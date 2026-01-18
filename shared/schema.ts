@@ -149,7 +149,10 @@ export const countries = pgTable("countries", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull().unique(),
   code: text("code").notNull().unique(), // ISO code
+  flag: text("flag").default("🌍").notNull(), // Emoji flag
+  dialCode: text("dial_code").default("+1").notNull(), // Phone dial code
   currency: text("currency").default("XAF").notNull(),
+  exchangeRate: decimal("exchange_rate", { precision: 15, scale: 4 }).default("1").notNull(), // Rate to XAF
   isActive: boolean("is_active").default(true),
   minDeposit: decimal("min_deposit", { precision: 15, scale: 2 }).default("100").notNull(),
   maxDeposit: decimal("max_deposit", { precision: 15, scale: 2 }).default("5000000").notNull(),

@@ -1280,6 +1280,27 @@ export async function registerRoutes(
     }
   });
 
+  // Public countries route for registration/login
+  app.get("/api/public/countries", async (_req, res) => {
+    try {
+      const allCountries = await storage.getAllCountries();
+      const activeCountries = allCountries
+        .filter(c => c.isActive)
+        .map(c => ({
+          code: c.code,
+          name: c.name,
+          flag: c.flag,
+          dialCode: c.dialCode,
+          currency: c.currency,
+          exchangeRate: c.exchangeRate,
+        }));
+      res.json(activeCountries);
+    } catch (error) {
+      console.error("Get public countries error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   // Public payment link route
   app.get("/api/payment-links/public/:slug", async (req, res) => {
     try {

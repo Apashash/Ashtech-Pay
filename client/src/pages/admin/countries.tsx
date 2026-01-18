@@ -45,7 +45,10 @@ export default function AdminCountries() {
   const [countryForm, setCountryForm] = useState({
     name: "",
     code: "",
+    flag: "🌍",
+    dialCode: "+1",
     currency: "XAF",
+    exchangeRate: "1",
     minDeposit: "100",
     maxDeposit: "5000000",
     minWithdrawal: "500",
@@ -146,7 +149,10 @@ export default function AdminCountries() {
     setCountryForm({
       name: "",
       code: "",
+      flag: "🌍",
+      dialCode: "+1",
       currency: "XAF",
+      exchangeRate: "1",
       minDeposit: "100",
       maxDeposit: "5000000",
       minWithdrawal: "500",
@@ -173,7 +179,10 @@ export default function AdminCountries() {
     setCountryForm({
       name: country.name,
       code: country.code,
+      flag: country.flag || "🌍",
+      dialCode: country.dialCode || "+1",
       currency: country.currency,
+      exchangeRate: country.exchangeRate || "1",
       minDeposit: country.minDeposit,
       maxDeposit: country.maxDeposit,
       minWithdrawal: country.minWithdrawal,
@@ -232,9 +241,9 @@ export default function AdminCountries() {
                     <TableRow>
                       <TableHead>Pays</TableHead>
                       <TableHead>Code</TableHead>
+                      <TableHead>Indicatif</TableHead>
                       <TableHead>Devise</TableHead>
-                      <TableHead>Limites Dépôt</TableHead>
-                      <TableHead>Limites Retrait</TableHead>
+                      <TableHead>Taux</TableHead>
                       <TableHead>Statut</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -253,15 +262,14 @@ export default function AdminCountries() {
                     ) : (
                       countries.map((country) => (
                         <TableRow key={country.id} data-testid={`country-row-${country.id}`}>
-                          <TableCell className="font-medium">{country.name}</TableCell>
+                          <TableCell className="font-medium">
+                            <span className="mr-2">{country.flag}</span>
+                            {country.name}
+                          </TableCell>
                           <TableCell>{country.code}</TableCell>
+                          <TableCell>{country.dialCode}</TableCell>
                           <TableCell>{country.currency}</TableCell>
-                          <TableCell className="text-sm">
-                            {country.minDeposit} - {country.maxDeposit}
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {country.minWithdrawal} - {country.maxWithdrawal}
-                          </TableCell>
+                          <TableCell className="text-sm">{country.exchangeRate}</TableCell>
                           <TableCell>
                             <Badge variant={country.isActive ? "default" : "secondary"}>
                               {country.isActive ? "Actif" : "Inactif"}
@@ -384,7 +392,7 @@ export default function AdminCountries() {
             <DialogHeader>
               <DialogTitle>{editingCountry ? "Modifier le pays" : "Nouveau pays"}</DialogTitle>
             </DialogHeader>
-            <div className="space-y-4 py-4">
+            <div className="space-y-4 py-4 max-h-[70vh] overflow-y-auto">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Nom du pays</Label>
@@ -406,22 +414,62 @@ export default function AdminCountries() {
                   />
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label>Devise</Label>
-                <Select
-                  value={countryForm.currency}
-                  onValueChange={(v) => setCountryForm({ ...countryForm, currency: v })}
-                >
-                  <SelectTrigger data-testid="select-country-currency">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="XAF">XAF (Franc CFA CEMAC)</SelectItem>
-                    <SelectItem value="XOF">XOF (Franc CFA UEMOA)</SelectItem>
-                    <SelectItem value="USD">USD (Dollar US)</SelectItem>
-                    <SelectItem value="EUR">EUR (Euro)</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Drapeau (emoji)</Label>
+                  <Input
+                    value={countryForm.flag}
+                    onChange={(e) => setCountryForm({ ...countryForm, flag: e.target.value })}
+                    placeholder="🇨🇲"
+                    data-testid="input-country-flag"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Indicatif téléphonique</Label>
+                  <Input
+                    value={countryForm.dialCode}
+                    onChange={(e) => setCountryForm({ ...countryForm, dialCode: e.target.value })}
+                    placeholder="+237"
+                    data-testid="input-country-dialcode"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Devise</Label>
+                  <Select
+                    value={countryForm.currency}
+                    onValueChange={(v) => setCountryForm({ ...countryForm, currency: v })}
+                  >
+                    <SelectTrigger data-testid="select-country-currency">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="XAF">XAF (Franc CFA CEMAC)</SelectItem>
+                      <SelectItem value="XOF">XOF (Franc CFA UEMOA)</SelectItem>
+                      <SelectItem value="CDF">CDF (Franc Congolais)</SelectItem>
+                      <SelectItem value="GNF">GNF (Franc Guinéen)</SelectItem>
+                      <SelectItem value="MGA">MGA (Ariary Malgache)</SelectItem>
+                      <SelectItem value="MAD">MAD (Dirham Marocain)</SelectItem>
+                      <SelectItem value="TND">TND (Dinar Tunisien)</SelectItem>
+                      <SelectItem value="DZD">DZD (Dinar Algérien)</SelectItem>
+                      <SelectItem value="USD">USD (Dollar US)</SelectItem>
+                      <SelectItem value="EUR">EUR (Euro)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Taux de change (vers XAF)</Label>
+                  <Input
+                    type="number"
+                    step="0.0001"
+                    value={countryForm.exchangeRate}
+                    onChange={(e) => setCountryForm({ ...countryForm, exchangeRate: e.target.value })}
+                    placeholder="1"
+                    data-testid="input-exchange-rate"
+                  />
+                  <p className="text-xs text-muted-foreground">1 {countryForm.currency} = {countryForm.exchangeRate} XAF</p>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
