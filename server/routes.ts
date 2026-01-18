@@ -64,6 +64,7 @@ declare module "express-session" {
 
 function requireAuth(req: Request, res: Response, next: NextFunction) {
   if (!req.session.userId) {
+    console.log("Auth failed - No userId in session. Session ID:", req.sessionID, "Cookies:", req.headers.cookie ? "present" : "none");
     return res.status(401).json({ message: "Non autorisé" });
   }
   next();
@@ -114,10 +115,8 @@ export async function registerRoutes(
   const express = await import("express");
   app.use("/uploads", express.default.static(uploadsDir));
 
-  // Trust proxy for production (Replit uses reverse proxy)
-  if (process.env.NODE_ENV === "production") {
-    app.set("trust proxy", 1);
-  }
+  // Trust proxy (Replit uses reverse proxy in all environments)
+  app.set("trust proxy", 1);
 
   // Session middleware
   app.use(
@@ -128,9 +127,9 @@ export async function registerRoutes(
       store: new SessionStore({
         checkPeriod: 86400000,
       }),
-      proxy: process.env.NODE_ENV === "production",
+      proxy: true,
       cookie: {
-        secure: process.env.NODE_ENV === "production",
+        secure: "auto",
         httpOnly: true,
         sameSite: "lax",
         maxAge: 24 * 60 * 60 * 1000,
