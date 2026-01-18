@@ -30,26 +30,16 @@ import globalReachImage from "@assets/image_1768076949520.png";
 import withdrawalImage from "@assets/image_1768083078697.png";
 import shareImage from "@assets/image_1768076993874.png";
 
-import orangeMoneyLogo from "@assets/stock_images/orange_money_official.png";
-import mtnLogo from "@assets/stock_images/mtn_momo_official.png";
-import waveLogo from "@assets/stock_images/wave_mobile_money_se_fa732861.jpg";
-import mpesaLogo from "@assets/stock_images/mpesa_official2.png";
-import paypalLogo from "@assets/stock_images/paypal_official.png";
-import visaLogo from "@assets/stock_images/visa_official.png";
-import mastercardLogo from "@assets/stock_images/mastercard_official.png";
-import airtelLogo from "@assets/stock_images/airtel_money.png";
-import moovLogo from "@assets/stock_images/moov_africa_telecom__8569161e.jpg";
-
 const paymentMethods = [
-  { name: "Orange Money", logo: orangeMoneyLogo },
-  { name: "MTN Mobile Money", logo: mtnLogo },
-  { name: "Wave", logo: waveLogo },
-  { name: "Airtel Money", logo: airtelLogo },
-  { name: "M-Pesa", logo: mpesaLogo },
-  { name: "Moov Money", logo: moovLogo },
-  { name: "PayPal", logo: paypalLogo },
-  { name: "Visa", logo: visaLogo },
-  { name: "Mastercard", logo: mastercardLogo },
+  { name: "Orange Money" },
+  { name: "MTN Mobile Money" },
+  { name: "Wave" },
+  { name: "Airtel Money" },
+  { name: "M-Pesa" },
+  { name: "Moov Money" },
+  { name: "PayPal" },
+  { name: "Visa" },
+  { name: "Mastercard" },
 ];
 
 const countries = [
@@ -952,13 +942,8 @@ function PaymentMethodsMarquee() {
           {duplicatedMethods.map((method, index) => (
             <div
               key={index}
-              className="flex-shrink-0 mx-4 px-6 py-3 bg-card rounded-lg border border-border flex items-center gap-3"
+              className="flex-shrink-0 mx-4 px-6 py-3 bg-card rounded-lg border border-border flex items-center"
             >
-              <img 
-                src={method.logo} 
-                alt={method.name} 
-                className="w-8 h-8 rounded-md object-cover"
-              />
               <span className="text-foreground font-medium whitespace-nowrap">{method.name}</span>
             </div>
           ))}
