@@ -30,15 +30,15 @@ import globalReachImage from "@assets/image_1768076949520.png";
 import withdrawalImage from "@assets/image_1768083078697.png";
 import shareImage from "@assets/image_1768076993874.png";
 
-import orangeMoneyLogo from "@assets/stock_images/orange_money_mobile__a68c6c5f.jpg";
-import mtnLogo from "@assets/stock_images/mtn_mobile_money_log_374df9c2.jpg";
-import waveLogo from "@assets/stock_images/wave_mobile_payment__58e84350.jpg";
-import mpesaLogo from "@assets/stock_images/m-pesa_mobile_money__df2eec49.jpg";
-import paypalLogo from "@assets/stock_images/paypal_logo_blue_72fd1232.jpg";
-import visaLogo from "@assets/stock_images/visa_credit_card_log_36ce9434.jpg";
-import mastercardLogo from "@assets/stock_images/mastercard_logo_red__350de26e.jpg";
-import airtelLogo from "@assets/stock_images/airtel_mobile_money__a8ebed40.jpg";
-import moovLogo from "@assets/stock_images/moov_africa_mobile_m_c3122f66.jpg";
+import orangeMoneyLogo from "@assets/stock_images/orange_money_logo_of_7b7d7a29.jpg";
+import mtnLogo from "@assets/stock_images/mtn_mobile_money_log_b427b725.jpg";
+import waveLogo from "@assets/stock_images/wave_africa_payment__5eef47f6.jpg";
+import mpesaLogo from "@assets/stock_images/m-pesa_mobile_money__3dd15aad.jpg";
+import paypalLogo from "@assets/stock_images/paypal_payment_logo_5684c164.jpg";
+import visaLogo from "@assets/stock_images/visa_card_logo_c65f0072.jpg";
+import mastercardLogo from "@assets/stock_images/mastercard_logo_cf6e8d42.jpg";
+import airtelLogo from "@assets/stock_images/airtel_money_africa__10e0f544.jpg";
+import moovLogo from "@assets/stock_images/moov_africa_mobile_m_fc6383aa.jpg";
 
 const paymentMethods = [
   { name: "Orange Money", logo: orangeMoneyLogo },
