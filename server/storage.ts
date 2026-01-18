@@ -1152,6 +1152,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteGlobalMessage(id: string): Promise<void> {
+    // First delete all dismissed entries referencing this message
+    await db.execute(sql`DELETE FROM dismissed_global_messages WHERE global_message_id = ${id}`);
     await db.delete(globalMessages).where(eq(globalMessages.id, id));
   }
 
