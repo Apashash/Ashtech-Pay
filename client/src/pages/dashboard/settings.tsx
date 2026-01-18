@@ -8,12 +8,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User } from "@shared/schema";
-import { User as UserIcon, Bell, Lock, Save, Globe, Smartphone, Mail, Loader2 } from "lucide-react";
+import { User as UserIcon, Bell, Lock, Save, Globe, Smartphone, Mail, Loader2, Sun, Moon, Palette } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { useTheme } from "@/components/theme-provider";
 
 export default function SettingsPage() {
   const { toast } = useToast();
+  const { theme, setTheme } = useTheme();
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   
   const [fullName, setFullName] = useState("");
@@ -166,6 +168,48 @@ export default function SettingsPage() {
                   </>
                 )}
               </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Palette className="w-5 h-5" />
+                Apparence
+              </CardTitle>
+              <CardDescription>Choisissez le thème de l'interface</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <button
+                  onClick={() => setTheme("light")}
+                  className={`flex flex-col items-center gap-3 p-4 rounded-lg border-2 transition-all ${
+                    theme === "light" 
+                      ? "border-primary bg-primary/10" 
+                      : "border-border hover:border-primary/50"
+                  }`}
+                  data-testid="theme-light"
+                >
+                  <div className="w-12 h-12 rounded-full bg-white border border-gray-200 flex items-center justify-center">
+                    <Sun className="w-6 h-6 text-yellow-500" />
+                  </div>
+                  <span className="font-medium text-foreground">Clair</span>
+                </button>
+                <button
+                  onClick={() => setTheme("dark")}
+                  className={`flex flex-col items-center gap-3 p-4 rounded-lg border-2 transition-all ${
+                    theme === "dark" 
+                      ? "border-primary bg-primary/10" 
+                      : "border-border hover:border-primary/50"
+                  }`}
+                  data-testid="theme-dark"
+                >
+                  <div className="w-12 h-12 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center">
+                    <Moon className="w-6 h-6 text-blue-400" />
+                  </div>
+                  <span className="font-medium text-foreground">Sombre</span>
+                </button>
+              </div>
             </CardContent>
           </Card>
 
