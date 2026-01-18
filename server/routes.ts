@@ -418,6 +418,36 @@ export async function registerRoutes(
     }
   });
 
+  // Delete own account
+  app.delete("/api/user/account", requireAuth, async (req, res) => {
+    try {
+      const { username } = req.body;
+      const userId = req.session.userId!;
+      
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "Utilisateur non trouvé" });
+      }
+      
+      if (user.username !== username) {
+        return res.status(400).json({ message: "Le nom d'utilisateur ne correspond pas" });
+      }
+      
+      await storage.deleteUser(userId);
+      
+      req.session.destroy((err) => {
+        if (err) {
+          console.error("Session destroy error:", err);
+        }
+      });
+      
+      res.json({ message: "Compte supprimé avec succès" });
+    } catch (error) {
+      console.error("Delete account error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   // Transaction routes
   app.get("/api/transactions", requireAuth, async (req, res) => {
     try {
@@ -1700,6 +1730,33 @@ export async function registerRoutes(
       res.json(safeUser);
     } catch (error) {
       console.error("Admin unban user error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // Admin: Delete user
+  app.delete("/api/admin/users/:id", requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const user = await storage.getUser(id);
+      if (!user) {
+        return res.status(404).json({ message: "Utilisateur non trouvé" });
+      }
+      
+      await storage.deleteUser(id);
+      
+      await storage.createAdminLog({
+        adminId: req.session.userId!,
+        action: "delete_user",
+        targetType: "user",
+        targetId: id,
+        details: JSON.stringify({ username: user.username, email: user.email }),
+        ipAddress: req.ip || null,
+      });
+      
+      res.json({ message: "Utilisateur supprimé avec succès" });
+    } catch (error) {
+      console.error("Admin delete user error:", error);
       res.status(500).json({ message: "Erreur serveur" });
     }
   });

@@ -99,6 +99,7 @@ export interface IStorage {
   updateUser(id: string, updates: Partial<User>): Promise<User | undefined>;
   banUser(id: string, reason: string): Promise<User | undefined>;
   unbanUser(id: string): Promise<User | undefined>;
+  deleteUser(id: string): Promise<void>;
   
   // Admin: Transaction management
   getAllTransactions(): Promise<Transaction[]>;
@@ -513,6 +514,23 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, id))
       .returning();
     return user || undefined;
+  }
+
+  async deleteUser(id: string): Promise<void> {
+    await db.delete(userNotifications).where(eq(userNotifications.userId, id));
+    await db.delete(ticketMessages).where(
+      sql`ticket_id IN (SELECT id FROM support_tickets WHERE user_id = ${id})`
+    );
+    await db.delete(supportTickets).where(eq(supportTickets.userId, id));
+    await db.delete(kycSubmissions).where(eq(kycSubmissions.userId, id));
+    await db.delete(withdrawalNumberChanges).where(
+      sql`withdrawal_number_id IN (SELECT id FROM withdrawal_numbers WHERE user_id = ${id})`
+    );
+    await db.delete(withdrawalNumbers).where(eq(withdrawalNumbers.userId, id));
+    await db.delete(paymentIntents).where(eq(paymentIntents.merchantId, id));
+    await db.delete(transactions).where(eq(transactions.userId, id));
+    await db.delete(paymentLinks).where(eq(paymentLinks.userId, id));
+    await db.delete(users).where(eq(users.id, id));
   }
 
   // Admin: Transaction management

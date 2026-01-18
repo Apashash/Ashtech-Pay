@@ -39,7 +39,8 @@ import {
   Shield,
   Eye,
   MoreHorizontal,
-  Edit
+  Edit,
+  Trash2
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -80,6 +81,7 @@ export default function AdminUsers() {
   const [viewUser, setViewUser] = useState<User | null>(null);
   const [editUser, setEditUser] = useState<User | null>(null);
   const [editForm, setEditForm] = useState({ fullName: "", email: "", phone: "", role: "" });
+  const [deleteModal, setDeleteModal] = useState<User | null>(null);
 
   useEffect(() => {
     if (urlSearch) {
@@ -157,6 +159,20 @@ export default function AdminUsers() {
     },
     onError: () => {
       toast({ title: "Erreur", variant: "destructive" });
+    },
+  });
+
+  const deleteUserMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest("DELETE", `/api/admin/users/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      toast({ title: "Utilisateur supprimé" });
+      setDeleteModal(null);
+    },
+    onError: () => {
+      toast({ title: "Erreur lors de la suppression", variant: "destructive" });
     },
   });
 
@@ -350,6 +366,9 @@ export default function AdminUsers() {
                             <DropdownMenuItem onClick={() => setRoleMutation.mutate({ id: user.id, role: "user" })}>
                               <Shield className="w-4 h-4 mr-2" /> Remettre User
                             </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setDeleteModal(user)} className="text-red-500">
+                              <Trash2 className="w-4 h-4 mr-2" /> Supprimer
+                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -518,6 +537,32 @@ export default function AdminUsers() {
                 data-testid="button-save-user"
               >
                 Enregistrer
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={!!deleteModal} onOpenChange={() => setDeleteModal(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="text-red-500">Supprimer l'utilisateur</DialogTitle>
+              <DialogDescription>
+                Êtes-vous sûr de vouloir supprimer définitivement {deleteModal?.fullName} (@{deleteModal?.username}) ? 
+                Cette action est irréversible et supprimera toutes les données associées.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDeleteModal(null)}>
+                Annuler
+              </Button>
+              <Button 
+                variant="destructive" 
+                onClick={() => deleteModal && deleteUserMutation.mutate(deleteModal.id)}
+                disabled={deleteUserMutation.isPending}
+                data-testid="button-confirm-delete"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Supprimer définitivement
               </Button>
             </DialogFooter>
           </DialogContent>

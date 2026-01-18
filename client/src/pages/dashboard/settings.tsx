@@ -4,10 +4,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User } from "@shared/schema";
-import { User as UserIcon, Bell, Lock, Save, Globe, Smartphone, Mail, Loader2, Sun, Moon, Palette } from "lucide-react";
+import { User as UserIcon, Bell, Lock, Save, Globe, Smartphone, Mail, Loader2, Sun, Moon, Palette, AlertTriangle, Trash2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useTheme } from "@/components/theme-provider";
@@ -15,6 +24,7 @@ import { useTheme } from "@/components/theme-provider";
 export default function SettingsPage() {
   const { toast } = useToast();
   const { theme, setTheme } = useTheme();
+  const [, setLocation] = useLocation();
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   
   const [fullName, setFullName] = useState("");
@@ -22,6 +32,9 @@ export default function SettingsPage() {
   const [phone, setPhone] = useState("");
   const [country, setCountry] = useState("");
   const [isInitialized, setIsInitialized] = useState(false);
+  
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteConfirmUsername, setDeleteConfirmUsername] = useState("");
   
   const [notifications, setNotifications] = useState({
     email: true,
@@ -70,6 +83,34 @@ export default function SettingsPage() {
       title: "Paramètres enregistrés",
       description: "Vos préférences de notification ont été sauvegardées.",
     });
+  };
+
+  const deleteAccountMutation = useMutation({
+    mutationFn: async (username: string) => {
+      const res = await apiRequest("DELETE", "/api/user/account", { username });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.clear();
+      toast({
+        title: "Compte supprimé",
+        description: "Votre compte a été supprimé avec succès.",
+      });
+      setLocation("/");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Erreur",
+        description: error.message || "Une erreur est survenue",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleDeleteAccount = () => {
+    if (deleteConfirmUsername === user?.username) {
+      deleteAccountMutation.mutate(deleteConfirmUsername);
+    }
   };
 
   return (
@@ -309,8 +350,83 @@ export default function SettingsPage() {
               </Button>
             </CardContent>
           </Card>
+
+          <Card className="border-red-500/50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-red-500">
+                <AlertTriangle className="w-5 h-5" />
+                Zone Danger
+              </CardTitle>
+              <CardDescription>Actions irréversibles sur votre compte</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="p-4 bg-red-500/10 rounded-lg border border-red-500/20">
+                <h4 className="font-medium text-red-500 mb-2">Supprimer mon compte définitivement</h4>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Cette action supprimera définitivement votre compte et toutes vos données. Cette action est irréversible.
+                </p>
+                <Button 
+                  variant="destructive" 
+                  onClick={() => setShowDeleteDialog(true)}
+                  data-testid="button-delete-account"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Supprimer mon compte
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
+
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-red-500 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" />
+              Supprimer votre compte définitivement
+            </DialogTitle>
+            <DialogDescription>
+              Voulez-vous supprimer définitivement votre compte ? Cette action est irréversible et supprimera toutes vos données.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <div className="space-y-2">
+              <Label>Entrez votre nom d'utilisateur pour confirmer</Label>
+              <Input 
+                placeholder={user?.username || "Votre nom d'utilisateur"}
+                value={deleteConfirmUsername}
+                onChange={(e) => setDeleteConfirmUsername(e.target.value)}
+                data-testid="input-delete-confirm-username"
+              />
+              <p className="text-xs text-muted-foreground">
+                Tapez <span className="font-mono text-foreground">{user?.username}</span> pour confirmer
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setShowDeleteDialog(false);
+              setDeleteConfirmUsername("");
+            }}>
+              Non, annuler
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleDeleteAccount}
+              disabled={deleteConfirmUsername !== user?.username || deleteAccountMutation.isPending}
+              data-testid="button-confirm-delete-account"
+            >
+              {deleteAccountMutation.isPending ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Trash2 className="w-4 h-4 mr-2" />
+              )}
+              Oui, supprimer mon compte
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
