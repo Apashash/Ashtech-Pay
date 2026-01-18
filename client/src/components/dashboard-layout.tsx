@@ -89,10 +89,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   });
 
   const handleKycClick = (e: React.MouseEvent) => {
-    if (user?.kycStatus === "approved") {
-      e.preventDefault();
-      setShowKycUpdateDialog(true);
-    }
+    e.preventDefault();
+    e.stopPropagation();
+    setShowKycUpdateDialog(true);
   };
 
   const confirmKycUpdate = () => {
