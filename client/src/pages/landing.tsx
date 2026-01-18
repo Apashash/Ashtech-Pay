@@ -23,8 +23,22 @@ import {
   Clock,
   FileText,
   Sun,
-  Moon
+  Moon,
+  Menu,
+  X,
+  LogIn,
+  UserPlus,
+  Info,
+  Briefcase,
+  BookOpen,
+  FileText as Terms,
+  ShieldCheck,
+  Scale,
+  HelpCircle,
+  Mail,
+  MessageCircleQuestion
 } from "lucide-react";
+import { useState } from "react";
 import { useTheme } from "@/components/theme-provider";
 import logoImage from "@assets/photo_2026-01-10_21-16-00_1768076188815.jpg";
 import paymentMethodsImage from "@assets/image_1768083090679.png";
@@ -72,56 +86,93 @@ const countries = [
 
 function Navbar() {
   const { theme, toggleTheme } = useTheme();
+  const [menuOpen, setMenuOpen] = useState(false);
+  
+  const menuItems = [
+    { label: "Se connecter", href: "/login", icon: LogIn },
+    { label: "Créer un compte", href: "/register", icon: UserPlus },
+    { label: "À propos", href: "/about", icon: Info },
+    { label: "Carrières", href: "/careers", icon: Briefcase },
+    { label: "Blog", href: "/blog", icon: BookOpen },
+    { label: "Conditions d'utilisation", href: "/terms", icon: Terms },
+    { label: "Politique de confidentialité", href: "/privacy", icon: ShieldCheck },
+    { label: "Mentions légales", href: "/legal", icon: Scale },
+    { label: "Centre d'aide", href: "/help", icon: HelpCircle },
+    { label: "Contact", href: "/contact", icon: Mail },
+    { label: "FAQ", href: "/faq", icon: MessageCircleQuestion },
+  ];
   
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16 gap-4">
-          <Link href="/">
-            <div className="flex items-center gap-2 cursor-pointer">
-              <img src={logoImage} alt="Ashtech-Pay Afrique" className="h-14 w-auto" />
+    <>
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16 gap-4">
+            <Link href="/">
+              <div className="flex items-center gap-2 cursor-pointer">
+                <img src={logoImage} alt="Ashtech-Pay Afrique" className="h-14 w-auto" />
+              </div>
+            </Link>
+            
+            <div className="flex items-center gap-3">
+              <button
+                onClick={toggleTheme}
+                className="p-2 rounded-full hover:bg-accent transition-colors"
+                aria-label="Changer de thème"
+                data-testid="button-theme-toggle"
+              >
+                {theme === "dark" ? (
+                  <Sun className="w-5 h-5 text-yellow-500" />
+                ) : (
+                  <Moon className="w-5 h-5 text-blue-500" />
+                )}
+              </button>
+              <button
+                onClick={() => setMenuOpen(!menuOpen)}
+                className="p-2 rounded-lg hover:bg-accent transition-colors"
+                aria-label="Menu"
+                data-testid="button-hamburger-menu"
+              >
+                <Menu className="w-6 h-6 text-foreground" />
+              </button>
             </div>
-          </Link>
-          
-          <div className="hidden md:flex items-center gap-6">
-            <a href="#features" className="text-muted-foreground hover:text-foreground transition-colors" data-testid="link-features">
-              Fonctionnalités
-            </a>
-            <a href="#how-it-works" className="text-muted-foreground hover:text-foreground transition-colors" data-testid="link-how-it-works">
-              Comment ça marche
-            </a>
-            <a href="#security" className="text-muted-foreground hover:text-foreground transition-colors" data-testid="link-security">
-              Sécurité
-            </a>
-          </div>
-          
-          <div className="flex items-center gap-3">
-            <button
-              onClick={toggleTheme}
-              className="p-2 rounded-full hover:bg-accent transition-colors"
-              aria-label="Changer de thème"
-              data-testid="button-theme-toggle"
-            >
-              {theme === "dark" ? (
-                <Sun className="w-5 h-5 text-yellow-500" />
-              ) : (
-                <Moon className="w-5 h-5 text-blue-500" />
-              )}
-            </button>
-            <Link href="/login">
-              <Button variant="ghost" data-testid="button-login-nav">
-                Se connecter
-              </Button>
-            </Link>
-            <Link href="/register">
-              <Button data-testid="button-register-nav">
-                Créer un compte
-              </Button>
-            </Link>
           </div>
         </div>
-      </div>
-    </nav>
+      </nav>
+      
+      {menuOpen && (
+        <div className="fixed inset-0 z-[60]" onClick={() => setMenuOpen(false)}>
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div 
+            className="absolute right-0 top-0 h-full w-80 max-w-[85vw] bg-background shadow-2xl overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-4 border-b border-border">
+              <span className="font-semibold text-lg text-foreground">Menu</span>
+              <button
+                onClick={() => setMenuOpen(false)}
+                className="p-2 rounded-lg hover:bg-accent transition-colors"
+                aria-label="Fermer le menu"
+              >
+                <X className="w-5 h-5 text-foreground" />
+              </button>
+            </div>
+            <div className="p-4 space-y-1">
+              {menuItems.map((item) => (
+                <Link key={item.href} href={item.href}>
+                  <button
+                    onClick={() => setMenuOpen(false)}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-accent transition-colors text-left"
+                  >
+                    <item.icon className="w-5 h-5 text-primary" />
+                    <span className="text-foreground">{item.label}</span>
+                  </button>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
