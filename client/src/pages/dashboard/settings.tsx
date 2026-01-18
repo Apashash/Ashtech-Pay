@@ -5,15 +5,21 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User } from "@shared/schema";
-import { Settings, User as UserIcon, Bell, Shield, Globe, Smartphone, Mail, Lock, Save } from "lucide-react";
-import { useState } from "react";
+import { User as UserIcon, Bell, Lock, Save, Globe, Smartphone, Mail, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function SettingsPage() {
   const { toast } = useToast();
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
+  
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [country, setCountry] = useState("");
   
   const [notifications, setNotifications] = useState({
     email: true,
@@ -22,10 +28,44 @@ export default function SettingsPage() {
     marketing: false,
   });
 
-  const handleSave = () => {
+  useEffect(() => {
+    if (user) {
+      setFullName(user.fullName || "");
+      setEmail(user.email || "");
+      setPhone(user.phone || "");
+      setCountry(user.country || "Cameroon");
+    }
+  }, [user]);
+
+  const updateProfileMutation = useMutation({
+    mutationFn: async (data: { fullName: string; email: string; phone: string; country: string }) => {
+      const res = await apiRequest("PATCH", "/api/user/profile", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+      toast({
+        title: "Profil mis à jour",
+        description: "Vos informations ont été enregistrées avec succès.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Erreur",
+        description: error.message || "Une erreur est survenue",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSaveProfile = () => {
+    updateProfileMutation.mutate({ fullName, email, phone, country });
+  };
+
+  const handleSaveNotifications = () => {
     toast({
       title: "Paramètres enregistrés",
-      description: "Vos modifications ont été sauvegardées avec succès.",
+      description: "Vos préférences de notification ont été sauvegardées.",
     });
   };
 
@@ -50,24 +90,46 @@ export default function SettingsPage() {
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Nom complet</Label>
-                  <Input defaultValue={user?.fullName} data-testid="input-fullname" />
+                  <Input 
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="Votre nom complet"
+                    data-testid="input-fullname" 
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Nom d'utilisateur</Label>
-                  <Input defaultValue={user?.username} data-testid="input-username" />
+                  <Input 
+                    value={user?.username || ""} 
+                    disabled 
+                    className="bg-muted"
+                    data-testid="input-username" 
+                  />
+                  <p className="text-xs text-muted-foreground">Le nom d'utilisateur ne peut pas être modifié</p>
                 </div>
                 <div className="space-y-2">
                   <Label>Email</Label>
-                  <Input type="email" defaultValue={user?.email} data-testid="input-email" />
+                  <Input 
+                    type="email" 
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="votreemail@exemple.com"
+                    data-testid="input-email" 
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Téléphone</Label>
-                  <Input defaultValue={user?.phone || ""} placeholder="+237 6XX XXX XXX" data-testid="input-phone" />
+                  <Input 
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="+237 6XX XXX XXX" 
+                    data-testid="input-phone" 
+                  />
                 </div>
               </div>
               <div className="space-y-2">
                 <Label>Pays</Label>
-                <Select defaultValue={user?.country || "Cameroon"}>
+                <Select value={country} onValueChange={setCountry}>
                   <SelectTrigger data-testid="select-country">
                     <SelectValue />
                   </SelectTrigger>
@@ -77,12 +139,32 @@ export default function SettingsPage() {
                     <SelectItem value="Ivory Coast">Côte d'Ivoire</SelectItem>
                     <SelectItem value="Mali">Mali</SelectItem>
                     <SelectItem value="Burkina Faso">Burkina Faso</SelectItem>
+                    <SelectItem value="Benin">Bénin</SelectItem>
+                    <SelectItem value="Togo">Togo</SelectItem>
+                    <SelectItem value="Niger">Niger</SelectItem>
+                    <SelectItem value="Guinea">Guinée</SelectItem>
+                    <SelectItem value="Gabon">Gabon</SelectItem>
+                    <SelectItem value="Congo">Congo</SelectItem>
+                    <SelectItem value="Chad">Tchad</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <Button onClick={handleSave} data-testid="button-save-profile">
-                <Save className="w-4 h-4 mr-2" />
-                Enregistrer
+              <Button 
+                onClick={handleSaveProfile} 
+                disabled={updateProfileMutation.isPending}
+                data-testid="button-save-profile"
+              >
+                {updateProfileMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Enregistrement...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4 mr-2" />
+                    Enregistrer
+                  </>
+                )}
               </Button>
             </CardContent>
           </Card>
@@ -155,6 +237,11 @@ export default function SettingsPage() {
                   data-testid="switch-marketing-notifications"
                 />
               </div>
+
+              <Button onClick={handleSaveNotifications} variant="outline">
+                <Save className="w-4 h-4 mr-2" />
+                Enregistrer les préférences
+              </Button>
             </CardContent>
           </Card>
 
@@ -182,23 +269,9 @@ export default function SettingsPage() {
                 </div>
               </div>
               <Button variant="outline" data-testid="button-change-password">
+                <Lock className="w-4 h-4 mr-2" />
                 Changer le mot de passe
               </Button>
-
-              <div className="border-t border-border pt-4 mt-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Shield className="w-5 h-5 text-muted-foreground" />
-                    <div>
-                      <p className="font-medium text-foreground">Authentification à deux facteurs</p>
-                      <p className="text-sm text-muted-foreground">Ajoutez une couche de sécurité supplémentaire</p>
-                    </div>
-                  </div>
-                  <Button variant="outline" data-testid="button-enable-2fa">
-                    Activer
-                  </Button>
-                </div>
-              </div>
             </CardContent>
           </Card>
         </div>

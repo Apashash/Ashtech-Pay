@@ -391,6 +391,33 @@ export async function registerRoutes(
     }
   });
 
+  // Update user profile
+  app.patch("/api/user/profile", requireAuth, async (req, res) => {
+    try {
+      const { fullName, email, phone, country } = req.body;
+      const userId = req.session.userId!;
+      
+      // Validate email uniqueness if changed
+      if (email) {
+        const existingUser = await storage.getUserByEmail(email);
+        if (existingUser && existingUser.id !== userId) {
+          return res.status(400).json({ message: "Cet email est déjà utilisé" });
+        }
+      }
+      
+      const user = await storage.updateUser(userId, { fullName, email, phone, country });
+      if (!user) {
+        return res.status(404).json({ message: "Utilisateur non trouvé" });
+      }
+      
+      const { password: _, ...safeUser } = user;
+      res.json(safeUser);
+    } catch (error) {
+      console.error("Update profile error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   // Transaction routes
   app.get("/api/transactions", requireAuth, async (req, res) => {
     try {

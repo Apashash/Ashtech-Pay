@@ -177,8 +177,17 @@ export default function WithdrawPage() {
                     selectedMethod === method.id 
                       ? 'border-primary bg-primary/5' 
                       : 'border-border hover-elevate'
-                  }`}
-                  onClick={() => setSelectedMethod(method.id)}
+                  } ${method.id === "bank_transfer" ? 'opacity-60' : ''}`}
+                  onClick={() => {
+                    if (method.id === "bank_transfer") {
+                      toast({ 
+                        title: "Bientôt disponible", 
+                        description: "Le virement bancaire sera disponible prochainement." 
+                      });
+                    } else {
+                      setSelectedMethod(method.id);
+                    }
+                  }}
                   data-testid={`withdraw-method-${method.id}`}
                 >
                   <div className="flex items-center gap-4">
@@ -190,6 +199,9 @@ export default function WithdrawPage() {
                     <div className="flex-1">
                       <p className="font-medium text-foreground">{method.name}</p>
                       <p className="text-sm text-muted-foreground">{method.description}</p>
+                      {method.id === "bank_transfer" && (
+                        <p className="text-xs text-primary mt-1">Bientôt disponible</p>
+                      )}
                     </div>
                     {selectedMethod === method.id && <CheckCircle className="w-5 h-5 text-primary" />}
                   </div>
