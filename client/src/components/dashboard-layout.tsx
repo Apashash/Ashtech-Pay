@@ -1,10 +1,20 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { User } from "@shared/schema";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Sidebar,
   SidebarContent,
@@ -72,10 +82,23 @@ const settingsItems = [
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
   const { toast } = useToast();
+  const [showKycUpdateDialog, setShowKycUpdateDialog] = useState(false);
 
   const { data: user, isLoading } = useQuery<User>({
     queryKey: ["/api/user"],
   });
+
+  const handleKycClick = (e: React.MouseEvent) => {
+    if (user?.kycStatus === "approved") {
+      e.preventDefault();
+      setShowKycUpdateDialog(true);
+    }
+  };
+
+  const confirmKycUpdate = () => {
+    setShowKycUpdateDialog(false);
+    setLocation("/dashboard/kyc");
+  };
 
   interface Notification {
     id: string;
@@ -227,6 +250,26 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 <SidebarMenu>
                   {settingsItems.map((item) => {
                     const badgeCount = item.url === "/dashboard/support" ? (ticketStats?.unreadCount || 0) : 0;
+                    const isKyc = item.url === "/dashboard/kyc";
+                    
+                    if (isKyc && user?.kycStatus === "approved") {
+                      return (
+                        <SidebarMenuItem key={item.title}>
+                          <SidebarMenuButton 
+                            isActive={location === item.url}
+                            onClick={handleKycClick}
+                            className="cursor-pointer"
+                          >
+                            <item.icon className="w-4 h-4" />
+                            <span className="flex-1">{item.title}</span>
+                            <Badge className="ml-auto bg-green-500 text-white h-5 px-1.5 text-xs">
+                              Vérifié
+                            </Badge>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      );
+                    }
+                    
                     return (
                       <SidebarMenuItem key={item.title}>
                         <SidebarMenuButton asChild isActive={location === item.url}>
@@ -422,6 +465,24 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           </main>
         </div>
       </div>
+
+      <AlertDialog open={showKycUpdateDialog} onOpenChange={setShowKycUpdateDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Mettre à jour votre vérification KYC ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Votre compte est déjà vérifié. Souhaitez-vous mettre à jour vos informations de vérification ? 
+              Cela nécessitera une nouvelle soumission de vos documents.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmKycUpdate}>
+              Oui, mettre à jour
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </SidebarProvider>
   );
 }
