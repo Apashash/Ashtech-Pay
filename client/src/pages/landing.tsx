@@ -129,10 +129,10 @@ function HeroSection() {
   return (
     <section className="relative min-h-screen flex items-center pt-16 overflow-hidden">
       <div 
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-15 dark:opacity-10"
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-40 dark:opacity-30"
         style={{ backgroundImage: `url(${heroBgImage})` }}
       />
-      <div className="absolute inset-0 bg-gradient-to-br from-background via-background/80 to-background/60" />
+      <div className="absolute inset-0 bg-gradient-to-br from-background/90 via-background/70 to-transparent" />
       <div className="absolute top-1/4 right-0 w-96 h-96 bg-primary/10 rounded-full blur-3xl" />
       <div className="absolute bottom-1/4 left-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl" />
       
