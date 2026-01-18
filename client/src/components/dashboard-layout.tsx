@@ -469,16 +469,15 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       <AlertDialog open={showKycUpdateDialog} onOpenChange={setShowKycUpdateDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Mettre à jour votre vérification KYC ?</AlertDialogTitle>
+            <AlertDialogTitle>Compte déjà vérifié</AlertDialogTitle>
             <AlertDialogDescription>
-              Votre compte est déjà vérifié. Souhaitez-vous mettre à jour vos informations de vérification ? 
-              Cela nécessitera une nouvelle soumission de vos documents.
+              Votre compte est déjà vérifié. Voulez-vous mettre à jour votre KYC ?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogCancel>Non</AlertDialogCancel>
             <AlertDialogAction onClick={confirmKycUpdate}>
-              Oui, mettre à jour
+              Oui
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
