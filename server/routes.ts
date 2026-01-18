@@ -116,6 +116,11 @@ export async function registerRoutes(
   const express = await import("express");
   app.use("/uploads", express.default.static(uploadsDir));
 
+  // Trust proxy for production (Replit uses reverse proxy)
+  if (process.env.NODE_ENV === "production") {
+    app.set("trust proxy", 1);
+  }
+
   // Session middleware
   app.use(
     session({
@@ -125,10 +130,11 @@ export async function registerRoutes(
       store: new SessionStore({
         checkPeriod: 86400000,
       }),
+      proxy: process.env.NODE_ENV === "production",
       cookie: {
         secure: process.env.NODE_ENV === "production",
         httpOnly: true,
-        sameSite: "strict",
+        sameSite: "lax",
         maxAge: 24 * 60 * 60 * 1000,
       },
     })
