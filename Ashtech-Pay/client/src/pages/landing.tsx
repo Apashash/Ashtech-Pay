@@ -128,19 +128,39 @@ function HeroSection() {
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
           <div className="space-y-8">
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20">
-              <Zap className="w-4 h-4 text-primary" />
-              <span className="text-sm text-primary font-medium">Transferts instantanés</span>
+              <Globe className="w-4 h-4 text-primary" />
+              <span className="text-sm text-primary font-medium">+18 pays africains</span>
             </div>
             
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-foreground leading-tight">
-              Transférez, recevez et gérez votre argent{" "}
-              <span className="text-primary">en toute simplicité</span>
+              Vendez en ligne.{" "}
+              <span className="text-primary">Encaissez instantanément.</span>
             </h1>
             
             <p className="text-lg sm:text-xl text-muted-foreground max-w-xl">
-              Rechargez, retirez et créez des liens de paiement en quelques secondes avec Ashtech Pay. 
-              La solution fintech moderne pour gérer vos finances.
+              Ashtech Pay permet aux créateurs, entrepreneurs et commerçants de vendre leurs produits physiques ou digitaux grâce à un simple lien de paiement, et de recevoir leur argent immédiatement, en toute sécurité.
             </p>
+            
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <span>Aucun site requis.</span>
+              </div>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <span>Aucun stress technique.</span>
+              </div>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <span>Paiements locaux & internationaux.</span>
+              </div>
+            </div>
             
             <div className="flex flex-col sm:flex-row gap-4">
               <Link href="/register">
@@ -151,7 +171,7 @@ function HeroSection() {
               </Link>
               <Link href="/login">
                 <Button size="lg" variant="outline" className="w-full sm:w-auto text-lg px-8" data-testid="button-hero-login">
-                  Se connecter
+                  Créer un lien de paiement
                 </Button>
               </Link>
             </div>
@@ -159,7 +179,7 @@ function HeroSection() {
             <div className="flex items-center gap-8 pt-4">
               <div className="text-center">
                 <p className="text-2xl font-bold text-foreground">50K+</p>
-                <p className="text-sm text-muted-foreground">Utilisateurs</p>
+                <p className="text-sm text-muted-foreground">Vendeurs</p>
               </div>
               <div className="w-px h-10 bg-border" />
               <div className="text-center">
@@ -168,7 +188,7 @@ function HeroSection() {
               </div>
               <div className="w-px h-10 bg-border" />
               <div className="text-center">
-                <p className="text-2xl font-bold text-foreground">21+</p>
+                <p className="text-2xl font-bold text-foreground">18+</p>
                 <p className="text-sm text-muted-foreground">Pays</p>
               </div>
             </div>
@@ -241,56 +261,91 @@ function OnlineSalesSection() {
   return (
     <section className="py-20 lg:py-32 bg-card/50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
-          <div className="space-y-6">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20">
-              <ShoppingBag className="w-4 h-4 text-primary" />
-              <span className="text-sm text-primary font-medium">E-commerce & Réseaux sociaux</span>
+        <div className="text-center mb-16">
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20 mb-4">
+            <Link2 className="w-4 h-4 text-primary" />
+            <span className="text-sm text-primary font-medium">Un lien. Plusieurs moyens de paiement.</span>
+          </div>
+          <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
+            Vendez tout type de produit
+          </h2>
+          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+            Vos clients peuvent payer avec Mobile Money (MTN, Orange, Airtel, Moov...), carte bancaire (Visa, Mastercard), virements locaux et autres moyens selon le pays.
+          </p>
+        </div>
+        
+        <div className="grid lg:grid-cols-2 gap-12 lg:gap-20">
+          <Card className="p-8 bg-card border-border">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
+                <FileText className="w-6 h-6 text-primary" />
+              </div>
+              <h3 className="text-2xl font-bold text-foreground">Produits digitaux</h3>
             </div>
-            
-            <h2 className="text-3xl sm:text-4xl font-bold text-foreground">
-              Ventes en ligne & réseaux sociaux
-            </h2>
-            
-            <p className="text-lg text-muted-foreground">
-              Générez des liens de paiement pour vendre vos produits digitaux ou services sur Instagram, WhatsApp, Facebook...
-            </p>
-            
-            <ul className="space-y-4">
-              <li className="flex items-start gap-3">
-                <div className="w-6 h-6 rounded-full bg-green-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-                <span className="text-muted-foreground">Créez un lien personnalisé pour chaque produit ou service</span>
+            <ul className="space-y-4 mb-6">
+              <li className="flex items-center gap-3 text-muted-foreground">
+                <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <span>Fichiers</span>
               </li>
-              <li className="flex items-start gap-3">
-                <div className="w-6 h-6 rounded-full bg-green-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-                <span className="text-muted-foreground">Acceptez les paiements via Mobile Money (+21 pays en Afrique), Orange Money, MTN, Airtel, Wave, Moov, Free Money, M-Pesa, PayPal et carte</span>
+              <li className="flex items-center gap-3 text-muted-foreground">
+                <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <span>Formations</span>
               </li>
-              <li className="flex items-start gap-3">
-                <div className="w-6 h-6 rounded-full bg-green-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-                <span className="text-muted-foreground">Suivez les ventes en temps réel depuis votre tableau de bord</span>
+              <li className="flex items-center gap-3 text-muted-foreground">
+                <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <span>Accès privés</span>
+              </li>
+              <li className="flex items-center gap-3 text-muted-foreground">
+                <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <span>Services</span>
               </li>
             </ul>
-          </div>
+            <div className="flex items-center gap-2 text-primary">
+              <Send className="w-4 h-4" />
+              <span className="text-sm font-medium">Livraison automatique après paiement</span>
+            </div>
+          </Card>
           
-          <div className="flex justify-center">
-            <img 
-              src={paymentMethodsImage} 
-              alt="Méthodes de paiement - Mobile Money, Orange Money, MTN, Wave, PayPal, Visa, Mastercard" 
-              className="w-full max-w-lg rounded-2xl"
-            />
-          </div>
+          <Card className="p-8 bg-card border-border">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
+                <ShoppingBag className="w-6 h-6 text-primary" />
+              </div>
+              <h3 className="text-2xl font-bold text-foreground">Produits physiques</h3>
+            </div>
+            <ul className="space-y-4 mb-6">
+              <li className="flex items-center gap-3 text-muted-foreground">
+                <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <span>Collecte des informations client</span>
+              </li>
+              <li className="flex items-center gap-3 text-muted-foreground">
+                <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <span>Suivi des commandes</span>
+              </li>
+              <li className="flex items-center gap-3 text-muted-foreground">
+                <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <span>Gestion simple des ventes</span>
+              </li>
+            </ul>
+            <div className="flex items-center gap-2 text-primary">
+              <History className="w-4 h-4" />
+              <span className="text-sm font-medium">Historique complet des transactions</span>
+            </div>
+          </Card>
         </div>
       </div>
     </section>
@@ -490,7 +545,7 @@ function GlobalReachSection() {
             <span className="text-sm text-primary font-medium">Portée internationale</span>
           </div>
           <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
-            Disponible dans plus de 21 pays africains
+            Disponible dans plus de 18 pays africains
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
             Recevez des paiements de partout dans le monde et retirez vos fonds localement via Mobile Money.
@@ -512,29 +567,29 @@ function GlobalReachSection() {
 function FeaturesSection() {
   const features = [
     {
-      icon: CreditCard,
-      title: "Recharge du compte",
-      description: "Rechargez votre compte via Mobile Money (MTN, Orange, Wave, Airtel) ou Crypto en quelques clics."
+      icon: Wallet,
+      title: "Solde en temps réel",
+      description: "Consultez votre solde et vos revenus à tout moment depuis votre tableau de bord."
+    },
+    {
+      icon: History,
+      title: "Historique complet",
+      description: "Retrouvez toutes vos transactions avec des détails complets et des filtres avancés."
     },
     {
       icon: ArrowDownUp,
       title: "Retraits rapides",
-      description: "Retirez votre argent de manière sécurisée vers votre compte Mobile Money ou bancaire."
+      description: "Retirez vos fonds vers Mobile Money ou banque de manière sécurisée."
+    },
+    {
+      icon: CreditCard,
+      title: "Frais transparents",
+      description: "Aucun frais caché. Vous savez exactement ce que vous payez."
     },
     {
       icon: Link2,
       title: "Liens de paiement",
-      description: "Créez et partagez des liens de paiement personnalisés pour recevoir des paiements facilement."
-    },
-    {
-      icon: Send,
-      title: "Transferts instantanés",
-      description: "Envoyez de l'argent instantanément à d'autres utilisateurs Ashtech Pay."
-    },
-    {
-      icon: History,
-      title: "Historique en temps réel",
-      description: "Suivez toutes vos transactions avec un historique détaillé et des notifications en temps réel."
+      description: "Créez des liens personnalisés avec montant fixe ou libre, fichiers PDF, date d'expiration."
     }
   ];
 
@@ -542,11 +597,15 @@ function FeaturesSection() {
     <section id="features" className="py-20 lg:py-32 relative">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20 mb-4">
+            <Wallet className="w-4 h-4 text-primary" />
+            <span className="text-sm text-primary font-medium">Wallet sécurisé</span>
+          </div>
           <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
-            Fonctionnalités clés
+            Un wallet sécurisé pour gérer votre argent
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Découvrez tout ce que vous pouvez faire avec Ashtech Pay
+            Tout ce dont vous avez besoin pour encaisser et gérer vos revenus
           </p>
         </div>
         
@@ -571,6 +630,16 @@ function FeaturesSection() {
 }
 
 function WhyAshtechSection() {
+  const targetAudience = [
+    { icon: Users, title: "Créateurs de contenu" },
+    { icon: TrendingUp, title: "Entrepreneurs" },
+    { icon: ShoppingBag, title: "E-commerçants" },
+    { icon: FileText, title: "Formateurs" },
+    { icon: Smartphone, title: "Freelancers" },
+    { icon: Zap, title: "Startups" },
+    { icon: Globe, title: "PME africaines" }
+  ];
+
   const benefits = [
     {
       icon: Zap,
@@ -590,7 +659,7 @@ function WhyAshtechSection() {
     {
       icon: Globe,
       title: "Disponible partout",
-      description: "Accessible dans plus de 21 pays africains et en expansion."
+      description: "Accessible dans plus de 18 pays africains et en expansion."
     },
     {
       icon: Headphones,
@@ -603,12 +672,34 @@ function WhyAshtechSection() {
     <section className="py-20 lg:py-32 bg-card/50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20 mb-4">
+            <Users className="w-4 h-4 text-primary" />
+            <span className="text-sm text-primary font-medium">Pour qui ?</span>
+          </div>
           <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
-            Pourquoi choisir Ashtech Pay ?
+            Pour qui est Ashtech Pay ?
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            La plateforme de confiance pour gérer votre argent
+            Si vous vendez en ligne, Ashtech Pay est fait pour vous.
           </p>
+        </div>
+        
+        <div className="flex flex-wrap justify-center gap-4 mb-16">
+          {targetAudience.map((item, index) => (
+            <div 
+              key={index}
+              className="flex items-center gap-3 px-6 py-3 bg-card rounded-xl border border-border hover:border-primary/50 transition-colors"
+            >
+              <item.icon className="w-5 h-5 text-primary" />
+              <span className="text-foreground font-medium">{item.title}</span>
+            </div>
+          ))}
+        </div>
+        
+        <div className="text-center mb-12">
+          <h3 className="text-2xl font-bold text-foreground mb-4">
+            Pourquoi choisir Ashtech Pay ?
+          </h3>
         </div>
         
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -637,23 +728,23 @@ function HowItWorksSection() {
   const steps = [
     {
       number: "01",
-      title: "Créez un compte",
-      description: "Inscrivez-vous en quelques minutes avec votre email et vos informations de base."
+      title: "Créez votre lien de paiement",
+      description: "Ajoutez votre produit, fixez le prix et générez un lien partageable."
     },
     {
       number: "02",
-      title: "Rechargez votre solde",
-      description: "Ajoutez des fonds via Mobile Money ou Crypto de manière sécurisée."
+      title: "Partagez le lien",
+      description: "WhatsApp, Facebook, Instagram, email ou site web."
     },
     {
       number: "03",
-      title: "Envoyez ou recevez",
-      description: "Transférez de l'argent instantanément ou retirez vers votre compte."
+      title: "Encaissez instantanément",
+      description: "Le client paie. L'argent arrive directement dans votre wallet."
     },
     {
       number: "04",
-      title: "Créez des liens",
-      description: "Générez des liens de paiement personnalisés à partager avec vos clients."
+      title: "Retirez quand vous voulez",
+      description: "Mobile Money, banque ou autre méthode locale."
     }
   ];
 
@@ -694,18 +785,18 @@ function SecuritySection() {
   const securityFeatures = [
     {
       icon: Lock,
-      title: "Données protégées",
-      description: "Chiffrement AES-256 pour toutes vos données personnelles et financières."
+      title: "Chiffrement des données",
+      description: "Vos données personnelles et financières sont chiffrées selon les standards internationaux."
     },
     {
       icon: Shield,
-      title: "Transactions sécurisées",
-      description: "Authentification à deux facteurs et surveillance continue des transactions."
+      title: "Protection anti-fraude",
+      description: "Surveillance continue des transactions et vérification des comptes."
     },
     {
       icon: FileCheck,
-      title: "Conformité & transparence",
-      description: "Nous respectons les réglementations financières locales et internationales."
+      title: "Partenaires agréés",
+      description: "Nous travaillons avec des partenaires de paiement agréés et conformes."
     }
   ];
 
@@ -713,11 +804,15 @@ function SecuritySection() {
     <section id="security" className="py-20 lg:py-32 bg-card/50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20 mb-4">
+            <Shield className="w-4 h-4 text-primary" />
+            <span className="text-sm text-primary font-medium">Votre confiance est notre priorité</span>
+          </div>
           <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
-            Sécurité & Confiance
+            Sécurité & Conformité
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Votre sécurité est notre priorité absolue
+            Votre argent est protégé par des standards de sécurité internationaux.
           </p>
         </div>
         
@@ -748,18 +843,29 @@ function CTASection() {
       <div className="absolute top-0 right-0 w-96 h-96 bg-primary/20 rounded-full blur-3xl" />
       
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
+        <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20 mb-6">
+          <Globe className="w-4 h-4 text-primary" />
+          <span className="text-sm text-primary font-medium">Développez votre business sans frontières</span>
+        </div>
         <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-foreground mb-6">
-          Prêt à simplifier vos paiements ?
+          Commencez maintenant
         </h2>
         <p className="text-lg text-muted-foreground mb-8 max-w-2xl mx-auto">
-          Rejoignez des milliers d'utilisateurs qui font confiance à Ashtech Pay pour leurs transactions quotidiennes.
+          Créez votre compte gratuitement et commencez à vendre dès aujourd'hui. Vendez localement ou à l'international, sans vous soucier des moyens de paiement ou de la technique.
         </p>
-        <Link href="/register">
-          <Button size="lg" className="text-lg px-10 py-6" data-testid="button-cta-register">
-            Commencer avec Ashtech Pay
-            <ChevronRight className="w-5 h-5 ml-2" />
-          </Button>
-        </Link>
+        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <Link href="/register">
+            <Button size="lg" className="text-lg px-10 py-6" data-testid="button-cta-register">
+              Créer un compte
+              <ChevronRight className="w-5 h-5 ml-2" />
+            </Button>
+          </Link>
+          <Link href="/login">
+            <Button size="lg" variant="outline" className="text-lg px-10 py-6">
+              Créer un lien de paiement
+            </Button>
+          </Link>
+        </div>
       </div>
     </section>
   );
@@ -869,7 +975,7 @@ function CountriesMarquee() {
     <section className="py-12 bg-card/30 overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-6">
         <h3 className="text-center text-lg font-semibold text-muted-foreground">
-          Disponible dans +21 pays africains
+          Disponible dans +18 pays africains
         </h3>
       </div>
       <div className="relative">
