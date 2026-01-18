@@ -164,6 +164,7 @@ export default function KYCPage() {
 
       const response = await fetch("/api/uploads/local", {
         method: "POST",
+        credentials: "include",
         body: formData,
       });
 

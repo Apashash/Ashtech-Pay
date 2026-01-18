@@ -22,7 +22,8 @@ import bcrypt from "bcrypt";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
+// Object storage disabled - using local file storage instead
+// import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
 
 const uploadsDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadsDir)) {
@@ -109,9 +110,6 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  // Register object storage routes for file uploads
-  registerObjectStorageRoutes(app);
-
   // Serve uploaded files statically
   const express = await import("express");
   app.use("/uploads", express.default.static(uploadsDir));
@@ -140,7 +138,7 @@ export async function registerRoutes(
     })
   );
 
-  // Local file upload endpoint (fallback when object storage fails)
+  // File upload endpoint using local storage
   app.post("/api/uploads/local", requireAuth, upload.single("file"), (req, res) => {
     try {
       if (!req.file) {
@@ -158,6 +156,28 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Local upload error:", error);
       res.status(500).json({ message: "Erreur lors de l'upload" });
+    }
+  });
+
+  // Direct file upload endpoint (replaces object storage)
+  app.post("/api/uploads/file", requireAuth, upload.single("file"), (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "Aucun fichier fourni" });
+      }
+      const filePath = `/uploads/${req.file.filename}`;
+      res.json({ 
+        success: true,
+        objectPath: filePath,
+        url: filePath,
+        filename: req.file.filename,
+        originalName: req.file.originalname,
+        size: req.file.size,
+        mimetype: req.file.mimetype
+      });
+    } catch (error) {
+      console.error("File upload error:", error);
+      res.status(500).json({ error: "Erreur lors de l'upload" });
     }
   });
 

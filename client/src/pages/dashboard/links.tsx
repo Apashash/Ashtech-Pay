@@ -156,23 +156,13 @@ function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => voi
       let finalData = { ...data };
       
       if (imageFile) {
-        let imageResult = await imageUpload.uploadFile(imageFile);
-        if (!imageResult) {
-          const localPath = await uploadFileLocally(imageFile);
-          finalData.imagePath = localPath;
-        } else {
-          finalData.imagePath = imageResult.objectPath;
-        }
+        const localPath = await uploadFileLocally(imageFile);
+        finalData.imagePath = localPath;
       }
       
       if (pdfFile) {
-        let pdfResult = await pdfUpload.uploadFile(pdfFile);
-        if (!pdfResult) {
-          const localPath = await uploadFileLocally(pdfFile);
-          finalData.pdfPath = localPath;
-        } else {
-          finalData.pdfPath = pdfResult.objectPath;
-        }
+        const localPath = await uploadFileLocally(pdfFile);
+        finalData.pdfPath = localPath;
       }
       
       const res = await apiRequest("POST", "/api/payment-links", finalData);
@@ -593,26 +583,16 @@ function EditLinkDialog({ link, onClose, userCurrency }: {
       
       // Handle image upload
       if (imageFile) {
-        let imageResult = await imageUpload.uploadFile(imageFile);
-        if (!imageResult) {
-          const localPath = await uploadFileLocally(imageFile);
-          finalData.imagePath = localPath;
-        } else {
-          finalData.imagePath = imageResult.objectPath;
-        }
+        const localPath = await uploadFileLocally(imageFile);
+        finalData.imagePath = localPath;
       } else if (!imagePreview) {
         finalData.imagePath = null;
       }
       
       // Handle PDF upload
       if (pdfFile) {
-        let pdfResult = await pdfUpload.uploadFile(pdfFile);
-        if (!pdfResult) {
-          const localPath = await uploadFileLocally(pdfFile);
-          finalData.pdfPath = localPath;
-        } else {
-          finalData.pdfPath = pdfResult.objectPath;
-        }
+        const localPath = await uploadFileLocally(pdfFile);
+        finalData.pdfPath = localPath;
       } else if (!currentPdfPath) {
         finalData.pdfPath = null;
       }
