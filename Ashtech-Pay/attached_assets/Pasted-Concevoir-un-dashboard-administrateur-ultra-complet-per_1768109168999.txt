@@ -1,0 +1,200 @@
+Concevoir un dashboard administrateur ultra-complet permettant le contrôle total de la plateforme, la gestion des frais de transaction, dépôts & retraits, opérateurs par pays, utilisateurs, sécurité et finances.
+
+🎨 Style & UX Admin
+
+Même identité visuelle que la landing (dark, premium, fintech)
+
+Sidebar sombre + icônes minimalistes
+
+Cartes statistiques arrondies
+
+Graphiques animés
+
+Navigation claire par modules
+
+Accès sécurisé (2FA, rôles, logs)
+
+🖥️ Structure du Panneau Admin
+🧭 Dashboard Principal
+
+Cartes KPI en temps réel :
+
+👥 Total utilisateurs
+
+💳 Total transactions
+
+💰 Volume total échangé
+
+📅 Transactions du mois
+
+❌ Transactions rejetées
+
+⏳ Transactions en attente
+
+🚫 Utilisateurs bannis
+
+🟢 Utilisateurs en ligne
+
+🧾 Total des dépôts
+
+💸 Total des retraits
+
+💼 Revenus (frais)
+
+Graphiques :
+
+Volume par pays
+
+Dépôts vs Retraits
+
+Évolution des utilisateurs
+
+👤 Gestion des Utilisateurs
+
+Liste complète des utilisateurs
+
+Actions :
+
+Activer / Désactiver / Bannir
+
+Vérification KYC
+
+Voir historique de transactions
+
+Réinitialisation mot de passe
+
+Attribution de rôles (Admin, Support, Finance)
+
+💳 Gestion des Transactions
+
+Recherche & filtres :
+
+Par pays
+
+Par opérateur
+
+Par statut (validée, en attente, rejetée)
+
+Actions :
+
+Valider / Rejeter
+
+Rembourser
+
+Forcer une transaction
+
+Export CSV / PDF
+
+💰 Gestion des Frais (Commission)
+
+Contrôle total des frais :
+
+Frais par :
+
+Type de transaction (dépôt, retrait, transfert)
+
+Pays
+
+Opérateur (MTN, Orange, Moov, Wave, Crypto, etc.)
+
+Modes :
+
+Pourcentage (%)
+
+Montant fixe
+
+Activation / désactivation instantanée
+
+🌍 Gestion des Pays
+
+Ajouter / Modifier / Désactiver un pays
+
+Définir :
+
+Devise locale
+
+Opérateurs disponibles
+
+Méthodes de paiement autorisées
+
+Limites (min/max dépôt & retrait)
+
+📡 Gestion des Opérateurs (par pays)
+
+Lier chaque pays à ses opérateurs :
+
+Mobile Money
+
+Banques
+
+Crypto
+
+Pour chaque opérateur :
+
+Activer / Désactiver
+
+Définir frais spécifiques
+
+Définir limites journalières
+
+Statut en temps réel (en ligne / maintenance)
+
+🔗 Gestion des Liens de Paiement
+
+Voir tous les liens créés
+
+Désactiver un lien
+
+Voir :
+
+Montant
+
+Expiration
+
+Utilisateur
+
+Statut (payé, expiré)
+
+🛡️ Sécurité & Conformité
+
+Logs d’activité admin
+
+Historique des connexions
+
+Alertes fraude
+
+Paramètres :
+
+2FA Admin
+
+IP Whitelist
+
+Blocage géographique
+
+Gestion KYC / conformité
+
+💬 Support & Chat
+
+Messagerie en temps réel :
+
+Admin ↔ Utilisateur
+
+Tickets :
+
+Ouvert / En cours / Résolu
+
+Historique client
+
+⚙️ Paramètres Généraux
+
+Nom de la plateforme : Ashtech Pay
+
+Devise par défaut
+
+Taux de change
+
+Limites globales
+
+Maintenance mode
+
+Gestion des rôles Admin
