@@ -517,16 +517,39 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteUser(id: string): Promise<void> {
+    // Handle all foreign key relationships
     await db.delete(userNotifications).where(eq(userNotifications.userId, id));
+    
+    // Delete ticket messages by sender OR by tickets owned by user
+    await db.delete(ticketMessages).where(eq(ticketMessages.senderId, id));
     await db.delete(ticketMessages).where(
       sql`ticket_id IN (SELECT id FROM support_tickets WHERE user_id = ${id})`
     );
+    
+    // Update tickets assigned to this user (set to null)
+    await db.execute(sql`UPDATE support_tickets SET assigned_to = NULL WHERE assigned_to = ${id}`);
     await db.delete(supportTickets).where(eq(supportTickets.userId, id));
+    
+    // Update KYC reviewer references (set to null)
+    await db.execute(sql`UPDATE kyc_submissions SET reviewer_id = NULL WHERE reviewer_id = ${id}`);
     await db.delete(kycSubmissions).where(eq(kycSubmissions.userId, id));
+    
+    // Delete dismissed global messages
+    await db.execute(sql`DELETE FROM dismissed_global_messages WHERE user_id = ${id}`);
+    
+    // Update global messages admin reference (set to null) 
+    await db.execute(sql`UPDATE global_messages SET admin_id = NULL WHERE admin_id = ${id}`);
+    
+    // Update admin logs - set admin_id to null instead of delete
+    await db.execute(sql`UPDATE admin_logs SET admin_id = NULL WHERE admin_id = ${id}`);
+    
+    // Handle withdrawal number changes (both user_id and admin_id)
+    await db.execute(sql`UPDATE withdrawal_number_changes SET admin_id = NULL WHERE admin_id = ${id}`);
     await db.delete(withdrawalNumberChanges).where(
       sql`withdrawal_number_id IN (SELECT id FROM withdrawal_numbers WHERE user_id = ${id})`
     );
     await db.delete(withdrawalNumbers).where(eq(withdrawalNumbers.userId, id));
+    
     await db.delete(paymentIntents).where(eq(paymentIntents.merchantId, id));
     await db.delete(transactions).where(eq(transactions.userId, id));
     await db.delete(paymentLinks).where(eq(paymentLinks.userId, id));
