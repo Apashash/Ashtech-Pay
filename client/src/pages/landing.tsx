@@ -32,6 +32,7 @@ import paymentValidatedImage from "@assets/image_1768076940034.png";
 import globalReachImage from "@assets/image_1768076949520.png";
 import withdrawalImage from "@assets/image_1768083078697.png";
 import shareImage from "@assets/image_1768076993874.png";
+import heroBgImage from "@assets/generated_images/hands_exchanging_money_and_package.png";
 
 const paymentMethods = [
   { name: "Orange Money" },
@@ -127,7 +128,11 @@ function Navbar() {
 function HeroSection() {
   return (
     <section className="relative min-h-screen flex items-center pt-16 overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent" />
+      <div 
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-15 dark:opacity-10"
+        style={{ backgroundImage: `url(${heroBgImage})` }}
+      />
+      <div className="absolute inset-0 bg-gradient-to-br from-background via-background/80 to-background/60" />
       <div className="absolute top-1/4 right-0 w-96 h-96 bg-primary/10 rounded-full blur-3xl" />
       <div className="absolute bottom-1/4 left-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl" />
       
