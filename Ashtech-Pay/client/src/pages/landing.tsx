@@ -881,41 +881,41 @@ function Footer() {
               <img src={logoImage} alt="Ashtech-Pay Afrique" className="h-12 w-auto" />
             </div>
             <p className="text-muted-foreground text-sm">
-              La plateforme de transfert d'argent moderne, sécurisée et accessible à tous en Afrique.
+              La plateforme de liens de paiement moderne, sécurisée et accessible à tous en Afrique.
             </p>
           </div>
           
           <div>
             <h4 className="font-semibold text-foreground mb-4">Entreprise</h4>
             <ul className="space-y-2">
-              <li><a href="#" className="text-muted-foreground hover:text-foreground text-sm transition-colors">À propos</a></li>
-              <li><a href="#" className="text-muted-foreground hover:text-foreground text-sm transition-colors">Carrières</a></li>
-              <li><a href="#" className="text-muted-foreground hover:text-foreground text-sm transition-colors">Blog</a></li>
+              <li><Link href="/about" className="text-muted-foreground hover:text-foreground text-sm transition-colors">À propos</Link></li>
+              <li><Link href="/careers" className="text-muted-foreground hover:text-foreground text-sm transition-colors">Carrières</Link></li>
+              <li><Link href="/blog" className="text-muted-foreground hover:text-foreground text-sm transition-colors">Blog</Link></li>
             </ul>
           </div>
           
           <div>
             <h4 className="font-semibold text-foreground mb-4">Légal</h4>
             <ul className="space-y-2">
-              <li><a href="#" className="text-muted-foreground hover:text-foreground text-sm transition-colors">Conditions d'utilisation</a></li>
-              <li><a href="#" className="text-muted-foreground hover:text-foreground text-sm transition-colors">Politique de confidentialité</a></li>
-              <li><a href="#" className="text-muted-foreground hover:text-foreground text-sm transition-colors">Mentions légales</a></li>
+              <li><Link href="/terms" className="text-muted-foreground hover:text-foreground text-sm transition-colors">Conditions d'utilisation</Link></li>
+              <li><Link href="/privacy" className="text-muted-foreground hover:text-foreground text-sm transition-colors">Politique de confidentialité</Link></li>
+              <li><Link href="/legal" className="text-muted-foreground hover:text-foreground text-sm transition-colors">Mentions légales</Link></li>
             </ul>
           </div>
           
           <div>
             <h4 className="font-semibold text-foreground mb-4">Support</h4>
             <ul className="space-y-2">
-              <li><a href="#" className="text-muted-foreground hover:text-foreground text-sm transition-colors">Centre d'aide</a></li>
-              <li><a href="#" className="text-muted-foreground hover:text-foreground text-sm transition-colors">Contact</a></li>
-              <li><a href="#" className="text-muted-foreground hover:text-foreground text-sm transition-colors">FAQ</a></li>
+              <li><Link href="/help" className="text-muted-foreground hover:text-foreground text-sm transition-colors">Centre d'aide</Link></li>
+              <li><Link href="/contact" className="text-muted-foreground hover:text-foreground text-sm transition-colors">Contact</Link></li>
+              <li><Link href="/faq" className="text-muted-foreground hover:text-foreground text-sm transition-colors">FAQ</Link></li>
             </ul>
           </div>
         </div>
         
         <div className="border-t border-border pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-muted-foreground text-sm">
-            © 2024 Ashtech Pay Afrique. Tous droits réservés.
+            © 2026 Ashtech Pay. Tous droits réservés.
           </p>
           <div className="flex items-center gap-4">
             <a href="#" className="text-muted-foreground hover:text-primary transition-colors" aria-label="Facebook">

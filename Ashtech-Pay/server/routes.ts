@@ -1179,6 +1179,25 @@ export async function registerRoutes(
     }
   });
 
+  // Public contact info route
+  app.get("/api/contact-info", async (_req, res) => {
+    try {
+      const settings = await storage.getAllSettings();
+      const contactEmail = settings.find(s => s.key === "contact_email")?.value || "";
+      const contactWhatsapp = settings.find(s => s.key === "contact_whatsapp")?.value || "";
+      const contactTelegram = settings.find(s => s.key === "contact_telegram")?.value || "";
+      
+      res.json({
+        email: contactEmail,
+        whatsapp: contactWhatsapp,
+        telegram: contactTelegram
+      });
+    } catch (error) {
+      console.error("Get contact info error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   // Public payment link route
   app.get("/api/payment-links/public/:slug", async (req, res) => {
     try {

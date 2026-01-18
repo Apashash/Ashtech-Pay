@@ -40,6 +40,15 @@ import AdminFeesWithdrawals from "@/pages/admin/fees/withdrawals";
 import AdminFeesTransfers from "@/pages/admin/fees/transfers";
 import AdminGlobalMessages from "@/pages/admin/global-messages";
 import AdminKYC from "@/pages/admin/kyc";
+import TermsPage from "@/pages/terms";
+import PrivacyPage from "@/pages/privacy";
+import LegalPage from "@/pages/legal";
+import AboutPage from "@/pages/about";
+import CareersPage from "@/pages/careers";
+import BlogPage from "@/pages/blog";
+import HelpPage from "@/pages/help";
+import ContactPage from "@/pages/contact";
+import FAQPage from "@/pages/faq";
 
 function Router() {
   return (
@@ -80,6 +89,15 @@ function Router() {
       <Route path="/admin/withdrawal-numbers" component={AdminWithdrawalNumbers} />
       <Route path="/admin/global-messages" component={AdminGlobalMessages} />
       <Route path="/admin/kyc" component={AdminKYC} />
+      <Route path="/terms" component={TermsPage} />
+      <Route path="/privacy" component={PrivacyPage} />
+      <Route path="/legal" component={LegalPage} />
+      <Route path="/about" component={AboutPage} />
+      <Route path="/careers" component={CareersPage} />
+      <Route path="/blog" component={BlogPage} />
+      <Route path="/help" component={HelpPage} />
+      <Route path="/contact" component={ContactPage} />
+      <Route path="/faq" component={FAQPage} />
       <Route component={NotFound} />
     </Switch>
   );

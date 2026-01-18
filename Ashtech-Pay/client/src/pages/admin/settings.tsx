@@ -13,7 +13,10 @@ import {
   Globe,
   DollarSign,
   Shield,
-  AlertTriangle
+  AlertTriangle,
+  MessageCircle,
+  Mail,
+  Phone
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -31,6 +34,9 @@ export default function AdminSettings() {
     max_transfer: "5000000",
     support_email: "support@ashtechpay.com",
     support_phone: "+237 6XX XXX XXX",
+    contact_email: "",
+    contact_whatsapp: "",
+    contact_telegram: "",
   });
 
   const { data: savedSettings, isLoading } = useQuery<PlatformSetting[]>({
@@ -124,6 +130,59 @@ export default function AdminSettings() {
                     value={settings.support_phone}
                     onChange={(e) => setSettings({ ...settings, support_phone: e.target.value })}
                     data-testid="input-support-phone"
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MessageCircle className="w-5 h-5" />
+                Informations de contact (page publique)
+              </CardTitle>
+              <CardDescription>
+                Ces informations seront affichées sur la page Contact du site
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <Mail className="w-4 h-4" />
+                    Email de contact
+                  </Label>
+                  <Input
+                    type="email"
+                    placeholder="contact@ashtechpay.com"
+                    value={settings.contact_email}
+                    onChange={(e) => setSettings({ ...settings, contact_email: e.target.value })}
+                    data-testid="input-contact-email"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <Phone className="w-4 h-4" />
+                    WhatsApp
+                  </Label>
+                  <Input
+                    placeholder="+237 6XX XXX XXX"
+                    value={settings.contact_whatsapp}
+                    onChange={(e) => setSettings({ ...settings, contact_whatsapp: e.target.value })}
+                    data-testid="input-contact-whatsapp"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <MessageCircle className="w-4 h-4" />
+                    Telegram
+                  </Label>
+                  <Input
+                    placeholder="@ashtechpay"
+                    value={settings.contact_telegram}
+                    onChange={(e) => setSettings({ ...settings, contact_telegram: e.target.value })}
+                    data-testid="input-contact-telegram"
                   />
                 </div>
               </div>
