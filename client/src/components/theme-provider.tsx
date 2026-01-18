@@ -16,7 +16,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       const stored = localStorage.getItem("ashtech-theme") as Theme;
       if (stored === "light" || stored === "dark") return stored;
     }
-    return "dark";
+    return "light";
   });
 
   useEffect(() => {

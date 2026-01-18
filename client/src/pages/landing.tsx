@@ -21,8 +21,11 @@ import {
   ShoppingBag,
   Share2,
   Clock,
-  FileText
+  FileText,
+  Sun,
+  Moon
 } from "lucide-react";
+import { useTheme } from "@/components/theme-provider";
 import logoImage from "@assets/photo_2026-01-10_21-16-00_1768076188815.jpg";
 import paymentMethodsImage from "@assets/image_1768083090679.png";
 import paymentValidatedImage from "@assets/image_1768076940034.png";
@@ -67,6 +70,8 @@ const countries = [
 ];
 
 function Navbar() {
+  const { theme, toggleTheme } = useTheme();
+  
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -90,6 +95,18 @@ function Navbar() {
           </div>
           
           <div className="flex items-center gap-3">
+            <button
+              onClick={toggleTheme}
+              className="p-2 rounded-full hover:bg-accent transition-colors"
+              aria-label="Changer de thème"
+              data-testid="button-theme-toggle"
+            >
+              {theme === "dark" ? (
+                <Sun className="w-5 h-5 text-yellow-500" />
+              ) : (
+                <Moon className="w-5 h-5 text-blue-500" />
+              )}
+            </button>
             <Link href="/login">
               <Button variant="ghost" data-testid="button-login-nav">
                 Se connecter
