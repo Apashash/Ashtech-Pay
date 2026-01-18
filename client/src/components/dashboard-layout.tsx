@@ -91,7 +91,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const handleKycClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setShowKycUpdateDialog(true);
+    setLocation("/dashboard/kyc-verified");
   };
 
   const confirmKycUpdate = () => {

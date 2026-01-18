@@ -18,6 +18,7 @@ import WithdrawalNumbersPage from "@/pages/dashboard/withdrawal-numbers";
 import TransferPage from "@/pages/dashboard/transfer";
 import SendMoneyPage from "@/pages/dashboard/send";
 import KYCPage from "@/pages/dashboard/kyc";
+import KYCVerifiedPage from "@/pages/dashboard/kyc-verified";
 import SupportPage from "@/pages/dashboard/support";
 import ApiKeysPage from "@/pages/dashboard/api-keys";
 import SettingsPage from "@/pages/dashboard/settings";
@@ -68,6 +69,7 @@ function Router() {
       <Route path="/dashboard/transfer" component={TransferPage} />
       <Route path="/dashboard/send" component={SendMoneyPage} />
       <Route path="/dashboard/kyc" component={KYCPage} />
+      <Route path="/dashboard/kyc-verified" component={KYCVerifiedPage} />
       <Route path="/dashboard/support" component={SupportPage} />
       <Route path="/dashboard/api-keys" component={ApiKeysPage} />
       <Route path="/dashboard/settings" component={SettingsPage} />
