@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User } from "@shared/schema";
@@ -42,7 +41,7 @@ export default function SettingsPage() {
   }, [user, isInitialized]);
 
   const updateProfileMutation = useMutation({
-    mutationFn: async (data: { fullName: string; email: string; phone: string; country: string }) => {
+    mutationFn: async (data: { fullName: string }) => {
       const res = await apiRequest("PATCH", "/api/user/profile", data);
       return res.json();
     },
@@ -63,7 +62,7 @@ export default function SettingsPage() {
   });
 
   const handleSaveProfile = () => {
-    updateProfileMutation.mutate({ fullName, email, phone, country });
+    updateProfileMutation.mutate({ fullName });
   };
 
   const handleSaveNotifications = () => {
@@ -116,42 +115,32 @@ export default function SettingsPage() {
                   <Input 
                     type="email" 
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="votreemail@exemple.com"
+                    disabled
+                    className="bg-muted"
                     data-testid="input-email" 
                   />
+                  <p className="text-xs text-muted-foreground">L'email ne peut pas être modifié</p>
                 </div>
                 <div className="space-y-2">
                   <Label>Téléphone</Label>
                   <Input 
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="+237 6XX XXX XXX" 
+                    disabled
+                    className="bg-muted"
                     data-testid="input-phone" 
                   />
+                  <p className="text-xs text-muted-foreground">Le téléphone ne peut pas être modifié</p>
                 </div>
               </div>
               <div className="space-y-2">
                 <Label>Pays</Label>
-                <Select value={country} onValueChange={setCountry}>
-                  <SelectTrigger data-testid="select-country">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Cameroon">Cameroun</SelectItem>
-                    <SelectItem value="Senegal">Sénégal</SelectItem>
-                    <SelectItem value="Ivory Coast">Côte d'Ivoire</SelectItem>
-                    <SelectItem value="Mali">Mali</SelectItem>
-                    <SelectItem value="Burkina Faso">Burkina Faso</SelectItem>
-                    <SelectItem value="Benin">Bénin</SelectItem>
-                    <SelectItem value="Togo">Togo</SelectItem>
-                    <SelectItem value="Niger">Niger</SelectItem>
-                    <SelectItem value="Guinea">Guinée</SelectItem>
-                    <SelectItem value="Gabon">Gabon</SelectItem>
-                    <SelectItem value="Congo">Congo</SelectItem>
-                    <SelectItem value="Chad">Tchad</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Input 
+                  value={country}
+                  disabled
+                  className="bg-muted"
+                  data-testid="input-country" 
+                />
+                <p className="text-xs text-muted-foreground">Le pays ne peut pas être modifié</p>
               </div>
               <Button 
                 onClick={handleSaveProfile} 
