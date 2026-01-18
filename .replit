@@ -33,3 +33,8 @@ outputType = "webview"
 [[ports]]
 localPort = 5000
 externalPort = 80
+
+[deployment]
+run = ["bash", "-c", "cd Ashtech-Pay && npm run start"]
+deploymentTarget = "autoscale"
+build = ["bash", "-c", "cd Ashtech-Pay && npm run build"]
