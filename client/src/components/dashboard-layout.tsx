@@ -251,7 +251,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                     const badgeCount = item.url === "/dashboard/support" ? (ticketStats?.unreadCount || 0) : 0;
                     const isKyc = item.url === "/dashboard/kyc";
                     
-                    if (isKyc && user?.kycStatus === "approved") {
+                    if (isKyc && (user?.kycStatus === "approved" || user?.kycStatus === "verified")) {
                       return (
                         <SidebarMenuItem key={item.title}>
                           <SidebarMenuButton 
