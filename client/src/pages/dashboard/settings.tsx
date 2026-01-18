@@ -22,6 +22,7 @@ export default function SettingsPage() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [country, setCountry] = useState("");
+  const [isInitialized, setIsInitialized] = useState(false);
   
   const [notifications, setNotifications] = useState({
     email: true,
@@ -31,13 +32,14 @@ export default function SettingsPage() {
   });
 
   useEffect(() => {
-    if (user) {
+    if (user && !isInitialized) {
       setFullName(user.fullName || "");
       setEmail(user.email || "");
       setPhone(user.phone || "");
       setCountry(user.country || "Cameroon");
+      setIsInitialized(true);
     }
-  }, [user]);
+  }, [user, isInitialized]);
 
   const updateProfileMutation = useMutation({
     mutationFn: async (data: { fullName: string; email: string; phone: string; country: string }) => {
