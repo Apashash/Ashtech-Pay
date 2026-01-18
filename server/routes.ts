@@ -2436,7 +2436,12 @@ export async function registerRoutes(
   app.post("/api/admin/settings", requireAdmin, async (req, res) => {
     try {
       const { key, value, description } = req.body;
-      const setting = await storage.upsertSetting(key, value, description);
+      
+      if (!key || value === undefined) {
+        return res.status(400).json({ message: "Clé et valeur requises" });
+      }
+      
+      const setting = await storage.upsertSetting(key, String(value), description || undefined);
       
       await storage.createAdminLog({
         adminId: req.session.userId!,
@@ -2450,6 +2455,39 @@ export async function registerRoutes(
       res.json(setting);
     } catch (error) {
       console.error("Admin update setting error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // Bulk save all settings
+  app.post("/api/admin/settings/bulk", requireAdmin, async (req, res) => {
+    try {
+      const { settings } = req.body;
+      
+      if (!settings || typeof settings !== "object") {
+        return res.status(400).json({ message: "Paramètres invalides" });
+      }
+      
+      const results = [];
+      for (const [key, value] of Object.entries(settings)) {
+        if (key && value !== undefined) {
+          const setting = await storage.upsertSetting(key, String(value));
+          results.push(setting);
+        }
+      }
+      
+      await storage.createAdminLog({
+        adminId: req.session.userId!,
+        action: "update_settings_bulk",
+        targetType: "setting",
+        targetId: "all",
+        details: JSON.stringify({ count: results.length }),
+        ipAddress: req.ip || null,
+      });
+      
+      res.json({ success: true, count: results.length });
+    } catch (error) {
+      console.error("Admin bulk update settings error:", error);
       res.status(500).json({ message: "Erreur serveur" });
     }
   });

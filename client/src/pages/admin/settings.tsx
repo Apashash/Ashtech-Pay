@@ -59,9 +59,22 @@ export default function AdminSettings() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/settings"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/contact-info"] });
       toast({ title: "Paramètre enregistré" });
     },
     onError: () => toast({ title: "Erreur", variant: "destructive" }),
+  });
+
+  const saveAllMutation = useMutation({
+    mutationFn: async (allSettings: Record<string, string>) => {
+      return apiRequest("POST", "/api/admin/settings/bulk", { settings: allSettings });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/settings"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/contact-info"] });
+      toast({ title: "Tous les paramètres ont été enregistrés" });
+    },
+    onError: () => toast({ title: "Erreur lors de l'enregistrement", variant: "destructive" }),
   });
 
   const handleSave = (key: string, description?: string) => {
@@ -69,9 +82,7 @@ export default function AdminSettings() {
   };
 
   const handleSaveAll = () => {
-    Object.entries(settings).forEach(([key, value]) => {
-      saveMutation.mutate({ key, value });
-    });
+    saveAllMutation.mutate(settings);
   };
 
   if (isLoading) {
@@ -92,9 +103,14 @@ export default function AdminSettings() {
             <h1 className="text-2xl font-bold">Paramètres Généraux</h1>
             <p className="text-muted-foreground">Configuration de la plateforme</p>
           </div>
-          <Button onClick={handleSaveAll} className="gap-2" data-testid="button-save-all">
+          <Button 
+            onClick={handleSaveAll} 
+            className="gap-2" 
+            data-testid="button-save-all"
+            disabled={saveAllMutation.isPending}
+          >
             <Save className="w-4 h-4" />
-            Tout enregistrer
+            {saveAllMutation.isPending ? "Enregistrement..." : "Tout enregistrer"}
           </Button>
         </div>
 
