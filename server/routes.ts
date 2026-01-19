@@ -1539,6 +1539,13 @@ export async function registerRoutes(
       let feeAmount = 0;
       const numAmount = parseFloat(baseAmount);
       
+      console.log("Payment link fee calculation:", {
+        countryId,
+        resolvedOperatorId,
+        fee: fee ? { feeType: fee.feeType, feeValue: fee.feeValue, minFee: fee.minFee, maxFee: fee.maxFee } : null,
+        numAmount
+      });
+      
       if (fee) {
         if (fee.feeType === "percentage") {
           feeAmount = (numAmount * parseFloat(fee.feeValue)) / 100;
@@ -1553,6 +1560,8 @@ export async function registerRoutes(
         }
       }
       
+      console.log("Calculated feeAmount:", feeAmount);
+      
       // Customer pays the base amount (no extra fees added)
       const totalAmount = numAmount.toFixed(2);
       // Net amount merchant receives = base amount - fees (fees deducted from merchant)
@@ -1562,13 +1571,14 @@ export async function registerRoutes(
       const reference = generateTransactionReference("payment_link");
 
       // Create payment intent (pending status)
+      const countryDisplay = countryData ? `${countryData.flag || ''} ${countryData.name}`.trim() : country;
       const intent = await storage.createPaymentIntent({
         paymentLinkId: paymentLink.id,
         merchantId: paymentLink.userId,
         payerName: fullName,
         payerEmail: email,
         payerPhone: phone,
-        payerCountry: country,
+        payerCountry: countryDisplay,
         amount: totalAmount,
         feeAmount: feeAmount.toFixed(2),
         currency: paymentLink.currency || "XAF",
@@ -1593,7 +1603,7 @@ export async function registerRoutes(
         paymentIntentId: intent.id,
         payerName: fullName,
         payerEmail: email,
-        recipientCountry: country,
+        recipientCountry: countryDisplay,
         operatorId: resolvedOperatorId || null,
       });
 
