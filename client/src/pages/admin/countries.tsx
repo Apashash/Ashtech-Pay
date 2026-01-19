@@ -75,26 +75,36 @@ export default function AdminCountries() {
 
   const createCountryMutation = useMutation({
     mutationFn: async (data: typeof countryForm) => {
-      return apiRequest("POST", "/api/admin/countries", data);
+      const res = await apiRequest("POST", "/api/admin/countries", data);
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Erreur lors de la création");
+      }
+      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/countries"] });
       toast({ title: "Pays créé" });
       resetCountryForm();
     },
-    onError: () => toast({ title: "Erreur", variant: "destructive" }),
+    onError: (error: Error) => toast({ title: "Erreur", description: error.message, variant: "destructive" }),
   });
 
   const updateCountryMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<typeof countryForm> }) => {
-      return apiRequest("PATCH", `/api/admin/countries/${id}`, data);
+      const res = await apiRequest("PATCH", `/api/admin/countries/${id}`, data);
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Erreur lors de la mise à jour");
+      }
+      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/countries"] });
       toast({ title: "Pays mis à jour" });
       resetCountryForm();
     },
-    onError: () => toast({ title: "Erreur", variant: "destructive" }),
+    onError: (error: Error) => toast({ title: "Erreur", description: error.message, variant: "destructive" }),
   });
 
   const deleteCountryMutation = useMutation({

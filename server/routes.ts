@@ -1988,6 +1988,7 @@ export async function registerRoutes(
 
   app.post("/api/admin/countries", requireAdmin, async (req, res) => {
     try {
+      console.log("Creating country with data:", JSON.stringify(req.body));
       const country = await storage.createCountry(req.body);
       
       await storage.createAdminLog({
@@ -2000,9 +2001,9 @@ export async function registerRoutes(
       });
       
       res.json(country);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Admin create country error:", error);
-      res.status(500).json({ message: "Erreur serveur" });
+      res.status(500).json({ message: error.message || "Erreur serveur" });
     }
   });
 
