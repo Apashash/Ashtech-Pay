@@ -67,7 +67,6 @@ export default function KYCPage() {
 
   const [documentType, setDocumentType] = useState("");
   const [documentNumber, setDocumentNumber] = useState("");
-  const [country, setCountry] = useState("");
   const [city, setCity] = useState("");
   const [postalCode, setPostalCode] = useState("");
   const [businessType, setBusinessType] = useState<"physical" | "online" | "">("");
@@ -241,7 +240,7 @@ export default function KYCPage() {
       documentFrontPath: uploadedPaths.front,
       documentBackPath: uploadedPaths.back,
       selfiePath: uploadedPaths.selfie,
-      country: country || undefined,
+      country: user?.country || undefined,
       city: city || undefined,
       postalCode: postalCode || undefined,
       businessType,
@@ -465,22 +464,13 @@ export default function KYCPage() {
                 </div>
                 <div className="grid md:grid-cols-3 gap-4">
                   <div className="space-y-2">
-                    <Label>Pays</Label>
-                    <Select value={country} onValueChange={setCountry}>
-                      <SelectTrigger data-testid="select-country">
-                        <SelectValue placeholder="Choisir votre pays" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {africanCountries.map((c) => (
-                          <SelectItem key={c.code} value={c.name}>
-                            <span className="flex items-center gap-2">
-                              <span>{c.flag}</span>
-                              <span>{c.name}</span>
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Label className="text-muted-foreground">Pays</Label>
+                    <Input
+                      value={user?.country || "Non renseigné"}
+                      disabled
+                      className="bg-muted/50"
+                      data-testid="input-country-readonly"
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label>Ville</Label>
