@@ -1553,10 +1553,10 @@ export async function registerRoutes(
         }
       }
       
-      // Total amount payer must pay = base amount + fees
-      const totalAmount = (numAmount + feeAmount).toFixed(2);
-      // Net amount merchant receives = base amount (fees go to platform)
-      const netAmount = numAmount.toFixed(2);
+      // Customer pays the base amount (no extra fees added)
+      const totalAmount = numAmount.toFixed(2);
+      // Net amount merchant receives = base amount - fees (fees deducted from merchant)
+      const netAmount = (numAmount - feeAmount).toFixed(2);
 
       // Generate unique ASHPAY reference
       const reference = generateTransactionReference("payment_link");
