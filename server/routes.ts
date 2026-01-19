@@ -1325,6 +1325,23 @@ export async function registerRoutes(
     }
   });
 
+  // Public support contact info route
+  app.get("/api/public/support-contact", async (_req, res) => {
+    try {
+      const settings = await storage.getAllSettings();
+      const supportEmail = settings.find(s => s.key === "support_email")?.value || "support@ashtechpay.com";
+      const supportPhone = settings.find(s => s.key === "support_phone")?.value || "+237 6XX XXX XXX";
+      
+      res.json({
+        email: supportEmail,
+        phone: supportPhone,
+      });
+    } catch (error) {
+      console.error("Get support contact error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   // Public payment link route
   app.get("/api/payment-links/public/:slug", async (req, res) => {
     try {

@@ -56,12 +56,6 @@ const faqs = [
   { question: "Quels sont les frais de transaction?", answer: "Les transferts entre utilisateurs Ashtech Pay sont gratuits. Des frais s'appliquent pour les retraits externes." },
 ];
 
-const contactOptions = [
-  { icon: MessageSquare, title: "Chat en direct", description: "Réponse en quelques minutes", available: true, action: "chat" },
-  { icon: Mail, title: "Email", description: "support@ashtechpay.com", available: true, action: "email" },
-  { icon: Phone, title: "Téléphone", description: "+237 6XX XXX XXX", available: true, action: "phone" },
-];
-
 const statusColors: Record<string, string> = {
   open: "bg-blue-500/10 text-blue-500",
   in_progress: "bg-yellow-500/10 text-yellow-500",
@@ -76,6 +70,11 @@ const statusLabels: Record<string, string> = {
   closed: "Clôturé",
 };
 
+interface SupportContact {
+  email: string;
+  phone: string;
+}
+
 export default function SupportPage() {
   const { toast } = useToast();
   const [showNewTicket, setShowNewTicket] = useState(false);
@@ -85,6 +84,16 @@ export default function SupportPage() {
   const [newTicketSubject, setNewTicketSubject] = useState("");
   const [newTicketMessage, setNewTicketMessage] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const { data: supportContact } = useQuery<SupportContact>({
+    queryKey: ["/api/public/support-contact"],
+  });
+
+  const contactOptions = [
+    { icon: MessageSquare, title: "Chat en direct", description: "Réponse en quelques minutes", available: true, action: "chat" },
+    { icon: Mail, title: "Email", description: supportContact?.email || "support@ashtechpay.com", available: true, action: "email" },
+    { icon: Phone, title: "Téléphone", description: supportContact?.phone || "+237 6XX XXX XXX", available: true, action: "phone" },
+  ];
 
   const { data: tickets, isLoading: ticketsLoading } = useQuery<SupportTicket[]>({
     queryKey: ["/api/tickets"],
