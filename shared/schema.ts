@@ -24,7 +24,7 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const SUPPORTED_CURRENCIES = ["XAF", "XOF", "USD", "EUR"] as const;
+export const SUPPORTED_CURRENCIES = ["XAF", "XOF", "CDF", "USD", "EUR"] as const;
 export type SupportedCurrency = typeof SUPPORTED_CURRENCIES[number];
 
 export const COUNTRY_CURRENCIES: Record<string, SupportedCurrency> = {
@@ -36,10 +36,10 @@ export const COUNTRY_CURRENCIES: Record<string, SupportedCurrency> = {
   "Central African Republic": "XAF",
   "Congo": "XAF",
   "Republic of the Congo": "XAF",
-  "RD Congo": "XAF",
   "Gabon": "XAF",
   "Guinée équatoriale": "XAF",
   "Equatorial Guinea": "XAF",
+  "RD Congo": "CDF",
   "Sénégal": "XOF",
   "Senegal": "XOF",
   "Côte d'Ivoire": "XOF",
@@ -72,6 +72,7 @@ export const COUNTRY_CURRENCIES: Record<string, SupportedCurrency> = {
 export const EXCHANGE_RATES: Record<SupportedCurrency, number> = {
   "XAF": 1,
   "XOF": 1,
+  "CDF": 0.27,
   "USD": 0.0016,
   "EUR": 0.0015,
 };
@@ -79,6 +80,7 @@ export const EXCHANGE_RATES: Record<SupportedCurrency, number> = {
 export const CURRENCY_SYMBOLS: Record<SupportedCurrency, string> = {
   "XAF": "XAF",
   "XOF": "XOF",
+  "CDF": "CDF",
   "USD": "$",
   "EUR": "€",
 };

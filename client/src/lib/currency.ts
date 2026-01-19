@@ -25,6 +25,7 @@ export function formatCurrency(amount: string | number, currency: SupportedCurre
 export const CURRENCY_OPTIONS = [
   { value: "XAF", label: "XAF", flag: "🇨🇲", name: "Franc CFA (CEMAC)" },
   { value: "XOF", label: "XOF", flag: "🇸🇳", name: "Franc CFA (UEMOA)" },
+  { value: "CDF", label: "CDF", flag: "🇨🇩", name: "Franc Congolais" },
   { value: "USD", label: "$", flag: "🇺🇸", name: "Dollar US" },
   { value: "EUR", label: "€", flag: "🇪🇺", name: "Euro" },
 ] as const;
