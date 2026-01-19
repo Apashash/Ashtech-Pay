@@ -118,7 +118,7 @@ export async function registerRoutes(
   // Trust proxy (Replit uses reverse proxy in all environments)
   app.set("trust proxy", 1);
 
-  // Session middleware
+  // Session middleware - use sameSite: none for Replit iframe preview
   app.use(
     session({
       secret: process.env.SESSION_SECRET || "ashtech-pay-secret-key",
@@ -129,9 +129,9 @@ export async function registerRoutes(
       }),
       proxy: true,
       cookie: {
-        secure: "auto",
+        secure: true,
         httpOnly: true,
-        sameSite: "lax",
+        sameSite: "none",
         maxAge: 24 * 60 * 60 * 1000,
       },
     })
