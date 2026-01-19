@@ -1524,7 +1524,7 @@ export async function registerRoutes(
 
       // Get country and operator IDs for fee calculation
       const allCountries = await storage.getAllCountries();
-      const countryData = allCountries.find((c: { code: string; name: string }) => c.code === country || c.name === country);
+      const countryData = allCountries.find((c: { id: string; code: string; name: string }) => c.id === country || c.code === country || c.name === country);
       const countryId = countryData?.id || undefined;
       
       let resolvedOperatorId: string | undefined = undefined;
