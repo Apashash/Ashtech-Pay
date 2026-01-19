@@ -30,6 +30,7 @@ export default function AdminSettings() {
     maintenance_mode: "false",
     exchange_rate_usd: "625",
     exchange_rate_eur: "656",
+    exchange_rate_cdf: "0.27",
     min_transfer: "100",
     max_transfer: "5000000",
     support_email: "support@ashtechpay.com",
@@ -216,7 +217,7 @@ export default function AdminSettings() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Devise par défaut</Label>
                   <Input
@@ -241,6 +242,16 @@ export default function AdminSettings() {
                     value={settings.exchange_rate_eur}
                     onChange={(e) => setSettings({ ...settings, exchange_rate_eur: e.target.value })}
                     data-testid="input-rate-eur"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>1 CDF = ? XAF</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={settings.exchange_rate_cdf}
+                    onChange={(e) => setSettings({ ...settings, exchange_rate_cdf: e.target.value })}
+                    data-testid="input-rate-cdf"
                   />
                 </div>
               </div>
