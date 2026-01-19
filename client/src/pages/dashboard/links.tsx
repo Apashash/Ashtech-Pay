@@ -1650,14 +1650,16 @@ export default function PaymentLinksPage() {
                             <div className="flex items-center gap-4 mt-2 flex-wrap">
                               <div className="flex flex-col">
                                 <span className="text-lg font-bold text-primary">
-                                  {formatCurrency(intent.amount, (intent.currency as SupportedCurrency) || "XAF")}
+                                  {formatCurrency(
+                                    intent.feeAmount 
+                                      ? parseFloat(String(intent.amount)) - parseFloat(intent.feeAmount)
+                                      : parseFloat(String(intent.amount)),
+                                    (intent.currency as SupportedCurrency) || "XAF"
+                                  )}
                                 </span>
                                 {intent.feeAmount && parseFloat(intent.feeAmount) > 0 && (
                                   <span className="text-xs text-muted-foreground">
-                                    À créditer: {formatCurrency(
-                                      parseFloat(String(intent.amount)) - parseFloat(intent.feeAmount),
-                                      (intent.currency as SupportedCurrency) || "XAF"
-                                    )}
+                                    Montant payé: {formatCurrency(intent.amount, (intent.currency as SupportedCurrency) || "XAF")}
                                     <span className="text-amber-500 ml-1">
                                       (-{formatCurrency(parseFloat(intent.feeAmount), (intent.currency as SupportedCurrency) || "XAF")} frais)
                                     </span>

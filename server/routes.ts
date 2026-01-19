@@ -1379,11 +1379,25 @@ export async function registerRoutes(
           code: country.code,
           flag: country.flag,
           currency: country.currency,
+          exchangeRate: parseFloat(country.exchangeRate as string) || 1,
           operators: countryOperators,
         };
       });
       
-      res.json(config);
+      // Get global exchange rates from settings
+      const settings = await storage.getAllSettings();
+      const exchangeRates: Record<string, number> = {
+        XAF: 1,
+        XOF: 1,
+      };
+      const usdRate = settings.find(s => s.key === "exchange_rate_usd")?.value;
+      const eurRate = settings.find(s => s.key === "exchange_rate_eur")?.value;
+      const cdfRate = settings.find(s => s.key === "exchange_rate_cdf")?.value;
+      if (usdRate) exchangeRates.USD = 1 / parseFloat(usdRate);
+      if (eurRate) exchangeRates.EUR = 1 / parseFloat(eurRate);
+      if (cdfRate) exchangeRates.CDF = parseFloat(cdfRate);
+      
+      res.json({ countries: config, exchangeRates });
     } catch (error) {
       console.error("Get public deposit config error:", error);
       res.status(500).json({ message: "Erreur serveur" });

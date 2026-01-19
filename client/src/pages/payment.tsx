@@ -30,12 +30,18 @@ interface CountryConfig {
   code: string;
   flag: string;
   currency: string;
+  exchangeRate: number;
   operators: {
     id: string;
     name: string;
     feePercentage: number;
     feeFixed: number;
   }[];
+}
+
+interface DepositConfigResponse {
+  countries: CountryConfig[];
+  exchangeRates: Record<string, number>;
 }
 
 function formatAmount(amount: number, currency: SupportedCurrency): string {
@@ -82,9 +88,12 @@ export default function PaymentPage() {
     enabled: !!params?.slug,
   });
 
-  const { data: depositConfig = [] } = useQuery<CountryConfig[]>({
+  const { data: depositConfigData } = useQuery<DepositConfigResponse>({
     queryKey: ["/api/public/deposit-config"],
   });
+  
+  const depositConfig = depositConfigData?.countries || [];
+  const adminExchangeRates = depositConfigData?.exchangeRates || { XAF: 1, XOF: 1 };
 
   const linkCurrency = useMemo(() => {
     return (paymentLink?.currency as SupportedCurrency) || "XAF";
@@ -115,15 +124,19 @@ export default function PaymentPage() {
 
   const convertedDisplayAmount = useMemo(() => {
     if (selectedDisplayCurrency === linkCurrency) return displayAmount;
-    const amountInXAF = displayAmount / EXCHANGE_RATES[linkCurrency];
-    return amountInXAF * EXCHANGE_RATES[selectedDisplayCurrency];
-  }, [displayAmount, selectedDisplayCurrency, linkCurrency]);
+    const linkRate = adminExchangeRates[linkCurrency] || 1;
+    const targetRate = adminExchangeRates[selectedDisplayCurrency] || 1;
+    const amountInXAF = displayAmount / linkRate;
+    return amountInXAF * targetRate;
+  }, [displayAmount, selectedDisplayCurrency, linkCurrency, adminExchangeRates]);
 
   const convertedAmount = useMemo(() => {
     if (!country || countryCurrency === linkCurrency) return null;
-    const amountInXAF = displayAmount / EXCHANGE_RATES[linkCurrency];
-    return amountInXAF * EXCHANGE_RATES[countryCurrency];
-  }, [displayAmount, countryCurrency, linkCurrency, country]);
+    const linkRate = adminExchangeRates[linkCurrency] || 1;
+    const countryRate = adminExchangeRates[countryCurrency] || 1;
+    const amountInXAF = displayAmount / linkRate;
+    return amountInXAF * countryRate;
+  }, [displayAmount, countryCurrency, linkCurrency, country, adminExchangeRates]);
 
   const operators = useMemo(() => {
     return selectedCountryData?.operators || [];
