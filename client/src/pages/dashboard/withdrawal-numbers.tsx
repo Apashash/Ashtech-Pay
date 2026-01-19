@@ -10,9 +10,21 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { WithdrawalNumber, WithdrawalNumberChange, User } from "@shared/schema";
-import { MOBILE_OPERATORS } from "@shared/schema";
 import { Phone, Plus, Loader2, Edit, Trash2, Clock, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
+
+interface CountryConfig {
+  id: string;
+  name: string;
+  code: string;
+  flag: string;
+  currency: string;
+  operators: Array<{
+    id: string;
+    name: string;
+    isActive: boolean;
+  }>;
+}
 
 export default function WithdrawalNumbersPage() {
   const { toast } = useToast();
@@ -22,8 +34,26 @@ export default function WithdrawalNumbersPage() {
   const [newNumber, setNewNumber] = useState({ phoneNumber: "", operatorName: "", label: "" });
 
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
-  const country = user?.country || "Cameroon";
-  const operators = MOBILE_OPERATORS[country] || [];
+  
+  // Fetch deposit config to get dynamic operators by country
+  const { data: depositConfig } = useQuery<{ countries: CountryConfig[] }>({
+    queryKey: ["/api/deposit-config"],
+  });
+
+  // Find the user's country in the config and get its operators
+  const operators = useMemo(() => {
+    if (!depositConfig?.countries || !user?.country) return [];
+    
+    const userCountry = depositConfig.countries.find(c => 
+      c.name === user.country || c.name.toLowerCase() === user.country?.toLowerCase()
+    );
+    
+    if (!userCountry) return [];
+    
+    return userCountry.operators
+      .filter(op => op.isActive)
+      .map(op => op.name);
+  }, [depositConfig?.countries, user?.country]);
 
   const { data: withdrawalNumbers = [], isLoading: numbersLoading } = useQuery<WithdrawalNumber[]>({
     queryKey: ["/api/withdrawal-numbers"],
