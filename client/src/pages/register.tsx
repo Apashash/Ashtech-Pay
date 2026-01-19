@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,25 +15,17 @@ import { Mail, Lock, User, Phone, Loader2, Eye, EyeOff, ArrowLeft } from "lucide
 import logoImage from "@assets/photo_2026-01-10_21-16-00_1768076188815.jpg";
 import { z } from "zod";
 
-const africanCountries = [
-  { code: "CM", name: "Cameroun", flag: "🇨🇲", dialCode: "+237" },
-  { code: "SN", name: "Sénégal", flag: "🇸🇳", dialCode: "+221" },
-  { code: "CI", name: "Côte d'Ivoire", flag: "🇨🇮", dialCode: "+225" },
-  { code: "ML", name: "Mali", flag: "🇲🇱", dialCode: "+223" },
-  { code: "BF", name: "Burkina Faso", flag: "🇧🇫", dialCode: "+226" },
-  { code: "NE", name: "Niger", flag: "🇳🇪", dialCode: "+227" },
-  { code: "TG", name: "Togo", flag: "🇹🇬", dialCode: "+228" },
-  { code: "BJ", name: "Bénin", flag: "🇧🇯", dialCode: "+229" },
-  { code: "GA", name: "Gabon", flag: "🇬🇦", dialCode: "+241" },
-  { code: "CG", name: "Congo", flag: "🇨🇬", dialCode: "+242" },
-  { code: "CD", name: "RD Congo", flag: "🇨🇩", dialCode: "+243" },
-  { code: "CF", name: "Centrafrique", flag: "🇨🇫", dialCode: "+236" },
-  { code: "TD", name: "Tchad", flag: "🇹🇩", dialCode: "+235" },
-  { code: "GN", name: "Guinée", flag: "🇬🇳", dialCode: "+224" },
-  { code: "MG", name: "Madagascar", flag: "🇲🇬", dialCode: "+261" },
-  { code: "MA", name: "Maroc", flag: "🇲🇦", dialCode: "+212" },
-  { code: "TN", name: "Tunisie", flag: "🇹🇳", dialCode: "+216" },
-  { code: "DZ", name: "Algérie", flag: "🇩🇿", dialCode: "+213" },
+interface CountryData {
+  code: string;
+  name: string;
+  flag: string;
+  dialCode: string;
+  currency: string;
+  exchangeRate: string;
+}
+
+const fallbackCountries: CountryData[] = [
+  { code: "CM", name: "Cameroun", flag: "🇨🇲", dialCode: "+237", currency: "XAF", exchangeRate: "1" },
 ];
 
 const extendedRegisterSchema = registerSchema.extend({
@@ -50,7 +42,22 @@ export default function RegisterPage() {
   const { toast } = useToast();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [selectedCountry, setSelectedCountry] = useState(africanCountries[0]);
+  const [selectedCountry, setSelectedCountry] = useState<CountryData | null>(null);
+
+  const { data: countries = fallbackCountries, isLoading: loadingCountries } = useQuery<CountryData[]>({
+    queryKey: ["/api/public/countries"],
+    queryFn: async () => {
+      const res = await fetch("/api/public/countries");
+      if (!res.ok) throw new Error("Failed to fetch countries");
+      return res.json();
+    },
+  });
+
+  useEffect(() => {
+    if (countries.length > 0 && !selectedCountry) {
+      setSelectedCountry(countries[0]);
+    }
+  }, [countries, selectedCountry]);
 
   const form = useForm<RegisterFormData>({
     resolver: zodResolver(extendedRegisterSchema),
@@ -69,7 +76,7 @@ export default function RegisterPage() {
       const { confirmPassword, ...submitData } = data;
       const res = await apiRequest("POST", "/api/auth/register", {
         ...submitData,
-        country: selectedCountry.name,
+        country: selectedCountry?.name || "",
       });
       return res.json();
     },
@@ -91,15 +98,23 @@ export default function RegisterPage() {
   });
 
   const onSubmit = (data: RegisterFormData) => {
+    if (!selectedCountry) {
+      toast({
+        title: "Erreur",
+        description: "Veuillez sélectionner un pays",
+        variant: "destructive",
+      });
+      return;
+    }
     registerMutation.mutate(data);
   };
 
   const handleCountryChange = (countryCode: string) => {
-    const country = africanCountries.find(c => c.code === countryCode);
+    const country = countries.find(c => c.code === countryCode);
     if (country) {
       setSelectedCountry(country);
       const currentPhone = form.getValues("phone");
-      if (!currentPhone || africanCountries.some(c => currentPhone.startsWith(c.dialCode))) {
+      if (!currentPhone || countries.some(c => currentPhone.startsWith(c.dialCode))) {
         form.setValue("phone", country.dialCode + " ");
       }
     }
@@ -206,17 +221,21 @@ export default function RegisterPage() {
                     <FormLabel>Téléphone</FormLabel>
                     <FormControl>
                       <div className="flex gap-2">
-                        <Select value={selectedCountry.code} onValueChange={handleCountryChange}>
+                        <Select value={selectedCountry?.code || ""} onValueChange={handleCountryChange}>
                           <SelectTrigger className="w-[140px]" data-testid="select-country">
                             <SelectValue>
-                              <span className="flex items-center gap-2">
-                                <span className="text-lg">{selectedCountry.flag}</span>
-                                <span className="text-sm">{selectedCountry.dialCode}</span>
-                              </span>
+                              {selectedCountry ? (
+                                <span className="flex items-center gap-2">
+                                  <span className="text-lg">{selectedCountry.flag}</span>
+                                  <span className="text-sm">{selectedCountry.dialCode}</span>
+                                </span>
+                              ) : (
+                                <span>Pays</span>
+                              )}
                             </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
-                            {africanCountries.map((country) => (
+                            {countries.map((country) => (
                               <SelectItem key={country.code} value={country.code}>
                                 <span className="flex items-center gap-2">
                                   <span className="text-lg">{country.flag}</span>
@@ -233,7 +252,8 @@ export default function RegisterPage() {
                             placeholder="6XX XXX XXX" 
                             className="pl-10"
                             data-testid="input-phone"
-                            {...field} 
+                            {...field}
+                            value={field.value || ""}
                           />
                         </div>
                       </div>
@@ -308,7 +328,7 @@ export default function RegisterPage() {
               <Button 
                 type="submit" 
                 className="w-full" 
-                disabled={registerMutation.isPending}
+                disabled={registerMutation.isPending || loadingCountries || !selectedCountry}
                 data-testid="button-register"
               >
                 {registerMutation.isPending ? (
