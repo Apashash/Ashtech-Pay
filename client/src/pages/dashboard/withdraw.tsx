@@ -288,15 +288,39 @@ export default function WithdrawPage() {
                         </div>
                       </div>
 
-                      {selectedOperatorData && selectedOperatorData.feePercentage > 0 && (
-                        <Card className="border-amber-500/30 bg-amber-500/5">
-                          <CardContent className="p-3">
-                            <p className="text-xs text-muted-foreground">
-                              Frais de retrait: <span className="font-medium text-foreground">{selectedOperatorData.feePercentage}%</span>
-                            </p>
-                          </CardContent>
-                        </Card>
-                      )}
+                      {(() => {
+                        const amountValue = parseFloat(form.watch("amount") || "0");
+                        if (amountValue > 0 && selectedOperatorData) {
+                          const feePercent = selectedOperatorData.feePercentage || 0;
+                          const feeFixed = selectedOperatorData.feeFixed || 0;
+                          const feeAmount = (amountValue * feePercent / 100) + feeFixed;
+                          const amountReceived = amountValue - feeAmount;
+                          
+                          return (
+                            <Card className="border-primary/30 bg-primary/5">
+                              <CardContent className="p-4 space-y-3">
+                                <div className="flex justify-between items-center text-sm">
+                                  <span className="text-muted-foreground">Montant demandé</span>
+                                  <span className="font-medium">{formatCurrency(amountValue, "XAF")}</span>
+                                </div>
+                                <div className="flex justify-between items-center text-sm">
+                                  <span className="text-muted-foreground">
+                                    Frais ({feePercent}%{feeFixed > 0 ? ` + ${formatCurrency(feeFixed, "XAF")}` : ''})
+                                  </span>
+                                  <span className="font-medium text-red-500">- {formatCurrency(feeAmount, "XAF")}</span>
+                                </div>
+                                <div className="border-t border-border pt-3">
+                                  <div className="flex justify-between items-center">
+                                    <span className="font-semibold text-foreground">Vous recevrez</span>
+                                    <span className="font-bold text-lg text-primary">{formatCurrency(amountReceived, "XAF")}</span>
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        }
+                        return null;
+                      })()}
                     </>
                   )}
 
