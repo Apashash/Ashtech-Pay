@@ -54,9 +54,16 @@ export default function EditWithdrawalNumberPage() {
   const operators = useMemo(() => {
     if (!countriesConfig.length || !user?.country) return [];
     
-    const userCountry = countriesConfig.find(c => 
-      c.name === user.country || c.name.toLowerCase() === user.country?.toLowerCase()
-    );
+    const userCountryLower = user.country.toLowerCase().trim();
+    
+    const userCountry = countriesConfig.find(c => {
+      const configNameLower = c.name.toLowerCase().trim();
+      return configNameLower === userCountryLower || 
+             configNameLower.includes(userCountryLower) ||
+             userCountryLower.includes(configNameLower) ||
+             (c.name.toLowerCase().includes("cameroun") && userCountryLower.includes("cameroon")) ||
+             (c.name.toLowerCase().includes("cameroon") && userCountryLower.includes("cameroun"));
+    });
     
     if (!userCountry) return [];
     
