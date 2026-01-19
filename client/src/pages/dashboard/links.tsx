@@ -1047,6 +1047,20 @@ export default function PaymentLinksPage() {
     return countryValue;
   };
 
+  const getOperatorDisplay = (operatorValue: string | null | undefined): string => {
+    if (!operatorValue) return "";
+    // If it looks like a UUID, try to find the operator
+    if (operatorValue.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+      for (const country of countriesList) {
+        const operators = (country as any).operators || [];
+        const operator = operators.find((o: { id: string; name: string }) => o.id === operatorValue);
+        if (operator) return operator.name;
+      }
+      return operatorValue;
+    }
+    return operatorValue;
+  };
+
   const deactivateMutation = useMutation({
     mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
       return apiRequest("PATCH", `/api/payment-links/${id}`, { isActive });
@@ -1697,7 +1711,7 @@ export default function PaymentLinksPage() {
                               </div>
                               <span className="text-xs text-muted-foreground">
                                 {intent.paymentMethod === "mobile_money" ? "Mobile Money" : intent.paymentMethod}
-                                {intent.operator && ` - ${intent.operator}`}
+                                {intent.operator && ` - ${getOperatorDisplay(intent.operator)}`}
                               </span>
                               <span className="text-xs text-muted-foreground">
                                 Réf: {intent.reference}
