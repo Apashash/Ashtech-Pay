@@ -1032,6 +1032,21 @@ export default function PaymentLinksPage() {
     queryKey: ["/api/payment-intents"],
   });
 
+  const { data: countriesData } = useQuery<{ countries: Array<{ id: string; name: string; flag: string; code: string }> }>({
+    queryKey: ["/api/public/deposit-config"],
+  });
+  const countriesList = countriesData?.countries || [];
+
+  const getCountryDisplay = (countryValue: string | null | undefined): string => {
+    if (!countryValue) return "Autre";
+    // If it looks like a UUID, try to find the country
+    if (countryValue.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+      const country = countriesList.find(c => c.id === countryValue);
+      return country ? `${country.flag || ''} ${country.name}`.trim() : countryValue;
+    }
+    return countryValue;
+  };
+
   const deactivateMutation = useMutation({
     mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
       return apiRequest("PATCH", `/api/payment-links/${id}`, { isActive });
@@ -1118,7 +1133,7 @@ export default function PaymentLinksPage() {
     
     const countryStats: Record<string, number> = {};
     completedIntents.forEach(intent => {
-      const country = intent.payerCountry || "Autre";
+      const country = getCountryDisplay(intent.payerCountry);
       countryStats[country] = (countryStats[country] || 0) + getNetAmount(intent);
     });
     
@@ -1164,7 +1179,7 @@ export default function PaymentLinksPage() {
       countries,
       sources: sources.length > 0 ? sources : [{ name: "Aucune donnée", value: 100, color: "#6B7280" }],
     };
-  }, [paymentLinks, paymentIntents]);
+  }, [paymentLinks, paymentIntents, countriesList]);
 
   const chartData = useMemo(() => {
     const toXAF = (amount: string, currency: string) => {
@@ -1659,7 +1674,7 @@ export default function PaymentLinksPage() {
                             <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
                               <span>{intent.payerEmail}</span>
                               <span>{intent.payerPhone}</span>
-                              <span>{intent.payerCountry}</span>
+                              <span>{getCountryDisplay(intent.payerCountry)}</span>
                             </div>
                             <div className="flex items-center gap-4 mt-2 flex-wrap">
                               <div className="flex flex-col">
