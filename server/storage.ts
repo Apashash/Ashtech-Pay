@@ -167,6 +167,10 @@ export interface IStorage {
     totalDeposits: string;
     totalWithdrawals: string;
     totalRevenue: string;
+    depositFees: string;
+    withdrawalFees: string;
+    transferFees: string;
+    paymentLinkFees: string;
     depositCount: number;
     withdrawalCount: number;
     transferCount: number;
@@ -838,6 +842,10 @@ export class DatabaseStorage implements IStorage {
     totalDeposits: string;
     totalWithdrawals: string;
     totalRevenue: string;
+    depositFees: string;
+    withdrawalFees: string;
+    transferFees: string;
+    paymentLinkFees: string;
     depositCount: number;
     withdrawalCount: number;
     transferCount: number;
@@ -909,6 +917,10 @@ export class DatabaseStorage implements IStorage {
       totalDeposits: totalDeposits.toFixed(2),
       totalWithdrawals: totalWithdrawals.toFixed(2),
       totalRevenue: totalRevenue.toFixed(2),
+      depositFees: depositFees.toFixed(2),
+      withdrawalFees: withdrawalFees.toFixed(2),
+      transferFees: transferFees.toFixed(2),
+      paymentLinkFees: paymentLinkFees.toFixed(2),
       depositCount,
       withdrawalCount,
       transferCount,

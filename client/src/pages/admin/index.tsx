@@ -45,6 +45,10 @@ interface AdminStats {
   totalDeposits: string;
   totalWithdrawals: string;
   totalRevenue: string;
+  depositFees: string;
+  withdrawalFees: string;
+  transferFees: string;
+  paymentLinkFees: string;
   depositCount: number;
   withdrawalCount: number;
   transferCount: number;
@@ -138,7 +142,7 @@ export default function AdminDashboard() {
       bgColor: "bg-red-500/10",
     },
     {
-      title: "Revenus (Frais)",
+      title: "Revenus Total (Frais)",
       value: formatCurrency(parseFloat(stats?.totalRevenue || "0"), "XAF"),
       icon: DollarSign,
       color: "text-primary",
@@ -204,6 +208,81 @@ export default function AdminDashboard() {
             </Card>
           ))}
         </div>
+
+        <Card className="border-primary/30 bg-primary/5">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <DollarSign className="w-5 h-5 text-primary" />
+              Détail des Revenus (Frais)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="p-4 rounded-lg bg-background border border-border">
+                <div className="flex items-center gap-2 mb-2">
+                  <ArrowDownCircle className="w-4 h-4 text-green-500" />
+                  <span className="text-sm text-muted-foreground">Frais Dépôts</span>
+                </div>
+                {isLoading ? (
+                  <Skeleton className="h-6 w-20" />
+                ) : (
+                  <p className="text-lg font-bold text-green-500">
+                    {formatCurrency(parseFloat(stats?.depositFees || "0"), "XAF")}
+                  </p>
+                )}
+              </div>
+              <div className="p-4 rounded-lg bg-background border border-border">
+                <div className="flex items-center gap-2 mb-2">
+                  <ArrowUpCircle className="w-4 h-4 text-orange-500" />
+                  <span className="text-sm text-muted-foreground">Frais Retraits</span>
+                </div>
+                {isLoading ? (
+                  <Skeleton className="h-6 w-20" />
+                ) : (
+                  <p className="text-lg font-bold text-orange-500">
+                    {formatCurrency(parseFloat(stats?.withdrawalFees || "0"), "XAF")}
+                  </p>
+                )}
+              </div>
+              <div className="p-4 rounded-lg bg-background border border-border">
+                <div className="flex items-center gap-2 mb-2">
+                  <Send className="w-4 h-4 text-blue-500" />
+                  <span className="text-sm text-muted-foreground">Frais Envois</span>
+                </div>
+                {isLoading ? (
+                  <Skeleton className="h-6 w-20" />
+                ) : (
+                  <p className="text-lg font-bold text-blue-500">
+                    {formatCurrency(parseFloat(stats?.transferFees || "0"), "XAF")}
+                  </p>
+                )}
+              </div>
+              <div className="p-4 rounded-lg bg-background border border-border">
+                <div className="flex items-center gap-2 mb-2">
+                  <Link2 className="w-4 h-4 text-purple-500" />
+                  <span className="text-sm text-muted-foreground">Frais Liens</span>
+                </div>
+                {isLoading ? (
+                  <Skeleton className="h-6 w-20" />
+                ) : (
+                  <p className="text-lg font-bold text-purple-500">
+                    {formatCurrency(parseFloat(stats?.paymentLinkFees || "0"), "XAF")}
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="mt-4 pt-4 border-t border-border flex justify-between items-center">
+              <span className="text-muted-foreground font-medium">Total des revenus</span>
+              {isLoading ? (
+                <Skeleton className="h-8 w-32" />
+              ) : (
+                <p className="text-2xl font-bold text-primary">
+                  {formatCurrency(parseFloat(stats?.totalRevenue || "0"), "XAF")}
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card>
