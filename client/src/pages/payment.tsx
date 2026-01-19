@@ -549,7 +549,7 @@ export default function PaymentPage() {
               ) : (
                 <>
                   <Shield className="w-4 h-4 mr-2" />
-                  Payer {displayAmount > 0 ? formatAmount(displayAmount, linkCurrency) : ""}
+                  Payer {displayAmount > 0 ? formatAmount(displayAmount, selectedDisplayCurrency) : ""}
                 </>
               )}
             </Button>
