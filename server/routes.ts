@@ -1301,6 +1301,30 @@ export async function registerRoutes(
     }
   });
 
+  // Public exchange rates route
+  app.get("/api/public/exchange-rates", async (_req, res) => {
+    try {
+      const settings = await storage.getAllSettings();
+      const rates: Record<string, number> = {
+        XAF: 1,
+        XOF: 1,
+      };
+      
+      const usdRate = settings.find(s => s.key === "exchange_rate_usd")?.value;
+      const eurRate = settings.find(s => s.key === "exchange_rate_eur")?.value;
+      const cdfRate = settings.find(s => s.key === "exchange_rate_cdf")?.value;
+      
+      if (usdRate) rates.USD = 1 / parseFloat(usdRate);
+      if (eurRate) rates.EUR = 1 / parseFloat(eurRate);
+      if (cdfRate) rates.CDF = parseFloat(cdfRate);
+      
+      res.json(rates);
+    } catch (error) {
+      console.error("Get exchange rates error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   // Public payment link route
   app.get("/api/payment-links/public/:slug", async (req, res) => {
     try {

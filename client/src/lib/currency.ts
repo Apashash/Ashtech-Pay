@@ -1,13 +1,14 @@
 import { EXCHANGE_RATES, CURRENCY_SYMBOLS, type SupportedCurrency } from "@shared/schema";
 
-export function convertCurrency(amountXAF: number, toCurrency: SupportedCurrency): number {
-  const rate = EXCHANGE_RATES[toCurrency];
+export function convertCurrency(amountXAF: number, toCurrency: SupportedCurrency, customRates?: Record<string, number>): number {
+  const rates = customRates || EXCHANGE_RATES;
+  const rate = rates[toCurrency] ?? EXCHANGE_RATES[toCurrency] ?? 1;
   return amountXAF * rate;
 }
 
-export function formatCurrency(amount: string | number, currency: SupportedCurrency = "XAF"): string {
+export function formatCurrency(amount: string | number, currency: SupportedCurrency = "XAF", customRates?: Record<string, number>): string {
   const num = typeof amount === "string" ? parseFloat(amount) : amount;
-  const convertedAmount = convertCurrency(num, currency);
+  const convertedAmount = convertCurrency(num, currency, customRates);
   
   const symbol = CURRENCY_SYMBOLS[currency];
   

@@ -14,6 +14,7 @@ import { transferSchema, depositSchema, withdrawSchema, createPaymentLinkSchema,
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User, Transaction, PaymentLink } from "@shared/schema";
 import { formatCurrency } from "@/lib/currency";
+import { useExchangeRates } from "@/hooks/use-exchange-rates";
 import {
   Wallet,
   Send,
@@ -420,6 +421,7 @@ export default function DashboardHome() {
   const [showVerificationDialog, setShowVerificationDialog] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState("month");
   const [selectedLink, setSelectedLink] = useState("all");
+  const { rates } = useExchangeRates();
   
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const { data: transactions = [] } = useQuery<Transaction[]>({ queryKey: ["/api/transactions"] });
@@ -474,7 +476,7 @@ export default function DashboardHome() {
               <div>
                 <p className="text-muted-foreground text-sm mb-1">Solde disponible</p>
                 <p className="text-3xl font-bold text-foreground" data-testid="text-balance">
-                  {formatCurrency(user?.balance || "0", (user?.preferredCurrency || "XAF") as SupportedCurrency)}
+                  {formatCurrency(user?.balance || "0", (user?.preferredCurrency || "XAF") as SupportedCurrency, rates)}
                 </p>
               </div>
               <div className="w-12 h-12 bg-primary/20 rounded-xl flex items-center justify-center">
@@ -539,7 +541,7 @@ export default function DashboardHome() {
           />
           <StatCard 
             title="Total collecté" 
-            value={formatCurrency(parseFloat(userStats?.totalCollected || "0"), (user?.preferredCurrency || "XAF") as SupportedCurrency)} 
+            value={formatCurrency(parseFloat(userStats?.totalCollected || "0"), (user?.preferredCurrency || "XAF") as SupportedCurrency, rates)} 
             icon={Wallet} 
             color="bg-primary/10 text-primary"
           />
@@ -571,7 +573,7 @@ export default function DashboardHome() {
                     <XAxis dataKey="period" stroke="hsl(var(--muted-foreground))" fontSize={12} />
                     <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickFormatter={(value) => `${(value / 1000000).toFixed(1)}M`} />
                     <Tooltip 
-                      formatter={(value: number) => [formatCurrency(value, (user?.preferredCurrency || "XAF") as SupportedCurrency), "Montant"]}
+                      formatter={(value: number) => [formatCurrency(value, (user?.preferredCurrency || "XAF") as SupportedCurrency, rates), "Montant"]}
                       contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }}
                       labelStyle={{ color: "hsl(var(--foreground))" }}
                     />
@@ -593,13 +595,13 @@ export default function DashboardHome() {
               <div className="flex items-center justify-between py-2 border-b border-border">
                 <span className="text-muted-foreground">Total reçu</span>
                 <span className="font-bold text-green-500">
-                  {formatCurrency(parseFloat(userStats?.totalReceived || "0"), (user?.preferredCurrency || "XAF") as SupportedCurrency)}
+                  {formatCurrency(parseFloat(userStats?.totalReceived || "0"), (user?.preferredCurrency || "XAF") as SupportedCurrency, rates)}
                 </span>
               </div>
               <div className="flex items-center justify-between py-2 border-b border-border">
                 <span className="text-muted-foreground">Total envoyé</span>
                 <span className="font-bold text-red-500">
-                  {formatCurrency(parseFloat(userStats?.totalSent || "0"), (user?.preferredCurrency || "XAF") as SupportedCurrency)}
+                  {formatCurrency(parseFloat(userStats?.totalSent || "0"), (user?.preferredCurrency || "XAF") as SupportedCurrency, rates)}
                 </span>
               </div>
               <div className="flex items-center justify-between py-2 border-b border-border">
@@ -649,7 +651,7 @@ export default function DashboardHome() {
                       </div>
                       <div className="flex items-center gap-2">
                         <span className={`font-semibold ${isIncoming ? 'text-green-500' : 'text-red-500'}`}>
-                          {isIncoming ? '+' : '-'}{formatCurrency(tx.amount, (user?.preferredCurrency || "XAF") as SupportedCurrency)}
+                          {isIncoming ? '+' : '-'}{formatCurrency(tx.amount, (user?.preferredCurrency || "XAF") as SupportedCurrency, rates)}
                         </span>
                         <CheckCircle className="w-4 h-4 text-green-500" />
                       </div>

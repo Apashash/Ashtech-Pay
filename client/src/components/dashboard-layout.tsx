@@ -61,6 +61,7 @@ import { Link as RouterLink } from "wouter";
 import logoImage from "@assets/photo_2026-01-10_21-16-00_1768076188815.jpg";
 import { CurrencySelector } from "@/components/currency-selector";
 import { formatCurrency } from "@/lib/currency";
+import { useExchangeRates } from "@/hooks/use-exchange-rates";
 import type { SupportedCurrency } from "@shared/schema";
 
 const menuItems = [
@@ -83,6 +84,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
   const { toast } = useToast();
   const [showKycUpdateDialog, setShowKycUpdateDialog] = useState(false);
+  const { rates } = useExchangeRates();
 
   const { data: user, isLoading } = useQuery<User>({
     queryKey: ["/api/user"],
@@ -220,7 +222,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               <div className="px-4 py-3 mx-2 my-2 bg-primary/10 rounded-lg border border-primary/20">
                 <p className="text-xs text-muted-foreground mb-1">Solde disponible</p>
                 <p className="text-lg font-bold text-primary" data-testid="text-sidebar-balance">
-                  {formatCurrency(user.balance, user.preferredCurrency as SupportedCurrency)}
+                  {formatCurrency(user.balance, user.preferredCurrency as SupportedCurrency, rates)}
                 </p>
               </div>
             </SidebarGroup>
