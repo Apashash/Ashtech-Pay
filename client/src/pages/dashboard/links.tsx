@@ -1068,7 +1068,11 @@ export default function PaymentLinksPage() {
       return parseFloat(amount) / rate;
     };
     const linkIntents = paymentIntents.filter(i => i.paymentLinkId === linkId && i.status === "completed");
-    const totalCollected = linkIntents.reduce((sum, i) => sum + toXAF(i.amount, i.currency), 0);
+    const totalCollected = linkIntents.reduce((sum, i) => {
+      const grossAmount = toXAF(i.amount, i.currency);
+      const feeAmount = i.feeAmount ? toXAF(i.feeAmount, i.currency) : 0;
+      return sum + (grossAmount - feeAmount);
+    }, 0);
     return { totalCollected, transactionCount: linkIntents.length };
   };
 
@@ -1105,12 +1109,17 @@ export default function PaymentLinksPage() {
 
     const totalClicks = paymentLinks.reduce((sum, link) => sum + (link.clickCount || 0), 0);
     const completedIntents = paymentIntents.filter(i => i.status === "completed");
-    const totalCollected = completedIntents.reduce((sum, i) => sum + toXAF(i.amount, i.currency), 0);
+    const getNetAmount = (i: typeof completedIntents[0]) => {
+      const gross = toXAF(i.amount, i.currency);
+      const fee = i.feeAmount ? toXAF(i.feeAmount, i.currency) : 0;
+      return gross - fee;
+    };
+    const totalCollected = completedIntents.reduce((sum, i) => sum + getNetAmount(i), 0);
     
     const countryStats: Record<string, number> = {};
     completedIntents.forEach(intent => {
       const country = intent.payerCountry || "Autre";
-      countryStats[country] = (countryStats[country] || 0) + toXAF(intent.amount, intent.currency);
+      countryStats[country] = (countryStats[country] || 0) + getNetAmount(intent);
     });
     
     const totalForCountries = Object.values(countryStats).reduce((a, b) => a + b, 0) || 1;
@@ -1127,7 +1136,7 @@ export default function PaymentLinksPage() {
     const methodStats: Record<string, number> = {};
     completedIntents.forEach(intent => {
       const method = intent.paymentMethod || "other";
-      methodStats[method] = (methodStats[method] || 0) + toXAF(intent.amount, intent.currency);
+      methodStats[method] = (methodStats[method] || 0) + getNetAmount(intent);
     });
     const totalForMethods = Object.values(methodStats).reduce((a, b) => a + b, 0) || 1;
     const methodColors: Record<string, string> = {
@@ -1162,6 +1171,11 @@ export default function PaymentLinksPage() {
       const rate = EXCHANGE_RATES[currency as SupportedCurrency] || 1;
       return parseFloat(amount) / rate;
     };
+    const getNetAmount = (i: typeof paymentIntents[0]) => {
+      const gross = toXAF(i.amount, i.currency);
+      const fee = i.feeAmount ? toXAF(i.feeAmount, i.currency) : 0;
+      return gross - fee;
+    };
     const monthNames = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"];
     const completedIntents = paymentIntents.filter(i => i.status === "completed");
 
@@ -1175,7 +1189,7 @@ export default function PaymentLinksPage() {
         const weekAgo = subDays(new Date(), 7);
         if (date >= weekAgo) {
           const dayIndex = date.getDay();
-          weekData[dayIndex].amount += toXAF(intent.amount, intent.currency);
+          weekData[dayIndex].amount += getNetAmount(intent);
         }
       });
       return weekData;
@@ -1197,7 +1211,7 @@ export default function PaymentLinksPage() {
         const date = new Date(intent.createdAt);
         const bucket = last6Months.find(b => b.year === date.getFullYear() && b.month === date.getMonth());
         if (bucket) {
-          bucket.amount += toXAF(intent.amount, intent.currency);
+          bucket.amount += getNetAmount(intent);
         }
       });
       return last6Months.map(({ period, amount }) => ({ period, amount }));
