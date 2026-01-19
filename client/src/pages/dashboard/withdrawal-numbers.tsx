@@ -34,16 +34,16 @@ export default function WithdrawalNumbersPage() {
 
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   
-  // Fetch deposit config to get dynamic operators by country
-  const { data: depositConfig } = useQuery<{ countries: CountryConfig[] }>({
+  // Fetch deposit config to get dynamic operators by country (API returns array directly)
+  const { data: countriesConfig = [] } = useQuery<CountryConfig[]>({
     queryKey: ["/api/public/deposit-config"],
   });
 
   // Find the user's country in the config and get its operators
   const operators = useMemo(() => {
-    if (!depositConfig?.countries || !user?.country) return [];
+    if (!countriesConfig.length || !user?.country) return [];
     
-    const userCountry = depositConfig.countries.find(c => 
+    const userCountry = countriesConfig.find(c => 
       c.name === user.country || c.name.toLowerCase() === user.country?.toLowerCase()
     );
     
@@ -51,7 +51,7 @@ export default function WithdrawalNumbersPage() {
     
     // API already returns only active operators
     return userCountry.operators.map(op => op.name);
-  }, [depositConfig?.countries, user?.country]);
+  }, [countriesConfig, user?.country]);
 
   const { data: withdrawalNumbers = [], isLoading: numbersLoading } = useQuery<WithdrawalNumber[]>({
     queryKey: ["/api/withdrawal-numbers"],
