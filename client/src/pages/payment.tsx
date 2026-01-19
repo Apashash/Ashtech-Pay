@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import type { PaymentLink, SupportedCurrency } from "@shared/schema";
-import { MOBILE_OPERATORS, COUNTRY_CURRENCIES, CURRENCY_SYMBOLS, EXCHANGE_RATES } from "@shared/schema";
+import { CURRENCY_SYMBOLS, EXCHANGE_RATES } from "@shared/schema";
 import { 
   Loader2, CheckCircle, XCircle, Shield, 
   Smartphone, CreditCard, ExternalLink, FileText, AlertTriangle
@@ -16,12 +16,19 @@ import { useState, useMemo } from "react";
 import { SiPaypal } from "react-icons/si";
 import logoImage from "@assets/image_1768087588517.png";
 
-const SUPPORTED_COUNTRIES = [
-  "Cameroon", "Chad", "Central African Republic", "Republic of the Congo", 
-  "Gabon", "Equatorial Guinea", "Senegal", "Côte d'Ivoire", "Mali", 
-  "Burkina Faso", "Niger", "Togo", "Benin", "Guinea-Bissau", 
-  "Nigeria", "Ghana", "Kenya", "Rwanda"
-];
+interface CountryConfig {
+  id: string;
+  name: string;
+  code: string;
+  flag: string;
+  currency: string;
+  operators: {
+    id: string;
+    name: string;
+    feePercentage: number;
+    feeFixed: number;
+  }[];
+}
 
 function formatAmount(amount: number, currency: SupportedCurrency): string {
   const symbol = CURRENCY_SYMBOLS[currency];
@@ -66,16 +73,24 @@ export default function PaymentPage() {
     enabled: !!params?.slug,
   });
 
+  const { data: depositConfig = [] } = useQuery<CountryConfig[]>({
+    queryKey: ["/api/public/deposit-config"],
+  });
+
   const linkCurrency = useMemo(() => {
     return (paymentLink?.currency as SupportedCurrency) || "XAF";
   }, [paymentLink]);
 
+  const selectedCountryData = useMemo(() => {
+    return depositConfig.find(c => c.id === country);
+  }, [depositConfig, country]);
+
   const countryCurrency = useMemo(() => {
-    if (country && COUNTRY_CURRENCIES[country]) {
-      return COUNTRY_CURRENCIES[country];
+    if (selectedCountryData?.currency) {
+      return selectedCountryData.currency as SupportedCurrency;
     }
     return linkCurrency;
-  }, [country, linkCurrency]);
+  }, [selectedCountryData, linkCurrency]);
 
   const displayAmount = useMemo(() => {
     if (!paymentLink) return 0;
@@ -92,11 +107,21 @@ export default function PaymentPage() {
   }, [displayAmount, countryCurrency, linkCurrency, country]);
 
   const operators = useMemo(() => {
-    if (country && MOBILE_OPERATORS[country]) {
-      return MOBILE_OPERATORS[country];
-    }
-    return [];
-  }, [country]);
+    return selectedCountryData?.operators || [];
+  }, [selectedCountryData]);
+
+  const selectedOperatorData = useMemo(() => {
+    return operators.find(o => o.id === operator);
+  }, [operators, operator]);
+
+  const feeCalculation = useMemo(() => {
+    if (!selectedOperatorData || displayAmount <= 0) return null;
+    const feePercent = selectedOperatorData.feePercentage || 0;
+    const feeFixed = selectedOperatorData.feeFixed || 0;
+    const feeAmount = (displayAmount * feePercent / 100) + feeFixed;
+    const totalAmount = displayAmount + feeAmount;
+    return { feePercent, feeFixed, feeAmount, totalAmount };
+  }, [selectedOperatorData, displayAmount]);
 
   const payMutation = useMutation({
     mutationFn: async () => {
@@ -346,8 +371,8 @@ export default function PaymentPage() {
                   <SelectValue placeholder="Sélectionnez votre pays" />
                 </SelectTrigger>
                 <SelectContent>
-                  {SUPPORTED_COUNTRIES.map((c) => (
-                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  {depositConfig.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.flag} {c.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -425,7 +450,12 @@ export default function PaymentPage() {
                   </SelectTrigger>
                   <SelectContent>
                     {operators.map((op) => (
-                      <SelectItem key={op} value={op}>{op}</SelectItem>
+                      <SelectItem key={op.id} value={op.id}>
+                        {op.name}
+                        {op.feePercentage > 0 && (
+                          <span className="text-xs text-muted-foreground ml-1">({op.feePercentage}%)</span>
+                        )}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -436,6 +466,29 @@ export default function PaymentPage() {
               <div className="bg-muted/50 rounded-lg p-3 text-center text-sm text-muted-foreground">
                 Aucun opérateur disponible pour ce pays
               </div>
+            )}
+
+            {feeCalculation && paymentMethod === "mobile_money" && (
+              <Card className="border-primary/30 bg-primary/5">
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-muted-foreground">Montant du produit</span>
+                    <span className="font-medium">{formatAmount(displayAmount, linkCurrency)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-muted-foreground">
+                      Frais ({feeCalculation.feePercent}%{feeCalculation.feeFixed > 0 ? ` + ${formatAmount(feeCalculation.feeFixed, linkCurrency)}` : ''})
+                    </span>
+                    <span className="font-medium text-amber-500">+ {formatAmount(feeCalculation.feeAmount, linkCurrency)}</span>
+                  </div>
+                  <div className="border-t border-border pt-3">
+                    <div className="flex justify-between items-center">
+                      <span className="font-semibold text-foreground">Total à payer</span>
+                      <span className="font-bold text-lg text-primary">{formatAmount(feeCalculation.totalAmount, linkCurrency)}</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             )}
             
             <Button 

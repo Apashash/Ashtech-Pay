@@ -1342,6 +1342,54 @@ export async function registerRoutes(
     }
   });
 
+  // Public deposit config for payment links (uses deposit fees)
+  app.get("/api/public/deposit-config", async (_req, res) => {
+    try {
+      const countries = await storage.getActiveCountries();
+      const allOperators = await storage.getAllOperators();
+      const allFees = await storage.getAllFees();
+      
+      const config = countries.map(country => {
+        const countryOperators = allOperators
+          .filter(op => op.countryId === country.id && op.isActive && !op.isInMaintenance)
+          .map(op => {
+            let operatorFee = allFees.find(
+              f => f.operatorId === op.id && f.transactionType === "deposit" && f.isActive
+            );
+            if (!operatorFee) {
+              operatorFee = allFees.find(
+                f => !f.operatorId && f.countryId === country.id && f.transactionType === "deposit" && f.isActive
+              );
+            }
+            if (!operatorFee) {
+              operatorFee = allFees.find(
+                f => !f.operatorId && !f.countryId && f.transactionType === "deposit" && f.isActive
+              );
+            }
+            return {
+              id: op.id,
+              name: op.name,
+              feePercentage: operatorFee?.feeType === "percentage" ? parseFloat(operatorFee.feeValue) : 0,
+              feeFixed: operatorFee?.feeType === "fixed" ? parseFloat(operatorFee.feeValue) : 0,
+            };
+          });
+        return {
+          id: country.id,
+          name: country.name,
+          code: country.code,
+          flag: country.flag,
+          currency: country.currency,
+          operators: countryOperators,
+        };
+      });
+      
+      res.json(config);
+    } catch (error) {
+      console.error("Get public deposit config error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   // Public payment link route
   app.get("/api/payment-links/public/:slug", async (req, res) => {
     try {
