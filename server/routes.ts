@@ -1426,6 +1426,52 @@ export async function registerRoutes(
     }
   });
 
+  // Public withdrawal operators config (for withdrawal number registration)
+  app.get("/api/public/withdrawal-operators", async (_req, res) => {
+    try {
+      const countries = await storage.getActiveCountries();
+      const allOperators = await storage.getAllOperators();
+      const allFees = await storage.getAllFees();
+      
+      const config = countries.map(country => {
+        // Get operators with withdrawal fees configured
+        const countryOperators = allOperators
+          .filter(op => op.countryId === country.id && op.isActive && !op.isInMaintenance)
+          .filter(op => {
+            // Check if this operator has a withdrawal fee
+            const hasOperatorFee = allFees.some(
+              f => f.operatorId === op.id && f.transactionType === "withdrawal" && f.isActive
+            );
+            const hasCountryFee = allFees.some(
+              f => !f.operatorId && f.countryId === country.id && f.transactionType === "withdrawal" && f.isActive
+            );
+            const hasGlobalFee = allFees.some(
+              f => !f.operatorId && !f.countryId && f.transactionType === "withdrawal" && f.isActive
+            );
+            return hasOperatorFee || hasCountryFee || hasGlobalFee;
+          })
+          .map(op => ({
+            id: op.id,
+            name: op.name,
+          }));
+        
+        return {
+          id: country.id,
+          name: country.name,
+          code: country.code,
+          flag: country.flag,
+          currency: country.currency,
+          operators: countryOperators,
+        };
+      });
+      
+      res.json(config);
+    } catch (error) {
+      console.error("Get public withdrawal operators error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   // Public payment link route
   app.get("/api/payment-links/public/:slug", async (req, res) => {
     try {

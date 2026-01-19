@@ -48,7 +48,7 @@ export default function EditWithdrawalNumberPage() {
   }, [currentNumber]);
 
   const { data: countriesConfig = [] } = useQuery<CountryConfig[]>({
-    queryKey: ["/api/public/deposit-config"],
+    queryKey: ["/api/public/withdrawal-operators"],
   });
 
   const operators = useMemo(() => {

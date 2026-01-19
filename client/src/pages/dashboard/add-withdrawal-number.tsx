@@ -33,7 +33,7 @@ export default function AddWithdrawalNumberPage() {
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   
   const { data: countriesConfig = [] } = useQuery<CountryConfig[]>({
-    queryKey: ["/api/public/deposit-config"],
+    queryKey: ["/api/public/withdrawal-operators"],
   });
 
   const operators = useMemo(() => {
