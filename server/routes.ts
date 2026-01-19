@@ -205,8 +205,15 @@ export async function registerRoutes(
 
       req.session.userId = user.id;
 
-      const { password: _, ...safeUser } = user;
-      res.json({ user: safeUser });
+      // Explicitly save session before responding
+      req.session.save((err) => {
+        if (err) {
+          console.error("Session save error:", err);
+          return res.status(500).json({ message: "Erreur de session" });
+        }
+        const { password: _, ...safeUser } = user;
+        res.json({ user: safeUser });
+      });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: error.errors[0].message });
@@ -232,8 +239,15 @@ export async function registerRoutes(
 
       req.session.userId = user.id;
 
-      const { password: _, ...safeUser } = user;
-      res.json({ user: safeUser });
+      // Explicitly save session before responding
+      req.session.save((err) => {
+        if (err) {
+          console.error("Session save error:", err);
+          return res.status(500).json({ message: "Erreur de session" });
+        }
+        const { password: _, ...safeUser } = user;
+        res.json({ user: safeUser });
+      });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: error.errors[0].message });
