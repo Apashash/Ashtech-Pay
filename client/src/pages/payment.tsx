@@ -467,29 +467,6 @@ export default function PaymentPage() {
                 Aucun opérateur disponible pour ce pays
               </div>
             )}
-
-            {feeCalculation && paymentMethod === "mobile_money" && (
-              <Card className="border-primary/30 bg-primary/5">
-                <CardContent className="p-4 space-y-3">
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-muted-foreground">Montant du produit</span>
-                    <span className="font-medium">{formatAmount(displayAmount, linkCurrency)}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-muted-foreground">
-                      Frais ({feeCalculation.feePercent}%{feeCalculation.feeFixed > 0 ? ` + ${formatAmount(feeCalculation.feeFixed, linkCurrency)}` : ''})
-                    </span>
-                    <span className="font-medium text-amber-500">+ {formatAmount(feeCalculation.feeAmount, linkCurrency)}</span>
-                  </div>
-                  <div className="border-t border-border pt-3">
-                    <div className="flex justify-between items-center">
-                      <span className="font-semibold text-foreground">Total à payer</span>
-                      <span className="font-bold text-lg text-primary">{formatAmount(feeCalculation.totalAmount, linkCurrency)}</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
             
             <Button 
               className="w-full" 
