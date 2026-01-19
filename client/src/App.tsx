@@ -15,6 +15,8 @@ import PaymentLinksPage from "@/pages/dashboard/links";
 import DepositPage from "@/pages/dashboard/deposit";
 import WithdrawPage from "@/pages/dashboard/withdraw";
 import WithdrawalNumbersPage from "@/pages/dashboard/withdrawal-numbers";
+import AddWithdrawalNumberPage from "@/pages/dashboard/add-withdrawal-number";
+import EditWithdrawalNumberPage from "@/pages/dashboard/edit-withdrawal-number";
 import TransferPage from "@/pages/dashboard/transfer";
 import SendMoneyPage from "@/pages/dashboard/send";
 import KYCPage from "@/pages/dashboard/kyc";
@@ -66,6 +68,8 @@ function Router() {
       <Route path="/dashboard/deposit" component={DepositPage} />
       <Route path="/dashboard/withdraw" component={WithdrawPage} />
       <Route path="/dashboard/withdrawal-numbers" component={WithdrawalNumbersPage} />
+      <Route path="/dashboard/withdrawal-numbers/add" component={AddWithdrawalNumberPage} />
+      <Route path="/dashboard/withdrawal-numbers/edit/:id" component={EditWithdrawalNumberPage} />
       <Route path="/dashboard/transfer" component={TransferPage} />
       <Route path="/dashboard/send" component={SendMoneyPage} />
       <Route path="/dashboard/kyc" component={KYCPage} />

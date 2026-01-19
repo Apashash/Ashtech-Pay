@@ -2,56 +2,15 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { WithdrawalNumber, WithdrawalNumberChange, User } from "@shared/schema";
+import type { WithdrawalNumber, WithdrawalNumberChange } from "@shared/schema";
 import { Phone, Plus, Loader2, Edit, Trash2, Clock, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
-import { useState, useMemo } from "react";
-
-interface CountryConfig {
-  id: string;
-  name: string;
-  code: string;
-  flag: string;
-  currency: string;
-  operators: Array<{
-    id: string;
-    name: string;
-  }>;
-}
+import { Link } from "wouter";
 
 export default function WithdrawalNumbersPage() {
   const { toast } = useToast();
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [editingNumber, setEditingNumber] = useState<WithdrawalNumber | null>(null);
-  const [newNumber, setNewNumber] = useState({ phoneNumber: "", operatorName: "", label: "" });
-
-  const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
-  
-  // Fetch deposit config to get dynamic operators by country (API returns array directly)
-  const { data: countriesConfig = [] } = useQuery<CountryConfig[]>({
-    queryKey: ["/api/public/deposit-config"],
-  });
-
-  // Find the user's country in the config and get its operators
-  const operators = useMemo(() => {
-    if (!countriesConfig.length || !user?.country) return [];
-    
-    const userCountry = countriesConfig.find(c => 
-      c.name === user.country || c.name.toLowerCase() === user.country?.toLowerCase()
-    );
-    
-    if (!userCountry) return [];
-    
-    // API already returns only active operators
-    return userCountry.operators.map(op => op.name);
-  }, [countriesConfig, user?.country]);
 
   const { data: withdrawalNumbers = [], isLoading: numbersLoading } = useQuery<WithdrawalNumber[]>({
     queryKey: ["/api/withdrawal-numbers"],
@@ -59,45 +18,6 @@ export default function WithdrawalNumbersPage() {
 
   const { data: changeRequests = [] } = useQuery<WithdrawalNumberChange[]>({
     queryKey: ["/api/withdrawal-number-changes"],
-  });
-
-  const addNumberMutation = useMutation({
-    mutationFn: async (data: { phoneNumber: string; operatorName: string; label?: string }) => {
-      const res = await apiRequest("POST", "/api/withdrawal-numbers", data);
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/withdrawal-numbers"] });
-      setIsAddDialogOpen(false);
-      setNewNumber({ phoneNumber: "", operatorName: "", label: "" });
-      toast({ title: "Numéro ajouté", description: "Le numéro de retrait a été enregistré avec succès" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Erreur", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const requestChangeMutation = useMutation({
-    mutationFn: async (data: { id: string; phoneNumber: string; operatorName: string; label?: string }) => {
-      const res = await apiRequest("POST", `/api/withdrawal-numbers/${data.id}/request-change`, {
-        phoneNumber: data.phoneNumber,
-        operatorName: data.operatorName,
-        label: data.label,
-      });
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/withdrawal-number-changes"] });
-      setIsEditDialogOpen(false);
-      setEditingNumber(null);
-      toast({ 
-        title: "Demande envoyée", 
-        description: "Votre demande de modification a été envoyée pour approbation" 
-      });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Erreur", description: error.message, variant: "destructive" });
-    },
   });
 
   const requestDeleteMutation = useMutation({
@@ -147,70 +67,15 @@ export default function WithdrawalNumbersPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Numéros de retrait</h1>
-            <p className="text-muted-foreground">Gérez vos numéros de téléphone pour les retraits</p>
+            <p className="text-muted-foreground">Gérez vos numéros de téléphone pour les retraits (max. 2)</p>
           </div>
           {withdrawalNumbers.length < 2 && (
-            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-              <DialogTrigger asChild>
-                <Button data-testid="button-add-number">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Ajouter un numéro
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Ajouter un numéro de retrait</DialogTitle>
-                  <DialogDescription>
-                    Vous pouvez enregistrer jusqu'à 2 numéros de téléphone pour les retraits
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Opérateur</Label>
-                    <Select 
-                      value={newNumber.operatorName} 
-                      onValueChange={(value) => setNewNumber({ ...newNumber, operatorName: value })}
-                    >
-                      <SelectTrigger data-testid="select-new-operator">
-                        <SelectValue placeholder="Choisir un opérateur" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {operators.map((op) => (
-                          <SelectItem key={op} value={op}>{op}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Numéro de téléphone</Label>
-                    <Input
-                      placeholder="+237 6XX XXX XXX"
-                      value={newNumber.phoneNumber}
-                      onChange={(e) => setNewNumber({ ...newNumber, phoneNumber: e.target.value })}
-                      data-testid="input-new-phone"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Libellé (optionnel)</Label>
-                    <Input
-                      placeholder="ex: Principal, Secondaire"
-                      value={newNumber.label}
-                      onChange={(e) => setNewNumber({ ...newNumber, label: e.target.value })}
-                      data-testid="input-new-label"
-                    />
-                  </div>
-                  <Button
-                    className="w-full"
-                    onClick={() => addNumberMutation.mutate(newNumber)}
-                    disabled={addNumberMutation.isPending || !newNumber.phoneNumber || !newNumber.operatorName}
-                    data-testid="button-confirm-add"
-                  >
-                    {addNumberMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                    Enregistrer
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
+            <Link href="/dashboard/withdrawal-numbers/add">
+              <Button data-testid="button-add-number">
+                <Plus className="w-4 h-4 mr-2" />
+                Ajouter un numéro
+              </Button>
+            </Link>
           )}
         </div>
 
@@ -221,7 +86,7 @@ export default function WithdrawalNumbersPage() {
               Mes numéros enregistrés
             </CardTitle>
             <CardDescription>
-              Maximum 2 numéros autorisés. Pour modifier un numéro, une approbation de l'administrateur est requise.
+              Maximum 2 numéros autorisés. Pour modifier ou supprimer un numéro, une approbation de l'administrateur est requise.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -234,6 +99,12 @@ export default function WithdrawalNumbersPage() {
                 <Phone className="w-12 h-12 mx-auto mb-4 opacity-50" />
                 <p>Aucun numéro de retrait enregistré</p>
                 <p className="text-sm">Ajoutez un numéro pour pouvoir effectuer des retraits</p>
+                <Link href="/dashboard/withdrawal-numbers/add">
+                  <Button className="mt-4">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Ajouter un numéro
+                  </Button>
+                </Link>
               </div>
             ) : (
               <div className="space-y-3">
@@ -256,17 +127,15 @@ export default function WithdrawalNumbersPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                          setEditingNumber(number);
-                          setIsEditDialogOpen(true);
-                        }}
-                        data-testid={`button-edit-${number.id}`}
-                      >
-                        <Edit className="w-4 h-4" />
-                      </Button>
+                      <Link href={`/dashboard/withdrawal-numbers/edit/${number.id}`}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          data-testid={`button-edit-${number.id}`}
+                        >
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                      </Link>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -352,67 +221,6 @@ export default function WithdrawalNumbersPage() {
             </CardContent>
           </Card>
         )}
-
-        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Demande de modification</DialogTitle>
-              <DialogDescription>
-                Cette modification nécessite l'approbation d'un administrateur
-              </DialogDescription>
-            </DialogHeader>
-            {editingNumber && (
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Opérateur</Label>
-                  <Select
-                    value={editingNumber.operatorName}
-                    onValueChange={(value) => setEditingNumber({ ...editingNumber, operatorName: value })}
-                  >
-                    <SelectTrigger data-testid="select-edit-operator">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {operators.map((op) => (
-                        <SelectItem key={op} value={op}>{op}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Numéro de téléphone</Label>
-                  <Input
-                    value={editingNumber.phoneNumber}
-                    onChange={(e) => setEditingNumber({ ...editingNumber, phoneNumber: e.target.value })}
-                    data-testid="input-edit-phone"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Libellé (optionnel)</Label>
-                  <Input
-                    value={editingNumber.label || ""}
-                    onChange={(e) => setEditingNumber({ ...editingNumber, label: e.target.value })}
-                    data-testid="input-edit-label"
-                  />
-                </div>
-                <Button
-                  className="w-full"
-                  onClick={() => requestChangeMutation.mutate({
-                    id: editingNumber.id,
-                    phoneNumber: editingNumber.phoneNumber,
-                    operatorName: editingNumber.operatorName,
-                    label: editingNumber.label || undefined,
-                  })}
-                  disabled={requestChangeMutation.isPending}
-                  data-testid="button-confirm-edit"
-                >
-                  {requestChangeMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                  Soumettre la demande
-                </Button>
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
       </div>
     </DashboardLayout>
   );
