@@ -138,6 +138,7 @@ export const paymentIntents = pgTable("payment_intents", {
   payerPhone: text("payer_phone").notNull(),
   payerCountry: text("payer_country").notNull(),
   amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  feeAmount: decimal("fee_amount", { precision: 15, scale: 2 }).default("0"),
   currency: text("currency").default("XAF").notNull(),
   paymentMethod: text("payment_method").notNull(), // 'mobile_money', 'card', 'paypal'
   operator: text("operator"), // For mobile money
@@ -397,6 +398,7 @@ export const insertPaymentIntentSchema = createInsertSchema(paymentIntents).pick
   payerPhone: true,
   payerCountry: true,
   amount: true,
+  feeAmount: true,
   currency: true,
   paymentMethod: true,
   operator: true,

@@ -7,14 +7,22 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import type { PaymentLink, SupportedCurrency } from "@shared/schema";
-import { CURRENCY_SYMBOLS, EXCHANGE_RATES } from "@shared/schema";
+import { CURRENCY_SYMBOLS, EXCHANGE_RATES, SUPPORTED_CURRENCIES } from "@shared/schema";
 import { 
   Loader2, CheckCircle, XCircle, Shield, 
-  Smartphone, CreditCard, ExternalLink, FileText, AlertTriangle
+  Smartphone, CreditCard, ExternalLink, FileText, AlertTriangle, Globe
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { SiPaypal } from "react-icons/si";
 import logoImage from "@assets/image_1768087588517.png";
+
+const CURRENCY_FLAGS: Record<SupportedCurrency, string> = {
+  "XAF": "🇨🇲",
+  "XOF": "🇸🇳", 
+  "CDF": "🇨🇩",
+  "USD": "🇺🇸",
+  "EUR": "🇪🇺",
+};
 
 interface CountryConfig {
   id: string;
@@ -62,6 +70,7 @@ export default function PaymentPage() {
   const [customAmount, setCustomAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<"mobile_money" | "card" | "paypal" | "">("");
   const [operator, setOperator] = useState("");
+  const [displayCurrency, setDisplayCurrency] = useState<SupportedCurrency | "">("");
 
   const { data: paymentLink, isLoading, error } = useQuery<PaymentLink & { hasPdf?: boolean }>({
     queryKey: ["/api/payment-links/public", params?.slug],
@@ -99,6 +108,16 @@ export default function PaymentPage() {
       : (customAmount ? parseFloat(customAmount) : 0);
     return amount;
   }, [paymentLink, customAmount]);
+
+  const selectedDisplayCurrency = useMemo(() => {
+    return displayCurrency || linkCurrency;
+  }, [displayCurrency, linkCurrency]);
+
+  const convertedDisplayAmount = useMemo(() => {
+    if (selectedDisplayCurrency === linkCurrency) return displayAmount;
+    const amountInXAF = displayAmount / EXCHANGE_RATES[linkCurrency];
+    return amountInXAF * EXCHANGE_RATES[selectedDisplayCurrency];
+  }, [displayAmount, selectedDisplayCurrency, linkCurrency]);
 
   const convertedAmount = useMemo(() => {
     if (!country || countryCurrency === linkCurrency) return null;
@@ -272,8 +291,21 @@ export default function PaymentPage() {
     <div className="min-h-screen bg-background flex flex-col">
       <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent pointer-events-none" />
       
-      <header className="flex justify-center py-4 relative z-10">
-        <img src={logoImage} alt="Ashtech Pay Afrique" className="h-16 object-contain" data-testid="img-logo" />
+      <header className="flex justify-between items-center px-4 py-4 relative z-10">
+        <img src={logoImage} alt="Ashtech Pay Afrique" className="h-12 object-contain" data-testid="img-logo" />
+        <Select value={displayCurrency || linkCurrency} onValueChange={(val) => setDisplayCurrency(val as SupportedCurrency)}>
+          <SelectTrigger className="w-auto gap-2 bg-muted/50 border-border">
+            <Globe className="w-4 h-4" />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {SUPPORTED_CURRENCIES.map((curr) => (
+              <SelectItem key={curr} value={curr}>
+                {CURRENCY_FLAGS[curr]} {curr}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </header>
       
       <div className="flex-1 flex items-start justify-center p-4 relative z-10">
@@ -313,17 +345,17 @@ export default function PaymentPage() {
               <div className="bg-muted/30 border border-border rounded-xl p-4 text-center">
                 <p className="text-sm text-muted-foreground mb-1">Montant à payer</p>
                 <p className="text-3xl font-bold text-foreground" data-testid="text-payment-amount">
-                  {formatAmount(parseFloat(paymentLink.amount), linkCurrency)}
+                  {formatAmount(convertedDisplayAmount, selectedDisplayCurrency)}
                 </p>
-                {convertedAmount !== null && (
+                {selectedDisplayCurrency !== linkCurrency && (
                   <p className="text-sm text-muted-foreground mt-1">
-                    ≈ {formatAmount(convertedAmount, countryCurrency)}
+                    = {formatAmount(displayAmount, linkCurrency)}
                   </p>
                 )}
               </div>
             ) : (
               <div className="space-y-2">
-                <Label htmlFor="amount">Montant à payer ({CURRENCY_SYMBOLS[linkCurrency]}) *</Label>
+                <Label htmlFor="amount">Montant à payer ({CURRENCY_SYMBOLS[selectedDisplayCurrency]}) *</Label>
                 <Input
                   id="amount"
                   type="number"
@@ -332,9 +364,9 @@ export default function PaymentPage() {
                   onChange={(e) => setCustomAmount(e.target.value)}
                   data-testid="input-payment-amount"
                 />
-                {convertedAmount !== null && customAmount && (
+                {selectedDisplayCurrency !== linkCurrency && customAmount && (
                   <p className="text-xs text-muted-foreground">
-                    ≈ {formatAmount(convertedAmount, countryCurrency)}
+                    = {formatAmount(displayAmount, linkCurrency)}
                   </p>
                 )}
               </div>

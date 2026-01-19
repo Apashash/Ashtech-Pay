@@ -1648,9 +1648,22 @@ export default function PaymentLinksPage() {
                               <span>{intent.payerCountry}</span>
                             </div>
                             <div className="flex items-center gap-4 mt-2 flex-wrap">
-                              <span className="text-lg font-bold text-primary">
-                                {formatCurrency(intent.amount, (intent.currency as SupportedCurrency) || "XAF")}
-                              </span>
+                              <div className="flex flex-col">
+                                <span className="text-lg font-bold text-primary">
+                                  {formatCurrency(intent.amount, (intent.currency as SupportedCurrency) || "XAF")}
+                                </span>
+                                {intent.feeAmount && parseFloat(intent.feeAmount) > 0 && (
+                                  <span className="text-xs text-muted-foreground">
+                                    À créditer: {formatCurrency(
+                                      parseFloat(String(intent.amount)) - parseFloat(intent.feeAmount),
+                                      (intent.currency as SupportedCurrency) || "XAF"
+                                    )}
+                                    <span className="text-amber-500 ml-1">
+                                      (-{formatCurrency(parseFloat(intent.feeAmount), (intent.currency as SupportedCurrency) || "XAF")} frais)
+                                    </span>
+                                  </span>
+                                )}
+                              </div>
                               <span className="text-xs text-muted-foreground">
                                 {intent.paymentMethod === "mobile_money" ? "Mobile Money" : intent.paymentMethod}
                                 {intent.operator && ` - ${intent.operator}`}

@@ -1548,6 +1548,7 @@ export async function registerRoutes(
         payerPhone: phone,
         payerCountry: country,
         amount: totalAmount,
+        feeAmount: feeAmount.toFixed(2),
         currency: paymentLink.currency || "XAF",
         paymentMethod,
         operator: operator || null,
