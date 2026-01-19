@@ -281,7 +281,7 @@ export default function PaymentPage() {
                 </div>
               )}
               <div className="text-2xl font-bold text-primary">
-                {formatAmount(displayAmount, linkCurrency)}
+                {formatAmount(displayAmount, selectedDisplayCurrency)}
               </div>
               
               {paymentLink?.hasPdf && (
