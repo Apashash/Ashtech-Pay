@@ -16,7 +16,8 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User } from "@shared/schema";
-import { User as UserIcon, Bell, Lock, Save, Globe, Smartphone, Mail, Loader2, Sun, Moon, Palette, AlertTriangle, Trash2 } from "lucide-react";
+import { User as UserIcon, Bell, Lock, Save, Globe, Smartphone, Mail, Loader2, Sun, Moon, Palette, AlertTriangle, Trash2, Phone, ChevronRight } from "lucide-react";
+import { Link } from "wouter";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useTheme } from "@/components/theme-provider";
@@ -241,6 +242,30 @@ export default function SettingsPage() {
                   </div>
                   <span className="font-medium text-foreground">Sombre</span>
                 </button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Phone className="w-5 h-5" />
+                Numéros de retrait
+              </CardTitle>
+              <CardDescription>Gérez vos numéros de téléphone pour les retraits</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/30">
+                <div>
+                  <p className="font-medium text-foreground">Configurer vos numéros</p>
+                  <p className="text-sm text-muted-foreground">Ajoutez jusqu'à 2 numéros pour recevoir vos retraits</p>
+                </div>
+                <Link href="/dashboard/withdrawal-numbers">
+                  <Button variant="outline" className="gap-2">
+                    Gérer
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </Link>
               </div>
             </CardContent>
           </Card>
