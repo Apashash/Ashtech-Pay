@@ -1385,17 +1385,25 @@ export async function registerRoutes(
       });
       
       // Get global exchange rates from settings
+      // Rates are stored as "how many XAF for 1 unit of currency"
+      // We convert to "how many of currency for 1 XAF" for easy multiplication
       const settings = await storage.getAllSettings();
+      const usdRateRaw = settings.find(s => s.key === "exchange_rate_usd")?.value;
+      const eurRateRaw = settings.find(s => s.key === "exchange_rate_eur")?.value;
+      const cdfRateRaw = settings.find(s => s.key === "exchange_rate_cdf")?.value;
+      
+      // Default rates if not configured (approximate)
+      const usdToXaf = usdRateRaw ? parseFloat(usdRateRaw) : 600;
+      const eurToXaf = eurRateRaw ? parseFloat(eurRateRaw) : 655;
+      const xafToCdf = cdfRateRaw ? parseFloat(cdfRateRaw) : 4.5;
+      
       const exchangeRates: Record<string, number> = {
         XAF: 1,
         XOF: 1,
+        USD: 1 / usdToXaf,
+        EUR: 1 / eurToXaf,
+        CDF: xafToCdf,
       };
-      const usdRate = settings.find(s => s.key === "exchange_rate_usd")?.value;
-      const eurRate = settings.find(s => s.key === "exchange_rate_eur")?.value;
-      const cdfRate = settings.find(s => s.key === "exchange_rate_cdf")?.value;
-      if (usdRate) exchangeRates.USD = 1 / parseFloat(usdRate);
-      if (eurRate) exchangeRates.EUR = 1 / parseFloat(eurRate);
-      if (cdfRate) exchangeRates.CDF = parseFloat(cdfRate);
       
       res.json({ countries: config, exchangeRates });
     } catch (error) {
