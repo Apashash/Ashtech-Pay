@@ -110,33 +110,54 @@ export default function PaymentPage() {
     return linkCurrency;
   }, [selectedCountryData, linkCurrency]);
 
-  const displayAmount = useMemo(() => {
-    if (!paymentLink) return 0;
-    const amount = paymentLink.isFixedAmount 
-      ? parseFloat(paymentLink.amount) 
-      : (customAmount ? parseFloat(customAmount) : 0);
-    return amount;
-  }, [paymentLink, customAmount]);
-
   const selectedDisplayCurrency = useMemo(() => {
     return displayCurrency || linkCurrency;
   }, [displayCurrency, linkCurrency]);
 
+  // For fixed amount: displayAmount is in linkCurrency
+  // For custom amount: displayAmount is what user entered (in selectedDisplayCurrency)
+  const displayAmount = useMemo(() => {
+    if (!paymentLink) return 0;
+    if (paymentLink.isFixedAmount) {
+      return parseFloat(paymentLink.amount);
+    }
+    return customAmount ? parseFloat(customAmount) : 0;
+  }, [paymentLink, customAmount]);
+
+  // Convert displayAmount from its currency to XAF (base currency)
+  const amountInXAF = useMemo(() => {
+    if (!paymentLink) return 0;
+    
+    if (paymentLink.isFixedAmount) {
+      // Fixed amount is in linkCurrency, convert to XAF
+      const linkRate = adminExchangeRates[linkCurrency] || 1;
+      return displayAmount / linkRate;
+    } else {
+      // Custom amount is in selectedDisplayCurrency, convert to XAF
+      const inputRate = adminExchangeRates[selectedDisplayCurrency] || 1;
+      return displayAmount / inputRate;
+    }
+  }, [paymentLink, displayAmount, linkCurrency, selectedDisplayCurrency, adminExchangeRates]);
+
+  // Convert XAF amount to linkCurrency for backend/display
+  const amountInLinkCurrency = useMemo(() => {
+    if (paymentLink?.isFixedAmount) return displayAmount;
+    const linkRate = adminExchangeRates[linkCurrency] || 1;
+    return amountInXAF * linkRate;
+  }, [paymentLink, displayAmount, amountInXAF, linkCurrency, adminExchangeRates]);
+
+  // For fixed amount links, convert to selected display currency
   const convertedDisplayAmount = useMemo(() => {
     if (selectedDisplayCurrency === linkCurrency) return displayAmount;
-    const linkRate = adminExchangeRates[linkCurrency] || 1;
     const targetRate = adminExchangeRates[selectedDisplayCurrency] || 1;
-    const amountInXAF = displayAmount / linkRate;
     return amountInXAF * targetRate;
-  }, [displayAmount, selectedDisplayCurrency, linkCurrency, adminExchangeRates]);
+  }, [displayAmount, selectedDisplayCurrency, linkCurrency, amountInXAF, adminExchangeRates]);
 
   const convertedAmount = useMemo(() => {
     if (!country || countryCurrency === linkCurrency) return null;
-    const linkRate = adminExchangeRates[linkCurrency] || 1;
     const countryRate = adminExchangeRates[countryCurrency] || 1;
-    const amountInXAF = displayAmount / linkRate;
     return amountInXAF * countryRate;
-  }, [displayAmount, countryCurrency, linkCurrency, country, adminExchangeRates]);
+  }, [amountInXAF, countryCurrency, linkCurrency, country, adminExchangeRates]);
 
   const operators = useMemo(() => {
     return selectedCountryData?.operators || [];
@@ -147,13 +168,13 @@ export default function PaymentPage() {
   }, [operators, operator]);
 
   const feeCalculation = useMemo(() => {
-    if (!selectedOperatorData || displayAmount <= 0) return null;
+    if (!selectedOperatorData || amountInLinkCurrency <= 0) return null;
     const feePercent = selectedOperatorData.feePercentage || 0;
     const feeFixed = selectedOperatorData.feeFixed || 0;
-    const feeAmount = (displayAmount * feePercent / 100) + feeFixed;
-    const totalAmount = displayAmount + feeAmount;
+    const feeAmount = (amountInLinkCurrency * feePercent / 100) + feeFixed;
+    const totalAmount = amountInLinkCurrency + feeAmount;
     return { feePercent, feeFixed, feeAmount, totalAmount };
-  }, [selectedOperatorData, displayAmount]);
+  }, [selectedOperatorData, amountInLinkCurrency]);
 
   const payMutation = useMutation({
     mutationFn: async () => {
@@ -165,7 +186,7 @@ export default function PaymentPage() {
           email,
           country,
           phone,
-          amount: paymentLink?.isFixedAmount ? paymentLink.amount : customAmount,
+          amount: paymentLink?.isFixedAmount ? paymentLink.amount : amountInLinkCurrency.toString(),
           paymentMethod,
           operator: paymentMethod === "mobile_money" ? operator : null,
         }),
@@ -207,10 +228,10 @@ export default function PaymentPage() {
 
   const canSubmit = useMemo(() => {
     if (!fullName || !email || !country || !phone || !paymentMethod) return false;
-    if (!paymentLink?.isFixedAmount && (!customAmount || parseFloat(customAmount) <= 0)) return false;
+    if (!paymentLink?.isFixedAmount && (!customAmount || displayAmount <= 0)) return false;
     if (paymentMethod === "mobile_money" && !operator) return false;
     return true;
-  }, [fullName, email, country, phone, paymentMethod, operator, paymentLink, customAmount]);
+  }, [fullName, email, country, phone, paymentMethod, operator, paymentLink, customAmount, displayAmount]);
 
   if (isLoading) {
     return (
@@ -379,7 +400,7 @@ export default function PaymentPage() {
                 />
                 {selectedDisplayCurrency !== linkCurrency && customAmount && (
                   <p className="text-xs text-muted-foreground">
-                    = {formatAmount(displayAmount, linkCurrency)}
+                    ≈ {formatAmount(amountInLinkCurrency, linkCurrency)}
                   </p>
                 )}
               </div>
