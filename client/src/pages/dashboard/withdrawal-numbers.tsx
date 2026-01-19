@@ -22,7 +22,6 @@ interface CountryConfig {
   operators: Array<{
     id: string;
     name: string;
-    isActive: boolean;
   }>;
 }
 
@@ -37,7 +36,7 @@ export default function WithdrawalNumbersPage() {
   
   // Fetch deposit config to get dynamic operators by country
   const { data: depositConfig } = useQuery<{ countries: CountryConfig[] }>({
-    queryKey: ["/api/deposit-config"],
+    queryKey: ["/api/public/deposit-config"],
   });
 
   // Find the user's country in the config and get its operators
@@ -50,9 +49,8 @@ export default function WithdrawalNumbersPage() {
     
     if (!userCountry) return [];
     
-    return userCountry.operators
-      .filter(op => op.isActive)
-      .map(op => op.name);
+    // API already returns only active operators
+    return userCountry.operators.map(op => op.name);
   }, [depositConfig?.countries, user?.country]);
 
   const { data: withdrawalNumbers = [], isLoading: numbersLoading } = useQuery<WithdrawalNumber[]>({
