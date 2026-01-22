@@ -40,6 +40,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { useTheme } from "@/components/theme-provider";
+import { useScrollAnimation } from "@/hooks/use-scroll-animation";
 import logoImage from "@assets/logo.png";
 import paymentMethodsImage from "@assets/image_1768083090679.png";
 import paymentValidatedImage from "@assets/image_1768076940034.png";
@@ -324,7 +325,7 @@ function OnlineSalesSection() {
   return (
     <section className="py-20 lg:py-32 bg-card/50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-16">
+        <div className="text-center mb-16 animate-on-scroll">
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20 mb-4">
             <Link2 className="w-4 h-4 text-primary" />
             <span className="text-sm text-primary font-medium">Un lien. Plusieurs moyens de paiement.</span>
@@ -338,7 +339,7 @@ function OnlineSalesSection() {
         </div>
         
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-20">
-          <Card className="p-8 bg-card border-border">
+          <Card className="p-8 bg-card border-border animate-on-scroll-left">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
                 <FileText className="w-6 h-6 text-primary" />
@@ -377,7 +378,7 @@ function OnlineSalesSection() {
             </div>
           </Card>
           
-          <Card className="p-8 bg-card border-border">
+          <Card className="p-8 bg-card border-border animate-on-scroll-right">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
                 <ShoppingBag className="w-6 h-6 text-primary" />
@@ -420,7 +421,7 @@ function PaymentLinksSection() {
     <section className="py-20 lg:py-32">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
-          <div className="flex justify-center order-2 lg:order-1">
+          <div className="flex justify-center order-2 lg:order-1 animate-on-scroll-left">
             <img 
               src={paymentValidatedImage} 
               alt="Paiement validé - Processus de validation de paiement" 
@@ -428,7 +429,7 @@ function PaymentLinksSection() {
             />
           </div>
           
-          <div className="space-y-6 order-1 lg:order-2">
+          <div className="space-y-6 order-1 lg:order-2 animate-on-scroll-right">
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20">
               <Link2 className="w-4 h-4 text-primary" />
               <span className="text-sm text-primary font-medium">Liens de paiement</span>
@@ -484,7 +485,7 @@ function ShareSection() {
     <section className="py-20 lg:py-32 bg-card/50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
-          <div className="space-y-6">
+          <div className="space-y-6 animate-on-scroll-left">
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20">
               <Share2 className="w-4 h-4 text-primary" />
               <span className="text-sm text-primary font-medium">Partage facile</span>
@@ -535,7 +536,7 @@ function WithdrawalSection() {
     <section className="py-20 lg:py-32">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
-          <div className="flex justify-center order-2 lg:order-1">
+          <div className="flex justify-center order-2 lg:order-1 animate-on-scroll-left">
             <img 
               src={withdrawalImage} 
               alt="Interface de retrait - Retrait rapide vers Mobile Money ou carte bancaire" 
@@ -543,7 +544,7 @@ function WithdrawalSection() {
             />
           </div>
           
-          <div className="space-y-6 order-1 lg:order-2">
+          <div className="space-y-6 order-1 lg:order-2 animate-on-scroll-right">
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20">
               <ArrowDownUp className="w-4 h-4 text-primary" />
               <span className="text-sm text-primary font-medium">Retraits</span>
@@ -659,7 +660,7 @@ function FeaturesSection() {
   return (
     <section id="features" className="py-20 lg:py-32 relative">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-16">
+        <div className="text-center mb-16 animate-on-scroll">
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20 mb-4">
             <Wallet className="w-4 h-4 text-primary" />
             <span className="text-sm text-primary font-medium">Wallet sécurisé</span>
@@ -814,7 +815,7 @@ function HowItWorksSection() {
   return (
     <section id="how-it-works" className="py-20 lg:py-32">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-16">
+        <div className="text-center mb-16 animate-on-scroll">
           <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
             Comment ça marche ?
           </h2>
@@ -825,7 +826,7 @@ function HowItWorksSection() {
         
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-8">
           {steps.map((step, index) => (
-            <div key={index} className="relative" data-testid={`step-${index}`}>
+            <div key={index} className="relative animate-on-scroll-scale" style={{ transitionDelay: `${index * 100}ms` }} data-testid={`step-${index}`}>
               {index < steps.length - 1 && (
                 <div className="hidden lg:block absolute top-8 left-full w-full h-px bg-gradient-to-r from-primary/50 to-transparent -translate-x-8" />
               )}
@@ -866,7 +867,7 @@ function SecuritySection() {
   return (
     <section id="security" className="py-20 lg:py-32 bg-card/50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-16">
+        <div className="text-center mb-16 animate-on-scroll">
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20 mb-4">
             <Shield className="w-4 h-4 text-primary" />
             <span className="text-sm text-primary font-medium">Votre confiance est notre priorité</span>
@@ -905,7 +906,7 @@ function CTASection() {
       <div className="absolute inset-0 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent" />
       <div className="absolute top-0 right-0 w-96 h-96 bg-primary/20 rounded-full blur-3xl" />
       
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10 animate-on-scroll-scale">
         <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20 mb-6">
           <Globe className="w-4 h-4 text-primary" />
           <span className="text-sm text-primary font-medium">Développez votre business sans frontières</span>
@@ -1058,6 +1059,8 @@ function CountriesMarquee() {
 }
 
 export default function LandingPage() {
+  useScrollAnimation();
+  
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
