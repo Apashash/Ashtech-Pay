@@ -22,8 +22,7 @@ import bcrypt from "bcrypt";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-// Object storage disabled - using local file storage instead
-// import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
+import { uploadToSupabase } from "./supabase";
 
 const uploadsDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadsDir)) {
@@ -158,22 +157,47 @@ export async function registerRoutes(
     }
   });
 
-  // Direct file upload endpoint (replaces object storage)
-  app.post("/api/uploads/file", requireAuth, upload.single("file"), (req, res) => {
+  // Direct file upload endpoint - uses Supabase Storage for persistence
+  app.post("/api/uploads/file", requireAuth, upload.single("file"), async (req, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ error: "Aucun fichier fourni" });
       }
-      const filePath = `/uploads/${req.file.filename}`;
-      res.json({ 
-        success: true,
-        objectPath: filePath,
-        url: filePath,
-        filename: req.file.filename,
-        originalName: req.file.originalname,
-        size: req.file.size,
-        mimetype: req.file.mimetype
-      });
+
+      // Try Supabase Storage first for persistent storage
+      const fileBuffer = fs.readFileSync(req.file.path);
+      const supabaseResult = await uploadToSupabase(
+        fileBuffer,
+        req.file.originalname,
+        req.file.mimetype
+      );
+
+      if (supabaseResult) {
+        // Delete local file after successful Supabase upload
+        fs.unlinkSync(req.file.path);
+        
+        res.json({ 
+          success: true,
+          objectPath: supabaseResult.path,
+          url: supabaseResult.url,
+          filename: req.file.originalname,
+          originalName: req.file.originalname,
+          size: req.file.size,
+          mimetype: req.file.mimetype
+        });
+      } else {
+        // Fallback to local storage
+        const filePath = `/uploads/${req.file.filename}`;
+        res.json({ 
+          success: true,
+          objectPath: filePath,
+          url: filePath,
+          filename: req.file.filename,
+          originalName: req.file.originalname,
+          size: req.file.size,
+          mimetype: req.file.mimetype
+        });
+      }
     } catch (error) {
       console.error("File upload error:", error);
       res.status(500).json({ error: "Erreur lors de l'upload" });
