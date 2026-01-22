@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ArrowLeft, Mail, Phone, MessageCircle, Send } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import logoImage from "@assets/photo_2026-01-10_21-16-00_1768076188815.jpg";
+import logoImage from "@assets/logo.png";
 
 interface ContactInfo {
   email: string;

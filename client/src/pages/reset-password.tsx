@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { resetPasswordSchema } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { Lock, Loader2, ArrowLeft, Eye, EyeOff, CheckCircle } from "lucide-react";
-import logoImage from "@assets/photo_2026-01-10_21-16-00_1768076188815.jpg";
+import logoImage from "@assets/logo.png";
 import { z } from "zod";
 
 type ResetPasswordFormData = z.infer<typeof resetPasswordSchema>;

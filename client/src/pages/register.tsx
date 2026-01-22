@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { registerSchema } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Mail, Lock, User, Phone, Loader2, Eye, EyeOff, ArrowLeft } from "lucide-react";
-import logoImage from "@assets/photo_2026-01-10_21-16-00_1768076188815.jpg";
+import logoImage from "@assets/logo.png";
 import { z } from "zod";
 
 interface CountryData {

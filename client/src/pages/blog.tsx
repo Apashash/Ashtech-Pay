@@ -1,7 +1,7 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, BookOpen } from "lucide-react";
-import logoImage from "@assets/photo_2026-01-10_21-16-00_1768076188815.jpg";
+import logoImage from "@assets/logo.png";
 
 export default function BlogPage() {
   return (

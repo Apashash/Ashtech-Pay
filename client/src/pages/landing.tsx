@@ -40,7 +40,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { useTheme } from "@/components/theme-provider";
-import logoImage from "@assets/photo_2026-01-10_21-16-00_1768076188815.jpg";
+import logoImage from "@assets/logo.png";
 import paymentMethodsImage from "@assets/image_1768083090679.png";
 import paymentValidatedImage from "@assets/image_1768076940034.png";
 import globalReachImage from "@assets/image_1768076949520.png";

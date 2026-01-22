@@ -58,7 +58,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Link as RouterLink } from "wouter";
-import logoImage from "@assets/photo_2026-01-10_21-16-00_1768076188815.jpg";
+import logoImage from "@assets/logo.png";
 import { CurrencySelector } from "@/components/currency-selector";
 import { formatCurrency } from "@/lib/currency";
 import { useExchangeRates } from "@/hooks/use-exchange-rates";

@@ -35,7 +35,7 @@ import {
   User as UserIcon,
   Menu
 } from "lucide-react";
-import logoImage from "@assets/photo_2026-01-10_21-16-00_1768076188815.jpg";
+import logoImage from "@assets/logo.png";
 import { z } from "zod";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
