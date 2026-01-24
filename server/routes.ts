@@ -1888,20 +1888,24 @@ export async function registerRoutes(
           } else {
             // Update transaction and intent status to failed
             await storage.updatePaymentIntentStatus(intent.id, "failed");
+            const failedTransaction = await storage.getTransactionByReference(reference);
+            if (failedTransaction) {
+              await storage.updateTransactionStatus(failedTransaction.id, "failed");
+            }
             res.status(400).json({ 
               message: soleaspayResponse.message || "Échec de l'initiation du paiement" 
             });
           }
         } catch (soleaspayError) {
           console.error("SoleAsPay API error:", soleaspayError);
-          // Keep as pending for manual processing
-          res.json({ 
-            message: "Paiement initié. Veuillez patienter pour la confirmation.",
-            reference: intent.reference,
-            redirectUrl: paymentLink.redirectUrl || null,
-            amount: numAmount,
-            feeAmount: feeAmount,
-            totalAmount: parseFloat(totalAmount),
+          // Mark as failed on API error
+          await storage.updatePaymentIntentStatus(intent.id, "failed");
+          const failedTransaction = await storage.getTransactionByReference(reference);
+          if (failedTransaction) {
+            await storage.updateTransactionStatus(failedTransaction.id, "failed");
+          }
+          res.status(500).json({ 
+            message: "Erreur lors de l'initiation du paiement. Veuillez réessayer.",
           });
         }
       } else {
