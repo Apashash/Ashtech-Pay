@@ -224,178 +224,97 @@ export default function AdminCountries() {
       <div className="p-6 space-y-6">
         <div>
           <h1 className="text-2xl font-bold">Pays & Opérateurs</h1>
-          <p className="text-muted-foreground">Gérez les pays et opérateurs de paiement</p>
+          <p className="text-muted-foreground">Gérez les pays et leurs opérateurs de paiement</p>
         </div>
 
-        <Tabs defaultValue="countries">
-          <TabsList>
-            <TabsTrigger value="countries" className="gap-2">
-              <Globe className="w-4 h-4" /> Pays
-            </TabsTrigger>
-            <TabsTrigger value="operators" className="gap-2">
-              <Smartphone className="w-4 h-4" /> Opérateurs
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="countries" className="mt-6">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Liste des pays</CardTitle>
-                <Button onClick={() => setShowCountryModal(true)} className="gap-2" data-testid="button-add-country">
-                  <Plus className="w-4 h-4" /> Ajouter un pays
-                </Button>
-              </CardHeader>
-              <CardContent>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Card className="md:col-span-1">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Pays</CardTitle>
+              <Button onClick={() => setShowCountryModal(true)} size="sm" className="gap-2">
+                <Plus className="w-4 h-4" /> Ajouter
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <div className="max-h-[600px] overflow-y-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Pays</TableHead>
-                      <TableHead>Code</TableHead>
-                      <TableHead>Indicatif</TableHead>
                       <TableHead>Devise</TableHead>
-                      <TableHead>Taux</TableHead>
-                      <TableHead>Statut</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {loadingCountries ? (
-                      <TableRow>
-                        <TableCell colSpan={7} className="text-center py-8">Chargement...</TableCell>
-                      </TableRow>
-                    ) : !countries?.length ? (
-                      <TableRow>
-                        <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                          Aucun pays configuré
+                      <TableRow><TableCell colSpan={3} className="text-center">Chargement...</TableCell></TableRow>
+                    ) : countries?.map((country) => (
+                      <TableRow key={country.id}>
+                        <TableCell>
+                          <span className="mr-2">{country.flag}</span>
+                          {country.name}
+                          {!country.isActive && <Badge variant="secondary" className="ml-2">Inactif</Badge>}
+                        </TableCell>
+                        <TableCell>{country.currency}</TableCell>
+                        <TableCell className="text-right">
+                          <Button size="icon" variant="ghost" onClick={() => openEditCountry(country)}>
+                            <Pencil className="w-4 h-4" />
+                          </Button>
                         </TableCell>
                       </TableRow>
-                    ) : (
-                      countries.map((country) => (
-                        <TableRow key={country.id} data-testid={`country-row-${country.id}`}>
-                          <TableCell className="font-medium">
-                            <span className="mr-2">{country.flag}</span>
-                            {country.name}
-                          </TableCell>
-                          <TableCell>{country.code}</TableCell>
-                          <TableCell>{country.dialCode}</TableCell>
-                          <TableCell>{country.currency}</TableCell>
-                          <TableCell className="text-sm">{country.exchangeRate}</TableCell>
-                          <TableCell>
-                            <Badge variant={country.isActive ? "default" : "secondary"}>
-                              {country.isActive ? "Actif" : "Inactif"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-2">
-                              <Button size="icon" variant="ghost" onClick={() => openEditCountry(country)}>
-                                <Pencil className="w-4 h-4" />
-                              </Button>
-                              <Button 
-                                size="icon" 
-                                variant="ghost" 
-                                className="text-destructive"
-                                onClick={() => {
-                                  if (confirm("Supprimer ce pays ?")) {
-                                    deleteCountryMutation.mutate(country.id);
-                                  }
-                                }}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
+                    ))}
                   </TableBody>
                 </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
+              </div>
+            </CardContent>
+          </Card>
 
-          <TabsContent value="operators" className="mt-6">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Liste des opérateurs</CardTitle>
-                <Button onClick={() => setShowOperatorModal(true)} className="gap-2" data-testid="button-add-operator">
-                  <Plus className="w-4 h-4" /> Ajouter un opérateur
-                </Button>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Opérateur</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Pays</TableHead>
-                      <TableHead>Limite journalière</TableHead>
-                      <TableHead>Statut</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {loadingOperators ? (
-                      <TableRow>
-                        <TableCell colSpan={6} className="text-center py-8">Chargement...</TableCell>
-                      </TableRow>
-                    ) : !operators?.length ? (
-                      <TableRow>
-                        <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                          Aucun opérateur configuré
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      operators.map((operator) => (
-                        <TableRow key={operator.id} data-testid={`operator-row-${operator.id}`}>
-                          <TableCell className="font-medium">{operator.name}</TableCell>
-                          <TableCell>
-                            <Badge variant="secondary" className="capitalize">
-                              {operator.type.replace("_", " ")}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>{getCountryName(operator.countryId)}</TableCell>
-                          <TableCell>{operator.dailyLimit}</TableCell>
-                          <TableCell>
-                            <div className="flex gap-2">
-                              {operator.isInMaintenance ? (
-                                <Badge variant="destructive" className="gap-1">
-                                  <AlertTriangle className="w-3 h-3" /> Maintenance
-                                </Badge>
-                              ) : (
-                                <Badge variant={operator.isActive ? "default" : "secondary"}>
-                                  {operator.isActive ? "Actif" : "Inactif"}
-                                </Badge>
-                              )}
+          <Card className="md:col-span-1">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Opérateurs par Pays</CardTitle>
+              <Button onClick={() => setShowOperatorModal(true)} size="sm" className="gap-2">
+                <Plus className="w-4 h-4" /> Ajouter
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <div className="max-h-[600px] overflow-y-auto space-y-4">
+                {countries?.map(country => {
+                  const countryOperators = operators?.filter(o => o.countryId === country.id);
+                  if (!countryOperators?.length) return null;
+                  
+                  return (
+                    <div key={country.id} className="border rounded-lg p-4">
+                      <h3 className="font-semibold mb-2 flex items-center gap-2">
+                        <span>{country.flag}</span> {country.name}
+                      </h3>
+                      <div className="space-y-2">
+                        {countryOperators.map(op => (
+                          <div key={op.id} className="flex items-center justify-between bg-muted/50 p-2 rounded text-sm">
+                            <div className="flex items-center gap-2">
+                              <span>{op.name}</span>
+                              {op.isInMaintenance && <Badge variant="destructive" className="text-[10px] px-1 h-4">Maintenance</Badge>}
+                              {!op.isActive && <Badge variant="outline" className="text-[10px] px-1 h-4">Off</Badge>}
                             </div>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-2">
-                              <Button size="icon" variant="ghost" onClick={() => openEditOperator(operator)}>
-                                <Pencil className="w-4 h-4" />
+                            <div className="flex gap-1">
+                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEditOperator(op)}>
+                                <Pencil className="w-3 h-3" />
                               </Button>
-                              <Button 
-                                size="icon" 
-                                variant="ghost"
-                                className="text-destructive"
-                                onClick={() => {
-                                  if (confirm("Supprimer cet opérateur ?")) {
-                                    deleteOperatorMutation.mutate(operator.id);
-                                  }
-                                }}
-                              >
-                                <Trash2 className="w-4 h-4" />
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => {
+                                if(confirm(`Supprimer ${op.name} ?`)) deleteOperatorMutation.mutate(op.id);
+                              }}>
+                                <Trash2 className="w-3 h-3" />
                               </Button>
                             </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
         <Dialog open={showCountryModal} onOpenChange={() => resetCountryForm()}>
           <DialogContent>
