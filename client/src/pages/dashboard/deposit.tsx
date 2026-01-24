@@ -51,12 +51,7 @@ export default function DepositPage() {
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   
   const { data: countries, isLoading: isLoadingConfig } = useQuery<CountryConfig[]>({
-    queryKey: ["/api/transfers/config", "deposit"],
-    queryFn: async () => {
-      const res = await fetch("/api/transfers/config?type=deposit", { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch config");
-      return res.json();
-    },
+    queryKey: ["/api/transfers/config?type=deposit"],
   });
 
   const form = useForm<DepositFormData>({
