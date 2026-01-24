@@ -117,7 +117,34 @@ export async function registerRoutes(
   // Trust proxy (Replit uses reverse proxy in all environments)
   app.set("trust proxy", 1);
 
-  // Session middleware - use sameSite: none for Replit iframe preview
+  // CORS middleware for development - enable credentials
+  const allowedOrigins = [
+    process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : null,
+    process.env.REPL_SLUG ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co` : null,
+    'http://localhost:5000',
+    'https://localhost:5000',
+  ].filter(Boolean);
+
+  app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin && allowedOrigins.some(allowed => origin.includes(allowed?.replace('https://', '').replace('http://', '') || ''))) {
+      res.header('Access-Control-Allow-Origin', origin);
+    } else if (process.env.NODE_ENV === 'development') {
+      res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+    }
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(200);
+    }
+    next();
+  });
+
+  // Session middleware
+  const isProduction = process.env.NODE_ENV === 'production';
+  
   app.use(
     session({
       secret: process.env.SESSION_SECRET || "ashtech-pay-secret-key",
@@ -128,13 +155,15 @@ export async function registerRoutes(
       }),
       proxy: true,
       cookie: {
-        secure: true,
+        secure: isProduction,
         httpOnly: true,
-        sameSite: "none",
+        sameSite: isProduction ? "none" : "lax",
         maxAge: 24 * 60 * 60 * 1000,
       },
     })
   );
+  
+  console.log(`Session configured - Production: ${isProduction}, Secure: ${isProduction}, SameSite: ${isProduction ? 'none' : 'lax'}`);
 
   // File upload endpoint using local storage
   app.post("/api/uploads/local", requireAuth, upload.single("file"), (req, res) => {
