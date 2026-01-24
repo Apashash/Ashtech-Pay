@@ -76,6 +76,7 @@ export interface IStorage {
   getTransactionByReference(reference: string): Promise<Transaction | undefined>;
   createTransaction(transaction: InsertTransaction): Promise<Transaction>;
   updateTransactionStatus(id: string, status: string): Promise<Transaction | undefined>;
+  updateTransactionExternalReference(id: string, externalReference: string): Promise<Transaction | undefined>;
   
   // Payment link operations
   getPaymentLinksByUserId(userId: string): Promise<PaymentLink[]>;
@@ -393,6 +394,15 @@ export class DatabaseStorage implements IStorage {
     const [transaction] = await db
       .update(transactions)
       .set({ status })
+      .where(eq(transactions.id, id))
+      .returning();
+    return transaction || undefined;
+  }
+
+  async updateTransactionExternalReference(id: string, externalReference: string): Promise<Transaction | undefined> {
+    const [transaction] = await db
+      .update(transactions)
+      .set({ externalReference })
       .where(eq(transactions.id, id))
       .returning();
     return transaction || undefined;

@@ -24,6 +24,7 @@ import path from "path";
 import fs from "fs";
 import { uploadToSupabase } from "./supabase";
 import { collectPayment, verifyPayment, validateCallback, type CallbackPayload } from "./soleaspay";
+import { addPendingPayment } from "./paymentPoller";
 
 const uploadsDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadsDir)) {
@@ -1011,11 +1012,25 @@ export async function registerRoutes(
           });
 
           if (soleaspayResponse.success) {
-            // Transaction stays pending until SoleAsPay callback confirms it
+            const externalRef = soleaspayResponse.data?.reference || "";
+            
+            if (externalRef) {
+              await storage.updateTransactionExternalReference(transaction.id, externalRef);
+              
+              addPendingPayment({
+                transactionId: transaction.id,
+                reference: depositRef,
+                externalReference: externalRef,
+                attempts: 0,
+                userId: user.id,
+                type: "deposit",
+                amount: creditedAmount.toString(),
+              });
+            }
             
             res.json({ 
-              transaction: { ...transaction, reference: soleaspayResponse.data?.reference || depositRef },
-              soleaspayReference: soleaspayResponse.data?.reference,
+              transaction: { ...transaction, reference: externalRef || depositRef },
+              soleaspayReference: externalRef,
               message: "Veuillez valider le paiement sur votre téléphone",
               feeDetails: {
                 grossAmount: totalAmount,
@@ -1876,17 +1891,35 @@ export async function registerRoutes(
           });
 
           if (soleaspayResponse.success) {
+            const externalRef = soleaspayResponse.data?.reference || "";
+            
+            const linkTransaction = await storage.getTransactionByReference(reference);
+            if (linkTransaction && externalRef) {
+              await storage.updateTransactionExternalReference(linkTransaction.id, externalRef);
+              
+              addPendingPayment({
+                transactionId: linkTransaction.id,
+                reference: reference,
+                externalReference: externalRef,
+                attempts: 0,
+                userId: paymentLink.userId,
+                type: "payment_link",
+                amount: netAmount,
+                paymentIntentId: intent.id,
+                payerName: fullName,
+              });
+            }
+            
             res.json({ 
               message: "Veuillez valider le paiement sur votre téléphone.",
               reference: intent.reference,
-              soleaspayReference: soleaspayResponse.data?.reference,
+              soleaspayReference: externalRef,
               redirectUrl: paymentLink.redirectUrl || null,
               amount: numAmount,
               feeAmount: feeAmount,
               totalAmount: parseFloat(totalAmount),
             });
           } else {
-            // Update transaction and intent status to failed
             await storage.updatePaymentIntentStatus(intent.id, "failed");
             const failedTransaction = await storage.getTransactionByReference(reference);
             if (failedTransaction) {
@@ -1898,7 +1931,6 @@ export async function registerRoutes(
           }
         } catch (soleaspayError) {
           console.error("SoleAsPay API error:", soleaspayError);
-          // Mark as failed on API error
           await storage.updatePaymentIntentStatus(intent.id, "failed");
           const failedTransaction = await storage.getTransactionByReference(reference);
           if (failedTransaction) {

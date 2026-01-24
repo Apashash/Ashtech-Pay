@@ -106,6 +106,7 @@ export const transactions = pgTable("transactions", {
   paymentIntentId: varchar("payment_intent_id"),
   payerName: text("payer_name"),
   payerEmail: text("payer_email"),
+  externalReference: text("external_reference"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
