@@ -10,7 +10,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { registerSchema } from "@shared/schema";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, setAuthToken } from "@/lib/queryClient";
 import { Mail, Lock, User, Phone, Loader2, Eye, EyeOff, ArrowLeft } from "lucide-react";
 import logoImage from "@assets/logo.png";
 import { z } from "zod";
@@ -81,6 +81,10 @@ export default function RegisterPage() {
       return res.json();
     },
     onSuccess: (data) => {
+      // Store auth token for token-based authentication (works when cookies are blocked)
+      if (data.token) {
+        setAuthToken(data.token);
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       toast({
         title: "Inscription réussie",

@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { transferSchema, depositSchema, withdrawSchema, createPaymentLinkSchema } from "@shared/schema";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, removeAuthToken } from "@/lib/queryClient";
 import type { User, Transaction, PaymentLink } from "@shared/schema";
 import {
   Wallet,
@@ -648,6 +648,7 @@ export default function DashboardPage() {
       await apiRequest("POST", "/api/auth/logout", {});
     },
     onSuccess: () => {
+      removeAuthToken();
       queryClient.clear();
       setLocation("/");
     },

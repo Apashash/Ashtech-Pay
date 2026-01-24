@@ -61,19 +61,76 @@ declare module "express-session" {
   }
 }
 
+// Token-based auth store (for when cookies don't work in iframes)
+const authTokens = new Map<string, { userId: string; expiresAt: Date }>();
+
+function generateAuthToken(): string {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+function storeAuthToken(userId: string): string {
+  const token = generateAuthToken();
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+  authTokens.set(token, { userId, expiresAt });
+  return token;
+}
+
+function getUserIdFromToken(token: string): string | null {
+  const data = authTokens.get(token);
+  if (!data) return null;
+  if (data.expiresAt < new Date()) {
+    authTokens.delete(token);
+    return null;
+  }
+  return data.userId;
+}
+
+function removeAuthToken(token: string): void {
+  authTokens.delete(token);
+}
+
+// Extended request to include userId from token
+declare global {
+  namespace Express {
+    interface Request {
+      userId?: string;
+    }
+  }
+}
+
+// Middleware to extract userId from either session or Bearer token
+function extractUserId(req: Request, _res: Response, next: NextFunction) {
+  // First check session
+  if (req.session?.userId) {
+    req.userId = req.session.userId;
+    return next();
+  }
+  
+  // Then check Bearer token
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7);
+    const userId = getUserIdFromToken(token);
+    if (userId) {
+      req.userId = userId;
+    }
+  }
+  next();
+}
+
 function requireAuth(req: Request, res: Response, next: NextFunction) {
-  if (!req.session.userId) {
-    console.log("Auth failed - No userId in session. Session ID:", req.sessionID, "Cookies:", req.headers.cookie ? "present" : "none");
+  if (!req.userId) {
+    console.log("Auth failed - No userId. Session ID:", req.sessionID, "Cookies:", req.headers.cookie ? "present" : "none", "Auth header:", req.headers.authorization ? "present" : "none");
     return res.status(401).json({ message: "Non autorisé" });
   }
   next();
 }
 
 async function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  if (!req.session.userId) {
+  if (!req.userId) {
     return res.status(401).json({ message: "Non autorisé" });
   }
-  const user = await storage.getUser(req.session.userId);
+  const user = await storage.getUser(req.userId);
   if (!user || !["admin", "support", "finance"].includes(user.role)) {
     return res.status(403).json({ message: "Accès refusé - Droits admin requis" });
   }
@@ -127,10 +184,9 @@ export async function registerRoutes(
 
   app.use((req, res, next) => {
     const origin = req.headers.origin;
-    if (origin && allowedOrigins.some(allowed => origin.includes(allowed?.replace('https://', '').replace('http://', '') || ''))) {
+    // Always use the specific origin for credentials to work
+    if (origin) {
       res.header('Access-Control-Allow-Origin', origin);
-    } else if (process.env.NODE_ENV === 'development') {
-      res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
     }
     res.header('Access-Control-Allow-Credentials', 'true');
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
@@ -143,8 +199,7 @@ export async function registerRoutes(
   });
 
   // Session middleware
-  const isProduction = process.env.NODE_ENV === 'production';
-  
+  // Always use secure cookies with sameSite: none for Replit's HTTPS proxy environment
   app.use(
     session({
       secret: process.env.SESSION_SECRET || "ashtech-pay-secret-key",
@@ -155,15 +210,18 @@ export async function registerRoutes(
       }),
       proxy: true,
       cookie: {
-        secure: isProduction,
+        secure: true,
         httpOnly: true,
-        sameSite: isProduction ? "none" : "lax",
+        sameSite: "none",
         maxAge: 24 * 60 * 60 * 1000,
       },
     })
   );
   
-  console.log(`Session configured - Production: ${isProduction}, Secure: ${isProduction}, SameSite: ${isProduction ? 'none' : 'lax'}`);
+  console.log("Session configured - Secure: true, SameSite: none (for Replit HTTPS proxy)");
+
+  // Add extractUserId middleware after session middleware
+  app.use(extractUserId);
 
   // File upload endpoint using local storage
   app.post("/api/uploads/local", requireAuth, upload.single("file"), (req, res) => {
@@ -256,16 +314,19 @@ export async function registerRoutes(
         preferredCurrency,
       });
 
+      // Generate auth token for token-based auth (works in iframes where cookies fail)
+      const authToken = storeAuthToken(user.id);
+      
       req.session.userId = user.id;
 
       // Explicitly save session before responding
       req.session.save((err) => {
         if (err) {
           console.error("Session save error:", err);
-          return res.status(500).json({ message: "Erreur de session" });
+          // Even if session fails, we have the token
         }
         const { password: _, ...safeUser } = user;
-        res.json({ user: safeUser });
+        res.json({ user: safeUser, token: authToken });
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -290,16 +351,19 @@ export async function registerRoutes(
         return res.status(401).json({ message: "Email/téléphone ou mot de passe incorrect" });
       }
 
+      // Generate auth token for token-based auth (works in iframes where cookies fail)
+      const authToken = storeAuthToken(user.id);
+      
       req.session.userId = user.id;
 
       // Explicitly save session before responding
       req.session.save((err) => {
         if (err) {
           console.error("Session save error:", err);
-          return res.status(500).json({ message: "Erreur de session" });
+          // Even if session fails, we have the token
         }
         const { password: _, ...safeUser } = user;
-        res.json({ user: safeUser });
+        res.json({ user: safeUser, token: authToken });
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -311,6 +375,13 @@ export async function registerRoutes(
   });
 
   app.post("/api/auth/logout", (req, res) => {
+    // Remove the Bearer token if present
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      removeAuthToken(token);
+    }
+    
     req.session.destroy((err) => {
       if (err) {
         return res.status(500).json({ message: "Erreur lors de la déconnexion" });
@@ -379,7 +450,7 @@ export async function registerRoutes(
   // User routes
   app.get("/api/user", requireAuth, async (req, res) => {
     try {
-      const user = await storage.getUser(req.session.userId!);
+      const user = await storage.getUser(req.userId!);
       if (!user) {
         return res.status(404).json({ message: "Utilisateur non trouvé" });
       }
@@ -394,7 +465,7 @@ export async function registerRoutes(
   // Get user statistics
   app.get("/api/user/stats", requireAuth, async (req, res) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const transactions = await storage.getTransactionsByUserId(userId);
       const paymentLinks = await storage.getPaymentLinksByUserId(userId);
       
@@ -445,7 +516,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Devise non supportée" });
       }
       
-      const user = await storage.updateUserCurrency(req.session.userId!, currency as SupportedCurrency);
+      const user = await storage.updateUserCurrency(req.userId!, currency as SupportedCurrency);
       if (!user) {
         return res.status(404).json({ message: "Utilisateur non trouvé" });
       }
@@ -462,7 +533,7 @@ export async function registerRoutes(
   app.patch("/api/user/profile", requireAuth, async (req, res) => {
     try {
       const { fullName, email, phone, country } = req.body;
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       
       // Validate email uniqueness if changed
       if (email) {
@@ -489,7 +560,7 @@ export async function registerRoutes(
   app.delete("/api/user/account", requireAuth, async (req, res) => {
     try {
       const { username } = req.body;
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       
       const user = await storage.getUser(userId);
       if (!user) {
@@ -518,7 +589,7 @@ export async function registerRoutes(
   // Transaction routes
   app.get("/api/transactions", requireAuth, async (req, res) => {
     try {
-      const transactions = await storage.getTransactionsByUserId(req.session.userId!);
+      const transactions = await storage.getTransactionsByUserId(req.userId!);
       res.json(transactions);
     } catch (error) {
       console.error("Get transactions error:", error);
@@ -535,7 +606,7 @@ export async function registerRoutes(
       }
       
       // Ensure user owns this transaction
-      if (transaction.userId !== req.session.userId) {
+      if (transaction.userId !== req.userId) {
         return res.status(403).json({ message: "Accès refusé" });
       }
       
@@ -573,7 +644,7 @@ export async function registerRoutes(
       }
       
       // Ensure user owns this transaction
-      if (transaction.userId !== req.session.userId) {
+      if (transaction.userId !== req.userId) {
         return res.status(403).json({ message: "Accès refusé" });
       }
       
@@ -704,7 +775,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Tous les champs sont requis" });
       }
       
-      const senderId = req.session.userId!;
+      const senderId = req.userId!;
       const parsedAmount = parseFloat(amount);
       
       if (isNaN(parsedAmount) || parsedAmount <= 0) {
@@ -794,7 +865,7 @@ export async function registerRoutes(
   app.post("/api/transfers", requireAuth, async (req, res) => {
     try {
       const data = transferSchema.parse(req.body);
-      const senderId = req.session.userId!;
+      const senderId = req.userId!;
       const amount = parseFloat(data.amount);
 
       const sender = await storage.getUser(senderId);
@@ -870,7 +941,7 @@ export async function registerRoutes(
   app.post("/api/deposits", requireAuth, async (req, res) => {
     try {
       const data = depositSchema.parse(req.body);
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const amount = parseFloat(data.amount);
 
       // Calculate fee using fee resolution
@@ -929,7 +1000,7 @@ export async function registerRoutes(
   app.post("/api/withdrawals", requireAuth, async (req, res) => {
     try {
       const data = withdrawSchema.parse(req.body);
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const amount = parseFloat(data.amount);
 
       const user = await storage.getUser(userId);
@@ -1046,7 +1117,7 @@ export async function registerRoutes(
   // Withdrawal numbers routes (user can register max 2 numbers)
   app.get("/api/withdrawal-numbers", requireAuth, async (req, res) => {
     try {
-      const numbers = await storage.getWithdrawalNumbersByUserId(req.session.userId!);
+      const numbers = await storage.getWithdrawalNumbersByUserId(req.userId!);
       res.json(numbers);
     } catch (error) {
       console.error("Get withdrawal numbers error:", error);
@@ -1057,7 +1128,7 @@ export async function registerRoutes(
   app.post("/api/withdrawal-numbers", requireAuth, async (req, res) => {
     try {
       const { phoneNumber, operatorName, label } = req.body;
-      const userId = req.session.userId!;
+      const userId = req.userId!;
 
       if (!phoneNumber || phoneNumber.length < 8) {
         return res.status(400).json({ message: "Numéro de téléphone invalide (min 8 caractères)" });
@@ -1097,7 +1168,7 @@ export async function registerRoutes(
   app.post("/api/withdrawal-numbers/:id/request-change", requireAuth, async (req, res) => {
     try {
       const numberId = req.params.id;
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const { phoneNumber, operatorName, label } = req.body;
 
       // Validate input
@@ -1147,7 +1218,7 @@ export async function registerRoutes(
   app.post("/api/withdrawal-numbers/:id/request-delete", requireAuth, async (req, res) => {
     try {
       const numberId = req.params.id;
-      const userId = req.session.userId!;
+      const userId = req.userId!;
 
       const existingNumber = await storage.getWithdrawalNumber(numberId);
       if (!existingNumber || existingNumber.userId !== userId) {
@@ -1184,7 +1255,7 @@ export async function registerRoutes(
   // Get user's pending change requests
   app.get("/api/withdrawal-number-changes", requireAuth, async (req, res) => {
     try {
-      const changes = await storage.getWithdrawalNumberChangesByUserId(req.session.userId!);
+      const changes = await storage.getWithdrawalNumberChangesByUserId(req.userId!);
       res.json(changes);
     } catch (error) {
       console.error("Get change requests error:", error);
@@ -1195,7 +1266,7 @@ export async function registerRoutes(
   // Payment link routes
   app.get("/api/payment-links", requireAuth, async (req, res) => {
     try {
-      const paymentLinks = await storage.getPaymentLinksByUserId(req.session.userId!);
+      const paymentLinks = await storage.getPaymentLinksByUserId(req.userId!);
       res.json(paymentLinks);
     } catch (error) {
       console.error("Get payment links error:", error);
@@ -1206,7 +1277,7 @@ export async function registerRoutes(
   app.post("/api/payment-links", requireAuth, async (req, res) => {
     try {
       const data = createPaymentLinkSchema.parse(req.body);
-      const userId = req.session.userId!;
+      const userId = req.userId!;
 
       // Use custom slug if provided, otherwise generate one
       let slug = data.customSlug?.trim() || generateSlug();
@@ -1252,7 +1323,7 @@ export async function registerRoutes(
   app.patch("/api/payment-links/:id", requireAuth, async (req, res) => {
     try {
       const linkId = req.params.id;
-      const userId = req.session.userId!;
+      const userId = req.userId!;
 
       const existingLink = await storage.getPaymentLinkById(linkId);
       if (!existingLink) {
@@ -1302,7 +1373,7 @@ export async function registerRoutes(
   app.delete("/api/payment-links/:id", requireAuth, async (req, res) => {
     try {
       const linkId = req.params.id;
-      const userId = req.session.userId!;
+      const userId = req.userId!;
 
       const existingLink = await storage.getPaymentLinkById(linkId);
       if (!existingLink) {
@@ -1745,7 +1816,7 @@ export async function registerRoutes(
   // Get payment intents for current user (merchant)
   app.get("/api/payment-intents", requireAuth, async (req, res) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const intents = await storage.getPaymentIntentsByMerchantId(userId);
       res.json(intents);
     } catch (error) {
@@ -1768,7 +1839,7 @@ export async function registerRoutes(
   // Get analytics for a specific payment link
   app.get("/api/payment-links/:id/analytics", requireAuth, async (req, res) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       const paymentLink = await storage.getPaymentLinkById(req.params.id);
       
       if (!paymentLink) {
@@ -1923,7 +1994,7 @@ export async function registerRoutes(
       
       // Log admin action
       await storage.createAdminLog({
-        adminId: req.session.userId!,
+        adminId: req.userId!,
         action: "update_user",
         targetType: "user",
         targetId: id,
@@ -1949,7 +2020,7 @@ export async function registerRoutes(
       }
       
       await storage.createAdminLog({
-        adminId: req.session.userId!,
+        adminId: req.userId!,
         action: "ban_user",
         targetType: "user",
         targetId: id,
@@ -1975,7 +2046,7 @@ export async function registerRoutes(
       }
       
       await storage.createAdminLog({
-        adminId: req.session.userId!,
+        adminId: req.userId!,
         action: "unban_user",
         targetType: "user",
         targetId: id,
@@ -2002,7 +2073,7 @@ export async function registerRoutes(
       await storage.deleteUser(id);
       
       await storage.createAdminLog({
-        adminId: req.session.userId!,
+        adminId: req.userId!,
         action: "delete_user",
         targetType: "user",
         targetId: id,
@@ -2195,7 +2266,7 @@ export async function registerRoutes(
       }
       
       await storage.createAdminLog({
-        adminId: req.session.userId!,
+        adminId: req.userId!,
         action: "update_transaction",
         targetType: "transaction",
         targetId: id,
@@ -2227,7 +2298,7 @@ export async function registerRoutes(
       const country = await storage.createCountry(req.body);
       
       await storage.createAdminLog({
-        adminId: req.session.userId!,
+        adminId: req.userId!,
         action: "create_country",
         targetType: "country",
         targetId: country.id,
@@ -2250,7 +2321,7 @@ export async function registerRoutes(
       }
       
       await storage.createAdminLog({
-        adminId: req.session.userId!,
+        adminId: req.userId!,
         action: "update_country",
         targetType: "country",
         targetId: req.params.id,
@@ -2270,7 +2341,7 @@ export async function registerRoutes(
       await storage.deleteCountry(req.params.id);
       
       await storage.createAdminLog({
-        adminId: req.session.userId!,
+        adminId: req.userId!,
         action: "delete_country",
         targetType: "country",
         targetId: req.params.id,
@@ -2300,7 +2371,7 @@ export async function registerRoutes(
       const operator = await storage.createOperator(req.body);
       
       await storage.createAdminLog({
-        adminId: req.session.userId!,
+        adminId: req.userId!,
         action: "create_operator",
         targetType: "operator",
         targetId: operator.id,
@@ -2323,7 +2394,7 @@ export async function registerRoutes(
       }
       
       await storage.createAdminLog({
-        adminId: req.session.userId!,
+        adminId: req.userId!,
         action: "update_operator",
         targetType: "operator",
         targetId: req.params.id,
@@ -2343,7 +2414,7 @@ export async function registerRoutes(
       await storage.deleteOperator(req.params.id);
       
       await storage.createAdminLog({
-        adminId: req.session.userId!,
+        adminId: req.userId!,
         action: "delete_operator",
         targetType: "operator",
         targetId: req.params.id,
@@ -2373,7 +2444,7 @@ export async function registerRoutes(
       const fee = await storage.createFee(req.body);
       
       await storage.createAdminLog({
-        adminId: req.session.userId!,
+        adminId: req.userId!,
         action: "create_fee",
         targetType: "fee",
         targetId: fee.id,
@@ -2396,7 +2467,7 @@ export async function registerRoutes(
       }
       
       await storage.createAdminLog({
-        adminId: req.session.userId!,
+        adminId: req.userId!,
         action: "update_fee",
         targetType: "fee",
         targetId: req.params.id,
@@ -2416,7 +2487,7 @@ export async function registerRoutes(
       await storage.deleteFee(req.params.id);
       
       await storage.createAdminLog({
-        adminId: req.session.userId!,
+        adminId: req.userId!,
         action: "delete_fee",
         targetType: "fee",
         targetId: req.params.id,
@@ -2478,7 +2549,7 @@ export async function registerRoutes(
       await storage.deleteAllTickets();
       
       await storage.createAdminLog({
-        adminId: req.session.userId!,
+        adminId: req.userId!,
         action: "delete_all_tickets",
         targetType: "ticket",
         targetId: null,
@@ -2499,7 +2570,7 @@ export async function registerRoutes(
       await storage.deleteTicket(req.params.id);
       
       await storage.createAdminLog({
-        adminId: req.session.userId!,
+        adminId: req.userId!,
         action: "delete_ticket",
         targetType: "ticket",
         targetId: req.params.id,
@@ -2522,7 +2593,7 @@ export async function registerRoutes(
       }
       
       await storage.createAdminLog({
-        adminId: req.session.userId!,
+        adminId: req.userId!,
         action: "update_ticket",
         targetType: "ticket",
         targetId: req.params.id,
@@ -2541,7 +2612,7 @@ export async function registerRoutes(
     try {
       const message = await storage.createTicketMessage({
         ticketId: req.params.id,
-        senderId: req.session.userId!,
+        senderId: req.userId!,
         message: req.body.message,
         isAdmin: true,
       });
@@ -2556,7 +2627,7 @@ export async function registerRoutes(
   app.post("/api/tickets", requireAuth, async (req, res) => {
     try {
       const ticket = await storage.createTicket({
-        userId: req.session.userId!,
+        userId: req.userId!,
         subject: req.body.subject,
         priority: req.body.priority || "medium",
       });
@@ -2564,7 +2635,7 @@ export async function registerRoutes(
       if (req.body.message) {
         await storage.createTicketMessage({
           ticketId: ticket.id,
-          senderId: req.session.userId!,
+          senderId: req.userId!,
           message: req.body.message,
           isAdmin: false,
         });
@@ -2580,7 +2651,7 @@ export async function registerRoutes(
   // User: Get ticket stats (unread count based on open tickets with admin responses)
   app.get("/api/tickets/stats", requireAuth, async (req, res) => {
     try {
-      const tickets = await storage.getTicketsByUser(req.session.userId!);
+      const tickets = await storage.getTicketsByUser(req.userId!);
       let unreadCount = 0;
       for (const ticket of tickets) {
         if (ticket.status === "open" || ticket.status === "in_progress") {
@@ -2601,7 +2672,7 @@ export async function registerRoutes(
   // User: Get own tickets
   app.get("/api/tickets", requireAuth, async (req, res) => {
     try {
-      const tickets = await storage.getTicketsByUser(req.session.userId!);
+      const tickets = await storage.getTicketsByUser(req.userId!);
       res.json(tickets);
     } catch (error) {
       console.error("Get user tickets error:", error);
@@ -2613,7 +2684,7 @@ export async function registerRoutes(
   app.get("/api/tickets/:id/messages", requireAuth, async (req, res) => {
     try {
       const ticket = await storage.getTicket(req.params.id);
-      if (!ticket || ticket.userId !== req.session.userId) {
+      if (!ticket || ticket.userId !== req.userId) {
         return res.status(404).json({ message: "Ticket non trouvé" });
       }
       const messages = await storage.getTicketMessages(req.params.id);
@@ -2628,13 +2699,13 @@ export async function registerRoutes(
   app.post("/api/tickets/:id/messages", requireAuth, async (req, res) => {
     try {
       const ticket = await storage.getTicket(req.params.id);
-      if (!ticket || ticket.userId !== req.session.userId) {
+      if (!ticket || ticket.userId !== req.userId) {
         return res.status(404).json({ message: "Ticket non trouvé" });
       }
       
       const message = await storage.createTicketMessage({
         ticketId: req.params.id,
-        senderId: req.session.userId!,
+        senderId: req.userId!,
         message: req.body.message,
         isAdmin: false,
       });
@@ -2655,7 +2726,7 @@ export async function registerRoutes(
   app.post("/api/tickets/:id/close", requireAuth, async (req, res) => {
     try {
       const ticket = await storage.getTicket(req.params.id);
-      if (!ticket || ticket.userId !== req.session.userId) {
+      if (!ticket || ticket.userId !== req.userId) {
         return res.status(404).json({ message: "Ticket non trouvé" });
       }
       
@@ -2701,7 +2772,7 @@ export async function registerRoutes(
       const setting = await storage.upsertSetting(key, String(value), description || undefined);
       
       await storage.createAdminLog({
-        adminId: req.session.userId!,
+        adminId: req.userId!,
         action: "update_setting",
         targetType: "setting",
         targetId: key,
@@ -2734,7 +2805,7 @@ export async function registerRoutes(
       }
       
       await storage.createAdminLog({
-        adminId: req.session.userId!,
+        adminId: req.userId!,
         action: "update_settings_bulk",
         targetType: "setting",
         targetId: "all",
@@ -2783,7 +2854,7 @@ export async function registerRoutes(
       }
       
       await storage.createAdminLog({
-        adminId: req.session.userId!,
+        adminId: req.userId!,
         action: "update_payment_link",
         targetType: "payment_link",
         targetId: req.params.id,
@@ -2833,7 +2904,7 @@ export async function registerRoutes(
       const { note } = req.body;
       const change = await storage.approveWithdrawalNumberChange(
         req.params.id, 
-        req.session.userId!, 
+        req.userId!, 
         note
       );
       
@@ -2842,7 +2913,7 @@ export async function registerRoutes(
       }
       
       await storage.createAdminLog({
-        adminId: req.session.userId!,
+        adminId: req.userId!,
         action: "approve_withdrawal_number_change",
         targetType: "withdrawal_number_change",
         targetId: req.params.id,
@@ -2863,7 +2934,7 @@ export async function registerRoutes(
       const { note } = req.body;
       const change = await storage.rejectWithdrawalNumberChange(
         req.params.id, 
-        req.session.userId!, 
+        req.userId!, 
         note
       );
       
@@ -2872,7 +2943,7 @@ export async function registerRoutes(
       }
       
       await storage.createAdminLog({
-        adminId: req.session.userId!,
+        adminId: req.userId!,
         action: "reject_withdrawal_number_change",
         targetType: "withdrawal_number_change",
         targetId: req.params.id,
@@ -2892,14 +2963,14 @@ export async function registerRoutes(
   // Get user notifications
   app.get("/api/notifications", requireAuth, async (req, res) => {
     try {
-      const notifications = await storage.getUserNotifications(req.session.userId!);
-      const unreadCount = await storage.getUnreadNotificationCount(req.session.userId!);
+      const notifications = await storage.getUserNotifications(req.userId!);
+      const unreadCount = await storage.getUnreadNotificationCount(req.userId!);
       
       // Also include active global messages as notifications (excluding dismissed ones)
-      const globalMessages = await storage.getActiveGlobalMessagesForUser(req.session.userId!);
+      const globalMessages = await storage.getActiveGlobalMessagesForUser(req.userId!);
       const globalNotifications = globalMessages.map(msg => ({
         id: `global-${msg.id}`,
-        userId: req.session.userId!,
+        userId: req.userId!,
         type: "global_message",
         title: msg.title,
         message: msg.message,
@@ -2926,9 +2997,9 @@ export async function registerRoutes(
       // Check if it's a global message - dismiss it instead of marking as read
       if (notificationId.startsWith("global-")) {
         const globalMessageId = notificationId.replace("global-", "");
-        await storage.dismissGlobalMessage(req.session.userId!, globalMessageId);
+        await storage.dismissGlobalMessage(req.userId!, globalMessageId);
       } else {
-        await storage.markNotificationAsRead(notificationId, req.session.userId!);
+        await storage.markNotificationAsRead(notificationId, req.userId!);
       }
       
       res.json({ success: true });
@@ -2942,12 +3013,12 @@ export async function registerRoutes(
   app.post("/api/notifications/read-all", requireAuth, async (req, res) => {
     try {
       // Mark regular notifications as read
-      await storage.markAllNotificationsAsRead(req.session.userId!);
+      await storage.markAllNotificationsAsRead(req.userId!);
       
       // Also dismiss all active global messages for this user
-      const globalMessages = await storage.getActiveGlobalMessagesForUser(req.session.userId!);
+      const globalMessages = await storage.getActiveGlobalMessagesForUser(req.userId!);
       for (const msg of globalMessages) {
-        await storage.dismissGlobalMessage(req.session.userId!, msg.id);
+        await storage.dismissGlobalMessage(req.userId!, msg.id);
       }
       
       res.json({ success: true });
@@ -2965,9 +3036,9 @@ export async function registerRoutes(
       // Check if it's a global message - dismiss it
       if (notificationId.startsWith("global-")) {
         const globalMessageId = notificationId.replace("global-", "");
-        await storage.dismissGlobalMessage(req.session.userId!, globalMessageId);
+        await storage.dismissGlobalMessage(req.userId!, globalMessageId);
       } else {
-        await storage.deleteUserNotification(notificationId, req.session.userId!);
+        await storage.deleteUserNotification(notificationId, req.userId!);
       }
       
       res.json({ success: true });
@@ -3000,7 +3071,7 @@ export async function registerRoutes(
       }
       
       const globalMessage = await storage.createGlobalMessage({
-        adminId: req.session.userId!,
+        adminId: req.userId!,
         title,
         message,
         isActive: true,
@@ -3008,7 +3079,7 @@ export async function registerRoutes(
       });
       
       await storage.createAdminLog({
-        adminId: req.session.userId!,
+        adminId: req.userId!,
         action: "create_global_message",
         targetType: "global_message",
         targetId: globalMessage.id,
@@ -3041,7 +3112,7 @@ export async function registerRoutes(
       }
       
       await storage.createAdminLog({
-        adminId: req.session.userId!,
+        adminId: req.userId!,
         action: "update_global_message",
         targetType: "global_message",
         targetId: req.params.id,
@@ -3062,7 +3133,7 @@ export async function registerRoutes(
       await storage.deleteGlobalMessage(req.params.id);
       
       await storage.createAdminLog({
-        adminId: req.session.userId!,
+        adminId: req.userId!,
         action: "delete_global_message",
         targetType: "global_message",
         targetId: req.params.id,
@@ -3082,7 +3153,7 @@ export async function registerRoutes(
   // User: Get own KYC submission
   app.get("/api/kyc", requireAuth, async (req, res) => {
     try {
-      const submission = await storage.getKycSubmissionByUserId(req.session.userId!);
+      const submission = await storage.getKycSubmissionByUserId(req.userId!);
       res.json(submission || null);
     } catch (error) {
       console.error("Get KYC error:", error);
@@ -3093,7 +3164,7 @@ export async function registerRoutes(
   // User: Submit KYC
   app.post("/api/kyc", requireAuth, async (req, res) => {
     try {
-      const userId = req.session.userId!;
+      const userId = req.userId!;
       
       // Check if user already has a pending KYC submission
       const existingSubmission = await storage.getKycSubmissionByUserId(userId);
@@ -3223,7 +3294,7 @@ export async function registerRoutes(
       const { note } = req.body;
       const submission = await storage.approveKycSubmission(
         req.params.id, 
-        req.session.userId!, 
+        req.userId!, 
         note
       );
       
@@ -3241,7 +3312,7 @@ export async function registerRoutes(
       });
       
       await storage.createAdminLog({
-        adminId: req.session.userId!,
+        adminId: req.userId!,
         action: "approve_kyc",
         targetType: "kyc_submission",
         targetId: req.params.id,
@@ -3267,7 +3338,7 @@ export async function registerRoutes(
       
       const submission = await storage.rejectKycSubmission(
         req.params.id, 
-        req.session.userId!, 
+        req.userId!, 
         note
       );
       
@@ -3285,7 +3356,7 @@ export async function registerRoutes(
       });
       
       await storage.createAdminLog({
-        adminId: req.session.userId!,
+        adminId: req.userId!,
         action: "reject_kyc",
         targetType: "kyc_submission",
         targetId: req.params.id,

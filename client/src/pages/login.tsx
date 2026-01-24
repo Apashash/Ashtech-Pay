@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { loginSchema } from "@shared/schema";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, setAuthToken } from "@/lib/queryClient";
 import { Mail, Lock, Loader2, Eye, EyeOff, ArrowLeft, Phone } from "lucide-react";
 import logoImage from "@assets/logo.png";
 import { z } from "zod";
@@ -35,6 +35,10 @@ export default function LoginPage() {
       return res.json();
     },
     onSuccess: (data) => {
+      // Store auth token for token-based authentication (works when cookies are blocked)
+      if (data.token) {
+        setAuthToken(data.token);
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       toast({
         title: "Connexion réussie",
