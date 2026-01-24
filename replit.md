@@ -73,6 +73,14 @@ Three main tables:
 
 ## External Dependencies
 
+### Payment Gateway
+- **SoleAsPay**: Mobile Money payment processing for 18+ African countries
+  - API keys stored in `SOLEASPAY_API_KEY` and `SOLEASPAY_SECRET_KEY`
+  - Service implementation: `server/soleaspay.ts`
+  - Callback endpoint: `POST /api/soleaspay/callback` (validates x-private-key header)
+  - Supports: MTN, Orange, Moov, Airtel, Wave, M-Pesa, etc.
+  - Used for deposits and payment link payments
+
 ### Database
 - **PostgreSQL**: Primary database via `DATABASE_URL` environment variable
 - **Drizzle ORM**: Database queries and schema management
