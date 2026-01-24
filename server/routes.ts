@@ -657,6 +657,20 @@ export async function registerRoutes(
     }
   });
 
+  // Public endpoint to check transaction status (for payment page polling)
+  app.get("/api/transactions/status/:reference", async (req, res) => {
+    try {
+      const transaction = await storage.getTransactionByReference(req.params.reference);
+      if (!transaction) {
+        return res.status(404).json({ message: "Transaction non trouvée", status: "not_found" });
+      }
+      res.json({ status: transaction.status, reference: transaction.reference });
+    } catch (error) {
+      console.error("Get transaction status error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   // Get transfer configuration (countries, operators, fees)
   app.get("/api/transfers/config", requireAuth, async (req, res) => {
     try {

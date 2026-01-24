@@ -12,7 +12,7 @@ import {
   Loader2, CheckCircle, XCircle, Shield, 
   Smartphone, CreditCard, ExternalLink, FileText, AlertTriangle, Globe
 } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { SiPaypal } from "react-icons/si";
 import logoImage from "@assets/image_1768087588517.png";
 
@@ -77,6 +77,11 @@ export default function PaymentPage() {
   const [paymentMethod, setPaymentMethod] = useState<"mobile_money" | "card" | "paypal" | "">("");
   const [operator, setOperator] = useState("");
   const [displayCurrency, setDisplayCurrency] = useState<SupportedCurrency | "">("");
+  
+  const [paymentStatus, setPaymentStatus] = useState<"pending" | "success" | "failed">("pending");
+  const [countdown, setCountdown] = useState(8 * 60);
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const countdownRef = useRef<NodeJS.Timeout | null>(null);
 
   const { data: paymentLink, isLoading, error } = useQuery<PaymentLink & { hasPdf?: boolean }>({
     queryKey: ["/api/payment-links/public", params?.slug],
@@ -233,6 +238,55 @@ export default function PaymentPage() {
     return true;
   }, [fullName, email, country, phone, paymentMethod, operator, paymentLink, customAmount, displayAmount]);
 
+  useEffect(() => {
+    if (paymentComplete && paymentReference && paymentStatus === "pending") {
+      setCountdown(8 * 60);
+      
+      countdownRef.current = setInterval(() => {
+        setCountdown(prev => {
+          if (prev <= 1) {
+            if (countdownRef.current) clearInterval(countdownRef.current);
+            if (pollingRef.current) clearInterval(pollingRef.current);
+            setPaymentStatus("failed");
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      
+      pollingRef.current = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/transactions/status/${paymentReference}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.status === "completed") {
+              setPaymentStatus("success");
+              if (pollingRef.current) clearInterval(pollingRef.current);
+              if (countdownRef.current) clearInterval(countdownRef.current);
+            } else if (data.status === "failed") {
+              setPaymentStatus("failed");
+              if (pollingRef.current) clearInterval(pollingRef.current);
+              if (countdownRef.current) clearInterval(countdownRef.current);
+            }
+          }
+        } catch (e) {
+          console.error("Error checking payment status:", e);
+        }
+      }, 5000);
+      
+      return () => {
+        if (pollingRef.current) clearInterval(pollingRef.current);
+        if (countdownRef.current) clearInterval(countdownRef.current);
+      };
+    }
+  }, [paymentComplete, paymentReference, paymentStatus]);
+
+  const formatCountdown = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -269,11 +323,52 @@ export default function PaymentPage() {
         <div className="flex-1 flex items-center justify-center p-4">
           <Card className="w-full max-w-md text-center">
             <CardContent className="pt-6 space-y-4">
-              <CheckCircle className="w-16 h-16 text-green-500 mx-auto" />
-              <h2 className="text-xl font-bold text-foreground">Paiement initié</h2>
-              <p className="text-muted-foreground">
-                Vous recevrez une demande de paiement sur votre téléphone. Veuillez confirmer le paiement pour finaliser la transaction.
-              </p>
+              {paymentStatus === "pending" && (
+                <>
+                  <div className="relative">
+                    <Loader2 className="w-16 h-16 text-primary mx-auto animate-spin" />
+                  </div>
+                  <h2 className="text-xl font-bold text-foreground">Validation en cours...</h2>
+                  <p className="text-muted-foreground">
+                    Veuillez valider le paiement sur votre téléphone.
+                  </p>
+                  <div className="bg-muted/30 rounded-lg p-4">
+                    <p className="text-sm text-muted-foreground mb-1">Temps restant</p>
+                    <p className="text-2xl font-mono font-bold text-primary">{formatCountdown(countdown)}</p>
+                  </div>
+                </>
+              )}
+              
+              {paymentStatus === "success" && (
+                <>
+                  <CheckCircle className="w-16 h-16 text-green-500 mx-auto" />
+                  <h2 className="text-xl font-bold text-foreground">Paiement confirmé</h2>
+                  <p className="text-muted-foreground">
+                    Votre paiement a été reçu avec succès. Merci pour votre confiance !
+                  </p>
+                </>
+              )}
+              
+              {paymentStatus === "failed" && (
+                <>
+                  <XCircle className="w-16 h-16 text-red-500 mx-auto" />
+                  <h2 className="text-xl font-bold text-foreground">Paiement échoué</h2>
+                  <p className="text-muted-foreground">
+                    Le paiement n'a pas pu être confirmé. Veuillez réessayer ou contacter le support.
+                  </p>
+                  <Button 
+                    onClick={() => {
+                      setPaymentComplete(false);
+                      setPaymentStatus("pending");
+                      setPaymentReference("");
+                    }}
+                    className="mt-4"
+                  >
+                    Réessayer
+                  </Button>
+                </>
+              )}
+              
               {paymentReference && (
                 <div className="bg-muted/30 rounded-lg p-3">
                   <p className="text-sm text-muted-foreground">Référence</p>
@@ -284,7 +379,7 @@ export default function PaymentPage() {
                 {formatAmount(displayAmount, selectedDisplayCurrency)}
               </div>
               
-              {paymentLink?.hasPdf && (
+              {paymentLink?.hasPdf && paymentStatus === "success" && (
                 <div className="pt-4 border-t">
                   {pdfDownloadUrl ? (
                     <>

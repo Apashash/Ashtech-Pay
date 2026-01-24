@@ -10,9 +10,9 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User, SupportedCurrency } from "@shared/schema";
-import { CreditCard, Loader2, Globe, Smartphone, AlertCircle, Phone } from "lucide-react";
+import { CreditCard, Loader2, Globe, Smartphone, AlertCircle, Phone, CheckCircle, XCircle } from "lucide-react";
 import { z } from "zod";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { formatCurrency } from "@/lib/currency";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -47,6 +47,11 @@ type DepositFormData = z.infer<typeof depositFormSchema>;
 export default function DepositPage() {
   const { toast } = useToast();
   const [showValidationMessage, setShowValidationMessage] = useState(false);
+  const [depositReference, setDepositReference] = useState("");
+  const [paymentStatus, setPaymentStatus] = useState<"pending" | "success" | "failed">("pending");
+  const [countdown, setCountdown] = useState(8 * 60);
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const countdownRef = useRef<NodeJS.Timeout | null>(null);
   
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   
@@ -131,8 +136,11 @@ export default function DepositPage() {
       });
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       setShowValidationMessage(true);
+      setDepositReference(data.reference || "");
+      setPaymentStatus("pending");
+      setCountdown(8 * 60);
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
     },
@@ -140,6 +148,55 @@ export default function DepositPage() {
       toast({ title: "Erreur", description: error.message, variant: "destructive" });
     },
   });
+
+  useEffect(() => {
+    if (showValidationMessage && depositReference && paymentStatus === "pending") {
+      countdownRef.current = setInterval(() => {
+        setCountdown(prev => {
+          if (prev <= 1) {
+            if (countdownRef.current) clearInterval(countdownRef.current);
+            if (pollingRef.current) clearInterval(pollingRef.current);
+            setPaymentStatus("failed");
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      
+      pollingRef.current = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/transactions/status/${depositReference}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.status === "completed") {
+              setPaymentStatus("success");
+              if (pollingRef.current) clearInterval(pollingRef.current);
+              if (countdownRef.current) clearInterval(countdownRef.current);
+              queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+              queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
+            } else if (data.status === "failed") {
+              setPaymentStatus("failed");
+              if (pollingRef.current) clearInterval(pollingRef.current);
+              if (countdownRef.current) clearInterval(countdownRef.current);
+            }
+          }
+        } catch (e) {
+          console.error("Error checking deposit status:", e);
+        }
+      }, 5000);
+      
+      return () => {
+        if (pollingRef.current) clearInterval(pollingRef.current);
+        if (countdownRef.current) clearInterval(countdownRef.current);
+      };
+    }
+  }, [showValidationMessage, depositReference, paymentStatus]);
+
+  const formatCountdown = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
 
   const handleSubmit = (data: DepositFormData) => {
     setShowValidationMessage(false);
@@ -184,26 +241,91 @@ export default function DepositPage() {
             <CardContent>
               {showValidationMessage ? (
                 <div className="text-center py-8 space-y-4">
-                  <div className="w-16 h-16 mx-auto rounded-full bg-primary/10 flex items-center justify-center">
-                    <Smartphone className="w-8 h-8 text-primary animate-pulse" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-semibold text-foreground mb-2">Validez votre paiement</h3>
-                    <p className="text-muted-foreground">
-                      Une notification a été envoyée sur votre téléphone.<br />
-                      Veuillez valider le paiement pour confirmer votre dépôt.
-                    </p>
-                  </div>
-                  <Button 
-                    variant="outline" 
-                    onClick={() => {
-                      setShowValidationMessage(false);
-                      form.reset();
-                    }}
-                    data-testid="button-new-deposit"
-                  >
-                    Faire un nouveau dépôt
-                  </Button>
+                  {paymentStatus === "pending" && (
+                    <>
+                      <div className="w-16 h-16 mx-auto rounded-full bg-primary/10 flex items-center justify-center">
+                        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-semibold text-foreground mb-2">Validation en cours...</h3>
+                        <p className="text-muted-foreground">
+                          Veuillez valider le paiement sur votre téléphone.
+                        </p>
+                      </div>
+                      <div className="bg-muted/30 rounded-lg p-4 inline-block">
+                        <p className="text-sm text-muted-foreground mb-1">Temps restant</p>
+                        <p className="text-2xl font-mono font-bold text-primary">{formatCountdown(countdown)}</p>
+                      </div>
+                      {depositReference && (
+                        <div className="bg-muted/30 rounded-lg p-3">
+                          <p className="text-sm text-muted-foreground">Référence</p>
+                          <p className="font-mono font-bold text-foreground">{depositReference}</p>
+                        </div>
+                      )}
+                    </>
+                  )}
+                  
+                  {paymentStatus === "success" && (
+                    <>
+                      <div className="w-16 h-16 mx-auto rounded-full bg-green-500/10 flex items-center justify-center">
+                        <CheckCircle className="w-8 h-8 text-green-500" />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-semibold text-foreground mb-2">Dépôt confirmé</h3>
+                        <p className="text-muted-foreground">
+                          Votre dépôt a été crédité sur votre compte avec succès !
+                        </p>
+                      </div>
+                      {depositReference && (
+                        <div className="bg-muted/30 rounded-lg p-3">
+                          <p className="text-sm text-muted-foreground">Référence</p>
+                          <p className="font-mono font-bold text-foreground">{depositReference}</p>
+                        </div>
+                      )}
+                      <Button 
+                        variant="outline" 
+                        onClick={() => {
+                          setShowValidationMessage(false);
+                          setPaymentStatus("pending");
+                          setDepositReference("");
+                          form.reset();
+                        }}
+                        data-testid="button-new-deposit"
+                      >
+                        Faire un nouveau dépôt
+                      </Button>
+                    </>
+                  )}
+                  
+                  {paymentStatus === "failed" && (
+                    <>
+                      <div className="w-16 h-16 mx-auto rounded-full bg-red-500/10 flex items-center justify-center">
+                        <XCircle className="w-8 h-8 text-red-500" />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-semibold text-foreground mb-2">Dépôt échoué</h3>
+                        <p className="text-muted-foreground">
+                          Le paiement n'a pas pu être confirmé. Veuillez réessayer.
+                        </p>
+                      </div>
+                      {depositReference && (
+                        <div className="bg-muted/30 rounded-lg p-3">
+                          <p className="text-sm text-muted-foreground">Référence</p>
+                          <p className="font-mono font-bold text-foreground">{depositReference}</p>
+                        </div>
+                      )}
+                      <Button 
+                        onClick={() => {
+                          setShowValidationMessage(false);
+                          setPaymentStatus("pending");
+                          setDepositReference("");
+                        }}
+                        data-testid="button-retry-deposit"
+                      >
+                        Réessayer
+                      </Button>
+                    </>
+                  )}
                 </div>
               ) : (
                 <Form {...form}>
