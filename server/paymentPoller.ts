@@ -2,7 +2,7 @@ import { storage } from "./storage";
 import { verifyPayment } from "./soleaspay";
 
 const POLL_INTERVAL = 5000;
-const MAX_POLL_ATTEMPTS = 60;
+const MAX_POLL_ATTEMPTS = 96;
 
 interface PendingPayment {
   transactionId: string;
@@ -121,8 +121,8 @@ async function pollPendingPayments() {
     payment.attempts++;
 
     if (payment.attempts > MAX_POLL_ATTEMPTS) {
-      console.log(`[PaymentPoller] Max attempts reached for ${reference}, marking as pending (timeout)`);
-      removePendingPayment(reference);
+      console.log(`[PaymentPoller] Max attempts reached for ${reference}, marking as failed (timeout)`);
+      await processPaymentResult(payment, "failed");
       continue;
     }
 
