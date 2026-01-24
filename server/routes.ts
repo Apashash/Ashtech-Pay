@@ -23,6 +23,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { uploadToSupabase } from "./supabase";
+import { collectPayment, verifyPayment, validateCallback, type CallbackPayload } from "./soleaspay";
 
 const uploadsDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadsDir)) {
@@ -944,6 +945,20 @@ export async function registerRoutes(
       const userId = req.userId!;
       const amount = parseFloat(data.amount);
 
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "Utilisateur non trouvé" });
+      }
+
+      // Get operator name for SoleAsPay
+      let operatorName = "MTN Mobile Money";
+      if (data.operatorId) {
+        const operator = await storage.getOperator(data.operatorId);
+        if (operator) {
+          operatorName = operator.name;
+        }
+      }
+
       // Calculate fee using fee resolution
       const fee = await storage.resolveFee("deposit", data.countryId, data.operatorId);
       let feeAmount = 0;
@@ -965,6 +980,8 @@ export async function registerRoutes(
       const creditedAmount = amount - feeAmount;
 
       const depositRef = generateTransactionReference("deposit");
+      
+      // Create pending transaction first
       const transaction = await storage.createTransaction({
         userId,
         type: "deposit",
@@ -974,19 +991,69 @@ export async function registerRoutes(
         description: `Recharge via ${data.paymentMethod === "mobile_money" ? "Mobile Money" : "Crypto"}`,
         paymentMethod: data.paymentMethod,
         reference: depositRef,
+        operatorId: data.operatorId,
         feeAmount: feeAmount.toFixed(2),
         totalAmount: totalAmount.toFixed(2),
       });
 
-      res.json({ 
-        transaction, 
-        message: "Dépôt en attente de confirmation",
-        feeDetails: {
-          grossAmount: totalAmount,
-          feeAmount,
-          creditedAmount
+      // Call SoleAsPay API for mobile money deposits
+      if (data.paymentMethod === "mobile_money" && data.phoneNumber) {
+        try {
+          const soleaspayResponse = await collectPayment({
+            wallet: data.phoneNumber.replace(/\s/g, ""),
+            amount: totalAmount,
+            currency: "XAF",
+            orderId: depositRef,
+            description: `Dépôt Ashtech Pay - ${depositRef}`,
+            payerName: user.fullName,
+            payerEmail: user.email,
+            operatorName,
+          });
+
+          if (soleaspayResponse.success) {
+            // Transaction stays pending until SoleAsPay callback confirms it
+            
+            res.json({ 
+              transaction: { ...transaction, reference: soleaspayResponse.data?.reference || depositRef },
+              soleaspayReference: soleaspayResponse.data?.reference,
+              message: "Veuillez valider le paiement sur votre téléphone",
+              feeDetails: {
+                grossAmount: totalAmount,
+                feeAmount,
+                creditedAmount
+              }
+            });
+          } else {
+            // Mark transaction as failed
+            await storage.updateTransactionStatus(transaction.id, "failed");
+            res.status(400).json({ 
+              message: soleaspayResponse.message || "Échec de l'initiation du paiement" 
+            });
+          }
+        } catch (soleaspayError) {
+          console.error("SoleAsPay API error:", soleaspayError);
+          // Keep transaction as pending for manual processing
+          res.json({ 
+            transaction, 
+            message: "Dépôt en attente de confirmation",
+            feeDetails: {
+              grossAmount: totalAmount,
+              feeAmount,
+              creditedAmount
+            }
+          });
         }
-      });
+      } else {
+        res.json({ 
+          transaction, 
+          message: "Dépôt en attente de confirmation",
+          feeDetails: {
+            grossAmount: totalAmount,
+            feeAmount,
+            creditedAmount
+          }
+        });
+      }
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: error.errors[0].message });
@@ -1791,19 +1858,62 @@ export async function registerRoutes(
         operatorId: resolvedOperatorId || null,
       });
 
-      // In a production environment, this is where we would:
-      // 1. Initialize payment with the actual payment gateway (MTN MoMo API, Orange Money API, etc.)
-      // 2. Return a redirect URL to the gateway's payment page
-      // 3. Wait for webhook confirmation before crediting the merchant
+      // Get operator name for SoleAsPay
+      let operatorName = operator || "MTN Mobile Money";
 
-      res.json({ 
-        message: "Paiement initié avec succès. Vous recevrez une demande de paiement sur votre téléphone.",
-        reference: intent.reference,
-        redirectUrl: paymentLink.redirectUrl || null,
-        amount: numAmount,
-        feeAmount: feeAmount,
-        totalAmount: parseFloat(totalAmount),
-      });
+      // Call SoleAsPay API for Mobile Money payments
+      if (paymentMethod === "mobile_money") {
+        try {
+          const soleaspayResponse = await collectPayment({
+            wallet: phone.replace(/\s/g, ""),
+            amount: numAmount,
+            currency: paymentLink.currency || "XAF",
+            orderId: reference,
+            description: `Paiement ${paymentLink.title} - ${reference}`,
+            payerName: fullName,
+            payerEmail: email,
+            operatorName,
+          });
+
+          if (soleaspayResponse.success) {
+            res.json({ 
+              message: "Veuillez valider le paiement sur votre téléphone.",
+              reference: intent.reference,
+              soleaspayReference: soleaspayResponse.data?.reference,
+              redirectUrl: paymentLink.redirectUrl || null,
+              amount: numAmount,
+              feeAmount: feeAmount,
+              totalAmount: parseFloat(totalAmount),
+            });
+          } else {
+            // Update transaction and intent status to failed
+            await storage.updatePaymentIntentStatus(intent.id, "failed");
+            res.status(400).json({ 
+              message: soleaspayResponse.message || "Échec de l'initiation du paiement" 
+            });
+          }
+        } catch (soleaspayError) {
+          console.error("SoleAsPay API error:", soleaspayError);
+          // Keep as pending for manual processing
+          res.json({ 
+            message: "Paiement initié. Veuillez patienter pour la confirmation.",
+            reference: intent.reference,
+            redirectUrl: paymentLink.redirectUrl || null,
+            amount: numAmount,
+            feeAmount: feeAmount,
+            totalAmount: parseFloat(totalAmount),
+          });
+        }
+      } else {
+        res.json({ 
+          message: "Paiement initié avec succès.",
+          reference: intent.reference,
+          redirectUrl: paymentLink.redirectUrl || null,
+          amount: numAmount,
+          feeAmount: feeAmount,
+          totalAmount: parseFloat(totalAmount),
+        });
+      }
     } catch (error) {
       if (error instanceof Error) {
         return res.status(400).json({ message: error.message });
@@ -3368,6 +3478,105 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Reject KYC error:", error);
       res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // SoleAsPay Callback - Payment confirmation webhook
+  app.post("/api/soleaspay/callback", async (req, res) => {
+    try {
+      const xPrivateKey = req.headers["x-private-key"] as string;
+      
+      // Validate callback authenticity
+      if (!validateCallback(xPrivateKey)) {
+        console.error("[SoleAsPay Callback] Invalid x-private-key");
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const payload: CallbackPayload = req.body;
+      console.log("[SoleAsPay Callback] Received:", JSON.stringify(payload));
+
+      if (!payload.data?.external_reference) {
+        return res.status(400).json({ message: "Missing order reference" });
+      }
+
+      // Find transaction by reference (external_reference is our orderId)
+      const transaction = await storage.getTransactionByReference(payload.data.external_reference);
+      
+      if (!transaction) {
+        console.error("[SoleAsPay Callback] Transaction not found:", payload.data.external_reference);
+        return res.status(404).json({ message: "Transaction not found" });
+      }
+
+      // Handle payment status
+      if (payload.success && payload.status === "SUCCESS") {
+        // Update transaction status to completed
+        await storage.updateTransactionStatus(transaction.id, "completed");
+        
+        // Credit user balance
+        const user = await storage.getUser(transaction.userId);
+        if (user) {
+          const newBalance = parseFloat(user.balance) + parseFloat(transaction.amount);
+          await storage.updateUserBalance(transaction.userId, newBalance);
+          
+          // Create notification based on transaction type
+          const isPaymentLink = transaction.type === "payment_link";
+          await storage.createUserNotification({
+            userId: transaction.userId,
+            type: isPaymentLink ? "payment_link_received" : "deposit_confirmed",
+            title: isPaymentLink ? "Paiement reçu" : "Dépôt confirmé",
+            message: isPaymentLink 
+              ? `Vous avez reçu un paiement de ${transaction.amount} XAF de ${transaction.payerName || "un client"}.`
+              : `Votre dépôt de ${transaction.amount} XAF a été crédité sur votre compte.`,
+            transactionId: transaction.id,
+          });
+          
+          // Update payment intent status if it's a payment link transaction
+          if (isPaymentLink && transaction.paymentIntentId) {
+            await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "completed");
+          }
+        }
+        
+        console.log("[SoleAsPay Callback] Payment SUCCESS for:", transaction.id);
+      } else if (payload.status === "FAILURE" || payload.status === "REFUND") {
+        // Mark transaction as failed
+        await storage.updateTransactionStatus(transaction.id, "failed");
+        
+        // Update payment intent status if it's a payment link transaction
+        if (transaction.type === "payment_link" && transaction.paymentIntentId) {
+          await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "failed");
+        }
+        
+        // Notify user
+        const isPaymentLink = transaction.type === "payment_link";
+        await storage.createUserNotification({
+          userId: transaction.userId,
+          type: isPaymentLink ? "payment_link_failed" : "deposit_failed",
+          title: isPaymentLink ? "Paiement échoué" : "Dépôt échoué",
+          message: isPaymentLink
+            ? `Un paiement de ${transaction.totalAmount || transaction.amount} XAF a échoué.`
+            : `Votre dépôt de ${transaction.totalAmount || transaction.amount} XAF a échoué.`,
+          transactionId: transaction.id,
+        });
+        
+        console.log("[SoleAsPay Callback] Payment FAILED for:", transaction.id);
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[SoleAsPay Callback] Error:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // SoleAsPay verify payment status
+  app.get("/api/soleaspay/verify/:orderId/:payId", requireAuth, async (req, res) => {
+    try {
+      const { orderId, payId } = req.params;
+      const result = await verifyPayment(orderId, payId);
+      res.json(result);
+    } catch (error) {
+      console.error("[SoleAsPay Verify] Error:", error);
+      res.status(500).json({ message: "Erreur de vérification" });
     }
   });
 
