@@ -150,7 +150,14 @@ export async function collectPayment(params: CollectPaymentParams): Promise<Sole
 
   const data: SoleaspayPaymentResponse = await response.json();
   
-  console.log("[SoleAsPay] Payment response:", { success: data.success, status: data.status, reference: data.data?.reference });
+  console.log("[SoleAsPay] Payment response:", { 
+    success: data.success, 
+    status: data.status, 
+    reference: data.data?.reference,
+    message: data.message,
+    code: data.code,
+    fullResponse: JSON.stringify(data)
+  });
   
   return data;
 }
