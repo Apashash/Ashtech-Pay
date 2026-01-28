@@ -1896,7 +1896,12 @@ export async function registerRoutes(
       });
 
       // Get operator name and country code for SoleAsPay
-      let operatorName = operator || "MTN Mobile Money";
+      let operatorName = "MTN Mobile Money";
+      if (operator && countryId) {
+        const operators = await storage.getOperatorsByCountry(countryId);
+        const operatorData = operators.find((o: { name: string; id: string }) => o.name === operator || o.id === operator);
+        operatorName = operatorData?.name || operator;
+      }
       const paymentCountryCode = countryData?.code || "CM";
 
       // Call SoleAsPay API for Mobile Money payments
