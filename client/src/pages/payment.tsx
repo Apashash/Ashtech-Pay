@@ -36,6 +36,7 @@ interface CountryConfig {
   operators: {
     id: string;
     name: string;
+    gateway: "soleapay" | "winipay";
     feePercentage: number;
     feeFixed: number;
   }[];
@@ -183,6 +184,12 @@ export default function PaymentPage() {
       return data;
     },
     onSuccess: async (data) => {
+      // If WinniPay returns a checkout URL, redirect to it
+      if (data.checkoutUrl && data.gateway === "winipay") {
+        window.location.href = data.checkoutUrl;
+        return;
+      }
+      
       const ref = data.reference || "";
       setPaymentComplete(true);
       setPaymentReference(ref);
@@ -314,6 +321,13 @@ export default function PaymentPage() {
     if (currentStep === 1) {
       const isValid = validateStep1();
       if (!isValid) return;
+    }
+    if (currentStep === 2 && paymentMethod === "mobile_money") {
+      // If WinniPay, skip step 3 and call API directly (no phone number needed upfront)
+      if (selectedOperatorData?.gateway === "winipay") {
+        payMutation.mutate();
+        return;
+      }
     }
     if (currentStep < 3) {
       setCurrentStep(currentStep + 1);
