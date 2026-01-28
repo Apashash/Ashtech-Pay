@@ -619,6 +619,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteOperator(id: string): Promise<void> {
+    // First delete associated fees to avoid foreign key constraint violation
+    await db.delete(fees).where(eq(fees.operatorId, id));
+    // Then delete the operator
     await db.delete(operators).where(eq(operators.id, id));
   }
 
