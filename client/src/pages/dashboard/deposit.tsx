@@ -214,8 +214,8 @@ export default function DepositPage() {
 
   const canProceedToStep2 = useMemo(() => {
     const amount = parseFloat(watchedAmount) || 0;
-    return amount > 0 && watchedPhoneNumber.length >= 8;
-  }, [watchedAmount, watchedPhoneNumber]);
+    return amount > 0;
+  }, [watchedAmount]);
 
   const canProceedToStep3 = useMemo(() => {
     if (!watchedCountryId || !watchedOperatorId) return false;
