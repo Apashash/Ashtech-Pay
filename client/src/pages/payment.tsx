@@ -259,51 +259,51 @@ export default function PaymentPage() {
   }, [canProceedToStep2, canProceedToStep3, paymentMethod, phone]);
 
   useEffect(() => {
-    if (paymentComplete && paymentReference && paymentStatus === "pending") {
-      // Clear any existing intervals first
-      if (countdownRef.current) clearInterval(countdownRef.current);
-      if (pollingRef.current) clearInterval(pollingRef.current);
-      
-      setCountdown(8 * 60);
-      
-      countdownRef.current = setInterval(() => {
-        setCountdown(prev => {
-          if (prev <= 1) {
-            if (countdownRef.current) clearInterval(countdownRef.current);
-            if (pollingRef.current) clearInterval(pollingRef.current);
-            setPaymentStatus("failed");
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-      
-      pollingRef.current = setInterval(async () => {
-        try {
-          const res = await fetch(`/api/transactions/status/${paymentReference}`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data.status === "completed") {
-              setPaymentStatus("success");
-              if (pollingRef.current) clearInterval(pollingRef.current);
-              if (countdownRef.current) clearInterval(countdownRef.current);
-            } else if (data.status === "failed") {
-              setPaymentStatus("failed");
-              if (pollingRef.current) clearInterval(pollingRef.current);
-              if (countdownRef.current) clearInterval(countdownRef.current);
-            }
-          }
-        } catch (e) {
-          console.error("Error checking payment status:", e);
+    if (!paymentComplete || !paymentReference) return;
+    if (paymentStatus !== "pending") return;
+    
+    setCountdown(8 * 60);
+    
+    // Start countdown
+    const countdownInterval = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(countdownInterval);
+          setPaymentStatus("failed");
+          return 0;
         }
-      }, 5000);
-    }
+        return prev - 1;
+      });
+    }, 1000);
+    countdownRef.current = countdownInterval;
+    
+    // Start polling
+    const pollingInterval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/transactions/status/${paymentReference}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.status === "completed") {
+            setPaymentStatus("success");
+            clearInterval(pollingInterval);
+            clearInterval(countdownInterval);
+          } else if (data.status === "failed") {
+            setPaymentStatus("failed");
+            clearInterval(pollingInterval);
+            clearInterval(countdownInterval);
+          }
+        }
+      } catch (e) {
+        console.error("Error checking payment status:", e);
+      }
+    }, 5000);
+    pollingRef.current = pollingInterval;
     
     return () => {
-      if (pollingRef.current) clearInterval(pollingRef.current);
-      if (countdownRef.current) clearInterval(countdownRef.current);
+      clearInterval(countdownInterval);
+      clearInterval(pollingInterval);
     };
-  }, [paymentComplete, paymentReference]);
+  }, [paymentComplete, paymentReference, paymentStatus]);
 
   const formatCountdown = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
