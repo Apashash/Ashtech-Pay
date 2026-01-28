@@ -664,7 +664,7 @@ export default function DepositPage() {
                             ) : (
                               <>
                                 <CreditCard className="w-4 h-4 mr-2" />
-                                Confirmer le dépôt
+                                Confirmer
                               </>
                             )}
                           </Button>
