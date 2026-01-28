@@ -2530,6 +2530,32 @@ export async function registerRoutes(
     }
   });
 
+  // Admin: Toggle all operators for a country
+  app.post("/api/admin/countries/:id/toggle-operators", requireAdmin, async (req, res) => {
+    try {
+      const { isActive } = req.body;
+      const operators = await storage.getOperatorsByCountry(req.params.id);
+      
+      for (const op of operators) {
+        await storage.updateOperator(op.id, { isActive });
+      }
+      
+      await storage.createAdminLog({
+        adminId: req.userId!,
+        action: isActive ? "activate_all_operators" : "deactivate_all_operators",
+        targetType: "country",
+        targetId: req.params.id,
+        details: JSON.stringify({ operatorCount: operators.length }),
+        ipAddress: req.ip || null,
+      });
+      
+      res.json({ success: true, count: operators.length });
+    } catch (error) {
+      console.error("Admin toggle operators error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   // Admin: Operators CRUD
   app.get("/api/admin/operators", requireAdmin, async (req, res) => {
     try {

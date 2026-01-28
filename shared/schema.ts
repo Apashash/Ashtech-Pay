@@ -158,6 +158,10 @@ export const countries = pgTable("countries", {
   currency: text("currency").default("XAF").notNull(),
   exchangeRate: decimal("exchange_rate", { precision: 15, scale: 4 }).default("1").notNull(), // Rate to XAF
   isActive: boolean("is_active").default(true),
+  isActiveForRegistration: boolean("is_active_for_registration").default(true),
+  isActiveForDeposit: boolean("is_active_for_deposit").default(true),
+  isActiveForTransfer: boolean("is_active_for_transfer").default(true),
+  isActiveForWithdrawal: boolean("is_active_for_withdrawal").default(true),
   minDeposit: decimal("min_deposit", { precision: 15, scale: 2 }).default("100").notNull(),
   maxDeposit: decimal("max_deposit", { precision: 15, scale: 2 }).default("5000000").notNull(),
   minWithdrawal: decimal("min_withdrawal", { precision: 15, scale: 2 }).default("500").notNull(),

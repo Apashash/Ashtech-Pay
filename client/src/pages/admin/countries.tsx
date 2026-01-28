@@ -54,6 +54,10 @@ export default function AdminCountries() {
     minWithdrawal: "500",
     maxWithdrawal: "2000000",
     isActive: true,
+    isActiveForRegistration: true,
+    isActiveForDeposit: true,
+    isActiveForTransfer: true,
+    isActiveForWithdrawal: true,
   });
 
   const [operatorForm, setOperatorForm] = useState({
@@ -153,6 +157,17 @@ export default function AdminCountries() {
     onError: () => toast({ title: "Erreur", variant: "destructive" }),
   });
 
+  const toggleAllOperatorsMutation = useMutation({
+    mutationFn: async ({ countryId, isActive }: { countryId: string; isActive: boolean }) => {
+      return apiRequest("POST", `/api/admin/countries/${countryId}/toggle-operators`, { isActive });
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/operators"] });
+      toast({ title: variables.isActive ? "Tous les opérateurs activés" : "Tous les opérateurs désactivés" });
+    },
+    onError: () => toast({ title: "Erreur", variant: "destructive" }),
+  });
+
   const resetCountryForm = () => {
     setShowCountryModal(false);
     setEditingCountry(null);
@@ -168,6 +183,10 @@ export default function AdminCountries() {
       minWithdrawal: "500",
       maxWithdrawal: "2000000",
       isActive: true,
+      isActiveForRegistration: true,
+      isActiveForDeposit: true,
+      isActiveForTransfer: true,
+      isActiveForWithdrawal: true,
     });
   };
 
@@ -198,6 +217,10 @@ export default function AdminCountries() {
       minWithdrawal: country.minWithdrawal,
       maxWithdrawal: country.maxWithdrawal,
       isActive: country.isActive ?? true,
+      isActiveForRegistration: country.isActiveForRegistration ?? true,
+      isActiveForDeposit: country.isActiveForDeposit ?? true,
+      isActiveForTransfer: country.isActiveForTransfer ?? true,
+      isActiveForWithdrawal: country.isActiveForWithdrawal ?? true,
     });
     setShowCountryModal(true);
   };
@@ -284,9 +307,29 @@ export default function AdminCountries() {
                   
                   return (
                     <div key={country.id} className="border rounded-lg p-4">
-                      <h3 className="font-semibold mb-2 flex items-center gap-2">
-                        <span>{country.flag}</span> {country.name}
-                      </h3>
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="font-semibold flex items-center gap-2">
+                          <span>{country.flag}</span> {country.name}
+                        </h3>
+                        <div className="flex gap-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs"
+                            onClick={() => toggleAllOperatorsMutation.mutate({ countryId: country.id, isActive: true })}
+                          >
+                            Tout activer
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 text-xs text-muted-foreground"
+                            onClick={() => toggleAllOperatorsMutation.mutate({ countryId: country.id, isActive: false })}
+                          >
+                            Tout désactiver
+                          </Button>
+                        </div>
+                      </div>
                       <div className="space-y-2">
                         {countryOperators.map(op => (
                           <div key={op.id} className="flex items-center justify-between bg-muted/50 p-2 rounded text-sm">
@@ -438,13 +481,46 @@ export default function AdminCountries() {
                   />
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Switch
-                  checked={countryForm.isActive}
-                  onCheckedChange={(checked) => setCountryForm({ ...countryForm, isActive: checked })}
-                  data-testid="switch-country-active"
-                />
-                <Label>Actif</Label>
+              <div className="space-y-3 border-t pt-4">
+                <Label className="text-sm font-medium">Options d'activation</Label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={countryForm.isActive}
+                      onCheckedChange={(checked) => setCountryForm({ ...countryForm, isActive: checked })}
+                      data-testid="switch-country-active"
+                    />
+                    <Label className="text-sm">Global</Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={countryForm.isActiveForRegistration}
+                      onCheckedChange={(checked) => setCountryForm({ ...countryForm, isActiveForRegistration: checked })}
+                    />
+                    <Label className="text-sm">Inscription</Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={countryForm.isActiveForDeposit}
+                      onCheckedChange={(checked) => setCountryForm({ ...countryForm, isActiveForDeposit: checked })}
+                    />
+                    <Label className="text-sm">Dépôt</Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={countryForm.isActiveForTransfer}
+                      onCheckedChange={(checked) => setCountryForm({ ...countryForm, isActiveForTransfer: checked })}
+                    />
+                    <Label className="text-sm">Transfert</Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={countryForm.isActiveForWithdrawal}
+                      onCheckedChange={(checked) => setCountryForm({ ...countryForm, isActiveForWithdrawal: checked })}
+                    />
+                    <Label className="text-sm">Retrait</Label>
+                  </div>
+                </div>
               </div>
             </div>
             <DialogFooter>
