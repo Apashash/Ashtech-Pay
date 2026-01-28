@@ -86,7 +86,6 @@ export default function PaymentPage() {
   const [countdown, setCountdown] = useState(8 * 60);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
-  const timerStartedRef = useRef(false);
 
   const { data: paymentLink, isLoading, error } = useQuery<PaymentLink & { hasPdf?: boolean }>({
     queryKey: ["/api/payment-links/public", params?.slug],
@@ -184,16 +183,54 @@ export default function PaymentPage() {
       return data;
     },
     onSuccess: async (data) => {
+      const ref = data.reference || "";
       setPaymentComplete(true);
-      setPaymentReference(data.reference || "");
+      setPaymentReference(ref);
+      setCountdown(8 * 60);
       toast({
         title: "Paiement initié",
         description: data.message,
       });
       
-      if (data.reference && paymentLink?.hasPdf) {
+      // Start countdown timer directly
+      if (countdownRef.current) clearInterval(countdownRef.current);
+      countdownRef.current = setInterval(() => {
+        setCountdown(prev => {
+          if (prev <= 1) {
+            if (countdownRef.current) clearInterval(countdownRef.current);
+            if (pollingRef.current) clearInterval(pollingRef.current);
+            setPaymentStatus("failed");
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      
+      // Start polling for payment status
+      if (pollingRef.current) clearInterval(pollingRef.current);
+      pollingRef.current = setInterval(async () => {
         try {
-          const pdfRes = await fetch(`/api/payment-links/${params?.slug}/download-pdf/${data.reference}`);
+          const res = await fetch(`/api/transactions/status/${ref}`);
+          if (res.ok) {
+            const statusData = await res.json();
+            if (statusData.status === "completed") {
+              setPaymentStatus("success");
+              if (countdownRef.current) clearInterval(countdownRef.current);
+              if (pollingRef.current) clearInterval(pollingRef.current);
+            } else if (statusData.status === "failed") {
+              setPaymentStatus("failed");
+              if (countdownRef.current) clearInterval(countdownRef.current);
+              if (pollingRef.current) clearInterval(pollingRef.current);
+            }
+          }
+        } catch (e) {
+          console.error("Error checking payment status:", e);
+        }
+      }, 5000);
+      
+      if (ref && paymentLink?.hasPdf) {
+        try {
+          const pdfRes = await fetch(`/api/payment-links/${params?.slug}/download-pdf/${ref}`);
           if (pdfRes.ok) {
             const pdfData = await pdfRes.json();
             if (pdfData.pdfPath) {
@@ -259,49 +296,6 @@ export default function PaymentPage() {
     return canProceedToStep2 && canProceedToStep3 && paymentMethod === "mobile_money";
   }, [canProceedToStep2, canProceedToStep3, paymentMethod, phone]);
 
-  // Start countdown and polling when payment is complete
-  useEffect(() => {
-    if (!paymentComplete || !paymentReference) return;
-    if (timerStartedRef.current) return;
-    
-    timerStartedRef.current = true;
-    setCountdown(8 * 60);
-    
-    // Start countdown
-    countdownRef.current = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) {
-          if (countdownRef.current) clearInterval(countdownRef.current);
-          if (pollingRef.current) clearInterval(pollingRef.current);
-          setPaymentStatus("failed");
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    
-    // Start polling
-    pollingRef.current = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/transactions/status/${paymentReference}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.status === "completed") {
-            setPaymentStatus("success");
-            if (countdownRef.current) clearInterval(countdownRef.current);
-            if (pollingRef.current) clearInterval(pollingRef.current);
-          } else if (data.status === "failed") {
-            setPaymentStatus("failed");
-            if (countdownRef.current) clearInterval(countdownRef.current);
-            if (pollingRef.current) clearInterval(pollingRef.current);
-          }
-        }
-      } catch (e) {
-        console.error("Error checking payment status:", e);
-      }
-    }, 5000);
-  }, [paymentComplete, paymentReference]);
-  
   // Cleanup on unmount only
   useEffect(() => {
     return () => {

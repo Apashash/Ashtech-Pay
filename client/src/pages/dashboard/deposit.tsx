@@ -60,7 +60,6 @@ export default function DepositPage() {
   const [countdown, setCountdown] = useState(8 * 60);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
-  const timerStartedRef = useRef(false);
   
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   
@@ -147,62 +146,57 @@ export default function DepositPage() {
       return res.json();
     },
     onSuccess: (data) => {
+      const ref = data.reference || "";
       setShowValidationMessage(true);
-      setDepositReference(data.reference || "");
+      setDepositReference(ref);
       setPaymentStatus("pending");
       setCountdown(8 * 60);
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
+      
+      // Start countdown timer directly
+      if (countdownRef.current) clearInterval(countdownRef.current);
+      countdownRef.current = setInterval(() => {
+        setCountdown(prev => {
+          if (prev <= 1) {
+            if (countdownRef.current) clearInterval(countdownRef.current);
+            if (pollingRef.current) clearInterval(pollingRef.current);
+            setPaymentStatus("failed");
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      
+      // Start polling for payment status
+      if (pollingRef.current) clearInterval(pollingRef.current);
+      pollingRef.current = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/transactions/status/${ref}`);
+          if (res.ok) {
+            const statusData = await res.json();
+            if (statusData.status === "completed") {
+              setPaymentStatus("success");
+              if (countdownRef.current) clearInterval(countdownRef.current);
+              if (pollingRef.current) clearInterval(pollingRef.current);
+              queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+              queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
+            } else if (statusData.status === "failed") {
+              setPaymentStatus("failed");
+              if (countdownRef.current) clearInterval(countdownRef.current);
+              if (pollingRef.current) clearInterval(pollingRef.current);
+            }
+          }
+        } catch (e) {
+          console.error("Error checking deposit status:", e);
+        }
+      }, 5000);
     },
     onError: (error: Error) => {
       toast({ title: "Erreur", description: error.message, variant: "destructive" });
     },
   });
 
-  // Start countdown and polling when validation screen is shown
-  useEffect(() => {
-    if (!showValidationMessage || !depositReference) return;
-    if (timerStartedRef.current) return;
-    
-    timerStartedRef.current = true;
-    
-    // Start countdown
-    countdownRef.current = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) {
-          if (countdownRef.current) clearInterval(countdownRef.current);
-          if (pollingRef.current) clearInterval(pollingRef.current);
-          setPaymentStatus("failed");
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    
-    // Start polling
-    pollingRef.current = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/transactions/status/${depositReference}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.status === "completed") {
-            setPaymentStatus("success");
-            if (countdownRef.current) clearInterval(countdownRef.current);
-            if (pollingRef.current) clearInterval(pollingRef.current);
-            queryClient.invalidateQueries({ queryKey: ["/api/user"] });
-            queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
-          } else if (data.status === "failed") {
-            setPaymentStatus("failed");
-            if (countdownRef.current) clearInterval(countdownRef.current);
-            if (pollingRef.current) clearInterval(pollingRef.current);
-          }
-        }
-      } catch (e) {
-        console.error("Error checking deposit status:", e);
-      }
-    }, 5000);
-  }, [showValidationMessage, depositReference]);
-  
   // Cleanup on unmount only
   useEffect(() => {
     return () => {
