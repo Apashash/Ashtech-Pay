@@ -202,7 +202,8 @@ export default function AdminDeposits() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Type</TableHead>
-                  <TableHead>Référence</TableHead>
+                  <TableHead>Réf. Interne</TableHead>
+                  <TableHead>Réf. Externe</TableHead>
                   <TableHead>Utilisateur / Payeur</TableHead>
                   <TableHead>Montant Net</TableHead>
                   <TableHead>Frais</TableHead>
@@ -215,11 +216,11 @@ export default function AdminDeposits() {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8">Chargement...</TableCell>
+                    <TableCell colSpan={10} className="text-center py-8">Chargement...</TableCell>
                   </TableRow>
                 ) : filteredTransactions.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                       Aucun dépôt trouvé
                     </TableCell>
                   </TableRow>
@@ -232,7 +233,8 @@ export default function AdminDeposits() {
                           {typeLabels[tx.type] || tx.type}
                         </Badge>
                       </TableCell>
-                      <TableCell className="font-mono text-xs">{tx.reference}</TableCell>
+                      <TableCell className="font-mono text-xs">{tx.reference || "-"}</TableCell>
+                      <TableCell className="font-mono text-xs">{tx.externalReference || "-"}</TableCell>
                       <TableCell>
                         {tx.type === "payment_link" ? (
                           <div>
@@ -338,11 +340,26 @@ export default function AdminDeposits() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <FileText className="w-4 h-4" />
-                        <span className="text-sm">Référence</span>
+                        <span className="text-sm">Réf. Interne</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <code className="text-sm font-mono bg-muted px-2 py-1 rounded">{tx.reference}</code>
                         <Button size="icon" variant="ghost" onClick={() => copyReference(tx.reference!)}>
+                          <Copy className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {tx.externalReference && (
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Link2 className="w-4 h-4" />
+                        <span className="text-sm">Réf. Externe</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <code className="text-sm font-mono bg-muted px-2 py-1 rounded">{tx.externalReference}</code>
+                        <Button size="icon" variant="ghost" onClick={() => copyReference(tx.externalReference!)}>
                           <Copy className="w-4 h-4" />
                         </Button>
                       </div>
