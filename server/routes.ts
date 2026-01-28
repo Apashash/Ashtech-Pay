@@ -965,12 +965,19 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Utilisateur non trouvé" });
       }
 
-      // Get operator name for SoleAsPay
+      // Get operator name and country code for SoleAsPay
       let operatorName = "MTN Mobile Money";
+      let countryCode = "CM";
       if (data.operatorId) {
         const operator = await storage.getOperator(data.operatorId);
         if (operator) {
           operatorName = operator.name;
+        }
+      }
+      if (data.countryId) {
+        const country = await storage.getCountry(data.countryId);
+        if (country) {
+          countryCode = country.code;
         }
       }
 
@@ -1023,6 +1030,7 @@ export async function registerRoutes(
             payerName: user.fullName,
             payerEmail: user.email,
             operatorName,
+            countryCode,
           });
 
           if (soleaspayResponse.success) {
@@ -1887,8 +1895,9 @@ export async function registerRoutes(
         operatorId: resolvedOperatorId || null,
       });
 
-      // Get operator name for SoleAsPay
+      // Get operator name and country code for SoleAsPay
       let operatorName = operator || "MTN Mobile Money";
+      const paymentCountryCode = countryData?.code || "CM";
 
       // Call SoleAsPay API for Mobile Money payments
       if (paymentMethod === "mobile_money") {
@@ -1902,6 +1911,7 @@ export async function registerRoutes(
             payerName: fullName,
             payerEmail: email,
             operatorName,
+            countryCode: paymentCountryCode,
           });
 
           if (soleaspayResponse.success) {

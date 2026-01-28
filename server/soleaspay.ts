@@ -43,17 +43,65 @@ interface SoleaspayVerifyResponse {
   message: string;
 }
 
-const OPERATOR_SERVICE_MAP: Record<string, number> = {
-  "MTN Mobile Money": 1,
-  "MTN Money": 1,
-  "Orange Money": 2,
-  "Moov Money": 3,
-  "Wave": 4,
-  "Free Money": 5,
-  "T-Money": 6,
-  "Airtel Money": 7,
-  "Vodacom M-Pesa": 8,
-  "M-Pesa": 9,
+const OPERATOR_SERVICE_MAP: Record<string, Record<string, number>> = {
+  "CM": {
+    "MTN Mobile Money": 1,
+    "MTN Money": 1,
+    "Orange Money": 2,
+  },
+  "SN": {
+    "Orange Money": 24,
+    "Wave": 25,
+    "Free Money": 26,
+  },
+  "CI": {
+    "Orange Money": 29,
+    "MTN Mobile Money": 30,
+    "MTN Money": 30,
+    "Moov Money": 31,
+    "Wave": 32,
+  },
+  "BF": {
+    "Moov Money": 33,
+    "Orange Money": 34,
+  },
+  "BJ": {
+    "MTN Mobile Money": 35,
+    "MTN Money": 35,
+    "Moov Money": 36,
+  },
+  "TG": {
+    "T-Money": 37,
+    "Flooz (Moov)": 38,
+    "Moov Money": 38,
+  },
+  "CD": {
+    "Vodacom M-Pesa": 52,
+    "Airtel Money": 53,
+    "Orange Money": 54,
+  },
+  "CG": {
+    "Airtel Money": 55,
+    "MTN Mobile Money": 56,
+    "MTN Money": 56,
+  },
+  "GA": {
+    "Airtel Money": 57,
+  },
+  "ML": {
+    "Orange Money": 39,
+    "Moov Money": 40,
+  },
+  "KE": {
+    "M-Pesa": 60,
+  },
+  "RW": {
+    "MTN Mobile Money": 61,
+  },
+  "UG": {
+    "Airtel Money": 58,
+    "MTN Mobile Money": 59,
+  },
 };
 
 let cachedToken: string | null = null;
@@ -86,14 +134,36 @@ export async function getAuthToken(): Promise<string> {
   return cachedToken;
 }
 
-export function getOperatorServiceId(operatorName: string): number {
-  for (const [key, value] of Object.entries(OPERATOR_SERVICE_MAP)) {
-    if (operatorName.toLowerCase().includes(key.toLowerCase()) || 
-        key.toLowerCase().includes(operatorName.toLowerCase())) {
-      return value;
+export function getOperatorServiceId(operatorName: string, countryCode?: string): number | null {
+  if (countryCode && OPERATOR_SERVICE_MAP[countryCode]) {
+    const countryOperators = OPERATOR_SERVICE_MAP[countryCode];
+    
+    for (const [key, value] of Object.entries(countryOperators)) {
+      if (operatorName.toLowerCase().includes(key.toLowerCase()) || 
+          key.toLowerCase().includes(operatorName.toLowerCase())) {
+        return value;
+      }
     }
   }
-  return 1;
+  
+  for (const [country, operators] of Object.entries(OPERATOR_SERVICE_MAP)) {
+    for (const [key, value] of Object.entries(operators)) {
+      if (operatorName.toLowerCase().includes(key.toLowerCase()) || 
+          key.toLowerCase().includes(operatorName.toLowerCase())) {
+        return value;
+      }
+    }
+  }
+  
+  return null;
+}
+
+export function isOperatorSupported(operatorName: string, countryCode: string): boolean {
+  return getOperatorServiceId(operatorName, countryCode) !== null;
+}
+
+export function getSupportedCountries(): string[] {
+  return Object.keys(OPERATOR_SERVICE_MAP);
 }
 
 export interface CollectPaymentParams {
@@ -105,13 +175,33 @@ export interface CollectPaymentParams {
   payerName: string;
   payerEmail: string;
   operatorName: string;
+  countryCode?: string;
   successUrl?: string;
   failureUrl?: string;
   otp?: string;
 }
 
 export async function collectPayment(params: CollectPaymentParams): Promise<SoleaspayPaymentResponse> {
-  const serviceId = getOperatorServiceId(params.operatorName);
+  const serviceId = getOperatorServiceId(params.operatorName, params.countryCode);
+  
+  if (serviceId === null) {
+    console.log(`[SoleAsPay] Operator not supported: ${params.operatorName} in country ${params.countryCode}`);
+    return {
+      success: false,
+      code: 400,
+      status: "FAILURE",
+      created_at: new Date().toISOString(),
+      data: {
+        operation: "PURCHASE",
+        reference: "",
+        external_reference: params.orderId,
+        transaction_reference: null,
+        amount: params.amount.toString(),
+        currency: params.currency,
+      },
+      message: `Opérateur ${params.operatorName} non supporté pour ce pays`,
+    };
+  }
   
   const headers: Record<string, string> = {
     "x-api-key": SOLEASPAY_API_KEY,
