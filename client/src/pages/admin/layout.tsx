@@ -103,6 +103,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   const [location, setLocation] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [openSubmenu, setOpenSubmenu] = useState<string | null>(null);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   const { data: user, isLoading } = useQuery<User>({
     queryKey: ["/api/user"],
@@ -324,7 +325,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           <span className="text-sm text-muted-foreground">Administration Ashtech Pay</span>
           
           <div className="ml-auto flex items-center gap-4">
-            <Popover>
+            <Popover open={notificationsOpen} onOpenChange={setNotificationsOpen}>
               <PopoverTrigger asChild>
                 <Button variant="ghost" size="icon" className="relative" data-testid="button-notifications">
                   <Bell className="w-5 h-5" />
@@ -357,6 +358,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                             : notif.type === "withdrawal" 
                               ? "/admin/transactions/withdrawals" 
                               : "/admin/transactions/transfers"}
+                          onClick={() => setNotificationsOpen(false)}
                         >
                           <div className="p-3 hover-elevate cursor-pointer">
                             <div className="flex items-center justify-between gap-2">
