@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { AdminLayout } from "../layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -54,10 +55,26 @@ interface TransactionDetails extends Transaction {
 
 export default function AdminDeposits() {
   const { toast } = useToast();
+  const [location] = useLocation();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [selectedTxId, setSelectedTxId] = useState<string | null>(null);
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const highlightRef = useRef<HTMLTableRowElement | null>(null);
+  
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const highlight = params.get("highlight");
+    if (highlight) {
+      setHighlightedId(highlight);
+      setStatusFilter("all");
+      setTimeout(() => {
+        highlightRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 300);
+      setTimeout(() => setHighlightedId(null), 5000);
+    }
+  }, [location]);
 
   const { data: transactions, isLoading } = useQuery<EnrichedTransaction[]>({
     queryKey: ["/api/admin/transactions"],
@@ -226,7 +243,12 @@ export default function AdminDeposits() {
                   </TableRow>
                 ) : (
                   filteredTransactions.map((tx) => (
-                    <TableRow key={tx.id} data-testid={`deposit-row-${tx.id}`}>
+                    <TableRow 
+                      key={tx.id} 
+                      data-testid={`deposit-row-${tx.id}`}
+                      ref={tx.id === highlightedId ? highlightRef : null}
+                      className={tx.id === highlightedId ? "bg-yellow-500/20 animate-pulse" : ""}
+                    >
                       <TableCell>
                         <Badge variant={tx.type === "payment_link" ? "default" : "secondary"} className="gap-1">
                           {tx.type === "payment_link" ? <Link2 className="w-3 h-3" /> : <ArrowDownCircle className="w-3 h-3" />}
