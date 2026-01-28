@@ -38,3 +38,8 @@ externalPort = 80
 run = ["npm", "run", "start"]
 deploymentTarget = "autoscale"
 build = ["npm", "run", "build"]
+
+[userenv]
+
+[userenv.shared]
+WINIPAY_ENV = "prod"
