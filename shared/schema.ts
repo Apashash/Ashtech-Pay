@@ -175,12 +175,20 @@ export const operators = pgTable("operators", {
   name: text("name").notNull(),
   type: text("type").notNull(), // 'mobile_money', 'bank', 'crypto'
   countryId: varchar("country_id").notNull().references(() => countries.id),
+  gateway: text("gateway").default("soleapay").notNull(), // 'soleapay', 'winipay'
   isActive: boolean("is_active").default(true),
   isInMaintenance: boolean("is_in_maintenance").default(false),
   dailyLimit: decimal("daily_limit", { precision: 15, scale: 2 }).default("1000000").notNull(),
   logoUrl: text("logo_url"),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+// Payment gateways
+export const PAYMENT_GATEWAYS = ["soleapay", "winipay"] as const;
+export type PaymentGateway = typeof PAYMENT_GATEWAYS[number];
+
+// Countries that use SoleaPay by default (Bénin, Cameroun, Côte d'Ivoire, Togo)
+export const SOLEAPAY_COUNTRIES = ["BJ", "CM", "CI", "TG"] as const;
 
 // Admin: Fees/Commissions table
 export const fees = pgTable("fees", {

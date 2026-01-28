@@ -73,13 +73,23 @@ Three main tables:
 
 ## External Dependencies
 
-### Payment Gateway
-- **SoleAsPay**: Mobile Money payment processing for 18+ African countries
-  - API keys stored in `SOLEASPAY_API_KEY` and `SOLEASPAY_SECRET_KEY`
-  - Service implementation: `server/soleaspay.ts`
-  - Callback endpoint: `POST /api/soleaspay/callback` (validates x-private-key header)
+### Payment Gateways
+The platform uses two payment gateways that can be configured per operator:
+
+- **SoleAsPay**: Mobile Money for Bénin, Cameroun, Côte d'Ivoire, Togo
+  - API keys: `SOLEASPAY_API_KEY`, `SOLEASPAY_SECRET_KEY`
+  - Service: `server/soleaspay.ts`
+  - Callback: `POST /api/soleaspay/callback`
   - Supports: MTN, Orange, Moov, Airtel, Wave, M-Pesa, etc.
-  - Used for deposits and payment link payments
+
+- **WinniPay**: Mobile Money for all other African countries
+  - API keys: `WINIPAY_MERCHANT_APPLY`, `WINIPAY_MERCHANT_TOKEN`
+  - Environment: `WINIPAY_ENV` (test/prod)
+  - Service: `server/winipay.ts`
+  - Callback: `POST /api/winipay/callback`
+  - Supports: Wave, Orange, MTN, Airtel, Vodacom, etc.
+
+Gateway selection is configurable per operator in the Admin panel (Pays & Opérateurs).
 
 ### Database
 - **PostgreSQL**: Primary database via `DATABASE_URL` environment variable

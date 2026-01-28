@@ -24,6 +24,7 @@ import path from "path";
 import fs from "fs";
 import { uploadToSupabase } from "./supabase";
 import { collectPayment, verifyPayment, validateCallback, type CallbackPayload } from "./soleaspay";
+import { createWinipayCheckout, getWinipayInvoiceDetail, createWinipayPayout, validateWinipayCallback, type WinipayCallbackPayload } from "./winipay";
 import { addPendingPayment } from "./paymentPoller";
 
 const uploadsDir = path.join(process.cwd(), "uploads");
@@ -965,13 +966,15 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Utilisateur non trouvé" });
       }
 
-      // Get operator name and country code for SoleAsPay
+      // Get operator name, country code and gateway for payment routing
       let operatorName = "MTN Mobile Money";
       let countryCode = "CM";
+      let gateway = "soleapay";
       if (data.operatorId) {
         const operator = await storage.getOperator(data.operatorId);
         if (operator) {
           operatorName = operator.name;
+          gateway = operator.gateway || "soleapay";
         }
       }
       if (data.countryId) {
@@ -1018,57 +1021,107 @@ export async function registerRoutes(
         totalAmount: totalAmount.toFixed(2),
       });
 
-      // Call SoleAsPay API for mobile money deposits
+      // Call payment gateway API for mobile money deposits
       if (data.paymentMethod === "mobile_money" && data.phoneNumber) {
         try {
-          const soleaspayResponse = await collectPayment({
-            wallet: data.phoneNumber.replace(/\s/g, ""),
-            amount: totalAmount,
-            currency: "XAF",
-            orderId: depositRef,
-            description: `Dépôt Ashtech Pay - ${depositRef}`,
-            payerName: user.fullName,
-            payerEmail: user.email,
-            operatorName,
-            countryCode,
-          });
+          if (gateway === "winipay") {
+            // Use WinniPay for this operator
+            console.log(`[Deposit] Using WinniPay for ${operatorName} in ${countryCode}`);
+            const winipayResponse = await createWinipayCheckout({
+              amount: totalAmount,
+              description: `Dépôt Ashtech Pay - ${depositRef}`,
+              orderId: depositRef,
+              operatorName,
+              countryCode,
+              phoneNumber: data.phoneNumber.replace(/\s/g, ""),
+              customData: { userId: user.id, transactionId: transaction.id },
+            });
 
-          if (soleaspayResponse.success) {
-            const externalRef = soleaspayResponse.data?.reference || "";
-            
-            if (externalRef) {
-              await storage.updateTransactionExternalReference(transaction.id, externalRef);
+            if (winipayResponse.success && winipayResponse.results.checkout_process) {
+              const externalRef = winipayResponse.results.uuid || "";
               
-              addPendingPayment({
-                transactionId: transaction.id,
-                reference: depositRef,
-                externalReference: externalRef,
-                attempts: 0,
-                userId: user.id,
-                type: "deposit",
-                amount: creditedAmount.toString(),
+              if (externalRef) {
+                await storage.updateTransactionExternalReference(transaction.id, externalRef);
+                
+                addPendingPayment({
+                  transactionId: transaction.id,
+                  reference: depositRef,
+                  externalReference: externalRef,
+                  attempts: 0,
+                  userId: user.id,
+                  type: "deposit",
+                  amount: creditedAmount.toString(),
+                });
+              }
+              
+              res.json({ 
+                transaction: { ...transaction, reference: externalRef || depositRef },
+                checkoutUrl: winipayResponse.results.checkout_process,
+                gateway: "winipay",
+                message: "Veuillez compléter le paiement",
+                feeDetails: {
+                  grossAmount: totalAmount,
+                  feeAmount,
+                  creditedAmount
+                }
+              });
+            } else {
+              await storage.updateTransactionStatus(transaction.id, "failed");
+              const errorMsg = Array.isArray(winipayResponse.errors) ? "Erreur WinniPay" : winipayResponse.errors.msg;
+              res.status(400).json({ message: errorMsg });
+            }
+          } else {
+            // Use SoleAsPay for this operator
+            console.log(`[Deposit] Using SoleAsPay for ${operatorName} in ${countryCode}`);
+            const soleaspayResponse = await collectPayment({
+              wallet: data.phoneNumber.replace(/\s/g, ""),
+              amount: totalAmount,
+              currency: "XAF",
+              orderId: depositRef,
+              description: `Dépôt Ashtech Pay - ${depositRef}`,
+              payerName: user.fullName,
+              payerEmail: user.email,
+              operatorName,
+              countryCode,
+            });
+
+            if (soleaspayResponse.success) {
+              const externalRef = soleaspayResponse.data?.reference || "";
+              
+              if (externalRef) {
+                await storage.updateTransactionExternalReference(transaction.id, externalRef);
+                
+                addPendingPayment({
+                  transactionId: transaction.id,
+                  reference: depositRef,
+                  externalReference: externalRef,
+                  attempts: 0,
+                  userId: user.id,
+                  type: "deposit",
+                  amount: creditedAmount.toString(),
+                });
+              }
+              
+              res.json({ 
+                transaction: { ...transaction, reference: externalRef || depositRef },
+                soleaspayReference: externalRef,
+                gateway: "soleapay",
+                message: "Veuillez valider le paiement sur votre téléphone",
+                feeDetails: {
+                  grossAmount: totalAmount,
+                  feeAmount,
+                  creditedAmount
+                }
+              });
+            } else {
+              await storage.updateTransactionStatus(transaction.id, "failed");
+              res.status(400).json({ 
+                message: soleaspayResponse.message || "Échec de l'initiation du paiement" 
               });
             }
-            
-            res.json({ 
-              transaction: { ...transaction, reference: externalRef || depositRef },
-              soleaspayReference: externalRef,
-              message: "Veuillez valider le paiement sur votre téléphone",
-              feeDetails: {
-                grossAmount: totalAmount,
-                feeAmount,
-                creditedAmount
-              }
-            });
-          } else {
-            // Mark transaction as failed
-            await storage.updateTransactionStatus(transaction.id, "failed");
-            res.status(400).json({ 
-              message: soleaspayResponse.message || "Échec de l'initiation du paiement" 
-            });
           }
-        } catch (soleaspayError) {
-          console.error("SoleAsPay API error:", soleaspayError);
+        } catch (gatewayError) {
+          console.error("Payment gateway API error:", gatewayError);
           // Keep transaction as pending for manual processing
           res.json({ 
             transaction, 
@@ -1895,71 +1948,135 @@ export async function registerRoutes(
         operatorId: resolvedOperatorId || null,
       });
 
-      // Get operator name and country code for SoleAsPay
+      // Get operator name, country code and gateway for payment routing
       let operatorName = "MTN Mobile Money";
+      let gateway = "soleapay";
       if (operator && countryId) {
         const operators = await storage.getOperatorsByCountry(countryId);
         const operatorData = operators.find((o: { name: string; id: string }) => o.name === operator || o.id === operator);
         operatorName = operatorData?.name || operator;
+        gateway = (operatorData as any)?.gateway || "soleapay";
       }
       const paymentCountryCode = countryData?.code || "CM";
 
-      // Call SoleAsPay API for Mobile Money payments
+      // Call payment gateway API for Mobile Money payments
       if (paymentMethod === "mobile_money") {
         try {
-          const soleaspayResponse = await collectPayment({
-            wallet: phone.replace(/\s/g, ""),
-            amount: numAmount,
-            currency: paymentLink.currency || "XAF",
-            orderId: reference,
-            description: `Paiement ${paymentLink.title} - ${reference}`,
-            payerName: fullName,
-            payerEmail: email,
-            operatorName,
-            countryCode: paymentCountryCode,
-          });
-
-          if (soleaspayResponse.success) {
-            const externalRef = soleaspayResponse.data?.reference || "";
-            
-            const linkTransaction = await storage.getTransactionByReference(reference);
-            if (linkTransaction && externalRef) {
-              await storage.updateTransactionExternalReference(linkTransaction.id, externalRef);
-              
-              addPendingPayment({
-                transactionId: linkTransaction.id,
-                reference: reference,
-                externalReference: externalRef,
-                attempts: 0,
-                userId: paymentLink.userId,
-                type: "payment_link",
-                amount: netAmount,
+          if (gateway === "winipay") {
+            // Use WinniPay for this operator
+            console.log(`[PaymentLink] Using WinniPay for ${operatorName} in ${paymentCountryCode}`);
+            const winipayResponse = await createWinipayCheckout({
+              amount: numAmount,
+              description: `Paiement ${paymentLink.title} - ${reference}`,
+              orderId: reference,
+              operatorName,
+              countryCode: paymentCountryCode,
+              phoneNumber: phone.replace(/\s/g, ""),
+              customData: { 
+                paymentLinkId: paymentLink.id, 
+                merchantId: paymentLink.userId,
                 paymentIntentId: intent.id,
                 payerName: fullName,
+              },
+            });
+
+            if (winipayResponse.success && winipayResponse.results.checkout_process) {
+              const externalRef = winipayResponse.results.uuid || "";
+              
+              const linkTransaction = await storage.getTransactionByReference(reference);
+              if (linkTransaction && externalRef) {
+                await storage.updateTransactionExternalReference(linkTransaction.id, externalRef);
+                
+                addPendingPayment({
+                  transactionId: linkTransaction.id,
+                  reference: reference,
+                  externalReference: externalRef,
+                  attempts: 0,
+                  userId: paymentLink.userId,
+                  type: "payment_link",
+                  amount: netAmount,
+                  paymentIntentId: intent.id,
+                  payerName: fullName,
+                });
+              }
+              
+              res.json({ 
+                message: "Veuillez compléter le paiement.",
+                reference: intent.reference,
+                checkoutUrl: winipayResponse.results.checkout_process,
+                gateway: "winipay",
+                redirectUrl: paymentLink.redirectUrl || null,
+                amount: numAmount,
+                feeAmount: feeAmount,
+                totalAmount: parseFloat(totalAmount),
+              });
+            } else {
+              await storage.updatePaymentIntentStatus(intent.id, "failed");
+              const failedTransaction = await storage.getTransactionByReference(reference);
+              if (failedTransaction) {
+                await storage.updateTransactionStatus(failedTransaction.id, "failed");
+              }
+              const errorMsg = Array.isArray(winipayResponse.errors) ? "Erreur WinniPay" : winipayResponse.errors.msg;
+              res.status(400).json({ message: errorMsg });
+            }
+          } else {
+            // Use SoleAsPay for this operator
+            console.log(`[PaymentLink] Using SoleAsPay for ${operatorName} in ${paymentCountryCode}`);
+            const soleaspayResponse = await collectPayment({
+              wallet: phone.replace(/\s/g, ""),
+              amount: numAmount,
+              currency: paymentLink.currency || "XAF",
+              orderId: reference,
+              description: `Paiement ${paymentLink.title} - ${reference}`,
+              payerName: fullName,
+              payerEmail: email,
+              operatorName,
+              countryCode: paymentCountryCode,
+            });
+
+            if (soleaspayResponse.success) {
+              const externalRef = soleaspayResponse.data?.reference || "";
+              
+              const linkTransaction = await storage.getTransactionByReference(reference);
+              if (linkTransaction && externalRef) {
+                await storage.updateTransactionExternalReference(linkTransaction.id, externalRef);
+                
+                addPendingPayment({
+                  transactionId: linkTransaction.id,
+                  reference: reference,
+                  externalReference: externalRef,
+                  attempts: 0,
+                  userId: paymentLink.userId,
+                  type: "payment_link",
+                  amount: netAmount,
+                  paymentIntentId: intent.id,
+                  payerName: fullName,
+                });
+              }
+              
+              res.json({ 
+                message: "Veuillez valider le paiement sur votre téléphone.",
+                reference: intent.reference,
+                soleaspayReference: externalRef,
+                gateway: "soleapay",
+                redirectUrl: paymentLink.redirectUrl || null,
+                amount: numAmount,
+                feeAmount: feeAmount,
+                totalAmount: parseFloat(totalAmount),
+              });
+            } else {
+              await storage.updatePaymentIntentStatus(intent.id, "failed");
+              const failedTransaction = await storage.getTransactionByReference(reference);
+              if (failedTransaction) {
+                await storage.updateTransactionStatus(failedTransaction.id, "failed");
+              }
+              res.status(400).json({ 
+                message: soleaspayResponse.message || "Échec de l'initiation du paiement" 
               });
             }
-            
-            res.json({ 
-              message: "Veuillez valider le paiement sur votre téléphone.",
-              reference: intent.reference,
-              soleaspayReference: externalRef,
-              redirectUrl: paymentLink.redirectUrl || null,
-              amount: numAmount,
-              feeAmount: feeAmount,
-              totalAmount: parseFloat(totalAmount),
-            });
-          } else {
-            await storage.updatePaymentIntentStatus(intent.id, "failed");
-            const failedTransaction = await storage.getTransactionByReference(reference);
-            if (failedTransaction) {
-              await storage.updateTransactionStatus(failedTransaction.id, "failed");
-            }
-            res.status(400).json({ 
-              message: soleaspayResponse.message || "Échec de l'initiation du paiement" 
-            });
           }
-        } catch (soleaspayError) {
-          console.error("SoleAsPay API error:", soleaspayError);
+        } catch (gatewayError) {
+          console.error("Payment gateway API error:", gatewayError);
           await storage.updatePaymentIntentStatus(intent.id, "failed");
           const failedTransaction = await storage.getTransactionByReference(reference);
           if (failedTransaction) {
@@ -3668,6 +3785,109 @@ export async function registerRoutes(
     } catch (error) {
       console.error("[SoleAsPay Verify] Error:", error);
       res.status(500).json({ message: "Erreur de vérification" });
+    }
+  });
+
+  // WinniPay callback for payment status updates
+  app.post("/api/winipay/callback", async (req, res) => {
+    try {
+      const payload = req.body;
+      console.log("[WinniPay Callback] Received:", JSON.stringify(payload));
+
+      // Validate callback payload
+      if (!validateWinipayCallback(payload)) {
+        console.error("[WinniPay Callback] Invalid payload");
+        return res.status(400).json({ message: "Invalid payload" });
+      }
+
+      // Extract order_id from custom_data
+      const customData = payload.custom_data || {};
+      const orderId = customData.order_id;
+      
+      if (!orderId) {
+        console.error("[WinniPay Callback] Missing order_id in custom_data");
+        return res.status(400).json({ message: "Missing order reference" });
+      }
+
+      // Find transaction by reference
+      const transaction = await storage.getTransactionByReference(orderId);
+      
+      if (!transaction) {
+        console.error("[WinniPay Callback] Transaction not found:", orderId);
+        return res.status(404).json({ message: "Transaction not found" });
+      }
+
+      // Handle payment status
+      if (payload.state === "success") {
+        // Update transaction status to completed
+        await storage.updateTransactionStatus(transaction.id, "completed");
+        
+        // Credit user balance
+        const user = await storage.getUser(transaction.userId);
+        if (user) {
+          const newBalance = parseFloat(user.balance) + parseFloat(transaction.amount);
+          await storage.updateUserBalance(transaction.userId, newBalance);
+          
+          // Create notification based on transaction type
+          const isPaymentLink = transaction.type === "payment_link";
+          await storage.createUserNotification({
+            userId: transaction.userId,
+            type: isPaymentLink ? "payment_link_received" : "deposit_confirmed",
+            title: isPaymentLink ? "Paiement reçu" : "Dépôt confirmé",
+            message: isPaymentLink 
+              ? `Vous avez reçu un paiement de ${transaction.amount} XAF de ${transaction.payerName || "un client"}.`
+              : `Votre dépôt de ${transaction.amount} XAF a été crédité sur votre compte.`,
+            transactionId: transaction.id,
+          });
+          
+          // Update payment intent status if it's a payment link transaction
+          if (isPaymentLink && transaction.paymentIntentId) {
+            await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "completed");
+          }
+          
+          console.log("[WinniPay Callback] Payment SUCCESS for:", transaction.id);
+        }
+      } else if (payload.state === "failed" || payload.state === "expired") {
+        // Mark transaction as failed
+        await storage.updateTransactionStatus(transaction.id, "failed");
+        
+        // Update payment intent status if it's a payment link transaction
+        if (transaction.type === "payment_link" && transaction.paymentIntentId) {
+          await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "failed");
+        }
+        
+        // Notify user
+        const isPaymentLink = transaction.type === "payment_link";
+        await storage.createUserNotification({
+          userId: transaction.userId,
+          type: isPaymentLink ? "payment_link_failed" : "deposit_failed",
+          title: isPaymentLink ? "Paiement échoué" : "Dépôt échoué",
+          message: isPaymentLink
+            ? `Un paiement de ${transaction.totalAmount || transaction.amount} XAF a échoué.`
+            : `Votre dépôt de ${transaction.totalAmount || transaction.amount} XAF a échoué.`,
+          transactionId: transaction.id,
+        });
+        
+        console.log("[WinniPay Callback] Payment FAILED for:", transaction.id);
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[WinniPay Callback] Error:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // WinniPay payout callback
+  app.post("/api/winipay/payout/callback", async (req, res) => {
+    try {
+      const payload = req.body;
+      console.log("[WinniPay Payout Callback] Received:", JSON.stringify(payload));
+      // Process payout status updates here when implementing withdrawals via WinniPay
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[WinniPay Payout Callback] Error:", error);
+      res.status(500).json({ message: "Internal server error" });
     }
   });
 
