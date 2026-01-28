@@ -60,6 +60,7 @@ export default function DepositPage() {
   const [countdown, setCountdown] = useState(8 * 60);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
+  const timerStartedRef = useRef(false);
   
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   
@@ -161,6 +162,9 @@ export default function DepositPage() {
   useEffect(() => {
     if (!showValidationMessage || !depositReference) return;
     if (paymentStatus !== "pending") return;
+    if (timerStartedRef.current) return;
+    
+    timerStartedRef.current = true;
     
     // Start countdown
     const countdownInterval = setInterval(() => {

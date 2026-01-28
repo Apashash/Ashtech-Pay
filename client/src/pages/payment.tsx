@@ -86,6 +86,7 @@ export default function PaymentPage() {
   const [countdown, setCountdown] = useState(8 * 60);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
+  const timerStartedRef = useRef(false);
 
   const { data: paymentLink, isLoading, error } = useQuery<PaymentLink & { hasPdf?: boolean }>({
     queryKey: ["/api/payment-links/public", params?.slug],
@@ -261,7 +262,9 @@ export default function PaymentPage() {
   useEffect(() => {
     if (!paymentComplete || !paymentReference) return;
     if (paymentStatus !== "pending") return;
+    if (timerStartedRef.current) return;
     
+    timerStartedRef.current = true;
     setCountdown(8 * 60);
     
     // Start countdown
