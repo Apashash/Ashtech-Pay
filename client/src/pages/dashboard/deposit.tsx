@@ -21,6 +21,7 @@ interface OperatorConfig {
   id: string;
   name: string;
   type: string;
+  gateway: "soleapay" | "winipay";
   feePercentage: number;
   fixedFee: number;
   minFee: number | null;
@@ -146,7 +147,13 @@ export default function DepositPage() {
       return res.json();
     },
     onSuccess: (data) => {
-      const ref = data.reference || "";
+      // If WinniPay returns a checkout URL, redirect to it
+      if (data.checkoutUrl && data.gateway === "winipay") {
+        window.location.href = data.checkoutUrl;
+        return;
+      }
+      
+      const ref = data.reference || data.transaction?.reference || "";
       setShowValidationMessage(true);
       setDepositReference(ref);
       setPaymentStatus("pending");
@@ -235,6 +242,17 @@ export default function DepositPage() {
     if (currentStep === 2) {
       const isValid = await form.trigger(["countryId", "operatorId"]);
       if (!isValid) return;
+      
+      // If WinniPay, skip step 3 and call API directly (no phone number needed)
+      if (selectedOperator?.gateway === "winipay") {
+        const data = form.getValues();
+        setShowValidationMessage(false);
+        depositMutation.mutate({
+          ...data,
+          phoneNumber: "00000000", // WinniPay redirects, no phone needed upfront
+        });
+        return;
+      }
     }
     if (currentStep < 3) {
       setCurrentStep(currentStep + 1);
