@@ -220,8 +220,6 @@ export default function PaymentPage() {
     if (!fullName.trim()) errors.fullName = "Le nom est requis";
     if (!email.trim()) errors.email = "L'email est requis";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.email = "Email invalide";
-    if (!phone.trim()) errors.phone = "Le numéro est requis";
-    else if (phone.replace(/\s/g, "").length < 8) errors.phone = "Numéro trop court";
     if (!paymentLink?.isFixedAmount && (!customAmount || parseFloat(customAmount) <= 0)) {
       errors.amount = "Le montant doit être supérieur à 0";
     }
@@ -229,13 +227,22 @@ export default function PaymentPage() {
     return Object.keys(errors).length === 0;
   };
 
+  const [step3Errors, setStep3Errors] = useState<{phone?: string}>({});
+
+  const validateStep3 = () => {
+    const errors: typeof step3Errors = {};
+    if (!phone.trim()) errors.phone = "Le numéro est requis";
+    else if (phone.replace(/\s/g, "").length < 8) errors.phone = "Numéro trop court";
+    setStep3Errors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const canProceedToStep2 = useMemo(() => {
-    if (!fullName || !email || !phone) return false;
+    if (!fullName || !email) return false;
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return false;
-    if (phone.replace(/\s/g, "").length < 8) return false;
     if (!paymentLink?.isFixedAmount && (!customAmount || displayAmount <= 0)) return false;
     return true;
-  }, [fullName, email, phone, paymentLink, customAmount, displayAmount]);
+  }, [fullName, email, paymentLink, customAmount, displayAmount]);
 
   const canProceedToStep3 = useMemo(() => {
     if (!country || !paymentMethod) return false;
@@ -247,8 +254,9 @@ export default function PaymentPage() {
   }, [country, paymentMethod, operator, operators]);
 
   const canSubmit = useMemo(() => {
+    if (!phone.trim() || phone.replace(/\s/g, "").length < 8) return false;
     return canProceedToStep2 && canProceedToStep3 && paymentMethod === "mobile_money";
-  }, [canProceedToStep2, canProceedToStep3, paymentMethod]);
+  }, [canProceedToStep2, canProceedToStep3, paymentMethod, phone]);
 
   useEffect(() => {
     if (paymentComplete && paymentReference && paymentStatus === "pending") {
@@ -617,23 +625,6 @@ export default function PaymentPage() {
                   {step1Errors.email && <p className="text-xs text-red-500">{step1Errors.email}</p>}
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Numéro de téléphone *</Label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      id="phone"
-                      type="tel"
-                      placeholder="+237 6XX XXX XXX"
-                      value={phone}
-                      onChange={(e) => { setPhone(e.target.value); setStep1Errors(prev => ({...prev, phone: undefined})); }}
-                      className={`pl-10 ${step1Errors.phone ? "border-red-500" : ""}`}
-                      data-testid="input-phone"
-                    />
-                  </div>
-                  {step1Errors.phone && <p className="text-xs text-red-500">{step1Errors.phone}</p>}
-                </div>
-
                 <Button 
                   type="button"
                   className="w-full" 
@@ -783,7 +774,24 @@ export default function PaymentPage() {
                     <CheckCircle className="w-7 h-7 text-green-500" />
                   </div>
                   <h3 className="font-semibold">Confirmez votre paiement</h3>
-                  <p className="text-sm text-muted-foreground">Vérifiez les informations avant de valider</p>
+                  <p className="text-sm text-muted-foreground">Entrez votre numéro et validez</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Numéro de téléphone *</Label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="phone"
+                      type="tel"
+                      placeholder="+237 6XX XXX XXX"
+                      value={phone}
+                      onChange={(e) => { setPhone(e.target.value); setStep3Errors(prev => ({...prev, phone: undefined})); }}
+                      className={`pl-10 ${step3Errors.phone ? "border-red-500" : ""}`}
+                      data-testid="input-phone"
+                    />
+                  </div>
+                  {step3Errors.phone && <p className="text-xs text-red-500">{step3Errors.phone}</p>}
                 </div>
 
                 <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
@@ -794,10 +802,6 @@ export default function PaymentPage() {
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Email</span>
                     <span className="font-medium">{email}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Téléphone</span>
-                    <span className="font-medium">{phone}</span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Pays</span>

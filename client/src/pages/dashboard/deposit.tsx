@@ -225,7 +225,7 @@ export default function DepositPage() {
 
   const goToNextStep = async () => {
     if (currentStep === 1) {
-      const isValid = await form.trigger(["amount", "phoneNumber"]);
+      const isValid = await form.trigger(["amount"]);
       if (!isValid) return;
     }
     if (currentStep === 2) {
@@ -413,7 +413,7 @@ export default function DepositPage() {
                             <CreditCard className="w-8 h-8 text-primary" />
                           </div>
                           <h3 className="text-lg font-semibold">Quel montant souhaitez-vous déposer ?</h3>
-                          <p className="text-sm text-muted-foreground">Entrez le montant et votre numéro de téléphone</p>
+                          <p className="text-sm text-muted-foreground">Entrez le montant souhaité</p>
                         </div>
 
                         <FormField
@@ -430,28 +430,6 @@ export default function DepositPage() {
                                   {...field} 
                                   data-testid="input-deposit-amount"
                                 />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name="phoneNumber"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Numéro de téléphone Mobile Money</FormLabel>
-                              <FormControl>
-                                <div className="relative">
-                                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                                  <Input 
-                                    placeholder="6XX XXX XXX"
-                                    className="pl-10"
-                                    {...field} 
-                                    data-testid="input-phone-number"
-                                  />
-                                </div>
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -593,14 +571,32 @@ export default function DepositPage() {
                             <CheckCircle className="w-8 h-8 text-green-500" />
                           </div>
                           <h3 className="text-lg font-semibold">Confirmez votre dépôt</h3>
-                          <p className="text-sm text-muted-foreground">Vérifiez les informations avant de valider</p>
+                          <p className="text-sm text-muted-foreground">Entrez votre numéro et validez</p>
                         </div>
 
+                        <FormField
+                          control={form.control}
+                          name="phoneNumber"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Numéro de téléphone Mobile Money</FormLabel>
+                              <FormControl>
+                                <div className="relative">
+                                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                                  <Input 
+                                    placeholder="6XX XXX XXX"
+                                    className="pl-10"
+                                    {...field} 
+                                    data-testid="input-phone-number"
+                                  />
+                                </div>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
                         <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">Numéro</span>
-                            <span className="font-medium">{watchedPhoneNumber}</span>
-                          </div>
                           <div className="flex items-center justify-between text-sm">
                             <span className="text-muted-foreground">Pays</span>
                             <span className="font-medium">{selectedCountry?.name}</span>
