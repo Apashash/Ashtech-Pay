@@ -159,55 +159,57 @@ export default function DepositPage() {
     },
   });
 
+  // Start countdown and polling when validation screen is shown
   useEffect(() => {
     if (!showValidationMessage || !depositReference) return;
-    if (paymentStatus !== "pending") return;
     if (timerStartedRef.current) return;
     
     timerStartedRef.current = true;
     
     // Start countdown
-    const countdownInterval = setInterval(() => {
+    countdownRef.current = setInterval(() => {
       setCountdown(prev => {
         if (prev <= 1) {
-          clearInterval(countdownInterval);
+          if (countdownRef.current) clearInterval(countdownRef.current);
+          if (pollingRef.current) clearInterval(pollingRef.current);
           setPaymentStatus("failed");
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
-    countdownRef.current = countdownInterval;
     
     // Start polling
-    const pollingInterval = setInterval(async () => {
+    pollingRef.current = setInterval(async () => {
       try {
         const res = await fetch(`/api/transactions/status/${depositReference}`);
         if (res.ok) {
           const data = await res.json();
           if (data.status === "completed") {
             setPaymentStatus("success");
-            clearInterval(pollingInterval);
-            clearInterval(countdownInterval);
+            if (countdownRef.current) clearInterval(countdownRef.current);
+            if (pollingRef.current) clearInterval(pollingRef.current);
             queryClient.invalidateQueries({ queryKey: ["/api/user"] });
             queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
           } else if (data.status === "failed") {
             setPaymentStatus("failed");
-            clearInterval(pollingInterval);
-            clearInterval(countdownInterval);
+            if (countdownRef.current) clearInterval(countdownRef.current);
+            if (pollingRef.current) clearInterval(pollingRef.current);
           }
         }
       } catch (e) {
         console.error("Error checking deposit status:", e);
       }
     }, 5000);
-    pollingRef.current = pollingInterval;
-    
+  }, [showValidationMessage, depositReference]);
+  
+  // Cleanup on unmount only
+  useEffect(() => {
     return () => {
-      clearInterval(countdownInterval);
-      clearInterval(pollingInterval);
+      if (countdownRef.current) clearInterval(countdownRef.current);
+      if (pollingRef.current) clearInterval(pollingRef.current);
     };
-  }, [showValidationMessage, depositReference, paymentStatus]);
+  }, []);
 
   const formatCountdown = (seconds: number) => {
     const mins = Math.floor(seconds / 60);

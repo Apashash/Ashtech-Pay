@@ -259,54 +259,56 @@ export default function PaymentPage() {
     return canProceedToStep2 && canProceedToStep3 && paymentMethod === "mobile_money";
   }, [canProceedToStep2, canProceedToStep3, paymentMethod, phone]);
 
+  // Start countdown and polling when payment is complete
   useEffect(() => {
     if (!paymentComplete || !paymentReference) return;
-    if (paymentStatus !== "pending") return;
     if (timerStartedRef.current) return;
     
     timerStartedRef.current = true;
     setCountdown(8 * 60);
     
     // Start countdown
-    const countdownInterval = setInterval(() => {
+    countdownRef.current = setInterval(() => {
       setCountdown(prev => {
         if (prev <= 1) {
-          clearInterval(countdownInterval);
+          if (countdownRef.current) clearInterval(countdownRef.current);
+          if (pollingRef.current) clearInterval(pollingRef.current);
           setPaymentStatus("failed");
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
-    countdownRef.current = countdownInterval;
     
     // Start polling
-    const pollingInterval = setInterval(async () => {
+    pollingRef.current = setInterval(async () => {
       try {
         const res = await fetch(`/api/transactions/status/${paymentReference}`);
         if (res.ok) {
           const data = await res.json();
           if (data.status === "completed") {
             setPaymentStatus("success");
-            clearInterval(pollingInterval);
-            clearInterval(countdownInterval);
+            if (countdownRef.current) clearInterval(countdownRef.current);
+            if (pollingRef.current) clearInterval(pollingRef.current);
           } else if (data.status === "failed") {
             setPaymentStatus("failed");
-            clearInterval(pollingInterval);
-            clearInterval(countdownInterval);
+            if (countdownRef.current) clearInterval(countdownRef.current);
+            if (pollingRef.current) clearInterval(pollingRef.current);
           }
         }
       } catch (e) {
         console.error("Error checking payment status:", e);
       }
     }, 5000);
-    pollingRef.current = pollingInterval;
-    
+  }, [paymentComplete, paymentReference]);
+  
+  // Cleanup on unmount only
+  useEffect(() => {
     return () => {
-      clearInterval(countdownInterval);
-      clearInterval(pollingInterval);
+      if (countdownRef.current) clearInterval(countdownRef.current);
+      if (pollingRef.current) clearInterval(pollingRef.current);
     };
-  }, [paymentComplete, paymentReference, paymentStatus]);
+  }, []);
 
   const formatCountdown = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
