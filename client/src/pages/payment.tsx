@@ -260,6 +260,10 @@ export default function PaymentPage() {
 
   useEffect(() => {
     if (paymentComplete && paymentReference && paymentStatus === "pending") {
+      // Clear any existing intervals first
+      if (countdownRef.current) clearInterval(countdownRef.current);
+      if (pollingRef.current) clearInterval(pollingRef.current);
+      
       setCountdown(8 * 60);
       
       countdownRef.current = setInterval(() => {
@@ -293,13 +297,13 @@ export default function PaymentPage() {
           console.error("Error checking payment status:", e);
         }
       }, 5000);
-      
-      return () => {
-        if (pollingRef.current) clearInterval(pollingRef.current);
-        if (countdownRef.current) clearInterval(countdownRef.current);
-      };
     }
-  }, [paymentComplete, paymentReference, paymentStatus]);
+    
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+      if (countdownRef.current) clearInterval(countdownRef.current);
+    };
+  }, [paymentComplete, paymentReference]);
 
   const formatCountdown = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -387,7 +391,7 @@ export default function PaymentPage() {
                   </p>
                   <div className="bg-muted/30 rounded-lg p-4">
                     <p className="text-sm text-muted-foreground mb-1">Temps restant</p>
-                    <p className="text-2xl font-mono font-bold text-primary">{formatCountdown(countdown)}</p>
+                    <p className="text-2xl font-mono font-bold text-red-500">{formatCountdown(countdown)}</p>
                   </div>
                 </>
               )}
