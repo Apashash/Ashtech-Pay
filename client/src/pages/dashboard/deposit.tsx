@@ -619,7 +619,11 @@ export default function DepositPage() {
                             </div>
                             <div className="flex items-center justify-between text-sm">
                               <span className="text-muted-foreground">
-                                Frais de dépôt {feeCalculation.feePercentage > 0 ? `(${feeCalculation.feePercentage}%)` : "(Gratuit)"}
+                                Frais de dépôt {feeCalculation.feePercentage > 0 
+                                  ? (selectedOperator?.minFee && feeCalculation.fee === selectedOperator.minFee 
+                                    ? `(min. ${selectedOperator.minFee} ${selectedCountry?.currency || 'XAF'})` 
+                                    : `(${feeCalculation.feePercentage}%)`)
+                                  : feeCalculation.fixedFee > 0 ? "(fixe)" : "(Gratuit)"}
                               </span>
                               <span className={`font-medium ${feeCalculation.fee > 0 ? "text-red-500" : "text-green-500"}`}>
                                 {feeCalculation.fee > 0 ? `-${formatCurrency(feeCalculation.fee.toString(), (selectedCountry?.currency || "XAF") as SupportedCurrency)}` : "0 XAF"}
