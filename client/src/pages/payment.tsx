@@ -10,11 +10,13 @@ import type { PaymentLink, SupportedCurrency } from "@shared/schema";
 import { CURRENCY_SYMBOLS, EXCHANGE_RATES, SUPPORTED_CURRENCIES } from "@shared/schema";
 import { 
   Loader2, CheckCircle, XCircle, Shield, 
-  Smartphone, CreditCard, ExternalLink, FileText, AlertTriangle, Globe
+  Smartphone, CreditCard, ExternalLink, FileText, AlertTriangle, Globe,
+  ArrowLeft, ArrowRight, User, Mail, Phone
 } from "lucide-react";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { SiPaypal } from "react-icons/si";
 import logoImage from "@assets/image_1768087588517.png";
+import { Progress } from "@/components/ui/progress";
 
 const CURRENCY_FLAGS: Record<SupportedCurrency, string> = {
   "XAF": "🇨🇲",
@@ -57,14 +59,16 @@ function formatAmount(amount: number, currency: SupportedCurrency): string {
   return `${formatted} ${symbol}`;
 }
 
-function convertCurrency(amountXAF: number, targetCurrency: SupportedCurrency): number {
-  const rate = EXCHANGE_RATES[targetCurrency];
-  return amountXAF * rate;
-}
+const STEPS = [
+  { id: 1, title: "Informations", description: "Vos coordonnées" },
+  { id: 2, title: "Pays & Opérateur", description: "Mode de paiement" },
+  { id: 3, title: "Confirmation", description: "Valider le paiement" },
+];
 
 export default function PaymentPage() {
   const [, params] = useRoute("/pay/:slug");
   const { toast } = useToast();
+  const [currentStep, setCurrentStep] = useState(1);
   const [paymentComplete, setPaymentComplete] = useState(false);
   const [paymentReference, setPaymentReference] = useState("");
   const [pdfDownloadUrl, setPdfDownloadUrl] = useState<string | null>(null);
@@ -119,8 +123,6 @@ export default function PaymentPage() {
     return displayCurrency || linkCurrency;
   }, [displayCurrency, linkCurrency]);
 
-  // For fixed amount: displayAmount is in linkCurrency
-  // For custom amount: displayAmount is what user entered (in selectedDisplayCurrency)
   const displayAmount = useMemo(() => {
     if (!paymentLink) return 0;
     if (paymentLink.isFixedAmount) {
@@ -129,40 +131,29 @@ export default function PaymentPage() {
     return customAmount ? parseFloat(customAmount) : 0;
   }, [paymentLink, customAmount]);
 
-  // Convert displayAmount from its currency to XAF (base currency)
   const amountInXAF = useMemo(() => {
     if (!paymentLink) return 0;
     
     if (paymentLink.isFixedAmount) {
-      // Fixed amount is in linkCurrency, convert to XAF
       const linkRate = adminExchangeRates[linkCurrency] || 1;
       return displayAmount / linkRate;
     } else {
-      // Custom amount is in selectedDisplayCurrency, convert to XAF
       const inputRate = adminExchangeRates[selectedDisplayCurrency] || 1;
       return displayAmount / inputRate;
     }
   }, [paymentLink, displayAmount, linkCurrency, selectedDisplayCurrency, adminExchangeRates]);
 
-  // Convert XAF amount to linkCurrency for backend/display
   const amountInLinkCurrency = useMemo(() => {
     if (paymentLink?.isFixedAmount) return displayAmount;
     const linkRate = adminExchangeRates[linkCurrency] || 1;
     return amountInXAF * linkRate;
   }, [paymentLink, displayAmount, amountInXAF, linkCurrency, adminExchangeRates]);
 
-  // For fixed amount links, convert to selected display currency
   const convertedDisplayAmount = useMemo(() => {
     if (selectedDisplayCurrency === linkCurrency) return displayAmount;
     const targetRate = adminExchangeRates[selectedDisplayCurrency] || 1;
     return amountInXAF * targetRate;
   }, [displayAmount, selectedDisplayCurrency, linkCurrency, amountInXAF, adminExchangeRates]);
-
-  const convertedAmount = useMemo(() => {
-    if (!country || countryCurrency === linkCurrency) return null;
-    const countryRate = adminExchangeRates[countryCurrency] || 1;
-    return amountInXAF * countryRate;
-  }, [amountInXAF, countryCurrency, linkCurrency, country, adminExchangeRates]);
 
   const operators = useMemo(() => {
     return selectedCountryData?.operators || [];
@@ -171,15 +162,6 @@ export default function PaymentPage() {
   const selectedOperatorData = useMemo(() => {
     return operators.find(o => o.id === operator);
   }, [operators, operator]);
-
-  const feeCalculation = useMemo(() => {
-    if (!selectedOperatorData || amountInLinkCurrency <= 0) return null;
-    const feePercent = selectedOperatorData.feePercentage || 0;
-    const feeFixed = selectedOperatorData.feeFixed || 0;
-    const feeAmount = (amountInLinkCurrency * feePercent / 100) + feeFixed;
-    const totalAmount = amountInLinkCurrency + feeAmount;
-    return { feePercent, feeFixed, feeAmount, totalAmount };
-  }, [selectedOperatorData, amountInLinkCurrency]);
 
   const payMutation = useMutation({
     mutationFn: async () => {
@@ -231,12 +213,42 @@ export default function PaymentPage() {
     },
   });
 
-  const canSubmit = useMemo(() => {
-    if (!fullName || !email || !country || !phone || !paymentMethod) return false;
+  const [step1Errors, setStep1Errors] = useState<{fullName?: string; email?: string; phone?: string; amount?: string}>({});
+
+  const validateStep1 = () => {
+    const errors: typeof step1Errors = {};
+    if (!fullName.trim()) errors.fullName = "Le nom est requis";
+    if (!email.trim()) errors.email = "L'email est requis";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.email = "Email invalide";
+    if (!phone.trim()) errors.phone = "Le numéro est requis";
+    else if (phone.replace(/\s/g, "").length < 8) errors.phone = "Numéro trop court";
+    if (!paymentLink?.isFixedAmount && (!customAmount || parseFloat(customAmount) <= 0)) {
+      errors.amount = "Le montant doit être supérieur à 0";
+    }
+    setStep1Errors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const canProceedToStep2 = useMemo(() => {
+    if (!fullName || !email || !phone) return false;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return false;
+    if (phone.replace(/\s/g, "").length < 8) return false;
     if (!paymentLink?.isFixedAmount && (!customAmount || displayAmount <= 0)) return false;
-    if (paymentMethod === "mobile_money" && !operator) return false;
     return true;
-  }, [fullName, email, country, phone, paymentMethod, operator, paymentLink, customAmount, displayAmount]);
+  }, [fullName, email, phone, paymentLink, customAmount, displayAmount]);
+
+  const canProceedToStep3 = useMemo(() => {
+    if (!country || !paymentMethod) return false;
+    if (paymentMethod === "mobile_money") {
+      if (!operator) return false;
+      if (operators.length === 0) return false;
+    }
+    return true;
+  }, [country, paymentMethod, operator, operators]);
+
+  const canSubmit = useMemo(() => {
+    return canProceedToStep2 && canProceedToStep3 && paymentMethod === "mobile_money";
+  }, [canProceedToStep2, canProceedToStep3, paymentMethod]);
 
   useEffect(() => {
     if (paymentComplete && paymentReference && paymentStatus === "pending") {
@@ -286,6 +298,39 @@ export default function PaymentPage() {
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
+
+  const goToNextStep = () => {
+    if (currentStep === 1) {
+      const isValid = validateStep1();
+      if (!isValid) return;
+    }
+    if (currentStep < 3) {
+      setCurrentStep(currentStep + 1);
+    }
+  };
+
+  const goToPreviousStep = () => {
+    if (currentStep > 1) {
+      setCurrentStep(currentStep - 1);
+    }
+  };
+
+  const resetWizard = () => {
+    setCurrentStep(1);
+    setPaymentComplete(false);
+    setPaymentStatus("pending");
+    setPaymentReference("");
+    setFullName("");
+    setEmail("");
+    setPhone("");
+    setCustomAmount("");
+    setCountry("");
+    setOperator("");
+    setPaymentMethod("");
+    setStep1Errors({});
+  };
+
+  const progressPercentage = (currentStep / 3) * 100;
 
   if (isLoading) {
     return (
@@ -357,11 +402,7 @@ export default function PaymentPage() {
                     Le paiement n'a pas pu être confirmé. Veuillez réessayer ou contacter le support.
                   </p>
                   <Button 
-                    onClick={() => {
-                      setPaymentComplete(false);
-                      setPaymentStatus("pending");
-                      setPaymentReference("");
-                    }}
+                    onClick={resetWizard}
                     className="mt-4"
                   >
                     Réessayer
@@ -444,7 +485,7 @@ export default function PaymentPage() {
               {paymentLink.title}
             </CardTitle>
             <CardDescription>
-              Suivez les instructions ci-dessous pour effectuer votre paiement
+              Suivez les étapes pour effectuer votre paiement
             </CardDescription>
             
             {paymentLink.imagePath && (
@@ -467,192 +508,354 @@ export default function PaymentPage() {
                 <span>Un document PDF sera disponible après le paiement</span>
               </div>
             )}
+
+            <div className="pt-4">
+              <div className="flex justify-between text-sm mb-2">
+                {STEPS.map((step) => (
+                  <div 
+                    key={step.id} 
+                    className={`flex flex-col items-center ${
+                      step.id === currentStep 
+                        ? "text-primary font-medium" 
+                        : step.id < currentStep 
+                          ? "text-green-500" 
+                          : "text-muted-foreground"
+                    }`}
+                  >
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-1 ${
+                      step.id === currentStep 
+                        ? "bg-primary text-primary-foreground" 
+                        : step.id < currentStep 
+                          ? "bg-green-500 text-white" 
+                          : "bg-muted text-muted-foreground"
+                    }`}>
+                      {step.id < currentStep ? <CheckCircle className="w-4 h-4" /> : step.id}
+                    </div>
+                    <span className="text-xs hidden sm:block">{step.title}</span>
+                  </div>
+                ))}
+              </div>
+              <Progress value={progressPercentage} className="h-2" />
+            </div>
           </CardHeader>
           
           <CardContent className="space-y-4">
-            {paymentLink.isFixedAmount ? (
-              <div className="bg-muted/30 border border-border rounded-xl p-4 text-center">
-                <p className="text-sm text-muted-foreground mb-1">Montant à payer</p>
-                <p className="text-3xl font-bold text-foreground" data-testid="text-payment-amount">
-                  {formatAmount(convertedDisplayAmount, selectedDisplayCurrency)}
-                </p>
-                {selectedDisplayCurrency !== linkCurrency && (
-                  <p className="text-sm text-muted-foreground mt-1">
-                    = {formatAmount(displayAmount, linkCurrency)}
-                  </p>
+            {currentStep === 1 && (
+              <div className="space-y-4 animate-in fade-in duration-300">
+                <div className="text-center mb-4">
+                  <div className="w-14 h-14 mx-auto rounded-full bg-primary/10 flex items-center justify-center mb-3">
+                    <User className="w-7 h-7 text-primary" />
+                  </div>
+                  <h3 className="font-semibold">Vos informations</h3>
+                  <p className="text-sm text-muted-foreground">Entrez vos coordonnées et le montant</p>
+                </div>
+
+                {paymentLink.isFixedAmount ? (
+                  <div className="bg-muted/30 border border-border rounded-xl p-4 text-center">
+                    <p className="text-sm text-muted-foreground mb-1">Montant à payer</p>
+                    <p className="text-3xl font-bold text-foreground" data-testid="text-payment-amount">
+                      {formatAmount(convertedDisplayAmount, selectedDisplayCurrency)}
+                    </p>
+                    {selectedDisplayCurrency !== linkCurrency && (
+                      <p className="text-sm text-muted-foreground mt-1">
+                        = {formatAmount(displayAmount, linkCurrency)}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label htmlFor="amount">Montant à payer ({CURRENCY_SYMBOLS[selectedDisplayCurrency]}) *</Label>
+                    <Input
+                      id="amount"
+                      type="number"
+                      placeholder="Entrez le montant"
+                      value={customAmount}
+                      onChange={(e) => { setCustomAmount(e.target.value); setStep1Errors(prev => ({...prev, amount: undefined})); }}
+                      className={`text-xl h-12 text-center ${step1Errors.amount ? "border-red-500" : ""}`}
+                      data-testid="input-payment-amount"
+                    />
+                    {step1Errors.amount && <p className="text-xs text-red-500">{step1Errors.amount}</p>}
+                    {selectedDisplayCurrency !== linkCurrency && customAmount && (
+                      <p className="text-xs text-muted-foreground text-center">
+                        ≈ {formatAmount(amountInLinkCurrency, linkCurrency)}
+                      </p>
+                    )}
+                  </div>
                 )}
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <Label htmlFor="amount">Montant à payer ({CURRENCY_SYMBOLS[selectedDisplayCurrency]}) *</Label>
-                <Input
-                  id="amount"
-                  type="number"
-                  placeholder="Entrez le montant"
-                  value={customAmount}
-                  onChange={(e) => setCustomAmount(e.target.value)}
-                  data-testid="input-payment-amount"
-                />
-                {selectedDisplayCurrency !== linkCurrency && customAmount && (
-                  <p className="text-xs text-muted-foreground">
-                    ≈ {formatAmount(amountInLinkCurrency, linkCurrency)}
-                  </p>
-                )}
+
+                <div className="space-y-2">
+                  <Label htmlFor="fullName">Nom complet *</Label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="fullName"
+                      type="text"
+                      placeholder="Votre nom complet"
+                      value={fullName}
+                      onChange={(e) => { setFullName(e.target.value); setStep1Errors(prev => ({...prev, fullName: undefined})); }}
+                      className={`pl-10 ${step1Errors.fullName ? "border-red-500" : ""}`}
+                      data-testid="input-full-name"
+                    />
+                  </div>
+                  {step1Errors.fullName && <p className="text-xs text-red-500">{step1Errors.fullName}</p>}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email *</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="votre@email.com"
+                      value={email}
+                      onChange={(e) => { setEmail(e.target.value); setStep1Errors(prev => ({...prev, email: undefined})); }}
+                      className={`pl-10 ${step1Errors.email ? "border-red-500" : ""}`}
+                      data-testid="input-email"
+                    />
+                  </div>
+                  {step1Errors.email && <p className="text-xs text-red-500">{step1Errors.email}</p>}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Numéro de téléphone *</Label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="phone"
+                      type="tel"
+                      placeholder="+237 6XX XXX XXX"
+                      value={phone}
+                      onChange={(e) => { setPhone(e.target.value); setStep1Errors(prev => ({...prev, phone: undefined})); }}
+                      className={`pl-10 ${step1Errors.phone ? "border-red-500" : ""}`}
+                      data-testid="input-phone"
+                    />
+                  </div>
+                  {step1Errors.phone && <p className="text-xs text-red-500">{step1Errors.phone}</p>}
+                </div>
+
+                <Button 
+                  type="button"
+                  className="w-full" 
+                  size="lg"
+                  onClick={goToNextStep}
+                  disabled={!canProceedToStep2}
+                >
+                  Continuer
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
               </div>
             )}
 
-            <div className="space-y-2">
-              <Label htmlFor="fullName">Nom complet *</Label>
-              <Input
-                id="fullName"
-                type="text"
-                placeholder="Votre nom complet"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                data-testid="input-full-name"
-              />
-            </div>
+            {currentStep === 2 && (
+              <div className="space-y-4 animate-in fade-in duration-300">
+                <div className="text-center mb-4">
+                  <div className="w-14 h-14 mx-auto rounded-full bg-primary/10 flex items-center justify-center mb-3">
+                    <Globe className="w-7 h-7 text-primary" />
+                  </div>
+                  <h3 className="font-semibold">Mode de paiement</h3>
+                  <p className="text-sm text-muted-foreground">Choisissez votre pays et opérateur</p>
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="email">Email *</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="votre@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                data-testid="input-email"
-              />
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="country">Pays *</Label>
+                  <Select value={country} onValueChange={(val) => { setCountry(val); setOperator(""); }}>
+                    <SelectTrigger data-testid="select-country" className="h-12">
+                      <Globe className="w-4 h-4 text-muted-foreground mr-2" />
+                      <SelectValue placeholder="Sélectionnez votre pays" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {depositConfig.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>{c.flag} {c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="country">Pays *</Label>
-              <Select value={country} onValueChange={(val) => { setCountry(val); setOperator(""); }}>
-                <SelectTrigger data-testid="select-country">
-                  <SelectValue placeholder="Sélectionnez votre pays" />
-                </SelectTrigger>
-                <SelectContent>
-                  {depositConfig.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>{c.flag} {c.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+                <div className="space-y-2">
+                  <Label>Mode de paiement *</Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <Button
+                      type="button"
+                      variant={paymentMethod === "mobile_money" ? "default" : "outline"}
+                      className="flex flex-col items-center gap-1 h-auto py-3"
+                      onClick={() => setPaymentMethod("mobile_money")}
+                      data-testid="button-payment-mobile"
+                    >
+                      <Smartphone className="w-5 h-5" />
+                      <span className="text-xs">Mobile Money</span>
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={paymentMethod === "card" ? "default" : "outline"}
+                      className="flex flex-col items-center gap-1 h-auto py-3"
+                      onClick={() => setPaymentMethod("card")}
+                      data-testid="button-payment-card"
+                    >
+                      <CreditCard className="w-5 h-5" />
+                      <span className="text-xs">Carte bancaire</span>
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={paymentMethod === "paypal" ? "default" : "outline"}
+                      className="flex flex-col items-center gap-1 h-auto py-3"
+                      onClick={() => setPaymentMethod("paypal")}
+                      data-testid="button-payment-paypal"
+                    >
+                      <SiPaypal className="w-5 h-5" />
+                      <span className="text-xs">PayPal</span>
+                    </Button>
+                  </div>
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="phone">Numéro de téléphone *</Label>
-              <Input
-                id="phone"
-                type="tel"
-                placeholder="+237 6XX XXX XXX"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                data-testid="input-phone"
-              />
-            </div>
+                {(paymentMethod === "card" || paymentMethod === "paypal") && (
+                  <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-amber-500 text-sm">Non disponible</p>
+                      <p className="text-sm text-muted-foreground">
+                        {paymentMethod === "card" 
+                          ? "Le paiement par carte bancaire n'est pas encore disponible. Veuillez utiliser Mobile Money."
+                          : "Le paiement par PayPal n'est pas encore disponible. Veuillez utiliser Mobile Money."
+                        }
+                      </p>
+                    </div>
+                  </div>
+                )}
 
-            <div className="space-y-2">
-              <Label>Mode de paiement *</Label>
-              <div className="grid grid-cols-3 gap-2">
-                <Button
-                  type="button"
-                  variant={paymentMethod === "mobile_money" ? "default" : "outline"}
-                  className="flex flex-col items-center gap-1 h-auto py-3"
-                  onClick={() => setPaymentMethod("mobile_money")}
-                  data-testid="button-payment-mobile"
-                >
-                  <Smartphone className="w-5 h-5" />
-                  <span className="text-xs">Mobile Money</span>
-                </Button>
-                <Button
-                  type="button"
-                  variant={paymentMethod === "card" ? "default" : "outline"}
-                  className="flex flex-col items-center gap-1 h-auto py-3"
-                  onClick={() => setPaymentMethod("card")}
-                  data-testid="button-payment-card"
-                >
-                  <CreditCard className="w-5 h-5" />
-                  <span className="text-xs">Carte bancaire</span>
-                </Button>
-                <Button
-                  type="button"
-                  variant={paymentMethod === "paypal" ? "default" : "outline"}
-                  className="flex flex-col items-center gap-1 h-auto py-3"
-                  onClick={() => setPaymentMethod("paypal")}
-                  data-testid="button-payment-paypal"
-                >
-                  <SiPaypal className="w-5 h-5" />
-                  <span className="text-xs">PayPal</span>
-                </Button>
-              </div>
-            </div>
+                {paymentMethod === "mobile_money" && country && operators.length > 0 && (
+                  <div className="space-y-2">
+                    <Label htmlFor="operator">Opérateur Mobile Money *</Label>
+                    <Select value={operator} onValueChange={setOperator}>
+                      <SelectTrigger data-testid="select-operator" className="h-12">
+                        <Smartphone className="w-4 h-4 text-muted-foreground mr-2" />
+                        <SelectValue placeholder="Sélectionnez votre opérateur" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {operators.map((op) => (
+                          <SelectItem key={op.id} value={op.id}>
+                            {op.name}
+                            {op.feePercentage > 0 && (
+                              <span className="text-xs text-muted-foreground ml-1">({op.feePercentage}%)</span>
+                            )}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
 
-            {(paymentMethod === "card" || paymentMethod === "paypal") && (
-              <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 flex items-start gap-3">
-                <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-medium text-amber-500 text-sm">Non disponible</p>
-                  <p className="text-sm text-muted-foreground">
-                    {paymentMethod === "card" 
-                      ? "Le paiement par carte bancaire n'est pas encore disponible. Veuillez utiliser Mobile Money."
-                      : "Le paiement par PayPal n'est pas encore disponible. Veuillez utiliser Mobile Money."
-                    }
-                  </p>
+                {paymentMethod === "mobile_money" && country && operators.length === 0 && (
+                  <div className="bg-muted/50 rounded-lg p-3 text-center text-sm text-muted-foreground">
+                    Aucun opérateur disponible pour ce pays
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <Button 
+                    type="button"
+                    variant="outline"
+                    className="flex-1" 
+                    size="lg"
+                    onClick={goToPreviousStep}
+                  >
+                    <ArrowLeft className="w-4 h-4 mr-2" />
+                    Retour
+                  </Button>
+                  <Button 
+                    type="button"
+                    className="flex-1" 
+                    size="lg"
+                    onClick={goToNextStep}
+                    disabled={!canProceedToStep3}
+                  >
+                    Continuer
+                    <ArrowRight className="w-4 h-4 ml-2" />
+                  </Button>
                 </div>
               </div>
             )}
 
-            {paymentMethod === "mobile_money" && country && operators.length > 0 && (
-              <div className="space-y-2">
-                <Label htmlFor="operator">Opérateur Mobile Money *</Label>
-                <Select value={operator} onValueChange={setOperator}>
-                  <SelectTrigger data-testid="select-operator">
-                    <SelectValue placeholder="Sélectionnez votre opérateur" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {operators.map((op) => (
-                      <SelectItem key={op.id} value={op.id}>
-                        {op.name}
-                        {op.feePercentage > 0 && (
-                          <span className="text-xs text-muted-foreground ml-1">({op.feePercentage}%)</span>
-                        )}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+            {currentStep === 3 && (
+              <div className="space-y-4 animate-in fade-in duration-300">
+                <div className="text-center mb-4">
+                  <div className="w-14 h-14 mx-auto rounded-full bg-green-500/10 flex items-center justify-center mb-3">
+                    <CheckCircle className="w-7 h-7 text-green-500" />
+                  </div>
+                  <h3 className="font-semibold">Confirmez votre paiement</h3>
+                  <p className="text-sm text-muted-foreground">Vérifiez les informations avant de valider</p>
+                </div>
 
-            {paymentMethod === "mobile_money" && country && operators.length === 0 && (
-              <div className="bg-muted/50 rounded-lg p-3 text-center text-sm text-muted-foreground">
-                Aucun opérateur disponible pour ce pays
+                <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Nom</span>
+                    <span className="font-medium">{fullName}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Email</span>
+                    <span className="font-medium">{email}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Téléphone</span>
+                    <span className="font-medium">{phone}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Pays</span>
+                    <span className="font-medium">{selectedCountryData?.flag} {selectedCountryData?.name}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Opérateur</span>
+                    <span className="font-medium">{selectedOperatorData?.name}</span>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border bg-primary/5 border-primary/20 p-4">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-foreground">Montant total</span>
+                    <span className="text-2xl font-bold text-primary">
+                      {formatAmount(displayAmount, selectedDisplayCurrency)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <Button 
+                    type="button"
+                    variant="outline"
+                    className="flex-1" 
+                    size="lg"
+                    onClick={goToPreviousStep}
+                  >
+                    <ArrowLeft className="w-4 h-4 mr-2" />
+                    Retour
+                  </Button>
+                  <Button 
+                    className="flex-1" 
+                    size="lg"
+                    onClick={() => payMutation.mutate()}
+                    disabled={payMutation.isPending || !canSubmit}
+                    data-testid="button-pay"
+                  >
+                    {payMutation.isPending ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Traitement...
+                      </>
+                    ) : (
+                      <>
+                        <Shield className="w-4 h-4 mr-2" />
+                        Payer maintenant
+                      </>
+                    )}
+                  </Button>
+                </div>
+                
+                <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground pt-2">
+                  <Shield className="w-4 h-4" />
+                  <span>Paiement sécurisé - Vos données sont protégées</span>
+                </div>
               </div>
             )}
-            
-            <Button 
-              className="w-full" 
-              size="lg"
-              onClick={() => payMutation.mutate()}
-              disabled={payMutation.isPending || !canSubmit || paymentMethod !== "mobile_money"}
-              data-testid="button-pay"
-            >
-              {payMutation.isPending ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Traitement en cours...
-                </>
-              ) : (
-                <>
-                  <Shield className="w-4 h-4 mr-2" />
-                  Payer {displayAmount > 0 ? formatAmount(displayAmount, selectedDisplayCurrency) : ""}
-                </>
-              )}
-            </Button>
-            
-            <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground pt-2">
-              <Shield className="w-4 h-4" />
-              <span>Paiement sécurisé - Vos données sont protégées</span>
-            </div>
           </CardContent>
         </Card>
       </div>
