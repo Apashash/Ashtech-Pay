@@ -4,7 +4,6 @@ import path from "path";
 const SWYCHR_BASE_URL = "https://api.accountpe.com/api";
 const SWYCHR_EMAIL = process.env.SWYCHR_EMAIL || "";
 const SWYCHR_PASSWORD = process.env.SWYCHR_PASSWORD || "";
-const SWYCHR_HOSTED_BASE = "https://app.swychrconnect.com";
 const TOKEN_FILE = path.join(process.cwd(), ".local", "swychr_token.json");
 
 let cachedToken: string | null = null;
@@ -77,6 +76,22 @@ export async function getSwychrToken(): Promise<string> {
   return cachedToken!;
 }
 
+async function fetchPaymentUuid(transaction_id: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${SWYCHR_BASE_URL}/swychpay/payment_link_byid`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify({ params: { id: transaction_id } }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const attrs = data.data?.data?.attributes;
+    return attrs?.payment_uuid || null;
+  } catch {
+    return null;
+  }
+}
+
 export interface SwychrCreateLinkParams {
   country_code: string;
   name: string;
@@ -110,12 +125,26 @@ export async function createSwychrPaymentLink(params: SwychrCreateLinkParams): P
         "Authorization": `Bearer ${token}`,
         "Idempotency-Key": params.transaction_id,
       },
-      body: JSON.stringify(params),
+      body: JSON.stringify({
+        country_code: params.country_code,
+        name: params.name,
+        email: params.email,
+        mobile: params.mobile,
+        amount: params.amount,
+        currency: params.currency,
+        transaction_id: params.transaction_id,
+        description: params.description,
+        pass_digital_charge: params.pass_digital_charge,
+        callback_url: params.callback_url,
+        source: "WEB",
+      }),
     });
     const data = await res.json();
     if (res.ok && data.data?.id) {
       const id = data.data.id;
-      const payment_link = data.data.payment_link || `${SWYCHR_HOSTED_BASE}/payment/${id}`;
+      const paymentUuid = await fetchPaymentUuid(params.transaction_id);
+      const payment_link = paymentUuid || `https://app.swychrconnect.com/payment/${id}`;
+      console.log(`[Swychr] Payment link created: id=${id}, url=${payment_link}`);
       return {
         success: true,
         data: { id, payment_link, transaction_id: params.transaction_id },
@@ -138,28 +167,27 @@ export interface SwychrStatusResponse {
 
 export async function checkSwychrPaymentStatus(transaction_id: string): Promise<SwychrStatusResponse> {
   try {
-    const token = await getSwychrToken();
-    const res = await fetch(`${SWYCHR_BASE_URL}/swychpay/payment_link_status`, {
+    const res = await fetch(`${SWYCHR_BASE_URL}/swychpay/payment_link_byid`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`,
-      },
-      body: JSON.stringify({ transaction_id }),
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify({ params: { id: transaction_id } }),
     });
-    const data = await res.json();
     if (!res.ok) {
-      return { success: false, message: data.message || data.error || `HTTP ${res.status}` };
+      return { success: false, message: `HTTP ${res.status}` };
     }
-    const inner = data.data?.data || data.data || {};
-    const rawStatus = inner.status ?? inner.attributes?.status ?? null;
+    const data = await res.json();
+    const attrs = data.data?.data?.attributes;
+    if (!attrs) {
+      return { success: false, message: data.message || "Payment not found" };
+    }
+    const rawStatus = attrs.status ?? null;
     let status: "pending" | "completed" | "failed" = "pending";
     if (rawStatus === 1 || rawStatus === "success" || rawStatus === "completed") {
       status = "completed";
-    } else if (rawStatus === 2 || rawStatus === "failed" || rawStatus === "cancelled") {
+    } else if (rawStatus === "expired" || rawStatus === "failed" || rawStatus === "cancelled") {
       status = "failed";
     }
-    return { success: true, status, rawStatus, data: inner };
+    return { success: true, status, rawStatus, data: attrs };
   } catch (err: any) {
     return { success: false, message: err.message };
   }
