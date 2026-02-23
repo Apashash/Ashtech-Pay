@@ -23,7 +23,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { uploadToSupabase } from "./supabase";
-import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees } from "./swychr";
+import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, fetchPaymentLinkDetails } from "./swychr";
 import { addPendingPayment } from "./paymentPoller";
 
 const uploadsDir = path.join(process.cwd(), "uploads");
@@ -1034,9 +1034,10 @@ export async function registerRoutes(
               amount: creditedAmount.toString(),
             });
             
+            const appUrl = process.env.APP_URL || "";
             res.json({ 
               transaction,
-              checkoutUrl: swychrResponse.data.payment_link,
+              checkoutUrl: `${appUrl}/checkout/${depositRef}`,
               gateway: "swychr",
               message: "Veuillez compléter le paiement sur la page sécurisée",
               feeDetails: {
@@ -1919,10 +1920,11 @@ export async function registerRoutes(
               });
             }
 
+            const appUrl2 = process.env.APP_URL || "";
             res.json({ 
               message: "Veuillez compléter le paiement sur la page sécurisée.",
               reference: intent.reference,
-              checkoutUrl: swychrResponse.data.payment_link,
+              checkoutUrl: `${appUrl2}/checkout/${reference}`,
               gateway: "swychr",
               redirectUrl: paymentLink.redirectUrl || null,
               amount: numAmount,
@@ -3550,6 +3552,19 @@ export async function registerRoutes(
   });
 
   // Swychr Webhook - Payment status callback
+  app.get("/api/checkout/:transactionId", async (req, res) => {
+    try {
+      const { transactionId } = req.params;
+      const details = await fetchPaymentLinkDetails(transactionId);
+      if (!details) {
+        return res.status(404).json({ message: "Payment details not found" });
+      }
+      res.json(details);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   app.post("/api/swychr/webhook", async (req, res) => {
     try {
       const payload = req.body;

@@ -25,6 +25,7 @@ import SupportPage from "@/pages/dashboard/support";
 import ApiKeysPage from "@/pages/dashboard/api-keys";
 import SettingsPage from "@/pages/dashboard/settings";
 import PaymentPage from "@/pages/payment";
+import CheckoutPage from "@/pages/checkout";
 import NotFound from "@/pages/not-found";
 import AdminDashboard from "@/pages/admin/index";
 import AdminUsers from "@/pages/admin/users";
@@ -78,6 +79,7 @@ function Router() {
       <Route path="/dashboard/api-keys" component={ApiKeysPage} />
       <Route path="/dashboard/settings" component={SettingsPage} />
       <Route path="/pay/:slug" component={PaymentPage} />
+      <Route path="/checkout/:transactionId" component={CheckoutPage} />
       <Route path="/admin" component={AdminDashboard} />
       <Route path="/admin/users" component={AdminUsers} />
       <Route path="/admin/transactions" component={AdminTransactions} />

@@ -159,6 +159,57 @@ async function fetchPaymentUuid(transaction_id: string): Promise<string | null> 
   }
 }
 
+export interface SwychrPaymentDetails {
+  transactionId: string;
+  agencyCode: string;
+  secretKey: string;
+  web: string;
+  netPayable: number;
+  currency: string;
+  description: string;
+  name: string;
+  email: string;
+  mobile: string;
+  adminName: string;
+  adminLogo: string;
+  adminEmail: string;
+}
+
+export async function fetchPaymentLinkDetails(transaction_id: string): Promise<SwychrPaymentDetails | null> {
+  try {
+    const uuidUrl = await fetchPaymentUuid(transaction_id);
+    if (!uuidUrl) return null;
+    const uuid = uuidUrl.split("/payment/")[1];
+    if (!uuid) return null;
+    const res = await fetch(`${SWYCHR_BASE_URL}/swychpay/payment_link_details`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify({ params: { id: uuid } }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const attrs = data.data?.data?.attributes;
+    if (!attrs) return null;
+    return {
+      transactionId: attrs.transaction_id || transaction_id,
+      agencyCode: attrs.agency_code || "",
+      secretKey: attrs.secret_key || "",
+      web: attrs.web || "swychr.com",
+      netPayable: parseFloat(attrs.net_payable) || 0,
+      currency: attrs.currency_code || "XAF",
+      description: attrs.description || "",
+      name: attrs.name || "",
+      email: attrs.email || "",
+      mobile: attrs.mobile || "",
+      adminName: attrs.admin_name || "Ashtech Pay",
+      adminLogo: attrs.admin_logo || "",
+      adminEmail: attrs.admin_email || "",
+    };
+  } catch {
+    return null;
+  }
+}
+
 export interface SwychrCreateLinkParams {
   country_code: string;
   name: string;
