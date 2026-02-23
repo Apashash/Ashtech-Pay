@@ -23,8 +23,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { uploadToSupabase } from "./supabase";
-import { collectPayment, verifyPayment, validateCallback, type CallbackPayload } from "./soleaspay";
-import { createWinipayCheckout, getWinipayInvoiceDetail, createWinipayPayout, validateWinipayCallback, type WinipayCallbackPayload } from "./winipay";
+import { createSwychrPaymentLink, checkSwychrPaymentStatus } from "./swychr";
 import { addPendingPayment } from "./paymentPoller";
 
 const uploadsDir = path.join(process.cwd(), "uploads");
@@ -967,21 +966,19 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Utilisateur non trouvé" });
       }
 
-      // Get operator name, country code and gateway for payment routing
-      let operatorName = "MTN Mobile Money";
+      // Get operator name and country code for fee resolution
+      let operatorName = "Mobile Money";
       let countryCode = "CM";
-      let gateway = "soleapay";
+      let countryCurrency = "XAF";
       if (data.operatorId) {
         const operator = await storage.getOperator(data.operatorId);
-        if (operator) {
-          operatorName = operator.name;
-          gateway = operator.gateway || "soleapay";
-        }
+        if (operator) operatorName = operator.name;
       }
       if (data.countryId) {
         const country = await storage.getCountry(data.countryId);
         if (country) {
           countryCode = country.code;
+          countryCurrency = country.currency || "XAF";
         }
       }
 
@@ -994,7 +991,6 @@ export async function registerRoutes(
         } else {
           feeAmount = parseFloat(fee.feeValue);
         }
-        // Apply min/max constraints
         if (fee.minFee && feeAmount < parseFloat(fee.minFee)) {
           feeAmount = parseFloat(fee.minFee);
         }
@@ -1012,7 +1008,7 @@ export async function registerRoutes(
         userId,
         type: "deposit",
         amount: creditedAmount.toString(),
-        currency: "XAF",
+        currency: countryCurrency,
         status: "pending",
         description: `Recharge via ${data.paymentMethod === "mobile_money" ? "Mobile Money" : "Crypto"}`,
         paymentMethod: data.paymentMethod,
@@ -1022,108 +1018,52 @@ export async function registerRoutes(
         totalAmount: totalAmount.toFixed(2),
       });
 
-      // Call payment gateway API for mobile money deposits
+      // Call Swychr API for mobile money deposits
       if (data.paymentMethod === "mobile_money" && data.phoneNumber) {
         try {
-          if (gateway === "winipay") {
-            // Use WinniPay for this operator
-            console.log(`[Deposit] Using WinniPay for ${operatorName} in ${countryCode}`);
-            const winipayResponse = await createWinipayCheckout({
-              amount: totalAmount,
-              description: `Dépôt Ashtech Pay - ${depositRef}`,
-              orderId: depositRef,
-              operatorName,
-              countryCode,
-              phoneNumber: data.phoneNumber.replace(/\s/g, ""),
-              customData: { userId: user.id, transactionId: transaction.id },
-            });
+          console.log(`[Deposit] Using Swychr for ${operatorName} in ${countryCode}`);
+          const callbackUrl = `${process.env.APP_URL || ""}/api/swychr/webhook`;
+          const swychrResponse = await createSwychrPaymentLink({
+            country_code: countryCode,
+            name: user.fullName || user.username,
+            email: user.email || `${user.phone}@ashtech.pay`,
+            mobile: data.phoneNumber.replace(/\s/g, ""),
+            amount: totalAmount,
+            currency: countryCurrency,
+            transaction_id: depositRef,
+            description: `Dépôt Ashtech Pay - ${depositRef}`,
+            pass_digital_charge: false,
+            callback_url: callbackUrl,
+          });
 
-            if (winipayResponse.success && winipayResponse.results.checkout_process) {
-              const externalRef = winipayResponse.results.uuid || "";
-              
-              if (externalRef) {
-                await storage.updateTransactionExternalReference(transaction.id, externalRef);
-                
-                addPendingPayment({
-                  transactionId: transaction.id,
-                  reference: depositRef,
-                  externalReference: externalRef,
-                  attempts: 0,
-                  userId: user.id,
-                  type: "deposit",
-                  amount: creditedAmount.toString(),
-                });
+          if (swychrResponse.success && swychrResponse.data?.payment_link) {
+            addPendingPayment({
+              transactionId: transaction.id,
+              reference: depositRef,
+              externalReference: depositRef,
+              attempts: 0,
+              userId: user.id,
+              type: "deposit",
+              amount: creditedAmount.toString(),
+            });
+            
+            res.json({ 
+              transaction,
+              checkoutUrl: swychrResponse.data.payment_link,
+              gateway: "swychr",
+              message: "Veuillez compléter le paiement sur la page sécurisée",
+              feeDetails: {
+                grossAmount: totalAmount,
+                feeAmount,
+                creditedAmount
               }
-              
-              res.json({ 
-                transaction: { ...transaction, reference: externalRef || depositRef },
-                checkoutUrl: winipayResponse.results.checkout_process,
-                gateway: "winipay",
-                message: "Veuillez compléter le paiement",
-                feeDetails: {
-                  grossAmount: totalAmount,
-                  feeAmount,
-                  creditedAmount
-                }
-              });
-            } else {
-              await storage.updateTransactionStatus(transaction.id, "failed");
-              const errorMsg = Array.isArray(winipayResponse.errors) ? "Erreur WinniPay" : winipayResponse.errors.msg;
-              res.status(400).json({ message: errorMsg });
-            }
+            });
           } else {
-            // Use SoleAsPay for this operator
-            console.log(`[Deposit] Using SoleAsPay for ${operatorName} in ${countryCode}`);
-            const soleaspayResponse = await collectPayment({
-              wallet: data.phoneNumber.replace(/\s/g, ""),
-              amount: totalAmount,
-              currency: "XAF",
-              orderId: depositRef,
-              description: `Dépôt Ashtech Pay - ${depositRef}`,
-              payerName: user.fullName,
-              payerEmail: user.email,
-              operatorName,
-              countryCode,
-            });
-
-            if (soleaspayResponse.success) {
-              const externalRef = soleaspayResponse.data?.reference || "";
-              
-              if (externalRef) {
-                await storage.updateTransactionExternalReference(transaction.id, externalRef);
-                
-                addPendingPayment({
-                  transactionId: transaction.id,
-                  reference: depositRef,
-                  externalReference: externalRef,
-                  attempts: 0,
-                  userId: user.id,
-                  type: "deposit",
-                  amount: creditedAmount.toString(),
-                });
-              }
-              
-              res.json({ 
-                transaction: { ...transaction, reference: externalRef || depositRef },
-                soleaspayReference: externalRef,
-                gateway: "soleapay",
-                message: "Veuillez valider le paiement sur votre téléphone",
-                feeDetails: {
-                  grossAmount: totalAmount,
-                  feeAmount,
-                  creditedAmount
-                }
-              });
-            } else {
-              await storage.updateTransactionStatus(transaction.id, "failed");
-              res.status(400).json({ 
-                message: soleaspayResponse.message || "Échec de l'initiation du paiement" 
-              });
-            }
+            await storage.updateTransactionStatus(transaction.id, "failed");
+            res.status(400).json({ message: swychrResponse.message || "Échec de l'initiation du paiement" });
           }
         } catch (gatewayError) {
-          console.error("Payment gateway API error:", gatewayError);
-          // Keep transaction as pending for manual processing
+          console.error("Swychr API error:", gatewayError);
           res.json({ 
             transaction, 
             message: "Dépôt en attente de confirmation",
@@ -1665,9 +1605,11 @@ export async function registerRoutes(
             return {
               id: op.id,
               name: op.name,
-              gateway: (op as any).gateway || "soleapay",
+              gateway: "swychr",
               feePercentage: operatorFee?.feeType === "percentage" ? parseFloat(operatorFee.feeValue) : 0,
               feeFixed: operatorFee?.feeType === "fixed" ? parseFloat(operatorFee.feeValue) : 0,
+              swychrFee: operatorFee ? parseFloat((operatorFee as any).swychrFee || "0") : 0,
+              ashtechMargin: operatorFee ? parseFloat((operatorFee as any).ashtechMargin || "0") : 0,
             };
           });
         return {
@@ -1684,22 +1626,19 @@ export async function registerRoutes(
       // Get global exchange rates from settings
       // Rates are stored as "how many XAF for 1 unit of currency"
       // We convert to "how many of currency for 1 XAF" for easy multiplication
-      const settings = await storage.getAllSettings();
-      const usdRateRaw = settings.find(s => s.key === "exchange_rate_usd")?.value;
-      const eurRateRaw = settings.find(s => s.key === "exchange_rate_eur")?.value;
-      const cdfRateRaw = settings.find(s => s.key === "exchange_rate_cdf")?.value;
-      
-      // Default rates if not configured (approximate)
-      const usdToXaf = usdRateRaw ? parseFloat(usdRateRaw) : 600;
-      const eurToXaf = eurRateRaw ? parseFloat(eurRateRaw) : 655;
-      const xafToCdf = cdfRateRaw ? parseFloat(cdfRateRaw) : 4.5;
-      
       const exchangeRates: Record<string, number> = {
         XAF: 1,
         XOF: 1,
-        USD: 1 / usdToXaf,
-        EUR: 1 / eurToXaf,
-        CDF: xafToCdf,
+        CDF: 4.5,
+        GHS: 14.0,
+        NGN: 0.44,
+        KES: 6.0,
+        RWF: 0.66,
+        GNF: 0.076,
+        TZS: 0.24,
+        UGX: 0.17,
+        INR: 7.5,
+        USD: 0.00165,
       };
       
       res.json({ countries: config, exchangeRates });
@@ -1950,143 +1889,76 @@ export async function registerRoutes(
         operatorId: resolvedOperatorId || null,
       });
 
-      // Get operator name, country code and gateway for payment routing
-      let operatorName = "MTN Mobile Money";
-      let gateway = "soleapay";
+      // Get operator name and country code for Swychr
+      let operatorName = "Mobile Money";
       if (operator && countryId) {
         const operators = await storage.getOperatorsByCountry(countryId);
         const operatorData = operators.find((o: { name: string; id: string }) => o.name === operator || o.id === operator);
         operatorName = operatorData?.name || operator;
-        gateway = (operatorData as any)?.gateway || "soleapay";
       }
       const paymentCountryCode = countryData?.code || "CM";
+      const paymentCurrency = countryData?.currency || paymentLink.currency || "XAF";
 
-      // Call payment gateway API for Mobile Money payments
+      // Call Swychr API for Mobile Money payments
       if (paymentMethod === "mobile_money") {
         try {
-          if (gateway === "winipay") {
-            // Use WinniPay for this operator
-            console.log(`[PaymentLink] Using WinniPay for ${operatorName} in ${paymentCountryCode}`);
-            const winipayResponse = await createWinipayCheckout({
-              amount: numAmount,
-              description: `Paiement ${paymentLink.title} - ${reference}`,
-              orderId: reference,
-              operatorName,
-              countryCode: paymentCountryCode,
-              phoneNumber: phone.replace(/\s/g, ""),
-              customData: { 
-                paymentLinkId: paymentLink.id, 
-                merchantId: paymentLink.userId,
+          console.log(`[PaymentLink] Using Swychr for ${operatorName} in ${paymentCountryCode}`);
+          const callbackUrl = `${process.env.APP_URL || ""}/api/swychr/webhook`;
+          const swychrResponse = await createSwychrPaymentLink({
+            country_code: paymentCountryCode,
+            name: fullName,
+            email: email || `${phone}@ashtech.pay`,
+            mobile: phone.replace(/\s/g, ""),
+            amount: numAmount,
+            currency: paymentCurrency,
+            transaction_id: reference,
+            description: `Paiement ${paymentLink.title} - ${reference}`,
+            pass_digital_charge: false,
+            callback_url: callbackUrl,
+          });
+
+          if (swychrResponse.success && swychrResponse.data?.payment_link) {
+            const linkTransaction = await storage.getTransactionByReference(reference);
+            if (linkTransaction) {
+              addPendingPayment({
+                transactionId: linkTransaction.id,
+                reference: reference,
+                externalReference: reference,
+                attempts: 0,
+                userId: paymentLink.userId,
+                type: "payment_link",
+                amount: netAmount,
                 paymentIntentId: intent.id,
                 payerName: fullName,
-              },
-            });
-
-            if (winipayResponse.success && winipayResponse.results.checkout_process) {
-              const externalRef = winipayResponse.results.uuid || "";
-              
-              const linkTransaction = await storage.getTransactionByReference(reference);
-              if (linkTransaction && externalRef) {
-                await storage.updateTransactionExternalReference(linkTransaction.id, externalRef);
-                
-                addPendingPayment({
-                  transactionId: linkTransaction.id,
-                  reference: reference,
-                  externalReference: externalRef,
-                  attempts: 0,
-                  userId: paymentLink.userId,
-                  type: "payment_link",
-                  amount: netAmount,
-                  paymentIntentId: intent.id,
-                  payerName: fullName,
-                });
-              }
-              
-              res.json({ 
-                message: "Veuillez compléter le paiement.",
-                reference: intent.reference,
-                checkoutUrl: winipayResponse.results.checkout_process,
-                gateway: "winipay",
-                redirectUrl: paymentLink.redirectUrl || null,
-                amount: numAmount,
-                feeAmount: feeAmount,
-                totalAmount: parseFloat(totalAmount),
               });
-            } else {
-              await storage.updatePaymentIntentStatus(intent.id, "failed");
-              const failedTransaction = await storage.getTransactionByReference(reference);
-              if (failedTransaction) {
-                await storage.updateTransactionStatus(failedTransaction.id, "failed");
-              }
-              const errorMsg = Array.isArray(winipayResponse.errors) ? "Erreur WinniPay" : winipayResponse.errors.msg;
-              res.status(400).json({ message: errorMsg });
             }
-          } else {
-            // Use SoleAsPay for this operator
-            console.log(`[PaymentLink] Using SoleAsPay for ${operatorName} in ${paymentCountryCode}`);
-            const soleaspayResponse = await collectPayment({
-              wallet: phone.replace(/\s/g, ""),
+
+            res.json({ 
+              message: "Veuillez compléter le paiement sur la page sécurisée.",
+              reference: intent.reference,
+              checkoutUrl: swychrResponse.data.payment_link,
+              gateway: "swychr",
+              redirectUrl: paymentLink.redirectUrl || null,
               amount: numAmount,
-              currency: paymentLink.currency || "XAF",
-              orderId: reference,
-              description: `Paiement ${paymentLink.title} - ${reference}`,
-              payerName: fullName,
-              payerEmail: email,
-              operatorName,
-              countryCode: paymentCountryCode,
+              feeAmount: feeAmount,
+              totalAmount: parseFloat(totalAmount),
             });
-
-            if (soleaspayResponse.success) {
-              const externalRef = soleaspayResponse.data?.reference || "";
-              
-              const linkTransaction = await storage.getTransactionByReference(reference);
-              if (linkTransaction && externalRef) {
-                await storage.updateTransactionExternalReference(linkTransaction.id, externalRef);
-                
-                addPendingPayment({
-                  transactionId: linkTransaction.id,
-                  reference: reference,
-                  externalReference: externalRef,
-                  attempts: 0,
-                  userId: paymentLink.userId,
-                  type: "payment_link",
-                  amount: netAmount,
-                  paymentIntentId: intent.id,
-                  payerName: fullName,
-                });
-              }
-              
-              res.json({ 
-                message: "Veuillez valider le paiement sur votre téléphone.",
-                reference: intent.reference,
-                soleaspayReference: externalRef,
-                gateway: "soleapay",
-                redirectUrl: paymentLink.redirectUrl || null,
-                amount: numAmount,
-                feeAmount: feeAmount,
-                totalAmount: parseFloat(totalAmount),
-              });
-            } else {
-              await storage.updatePaymentIntentStatus(intent.id, "failed");
-              const failedTransaction = await storage.getTransactionByReference(reference);
-              if (failedTransaction) {
-                await storage.updateTransactionStatus(failedTransaction.id, "failed");
-              }
-              res.status(400).json({ 
-                message: soleaspayResponse.message || "Échec de l'initiation du paiement" 
-              });
+          } else {
+            await storage.updatePaymentIntentStatus(intent.id, "failed");
+            const failedTransaction = await storage.getTransactionByReference(reference);
+            if (failedTransaction) {
+              await storage.updateTransactionStatus(failedTransaction.id, "failed");
             }
+            res.status(400).json({ message: swychrResponse.message || "Échec de l'initiation du paiement" });
           }
         } catch (gatewayError) {
-          console.error("Payment gateway API error:", gatewayError);
+          console.error("Swychr API error:", gatewayError);
           await storage.updatePaymentIntentStatus(intent.id, "failed");
           const failedTransaction = await storage.getTransactionByReference(reference);
           if (failedTransaction) {
             await storage.updateTransactionStatus(failedTransaction.id, "failed");
           }
-          res.status(500).json({ 
-            message: "Erreur lors de l'initiation du paiement. Veuillez réessayer.",
-          });
+          res.status(500).json({ message: "Erreur lors de l'initiation du paiement. Veuillez réessayer." });
         }
       } else {
         res.json({ 
@@ -3691,205 +3563,97 @@ export async function registerRoutes(
     }
   });
 
-  // SoleAsPay Callback - Payment confirmation webhook
-  app.post("/api/soleaspay/callback", async (req, res) => {
+  // Swychr Webhook - Payment status callback
+  app.post("/api/swychr/webhook", async (req, res) => {
     try {
-      const xPrivateKey = req.headers["x-private-key"] as string;
-      
-      // Validate callback authenticity
-      if (!validateCallback(xPrivateKey)) {
-        console.error("[SoleAsPay Callback] Invalid x-private-key");
-        return res.status(401).json({ message: "Unauthorized" });
+      const payload = req.body;
+      console.log("[Swychr Webhook] Received:", JSON.stringify(payload));
+
+      // Extract transaction_id from nested payload
+      const inner = payload?.data?.data || payload?.data || {};
+      const transactionId = inner?.transaction_id || inner?.attributes?.transaction_id || payload?.transaction_id;
+      const rawStatus = inner?.status ?? inner?.attributes?.status ?? null;
+
+      if (!transactionId) {
+        console.error("[Swychr Webhook] Missing transaction_id");
+        return res.status(400).json({ message: "Missing transaction_id" });
       }
 
-      const payload: CallbackPayload = req.body;
-      console.log("[SoleAsPay Callback] Received:", JSON.stringify(payload));
-
-      if (!payload.data?.external_reference) {
-        return res.status(400).json({ message: "Missing order reference" });
-      }
-
-      // Find transaction by reference (external_reference is our orderId)
-      const transaction = await storage.getTransactionByReference(payload.data.external_reference);
-      
+      const transaction = await storage.getTransactionByReference(transactionId);
       if (!transaction) {
-        console.error("[SoleAsPay Callback] Transaction not found:", payload.data.external_reference);
+        console.error("[Swychr Webhook] Transaction not found:", transactionId);
         return res.status(404).json({ message: "Transaction not found" });
       }
 
-      // Handle payment status
-      if (payload.success && payload.status === "SUCCESS") {
-        // Update transaction status to completed
+      if (transaction.status !== "pending") {
+        console.log("[Swychr Webhook] Transaction already processed:", transactionId);
+        return res.json({ success: true });
+      }
+
+      let status: "completed" | "failed" | null = null;
+      if (rawStatus === 1 || rawStatus === "success" || rawStatus === "completed") {
+        status = "completed";
+      } else if (rawStatus === 2 || rawStatus === "failed" || rawStatus === "cancelled") {
+        status = "failed";
+      }
+
+      if (status === "completed") {
         await storage.updateTransactionStatus(transaction.id, "completed");
-        
-        // Credit user balance
         const user = await storage.getUser(transaction.userId);
         if (user) {
           const newBalance = parseFloat(user.balance) + parseFloat(transaction.amount);
           await storage.updateUserBalance(transaction.userId, newBalance);
-          
-          // Create notification based on transaction type
           const isPaymentLink = transaction.type === "payment_link";
           await storage.createUserNotification({
             userId: transaction.userId,
             type: isPaymentLink ? "payment_link_received" : "deposit_confirmed",
             title: isPaymentLink ? "Paiement reçu" : "Dépôt confirmé",
-            message: isPaymentLink 
-              ? `Vous avez reçu un paiement de ${transaction.amount} XAF de ${transaction.payerName || "un client"}.`
-              : `Votre dépôt de ${transaction.amount} XAF a été crédité sur votre compte.`,
+            message: isPaymentLink
+              ? `Vous avez reçu un paiement de ${transaction.amount} de ${transaction.payerName || "un client"}.`
+              : `Votre dépôt de ${transaction.amount} a été crédité sur votre compte.`,
             transactionId: transaction.id,
           });
-          
-          // Update payment intent status if it's a payment link transaction
           if (isPaymentLink && transaction.paymentIntentId) {
             await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "completed");
           }
         }
-        
-        console.log("[SoleAsPay Callback] Payment SUCCESS for:", transaction.id);
-      } else if (payload.status === "FAILURE" || payload.status === "REFUND") {
-        // Mark transaction as failed
+        console.log("[Swychr Webhook] Payment SUCCESS for:", transaction.id);
+      } else if (status === "failed") {
         await storage.updateTransactionStatus(transaction.id, "failed");
-        
-        // Update payment intent status if it's a payment link transaction
         if (transaction.type === "payment_link" && transaction.paymentIntentId) {
           await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "failed");
         }
-        
-        // Notify user
         const isPaymentLink = transaction.type === "payment_link";
         await storage.createUserNotification({
           userId: transaction.userId,
           type: isPaymentLink ? "payment_link_failed" : "deposit_failed",
           title: isPaymentLink ? "Paiement échoué" : "Dépôt échoué",
           message: isPaymentLink
-            ? `Un paiement de ${transaction.totalAmount || transaction.amount} XAF a échoué.`
-            : `Votre dépôt de ${transaction.totalAmount || transaction.amount} XAF a échoué.`,
+            ? `Un paiement de ${transaction.totalAmount || transaction.amount} a échoué.`
+            : `Votre dépôt de ${transaction.totalAmount || transaction.amount} a échoué.`,
           transactionId: transaction.id,
         });
-        
-        console.log("[SoleAsPay Callback] Payment FAILED for:", transaction.id);
+        console.log("[Swychr Webhook] Payment FAILED for:", transaction.id);
+      } else {
+        console.log("[Swychr Webhook] Unrecognized status:", rawStatus, "for:", transactionId);
       }
 
       res.json({ success: true });
     } catch (error) {
-      console.error("[SoleAsPay Callback] Error:", error);
+      console.error("[Swychr Webhook] Error:", error);
       res.status(500).json({ message: "Internal server error" });
     }
   });
 
-  // SoleAsPay verify payment status
-  app.get("/api/soleaspay/verify/:orderId/:payId", requireAuth, async (req, res) => {
+  // Swychr manual status check
+  app.get("/api/swychr/verify/:transactionId", requireAuth, async (req, res) => {
     try {
-      const { orderId, payId } = req.params;
-      const result = await verifyPayment(orderId, payId);
+      const { transactionId } = req.params;
+      const result = await checkSwychrPaymentStatus(transactionId);
       res.json(result);
     } catch (error) {
-      console.error("[SoleAsPay Verify] Error:", error);
+      console.error("[Swychr Verify] Error:", error);
       res.status(500).json({ message: "Erreur de vérification" });
-    }
-  });
-
-  // WinniPay callback for payment status updates
-  app.post("/api/winipay/callback", async (req, res) => {
-    try {
-      const payload = req.body;
-      console.log("[WinniPay Callback] Received:", JSON.stringify(payload));
-
-      // Validate callback payload
-      if (!validateWinipayCallback(payload)) {
-        console.error("[WinniPay Callback] Invalid payload");
-        return res.status(400).json({ message: "Invalid payload" });
-      }
-
-      // Extract order_id from custom_data
-      const customData = payload.custom_data || {};
-      const orderId = customData.order_id;
-      
-      if (!orderId) {
-        console.error("[WinniPay Callback] Missing order_id in custom_data");
-        return res.status(400).json({ message: "Missing order reference" });
-      }
-
-      // Find transaction by reference
-      const transaction = await storage.getTransactionByReference(orderId);
-      
-      if (!transaction) {
-        console.error("[WinniPay Callback] Transaction not found:", orderId);
-        return res.status(404).json({ message: "Transaction not found" });
-      }
-
-      // Handle payment status
-      if (payload.state === "success") {
-        // Update transaction status to completed
-        await storage.updateTransactionStatus(transaction.id, "completed");
-        
-        // Credit user balance
-        const user = await storage.getUser(transaction.userId);
-        if (user) {
-          const newBalance = parseFloat(user.balance) + parseFloat(transaction.amount);
-          await storage.updateUserBalance(transaction.userId, newBalance);
-          
-          // Create notification based on transaction type
-          const isPaymentLink = transaction.type === "payment_link";
-          await storage.createUserNotification({
-            userId: transaction.userId,
-            type: isPaymentLink ? "payment_link_received" : "deposit_confirmed",
-            title: isPaymentLink ? "Paiement reçu" : "Dépôt confirmé",
-            message: isPaymentLink 
-              ? `Vous avez reçu un paiement de ${transaction.amount} XAF de ${transaction.payerName || "un client"}.`
-              : `Votre dépôt de ${transaction.amount} XAF a été crédité sur votre compte.`,
-            transactionId: transaction.id,
-          });
-          
-          // Update payment intent status if it's a payment link transaction
-          if (isPaymentLink && transaction.paymentIntentId) {
-            await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "completed");
-          }
-          
-          console.log("[WinniPay Callback] Payment SUCCESS for:", transaction.id);
-        }
-      } else if (payload.state === "failed" || payload.state === "expired") {
-        // Mark transaction as failed
-        await storage.updateTransactionStatus(transaction.id, "failed");
-        
-        // Update payment intent status if it's a payment link transaction
-        if (transaction.type === "payment_link" && transaction.paymentIntentId) {
-          await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "failed");
-        }
-        
-        // Notify user
-        const isPaymentLink = transaction.type === "payment_link";
-        await storage.createUserNotification({
-          userId: transaction.userId,
-          type: isPaymentLink ? "payment_link_failed" : "deposit_failed",
-          title: isPaymentLink ? "Paiement échoué" : "Dépôt échoué",
-          message: isPaymentLink
-            ? `Un paiement de ${transaction.totalAmount || transaction.amount} XAF a échoué.`
-            : `Votre dépôt de ${transaction.totalAmount || transaction.amount} XAF a échoué.`,
-          transactionId: transaction.id,
-        });
-        
-        console.log("[WinniPay Callback] Payment FAILED for:", transaction.id);
-      }
-
-      res.json({ success: true });
-    } catch (error) {
-      console.error("[WinniPay Callback] Error:", error);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  // WinniPay payout callback
-  app.post("/api/winipay/payout/callback", async (req, res) => {
-    try {
-      const payload = req.body;
-      console.log("[WinniPay Payout Callback] Received:", JSON.stringify(payload));
-      // Process payout status updates here when implementing withdrawals via WinniPay
-      res.json({ success: true });
-    } catch (error) {
-      console.error("[WinniPay Payout Callback] Error:", error);
-      res.status(500).json({ message: "Internal server error" });
     }
   });
 

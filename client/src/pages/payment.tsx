@@ -20,10 +20,17 @@ import { Progress } from "@/components/ui/progress";
 
 const CURRENCY_FLAGS: Record<SupportedCurrency, string> = {
   "XAF": "🇨🇲",
-  "XOF": "🇸🇳", 
+  "XOF": "🇸🇳",
   "CDF": "🇨🇩",
+  "GHS": "🇬🇭",
+  "NGN": "🇳🇬",
+  "KES": "🇰🇪",
+  "RWF": "🇷🇼",
+  "GNF": "🇬🇳",
+  "TZS": "🇹🇿",
+  "UGX": "🇺🇬",
+  "INR": "🇮🇳",
   "USD": "🇺🇸",
-  "EUR": "🇪🇺",
 };
 
 interface CountryConfig {
@@ -36,7 +43,7 @@ interface CountryConfig {
   operators: {
     id: string;
     name: string;
-    gateway: "soleapay" | "winipay";
+    gateway: string;
     feePercentage: number;
     feeFixed: number;
   }[];
@@ -49,12 +56,13 @@ interface DepositConfigResponse {
 
 function formatAmount(amount: number, currency: SupportedCurrency): string {
   const symbol = CURRENCY_SYMBOLS[currency];
+  const useDecimals = ["USD", "GHS", "KES", "NGN", "INR"].includes(currency);
   const formatted = new Intl.NumberFormat("fr-FR", {
-    minimumFractionDigits: currency === "USD" || currency === "EUR" ? 2 : 0,
+    minimumFractionDigits: useDecimals ? 2 : 0,
     maximumFractionDigits: 2,
   }).format(amount);
   
-  if (currency === "USD" || currency === "EUR") {
+  if (["USD", "NGN", "GHS", "KES", "INR"].includes(currency)) {
     return `${symbol}${formatted}`;
   }
   return `${formatted} ${symbol}`;
@@ -184,8 +192,8 @@ export default function PaymentPage() {
       return data;
     },
     onSuccess: async (data) => {
-      // If WinniPay returns a checkout URL, redirect to it
-      if (data.checkoutUrl && data.gateway === "winipay") {
+      // If Swychr returns a checkout URL, redirect to hosted payment page
+      if (data.checkoutUrl) {
         window.location.href = data.checkoutUrl;
         return;
       }
@@ -321,13 +329,6 @@ export default function PaymentPage() {
     if (currentStep === 1) {
       const isValid = validateStep1();
       if (!isValid) return;
-    }
-    if (currentStep === 2 && paymentMethod === "mobile_money") {
-      // If WinniPay, skip step 3 and call API directly (no phone number needed upfront)
-      if (selectedOperatorData?.gateway === "winipay") {
-        payMutation.mutate();
-        return;
-      }
     }
     if (currentStep < 3) {
       setCurrentStep(currentStep + 1);

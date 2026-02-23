@@ -42,10 +42,7 @@ build = ["npm", "run", "build"]
 [userenv]
 
 [userenv.shared]
-WINIPAY_ENV = "prod"
 SUPABASE_DATABASE_URL = "postgresql://postgres.vngfjjfgaxkcwtrzawdq:bHOFcwceoFfvhzMo@aws-1-eu-west-3.pooler.supabase.com:6543/postgres"
 SUPABASE_URL = "https://vngfjjfgaxkcwtrzawdq.supabase.co/"
 SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZuZ2ZqamZnYXhrY3d0cnphd2RxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4NDQzNTIsImV4cCI6MjA4NzQyMDM1Mn0.gh76rmi7uEzjLbqGjiRIckoaKxmOAyiLyy9QZOxuucc"
-WINIPAY_MERCHANT_TOKEN = "205a3132-c1a4-4b5f-9f59-ccc54b57089b"
-WINIPAY_PRIVATE_KEY = "cALvInzCEOrPyqXA1YNSdiq02itPCh7sawLv"
-WINIPAY_MERCHANT_APPLY = "qnlOVr8xymUglVJmiNmu"
+APP_URL = "https://f96a6379-f341-4944-8f17-8e8a1d157003-00-rvqhzlc1jkpk.worf.replit.dev"

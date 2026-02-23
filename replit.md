@@ -2,7 +2,9 @@
 
 ## Overview
 
-Ashtech Pay is a fintech money transfer platform targeting French-speaking African markets (primarily Cameroon). The application enables users to transfer money, receive funds, create payment links, and manage their digital wallet. The platform supports Mobile Money and cryptocurrency deposits/withdrawals with XAF (Central African CFA franc) as the primary currency.
+Ashtech Pay is a fintech payment collection platform targeting African mobile money markets. The application enables merchants to collect payments, create payment links, and manage their digital wallet. The platform uses Swychr as its exclusive payment gateway, supporting 22 countries across Africa and Asia.
+
+Key payment gateway: **Swychr** — creates hosted payment links (redirect-based flow), supports per-country fee structure (Swychr base fee + Ashtech margin = total client fee).
 
 Key features include:
 - User registration and authentication
@@ -76,20 +78,21 @@ Three main tables:
 ### Payment Gateways
 The platform uses two payment gateways that can be configured per operator:
 
-- **SoleAsPay**: Mobile Money for Bénin, Cameroun, Côte d'Ivoire, Togo
-  - API keys: `SOLEASPAY_API_KEY`, `SOLEASPAY_SECRET_KEY`
-  - Service: `server/soleaspay.ts`
-  - Callback: `POST /api/soleaspay/callback`
-  - Supports: MTN, Orange, Moov, Airtel, Wave, M-Pesa, etc.
+- **Swychr** (exclusive gateway — all countries):
+  - Credentials: `SWYCHR_EMAIL`, `SWYCHR_PASSWORD`
+  - API URL: `SWYCHR_API_URL` (default: `https://app.swychrconnect.com`)
+  - App URL: `APP_URL` (used for webhook callback)
+  - Service: `server/swychr.ts`
+  - Webhook: `POST /api/swychr/webhook`
+  - Manual verify: `GET /api/swychr/verify/:transactionId`
+  - Flow: Creates hosted payment link → user redirects → Swychr posts webhook callback
 
-- **WinniPay**: Mobile Money for all other African countries
-  - API keys: `WINIPAY_MERCHANT_APPLY`, `WINIPAY_MERCHANT_TOKEN`
-  - Environment: `WINIPAY_ENV` (test/prod)
-  - Service: `server/winipay.ts`
-  - Callback: `POST /api/winipay/callback`
-  - Supports: Wave, Orange, MTN, Airtel, Vodacom, etc.
+Fee structure per country (db table: fees):
+  - `swychrFee`: Swychr base fee (read-only for admin)
+  - `ashtechMargin`: Ashtech margin (admin editable, default 2%)
+  - `feeValue`: Total = swychrFee + ashtechMargin (auto-calculated)
 
-Gateway selection is configurable per operator in the Admin panel (Pays & Opérateurs).
+Countries supported: CM, GA, CG, CD, SN, CI, BF, ML, BJ, TG, TZ, UG, NG, NE, RW, GN, GH, KE + others
 
 ### Database
 - **PostgreSQL**: Primary database via `DATABASE_URL` environment variable

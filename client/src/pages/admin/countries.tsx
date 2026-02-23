@@ -67,7 +67,7 @@ export default function AdminCountries() {
     dailyLimit: "1000000",
     isActive: true,
     isInMaintenance: false,
-    gateway: "soleapay" as "soleapay" | "winipay",
+    gateway: "swychr",
   });
 
   const { data: countries, isLoading: loadingCountries } = useQuery<Country[]>({
@@ -338,8 +338,8 @@ export default function AdminCountries() {
                           <div key={op.id} className="flex items-center justify-between bg-muted/50 p-2 rounded text-sm">
                             <div className="flex items-center gap-2">
                               <span>{op.name}</span>
-                              <Badge variant={(op as any).gateway === "winipay" ? "default" : "secondary"} className="text-[10px] px-1 h-4">
-                                {(op as any).gateway === "winipay" ? "WinniPay" : "SoleaPay"}
+                              <Badge variant="default" className="text-[10px] px-1 h-4 bg-purple-600">
+                                Swychr
                               </Badge>
                               {op.isInMaintenance && <Badge variant="destructive" className="text-[10px] px-1 h-4">Maintenance</Badge>}
                               {!op.isActive && <Badge variant="outline" className="text-[10px] px-1 h-4">Off</Badge>}
@@ -609,21 +609,10 @@ export default function AdminCountries() {
               </div>
               <div className="space-y-2">
                 <Label>Passerelle de paiement</Label>
-                <Select
-                  value={operatorForm.gateway}
-                  onValueChange={(v: "soleapay" | "winipay") => setOperatorForm({ ...operatorForm, gateway: v })}
-                >
-                  <SelectTrigger data-testid="select-operator-gateway">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="soleapay">SoleaPay</SelectItem>
-                    <SelectItem value="winipay">WinniPay</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  SoleaPay: Bénin, Cameroun, Côte d'Ivoire, Togo | WinniPay: Autres pays
-                </p>
+                <div className="flex items-center gap-2 px-3 py-2 border rounded-md bg-muted/50">
+                  <Badge className="bg-purple-600">Swychr</Badge>
+                  <span className="text-sm text-muted-foreground">Intégration Swychr (tous les pays)</span>
+                </div>
               </div>
               <div className="flex items-center gap-6">
                 <div className="flex items-center gap-2">

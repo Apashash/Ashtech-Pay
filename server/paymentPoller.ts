@@ -1,8 +1,8 @@
 import { storage } from "./storage";
-import { verifyPayment } from "./soleaspay";
+import { checkSwychrPaymentStatus } from "./swychr";
 
-const POLL_INTERVAL = 5000;
-const MAX_POLL_ATTEMPTS = 96;
+const POLL_INTERVAL = 10000;
+const MAX_POLL_ATTEMPTS = 144; // 144 * 10s = 24 minutes
 
 interface PendingPayment {
   transactionId: string;
@@ -30,20 +30,10 @@ export function removePendingPayment(reference: string) {
 
 async function checkPaymentStatus(payment: PendingPayment): Promise<"pending" | "completed" | "failed"> {
   try {
-    const result = await verifyPayment(payment.reference, payment.externalReference);
-    
-    console.log(`[PaymentPoller] Verification result for ${payment.reference}:`, {
-      success: result.success,
-      status: result.status,
-      message: result.message
-    });
-
-    if (result.success && result.status === "SUCCESS") {
-      return "completed";
-    } else if (result.status === "FAILURE" || result.status === "REFUND") {
-      return "failed";
-    }
-    
+    const result = await checkSwychrPaymentStatus(payment.externalReference || payment.reference);
+    console.log(`[PaymentPoller] Swychr status for ${payment.reference}:`, result.status, result.rawStatus);
+    if (result.success && result.status === "completed") return "completed";
+    if (result.success && result.status === "failed") return "failed";
     return "pending";
   } catch (error) {
     console.error(`[PaymentPoller] Error checking payment ${payment.reference}:`, error);
@@ -79,14 +69,12 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
           type: isPaymentLink ? "payment_link_received" : "deposit_confirmed",
           title: isPaymentLink ? "Paiement reçu" : "Dépôt confirmé",
           message: isPaymentLink
-            ? `Vous avez reçu un paiement de ${payment.amount} XAF de ${payment.payerName || "un client"}.`
-            : `Votre dépôt de ${payment.amount} XAF a été crédité sur votre compte.`,
+            ? `Vous avez reçu un paiement de ${payment.amount} via lien de paiement.`
+            : `Votre dépôt a été crédité sur votre compte.`,
           transactionId: transaction.id,
         });
-
-        console.log(`[PaymentPoller] Payment completed and balance updated for ${payment.reference}`);
+        console.log(`[PaymentPoller] Payment completed for ${payment.reference}`);
       }
-
       if (payment.paymentIntentId) {
         await storage.updatePaymentIntentStatus(payment.paymentIntentId, "completed");
       }
@@ -96,16 +84,12 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
         userId: payment.userId,
         type: isPaymentLink ? "payment_link_failed" : "deposit_failed",
         title: isPaymentLink ? "Paiement échoué" : "Dépôt échoué",
-        message: isPaymentLink
-          ? `Un paiement a échoué.`
-          : `Votre dépôt a échoué.`,
+        message: isPaymentLink ? "Un paiement a échoué." : "Votre dépôt a échoué.",
         transactionId: transaction.id,
       });
-
       if (payment.paymentIntentId) {
         await storage.updatePaymentIntentStatus(payment.paymentIntentId, "failed");
       }
-
       console.log(`[PaymentPoller] Payment failed for ${payment.reference}`);
     }
 
@@ -119,19 +103,16 @@ async function pollPendingPayments() {
   const entries = Array.from(pendingPayments.entries());
   for (const [reference, payment] of entries) {
     payment.attempts++;
-
     if (payment.attempts > MAX_POLL_ATTEMPTS) {
-      console.log(`[PaymentPoller] Max attempts reached for ${reference}, marking as failed (timeout)`);
+      console.log(`[PaymentPoller] Timeout for ${reference}, marking as failed`);
       await processPaymentResult(payment, "failed");
       continue;
     }
-
     const status = await checkPaymentStatus(payment);
-
     if (status === "completed" || status === "failed") {
       await processPaymentResult(payment, status);
     } else {
-      console.log(`[PaymentPoller] Payment ${reference} still pending (attempt ${payment.attempts}/${MAX_POLL_ATTEMPTS})`);
+      console.log(`[PaymentPoller] ${reference} still pending (${payment.attempts}/${MAX_POLL_ATTEMPTS})`);
     }
   }
 }
@@ -139,12 +120,8 @@ async function pollPendingPayments() {
 let pollerInterval: NodeJS.Timeout | null = null;
 
 export function startPaymentPoller() {
-  if (pollerInterval) {
-    console.log("[PaymentPoller] Already running");
-    return;
-  }
-
-  console.log("[PaymentPoller] Starting payment poller (every 5 seconds)");
+  if (pollerInterval) { console.log("[PaymentPoller] Already running"); return; }
+  console.log("[PaymentPoller] Starting payment poller (every 10 seconds)");
   pollerInterval = setInterval(pollPendingPayments, POLL_INTERVAL);
 }
 

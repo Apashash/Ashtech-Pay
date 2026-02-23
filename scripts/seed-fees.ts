@@ -5,144 +5,101 @@ const pool = new Pool({
   connectionString: process.env.SUPABASE_DATABASE_URL,
 });
 
+// Swychr fee structure per country (from official tariff table)
+const SWYCHR_FEES: Record<string, { swychr: number; ashtech: number }> = {
+  'CM': { swychr: 2.50, ashtech: 2.00 }, // Cameroun
+  'GA': { swychr: 3.00, ashtech: 2.00 }, // Gabon
+  'CG': { swychr: 4.50, ashtech: 2.00 }, // Congo Brazzaville
+  'CD': { swychr: 3.50, ashtech: 2.00 }, // Congo DRC
+  'SN': { swychr: 2.50, ashtech: 2.00 }, // Sénégal
+  'CI': { swychr: 3.00, ashtech: 2.00 }, // Côte d'Ivoire
+  'BF': { swychr: 3.00, ashtech: 2.00 }, // Burkina Faso
+  'ML': { swychr: 3.00, ashtech: 2.00 }, // Mali
+  'BJ': { swychr: 3.00, ashtech: 2.00 }, // Bénin
+  'TG': { swychr: 3.00, ashtech: 2.00 }, // Togo
+  'TZ': { swychr: 3.00, ashtech: 2.00 }, // Tanzanie
+  'UG': { swychr: 3.00, ashtech: 2.00 }, // Ouganda
+  'NG': { swychr: 2.00, ashtech: 2.00 }, // Nigéria
+  'NE': { swychr: 3.50, ashtech: 2.00 }, // Niger
+  'RW': { swychr: 3.75, ashtech: 2.00 }, // Rwanda
+  'GN': { swychr: 3.75, ashtech: 2.00 }, // Guinée Conakry
+  'GH': { swychr: 2.50, ashtech: 2.00 }, // Ghana
+  'KE': { swychr: 1.50, ashtech: 2.00 }, // Kenya
+};
+
 async function seedFees() {
   const client = await pool.connect();
   
   try {
-    // Get countries and operators
     const countriesResult = await client.query(`SELECT id, code, name FROM countries`);
-    const operatorsResult = await client.query(`SELECT id, name, country_id FROM operators`);
     
     const countryIdByCode: Record<string, string> = {};
-    const countryCodeById: Record<string, string> = {};
+    const countryNameByCode: Record<string, string> = {};
     for (const row of countriesResult.rows) {
       countryIdByCode[row.code] = row.id;
-      countryCodeById[row.id] = row.code;
+      countryNameByCode[row.code] = row.name;
     }
     
-    // Define fees per country/operator
-    const feesByCountryOperator: Record<string, Record<string, { deposit: number; withdrawal: number }>> = {
-      'CI': {
-        'Wave': { deposit: 2.5, withdrawal: 2.0 },
-        'MTN Mobile Money': { deposit: 2.9, withdrawal: 2.5 },
-        'Orange Money': { deposit: 3.5, withdrawal: 3.0 },
-        'Moov Money': { deposit: 3.0, withdrawal: 2.5 },
-      },
-      'SN': {
-        'Orange Money': { deposit: 2.5, withdrawal: 2.0 },
-        'Wave': { deposit: 2.5, withdrawal: 2.0 },
-        'Free Money': { deposit: 2.5, withdrawal: 2.0 },
-      },
-      'BJ': {
-        'MTN Mobile Money': { deposit: 2.7, withdrawal: 2.2 },
-        'Moov Money': { deposit: 2.7, withdrawal: 2.2 },
-      },
-      'TG': {
-        'Flooz (Moov)': { deposit: 3.5, withdrawal: 3.0 },
-        'T-Money': { deposit: 3.5, withdrawal: 3.0 },
-      },
-      'ML': {
-        'Orange Money': { deposit: 4.0, withdrawal: 3.5 },
-        'Moov Money': { deposit: 4.0, withdrawal: 3.5 },
-      },
-      'BF': {
-        'Orange Money': { deposit: 4.5, withdrawal: 4.0 },
-        'Moov Money': { deposit: 4.5, withdrawal: 4.0 },
-      },
-      'NE': {
-        'Airtel Money': { deposit: 5.0, withdrawal: 4.5 },
-        'Orange Money': { deposit: 5.0, withdrawal: 4.5 },
-      },
-      // CEMAC countries
-      'CM': {
-        'MTN Mobile Money': { deposit: 2.5, withdrawal: 2.0 },
-        'Orange Money': { deposit: 2.5, withdrawal: 2.0 },
-      },
-      'TD': {
-        'Airtel Money': { deposit: 3.5, withdrawal: 3.0 },
-        'Moov Money': { deposit: 3.5, withdrawal: 3.0 },
-      },
-      'CF': {
-        'Orange Money': { deposit: 4.0, withdrawal: 3.5 },
-      },
-      'CG': {
-        'MTN Mobile Money': { deposit: 3.0, withdrawal: 2.5 },
-        'Airtel Money': { deposit: 3.0, withdrawal: 2.5 },
-      },
-      'GA': {
-        'Airtel Money': { deposit: 3.5, withdrawal: 3.0 },
-        'Moov Money': { deposit: 3.5, withdrawal: 3.0 },
-      },
-      'GQ': {
-        'Orange Money': { deposit: 4.0, withdrawal: 3.5 },
-      },
-      'GW': {
-        'Orange Money': { deposit: 3.5, withdrawal: 3.0 },
-      },
-      'CD': {
-        'Vodacom M-Pesa': { deposit: 3.0, withdrawal: 2.5 },
-        'Airtel Money': { deposit: 3.0, withdrawal: 2.5 },
-        'Orange Money': { deposit: 3.0, withdrawal: 2.5 },
-      },
-      'NG': {
-        'OPay': { deposit: 2.5, withdrawal: 2.0 },
-        'PalmPay': { deposit: 2.5, withdrawal: 2.0 },
-        'Paga': { deposit: 2.5, withdrawal: 2.0 },
-      },
-      'GH': {
-        'MTN Mobile Money': { deposit: 2.5, withdrawal: 2.0 },
-        'Vodafone Cash': { deposit: 2.5, withdrawal: 2.0 },
-        'AirtelTigo Money': { deposit: 2.5, withdrawal: 2.0 },
-      },
-      'KE': {
-        'M-Pesa': { deposit: 2.0, withdrawal: 1.5 },
-        'Airtel Money': { deposit: 2.0, withdrawal: 1.5 },
-      },
-    };
+    console.log('Seeding Swychr-based deposit fees per country...');
     
-    console.log('Inserting fees...');
-    let feesInserted = 0;
-    
-    for (const operator of operatorsResult.rows) {
-      const countryCode = countryCodeById[operator.country_id];
-      const countryFees = feesByCountryOperator[countryCode];
-      const operatorFees = countryFees?.[operator.name] || { deposit: 3.0, withdrawal: 2.5 }; // Default fees
+    for (const [code, tariff] of Object.entries(SWYCHR_FEES)) {
+      const countryId = countryIdByCode[code];
+      if (!countryId) {
+        console.warn(`Country not found for code: ${code}, skipping`);
+        continue;
+      }
       
-      // Insert deposit fee
+      const total = tariff.swychr + tariff.ashtech;
+      const countryName = countryNameByCode[code];
+      
+      // Upsert deposit fee for this country (country-level, applies to all operators)
       await client.query(`
-        INSERT INTO fees (id, name, transaction_type, fee_type, fee_value, min_fee, max_fee, country_id, operator_id, is_active)
-        VALUES (gen_random_uuid(), $1, 'deposit', 'percentage', $2, 100, 50000, $3, $4, true)
+        INSERT INTO fees (id, name, transaction_type, fee_type, fee_value, swychr_fee, ashtech_margin, country_id, operator_id, is_active)
+        VALUES (
+          gen_random_uuid(),
+          $1, 'deposit', 'percentage', $2, $3, $4, $5, NULL, true
+        )
         ON CONFLICT DO NOTHING
-      `, [`Frais dépôt ${operator.name}`, operatorFees.deposit, operator.country_id, operator.id]);
+      `, [
+        `Dépôt ${countryName}`,
+        total.toFixed(4),
+        tariff.swychr.toFixed(4),
+        tariff.ashtech.toFixed(4),
+        countryId,
+      ]);
       
-      // Insert withdrawal fee
-      await client.query(`
-        INSERT INTO fees (id, name, transaction_type, fee_type, fee_value, min_fee, max_fee, country_id, operator_id, is_active)
-        VALUES (gen_random_uuid(), $1, 'withdrawal', 'percentage', $2, 100, 50000, $3, $4, true)
-        ON CONFLICT DO NOTHING
-      `, [`Frais retrait ${operator.name}`, operatorFees.withdrawal, operator.country_id, operator.id]);
-      
-      feesInserted += 2;
-      console.log(`Added fees for ${operator.name} (${countryCode}): deposit ${operatorFees.deposit}%, withdrawal ${operatorFees.withdrawal}%`);
+      console.log(`  ${code} (${countryName}): Swychr ${tariff.swychr}% + Ashtech ${tariff.ashtech}% = ${total}%`);
     }
     
-    // Add transfer fees (global)
-    await client.query(`
-      INSERT INTO fees (id, name, transaction_type, fee_type, fee_value, min_fee, max_fee, is_active)
-      VALUES (gen_random_uuid(), 'Frais de transfert', 'transfer', 'percentage', 1.5, 50, 25000, true)
-      ON CONFLICT DO NOTHING
-    `);
+    // Add a global withdrawal fee (1% flat, not gateway-specific)
+    console.log('Seeding withdrawal fees...');
+    const withdrawalExists = await client.query(`SELECT id FROM fees WHERE transaction_type = 'withdrawal' AND country_id IS NULL AND operator_id IS NULL`);
+    if (withdrawalExists.rows.length === 0) {
+      await client.query(`
+        INSERT INTO fees (id, name, transaction_type, fee_type, fee_value, swychr_fee, ashtech_margin, country_id, operator_id, is_active)
+        VALUES (gen_random_uuid(), 'Retrait Standard', 'withdrawal', 'percentage', '1.0000', '0', '1.0000', NULL, NULL, true)
+      `);
+      console.log('  Global withdrawal fee: 1%');
+    }
     
-    console.log(`\n${feesInserted} fees inserted for operators.`);
-    console.log('Done!');
+    // Transfer fee
+    const transferExists = await client.query(`SELECT id FROM fees WHERE transaction_type = 'transfer' AND country_id IS NULL AND operator_id IS NULL`);
+    if (transferExists.rows.length === 0) {
+      await client.query(`
+        INSERT INTO fees (id, name, transaction_type, fee_type, fee_value, swychr_fee, ashtech_margin, country_id, operator_id, is_active)
+        VALUES (gen_random_uuid(), 'Transfert Standard', 'transfer', 'percentage', '0.5000', '0', '0.5000', NULL, NULL, true)
+      `);
+      console.log('  Global transfer fee: 0.5%');
+    }
     
-  } catch (error) {
-    console.error('Error:', error);
-    throw error;
+    const countResult = await client.query(`SELECT COUNT(*) FROM fees`);
+    console.log(`\nTotal fees in DB: ${countResult.rows[0].count}`);
+    console.log('Fee seeding completed!');
+    
   } finally {
     client.release();
     await pool.end();
   }
 }
 
-seedFees();
+seedFees().catch(console.error);

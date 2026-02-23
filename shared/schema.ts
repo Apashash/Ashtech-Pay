@@ -24,22 +24,17 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const SUPPORTED_CURRENCIES = ["XAF", "XOF", "CDF", "USD", "EUR"] as const;
+export const SUPPORTED_CURRENCIES = ["XAF", "XOF", "CDF", "GHS", "NGN", "KES", "RWF", "GNF", "TZS", "UGX", "INR", "USD"] as const;
 export type SupportedCurrency = typeof SUPPORTED_CURRENCIES[number];
 
 export const COUNTRY_CURRENCIES: Record<string, SupportedCurrency> = {
   "Cameroun": "XAF",
   "Cameroon": "XAF",
-  "Tchad": "XAF",
-  "Chad": "XAF",
-  "Centrafrique": "XAF",
-  "Central African Republic": "XAF",
-  "Congo": "XAF",
+  "Congo Brazzaville": "XAF",
   "Republic of the Congo": "XAF",
   "Gabon": "XAF",
-  "Guinée équatoriale": "XAF",
-  "Equatorial Guinea": "XAF",
   "RD Congo": "CDF",
+  "Congo DRC": "CDF",
   "Sénégal": "XOF",
   "Senegal": "XOF",
   "Côte d'Ivoire": "XOF",
@@ -49,40 +44,51 @@ export const COUNTRY_CURRENCIES: Record<string, SupportedCurrency> = {
   "Togo": "XOF",
   "Bénin": "XOF",
   "Benin": "XOF",
-  "Guinée-Bissau": "XOF",
-  "Guinea-Bissau": "XOF",
-  "Guinée": "XOF",
-  "Nigeria": "USD",
-  "Ghana": "USD",
-  "Kenya": "USD",
-  "South Africa": "USD",
-  "Tanzania": "USD",
-  "Uganda": "USD",
-  "Rwanda": "USD",
-  "Ethiopia": "USD",
-  "Maroc": "EUR",
-  "Morocco": "EUR",
-  "Tunisie": "EUR",
-  "Tunisia": "EUR",
-  "Algérie": "EUR",
-  "Algeria": "EUR",
-  "Madagascar": "EUR",
+  "Nigeria": "NGN",
+  "Nigéria": "NGN",
+  "Ghana": "GHS",
+  "Kenya": "KES",
+  "Rwanda": "RWF",
+  "Tanzania": "TZS",
+  "Tanzanie": "TZS",
+  "Uganda": "UGX",
+  "Ouganda": "UGX",
+  "Guinée Conakry": "GNF",
+  "Guinea": "GNF",
+  "India": "INR",
+  "Inde": "INR",
+  "United States": "USD",
+  "USA": "USD",
 };
 
 export const EXCHANGE_RATES: Record<SupportedCurrency, number> = {
   "XAF": 1,
   "XOF": 1,
   "CDF": 0.27,
-  "USD": 0.0016,
-  "EUR": 0.0015,
+  "GHS": 0.057,
+  "NGN": 0.44,
+  "KES": 0.052,
+  "RWF": 0.00066,
+  "GNF": 0.0076,
+  "TZS": 0.026,
+  "UGX": 0.0019,
+  "INR": 0.0083,
+  "USD": 0.00165,
 };
 
 export const CURRENCY_SYMBOLS: Record<SupportedCurrency, string> = {
-  "XAF": "XAF",
-  "XOF": "XOF",
-  "CDF": "CDF",
+  "XAF": "FCFA",
+  "XOF": "FCFA",
+  "CDF": "FC",
+  "GHS": "₵",
+  "NGN": "₦",
+  "KES": "KSh",
+  "RWF": "RWF",
+  "GNF": "GNF",
+  "TZS": "TZS",
+  "UGX": "UGX",
+  "INR": "₹",
   "USD": "$",
-  "EUR": "€",
 };
 
 export const transactions = pgTable("transactions", {
@@ -197,6 +203,8 @@ export const fees = pgTable("fees", {
   transactionType: text("transaction_type").notNull(), // 'deposit', 'withdrawal', 'transfer'
   feeType: text("fee_type").notNull(), // 'percentage', 'fixed'
   feeValue: decimal("fee_value", { precision: 10, scale: 4 }).notNull(),
+  swychrFee: decimal("swychr_fee", { precision: 10, scale: 4 }).default("0"),
+  ashtechMargin: decimal("ashtech_margin", { precision: 10, scale: 4 }).default("0"),
   minFee: decimal("min_fee", { precision: 15, scale: 2 }),
   maxFee: decimal("max_fee", { precision: 15, scale: 2 }),
   countryId: varchar("country_id").references(() => countries.id), // null = global
