@@ -48,7 +48,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, getAuthHeaders } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { KYC_DOCUMENT_TYPES, BUSINESS_CATEGORIES } from "@shared/schema";
 
@@ -101,8 +101,12 @@ export default function AdminKYC() {
   const { data: submissions, isLoading } = useQuery<KycSubmission[]>({
     queryKey: ["/api/admin/kyc", statusFilter],
     queryFn: async () => {
-      const response = await fetch(`/api/admin/kyc${statusFilter ? `?status=${statusFilter}` : ""}`);
-      return response.json();
+      const response = await fetch(`/api/admin/kyc${statusFilter ? `?status=${statusFilter}` : ""}`, {
+        credentials: "include",
+        headers: getAuthHeaders(),
+      });
+      const data = await response.json();
+      return Array.isArray(data) ? data : [];
     },
   });
 
