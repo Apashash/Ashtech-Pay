@@ -23,7 +23,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { uploadToSupabase } from "./supabase";
-import { createSwychrPaymentLink, checkSwychrPaymentStatus } from "./swychr";
+import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees } from "./swychr";
 import { addPendingPayment } from "./paymentPoller";
 
 const uploadsDir = path.join(process.cwd(), "uploads");
@@ -982,24 +982,12 @@ export async function registerRoutes(
         }
       }
 
-      // Calculate fee using fee resolution
-      const fee = await storage.resolveFee("deposit", data.countryId, data.operatorId);
-      let feeAmount = 0;
-      if (fee) {
-        if (fee.feeType === "percentage") {
-          feeAmount = (amount * parseFloat(fee.feeValue)) / 100;
-        } else {
-          feeAmount = parseFloat(fee.feeValue);
-        }
-        if (fee.minFee && feeAmount < parseFloat(fee.minFee)) {
-          feeAmount = parseFloat(fee.minFee);
-        }
-        if (fee.maxFee && feeAmount > parseFloat(fee.maxFee)) {
-          feeAmount = parseFloat(fee.maxFee);
-        }
-      }
+      // Calculate fee using Swychr fee structure
+      // pass_digital_charge=true: customer pays Swychr's fee on top; we deduct Ashtech margin only
+      const swychrFees = computeSwychrFees(amount, countryCode);
       const totalAmount = amount;
-      const creditedAmount = amount - feeAmount;
+      const feeAmount = swychrFees.totalFeeAmount;
+      const creditedAmount = swychrFees.creditedAmount;
 
       const depositRef = generateTransactionReference("deposit");
       
@@ -1028,11 +1016,10 @@ export async function registerRoutes(
             name: user.fullName || user.username,
             email: user.email || `${user.phone}@ashtech.pay`,
             mobile: data.phoneNumber.replace(/\s/g, ""),
-            amount: totalAmount,
+            grossAmount: totalAmount,
             currency: countryCurrency,
             transaction_id: depositRef,
             description: `Dépôt Ashtech Pay - ${depositRef}`,
-            pass_digital_charge: false,
             callback_url: callbackUrl,
           });
 
@@ -1909,11 +1896,10 @@ export async function registerRoutes(
             name: fullName,
             email: email || `${phone}@ashtech.pay`,
             mobile: phone.replace(/\s/g, ""),
-            amount: numAmount,
+            grossAmount: numAmount,
             currency: paymentCurrency,
             transaction_id: reference,
             description: `Paiement ${paymentLink.title} - ${reference}`,
-            pass_digital_charge: false,
             callback_url: callbackUrl,
           });
 

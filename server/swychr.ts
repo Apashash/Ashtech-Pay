@@ -6,6 +6,73 @@ const SWYCHR_EMAIL = process.env.SWYCHR_EMAIL || "";
 const SWYCHR_PASSWORD = process.env.SWYCHR_PASSWORD || "";
 const TOKEN_FILE = path.join(process.cwd(), ".local", "swychr_token.json");
 
+// Swychr fee rates per country (from official tariff documentation)
+// These are the fees charged by Swychr – passed to customer via pass_digital_charge=true
+export const SWYCHR_FEE_RATES: Record<string, number> = {
+  CM: 2.5,   // Cameroun
+  KE: 1.5,   // Kenya
+  GA: 3.0,   // Gabon
+  CD: 3.5,   // Congo DRC
+  SN: 2.5,   // Sénégal
+  CI: 3.0,   // Côte d'Ivoire
+  BF: 3.0,   // Burkina Faso
+  ML: 3.0,   // Mali
+  BJ: 3.0,   // Bénin
+  TG: 3.0,   // Togo
+  TZ: 3.0,   // Tanzanie
+  UG: 3.0,   // Ouganda
+  NG: 2.0,   // Nigéria
+  NE: 3.5,   // Niger
+  RW: 3.75,  // Rwanda
+  CG: 4.5,   // Congo Brazzaville
+  GN: 3.75,  // Guinée Conakry
+  GH: 2.5,   // Ghana
+  TD: 3.0,   // Tchad
+  GQ: 3.0,   // Guinée équatoriale
+  GW: 3.0,   // Guinée-Bissau
+  CF: 3.0,   // Centrafrique
+};
+
+// Ashtech margin applied on top of Swychr fee (always 2%)
+export const ASHTECH_MARGIN = 2.0;
+
+export function getSwychrFeeRate(countryCode: string): number {
+  return SWYCHR_FEE_RATES[countryCode.toUpperCase()] ?? 3.0;
+}
+
+/**
+ * Given a gross amount (what the client types in the UI), compute:
+ * - amountToSwychr: the net amount to send to Swychr API
+ *   → Swychr will add its fee on top → client pays exactly grossAmount
+ * - ashtechFeeAmount: our 2% margin deducted from what we receive
+ * - creditedAmount: what gets credited to the user's wallet
+ * - swychrFeeAmount: Swychr's portion (paid by customer to Swychr)
+ * - totalFeeAmount: total deducted from customer's payment
+ */
+export function computeSwychrFees(grossAmount: number, countryCode: string): {
+  amountToSwychr: number;
+  swychrFeeRate: number;
+  swychrFeeAmount: number;
+  ashtechFeeAmount: number;
+  creditedAmount: number;
+  totalFeeAmount: number;
+} {
+  const swychrFeeRate = getSwychrFeeRate(countryCode);
+  const amountToSwychr = grossAmount / (1 + swychrFeeRate / 100);
+  const swychrFeeAmount = grossAmount - amountToSwychr;
+  const ashtechFeeAmount = amountToSwychr * (ASHTECH_MARGIN / 100);
+  const creditedAmount = amountToSwychr - ashtechFeeAmount;
+  const totalFeeAmount = swychrFeeAmount + ashtechFeeAmount;
+  return {
+    amountToSwychr: Math.round(amountToSwychr * 100) / 100,
+    swychrFeeRate,
+    swychrFeeAmount: Math.round(swychrFeeAmount * 100) / 100,
+    ashtechFeeAmount: Math.round(ashtechFeeAmount * 100) / 100,
+    creditedAmount: Math.round(creditedAmount * 100) / 100,
+    totalFeeAmount: Math.round(totalFeeAmount * 100) / 100,
+  };
+}
+
 let cachedToken: string | null = null;
 let tokenExpiry: Date | null = null;
 
@@ -97,11 +164,10 @@ export interface SwychrCreateLinkParams {
   name: string;
   email: string;
   mobile?: string;
-  amount: number;
+  grossAmount: number;
   currency: string;
   transaction_id: string;
   description?: string;
-  pass_digital_charge: boolean;
   callback_url?: string;
 }
 
@@ -112,12 +178,22 @@ export interface SwychrCreateLinkResponse {
     payment_link: string;
     transaction_id: string;
   };
+  fees?: {
+    amountToSwychr: number;
+    swychrFeeRate: number;
+    swychrFeeAmount: number;
+    ashtechFeeAmount: number;
+    creditedAmount: number;
+    totalFeeAmount: number;
+  };
   message?: string;
 }
 
 export async function createSwychrPaymentLink(params: SwychrCreateLinkParams): Promise<SwychrCreateLinkResponse> {
   try {
     const token = await getSwychrToken();
+    const fees = computeSwychrFees(params.grossAmount, params.country_code);
+
     const res = await fetch(`${SWYCHR_BASE_URL}/swychpay/create_payment_links`, {
       method: "POST",
       headers: {
@@ -130,24 +206,29 @@ export async function createSwychrPaymentLink(params: SwychrCreateLinkParams): P
         name: params.name,
         email: params.email,
         mobile: params.mobile,
-        amount: params.amount,
+        amount: fees.amountToSwychr,
         currency: params.currency,
         transaction_id: params.transaction_id,
         description: params.description,
-        pass_digital_charge: params.pass_digital_charge,
+        pass_digital_charge: true,
         callback_url: params.callback_url,
-        source: "WEB",
       }),
     });
     const data = await res.json();
     if (res.ok && data.data?.id) {
       const id = data.data.id;
-      const paymentUuid = await fetchPaymentUuid(params.transaction_id);
-      const payment_link = paymentUuid || `https://app.swychrconnect.com/payment/${id}`;
+      // Extract payment_link from creation response (per doc), or fetch UUID separately
+      let payment_link: string = data.data?.payment_link || "";
+      if (!payment_link) {
+        const uuid = await fetchPaymentUuid(params.transaction_id);
+        payment_link = uuid || `https://app.swychrconnect.com/payment/${id}`;
+      }
       console.log(`[Swychr] Payment link created: id=${id}, url=${payment_link}`);
+      console.log(`[Swychr] Fees: grossAmount=${params.grossAmount}, toSwychr=${fees.amountToSwychr}, credited=${fees.creditedAmount}`);
       return {
         success: true,
         data: { id, payment_link, transaction_id: params.transaction_id },
+        fees,
         message: data.message,
       };
     }
@@ -167,6 +248,7 @@ export interface SwychrStatusResponse {
 
 export async function checkSwychrPaymentStatus(transaction_id: string): Promise<SwychrStatusResponse> {
   try {
+    // Use payment_link_byid (payment_link_status endpoint is not available in production)
     const res = await fetch(`${SWYCHR_BASE_URL}/swychpay/payment_link_byid`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Accept": "application/json" },
@@ -181,6 +263,9 @@ export async function checkSwychrPaymentStatus(transaction_id: string): Promise<
       return { success: false, message: data.message || "Payment not found" };
     }
     const rawStatus = attrs.status ?? null;
+    // status=1 means payment credited (success)
+    // status=0/2 means pending/new (no payment yet)
+    // Only mark as failed on explicit string statuses (webhook will confirm)
     let status: "pending" | "completed" | "failed" = "pending";
     if (rawStatus === 1 || rawStatus === "success" || rawStatus === "completed") {
       status = "completed";
