@@ -1033,10 +1033,11 @@ export async function registerRoutes(
               type: "deposit",
               amount: creditedAmount.toString(),
             });
-            
+
+            const appUrl = process.env.APP_URL || "";
             res.json({ 
               transaction,
-              checkoutUrl: swychrResponse.data.payment_link,
+              checkoutUrl: `${appUrl}/checkout/${depositRef}`,
               gateway: "swychr",
               message: "Veuillez compléter le paiement sur la page sécurisée",
               feeDetails: {
@@ -1919,10 +1920,11 @@ export async function registerRoutes(
               });
             }
 
+            const appUrl2 = process.env.APP_URL || "";
             res.json({ 
               message: "Veuillez compléter le paiement sur la page sécurisée.",
               reference: intent.reference,
-              checkoutUrl: swychrResponse.data.payment_link,
+              checkoutUrl: `${appUrl2}/checkout/${reference}`,
               gateway: "swychr",
               redirectUrl: paymentLink.redirectUrl || null,
               amount: numAmount,
