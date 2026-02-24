@@ -47,6 +47,26 @@ const externalFormSchema = z.object({
 
 type ExternalFormData = z.infer<typeof externalFormSchema>;
 
+const COUNTRY_FLAGS: Record<string, string> = {
+  "Congo": "🇨🇬",
+  "Côte d'Ivoire": "🇨🇮",
+  "Gabon": "🇬🇦",
+  "Ghana": "🇬🇭",
+  "Guinée Conakry": "🇬🇳",
+  "Guinée équatoriale": "🇬🇶",
+  "Guinée-Bissau": "🇬🇼",
+  "Kenya": "🇰🇪",
+  "Mali": "🇲🇱",
+  "Nigéria": "🇳🇬",
+  "Rwanda": "🇷🇼",
+  "Tanzanie": "🇹🇿",
+  "Ouganda": "🇺🇬",
+  "Sénégal": "🇸🇳",
+  "Cameroun": "🇨🇲",
+  "RDC": "🇨🇩",
+  "USA": "🇺🇸"
+};
+
 export default function SendMoneyPage() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
@@ -248,10 +268,10 @@ export default function SendMoneyPage() {
                     {isLoadingConfig
                       ? <SelectItem key="__loading__" value="__loading__" disabled>Chargement...</SelectItem>
                       : (countries ?? []).map(country => (
-                        <SelectItem key={country.id} value={country.id}>
-                          🌍 {country.name} ({country.currency})
-                        </SelectItem>
-                      ))
+                      <SelectItem key={country.id} value={country.id}>
+                        {COUNTRY_FLAGS[country.name] || "🌍"} {country.name} ({country.currency})
+                      </SelectItem>
+                    ))
                     }
                   </SelectContent>
                 </Select>
