@@ -111,10 +111,9 @@ async function pollPendingPayouts() {
     const result = await checkSwychrPayoutStatus(reference);
     if (!result.success) {
       console.log(`[PayoutPoller] Status check failed for ${reference}: ${result.message}`);
-      // If transaction not found in Swychr (404) → refund immediately
       if (result.status === "failed") {
-        console.log(`[PayoutPoller] Transaction not found in Swychr, triggering refund for ${reference}`);
-        await processPayout(payout, "failed");
+        console.log(`[PayoutPoller] Transaction not found in Swychr for ${reference} — stopping poll (awaiting admin)`);
+        removePendingPayout(reference);
       }
       continue;
     }

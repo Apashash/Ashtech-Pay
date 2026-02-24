@@ -78,14 +78,20 @@ Three main tables:
 ### Payment Gateways
 The platform uses two payment gateways that can be configured per operator:
 
-- **Swychr** (exclusive gateway — all countries):
+- **Swychr/AccountPE** (exclusive gateway — all countries):
   - Credentials: `SWYCHR_EMAIL`, `SWYCHR_PASSWORD`
-  - API URL: `SWYCHR_API_URL` (default: `https://app.swychrconnect.com`)
-  - App URL: `APP_URL` (used for webhook callback)
-  - Service: `server/swychr.ts`
+  - Payin API URL: `https://app.swychrconnect.com` (deposits)
+  - Payout API URL: `https://api.accountpe.com/api/payout` (withdrawals/transfers)
+  - Services: `server/swychr.ts` (payin), `server/swychrPayout.ts` (payout)
   - Webhook: `POST /api/swychr/webhook`
   - Manual verify: `GET /api/swychr/verify/:transactionId`
-  - Flow: Creates hosted payment link → user redirects → Swychr posts webhook callback
+  - Payin flow: Creates hosted payment link → user redirects → Swychr posts webhook callback
+  - Payout flow: User submits withdrawal/transfer → API call to AccountPE immediately →
+    If success: added to poller for status tracking. If Swychr wallet insufficient: stays pending for admin retry.
+    Admin can retry by clicking "Approve" on pending transactions.
+  - Payout poller: `server/payoutPoller.ts` — checks status every 30s, auto-marks completed/refunds on failure
+  - Currency routing: payout uses the wallet matching the destination country (BJ→XOF, CM→XAF, etc.)
+  - No automatic currency conversion — admin handles conversions on Swychr manually if needed
 
 Fee structure per country (db table: fees):
   - `swychrFee`: Swychr base fee (read-only for admin)

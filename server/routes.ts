@@ -863,8 +863,60 @@ export async function registerRoutes(
         reference,
       });
 
-      // Transaction is pending — admin will approve and trigger payout manually
-      console.log(`[Transfer] Created pending transfer ${reference} for ${parsedAmount} XAF to ${recipientName}`);
+      console.log(`[Transfer] Created transfer ${reference} for ${parsedAmount} to ${recipientName} — calling AccountPE immediately`);
+
+      // Call AccountPE payout API immediately
+      let transferCountryCode = "CM";
+      if (country?.code) transferCountryCode = country.code;
+
+      try {
+        const payoutResult = await createSwychrPayout({
+          country_code:     transferCountryCode,
+          beneficiary_name: recipientName,
+          mobile_no:        formatInternationalPhone(recipientPhone, transferCountryCode),
+          amount:           parsedAmount,
+          transaction_id:   reference,
+          payment_method:   (operator.type === "bank_transfer") ? "bank_transfer" : "mobile_money",
+          remarks:          `Ashtech Pay - ${reference}`,
+        });
+
+        if (payoutResult.success) {
+          console.log(`[Transfer] Payout submitted OK: ${reference} (ext: ${payoutResult.transaction_id})`);
+          const extTxId = payoutResult.transaction_id || reference;
+          addPendingPayout({
+            transactionId: transaction.id,
+            reference:     extTxId,
+            userId:        senderId,
+            amount:        parsedAmount.toFixed(2),
+            totalDebited:  totalAmount.toFixed(2),
+          });
+        } else {
+          const isInsufficientBalance = (payoutResult.message || "").toLowerCase().includes("insuffi") ||
+                                         (payoutResult.message || "").toLowerCase().includes("solde") ||
+                                         (payoutResult.message || "").toLowerCase().includes("balance");
+          if (isInsufficientBalance) {
+            console.log(`[Transfer] Swychr wallet insufficient for ${reference} — awaiting admin`);
+            await storage.createUserNotification({
+              userId: senderId,
+              type: "transfer_pending",
+              title: "Transfert en attente",
+              message: `Votre transfert de ${parsedAmount.toLocaleString()} vers ${recipientName} est en cours de traitement.`,
+              transactionId: transaction.id,
+              isRead: false,
+            });
+          } else {
+            console.error(`[Transfer] Payout failed for ${reference}: ${payoutResult.message}`);
+            await storage.updateTransactionStatus(transaction.id, "failed");
+            await storage.updateUserBalance(senderId, totalAmount);
+            return res.status(400).json({
+              message: `Le transfert a échoué: ${payoutResult.message}`,
+            });
+          }
+        }
+      } catch (payoutErr: any) {
+        console.error(`[Transfer] Payout error for ${reference}:`, payoutErr.message);
+        // Keep pending for admin retry on network errors
+      }
 
       res.json({ 
         message: "Votre transfert est en cours de traitement",
@@ -1251,8 +1303,57 @@ export async function registerRoutes(
         recipientCountry: withdrawalCountryCode,
       });
 
-      // Transaction is pending — admin will approve and trigger payout manually
-      console.log(`[Withdrawal] Created pending withdrawal ${withdrawalRef} for ${amount} XAF`);
+      console.log(`[Withdrawal] Created withdrawal ${withdrawalRef} for ${amount} — calling AccountPE immediately`);
+
+      // Call AccountPE payout API immediately
+      try {
+        const payoutResult = await createSwychrPayout({
+          country_code:     withdrawalCountryCode,
+          beneficiary_name: user.fullName || user.username || "Client",
+          mobile_no:        formatInternationalPhone(data.accountDetails, withdrawalCountryCode),
+          amount:           amount,
+          transaction_id:   withdrawalRef,
+          payment_method:   (data.paymentMethod === "bank_transfer") ? "bank_transfer" : "mobile_money",
+          remarks:          `Ashtech Pay - ${withdrawalRef}`,
+        });
+
+        if (payoutResult.success) {
+          console.log(`[Withdrawal] Payout submitted OK: ${withdrawalRef} (ext: ${payoutResult.transaction_id})`);
+          const extTxId = payoutResult.transaction_id || withdrawalRef;
+          addPendingPayout({
+            transactionId: transaction.id,
+            reference:     extTxId,
+            userId,
+            amount:        data.amount,
+            totalDebited:  totalAmount.toFixed(2),
+          });
+        } else {
+          const isInsufficientBalance = (payoutResult.message || "").toLowerCase().includes("insuffi") ||
+                                         (payoutResult.message || "").toLowerCase().includes("solde") ||
+                                         (payoutResult.message || "").toLowerCase().includes("balance");
+          if (isInsufficientBalance) {
+            console.log(`[Withdrawal] Swychr wallet insufficient for ${withdrawalRef} — awaiting admin`);
+            await storage.createUserNotification({
+              userId,
+              type: "withdrawal_pending",
+              title: "Retrait en attente",
+              message: `Votre retrait de ${amount.toLocaleString()} est en cours de traitement. Vous serez notifié dès qu'il sera effectué.`,
+              transactionId: transaction.id,
+              isRead: false,
+            });
+          } else {
+            console.error(`[Withdrawal] Payout failed for ${withdrawalRef}: ${payoutResult.message}`);
+            await storage.updateTransactionStatus(transaction.id, "failed");
+            await storage.updateUserBalance(userId, totalAmount);
+            return res.status(400).json({
+              message: `Le retrait a échoué: ${payoutResult.message}`,
+            });
+          }
+        }
+      } catch (payoutErr: any) {
+        console.error(`[Withdrawal] Payout error for ${withdrawalRef}:`, payoutErr.message);
+        // Keep pending for admin retry on network errors
+      }
 
       res.json({ 
         transaction,
@@ -3049,10 +3150,16 @@ export async function registerRoutes(
             });
           } else {
             console.error(`[Admin] Payout failed for ${payoutRef}: ${payoutResult.message}`);
-            // Revert to pending if payout failed
             await storage.updateTransactionStatus(id, "pending");
+            const msg = (payoutResult.message || "").toLowerCase();
+            const isInsufficientBalance = msg.includes("insuffi") || msg.includes("solde") || msg.includes("balance");
+            if (isInsufficientBalance) {
+              return res.status(400).json({
+                message: `Solde insuffisant sur le wallet Swychr. Connectez-vous à Swychr, effectuez la conversion/recharge nécessaire, puis réessayez.`,
+              });
+            }
             return res.status(400).json({
-              message: `Paiement AccountPE échoué: ${payoutResult.message}. Vérifiez le solde pUSD et réessayez.`,
+              message: `Paiement AccountPE échoué: ${payoutResult.message}`,
             });
           }
         } catch (payoutErr: any) {
