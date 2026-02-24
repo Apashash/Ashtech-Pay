@@ -308,8 +308,19 @@ export default function SendMoneyPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="XAF">Compte Principal — {balance.toLocaleString()} XAF</SelectItem>
-                        {wallets.filter(w => w.currency !== "XAF").map(w => (
+                        {localCurrency === "XAF" ? (
+                          <SelectItem value="XAF">Compte Principal — {parseFloat(user?.balance || "0").toLocaleString()} XAF</SelectItem>
+                        ) : (
+                          <>
+                            <SelectItem value={localCurrency}>
+                              Compte Principal — {balance.toLocaleString()} {localCurrency}
+                            </SelectItem>
+                            <SelectItem value="XAF">
+                              Compte XAF — {parseFloat(user?.balance || "0").toLocaleString()} XAF
+                            </SelectItem>
+                          </>
+                        )}
+                        {wallets.filter(w => w.currency !== "XAF" && w.currency !== localCurrency).map(w => (
                           <SelectItem key={w.id} value={w.currency}>
                             Compte {w.currency} — {parseFloat(w.balance).toLocaleString()} {w.currency}
                           </SelectItem>
@@ -431,12 +442,14 @@ export default function SendMoneyPage() {
           </Card>
 
           <div className="space-y-4">
-                <CardContent className="p-6">
-                  <p className="text-sm text-muted-foreground mb-1">Votre solde ({localCurrency})</p>
-                  <p className="text-2xl font-bold text-foreground">
-                    {formatCurrency(balance, localCurrency as SupportedCurrency)}
-                  </p>
-                </CardContent>
+            <Card className="bg-gradient-to-br from-blue-500/10 to-transparent border-blue-500/20">
+              <CardContent className="p-6">
+                <p className="text-sm text-muted-foreground mb-1">Votre solde ({localCurrency})</p>
+                <p className="text-2xl font-bold text-foreground">
+                  {formatCurrency(balance, localCurrency as SupportedCurrency)}
+                </p>
+              </CardContent>
+            </Card>
 
             {!isInternal && amountValue > 0 && selectedOperator && (
               <Card>
@@ -444,6 +457,7 @@ export default function SendMoneyPage() {
                   <p className="text-sm text-muted-foreground">
                     Résumé {feePreview.isLoading && <Loader2 className="inline w-3 h-3 ml-1 animate-spin" />}
                   </p>
+                  <div className="flex justify-between">
                     <span>Montant</span>
                     <span className="font-medium">{formatCurrency(amountValue, localCurrency as SupportedCurrency)}</span>
                   </div>
