@@ -75,14 +75,20 @@ export async function getPayoutToken(): Promise<string> {
     body:    JSON.stringify({ email: SWYCHR_EMAIL, password: SWYCHR_PASSWORD }),
   });
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Payout auth failed: ${res.status} ${text}`);
+  const rawAuthText = await res.text();
+  let authJson: any = {};
+  try {
+    authJson = JSON.parse(rawAuthText);
+  } catch {
+    throw new Error(`Payout auth: réponse non-JSON (HTTP ${res.status}) — ${rawAuthText.slice(0, 200)}`);
   }
 
-  const json  = await res.json();
+  if (!res.ok) {
+    throw new Error(`Payout auth failed: ${res.status} ${authJson.message || rawAuthText.slice(0, 100)}`);
+  }
+
   // Doc: AuthResponse { status, message, token }
-  const token = json.token || json.data?.token;
+  const token = authJson.token || authJson.data?.token;
   if (!token) throw new Error("Payout auth: no token in response");
 
   const expiry = parseJwtExp(token) || new Date(Date.now() + 47 * 60 * 60 * 1000);
@@ -189,7 +195,15 @@ export async function createSwychrPayout(
       }),
     });
 
-    const json = await res.json();
+    const rawText = await res.text();
+    let json: any = {};
+    try {
+      json = JSON.parse(rawText);
+    } catch {
+      console.error(`[PayoutAPI] create_transaction non-JSON response HTTP=${res.status}:`, rawText.slice(0, 300));
+      return { success: false, message: `Réponse invalide de AccountPE (HTTP ${res.status}). Vérifiez la connexion et les identifiants.` };
+    }
+
     console.log(`[PayoutAPI] create_transaction response HTTP=${res.status} body.status=${json.status}:`, JSON.stringify(json));
 
     // Swychr returns HTTP 200 even for errors — check json.status (400, 404, etc.)
@@ -204,7 +218,7 @@ export async function createSwychrPayout(
 
   } catch (err: any) {
     console.error("[PayoutAPI] createSwychrPayout error:", err.message);
-    return { success: false, message: err.message };
+    return { success: false, message: `Erreur réseau AccountPE: ${err.message}` };
   }
 }
 
@@ -305,11 +319,15 @@ export async function checkSwychrPayoutStatus(
       body: JSON.stringify({ transaction_id }),
     });
 
-    if (!res.ok) {
-      return { success: false, message: `HTTP ${res.status}` };
+    const rawStatusText = await res.text();
+    let json: any = {};
+    try {
+      json = JSON.parse(rawStatusText);
+    } catch {
+      console.error(`[PayoutAPI] transaction_status non-JSON response HTTP=${res.status}:`, rawStatusText.slice(0, 300));
+      return { success: false, message: `Réponse invalide de AccountPE (HTTP ${res.status})` };
     }
 
-    const json = await res.json();
     console.log(`[PayoutAPI] transaction_status HTTP=${res.status} body.status=${json.status}:`, JSON.stringify(json));
 
     // Swychr returns HTTP 200 even for errors — check json.status
