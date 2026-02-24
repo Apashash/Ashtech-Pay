@@ -1545,6 +1545,7 @@ export async function registerRoutes(
     }
   });
 
+    try {
   // Delete payment link
   app.delete("/api/payment-links/:id", requireAuth, async (req, res) => {
     try {
@@ -1594,6 +1595,16 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/public/fees", async (_req, res) => {
+    try {
+      const fees = await storage.getAllFees();
+      res.json(fees.filter(f => f.isActive));
+    } catch (error) {
+      console.error("Public get fees error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   // Public countries route for registration/login
   app.get("/api/public/countries", async (_req, res) => {
     try {
@@ -1601,16 +1612,16 @@ export async function registerRoutes(
       const activeCountries = allCountries
         .filter(c => c.isActive)
         .map(c => ({
-          code: c.code,
+          id: c.id,
           name: c.name,
+          code: c.code,
           flag: c.flag,
           dialCode: c.dialCode,
-          currency: c.currency,
-          exchangeRate: c.exchangeRate,
+          currency: c.currency
         }));
       res.json(activeCountries);
     } catch (error) {
-      console.error("Get public countries error:", error);
+      console.error("Public get countries error:", error);
       res.status(500).json({ message: "Erreur serveur" });
     }
   });
@@ -1775,6 +1786,37 @@ export async function registerRoutes(
   // Public payment link route
   app.get("/api/payment-links/public/:slug", async (req, res) => {
     try {
+      const link = await storage.getPaymentLinkBySlug(req.params.slug);
+      if (!link || !link.isActive) {
+        return res.status(404).json({ message: "Lien de paiement non trouvé ou inactif" });
+      }
+      
+      const user = await storage.getUser(link.userId);
+      
+      // Increment clicks
+      await storage.incrementPaymentLinkClicks(link.slug);
+      
+      res.json({
+        link: {
+          id: link.id,
+          title: link.title,
+          description: link.description,
+          amount: link.amount,
+          currency: link.currency,
+          isFixedAmount: link.isFixedAmount,
+          imagePath: link.imagePath,
+          hasPdfDelivery: link.hasPdfDelivery,
+        },
+        merchant: {
+          fullName: user?.fullName,
+          isVerified: user?.isVerified,
+        }
+      });
+    } catch (error) {
+      console.error("Get public payment link error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
       const paymentLink = await storage.getPaymentLinkBySlug(req.params.slug);
       if (!paymentLink) {
         return res.status(404).json({ message: "Lien de paiement non trouvé" });
@@ -2735,11 +2777,37 @@ export async function registerRoutes(
 
   app.patch("/api/admin/fees/:id", requireAdmin, async (req, res) => {
     try {
-      const fee = await storage.updateFee(req.params.id, req.body);
+      const { ashtechMargin, feeValue, isActive, minFee } = req.body;
+      const fee = await storage.getFee(req.params.id);
       if (!fee) {
         return res.status(404).json({ message: "Frais non trouvé" });
       }
-      
+
+      const updates: any = {
+        ashtechMargin,
+        feeValue,
+        isActive,
+        minFee
+      };
+
+      const updatedFee = await storage.updateFee(req.params.id, updates);
+
+      // Si c'est un frais de transfert ou retrait, on synchronise l'autre type pour le même pays
+      if (fee.countryId && (fee.transactionType === 'transfer' || fee.transactionType === 'withdrawal')) {
+        const otherType = fee.transactionType === 'transfer' ? 'withdrawal' : 'transfer';
+        const allFees = await storage.getAllFees();
+        const otherFee = allFees.find(f => f.countryId === fee.countryId && f.transactionType === otherType);
+        
+        if (otherFee) {
+          await storage.updateFee(otherFee.id, {
+            ashtechMargin: updates.ashtechMargin,
+            feeValue: updates.feeValue,
+            isActive: updates.isActive,
+            minFee: updates.minFee
+          });
+        }
+      }
+
       await storage.createAdminLog({
         adminId: req.userId!,
         action: "update_fee",
@@ -2748,8 +2816,8 @@ export async function registerRoutes(
         details: JSON.stringify(req.body),
         ipAddress: req.ip || null,
       });
-      
-      res.json(fee);
+
+      res.json(updatedFee);
     } catch (error) {
       console.error("Admin update fee error:", error);
       res.status(500).json({ message: "Erreur serveur" });

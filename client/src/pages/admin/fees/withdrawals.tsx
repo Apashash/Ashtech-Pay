@@ -27,6 +27,7 @@ export default function AdminFeesWithdrawals() {
   const [editingFee, setEditingFee] = useState<Fee | null>(null);
   const [filterCountry, setFilterCountry] = useState<string>("all");
   const [ashtechMargin, setAshtechMargin] = useState("");
+  const [minFee, setMinFee] = useState("");
   const [isActive, setIsActive] = useState(true);
 
   const { data: fees, isLoading } = useQuery<Fee[]>({
@@ -50,7 +51,7 @@ export default function AdminFeesWithdrawals() {
   }, [fees, filterCountry, countries]);
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, margin, active }: { id: string; margin: string; active: boolean }) => {
+    mutationFn: async ({ id, margin, active, minFee }: { id: string; margin: string; active: boolean; minFee: string }) => {
       const swychrFee = parseFloat((editingFee as any)?.swychrFee || "0");
       const newMargin = parseFloat(margin);
       const newTotal = (swychrFee + newMargin).toFixed(4);
@@ -58,11 +59,12 @@ export default function AdminFeesWithdrawals() {
         ashtechMargin: margin,
         feeValue: newTotal,
         isActive: active,
+        minFee: minFee,
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/fees"] });
-      toast({ title: "Marge mise à jour avec succès" });
+      toast({ title: "Frais mis à jour avec succès" });
       resetForm();
     },
     onError: () => {
@@ -74,12 +76,14 @@ export default function AdminFeesWithdrawals() {
     setShowModal(false);
     setEditingFee(null);
     setAshtechMargin("");
+    setMinFee("");
     setIsActive(true);
   };
 
   const openEdit = (fee: Fee) => {
     setEditingFee(fee);
     setAshtechMargin((fee as any).ashtechMargin || "2");
+    setMinFee(fee.minFee?.toString() || "");
     setIsActive(fee.isActive ?? true);
     setShowModal(true);
   };
@@ -102,6 +106,11 @@ export default function AdminFeesWithdrawals() {
     return (s + m).toFixed(2);
   };
 
+  const getCurrency = (countryId: string | null) => {
+    if (!countryId) return "XAF";
+    return countries?.find(c => c.id === countryId)?.currency || "XAF";
+  };
+
   return (
     <AdminLayout>
       <div className="p-6 space-y-6">
@@ -112,7 +121,7 @@ export default function AdminFeesWithdrawals() {
             </div>
             <div>
               <h1 className="text-2xl font-bold">Frais de Retrait</h1>
-              <p className="text-muted-foreground">Frais Swychr + marge Ashtech Pay par pays</p>
+              <p className="text-muted-foreground">Configuration des frais et minimums par pays</p>
             </div>
           </div>
         </div>
@@ -122,8 +131,7 @@ export default function AdminFeesWithdrawals() {
             <div className="flex items-start gap-2 text-sm text-blue-400">
               <Info className="w-4 h-4 mt-0.5 shrink-0" />
               <div>
-                <span className="font-medium">Structure des frais Swychr :</span> Frais Swychr (fixé par Swychr, non modifiable) + Marge Ashtech (modifiable) = Total facturé au client.
-                Seule la <span className="font-semibold">marge Ashtech</span> peut être modifiée par l'admin.
+                <span className="font-medium">Note :</span> Toute modification d'un frais de retrait sera <span className="font-bold">automatiquement appliquée</span> aux frais de transfert du même pays pour garantir la cohérence.
               </div>
             </div>
           </CardContent>
@@ -160,7 +168,8 @@ export default function AdminFeesWithdrawals() {
                   <TableHead>Pays</TableHead>
                   <TableHead>Frais Swychr</TableHead>
                   <TableHead>Marge Ashtech</TableHead>
-                  <TableHead className="font-bold">Total client</TableHead>
+                  <TableHead className="font-bold">Total client (%)</TableHead>
+                  <TableHead>Minimum (Charge)</TableHead>
                   <TableHead>Statut</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -168,11 +177,11 @@ export default function AdminFeesWithdrawals() {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8">Chargement...</TableCell>
+                    <TableCell colSpan={7} className="text-center py-8">Chargement...</TableCell>
                   </TableRow>
                 ) : !withdrawalFees.length ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                       Aucun frais de retrait configuré
                     </TableCell>
                   </TableRow>
@@ -182,6 +191,7 @@ export default function AdminFeesWithdrawals() {
                     const margin = parseFloat((fee as any).ashtechMargin || "0");
                     const total = parseFloat(fee.feeValue);
                     const cc = getCountryCode(fee.countryId);
+                    const currency = getCurrency(fee.countryId);
                     return (
                       <TableRow key={fee.id}>
                         <TableCell className="font-medium">
@@ -198,6 +208,9 @@ export default function AdminFeesWithdrawals() {
                         </TableCell>
                         <TableCell>
                           <span className="font-bold text-green-400">{total.toFixed(2)}%</span>
+                        </TableCell>
+                        <TableCell>
+                          <span className="font-mono">{fee.minFee || 0} {currency}</span>
                         </TableCell>
                         <TableCell>
                           <Badge variant={fee.isActive ? "default" : "secondary"}>
@@ -225,7 +238,7 @@ export default function AdminFeesWithdrawals() {
         <Dialog open={showModal} onOpenChange={() => resetForm()}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Modifier la marge — {editingFee ? getCountryName(editingFee.countryId) : ""}</DialogTitle>
+              <DialogTitle>Modifier les frais — {editingFee ? getCountryName(editingFee.countryId) : ""}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
@@ -235,7 +248,6 @@ export default function AdminFeesWithdrawals() {
                   disabled
                   className="bg-muted"
                 />
-                <p className="text-xs text-muted-foreground">Fixé par Swychr — contact Swychr pour changer</p>
               </div>
 
               <div className="space-y-2">
@@ -249,15 +261,27 @@ export default function AdminFeesWithdrawals() {
                   onChange={(e) => setAshtechMargin(e.target.value)}
                   placeholder="2.00"
                 />
-                <p className="text-xs text-muted-foreground">Revenu Ashtech Pay sur chaque retrait</p>
               </div>
 
               <div className="space-y-2">
-                <Label className="text-muted-foreground">Total facturé au client</Label>
+                <Label>Minimum Payout Charge ({editingFee ? getCurrency(editingFee.countryId) : "devise"})</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={minFee}
+                  onChange={(e) => setMinFee(e.target.value)}
+                  placeholder="550"
+                />
+                <p className="text-xs text-muted-foreground">Montant minimum prélevé si le % est inférieur</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-muted-foreground">Total facturé au client (%)</Label>
                 <Input
                   value={`${computedTotal()}%`}
                   disabled
-                  className="bg-muted font-bold"
+                  className="bg-muted font-bold text-green-500"
                 />
               </div>
 
@@ -272,7 +296,7 @@ export default function AdminFeesWithdrawals() {
             <DialogFooter>
               <Button variant="outline" onClick={resetForm}>Annuler</Button>
               <Button
-                onClick={() => editingFee && updateMutation.mutate({ id: editingFee.id, margin: ashtechMargin, active: isActive })}
+                onClick={() => editingFee && updateMutation.mutate({ id: editingFee.id, margin: ashtechMargin, active: isActive, minFee: minFee })}
                 disabled={updateMutation.isPending}
               >
                 {updateMutation.isPending ? "Enregistrement..." : "Enregistrer"}

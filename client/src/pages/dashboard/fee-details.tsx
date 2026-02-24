@@ -3,7 +3,8 @@ import { DashboardLayout } from "@/components/dashboard-layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Info, Percent, ShieldCheck, Wallet } from "lucide-react";
-import { formatCurrency } from "@/lib/currency";
+import { useQuery } from "@tanstack/react-query";
+import type { Fee, Country } from "@shared/schema";
 
 const FEE_EXPLANATIONS = [
   {
@@ -29,30 +30,31 @@ const FEE_EXPLANATIONS = [
   }
 ];
 
-const COUNTRY_FEES = [
-  { country: "Cameroun", percentage: "3.50%", min: "550 XAF" },
-  { country: "Burkina Faso", percentage: "3.80%", min: "550 XOF" },
-  { country: "Bénin", percentage: "3.80%", min: "100 XOF" },
-  { country: "Congo Brazzaville", percentage: "4.00%", min: "800 XAF" },
-  { country: "Congo RDC", percentage: "3.80%", min: "27 CDF" },
-  { country: "Côte d'Ivoire", percentage: "3.80%", min: "550 XOF" },
-  { country: "Gabon", percentage: "3.80%", min: "550 XAF" },
-  { country: "Ghana", percentage: "4.00%", min: "20.7 GHS" },
-  { country: "Guinée Conakry", percentage: "4.00%", min: "6500.76 GNF" },
-  { country: "Inde", percentage: "3.50%", min: "10.83 INR" },
-  { country: "Kenya", percentage: "3.50%", min: "105.2 KES" },
-  { country: "Mali", percentage: "3.80%", min: "550 XOF" },
-  { country: "Niger", percentage: "4.50%", min: "790 XOF" },
-  { country: "Nigeria", percentage: "4.00%", min: "144 NGN" },
-  { country: "Rwanda", percentage: "3.80%", min: "2300.07 RWF" },
-  { country: "Sénégal", percentage: "3.80%", min: "550 XOF" },
-  { country: "Togo", percentage: "3.80%", min: "100 XOF" },
-  { country: "Tanzanie", percentage: "6.00%", min: "2.6 TZS" },
-  { country: "Ouganda", percentage: "6.00%", min: "0.19 UGX" },
-  { country: "États-Unis", percentage: "5.00%", min: "50.17 USD" },
-];
-
 export default function FeeExplanationsPage() {
+  const { data: fees } = useQuery<Fee[]>({
+    queryKey: ["/api/public/fees"],
+  });
+
+  const { data: countries } = useQuery<Country[]>({
+    queryKey: ["/api/public/countries"],
+  });
+
+  const displayFees = React.useMemo(() => {
+    if (!fees || !countries) return [];
+    
+    // Filtrer pour n'avoir qu'une ligne par pays (les frais sont synchronisés)
+    const transferFees = fees.filter(f => f.transactionType === "transfer" && f.countryId);
+    
+    return transferFees.map(fee => {
+      const country = countries.find(c => c.id === fee.countryId);
+      return {
+        country: country?.name || "Inconnu",
+        percentage: `${parseFloat(fee.feeValue).toFixed(2)}%`,
+        min: `${fee.minFee || 0} ${country?.currency || "XAF"}`
+      };
+    }).sort((a, b) => a.country.localeCompare(b.country));
+  }, [fees, countries]);
+
   return (
     <DashboardLayout>
       <div className="space-y-8 pb-10">
@@ -98,13 +100,21 @@ export default function FeeExplanationsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {COUNTRY_FEES.map((row) => (
-                    <TableRow key={row.country} className="hover:bg-muted/30 transition-colors">
-                      <TableCell className="font-medium">{row.country}</TableCell>
-                      <TableCell>{row.percentage}</TableCell>
-                      <TableCell className="text-right font-mono">{row.min}</TableCell>
+                  {displayFees.length > 0 ? (
+                    displayFees.map((row) => (
+                      <TableRow key={row.country} className="hover:bg-muted/30 transition-colors">
+                        <TableCell className="font-medium">{row.country}</TableCell>
+                        <TableCell>{row.percentage}</TableCell>
+                        <TableCell className="text-right font-mono">{row.min}</TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
+                        Chargement de la grille tarifaire...
+                      </TableCell>
                     </TableRow>
-                  ))}
+                  )}
                 </TableBody>
               </Table>
             </div>

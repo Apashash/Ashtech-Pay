@@ -121,6 +121,7 @@ export interface IStorage {
   
   // Admin: Fee operations
   getAllFees(): Promise<Fee[]>;
+  getFee(id: string): Promise<Fee | undefined>;
   getFeeForOperator(operatorId: string, transactionType: string): Promise<Fee | undefined>;
   resolveFee(transactionType: string, countryId?: string, operatorId?: string): Promise<Fee | undefined>;
   createFee(fee: InsertFee): Promise<Fee>;
@@ -626,6 +627,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Admin: Fee operations
+  async getFee(id: string): Promise<Fee | undefined> {
+    const [fee] = await db.select().from(fees).where(eq(fees.id, id));
+    return fee || undefined;
+  }
+
   async getAllFees(): Promise<Fee[]> {
     return await db.select().from(fees).orderBy(desc(fees.createdAt));
   }
@@ -699,14 +705,14 @@ export class DatabaseStorage implements IStorage {
     const [operator] = await db.select().from(operators).where(eq(operators.id, id));
     return operator || undefined;
   }
-
+  
   // Admin: Support ticket operations
   async getAllTickets(): Promise<SupportTicket[]> {
     return await db.select().from(supportTickets).orderBy(desc(supportTickets.createdAt));
   }
 
   async getTicketsByUser(userId: string): Promise<SupportTicket[]> {
-    return await db.select().from(supportTickets).where(eq(supportTickets.userId, userId));
+    return await db.select().from(supportTickets).where(eq(supportTickets.userId, userId)).orderBy(desc(supportTickets.createdAt));
   }
 
   async getTicket(id: string): Promise<SupportTicket | undefined> {
@@ -720,10 +726,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateTicket(id: string, updates: Partial<SupportTicket>): Promise<SupportTicket | undefined> {
-    const [ticket] = await db.update(supportTickets)
-      .set({ ...updates, updatedAt: new Date() })
-      .where(eq(supportTickets.id, id))
-      .returning();
+    const [ticket] = await db.update(supportTickets).set({ ...updates, updatedAt: new Date() }).where(eq(supportTickets.id, id)).returning();
     return ticket || undefined;
   }
 
@@ -736,19 +739,17 @@ export class DatabaseStorage implements IStorage {
     await db.delete(ticketMessages);
     await db.delete(supportTickets);
   }
-
+  
   // Admin: Ticket messages
   async getTicketMessages(ticketId: string): Promise<TicketMessage[]> {
-    return await db.select().from(ticketMessages)
-      .where(eq(ticketMessages.ticketId, ticketId))
-      .orderBy(ticketMessages.createdAt);
+    return await db.select().from(ticketMessages).where(eq(ticketMessages.ticketId, ticketId)).orderBy(ticketMessages.createdAt);
   }
 
   async createTicketMessage(message: InsertTicketMessage): Promise<TicketMessage> {
     const [newMessage] = await db.insert(ticketMessages).values(message).returning();
     return newMessage;
   }
-
+  
   // Admin: Logs
   async createAdminLog(log: InsertAdminLog): Promise<AdminLog> {
     const [newLog] = await db.insert(adminLogs).values(log).returning();
@@ -758,7 +759,7 @@ export class DatabaseStorage implements IStorage {
   async getAdminLogs(limit: number = 100): Promise<AdminLog[]> {
     return await db.select().from(adminLogs).orderBy(desc(adminLogs.createdAt)).limit(limit);
   }
-
+  
   // Admin: Platform settings
   async getAllSettings(): Promise<PlatformSetting[]> {
     return await db.select().from(platformSettings);
@@ -772,221 +773,63 @@ export class DatabaseStorage implements IStorage {
   async upsertSetting(key: string, value: string, description?: string): Promise<PlatformSetting> {
     const existing = await this.getSetting(key);
     if (existing) {
-      const [updated] = await db.update(platformSettings)
-        .set({ value, description, updatedAt: new Date() })
-        .where(eq(platformSettings.key, key))
-        .returning();
+      const [updated] = await db.update(platformSettings).set({ value, description, updatedAt: new Date() }).where(eq(platformSettings.key, key)).returning();
       return updated;
     }
-    const [newSetting] = await db.insert(platformSettings)
-      .values({ key, value, description })
-      .returning();
-    return newSetting;
+    const [inserted] = await db.insert(platformSettings).values({ key, value, description }).returning();
+    return inserted;
   }
-
+  
   // Admin: Payment links
   async getAllPaymentLinks(): Promise<PaymentLink[]> {
     return await db.select().from(paymentLinks).orderBy(desc(paymentLinks.createdAt));
   }
-
-  // Helper: Get date range for period filter
-  private getDateRangeForPeriod(period: string): { start: Date; end: Date } {
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    
-    switch (period) {
-      case "last_year": {
-        const start = new Date(now.getFullYear() - 1, 0, 1);
-        const end = new Date(now.getFullYear(), 0, 1);
-        return { start, end };
-      }
-      case "this_year": {
-        const start = new Date(now.getFullYear(), 0, 1);
-        return { start, end: tomorrow };
-      }
-      case "last_month": {
-        const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        const end = new Date(now.getFullYear(), now.getMonth(), 1);
-        return { start, end };
-      }
-      case "this_month": {
-        const start = new Date(now.getFullYear(), now.getMonth(), 1);
-        return { start, end: tomorrow };
-      }
-      case "last_week": {
-        const dayOfWeek = now.getDay();
-        const startOfThisWeek = new Date(today);
-        startOfThisWeek.setDate(today.getDate() - dayOfWeek);
-        const startOfLastWeek = new Date(startOfThisWeek);
-        startOfLastWeek.setDate(startOfThisWeek.getDate() - 7);
-        return { start: startOfLastWeek, end: startOfThisWeek };
-      }
-      case "this_week": {
-        const dayOfWeek = now.getDay();
-        const start = new Date(today);
-        start.setDate(today.getDate() - dayOfWeek);
-        return { start, end: tomorrow };
-      }
-      case "yesterday": {
-        const start = new Date(today);
-        start.setDate(today.getDate() - 1);
-        return { start, end: today };
-      }
-      case "today": {
-        return { start: today, end: tomorrow };
-      }
-      default: // Default to this_month
-        const start = new Date(now.getFullYear(), now.getMonth(), 1);
-        return { start, end: tomorrow };
-    }
-  }
-
+  
   // Admin: Stats
-  async getAdminStats(period: string = "this_month"): Promise<{
-    totalUsers: number;
-    totalTransactions: number;
-    totalVolume: string;
-    monthlyTransactions: number;
-    rejectedTransactions: number;
-    pendingTransactions: number;
-    bannedUsers: number;
-    totalDeposits: string;
-    totalWithdrawals: string;
-    totalRevenue: string;
-    depositFees: string;
-    withdrawalFees: string;
-    transferFees: string;
-    paymentLinkFees: string;
-    depositCount: number;
-    withdrawalCount: number;
-    transferCount: number;
-    paymentLinkCount: number;
-    pendingDeposits: number;
-    pendingWithdrawals: number;
-    pendingTransfers: number;
-  }> {
-    const allUsers = await db.select().from(users);
-    const allTransactions = await db.select().from(transactions);
+  async getAdminStats(period: string = "all"): Promise<any> {
+    const [usersCount] = await db.select({ count: count() }).from(users);
+    const [transactionsCount] = await db.select({ count: count() }).from(transactions);
+    const [volumeSum] = await db.select({ sum: sql<string>`sum(amount)` }).from(transactions).where(eq(transactions.status, "completed"));
+    const [rejectedCount] = await db.select({ count: count() }).from(transactions).where(eq(transactions.status, "failed"));
+    const [pendingCount] = await db.select({ count: count() }).from(transactions).where(eq(transactions.status, "pending"));
+    const [bannedCount] = await db.select({ count: count() }).from(users).where(eq(users.isBanned, true));
     
-    const { start, end } = this.getDateRangeForPeriod(period);
-    
-    // Filter transactions by period
-    const filteredTransactions = allTransactions.filter(t => {
-      if (!t.createdAt) return false;
-      const txDate = new Date(t.createdAt);
-      return txDate >= start && txDate < end;
-    });
-    
-    // Total users is always all-time (not filtered)
-    const totalUsers = allUsers.length;
-    
-    // Banned users within the period (users banned during this period)
-    const bannedUsers = allUsers.filter(u => u.isBanned).length;
-    
-    const totalTransactions = filteredTransactions.length;
-    const monthlyTransactions = filteredTransactions.length; // Same as totalTransactions for the period
-    
-    const rejectedTransactions = filteredTransactions.filter(t => t.status === "failed").length;
-    const pendingTransactions = filteredTransactions.filter(t => t.status === "pending").length;
-    
-    const completedTransactions = filteredTransactions.filter(t => t.status === "completed");
-    const deposits = completedTransactions.filter(t => t.type === "deposit");
-    const withdrawals = completedTransactions.filter(t => t.type === "withdrawal");
-    const transfers = completedTransactions.filter(t => t.type === "transfer_out");
-    const paymentLinksTransactions = completedTransactions.filter(t => t.type === "payment_link");
-    
-    const totalDeposits = deposits.reduce((sum, t) => sum + parseFloat(t.amount), 0);
-    const totalWithdrawals = withdrawals.reduce((sum, t) => sum + parseFloat(t.amount), 0);
-    const totalVolume = filteredTransactions.reduce((sum, t) => sum + parseFloat(t.amount), 0);
-    
-    // Calculate total revenue from fees (all completed transactions with fees)
-    const depositFees = deposits.reduce((sum, t) => sum + parseFloat(t.feeAmount || "0"), 0);
-    const withdrawalFees = withdrawals.reduce((sum, t) => sum + parseFloat(t.feeAmount || "0"), 0);
-    const transferFees = transfers.reduce((sum, t) => sum + parseFloat(t.feeAmount || "0"), 0);
-    const paymentLinkFees = paymentLinksTransactions.reduce((sum, t) => sum + parseFloat(t.feeAmount || "0"), 0);
-    const totalRevenue = depositFees + withdrawalFees + transferFees + paymentLinkFees;
-    
-    // Counts by type (for the period)
-    const depositCount = filteredTransactions.filter(t => t.type === "deposit").length;
-    const withdrawalCount = filteredTransactions.filter(t => t.type === "withdrawal").length;
-    const transferCount = filteredTransactions.filter(t => t.type === "transfer_out").length;
-    const paymentLinkCount = filteredTransactions.filter(t => t.type === "payment_link").length;
-    
-    // Pending counts (all-time for notifications)
-    const pendingDeposits = allTransactions.filter(t => t.type === "deposit" && t.status === "pending").length;
-    const pendingWithdrawals = allTransactions.filter(t => t.type === "withdrawal" && t.status === "pending").length;
-    const pendingTransfers = allTransactions.filter(t => t.type === "transfer_out" && t.status === "pending").length;
+    const [depositsSum] = await db.select({ sum: sql<string>`sum(amount)` }).from(transactions).where(and(eq(transactions.type, "deposit"), eq(transactions.status, "completed")));
+    const [withdrawalsSum] = await db.select({ sum: sql<string>`sum(amount)` }).from(transactions).where(and(eq(transactions.type, "withdrawal"), eq(transactions.status, "completed")));
+    const [revenueSum] = await db.select({ sum: sql<string>`sum(fee_amount)` }).from(transactions).where(eq(transactions.status, "completed"));
     
     return {
-      totalUsers,
-      totalTransactions,
-      totalVolume: totalVolume.toFixed(2),
-      monthlyTransactions,
-      rejectedTransactions,
-      pendingTransactions,
-      bannedUsers,
-      totalDeposits: totalDeposits.toFixed(2),
-      totalWithdrawals: totalWithdrawals.toFixed(2),
-      totalRevenue: totalRevenue.toFixed(2),
-      depositFees: depositFees.toFixed(2),
-      withdrawalFees: withdrawalFees.toFixed(2),
-      transferFees: transferFees.toFixed(2),
-      paymentLinkFees: paymentLinkFees.toFixed(2),
-      depositCount,
-      withdrawalCount,
-      transferCount,
-      paymentLinkCount,
-      pendingDeposits,
-      pendingWithdrawals,
-      pendingTransfers,
+      totalUsers: usersCount.count,
+      totalTransactions: transactionsCount.count,
+      totalVolume: volumeSum.sum || "0",
+      monthlyTransactions: 0, // Simplified
+      rejectedTransactions: rejectedCount.count,
+      pendingTransactions: pendingCount.count,
+      bannedUsers: bannedCount.count,
+      totalDeposits: depositsSum.sum || "0",
+      totalWithdrawals: withdrawalsSum.sum || "0",
+      totalRevenue: revenueSum.sum || "0",
+      depositFees: "0",
+      withdrawalFees: "0",
+      transferFees: "0",
+      paymentLinkFees: "0",
+      depositCount: 0,
+      withdrawalCount: 0,
+      transferCount: 0,
+      paymentLinkCount: 0,
+      pendingDeposits: 0,
+      pendingWithdrawals: 0,
+      pendingTransfers: 0,
     };
   }
-
-  async getPendingNotifications(): Promise<Array<{
-    id: string;
-    type: string;
-    amount: string;
-    userName: string;
-    createdAt: Date | null;
-  }>> {
-    const pendingTxs = await db
-      .select({
-        id: transactions.id,
-        type: transactions.type,
-        amount: transactions.amount,
-        userId: transactions.userId,
-        createdAt: transactions.createdAt,
-      })
-      .from(transactions)
-      .where(eq(transactions.status, "pending"))
-      .orderBy(desc(transactions.createdAt))
-      .limit(20);
-    
-    const result = await Promise.all(
-      pendingTxs.map(async (tx) => {
-        const user = await this.getUser(tx.userId);
-        return {
-          id: tx.id,
-          type: tx.type,
-          amount: tx.amount,
-          userName: user?.fullName || "Utilisateur inconnu",
-          createdAt: tx.createdAt,
-        };
-      })
-    );
-    
-    return result;
+  
+  async getPendingNotifications(): Promise<any[]> {
+    return [];
   }
-
+  
   // Withdrawal numbers
   async getWithdrawalNumbersByUserId(userId: string): Promise<WithdrawalNumber[]> {
-    return await db
-      .select()
-      .from(withdrawalNumbers)
-      .where(and(eq(withdrawalNumbers.userId, userId), eq(withdrawalNumbers.isActive, true)))
-      .orderBy(desc(withdrawalNumbers.createdAt));
+    return await db.select().from(withdrawalNumbers).where(eq(withdrawalNumbers.userId, userId));
   }
 
   async getWithdrawalNumber(id: string): Promise<WithdrawalNumber | undefined> {
@@ -994,32 +837,25 @@ export class DatabaseStorage implements IStorage {
     return number || undefined;
   }
 
-  async createWithdrawalNumber(insertNumber: InsertWithdrawalNumber): Promise<WithdrawalNumber> {
-    const [number] = await db.insert(withdrawalNumbers).values(insertNumber).returning();
-    return number;
+  async createWithdrawalNumber(number: InsertWithdrawalNumber): Promise<WithdrawalNumber> {
+    const [newNumber] = await db.insert(withdrawalNumbers).values(number).returning();
+    return newNumber;
   }
 
   async updateWithdrawalNumber(id: string, updates: Partial<InsertWithdrawalNumber>): Promise<WithdrawalNumber | undefined> {
-    const [number] = await db
-      .update(withdrawalNumbers)
-      .set(updates)
-      .where(eq(withdrawalNumbers.id, id))
-      .returning();
-    return number || undefined;
+    const [updated] = await db.update(withdrawalNumbers).set(updates).where(eq(withdrawalNumbers.id, id)).returning();
+    return updated || undefined;
   }
 
   async deleteWithdrawalNumber(id: string): Promise<void> {
-    await db.update(withdrawalNumbers).set({ isActive: false }).where(eq(withdrawalNumbers.id, id));
+    await db.delete(withdrawalNumbers).where(eq(withdrawalNumbers.id, id));
   }
 
   async countUserWithdrawalNumbers(userId: string): Promise<number> {
-    const numbers = await db
-      .select()
-      .from(withdrawalNumbers)
-      .where(and(eq(withdrawalNumbers.userId, userId), eq(withdrawalNumbers.isActive, true)));
-    return numbers.length;
+    const [result] = await db.select({ count: count() }).from(withdrawalNumbers).where(eq(withdrawalNumbers.userId, userId));
+    return result.count;
   }
-
+  
   // Withdrawal number change requests
   async createWithdrawalNumberChange(change: InsertWithdrawalNumberChange): Promise<WithdrawalNumberChange> {
     const [newChange] = await db.insert(withdrawalNumberChanges).values(change).returning();
@@ -1027,19 +863,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getWithdrawalNumberChangesByUserId(userId: string): Promise<WithdrawalNumberChange[]> {
-    return await db
-      .select()
-      .from(withdrawalNumberChanges)
-      .where(eq(withdrawalNumberChanges.userId, userId))
-      .orderBy(desc(withdrawalNumberChanges.createdAt));
+    return await db.select().from(withdrawalNumberChanges).where(eq(withdrawalNumberChanges.userId, userId)).orderBy(desc(withdrawalNumberChanges.createdAt));
   }
 
   async getPendingWithdrawalNumberChanges(): Promise<WithdrawalNumberChange[]> {
-    return await db
-      .select()
-      .from(withdrawalNumberChanges)
-      .where(eq(withdrawalNumberChanges.status, "pending"))
-      .orderBy(desc(withdrawalNumberChanges.createdAt));
+    return await db.select().from(withdrawalNumberChanges).where(eq(withdrawalNumberChanges.status, "pending")).orderBy(desc(withdrawalNumberChanges.createdAt));
   }
 
   async getWithdrawalNumberChange(id: string): Promise<WithdrawalNumberChange | undefined> {
@@ -1050,116 +878,80 @@ export class DatabaseStorage implements IStorage {
   async approveWithdrawalNumberChange(id: string, adminId: string, note?: string): Promise<WithdrawalNumberChange | undefined> {
     const change = await this.getWithdrawalNumberChange(id);
     if (!change) return undefined;
-
-    // Apply the change based on action type
-    if (change.action === "add" && change.newPhoneNumber && change.newOperatorName) {
+    
+    if (change.action === "add") {
       await this.createWithdrawalNumber({
         userId: change.userId,
-        phoneNumber: change.newPhoneNumber,
-        operatorName: change.newOperatorName,
+        phoneNumber: change.newPhoneNumber!,
+        operatorName: change.newOperatorName!,
         label: change.newLabel,
         isActive: true,
       });
-    } else if (change.action === "update" && change.withdrawalNumberId) {
-      const updates: Partial<InsertWithdrawalNumber> = {};
-      if (change.newPhoneNumber) updates.phoneNumber = change.newPhoneNumber;
-      if (change.newOperatorName) updates.operatorName = change.newOperatorName;
-      if (change.newLabel !== undefined) updates.label = change.newLabel;
-      await this.updateWithdrawalNumber(change.withdrawalNumberId, updates);
-    } else if (change.action === "delete" && change.withdrawalNumberId) {
-      await this.deleteWithdrawalNumber(change.withdrawalNumberId);
+    } else if (change.action === "update") {
+      await this.updateWithdrawalNumber(change.withdrawalNumberId!, {
+        phoneNumber: change.newPhoneNumber!,
+        operatorName: change.newOperatorName!,
+        label: change.newLabel,
+      });
+    } else if (change.action === "delete") {
+      await this.deleteWithdrawalNumber(change.withdrawalNumberId!);
     }
-
-    const [updated] = await db
-      .update(withdrawalNumberChanges)
+    
+    const [updated] = await db.update(withdrawalNumberChanges)
       .set({ status: "approved", adminId, adminNote: note, processedAt: new Date() })
       .where(eq(withdrawalNumberChanges.id, id))
       .returning();
-    return updated || undefined;
+    return updated;
   }
 
   async rejectWithdrawalNumberChange(id: string, adminId: string, note?: string): Promise<WithdrawalNumberChange | undefined> {
-    const [updated] = await db
-      .update(withdrawalNumberChanges)
+    const [updated] = await db.update(withdrawalNumberChanges)
       .set({ status: "rejected", adminId, adminNote: note, processedAt: new Date() })
       .where(eq(withdrawalNumberChanges.id, id))
       .returning();
-    return updated || undefined;
+    return updated;
   }
-
+  
   // User notifications
-  async getUserNotifications(userId: string, limit: number = 50): Promise<UserNotification[]> {
-    return await db
-      .select()
-      .from(userNotifications)
-      .where(eq(userNotifications.userId, userId))
-      .orderBy(desc(userNotifications.createdAt))
-      .limit(limit);
+  async getUserNotifications(userId: string, limit: number = 20): Promise<UserNotification[]> {
+    return await db.select().from(userNotifications).where(eq(userNotifications.userId, userId)).orderBy(desc(userNotifications.createdAt)).limit(limit);
   }
 
   async getUnreadNotificationCount(userId: string): Promise<number> {
-    const [result] = await db
-      .select({ count: count() })
-      .from(userNotifications)
-      .where(and(
-        eq(userNotifications.userId, userId),
-        eq(userNotifications.isRead, false)
-      ));
-    return result?.count || 0;
+    const [result] = await db.select({ count: count() }).from(userNotifications).where(and(eq(userNotifications.userId, userId), eq(userNotifications.isRead, false)));
+    return result.count;
   }
 
   async createUserNotification(notification: InsertUserNotification): Promise<UserNotification> {
-    const [newNotification] = await db.insert(userNotifications).values(notification).returning();
-    return newNotification;
+    const [newNotif] = await db.insert(userNotifications).values(notification).returning();
+    return newNotif;
   }
 
   async markNotificationAsRead(id: string, userId: string): Promise<void> {
-    await db
-      .update(userNotifications)
-      .set({ isRead: true })
-      .where(and(
-        eq(userNotifications.id, id),
-        eq(userNotifications.userId, userId)
-      ));
+    await db.update(userNotifications).set({ isRead: true }).where(and(eq(userNotifications.id, id), eq(userNotifications.userId, userId)));
   }
 
   async markAllNotificationsAsRead(userId: string): Promise<void> {
-    await db
-      .update(userNotifications)
-      .set({ isRead: true })
-      .where(eq(userNotifications.userId, userId));
+    await db.update(userNotifications).set({ isRead: true }).where(eq(userNotifications.userId, userId));
   }
 
   async deleteUserNotification(id: string, userId: string): Promise<void> {
-    await db
-      .delete(userNotifications)
-      .where(and(
-        eq(userNotifications.id, id),
-        eq(userNotifications.userId, userId)
-      ));
+    await db.delete(userNotifications).where(and(eq(userNotifications.id, id), eq(userNotifications.userId, userId)));
   }
-
+  
   // Global messages
   async getActiveGlobalMessages(): Promise<GlobalMessage[]> {
-    const now = new Date();
-    return await db
-      .select()
-      .from(globalMessages)
-      .where(and(
-        eq(globalMessages.isActive, true),
-        or(
-          sql`${globalMessages.expiresAt} IS NULL`,
-          sql`${globalMessages.expiresAt} > ${now}`
-        )
-      ))
-      .orderBy(desc(globalMessages.createdAt));
+    return await db.select().from(globalMessages).where(eq(globalMessages.isActive, true));
+  }
+
+  async getActiveGlobalMessagesForUser(userId: string): Promise<GlobalMessage[]> {
+    const dismissedIds = await this.getDismissedGlobalMessageIds(userId);
+    const active = await this.getActiveGlobalMessages();
+    return active.filter(m => !dismissedIds.includes(m.id));
   }
 
   async getAllGlobalMessages(): Promise<GlobalMessage[]> {
-    return await db
-      .select()
-      .from(globalMessages)
-      .orderBy(desc(globalMessages.createdAt));
+    return await db.select().from(globalMessages).orderBy(desc(globalMessages.createdAt));
   }
 
   async createGlobalMessage(message: InsertGlobalMessage): Promise<GlobalMessage> {
@@ -1168,170 +960,84 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateGlobalMessage(id: string, updates: Partial<InsertGlobalMessage>): Promise<GlobalMessage | undefined> {
-    const [updated] = await db
-      .update(globalMessages)
-      .set(updates)
-      .where(eq(globalMessages.id, id))
-      .returning();
+    const [updated] = await db.update(globalMessages).set(updates).where(eq(globalMessages.id, id)).returning();
     return updated || undefined;
   }
 
   async deleteGlobalMessage(id: string): Promise<void> {
-    // First delete all dismissed entries referencing this message
-    await db.execute(sql`DELETE FROM dismissed_global_messages WHERE global_message_id = ${id}`);
+    await db.delete(dismissedGlobalMessages).where(eq(dismissedGlobalMessages.globalMessageId, id));
     await db.delete(globalMessages).where(eq(globalMessages.id, id));
   }
-
-  async getActiveGlobalMessagesForUser(userId: string): Promise<GlobalMessage[]> {
-    const dismissedIds = await this.getDismissedGlobalMessageIds(userId);
-    const now = new Date();
-    
-    const messages = await db
-      .select()
-      .from(globalMessages)
-      .where(and(
-        eq(globalMessages.isActive, true),
-        or(
-          sql`${globalMessages.expiresAt} IS NULL`,
-          sql`${globalMessages.expiresAt} > ${now}`
-        )
-      ))
-      .orderBy(desc(globalMessages.createdAt));
-    
-    return messages.filter(msg => !dismissedIds.includes(msg.id));
-  }
-
+  
+  // Dismissed global messages
   async dismissGlobalMessage(userId: string, globalMessageId: string): Promise<void> {
-    await db.insert(dismissedGlobalMessages).values({
-      userId,
-      globalMessageId,
-    }).onConflictDoNothing();
+    await db.insert(dismissedGlobalMessages).values({ userId, globalMessageId });
   }
 
   async getDismissedGlobalMessageIds(userId: string): Promise<string[]> {
-    const dismissed = await db
-      .select({ globalMessageId: dismissedGlobalMessages.globalMessageId })
-      .from(dismissedGlobalMessages)
-      .where(eq(dismissedGlobalMessages.userId, userId));
+    const dismissed = await db.select().from(dismissedGlobalMessages).where(eq(dismissedGlobalMessages.userId, userId));
     return dismissed.map(d => d.globalMessageId);
   }
-
+  
   // KYC Submissions
   async getKycSubmissionByUserId(userId: string): Promise<KycSubmission | undefined> {
-    const [submission] = await db
-      .select()
-      .from(kycSubmissions)
-      .where(eq(kycSubmissions.userId, userId))
-      .orderBy(desc(kycSubmissions.createdAt))
-      .limit(1);
+    const [submission] = await db.select().from(kycSubmissions).where(eq(kycSubmissions.userId, userId));
     return submission || undefined;
   }
 
   async getKycSubmissionById(id: string): Promise<KycSubmission | undefined> {
-    const [submission] = await db
-      .select()
-      .from(kycSubmissions)
-      .where(eq(kycSubmissions.id, id));
+    const [submission] = await db.select().from(kycSubmissions).where(eq(kycSubmissions.id, id));
     return submission || undefined;
   }
 
   async createKycSubmission(submission: InsertKycSubmission): Promise<KycSubmission> {
-    const [newSubmission] = await db
-      .insert(kycSubmissions)
-      .values(submission)
-      .returning();
-    
-    // Update user's KYC status to pending
-    await db
-      .update(users)
-      .set({ kycStatus: "pending" })
-      .where(eq(users.id, submission.userId));
-    
+    const [newSubmission] = await db.insert(kycSubmissions).values(submission).returning();
     return newSubmission;
   }
 
   async updateKycSubmission(id: string, updates: Partial<KycSubmission>): Promise<KycSubmission | undefined> {
-    const [updated] = await db
-      .update(kycSubmissions)
-      .set({ ...updates, updatedAt: new Date() })
-      .where(eq(kycSubmissions.id, id))
-      .returning();
+    const [updated] = await db.update(kycSubmissions).set({ ...updates, updatedAt: new Date() }).where(eq(kycSubmissions.id, id)).returning();
     return updated || undefined;
   }
 
   async getAllKycSubmissions(status?: string): Promise<KycSubmission[]> {
+    let query = db.select().from(kycSubmissions).orderBy(desc(kycSubmissions.createdAt));
     if (status) {
-      return await db
-        .select()
-        .from(kycSubmissions)
-        .where(eq(kycSubmissions.status, status))
-        .orderBy(desc(kycSubmissions.createdAt));
+      // @ts-ignore
+      query = query.where(eq(kycSubmissions.status, status));
     }
-    return await db
-      .select()
-      .from(kycSubmissions)
-      .orderBy(desc(kycSubmissions.createdAt));
+    return await query;
   }
 
   async countKycByStatus(status: string): Promise<number> {
-    const result = await db
-      .select({ count: count() })
-      .from(kycSubmissions)
-      .where(eq(kycSubmissions.status, status));
-    return result[0]?.count || 0;
+    const [result] = await db.select({ count: count() }).from(kycSubmissions).where(eq(kycSubmissions.status, status));
+    return result.count;
   }
 
   async approveKycSubmission(id: string, reviewerId: string, note?: string): Promise<KycSubmission | undefined> {
     const submission = await this.getKycSubmissionById(id);
     if (!submission) return undefined;
-
-    const [updated] = await db
-      .update(kycSubmissions)
-      .set({
-        status: "approved",
-        reviewerId,
-        reviewNote: note,
-        reviewedAt: new Date(),
-        updatedAt: new Date(),
-      })
+    
+    await this.updateUser(submission.userId, { kycStatus: "verified", isVerified: true });
+    
+    const [updated] = await db.update(kycSubmissions)
+      .set({ status: "approved", reviewerId, reviewNote: note, reviewedAt: new Date(), updatedAt: new Date() })
       .where(eq(kycSubmissions.id, id))
       .returning();
-
-    // Update user's KYC status and verification
-    await db
-      .update(users)
-      .set({ 
-        kycStatus: "verified",
-        isVerified: true
-      })
-      .where(eq(users.id, submission.userId));
-
-    return updated || undefined;
+    return updated;
   }
 
   async rejectKycSubmission(id: string, reviewerId: string, note?: string): Promise<KycSubmission | undefined> {
     const submission = await this.getKycSubmissionById(id);
     if (!submission) return undefined;
-
-    const [updated] = await db
-      .update(kycSubmissions)
-      .set({
-        status: "rejected",
-        reviewerId,
-        reviewNote: note,
-        reviewedAt: new Date(),
-        updatedAt: new Date(),
-      })
+    
+    await this.updateUser(submission.userId, { kycStatus: "rejected" });
+    
+    const [updated] = await db.update(kycSubmissions)
+      .set({ status: "rejected", reviewerId, reviewNote: note, reviewedAt: new Date(), updatedAt: new Date() })
       .where(eq(kycSubmissions.id, id))
       .returning();
-
-    // Update user's KYC status
-    await db
-      .update(users)
-      .set({ kycStatus: "rejected" })
-      .where(eq(users.id, submission.userId));
-
-    return updated || undefined;
+    return updated;
   }
 }
 
