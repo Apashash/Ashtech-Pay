@@ -1,42 +1,40 @@
 import fs from "fs";
 import path from "path";
 
-// Production base URL for Swychr API
-const SWYCHR_BASE_URL = "https://api.accountpe.com/api";
+// ─── Production endpoints (doc: Collection swychr api.md) ────────────────────
+// Base URL changed from /swychpay/ to /payin/ per updated documentation
+const SWYCHR_BASE_URL = "https://api.accountpe.com/api/payin";
 const SWYCHR_EMAIL = process.env.SWYCHR_EMAIL || "";
 const SWYCHR_PASSWORD = process.env.SWYCHR_PASSWORD || "";
 const TOKEN_FILE = path.join(process.cwd(), ".local", "swychr_token.json");
 
-// ─── Fee Rates (from official Ashtech Pay tariff table) ─────────────────────
-// Source: "Collection swychr api.md" – TARIFS ASHTECH PAY – PAYMENT COLLECTION
-// Swychr base fee + Ashtech 2% margin = total charged to client
-// pass_digital_charge: true → Swychr adds its fee on top, client pays gross amount
+// ─── Fee Rates (TARIFS ASHTECH PAY – PAYMENT COLLECTION) ────────────────────
+// Swychr base fee + Ashtech 2% margin = total facturé client (simple addition)
 export const SWYCHR_FEE_RATES: Record<string, number> = {
-  CM: 2.50,  // Cameroun        → total client: 4.50%
-  KE: 1.50,  // Kenya           → total client: 3.50%
-  GA: 3.00,  // Gabon           → total client: 5.00%
-  CD: 3.50,  // Congo DRC       → total client: 5.50%
-  SN: 2.50,  // Sénégal         → total client: 4.50%
-  CI: 3.00,  // Côte d'Ivoire   → total client: 5.00%
-  BF: 3.00,  // Burkina Faso    → total client: 5.00%
-  ML: 3.00,  // Mali            → total client: 5.00%
-  BJ: 3.00,  // Bénin           → total client: 5.00%
-  TG: 3.00,  // Togo            → total client: 5.00%
-  TZ: 3.00,  // Tanzanie        → total client: 5.00%
-  UG: 3.00,  // Ouganda         → total client: 5.00%
-  NG: 2.00,  // Nigéria         → total client: 4.00%
-  NE: 3.50,  // Niger           → total client: 5.50%
-  RW: 3.75,  // Rwanda          → total client: 5.75%
+  CM: 2.50,  // Cameroun          → total client: 4.50%
+  KE: 1.50,  // Kenya             → total client: 3.50%
+  GA: 3.00,  // Gabon             → total client: 5.00%
+  CD: 3.50,  // Congo DRC         → total client: 5.50%
+  SN: 2.50,  // Sénégal           → total client: 4.50%
+  CI: 3.00,  // Côte d'Ivoire     → total client: 5.00%
+  BF: 3.00,  // Burkina Faso      → total client: 5.00%
+  ML: 3.00,  // Mali              → total client: 5.00%
+  BJ: 3.00,  // Bénin             → total client: 5.00%
+  TG: 3.00,  // Togo              → total client: 5.00%
+  TZ: 3.00,  // Tanzanie          → total client: 5.00%
+  UG: 3.00,  // Ouganda           → total client: 5.00%
+  NG: 2.00,  // Nigéria           → total client: 4.00%
+  NE: 3.50,  // Niger             → total client: 5.50%
+  RW: 3.75,  // Rwanda            → total client: 5.75%
   CG: 4.50,  // Congo Brazzaville → total client: 6.50%
-  GN: 3.75,  // Guinée Conakry  → total client: 5.75%
-  GH: 2.50,  // Ghana           → total client: 4.50%
-  TD: 3.00,  // Tchad           → total client: 5.00%
+  GN: 3.75,  // Guinée Conakry    → total client: 5.75%
+  GH: 2.50,  // Ghana             → total client: 4.50%
+  TD: 3.00,  // Tchad             → total client: 5.00%
   GQ: 3.00,  // Guinée équatoriale → total client: 5.00%
-  GW: 3.00,  // Guinée-Bissau   → total client: 5.00%
-  CF: 3.00,  // Centrafrique    → total client: 5.00%
+  GW: 3.00,  // Guinée-Bissau     → total client: 5.00%
+  CF: 3.00,  // Centrafrique      → total client: 5.00%
 };
 
-// Ashtech margin is always 2% on top of Swychr base fee
 export const ASHTECH_MARGIN = 2.0;
 
 export function getSwychrFeeRate(countryCode: string): number {
@@ -44,36 +42,25 @@ export function getSwychrFeeRate(countryCode: string): number {
 }
 
 /**
- * Compute fee breakdown per the official tariff table (simple addition):
- *   totalRate = swychrRate + ashtechRate
- *   swychrFeeAmount = gross × swychrRate%   (passed to client via pass_digital_charge)
- *   ashtechFeeAmount = gross × 2%
+ * Fee breakdown per tariff table (simple addition):
+ *   totalRate      = swychrRate + 2%
+ *   swychrFeeAmt   = gross × swychrRate%   (passed to client via pass_digital_charge)
+ *   ashtechFeeAmt  = gross × 2%
  *   creditedAmount = gross × (1 - totalRate%)
- *   amountToSwychr = gross - swychrFeeAmount  (what we send to API; client pays ~gross on Swychr page)
+ *   amountToSwychr = gross - swychrFeeAmt  (what we send; Swychr adds its fee on top)
  *
- * Example – Cameroun (swychr 2.5%, ashtech 2%), gross = 100 XAF:
- *   swychrFee = 2.50, ashtechFee = 2.00, totalFee = 4.50, credited = 95.50, toSwychr = 97.50
+ * Example CM (swychr 2.5%), gross = 1000 XAF:
+ *   swychrFee=25, ashtechFee=20, totalFee=45 (4.5%), credited=955, toSwychr=975
  */
-export function computeSwychrFees(grossAmount: number, countryCode: string): {
-  amountToSwychr: number;
-  swychrFeeRate: number;
-  ashtechFeeRate: number;
-  totalFeeRate: number;
-  swychrFeeAmount: number;
-  ashtechFeeAmount: number;
-  totalFeeAmount: number;
-  creditedAmount: number;
-} {
-  const swychrFeeRate = getSwychrFeeRate(countryCode);
+export function computeSwychrFees(grossAmount: number, countryCode: string) {
+  const swychrFeeRate  = getSwychrFeeRate(countryCode);
   const ashtechFeeRate = ASHTECH_MARGIN;
-  const totalFeeRate = swychrFeeRate + ashtechFeeRate;
+  const totalFeeRate   = swychrFeeRate + ashtechFeeRate;
 
-  const swychrFeeAmount  = grossAmount * swychrFeeRate / 100;
+  const swychrFeeAmount  = grossAmount * swychrFeeRate  / 100;
   const ashtechFeeAmount = grossAmount * ashtechFeeRate / 100;
-  const totalFeeAmount   = grossAmount * totalFeeRate / 100;
+  const totalFeeAmount   = grossAmount * totalFeeRate   / 100;
   const creditedAmount   = grossAmount - totalFeeAmount;
-  // Amount sent to Swychr API. With pass_digital_charge=true, Swychr adds its fee
-  // on top → client pays ≈ grossAmount on the payment page.
   const amountToSwychr   = grossAmount - swychrFeeAmount;
 
   return {
@@ -88,7 +75,7 @@ export function computeSwychrFees(grossAmount: number, countryCode: string): {
   };
 }
 
-// ─── Token Management ────────────────────────────────────────────────────────
+// ─── Token management ─────────────────────────────────────────────────────────
 
 let cachedToken: string | null = null;
 let tokenExpiry: Date | null = null;
@@ -104,13 +91,13 @@ function parseJwtExp(token: string): Date | null {
 function loadPersistedToken(): void {
   try {
     if (fs.existsSync(TOKEN_FILE)) {
-      const data = JSON.parse(fs.readFileSync(TOKEN_FILE, "utf8"));
-      if (data.token && data.expiry) {
-        const expiry = new Date(data.expiry);
-        if (expiry > new Date()) {
-          cachedToken = data.token;
-          tokenExpiry = expiry;
-          console.log("[Swychr] Loaded persisted token, valid until:", expiry.toISOString());
+      const d = JSON.parse(fs.readFileSync(TOKEN_FILE, "utf8"));
+      if (d.token && d.expiry) {
+        const exp = new Date(d.expiry);
+        if (exp > new Date()) {
+          cachedToken  = d.token;
+          tokenExpiry  = exp;
+          console.log("[Swychr] Loaded persisted token, valid until:", exp.toISOString());
         }
       }
     }
@@ -132,14 +119,15 @@ function persistToken(token: string, expiry: Date): void {
 loadPersistedToken();
 
 /**
- * Obtain a bearer token for admin operations.
- * Doc: POST /admin/auth  (production path: /swychpay/auth/login)
+ * Doc: POST /admin/auth
+ * Production: https://api.accountpe.com/api/payin/admin/auth
+ * Response: { token, message, email }
  */
 export async function getSwychrToken(): Promise<string> {
   if (cachedToken && tokenExpiry && new Date() < tokenExpiry) {
     return cachedToken;
   }
-  const res = await fetch(`${SWYCHR_BASE_URL}/swychpay/auth/login`, {
+  const res = await fetch(`${SWYCHR_BASE_URL}/admin/auth`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email: SWYCHR_EMAIL, password: SWYCHR_PASSWORD }),
@@ -149,7 +137,8 @@ export async function getSwychrToken(): Promise<string> {
     throw new Error(`Swychr auth failed: ${res.status} ${text}`);
   }
   const json = await res.json();
-  const token = json.data?.token || json.token;
+  // Doc: token is at root level (not data.token)
+  const token = json.token || json.data?.token;
   if (!token) throw new Error(`Swychr auth: no token in response`);
   const expiry = parseJwtExp(token) || new Date(Date.now() + 47 * 60 * 60 * 1000);
   cachedToken = token;
@@ -159,25 +148,25 @@ export async function getSwychrToken(): Promise<string> {
   return cachedToken!;
 }
 
-// ─── Create Payment Link ─────────────────────────────────────────────────────
+// ─── Create payment link ──────────────────────────────────────────────────────
 
 export interface SwychrCreateLinkParams {
   country_code: string;
   name: string;
   email: string;
   mobile?: string;
-  grossAmount: number;   // total the user enters (e.g. 1000 XAF)
+  grossAmount: number;
   currency: string;
   transaction_id: string;
   description?: string;
-  callback_url?: string; // webhook URL for status updates
+  callback_url?: string;
 }
 
 export interface SwychrCreateLinkResponse {
   success: boolean;
   data?: {
     id: number;
-    payment_link: string;   // https://app.swychrconnect.com/payment/{uuid}
+    payment_link: string;
     transaction_id: string;
   };
   fees?: ReturnType<typeof computeSwychrFees>;
@@ -185,24 +174,29 @@ export interface SwychrCreateLinkResponse {
 }
 
 /**
- * Create a hosted payment link for collecting payment.
- * Doc: POST /create_payment_links  (production: /swychpay/create_payment_links)
+ * Doc: POST /create_payment_links
+ * Production: https://api.accountpe.com/api/payin/create_payment_links
+ * Response: { data: { id, payment_link, transaction_id }, message, status }
  *
- * pass_digital_charge: true → Swychr adds its fee on top of amountToSwychr,
- * so the client pays ≈ grossAmount on the payment page.
+ * pass_digital_charge: true → Swychr adds its fee on top, client pays ~grossAmount
  */
-export async function createSwychrPaymentLink(params: SwychrCreateLinkParams): Promise<SwychrCreateLinkResponse> {
+export async function createSwychrPaymentLink(
+  params: SwychrCreateLinkParams
+): Promise<SwychrCreateLinkResponse> {
   try {
     const token = await getSwychrToken();
     const fees  = computeSwychrFees(params.grossAmount, params.country_code);
 
-    console.log(`[Swychr] Creating payment link: gross=${params.grossAmount}, toSwychr=${fees.amountToSwychr}, credited=${fees.creditedAmount}, totalFee=${fees.totalFeeRate}%`);
+    console.log(
+      `[Swychr] Creating link: gross=${params.grossAmount}, toSwychr=${fees.amountToSwychr}, ` +
+      `credited=${fees.creditedAmount}, totalFee=${fees.totalFeeRate}%`
+    );
 
-    const res = await fetch(`${SWYCHR_BASE_URL}/swychpay/create_payment_links`, {
+    const res = await fetch(`${SWYCHR_BASE_URL}/create_payment_links`, {
       method: "POST",
       headers: {
-        "Content-Type":   "application/json",
-        "Authorization":  `Bearer ${token}`,
+        "Content-Type":    "application/json",
+        "Authorization":   `Bearer ${token}`,
         "Idempotency-Key": params.transaction_id,
       },
       body: JSON.stringify({
@@ -222,18 +216,12 @@ export async function createSwychrPaymentLink(params: SwychrCreateLinkParams): P
     const data = await res.json();
 
     if (!res.ok || !data.data?.id) {
-      console.error("[Swychr] Payment link creation failed:", data);
-      return { success: false, message: data.message || data.error || `HTTP ${res.status}` };
+      console.error("[Swychr] Create link failed:", JSON.stringify(data));
+      return { success: false, message: data.message || data.errors?.[0]?.detail || `HTTP ${res.status}` };
     }
 
-    const id = data.data.id as number;
-
-    // Doc says response includes payment_link. In practice it may be missing;
-    // fetch it via payment_link_byid as a fallback.
-    let payment_link: string = data.data?.payment_link || "";
-    if (!payment_link) {
-      payment_link = await resolvePaymentLink(params.transaction_id, id);
-    }
+    const id           = data.data.id as number;
+    const payment_link = data.data.payment_link as string; // always present in /payin/ response
 
     console.log(`[Swychr] Payment link created: id=${id}, url=${payment_link}`);
     return {
@@ -248,128 +236,75 @@ export async function createSwychrPaymentLink(params: SwychrCreateLinkParams): P
   }
 }
 
-/**
- * Resolve the hosted payment URL from the transaction_id.
- * First tries the documented /payment_link_status endpoint,
- * falls back to /payment_link_byid (undocumented but available in production).
- */
-async function resolvePaymentLink(transaction_id: string, fallbackId: number): Promise<string> {
-  // Try documented endpoint first
-  try {
-    const token = await getSwychrToken();
-    const r = await fetch(`${SWYCHR_BASE_URL}/swychpay/payment_link_status`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-      body: JSON.stringify({ transaction_id }),
-    });
-    if (r.ok) {
-      const d = await r.json();
-      const link = d.data?.data?.attributes?.payment_uuid || d.data?.payment_link || "";
-      if (link) return link;
-    }
-  } catch {}
-
-  // Fallback: undocumented endpoint available in production
-  try {
-    const r = await fetch(`${SWYCHR_BASE_URL}/swychpay/payment_link_byid`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ params: { id: transaction_id } }),
-    });
-    if (r.ok) {
-      const d = await r.json();
-      const link = d.data?.data?.attributes?.payment_uuid || "";
-      if (link) return link;
-    }
-  } catch {}
-
-  return `https://app.swychrconnect.com/payment/${fallbackId}`;
-}
-
-// ─── Check Payment Status ─────────────────────────────────────────────────────
+// ─── Check payment status ─────────────────────────────────────────────────────
 
 export interface SwychrStatusResponse {
   success: boolean;
   status?: "pending" | "completed" | "failed";
-  rawStatus?: number | string | null;
+  rawStatus?: number | null;
   data?: any;
   message?: string;
 }
 
 /**
- * Check status of a payment link by transaction_id.
- * Doc: POST /payment_link_status → returns {data:{data:{}}, message, status:200}
- * Note: In production, data.data is empty {}; actual status arrives via webhook.
- * Falls back to /payment_link_byid for richer data if available.
+ * Doc: POST /payment_link_status
+ * Production: https://api.accountpe.com/api/payin/payment_link_status
+ * Body: { transaction_id }
+ * Response: { data: { data: { attributes: { status, ... } } }, message, status:200 }
+ *
+ * Status values:
+ *   0 = pending (waiting for payment)
+ *   1 = completed (payment received)
+ *   2 = failed/expired
  */
-export async function checkSwychrPaymentStatus(transaction_id: string): Promise<SwychrStatusResponse> {
+export async function checkSwychrPaymentStatus(
+  transaction_id: string
+): Promise<SwychrStatusResponse> {
   try {
     const token = await getSwychrToken();
-
-    // Try the documented endpoint first
-    const r1 = await fetch(`${SWYCHR_BASE_URL}/swychpay/payment_link_status`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+    const res = await fetch(`${SWYCHR_BASE_URL}/payment_link_status`, {
+      method:  "POST",
+      headers: {
+        "Content-Type":  "application/json",
+        "Authorization": `Bearer ${token}`,
+      },
       body: JSON.stringify({ transaction_id }),
     });
 
-    if (r1.ok) {
-      const d1 = await r1.json();
-      const attrs = d1.data?.data?.attributes || d1.data?.data || {};
-      const rawStatus = attrs.status ?? null;
+    if (!res.ok) {
+      return { success: false, message: `HTTP ${res.status}` };
+    }
 
-      // Doc: data.data is {} for pending. Only interpret if non-empty.
-      if (rawStatus !== null && rawStatus !== undefined) {
-        return {
-          success: true,
-          status: mapRawStatus(rawStatus),
-          rawStatus,
-          data: attrs,
-        };
-      }
-      // Empty response = still pending (no payment yet)
+    const json   = await res.json();
+    const attrs  = json.data?.data?.attributes;
+
+    if (!attrs) {
+      // Empty data means still pending (as shown in doc sample)
       return { success: true, status: "pending", rawStatus: null, data: {} };
     }
 
-    // Fallback: use undocumented endpoint if documented one is unavailable
-    const r2 = await fetch(`${SWYCHR_BASE_URL}/swychpay/payment_link_byid`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ params: { id: transaction_id } }),
-    });
-    if (!r2.ok) return { success: false, message: `HTTP ${r2.status}` };
-
-    const d2 = await r2.json();
-    const attrs2 = d2.data?.data?.attributes;
-    if (!attrs2) return { success: false, message: "Payment not found" };
-
-    const rawStatus2 = attrs2.status ?? null;
+    const rawStatus = typeof attrs.status === "number" ? attrs.status : null;
     return {
-      success: true,
-      status: mapRawStatus(rawStatus2),
-      rawStatus: rawStatus2,
-      data: attrs2,
+      success:   true,
+      status:    mapRawStatus(rawStatus),
+      rawStatus,
+      data:      attrs,
     };
   } catch (err: any) {
     return { success: false, message: err.message };
   }
 }
 
-function mapRawStatus(raw: any): "pending" | "completed" | "failed" {
-  if (raw === 1 || raw === "success" || raw === "completed") return "completed";
-  if (raw === "expired" || raw === "cancelled") return "failed";
-  // raw=2 with no prior payment attempt = still pending (Swychr account issue)
-  // raw=0 = new link, pending
-  return "pending";
+function mapRawStatus(raw: number | null): "pending" | "completed" | "failed" {
+  if (raw === 1) return "completed";
+  if (raw === 2) return "failed";
+  return "pending"; // 0 or null = pending
 }
 
-// ─── Checkout Page – Payment Details ─────────────────────────────────────────
+// ─── Re-export for backward compat (checkout page fallback) ──────────────────
 
 export interface SwychrPaymentDetails {
   transactionId: string;
-  agencyCode: string;
-  secretKey: string;
-  web: string;
   netPayable: number;
   currency: string;
   description: string;
@@ -377,54 +312,39 @@ export interface SwychrPaymentDetails {
   email: string;
   mobile: string;
   adminName: string;
-  adminLogo: string;
   adminEmail: string;
+  paymentLink: string;
 }
 
 /**
- * Fetch full payment details for the checkout page.
- * Uses undocumented endpoints (payment_link_byid → payment_link_details)
- * to retrieve TouchPay SDK credentials for our custom checkout page.
+ * Fetch payment details for a transaction using the documented status endpoint.
+ * Doc: POST /payment_link_status → attributes include all link metadata.
  */
-export async function fetchPaymentLinkDetails(transaction_id: string): Promise<SwychrPaymentDetails | null> {
+export async function fetchPaymentLinkDetails(
+  transaction_id: string
+): Promise<SwychrPaymentDetails | null> {
   try {
-    // Step 1: resolve UUID from transaction_id
-    const r1 = await fetch(`${SWYCHR_BASE_URL}/swychpay/payment_link_byid`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ params: { id: transaction_id } }),
+    const token = await getSwychrToken();
+    const res = await fetch(`${SWYCHR_BASE_URL}/payment_link_status`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify({ transaction_id }),
     });
-    if (!r1.ok) return null;
-    const d1 = await r1.json();
-    const uuidUrl = d1.data?.data?.attributes?.payment_uuid || "";
-    const uuid = uuidUrl.split("/payment/")[1];
-    if (!uuid) return null;
-
-    // Step 2: fetch full details (includes agency_code, secret_key for TouchPay SDK)
-    const r2 = await fetch(`${SWYCHR_BASE_URL}/swychpay/payment_link_details`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ params: { id: uuid } }),
-    });
-    if (!r2.ok) return null;
-    const d2 = await r2.json();
-    const attrs = d2.data?.data?.attributes;
+    if (!res.ok) return null;
+    const json  = await res.json();
+    const attrs = json.data?.data?.attributes;
     if (!attrs) return null;
-
     return {
       transactionId: attrs.transaction_id || transaction_id,
-      agencyCode:    attrs.agency_code || "",
-      secretKey:     attrs.secret_key  || "",
-      web:           attrs.web         || "swychr.com",
       netPayable:    parseFloat(attrs.net_payable) || 0,
-      currency:      attrs.currency_code           || "XAF",
-      description:   attrs.description             || "",
-      name:          attrs.name                    || "",
-      email:         attrs.email                   || "",
-      mobile:        attrs.mobile                  || "",
-      adminName:     attrs.admin_name              || "Ashtech Pay",
-      adminLogo:     attrs.admin_logo              || "",
-      adminEmail:    attrs.admin_email             || "",
+      currency:      attrs.currency_code  || "XAF",
+      description:   attrs.description   || "",
+      name:          attrs.name           || "",
+      email:         attrs.email          || "",
+      mobile:        attrs.mobile         || "",
+      adminName:     attrs.admin_name     || "Ashtech Pay",
+      adminEmail:    attrs.admin_email    || "",
+      paymentLink:   attrs.payment_uuid   || "",
     };
   } catch {
     return null;
