@@ -117,40 +117,43 @@ function StatCard({ title, value, icon: Icon, trend, color, href }: {
   return content;
 }
 
+const INTERNAL_TRANSFER_KEY = "__ashtech_interne__";
+
 function SendMoneyDialog({ open, onClose, wallets = [] }: { open: boolean; onClose: () => void, wallets?: WalletEntry[] }) {
   const { toast } = useToast();
-  const [transferType, setTransferType] = useState<"ashtech" | "international">("ashtech");
   const [selectedWallet, setSelectedWallet] = useState<string>("XAF");
-  const [recipientCountry, setRecipientCountry] = useState<string>("Cameroun");
+  const [destination, setDestination] = useState<string>(INTERNAL_TRANSFER_KEY);
   const [recipientIdentifier, setRecipientIdentifier] = useState<string>("");
   const [amount, setAmount] = useState<string>("");
-  const [description, setDescription] = useState<string>("");
 
-  const form = useForm<z.infer<typeof transferSchema>>({
-    resolver: zodResolver(transferSchema),
-    defaultValues: { recipientUsername: "", amount: "", description: "" },
-  });
+  const isInternal = destination === INTERNAL_TRANSFER_KEY;
+
+  const reset = () => {
+    setRecipientIdentifier("");
+    setAmount("");
+    setSelectedWallet("XAF");
+    setDestination(INTERNAL_TRANSFER_KEY);
+  };
 
   const internalTransferMutation = useMutation({
     mutationFn: async () => {
-      if (!recipientIdentifier.trim()) throw new Error("Veuillez entrer un identifiant de destinataire");
+      if (!recipientIdentifier.trim()) throw new Error("Veuillez entrer l'identifiant du destinataire");
       if (!amount || parseFloat(amount) <= 0) throw new Error("Veuillez entrer un montant valide");
       const res = await apiRequest("POST", "/api/transfers/internal", {
         recipientIdentifier: recipientIdentifier.trim(),
         amount,
-        description,
         sourceCurrency: selectedWallet,
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Erreur lors du transfert");
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/wallets"] });
-      toast({ title: "Transfert effectué", description: "Le compte Ashtech Pay a été crédité avec succès" });
-      setRecipientIdentifier(""); setAmount(""); setDescription("");
+      toast({ title: "Transfert effectué ✓", description: `Compte de ${data.recipientName} crédité instantanément — Frais: 0` });
+      reset();
       onClose();
     },
     onError: (error: Error) => {
@@ -159,12 +162,18 @@ function SendMoneyDialog({ open, onClose, wallets = [] }: { open: boolean; onClo
   });
 
   const internationalTransferMutation = useMutation({
-    mutationFn: async (data: z.infer<typeof transferSchema>) => {
-      const expectedCurrency = COUNTRY_CURRENCIES[recipientCountry];
+    mutationFn: async () => {
+      const expectedCurrency = COUNTRY_CURRENCIES[destination];
       if (selectedWallet !== expectedCurrency) {
-        throw new Error("Impossible d'effectuer cette opération! La devise du compte sélectionné ne correspond pas au pays de destination.");
+        throw new Error(`Impossible d'effectuer cette opération! Le compte ${selectedWallet} ne correspond pas au pays ${destination} (devise attendue: ${expectedCurrency}).`);
       }
-      const res = await apiRequest("POST", "/api/transfers", { ...data, sourceCurrency: selectedWallet });
+      if (!recipientIdentifier.trim()) throw new Error("Veuillez entrer l'identifiant du destinataire");
+      if (!amount || parseFloat(amount) <= 0) throw new Error("Veuillez entrer un montant valide");
+      const res = await apiRequest("POST", "/api/transfers", {
+        recipientUsername: recipientIdentifier.trim(),
+        amount,
+        sourceCurrency: selectedWallet,
+      });
       const json = await res.json();
       if (!res.ok) throw new Error(json.message || "Erreur lors du transfert");
       return json;
@@ -174,7 +183,7 @@ function SendMoneyDialog({ open, onClose, wallets = [] }: { open: boolean; onClo
       queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/wallets"] });
       toast({ title: "Transfert effectué", description: "L'argent a été envoyé avec succès" });
-      form.reset();
+      reset();
       onClose();
     },
     onError: (error: Error) => {
@@ -182,160 +191,97 @@ function SendMoneyDialog({ open, onClose, wallets = [] }: { open: boolean; onClo
     },
   });
 
-  const handleClose = () => {
-    setRecipientIdentifier(""); setAmount(""); setDescription("");
-    form.reset();
-    onClose();
+  const isPending = internalTransferMutation.isPending || internationalTransferMutation.isPending;
+
+  const handleSend = () => {
+    if (isInternal) {
+      internalTransferMutation.mutate();
+    } else {
+      internationalTransferMutation.mutate();
+    }
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
+    <Dialog open={open} onOpenChange={() => { reset(); onClose(); }}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Envoyer de l'argent</DialogTitle>
-          <DialogDescription>Choisissez le type de transfert</DialogDescription>
+          <DialogDescription>Transfert instantané vers un compte Ashtech Pay ou international</DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-2 gap-2 p-1 bg-muted rounded-lg">
-          <button
-            type="button"
-            onClick={() => setTransferType("ashtech")}
-            className={`py-2 px-3 rounded-md text-sm font-medium transition-all ${transferType === "ashtech" ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-          >
-            🏦 Compte Ashtech Pay
-          </button>
-          <button
-            type="button"
-            onClick={() => setTransferType("international")}
-            className={`py-2 px-3 rounded-md text-sm font-medium transition-all ${transferType === "international" ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-          >
-            🌍 Transfert International
-          </button>
-        </div>
-
-        {transferType === "ashtech" ? (
-          <div className="space-y-4">
-            <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
-              <p className="text-xs text-blue-700 dark:text-blue-300">Transférez instantanément vers n'importe quel compte Ashtech Pay via email ou nom d'utilisateur.</p>
-            </div>
-
-            <div className="space-y-2">
-              <FormLabel>Compte à débiter</FormLabel>
-              <Select value={selectedWallet} onValueChange={setSelectedWallet}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choisir un compte" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="XAF">Compte Principal (XAF)</SelectItem>
-                  {wallets.filter(w => w.currency !== "XAF").map(w => (
-                    <SelectItem key={w.id} value={w.currency}>Compte {w.currency} ({w.balance})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <FormLabel>Email, téléphone ou nom d'utilisateur</FormLabel>
-              <Input
-                placeholder="exemple@email.com / +237600000000 / username"
-                value={recipientIdentifier}
-                onChange={e => setRecipientIdentifier(e.target.value)}
-                data-testid="input-recipient-identifier"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <FormLabel>Montant ({selectedWallet})</FormLabel>
-              <Input
-                type="number"
-                placeholder="10000"
-                value={amount}
-                onChange={e => setAmount(e.target.value)}
-                data-testid="input-ashtech-amount"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <FormLabel>Description (optionnel)</FormLabel>
-              <Input
-                placeholder="Pour..."
-                value={description}
-                onChange={e => setDescription(e.target.value)}
-                data-testid="input-ashtech-description"
-              />
-            </div>
-
-            <Button
-              type="button"
-              className="w-full"
-              onClick={() => internalTransferMutation.mutate()}
-              disabled={internalTransferMutation.isPending}
-              data-testid="button-send-ashtech"
-            >
-              {internalTransferMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-              Envoyer
-            </Button>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Solde à débiter</label>
+            <Select value={selectedWallet} onValueChange={setSelectedWallet}>
+              <SelectTrigger>
+                <SelectValue placeholder="Choisir un compte" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="XAF">Compte Principal (XAF)</SelectItem>
+                {wallets.filter(w => w.currency !== "XAF").map(w => (
+                  <SelectItem key={w.id} value={w.currency}>Compte {w.currency} — {w.balance} {w.currency}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        ) : (
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit((d) => internationalTransferMutation.mutate(d))} className="space-y-4">
-              <div className="space-y-2">
-                <FormLabel>Compte à débiter</FormLabel>
-                <Select value={selectedWallet} onValueChange={setSelectedWallet}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choisir un compte" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="XAF">Compte Principal (XAF)</SelectItem>
-                    {wallets.filter(w => w.currency !== "XAF").map(w => (
-                      <SelectItem key={w.id} value={w.currency}>Compte {w.currency} ({w.balance})</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
 
-              <div className="space-y-2">
-                <FormLabel>Pays de destination</FormLabel>
-                <Select value={recipientCountry} onValueChange={setRecipientCountry}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choisir un pays" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.keys(COUNTRY_CURRENCIES).map(country => (
-                      <SelectItem key={country} value={country}>{country}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Destination</label>
+            <Select value={destination} onValueChange={setDestination}>
+              <SelectTrigger>
+                <SelectValue placeholder="Choisir la destination" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={INTERNAL_TRANSFER_KEY}>🏦 Transfert Interne Ashtech Pay</SelectItem>
+                {Object.keys(COUNTRY_CURRENCIES)
+                  .filter((c, i, arr) => arr.findIndex(x => COUNTRY_CURRENCIES[x] === COUNTRY_CURRENCIES[c]) === i)
+                  .map(country => (
+                    <SelectItem key={country} value={country}>🌍 {country}</SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-              <FormField control={form.control} name="recipientUsername" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Nom d'utilisateur du destinataire</FormLabel>
-                  <FormControl><Input placeholder="username" {...field} data-testid="input-recipient" /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={form.control} name="amount" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Montant ({selectedWallet})</FormLabel>
-                  <FormControl><Input type="number" placeholder="10000" {...field} data-testid="input-amount" /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={form.control} name="description" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Description (optionnel)</FormLabel>
-                  <FormControl><Input placeholder="Pour..." {...field} data-testid="input-description" /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <Button type="submit" className="w-full" disabled={internationalTransferMutation.isPending} data-testid="button-send-confirm">
-                {internationalTransferMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                Envoyer
-              </Button>
-            </form>
-          </Form>
-        )}
+          {isInternal && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-green-50 dark:bg-green-950/30 rounded-lg border border-green-200 dark:border-green-800">
+              <span className="text-green-600 text-sm font-medium">Frais: 0 — Transfert gratuit et instantané</span>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">
+              {isInternal ? "Email, téléphone ou nom d'utilisateur" : "Nom d'utilisateur du destinataire"}
+            </label>
+            <Input
+              placeholder={isInternal ? "exemple@email.com / +237600000000 / username" : "username"}
+              value={recipientIdentifier}
+              onChange={e => setRecipientIdentifier(e.target.value)}
+              data-testid="input-recipient-identifier"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Montant ({selectedWallet})</label>
+            <Input
+              type="number"
+              placeholder="10000"
+              value={amount}
+              onChange={e => setAmount(e.target.value)}
+              data-testid="input-amount"
+            />
+          </div>
+
+          <Button
+            type="button"
+            className="w-full"
+            onClick={handleSend}
+            disabled={isPending}
+            data-testid="button-send-confirm"
+          >
+            {isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+            Envoyer
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );
