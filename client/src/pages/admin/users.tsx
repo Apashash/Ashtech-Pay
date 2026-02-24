@@ -40,12 +40,14 @@ import {
   Eye,
   MoreHorizontal,
   Edit,
-  Trash2
+  Trash2,
+  DollarSign
 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { format } from "date-fns";
@@ -82,6 +84,8 @@ export default function AdminUsers() {
   const [editUser, setEditUser] = useState<User | null>(null);
   const [editForm, setEditForm] = useState({ fullName: "", email: "", phone: "", role: "" });
   const [deleteModal, setDeleteModal] = useState<User | null>(null);
+  const [balanceModal, setBalanceModal] = useState<User | null>(null);
+  const [newBalance, setNewBalance] = useState("");
 
   useEffect(() => {
     if (urlSearch) {
@@ -173,6 +177,20 @@ export default function AdminUsers() {
     },
     onError: () => {
       toast({ title: "Erreur lors de la suppression", variant: "destructive" });
+    },
+  });
+
+  const updateBalanceMutation = useMutation({
+    mutationFn: async ({ id, balance }: { id: string; balance: string }) => {
+      return apiRequest("PATCH", `/api/admin/users/${id}`, { balance });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      toast({ title: "Solde mis à jour" });
+      setBalanceModal(null);
+    },
+    onError: () => {
+      toast({ title: "Erreur lors de la mise à jour du solde", variant: "destructive" });
     },
   });
 
@@ -366,6 +384,13 @@ export default function AdminUsers() {
                             <DropdownMenuItem onClick={() => setRoleMutation.mutate({ id: user.id, role: "user" })}>
                               <Shield className="w-4 h-4 mr-2" /> Remettre User
                             </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => {
+                              setNewBalance(user.balance);
+                              setBalanceModal(user);
+                            }}>
+                              <DollarSign className="w-4 h-4 mr-2" /> Modifier le solde
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={() => setDeleteModal(user)} className="text-red-500">
                               <Trash2 className="w-4 h-4 mr-2" /> Supprimer
                             </DropdownMenuItem>
@@ -563,6 +588,40 @@ export default function AdminUsers() {
               >
                 <Trash2 className="w-4 h-4 mr-2" />
                 Supprimer définitivement
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={!!balanceModal} onOpenChange={() => setBalanceModal(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Modifier le solde de {balanceModal?.fullName}</DialogTitle>
+              <DialogDescription>
+                Entrez le nouveau solde pour cet utilisateur. Le montant actuel est de {balanceModal ? formatCurrency(parseFloat(balanceModal.balance), balanceModal.preferredCurrency as any) : ""}.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4 space-y-4">
+              <div className="space-y-2">
+                <Label>Nouveau solde (XAF)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={newBalance}
+                  onChange={(e) => setNewBalance(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setBalanceModal(null)}>
+                Annuler
+              </Button>
+              <Button 
+                onClick={() => balanceModal && updateBalanceMutation.mutate({ id: balanceModal.id, balance: newBalance })}
+                disabled={updateBalanceMutation.isPending}
+              >
+                {updateBalanceMutation.isPending ? "Mise à jour..." : "Mettre à jour le solde"}
               </Button>
             </DialogFooter>
           </DialogContent>

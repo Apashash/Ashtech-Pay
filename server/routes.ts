@@ -2231,6 +2231,12 @@ export async function registerRoutes(
     try {
       const { id } = req.params;
       const updates = req.body;
+      
+      // Special handling for balance update to ensure it's treated as decimal
+      if (updates.balance !== undefined) {
+        updates.balance = parseFloat(updates.balance).toFixed(2);
+      }
+
       const user = await storage.updateUser(id, updates);
       if (!user) {
         return res.status(404).json({ message: "Utilisateur non trouvé" });
