@@ -114,14 +114,16 @@ export async function createSwychrPayout(
     });
 
     const json = await res.json();
-    console.log(`[PayoutAPI] create_transaction response ${res.status}:`, JSON.stringify(json));
+    console.log(`[PayoutAPI] create_transaction response HTTP=${res.status} body.status=${json.status}:`, JSON.stringify(json));
 
-    if (!res.ok) {
-      return { success: false, message: json.message || `HTTP ${res.status}`, rawStatus: res.status };
+    // Swychr returns HTTP 200 even for errors — check json.status (400, 404, etc.)
+    const bodyStatus = typeof json.status === "number" ? json.status : res.status;
+    if (!res.ok || bodyStatus >= 400) {
+      return { success: false, message: json.message || `HTTP ${bodyStatus}`, rawStatus: bodyStatus };
     }
 
     // Doc: CreateTransactionResponse { status, message, transaction_id, data? }
-    const extTxId = json.transaction_id || params.transaction_id;
+    const extTxId = json.transaction_id || (json.data && json.data.transaction_id) || params.transaction_id;
     return { success: true, transaction_id: extTxId, message: json.message, rawStatus: json.status };
 
   } catch (err: any) {
@@ -152,12 +154,23 @@ export async function checkSwychrPayoutStatus(
     }
 
     const json = await res.json();
-    // Doc: TransactionStatusResponse { status, message, data: { transaction_id, status, amount, currency, updated_at, provider_reference, failure_reason } }
+    console.log(`[PayoutAPI] transaction_status HTTP=${res.status} body.status=${json.status}:`, JSON.stringify(json));
+
+    // Swychr returns HTTP 200 even for errors — check json.status
+    const bodyStatus = typeof json.status === "number" ? json.status : res.status;
+    if (!res.ok || bodyStatus >= 400) {
+      // 404 = not found in Swychr → treat as failed
+      return { success: false, message: json.message || `HTTP ${bodyStatus}`, status: "failed" };
+    }
+
+    // Doc: TransactionStatusResponse { status, message, data: { transaction_id, status, ... } }
     const data: any = json.data || {};
+    const rawStatus = (data.status || "") as string;
+    const normalizedStatus = rawStatus.toLowerCase() as PayoutStatus;
 
     return {
       success:            true,
-      status:             data.status as PayoutStatus,
+      status:             normalizedStatus || undefined,
       provider_reference: data.provider_reference || null,
       failure_reason:     data.failure_reason     || null,
       message:            json.message,

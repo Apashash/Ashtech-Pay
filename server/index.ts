@@ -3,7 +3,7 @@ import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { startPaymentPoller } from "./paymentPoller";
-import { startPayoutPoller } from "./payoutPoller";
+import { startPayoutPoller, recoverPendingPayouts } from "./payoutPoller";
 import { seedWithdrawalTransferFees } from "./seedWithdrawalTransferFees";
 
 const app = express();
@@ -98,6 +98,9 @@ app.use((req, res, next) => {
       log(`serving on port ${port}`);
       startPaymentPoller();
       startPayoutPoller();
+      recoverPendingPayouts().catch(err =>
+        console.error("[PayoutPoller] Recovery error:", err)
+      );
       seedWithdrawalTransferFees().catch(err =>
         console.error("[FeesSeed] Error during fee seeding:", err)
       );

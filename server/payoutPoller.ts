@@ -5,8 +5,8 @@ const POLL_INTERVAL  = 30_000; // 30 seconds
 const MAX_ATTEMPTS   = 120;    // 120 × 30s = 60 minutes max
 
 interface PendingPayout {
-  transactionId:  string; // DB transaction.id
-  reference:      string; // our internal ref (used for Swychr lookup)
+  transactionId:  string;
+  reference:      string;
   userId:         string;
   amount:         string;
   totalDebited:   string;
@@ -22,6 +22,38 @@ export function addPendingPayout(payout: Omit<PendingPayout, "attempts">) {
 
 export function removePendingPayout(reference: string) {
   pendingPayouts.delete(reference);
+}
+
+// ─── Recover pending payouts from DB on startup ───────────────────────────
+export async function recoverPendingPayouts() {
+  try {
+    const all = await storage.getAllTransactions();
+    const pending = all.filter(t =>
+      (t.type === "withdrawal" || t.type === "transfer_out") && t.status === "pending"
+    );
+    if (pending.length === 0) {
+      console.log("[PayoutPoller] No pending payouts to recover");
+      return;
+    }
+    console.log(`[PayoutPoller] Recovering ${pending.length} pending payout(s) from DB`);
+    for (const t of pending) {
+      const ref = t.reference ?? "";
+      if (!ref) continue;
+      if (!pendingPayouts.has(ref)) {
+        pendingPayouts.set(ref, {
+          transactionId: t.id,
+          reference:     ref,
+          userId:        t.userId,
+          amount:        t.amount ?? "0",
+          totalDebited:  t.totalAmount ?? t.amount ?? "0",
+          attempts:      0,
+        });
+        console.log(`[PayoutPoller] Recovered: ${ref} (${t.type})`);
+      }
+    }
+  } catch (err: any) {
+    console.error("[PayoutPoller] Recovery error:", err.message);
+  }
 }
 
 async function processPayout(payout: PendingPayout, apiStatus: string) {
@@ -45,7 +77,6 @@ async function processPayout(payout: PendingPayout, apiStatus: string) {
       console.log(`[PayoutPoller] ✅ Payout success: ${payout.reference}`);
 
     } else {
-      // failed / refunded / cancelled → refund user
       await storage.updateTransactionStatus(payout.transactionId, "failed");
       const refundAmount = parseFloat(payout.totalDebited || payout.amount);
       await storage.updateUserBalance(payout.userId, refundAmount);
@@ -79,7 +110,12 @@ async function pollPendingPayouts() {
 
     const result = await checkSwychrPayoutStatus(reference);
     if (!result.success) {
-      console.log(`[PayoutPoller] Status check error for ${reference}: ${result.message}`);
+      console.log(`[PayoutPoller] Status check failed for ${reference}: ${result.message}`);
+      // If transaction not found in Swychr (404) → refund immediately
+      if (result.status === "failed") {
+        console.log(`[PayoutPoller] Transaction not found in Swychr, triggering refund for ${reference}`);
+        await processPayout(payout, "failed");
+      }
       continue;
     }
 
@@ -91,7 +127,7 @@ async function pollPendingPayouts() {
     } else if (status === "failed" || status === "refunded" || status === "cancelled") {
       await processPayout(payout, status);
     }
-    // pending / processing → keep polling
+    // pending / processing / undefined → keep polling
   }
 }
 
