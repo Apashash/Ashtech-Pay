@@ -924,74 +924,74 @@ export async function registerRoutes(
   // Transfer money (internal - between users)
   app.post("/api/transfers", requireAuth, async (req, res) => {
     try {
-      const data = transferSchema.parse(req.body);
+      const { recipientUsername, amount, description, sourceCurrency } = req.body;
       const senderId = req.userId!;
-      const amount = parseFloat(data.amount);
+      const amountNum = parseFloat(amount);
 
       const sender = await storage.getUser(senderId);
-      if (!sender) {
-        return res.status(404).json({ message: "Utilisateur non trouvé" });
+      if (!sender) return res.status(404).json({ message: "Utilisateur non trouvé" });
+
+      const recipient = await storage.getUserByUsername(recipientUsername);
+      if (!recipient) return res.status(404).json({ message: "Destinataire non trouvé" });
+      if (recipient.id === senderId) return res.status(400).json({ message: "Vous ne pouvez pas vous envoyer de l'argent" });
+
+      const currency = sourceCurrency || "XAF";
+
+      // Vérifier le solde
+      if (currency === "XAF") {
+        if (parseFloat(sender.balance) < amountNum) {
+          return res.status(400).json({ message: "Solde insuffisant" });
+        }
+        await storage.updateUserBalance(senderId, -amountNum);
+        await storage.updateUserBalance(recipient.id, amountNum);
+      } else {
+        const wallet = await storage.getUserWallet(senderId, currency);
+        if (!wallet || parseFloat(wallet.balance) < amountNum) {
+          return res.status(400).json({ message: "Solde insuffisant dans ce portefeuille" });
+        }
+        await storage.upsertWallet(senderId, currency, -amountNum);
+        await storage.upsertWallet(recipient.id, currency, amountNum);
       }
 
-      const recipient = await storage.getUserByUsername(data.recipientUsername);
-      if (!recipient) {
-        return res.status(404).json({ message: "Destinataire non trouvé" });
-      }
+      const transferRef = generateTransactionReference("transfer_out");
 
-      if (recipient.id === senderId) {
-        return res.status(400).json({ message: "Vous ne pouvez pas vous envoyer de l'argent" });
-      }
-
-      if (parseFloat(sender.balance) < amount) {
-        return res.status(400).json({ message: "Solde insuffisant" });
-      }
-
-      await storage.updateUserBalance(senderId, -amount);
-      await storage.updateUserBalance(recipient.id, amount);
-
-      const transferOutRef = generateTransactionReference("transfer_out");
-      const transferInRef = generateTransactionReference("transfer_in");
-
-      await storage.createTransaction({
+      const transactionOut = await storage.createTransaction({
         userId: senderId,
         type: "transfer_out",
-        amount: data.amount,
-        currency: "XAF",
+        amount: amountNum.toFixed(2),
+        currency,
         status: "completed",
-        description: data.description || `Transfert à ${recipient.fullName}`,
+        description: description || `Transfert à ${recipient.fullName}`,
         recipientId: recipient.id,
-        reference: transferOutRef,
+        recipientName: recipient.fullName,
+        reference: transferRef,
+        totalAmount: amountNum.toFixed(2),
       });
 
-      const transferInTx = await storage.createTransaction({
+      const transactionIn = await storage.createTransaction({
         userId: recipient.id,
         type: "transfer_in",
-        amount: data.amount,
-        currency: "XAF",
+        amount: amountNum.toFixed(2),
+        currency,
         status: "completed",
         description: `Reçu de ${sender.fullName}`,
         recipientId: senderId,
-        reference: transferInRef,
+        reference: transferRef,
+        totalAmount: amountNum.toFixed(2),
       });
 
-      // Create notification for recipient
+      // Notify recipient
       await storage.createUserNotification({
         userId: recipient.id,
         type: "transfer_received",
         title: "Argent reçu",
-        message: `Vous avez reçu ${data.amount} XAF de ${sender.fullName}.`,
-        transactionId: transferInTx.id,
+        message: `Vous avez reçu ${amountNum.toFixed(2)} ${currency} de ${sender.fullName}.`,
+        transactionId: transactionIn.id,
         isRead: false,
       });
 
-      res.json({ message: "Transfert réussi" });
+      res.json(transactionOut);
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: error.errors[0].message });
-      }
-      if (error instanceof Error) {
-        return res.status(400).json({ message: error.message });
-      }
       console.error("Transfer error:", error);
       res.status(500).json({ message: "Erreur serveur" });
     }

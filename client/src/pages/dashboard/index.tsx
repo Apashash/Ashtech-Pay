@@ -117,8 +117,11 @@ function StatCard({ title, value, icon: Icon, trend, color, href }: {
   return content;
 }
 
-function SendMoneyDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+function SendMoneyDialog({ open, onClose, wallets = [] }: { open: boolean; onClose: () => void, wallets?: WalletEntry[] }) {
   const { toast } = useToast();
+  const [selectedWallet, setSelectedWallet] = useState<string>("XAF");
+  const [recipientCountry, setRecipientCountry] = useState<string>("Cameroon");
+
   const form = useForm<z.infer<typeof transferSchema>>({
     resolver: zodResolver(transferSchema),
     defaultValues: { recipientUsername: "", amount: "", description: "" },
@@ -126,7 +129,13 @@ function SendMoneyDialog({ open, onClose }: { open: boolean; onClose: () => void
 
   const transferMutation = useMutation({
     mutationFn: async (data: z.infer<typeof transferSchema>) => {
-      const res = await apiRequest("POST", "/api/transfers", data);
+      // Validation de la devise par rapport au pays
+      const expectedCurrency = COUNTRY_CURRENCIES[recipientCountry];
+      if (selectedWallet !== expectedCurrency) {
+        throw new Error("Impossible d'effectuer cette opération! La devise du compte sélectionné ne correspond pas au pays de destination.");
+      }
+
+      const res = await apiRequest("POST", "/api/transfers", { ...data, sourceCurrency: selectedWallet });
       return res.json();
     },
     onSuccess: () => {
@@ -150,6 +159,35 @@ function SendMoneyDialog({ open, onClose }: { open: boolean; onClose: () => void
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit((d) => transferMutation.mutate(d))} className="space-y-4">
+            <div className="space-y-2">
+              <FormLabel>Compte à débiter</FormLabel>
+              <Select value={selectedWallet} onValueChange={setSelectedWallet}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choisir un compte" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="XAF">Compte Principal (XAF)</SelectItem>
+                  {wallets.filter(w => w.currency !== "XAF").map(w => (
+                    <SelectItem key={w.id} value={w.currency}>Compte {w.currency} ({w.balance})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <FormLabel>Pays de destination</FormLabel>
+              <Select value={recipientCountry} onValueChange={setRecipientCountry}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choisir un pays" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.keys(COUNTRY_CURRENCIES).map(country => (
+                    <SelectItem key={country} value={country}>{country}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <FormField control={form.control} name="recipientUsername" render={({ field }) => (
               <FormItem>
                 <FormLabel>Nom d'utilisateur du destinataire</FormLabel>
@@ -159,7 +197,7 @@ function SendMoneyDialog({ open, onClose }: { open: boolean; onClose: () => void
             )} />
             <FormField control={form.control} name="amount" render={({ field }) => (
               <FormItem>
-                <FormLabel>Montant (XAF)</FormLabel>
+                <FormLabel>Montant ({selectedWallet})</FormLabel>
                 <FormControl><Input type="number" placeholder="10000" {...field} data-testid="input-amount" /></FormControl>
                 <FormMessage />
               </FormItem>
@@ -684,7 +722,11 @@ export default function DashboardHome() {
         </Card>
       </div>
 
-      <SendMoneyDialog open={activeDialog === "send"} onClose={() => setActiveDialog(null)} />
+        <SendMoneyDialog 
+          open={activeDialog === "send"} 
+          onClose={() => setActiveDialog(null)} 
+          wallets={wallets}
+        />
       <DepositDialog open={activeDialog === "deposit"} onClose={() => setActiveDialog(null)} />
       <WithdrawDialog open={activeDialog === "withdraw"} onClose={() => setActiveDialog(null)} />
       <CreateLinkDialog open={activeDialog === "link"} onClose={() => setActiveDialog(null)} />
