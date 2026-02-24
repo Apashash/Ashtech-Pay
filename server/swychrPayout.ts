@@ -173,20 +173,61 @@ export async function createSwychrPayout(
   }
 }
 
-// ─── Fiat → PUSD conversion (for wallet-to-wallet convert) ──────────────────
+// ─── Fiat → PUSD rate (rate-only, no wallet balance needed) ──────────────────
+// Returns how many PUSD a given fiatAmount is worth, using the reverse of pusd_to_fiat_rate
 export async function fiatToPusd(currencyCode: string, fiatAmount: number): Promise<{ success: boolean; pusdAmount?: number; message?: string }> {
   try {
-    const token = await getPayoutToken();
-    const res = await fetch(`${PAYOUT_BASE_URL}/fiat_to_pusd_conversion`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-      body: JSON.stringify({ currency_code: currencyCode, fiat_amount: fiatAmount }),
-    });
-    const json = await res.json();
-    const bodyStatus = typeof json.status === "number" ? json.status : res.status;
-    if (bodyStatus >= 400) return { success: false, message: json.message || `HTTP ${bodyStatus}` };
-    const pusd = json.data?.pusd_amount ?? json.pusd_amount ?? json.data?.amount;
-    return { success: true, pusdAmount: pusd };
+    // Map currency to a representative country code for the rate endpoint
+    const CURRENCY_TO_COUNTRY: Record<string, string> = {
+      XAF: "CM", XOF: "SN", GHS: "GH", NGN: "NG", KES: "KE",
+      RWF: "RW", TZS: "TZ", UGX: "UG", CDF: "CD", GNF: "GN",
+    };
+    const countryCode = CURRENCY_TO_COUNTRY[currencyCode] || "CM";
+    // Get: 1 PUSD = X fiat
+    const rateRes = await pusdToFiatRate(countryCode, 1);
+    if (!rateRes.success || !rateRes.fiatAmount || rateRes.fiatAmount === 0) {
+      return { success: false, message: rateRes.message || "Taux indisponible" };
+    }
+    // fiatAmount / (fiat per PUSD) = pusd amount
+    const pusdAmount = fiatAmount / rateRes.fiatAmount;
+    return { success: true, pusdAmount };
+  } catch (err: any) {
+    return { success: false, message: err.message };
+  }
+}
+
+// ─── Cross-currency rate via PUSD bridge (no wallet balance needed) ───────────
+// Returns how many targetCurrency units you get for a given sourceAmount of sourceCurrency
+export async function getConversionRate(
+  sourceCurrency: string,
+  targetCurrency: string,
+  sourceAmount: number,
+): Promise<{ success: boolean; targetAmount?: number; rate?: number; message?: string }> {
+  const CURRENCY_TO_COUNTRY: Record<string, string> = {
+    XAF: "CM", XOF: "SN", GHS: "GH", NGN: "NG", KES: "KE",
+    RWF: "RW", TZS: "TZ", UGX: "UG", CDF: "CD", GNF: "GN",
+  };
+  try {
+    const sourceCountry = CURRENCY_TO_COUNTRY[sourceCurrency] || "CM";
+    const targetCountry = CURRENCY_TO_COUNTRY[targetCurrency] || "CM";
+
+    // 1 PUSD = sourceRate source_fiat
+    const sourceRes = await pusdToFiatRate(sourceCountry, 1);
+    if (!sourceRes.success || !sourceRes.fiatAmount || sourceRes.fiatAmount === 0) {
+      return { success: false, message: `Taux source ${sourceCurrency} indisponible: ${sourceRes.message}` };
+    }
+    // 1 PUSD = targetRate target_fiat
+    const targetRes = await pusdToFiatRate(targetCountry, 1);
+    if (!targetRes.success || !targetRes.fiatAmount) {
+      return { success: false, message: `Taux cible ${targetCurrency} indisponible: ${targetRes.message}` };
+    }
+
+    // sourceAmount source_fiat → pusd → targetAmount target_fiat
+    const pusdAmount = sourceAmount / sourceRes.fiatAmount;
+    const targetAmount = pusdAmount * targetRes.fiatAmount;
+    const rate = targetRes.fiatAmount / sourceRes.fiatAmount; // 1 source = rate target
+
+    return { success: true, targetAmount, rate };
   } catch (err: any) {
     return { success: false, message: err.message };
   }

@@ -27,7 +27,7 @@ import fs from "fs";
 import { uploadToSupabase } from "./supabase";
 import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, fetchPaymentLinkDetails, ASHTECH_MARGIN } from "./swychr";
 import { addPendingPayment } from "./paymentPoller";
-import { createSwychrPayout, formatInternationalPhone, fiatToPusd, pusdToFiatRate } from "./swychrPayout";
+import { createSwychrPayout, formatInternationalPhone, fiatToPusd, pusdToFiatRate, getConversionRate } from "./swychrPayout";
 import { addPendingPayout } from "./payoutPoller";
 
 const uploadsDir = path.join(process.cwd(), "uploads");
@@ -1367,20 +1367,13 @@ export async function registerRoutes(
         return res.status(400).json({ message: `Solde insuffisant en ${fromCurrency} (disponible: ${sourceBalance.toFixed(2)})` });
       }
 
-      // Step 1: Convert source fiat → PUSD
-      const pusdResult = await fiatToPusd(fromCurrency, parsedAmount);
-      if (!pusdResult.success || !pusdResult.pusdAmount) {
-        return res.status(400).json({ message: `Conversion ${fromCurrency}→PUSD échouée: ${pusdResult.message}` });
+      // Convert via PUSD bridge (pure rate calculation, no Swychr wallet balance needed)
+      const convResult = await getConversionRate(fromCurrency, toCurrency, parsedAmount);
+      if (!convResult.success || convResult.targetAmount === undefined) {
+        return res.status(400).json({ message: `Conversion ${fromCurrency}→${toCurrency} échouée: ${convResult.message}` });
       }
 
-      // Step 2: Find country code for target currency to get PUSD → fiat rate
-      const countryCodeForTarget = Object.entries(CURRENCY_ZONE).find(([, c]) => c === toCurrency)?.[0] || "CM";
-      const fiatResult = await pusdToFiatRate(countryCodeForTarget, pusdResult.pusdAmount);
-      if (!fiatResult.success || !fiatResult.fiatAmount) {
-        return res.status(400).json({ message: `Conversion PUSD→${toCurrency} échouée: ${fiatResult.message}` });
-      }
-
-      const receivedAmount = fiatResult.fiatAmount;
+      const receivedAmount = convResult.targetAmount;
 
       // Debit source wallet
       if (fromCurrency === "XAF") {
@@ -1415,7 +1408,6 @@ export async function registerRoutes(
         fromCurrency,
         toAmount: receivedAmount,
         toCurrency,
-        pusdBridge: pusdResult.pusdAmount,
         message: `Conversion réussie : ${parsedAmount.toFixed(2)} ${fromCurrency} → ${receivedAmount.toFixed(2)} ${toCurrency}`,
       });
     } catch (error) {
@@ -1447,7 +1439,7 @@ export async function registerRoutes(
     }
   });
 
-  // POST /api/wallets/convert-preview — preview conversion rate (no actual conversion)
+  // POST /api/wallets/convert-preview — preview conversion rate (no actual conversion, no Swychr balance needed)
   app.post("/api/wallets/convert-preview", requireAuth, async (req, res) => {
     try {
       const { fromCurrency, toCurrency, amount } = req.body;
@@ -1456,23 +1448,17 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Montant invalide" });
       }
 
-      const pusdResult = await fiatToPusd(fromCurrency, parsedAmount);
-      if (!pusdResult.success || !pusdResult.pusdAmount) {
-        return res.status(400).json({ message: `Taux non disponible: ${pusdResult.message}` });
-      }
-
-      const countryCodeForTarget = Object.entries(CURRENCY_ZONE).find(([, c]) => c === toCurrency)?.[0] || "CM";
-      const fiatResult = await pusdToFiatRate(countryCodeForTarget, pusdResult.pusdAmount);
-      if (!fiatResult.success || !fiatResult.fiatAmount) {
-        return res.status(400).json({ message: `Taux non disponible: ${fiatResult.message}` });
+      const convResult = await getConversionRate(fromCurrency, toCurrency, parsedAmount);
+      if (!convResult.success || convResult.targetAmount === undefined) {
+        return res.status(400).json({ message: `Taux non disponible: ${convResult.message}` });
       }
 
       res.json({
         fromAmount: parsedAmount,
         fromCurrency,
-        toAmount: fiatResult.fiatAmount,
+        toAmount: convResult.targetAmount,
         toCurrency,
-        rate: fiatResult.fiatAmount / parsedAmount,
+        rate: convResult.rate,
       });
     } catch (error) {
       res.status(500).json({ message: "Erreur serveur" });
