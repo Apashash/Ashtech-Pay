@@ -25,6 +25,8 @@ import fs from "fs";
 import { uploadToSupabase } from "./supabase";
 import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, fetchPaymentLinkDetails, ASHTECH_MARGIN } from "./swychr";
 import { addPendingPayment } from "./paymentPoller";
+import { createSwychrPayout } from "./swychrPayout";
+import { addPendingPayout } from "./payoutPoller";
 
 const uploadsDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadsDir)) {
@@ -1138,6 +1140,55 @@ export async function registerRoutes(
         feeAmount: feeAmount.toFixed(2),
         totalAmount: totalAmount.toFixed(2),
       });
+
+      // ── Automatic Swychr payout ──────────────────────────────────────────
+      let countryCode = "CM"; // default fallback
+      if (data.countryId) {
+        const country = await storage.getCountry(data.countryId);
+        if (country?.code) countryCode = country.code;
+      }
+
+      const payoutResult = await createSwychrPayout({
+        country_code:     countryCode,
+        beneficiary_name: `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.username || "Client",
+        mobile_no:        data.accountDetails,
+        amount:           amount,
+        transaction_id:   withdrawalRef,
+        payment_method:   data.paymentMethod,
+        remarks:          `Retrait Ashtech Pay - ${withdrawalRef}`,
+      });
+
+      if (!payoutResult.success) {
+        // Payout API rejected the request immediately → refund user
+        console.error(`[Withdrawal] Payout API failed for ${withdrawalRef}: ${payoutResult.message}`);
+        await storage.updateTransactionStatus(transaction.id, "failed");
+        await storage.updateUserBalance(userId, totalAmount);
+        await storage.createUserNotification({
+          userId,
+          type: "withdrawal_failed",
+          title: "Retrait échoué",
+          message: `Votre retrait de ${amount} XAF a échoué (${payoutResult.message}). Le montant a été recrédité.`,
+          transactionId: transaction.id,
+          isRead: false,
+        });
+        return res.status(400).json({
+          message: `Retrait échoué: ${payoutResult.message}`,
+          feeDetails: { requestedAmount: amount, feeAmount, totalDebited: totalAmount }
+        });
+      }
+
+      // Payout accepted → track it until success/failure
+      const externalTxId = payoutResult.transaction_id || withdrawalRef;
+      addPendingPayout({
+        transactionId: transaction.id,
+        reference:     externalTxId,
+        userId,
+        amount:        data.amount,
+        totalDebited:  totalAmount.toFixed(2),
+      });
+
+      console.log(`[Withdrawal] Payout submitted OK: internal=${withdrawalRef} external=${externalTxId}`);
+      // ────────────────────────────────────────────────────────────────────
 
       res.json({ 
         transaction,
@@ -2401,16 +2452,27 @@ export async function registerRoutes(
         });
       }
       
-      // Refund user when transfer_out is rejected (only if previously pending)
+      // Refund user when transfer_out or withdrawal is rejected (only if previously pending)
       const wasNotRejected = existingTx.status !== "failed" && existingTx.status !== "cancelled";
       const isNowRejected = status === "failed" || status === "cancelled";
       
-      if (wasNotRejected && isNowRejected && transaction.type === "transfer_out") {
+      if (wasNotRejected && isNowRejected && (transaction.type === "transfer_out" || transaction.type === "withdrawal")) {
         // Refund total amount (amount + fee)
         const refundAmount = transaction.totalAmount 
           ? parseFloat(transaction.totalAmount) 
           : parseFloat(transaction.amount);
         await storage.updateUserBalance(transaction.userId, refundAmount);
+
+        if (transaction.type === "withdrawal") {
+          await storage.createUserNotification({
+            userId:        transaction.userId,
+            type:          "withdrawal_failed",
+            title:         "Retrait annulé",
+            message:       `Votre retrait de ${transaction.amount} XAF a été annulé. Le montant de ${refundAmount.toFixed(0)} XAF a été recrédité.`,
+            transactionId: transaction.id,
+            isRead:        false,
+          });
+        }
       }
       
       await storage.createAdminLog({
