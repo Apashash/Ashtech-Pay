@@ -297,7 +297,7 @@ export async function checkSwychrPaymentStatus(
 
 function mapRawStatus(raw: number | null): "pending" | "completed" | "failed" {
   if (raw === 1) return "completed";
-  if (raw === 2) return "failed";
+  if (raw === 2 || raw === 3) return "failed"; // 2=failed, 3=refunded (YAML spec)
   return "pending"; // 0 or null = pending
 }
 

@@ -3595,9 +3595,10 @@ export async function registerRoutes(
       }
 
       let status: "completed" | "failed" | null = null;
-      if (rawStatus === 1 || rawStatus === "success" || rawStatus === "completed") {
+      if (rawStatus === 1) {
         status = "completed";
-      } else if (rawStatus === 2 || rawStatus === "failed" || rawStatus === "cancelled") {
+      } else if (rawStatus === 2 || rawStatus === 3) {
+        // 2 = failed, 3 = refunded (YAML spec v1.0.3)
         status = "failed";
       }
 
