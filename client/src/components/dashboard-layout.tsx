@@ -51,6 +51,7 @@ import {
   ArrowUpCircle,
   X,
   Check,
+  Coins,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -71,6 +72,7 @@ const menuItems = [
   { title: "Dépôt", url: "/dashboard/deposit", icon: CreditCard },
   { title: "Retrait", url: "/dashboard/withdraw", icon: Wallet },
   { title: "Envoyer", url: "/dashboard/send", icon: Send },
+  { title: "Comptes", url: "/dashboard/wallets", icon: Coins },
 ];
 
 const settingsItems = [

@@ -12,6 +12,8 @@ import {
   resetPasswordSchema,
   COUNTRY_CURRENCIES,
   SUPPORTED_CURRENCIES,
+  CURRENCY_ZONE,
+  CURRENCY_SYMBOLS,
   type SupportedCurrency
 } from "@shared/schema";
 import crypto from "crypto";
@@ -25,7 +27,7 @@ import fs from "fs";
 import { uploadToSupabase } from "./supabase";
 import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, fetchPaymentLinkDetails, ASHTECH_MARGIN } from "./swychr";
 import { addPendingPayment } from "./paymentPoller";
-import { createSwychrPayout, formatInternationalPhone } from "./swychrPayout";
+import { createSwychrPayout, formatInternationalPhone, fiatToPusd, pusdToFiatRate } from "./swychrPayout";
 import { addPendingPayout } from "./payoutPoller";
 
 const uploadsDir = path.join(process.cwd(), "uploads");
@@ -1298,6 +1300,181 @@ export async function registerRoutes(
       });
     } catch (error) {
       console.error("Fee calculation error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // ── Multi-currency wallets ─────────────────────────────────────────────────
+
+  // GET /api/wallets — list all user wallets (XAF from user.balance + others from wallets table)
+  app.get("/api/wallets", requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId!;
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
+
+      const extraWallets = await storage.getUserWallets(userId);
+
+      // XAF is always first (from user.balance)
+      const xafWallet = { currency: "XAF", balance: user.balance, symbol: "FCFA" };
+
+      const result = [
+        xafWallet,
+        ...extraWallets.map(w => ({
+          currency: w.currency,
+          balance: w.balance,
+          symbol: CURRENCY_SYMBOLS[w.currency as SupportedCurrency] || w.currency,
+        })),
+      ];
+
+      res.json(result);
+    } catch (error) {
+      console.error("Get wallets error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // POST /api/wallets/convert — convert between wallets via Swychr PUSD bridge
+  app.post("/api/wallets/convert", requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId!;
+      const { fromCurrency, toCurrency, amount } = req.body;
+
+      if (!fromCurrency || !toCurrency || !amount) {
+        return res.status(400).json({ message: "fromCurrency, toCurrency et amount sont requis" });
+      }
+      if (fromCurrency === toCurrency) {
+        return res.status(400).json({ message: "Les deux devises doivent être différentes" });
+      }
+
+      const parsedAmount = parseFloat(amount);
+      if (isNaN(parsedAmount) || parsedAmount <= 0) {
+        return res.status(400).json({ message: "Montant invalide" });
+      }
+
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
+
+      // Check source balance
+      let sourceBalance: number;
+      if (fromCurrency === "XAF") {
+        sourceBalance = parseFloat(user.balance);
+      } else {
+        const w = await storage.getWallet(userId, fromCurrency);
+        sourceBalance = w ? parseFloat(w.balance) : 0;
+      }
+      if (sourceBalance < parsedAmount) {
+        return res.status(400).json({ message: `Solde insuffisant en ${fromCurrency} (disponible: ${sourceBalance.toFixed(2)})` });
+      }
+
+      // Step 1: Convert source fiat → PUSD
+      const pusdResult = await fiatToPusd(fromCurrency, parsedAmount);
+      if (!pusdResult.success || !pusdResult.pusdAmount) {
+        return res.status(400).json({ message: `Conversion ${fromCurrency}→PUSD échouée: ${pusdResult.message}` });
+      }
+
+      // Step 2: Find country code for target currency to get PUSD → fiat rate
+      const countryCodeForTarget = Object.entries(CURRENCY_ZONE).find(([, c]) => c === toCurrency)?.[0] || "CM";
+      const fiatResult = await pusdToFiatRate(countryCodeForTarget, pusdResult.pusdAmount);
+      if (!fiatResult.success || !fiatResult.fiatAmount) {
+        return res.status(400).json({ message: `Conversion PUSD→${toCurrency} échouée: ${fiatResult.message}` });
+      }
+
+      const receivedAmount = fiatResult.fiatAmount;
+
+      // Debit source wallet
+      if (fromCurrency === "XAF") {
+        await storage.updateUserBalance(userId, -parsedAmount);
+      } else {
+        await storage.upsertWallet(userId, fromCurrency, -parsedAmount);
+      }
+
+      // Credit target wallet
+      if (toCurrency === "XAF") {
+        await storage.updateUserBalance(userId, receivedAmount);
+      } else {
+        await storage.upsertWallet(userId, toCurrency, receivedAmount);
+      }
+
+      // Record transaction
+      await storage.createTransaction({
+        userId,
+        type: "conversion",
+        amount: parsedAmount.toFixed(2),
+        currency: fromCurrency,
+        status: "completed",
+        description: `Conversion ${parsedAmount.toFixed(2)} ${fromCurrency} → ${receivedAmount.toFixed(2)} ${toCurrency}`,
+        reference: `conv_${Date.now()}`,
+        feeAmount: "0",
+        totalAmount: parsedAmount.toFixed(2),
+      });
+
+      res.json({
+        success: true,
+        fromAmount: parsedAmount,
+        fromCurrency,
+        toAmount: receivedAmount,
+        toCurrency,
+        pusdBridge: pusdResult.pusdAmount,
+        message: `Conversion réussie : ${parsedAmount.toFixed(2)} ${fromCurrency} → ${receivedAmount.toFixed(2)} ${toCurrency}`,
+      });
+    } catch (error) {
+      console.error("Convert wallet error:", error);
+      res.status(500).json({ message: "Erreur serveur lors de la conversion" });
+    }
+  });
+
+  // POST /api/wallets/create — open a new empty wallet for a currency
+  app.post("/api/wallets/create", requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId!;
+      const { currency } = req.body;
+      if (!currency || !SUPPORTED_CURRENCIES.includes(currency)) {
+        return res.status(400).json({ message: "Devise non supportée" });
+      }
+      if (currency === "XAF") {
+        return res.status(400).json({ message: "Le compte XAF est votre compte principal" });
+      }
+      const existing = await storage.getWallet(userId, currency);
+      if (existing) {
+        return res.status(400).json({ message: `Un compte ${currency} existe déjà` });
+      }
+      const wallet = await storage.setWalletBalance(userId, currency, 0);
+      res.json({ success: true, wallet });
+    } catch (error) {
+      console.error("Create wallet error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // POST /api/wallets/convert-preview — preview conversion rate (no actual conversion)
+  app.post("/api/wallets/convert-preview", requireAuth, async (req, res) => {
+    try {
+      const { fromCurrency, toCurrency, amount } = req.body;
+      const parsedAmount = parseFloat(amount || "0");
+      if (isNaN(parsedAmount) || parsedAmount <= 0) {
+        return res.status(400).json({ message: "Montant invalide" });
+      }
+
+      const pusdResult = await fiatToPusd(fromCurrency, parsedAmount);
+      if (!pusdResult.success || !pusdResult.pusdAmount) {
+        return res.status(400).json({ message: `Taux non disponible: ${pusdResult.message}` });
+      }
+
+      const countryCodeForTarget = Object.entries(CURRENCY_ZONE).find(([, c]) => c === toCurrency)?.[0] || "CM";
+      const fiatResult = await pusdToFiatRate(countryCodeForTarget, pusdResult.pusdAmount);
+      if (!fiatResult.success || !fiatResult.fiatAmount) {
+        return res.status(400).json({ message: `Taux non disponible: ${fiatResult.message}` });
+      }
+
+      res.json({
+        fromAmount: parsedAmount,
+        fromCurrency,
+        toAmount: fiatResult.fiatAmount,
+        toCurrency,
+        rate: fiatResult.fiatAmount / parsedAmount,
+      });
+    } catch (error) {
       res.status(500).json({ message: "Erreur serveur" });
     }
   });

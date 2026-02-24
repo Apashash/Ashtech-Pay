@@ -48,7 +48,9 @@ import {
   type GlobalMessage,
   type InsertGlobalMessage,
   type KycSubmission,
-  type InsertKycSubmission
+  type InsertKycSubmission,
+  wallets,
+  type Wallet,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, sql, and, or, like, count } from "drizzle-orm";
@@ -235,6 +237,12 @@ export interface IStorage {
   countKycByStatus(status: string): Promise<number>;
   approveKycSubmission(id: string, reviewerId: string, note?: string): Promise<KycSubmission | undefined>;
   rejectKycSubmission(id: string, reviewerId: string, note?: string): Promise<KycSubmission | undefined>;
+
+  // Multi-currency wallets
+  getUserWallets(userId: string): Promise<Wallet[]>;
+  getWallet(userId: string, currency: string): Promise<Wallet | undefined>;
+  upsertWallet(userId: string, currency: string, balanceDelta: number): Promise<Wallet>;
+  setWalletBalance(userId: string, currency: string, newBalance: number): Promise<Wallet>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1038,6 +1046,50 @@ export class DatabaseStorage implements IStorage {
       .where(eq(kycSubmissions.id, id))
       .returning();
     return updated;
+  }
+
+  // ── Multi-currency wallets ──────────────────────────────────────────────────
+  async getUserWallets(userId: string): Promise<Wallet[]> {
+    return db.select().from(wallets).where(eq(wallets.userId, userId));
+  }
+
+  async getWallet(userId: string, currency: string): Promise<Wallet | undefined> {
+    const [w] = await db.select().from(wallets).where(and(eq(wallets.userId, userId), eq(wallets.currency, currency)));
+    return w;
+  }
+
+  async upsertWallet(userId: string, currency: string, balanceDelta: number): Promise<Wallet> {
+    const existing = await this.getWallet(userId, currency);
+    if (existing) {
+      const newBalance = Math.max(0, parseFloat(existing.balance) + balanceDelta);
+      const [updated] = await db.update(wallets)
+        .set({ balance: newBalance.toFixed(2), updatedAt: new Date() })
+        .where(and(eq(wallets.userId, userId), eq(wallets.currency, currency)))
+        .returning();
+      return updated;
+    } else {
+      const initialBalance = Math.max(0, balanceDelta);
+      const [created] = await db.insert(wallets)
+        .values({ userId, currency, balance: initialBalance.toFixed(2) })
+        .returning();
+      return created;
+    }
+  }
+
+  async setWalletBalance(userId: string, currency: string, newBalance: number): Promise<Wallet> {
+    const existing = await this.getWallet(userId, currency);
+    if (existing) {
+      const [updated] = await db.update(wallets)
+        .set({ balance: newBalance.toFixed(2), updatedAt: new Date() })
+        .where(and(eq(wallets.userId, userId), eq(wallets.currency, currency)))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db.insert(wallets)
+        .values({ userId, currency, balance: newBalance.toFixed(2) })
+        .returning();
+      return created;
+    }
   }
 }
 

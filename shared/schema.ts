@@ -825,6 +825,31 @@ export const updateWithdrawalNumberSchema = z.object({
   label: z.string().optional(),
 });
 
+// ─── User multi-currency wallets ─────────────────────────────────────────────
+export const wallets = pgTable("wallets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  currency: text("currency").notNull(), // XOF, GHS, NGN, KES, CDF, etc.
+  balance: decimal("balance", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertWalletSchema = createInsertSchema(wallets).omit({ id: true, updatedAt: true });
+export type Wallet = typeof wallets.$inferSelect;
+export type InsertWallet = z.infer<typeof insertWalletSchema>;
+
+// ─── Currency zones mapping ───────────────────────────────────────────────────
+// Which wallet (currency) to use for each destination country
+export const CURRENCY_ZONE: Record<string, SupportedCurrency> = {
+  // XAF zone — Central Africa (stored in user.balance)
+  CM: "XAF", CF: "XAF", CG: "XAF", GA: "XAF", GQ: "XAF", TD: "XAF",
+  // XOF zone — West Africa
+  BJ: "XOF", BF: "XOF", CI: "XOF", GW: "XOF", ML: "XOF", NE: "XOF", SN: "XOF", TG: "XOF",
+  // Other countries
+  GH: "GHS", NG: "NGN", KE: "KES", RW: "RWF", TZ: "TZS", UG: "UGX",
+  CD: "CDF", GN: "GNF",
+};
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;

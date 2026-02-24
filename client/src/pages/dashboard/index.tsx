@@ -475,17 +475,27 @@ export default function DashboardHome() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between gap-4">
               <div className="flex-1">
-                <p className="text-muted-foreground text-sm mb-1">Solde disponible</p>
+                <p className="text-muted-foreground text-sm mb-1">Solde disponible (XAF)</p>
                 <p className="text-3xl font-bold text-foreground" data-testid="text-balance">
                   {formatCurrency(user?.balance || "0", (user?.preferredCurrency || "XAF") as SupportedCurrency, rates)}
                 </p>
                 <p className="text-xs text-muted-foreground mt-2">Ashtech Pay</p>
               </div>
-              <img
-                src={dashboardIllustration}
-                alt="Tableau de bord Ashtech Pay"
-                className="h-24 w-auto object-contain hidden sm:block flex-shrink-0"
-              />
+              <div className="flex flex-col items-end gap-3 flex-shrink-0">
+                <button
+                  onClick={() => setLocation("/dashboard/wallets")}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/20 hover:bg-primary/30 text-primary text-sm font-semibold transition-all border border-primary/30"
+                  data-testid="button-wallets"
+                >
+                  <Wallet className="w-4 h-4" />
+                  Comptes
+                </button>
+                <img
+                  src={dashboardIllustration}
+                  alt="Tableau de bord Ashtech Pay"
+                  className="h-16 w-auto object-contain hidden sm:block"
+                />
+              </div>
             </div>
           </CardContent>
         </Card>

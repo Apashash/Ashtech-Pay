@@ -173,6 +173,45 @@ export async function createSwychrPayout(
   }
 }
 
+// ─── Fiat → PUSD conversion (for wallet-to-wallet convert) ──────────────────
+export async function fiatToPusd(currencyCode: string, fiatAmount: number): Promise<{ success: boolean; pusdAmount?: number; message?: string }> {
+  try {
+    const token = await getPayoutToken();
+    const res = await fetch(`${PAYOUT_BASE_URL}/fiat_to_pusd_conversion`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify({ currency_code: currencyCode, fiat_amount: fiatAmount }),
+    });
+    const json = await res.json();
+    const bodyStatus = typeof json.status === "number" ? json.status : res.status;
+    if (bodyStatus >= 400) return { success: false, message: json.message || `HTTP ${bodyStatus}` };
+    const pusd = json.data?.pusd_amount ?? json.pusd_amount ?? json.data?.amount;
+    return { success: true, pusdAmount: pusd };
+  } catch (err: any) {
+    return { success: false, message: err.message };
+  }
+}
+
+// ─── PUSD → Fiat rate (for wallet-to-wallet convert) ─────────────────────────
+export async function pusdToFiatRate(countryCode: string, pusdAmount: number): Promise<{ success: boolean; fiatAmount?: number; currency?: string; message?: string }> {
+  try {
+    const token = await getPayoutToken();
+    const res = await fetch(`${PAYOUT_BASE_URL}/pusd_to_fiat_rate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify({ country_code: countryCode, amount: pusdAmount }),
+    });
+    const json = await res.json();
+    const bodyStatus = typeof json.status === "number" ? json.status : res.status;
+    if (bodyStatus >= 400) return { success: false, message: json.message || `HTTP ${bodyStatus}` };
+    const fiat = json.data?.fiat_amount ?? json.fiat_amount ?? json.data?.amount;
+    const currency = json.data?.currency_code ?? json.currency_code;
+    return { success: true, fiatAmount: fiat, currency };
+  } catch (err: any) {
+    return { success: false, message: err.message };
+  }
+}
+
 // ─── Check payout transaction status ─────────────────────────────────────
 
 export async function checkSwychrPayoutStatus(
