@@ -28,7 +28,7 @@ import fs from "fs";
 import { uploadToSupabase } from "./supabase";
 import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, fetchPaymentLinkDetails, ASHTECH_MARGIN } from "./swychr";
 import { addPendingPayment } from "./paymentPoller";
-import { createSwychrPayout, formatInternationalPhone, fiatToPusd, pusdToFiatRate, getConversionRate } from "./swychrPayout";
+import { createSwychrPayout, formatInternationalPhone, fiatToPusd, pusdToFiatRate, getConversionRate, convertFiatToPusd, getPayoutToken } from "./swychrPayout";
 import { addPendingPayout } from "./payoutPoller";
 
 const uploadsDir = path.join(process.cwd(), "uploads");
@@ -2720,6 +2720,41 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Admin get users error:", error);
       res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // Admin: Manual Fiat to PUSD conversion
+  app.post("/api/admin/convert-fiat-to-pusd", requireAdmin, async (req, res) => {
+    try {
+      const { countryCode, amount } = req.body;
+      if (!countryCode || !amount) {
+        return res.status(400).json({ message: "Pays et montant requis" });
+      }
+
+      const parsedAmount = parseFloat(amount);
+      if (isNaN(parsedAmount) || parsedAmount <= 0) {
+        return res.status(400).json({ message: "Montant invalide" });
+      }
+
+      const COUNTRY_CURRENCY: Record<string, string> = {
+        BJ: "XOF", BF: "XOF", CM: "XAF", CF: "XAF", CG: "XAF",
+        CI: "XOF", GA: "XAF", GH: "GHS", GN: "GNF", GQ: "XAF",
+        GW: "XOF", KE: "KES", ML: "XOF", NE: "XOF", NG: "NGN",
+        UG: "UGX", CD: "CDF", RW: "RWF", SN: "XOF", TZ: "TZS",
+        TD: "XAF", TG: "XOF",
+      };
+
+      const currencyCode = COUNTRY_CURRENCY[countryCode.toUpperCase()] || "XAF";
+      const token = await getPayoutToken();
+      const success = await convertFiatToPusd(token, currencyCode, parsedAmount);
+
+      if (!success) {
+        return res.status(400).json({ message: "La conversion a échoué. Vérifiez votre solde Fiat sur AccountPE." });
+      }
+
+      res.json({ message: "Conversion Fiat vers pUSD réussie" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Erreur serveur" });
     }
   });
 

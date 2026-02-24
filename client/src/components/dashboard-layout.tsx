@@ -52,7 +52,19 @@ import {
   X,
   Check,
   Coins,
+  RefreshCw,
 } from "lucide-react";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogFooter,
+  DialogDescription 
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -159,6 +171,31 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
     },
+  });
+
+  const [showPusdConvert, setShowPusdConvert] = useState(false);
+  const [pusdAmount, setPusdAmount] = useState("");
+  const [pusdCountry, setPusdCountry] = useState("CM");
+
+  const convertPusdMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", "/api/admin/convert-fiat-to-pusd", {
+        countryCode: pusdCountry,
+        amount: parseFloat(pusdAmount),
+      });
+    },
+    onSuccess: () => {
+      toast({ title: "Succès", description: "Conversion Fiat vers pUSD réussie" });
+      setShowPusdConvert(false);
+      setPusdAmount("");
+    },
+    onError: (error: Error) => {
+      toast({ 
+        title: "Erreur", 
+        description: error.message || "La conversion a échoué",
+        variant: "destructive" 
+      });
+    }
   });
 
   const getNotificationIcon = (type: string) => {
@@ -316,6 +353,12 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                           <Shield className="w-4 h-4" />
                           <span>Panel Admin</span>
                         </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton onClick={() => setShowPusdConvert(true)}>
+                        <RefreshCw className="w-4 h-4" />
+                        <span>FTPUSD</span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   </SidebarMenu>
@@ -497,6 +540,53 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={showPusdConvert} onOpenChange={setShowPusdConvert}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Conversion Fiat vers pUSD (AccountPE)</DialogTitle>
+            <DialogDescription>
+              Prend les fonds en monnaie locale présents sur le compte AccountPE et les transforme en pUSD pour les retraits.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Pays (Source Fiat)</Label>
+              <Select value={pusdCountry} onValueChange={setPusdCountry}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="CM">Cameroun (XAF)</SelectItem>
+                  <SelectItem value="SN">Sénégal (XOF)</SelectItem>
+                  <SelectItem value="CI">Côte d'Ivoire (XOF)</SelectItem>
+                  <SelectItem value="GH">Ghana (GHS)</SelectItem>
+                  <SelectItem value="NG">Nigéria (NGN)</SelectItem>
+                  <SelectItem value="KE">Kenya (KES)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Montant Fiat</Label>
+              <Input 
+                type="number" 
+                placeholder="Ex: 5000" 
+                value={pusdAmount}
+                onChange={(e) => setPusdAmount(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPusdConvert(false)}>Annuler</Button>
+            <Button 
+              onClick={() => convertPusdMutation.mutate()} 
+              disabled={convertPusdMutation.isPending || !pusdAmount}
+            >
+              {convertPusdMutation.isPending ? "Conversion..." : "Convertir"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </SidebarProvider>
   );
 }

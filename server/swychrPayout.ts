@@ -135,8 +135,8 @@ const COUNTRY_CURRENCY: Record<string, string> = {
 
 // ─── Fiat → PUSD conversion (fund wallet before payout) ──────────────────
 // Returns true if conversion succeeded, false if it failed (non-fatal: PUSD may already be available)
-async function convertFiatToPusd(token: string, currencyCode: string, fiatAmount: number): Promise<boolean> {
-  console.log(`[PayoutAPI] Converting ${fiatAmount} ${currencyCode} → PUSD before payout`);
+export async function convertFiatToPusd(token: string, currencyCode: string, fiatAmount: number): Promise<boolean> {
+  console.log(`[PayoutAPI] Converting ${fiatAmount} ${currencyCode} → PUSD`);
   try {
     const res = await fetch(`${PAYOUT_BASE_URL}/fiat_to_pusd_conversion`, {
       method: "POST",
@@ -150,12 +150,11 @@ async function convertFiatToPusd(token: string, currencyCode: string, fiatAmount
     const bodyStatus = typeof json.status === "number" ? json.status : res.status;
     console.log(`[PayoutAPI] fiat_to_pusd_conversion HTTP=${res.status} body.status=${bodyStatus}:`, JSON.stringify(json));
     if (bodyStatus >= 400) {
-      console.warn(`[PayoutAPI] fiat_to_pusd_conversion failed (${json.message}), will attempt payout with existing PUSD balance`);
       return false;
     }
     return true;
   } catch (err: any) {
-    console.warn(`[PayoutAPI] fiat_to_pusd_conversion error: ${err.message}, will attempt payout with existing PUSD balance`);
+    console.warn(`[PayoutAPI] fiat_to_pusd_conversion error: ${err.message}`);
     return false;
   }
 }
@@ -167,11 +166,6 @@ export async function createSwychrPayout(
 ): Promise<SwychrPayoutResult> {
   try {
     const token = await getPayoutToken();
-
-    // ── Step 1: Convert fiat → PUSD to fund the payout wallet ────────────
-    const currencyCode = COUNTRY_CURRENCY[params.country_code.toUpperCase()] || "XAF";
-    await convertFiatToPusd(token, currencyCode, params.amount);
-    // ─────────────────────────────────────────────────────────────────────
 
     console.log(`[PayoutAPI] Creating payout: ${params.country_code} ${params.amount} → ${params.mobile_no}`);
 
