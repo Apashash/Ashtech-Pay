@@ -50,6 +50,11 @@ export default function WithdrawPage() {
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const balance = parseFloat(user?.balance || "0");
 
+  const { data: limits } = useQuery<{ minWithdrawal: number; maxWithdrawal: number; minTransfer: number; maxTransfer: number }>({
+    queryKey: ["/api/public/limits"],
+  });
+  const minWithdrawal = limits?.minWithdrawal ?? 2650;
+
   const { data: withdrawalNumbers = [] } = useQuery<WithdrawalNumber[]>({
     queryKey: ["/api/withdrawal-numbers"],
   });
@@ -112,7 +117,7 @@ export default function WithdrawPage() {
   const watchedAmount = form.watch("amount");
   const watchedAccountDetails = form.watch("accountDetails");
   const amountValue = parseFloat(watchedAmount || "0");
-  const isAmountValid = amountValue >= 1000 && amountValue <= balance;
+  const isAmountValid = amountValue >= minWithdrawal && amountValue <= balance;
   const isMobileMoneyValid = selectedMethod === "mobile_money" ? (!!selectedCountry && !!selectedOperator && !!watchedAccountDetails) : true;
   const isBankTransferValid = selectedMethod === "bank_transfer" ? !!watchedAccountDetails : true;
   const isSubmitDisabled = withdrawMutation.isPending || !isAmountValid || !isMobileMoneyValid || !isBankTransferValid;
@@ -171,11 +176,11 @@ export default function WithdrawPage() {
           </CardContent>
         </Card>
 
-        {balance < 1000 && (
+        {balance < minWithdrawal && (
           <Card className="border-yellow-500/50 bg-yellow-500/5">
             <CardContent className="p-4 flex items-center gap-3">
               <AlertCircle className="w-5 h-5 text-yellow-500" />
-              <p className="text-sm text-foreground">Solde insuffisant. Le montant minimum de retrait est de 1,000 XAF.</p>
+              <p className="text-sm text-foreground">Solde insuffisant. Le montant minimum de retrait est de {minWithdrawal.toLocaleString()} XAF.</p>
             </CardContent>
           </Card>
         )}
@@ -244,13 +249,19 @@ export default function WithdrawPage() {
                         <FormControl>
                           <Input 
                             type="number" 
-                            placeholder="10000" 
+                            placeholder={minWithdrawal.toString()} 
                             className="text-xl h-12"
                             {...field} 
                             data-testid="input-withdraw-amount"
                           />
                         </FormControl>
                         <FormMessage />
+                        {amountValue > 0 && amountValue < minWithdrawal && (
+                          <p className="text-sm text-destructive flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3" />
+                            Montant minimum de retrait : {minWithdrawal.toLocaleString()} XAF
+                          </p>
+                        )}
                       </FormItem>
                     )}
                   />

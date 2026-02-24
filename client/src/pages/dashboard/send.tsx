@@ -51,6 +51,11 @@ export default function SendMoneyPage() {
   
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const balance = parseFloat(user?.balance || "0");
+
+  const { data: limits } = useQuery<{ minTransfer: number; maxTransfer: number; minWithdrawal: number; maxWithdrawal: number }>({
+    queryKey: ["/api/public/limits"],
+  });
+  const minTransfer = limits?.minTransfer ?? 2650;
   
   const { data: countries, isLoading: isLoadingConfig } = useQuery<CountryConfig[]>({
     queryKey: ["/api/transfers/config"],
@@ -162,7 +167,7 @@ export default function SendMoneyPage() {
     },
   });
 
-  const canSubmit = amountValue > 0 && 
+  const canSubmit = amountValue >= minTransfer && 
     feePreview.totalAmount <= balance && 
     feePreview.totalAmount > 0 &&
     watchedCountryId && 
@@ -357,13 +362,19 @@ export default function SendMoneyPage() {
                           <FormControl>
                             <Input 
                               type="number" 
-                              placeholder="10000" 
+                              placeholder={minTransfer.toString()} 
                               className="text-2xl h-14"
                               {...field} 
                               data-testid="input-amount"
                             />
                           </FormControl>
                           <FormMessage />
+                          {amountValue > 0 && amountValue < minTransfer && (
+                            <p className="text-sm text-destructive flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3" />
+                              Montant minimum de transfert : {minTransfer.toLocaleString()} XAF
+                            </p>
+                          )}
                         </FormItem>
                       )}
                     />

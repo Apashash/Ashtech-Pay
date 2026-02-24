@@ -31,8 +31,10 @@ export default function AdminSettings() {
     exchange_rate_usd: "625",
     exchange_rate_eur: "656",
     exchange_rate_cdf: "0.27",
-    min_transfer: "100",
+    min_transfer: "2650",
     max_transfer: "5000000",
+    min_withdrawal: "2650",
+    max_withdrawal: "5000000",
     support_email: "support@ashtechpay.com",
     support_phone: "+237 6XX XXX XXX",
     contact_email: "",
@@ -262,13 +264,16 @@ export default function AdminSettings() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Globe className="w-5 h-5" />
-                Limites globales
+                Limites globales de transaction (XAF)
               </CardTitle>
+              <CardDescription>
+                Montants minimum et maximum autorisés pour les transferts et retraits
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Transfert minimum (XAF)</Label>
+                  <Label>Montant minimum — Transfert (XAF)</Label>
                   <Input
                     type="number"
                     value={settings.min_transfer}
@@ -277,12 +282,30 @@ export default function AdminSettings() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Transfert maximum (XAF)</Label>
+                  <Label>Montant maximum — Transfert (XAF)</Label>
                   <Input
                     type="number"
                     value={settings.max_transfer}
                     onChange={(e) => setSettings({ ...settings, max_transfer: e.target.value })}
                     data-testid="input-max-transfer"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Montant minimum — Retrait (XAF)</Label>
+                  <Input
+                    type="number"
+                    value={settings.min_withdrawal}
+                    onChange={(e) => setSettings({ ...settings, min_withdrawal: e.target.value })}
+                    data-testid="input-min-withdrawal"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Montant maximum — Retrait (XAF)</Label>
+                  <Input
+                    type="number"
+                    value={settings.max_withdrawal}
+                    onChange={(e) => setSettings({ ...settings, max_withdrawal: e.target.value })}
+                    data-testid="input-max-withdrawal"
                   />
                 </div>
               </div>

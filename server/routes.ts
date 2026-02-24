@@ -793,6 +793,12 @@ export async function registerRoutes(
       if (isNaN(parsedAmount) || parsedAmount <= 0) {
         return res.status(400).json({ message: "Montant invalide" });
       }
+
+      const minTransferSetting = await storage.getSetting("min_transfer");
+      const minTransfer = minTransferSetting ? parseFloat(minTransferSetting.value) : 2650;
+      if (parsedAmount < minTransfer) {
+        return res.status(400).json({ message: `Le montant minimum de transfert est de ${minTransfer.toLocaleString()} XAF` });
+      }
       
       const sender = await storage.getUser(senderId);
       if (!sender) {
@@ -1129,6 +1135,12 @@ export async function registerRoutes(
       const data = withdrawSchema.parse(req.body);
       const userId = req.userId!;
       const amount = parseFloat(data.amount);
+
+      const minWithdrawalSetting = await storage.getSetting("min_withdrawal");
+      const minWithdrawal = minWithdrawalSetting ? parseFloat(minWithdrawalSetting.value) : 2650;
+      if (amount < minWithdrawal) {
+        return res.status(400).json({ message: `Le montant minimum de retrait est de ${minWithdrawal.toLocaleString()} XAF` });
+      }
 
       const user = await storage.getUser(userId);
       if (!user) {
@@ -1600,6 +1612,25 @@ export async function registerRoutes(
       res.json(fees.filter(f => f.isActive));
     } catch (error) {
       console.error("Public get fees error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  app.get("/api/public/limits", async (_req, res) => {
+    try {
+      const allSettings = await storage.getAllSettings();
+      const get = (key: string, def: number) => {
+        const s = allSettings.find(s => s.key === key);
+        return s ? parseFloat(s.value) : def;
+      };
+      res.json({
+        minTransfer: get("min_transfer", 2650),
+        maxTransfer: get("max_transfer", 5000000),
+        minWithdrawal: get("min_withdrawal", 2650),
+        maxWithdrawal: get("max_withdrawal", 5000000),
+      });
+    } catch (error) {
+      console.error("Public get limits error:", error);
       res.status(500).json({ message: "Erreur serveur" });
     }
   });
