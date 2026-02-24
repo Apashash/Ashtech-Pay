@@ -97,8 +97,26 @@ export default function WithdrawPage() {
     },
   });
 
-  const [, setLocation] = useLocation();
-  const isVerified = user?.isVerified;
+  const renderSubmitButton = () => {
+    const amountValue = parseFloat(form.watch("amount") || "0");
+    const accountDetails = form.watch("accountDetails");
+    const isAmountValid = amountValue >= 1000 && amountValue <= balance;
+    const isMobileMoneyValid = selectedMethod === "mobile_money" ? (!!selectedCountry && !!selectedOperator && !!accountDetails) : true;
+    const isBankTransferValid = selectedMethod === "bank_transfer" ? !!accountDetails : true;
+
+    return (
+      <Button 
+        type="submit" 
+        className="w-full" 
+        size="lg" 
+        disabled={withdrawMutation.isPending || !isAmountValid || !isMobileMoneyValid || !isBankTransferValid}
+        data-testid="button-withdraw-confirm"
+      >
+        {withdrawMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Wallet className="w-4 h-4 mr-2" />}
+        Demander le retrait
+      </Button>
+    );
+  };
 
   if (user && !isVerified) {
     return (
@@ -405,16 +423,7 @@ export default function WithdrawPage() {
                     />
                   )}
 
-                  <Button 
-                    type="submit" 
-                    className="w-full" 
-                    size="lg" 
-                    disabled={withdrawMutation.isPending || balance < 1000 || !selectedCountry || !selectedOperator || (selectedMethod === "mobile_money" && !form.watch("accountDetails"))}
-                    data-testid="button-withdraw-confirm"
-                  >
-                    {withdrawMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Wallet className="w-4 h-4 mr-2" />}
-                    Demander le retrait
-                  </Button>
+                  {renderSubmitButton()}
                 </form>
               </Form>
             </CardContent>
