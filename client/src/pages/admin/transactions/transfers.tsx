@@ -77,8 +77,9 @@ export default function AdminTransfers() {
       toast({ title: "Statut mis à jour" });
       setSelectedTxId(null);
     },
-    onError: () => {
-      toast({ title: "Erreur", variant: "destructive" });
+    onError: (error: any) => {
+      const message = error?.message || "Une erreur est survenue";
+      toast({ title: "Erreur", description: message, variant: "destructive" });
     },
   });
 
