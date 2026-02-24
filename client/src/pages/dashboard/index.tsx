@@ -428,6 +428,12 @@ export default function DashboardHome() {
   const { data: transactions = [] } = useQuery<Transaction[]>({ queryKey: ["/api/transactions"] });
   const { data: paymentLinks = [] } = useQuery<PaymentLink[]>({ queryKey: ["/api/payment-links"] });
   const { data: userStats } = useQuery<UserStats>({ queryKey: ["/api/user/stats"] });
+  const { data: wallets = [] } = useQuery<any[]>({ queryKey: ["/api/wallets"] });
+
+  const localCurrency = user?.preferredCurrency || "XAF";
+  const localBalance = localCurrency === "XAF" 
+    ? (user?.balance || "0.00")
+    : (wallets.find(w => w.currency === localCurrency)?.balance || "0.00");
 
   const recentTransactions = transactions.slice(0, 5);
   const isVerified = user?.isVerified ?? false;

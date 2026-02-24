@@ -10,7 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Wallet, ArrowLeftRight, Info, Plus, Loader2, Clock, CheckCircle2 } from "lucide-react";
-import { CURRENCY_SYMBOLS, SUPPORTED_CURRENCIES, EXCHANGE_RATES } from "@shared/schema";
+import { CURRENCY_SYMBOLS, SUPPORTED_CURRENCIES } from "@shared/schema";
+import { EXCHANGE_RATES } from "@/lib/currency";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface WalletEntry {

@@ -86,6 +86,13 @@ export default function AdminUsers() {
   const [deleteModal, setDeleteModal] = useState<User | null>(null);
   const [balanceModal, setBalanceModal] = useState<User | null>(null);
   const [newBalance, setNewBalance] = useState("");
+  const [balanceCurrency, setBalanceCurrency] = useState("XAF");
+  const [updateType, setUpdateType] = useState<"set" | "add">("set");
+
+  const { data: userWallets } = useQuery<any[]>({
+    queryKey: [`/api/admin/users/${viewUser?.id}/wallets`],
+    enabled: !!viewUser,
+  });
 
   useEffect(() => {
     if (urlSearch) {
@@ -181,11 +188,12 @@ export default function AdminUsers() {
   });
 
   const updateBalanceMutation = useMutation({
-    mutationFn: async ({ id, balance }: { id: string; balance: string }) => {
-      return apiRequest("PATCH", `/api/admin/users/${id}`, { balance });
+    mutationFn: async ({ id, balance, currency, type }: { id: string; balance: string; currency: string; type: string }) => {
+      return apiRequest("PATCH", `/api/admin/users/${id}/balance`, { amount: balance, currency, type });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/admin/users/${balanceModal?.id}/wallets`] });
       toast({ title: "Solde mis à jour" });
       setBalanceModal(null);
     },
@@ -467,7 +475,14 @@ export default function AdminUsers() {
                   </div>
                   <div>
                     <p className="text-muted-foreground">Solde</p>
-                    <p className="font-bold">{formatCurrency(parseFloat(viewUser.balance), viewUser.preferredCurrency as any)}</p>
+                    <div className="space-y-1">
+                      <p className="font-bold">{formatCurrency(parseFloat(viewUser.balance), "XAF")}</p>
+                      {userWallets?.map((wallet: any) => (
+                        <p key={wallet.id} className="text-xs font-medium">
+                          {formatCurrency(parseFloat(wallet.balance), wallet.currency as any)}
+                        </p>
+                      ))}
+                    </div>
                   </div>
                   <div>
                     <p className="text-muted-foreground">Rôle</p>
@@ -598,12 +613,37 @@ export default function AdminUsers() {
             <DialogHeader>
               <DialogTitle>Modifier le solde de {balanceModal?.fullName}</DialogTitle>
               <DialogDescription>
-                Entrez le nouveau solde pour cet utilisateur. Le montant actuel est de {balanceModal ? formatCurrency(parseFloat(balanceModal.balance), balanceModal.preferredCurrency as any) : ""}.
+                Créditez ou définissez le solde de l'utilisateur pour n'importe quelle devise.
               </DialogDescription>
             </DialogHeader>
             <div className="py-4 space-y-4">
               <div className="space-y-2">
-                <Label>Nouveau solde (XAF)</Label>
+                <Label>Devise</Label>
+                <Select value={balanceCurrency} onValueChange={setBalanceCurrency}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {["XAF", "XOF", "GHS", "NGN", "KES", "RWF", "TZS", "UGX", "CDF", "GNF", "USD"].map(c => (
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Type de modification</Label>
+                <Select value={updateType} onValueChange={(v: any) => setUpdateType(v)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="set">Définir le montant exact</SelectItem>
+                    <SelectItem value="add">Ajouter au solde actuel</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Montant</Label>
                 <Input
                   type="number"
                   step="0.01"
@@ -618,7 +658,12 @@ export default function AdminUsers() {
                 Annuler
               </Button>
               <Button 
-                onClick={() => balanceModal && updateBalanceMutation.mutate({ id: balanceModal.id, balance: newBalance })}
+                onClick={() => balanceModal && updateBalanceMutation.mutate({ 
+                  id: balanceModal.id, 
+                  balance: newBalance,
+                  currency: balanceCurrency,
+                  type: updateType
+                })}
                 disabled={updateBalanceMutation.isPending}
               >
                 {updateBalanceMutation.isPending ? "Mise à jour..." : "Mettre à jour le solde"}

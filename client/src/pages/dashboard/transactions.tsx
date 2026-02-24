@@ -32,6 +32,12 @@ export default function TransactionsPage() {
   const { data: transactions = [], isLoading } = useQuery<Transaction[]>({
     queryKey: ["/api/transactions"],
   });
+  const { data: wallets = [] } = useQuery<any[]>({ queryKey: ["/api/wallets"] });
+
+  const localCurrency = user?.preferredCurrency || "XAF";
+  const localBalance = localCurrency === "XAF" 
+    ? (user?.balance || "0.00")
+    : (wallets.find(w => w.currency === localCurrency)?.balance || "0.00");
 
   const { data: txDetails, isLoading: txDetailsLoading } = useQuery<TransactionDetails>({
     queryKey: selectedTx ? [`/api/transactions/${selectedTx.id}`] : ["__disabled__"],
