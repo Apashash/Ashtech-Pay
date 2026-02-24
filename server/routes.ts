@@ -863,51 +863,8 @@ export async function registerRoutes(
         reference,
       });
 
-      // ── Automatic Swychr payout ──────────────────────────────────────────
-      const payoutMethod = (operator.type === "bank_transfer")
-        ? "bank_transfer"
-        : "mobile_money";
-
-      const transferPayoutResult = await createSwychrPayout({
-        country_code:     country.code,
-        beneficiary_name: recipientName,
-        mobile_no:        formatInternationalPhone(recipientPhone, country.code),
-        amount:           parsedAmount,
-        transaction_id:   reference,
-        payment_method:   payoutMethod,
-        remarks:          `Transfert Ashtech Pay - ${reference}`,
-      });
-
-      if (!transferPayoutResult.success) {
-        console.error(`[Transfer] Payout API failed for ${reference}: ${transferPayoutResult.message}`);
-        await storage.updateTransactionStatus(transaction.id, "failed");
-        await storage.updateUserBalance(senderId, totalAmount);
-        await storage.createUserNotification({
-          userId: senderId,
-          type: "withdrawal_failed",
-          title: "Transfert échoué",
-          message: `Votre transfert de ${parsedAmount.toFixed(0)} XAF vers ${recipientName} a échoué (${transferPayoutResult.message}). Le montant a été recrédité.`,
-          transactionId: transaction.id,
-          isRead: false,
-        });
-        return res.status(400).json({
-          message: `Transfert échoué: ${transferPayoutResult.message}`,
-          feeAmount: feeAmount.toFixed(2),
-          totalAmount: totalAmount.toFixed(2),
-        });
-      }
-
-      const externalTxId = transferPayoutResult.transaction_id || reference;
-      addPendingPayout({
-        transactionId: transaction.id,
-        reference:     externalTxId,
-        userId:        senderId,
-        amount:        parsedAmount.toFixed(2),
-        totalDebited:  totalAmount.toFixed(2),
-      });
-
-      console.log(`[Transfer] Payout submitted OK: internal=${reference} external=${externalTxId}`);
-      // ────────────────────────────────────────────────────────────────────
+      // Transaction is pending — admin will approve and trigger payout manually
+      console.log(`[Transfer] Created pending transfer ${reference} for ${parsedAmount} XAF to ${recipientName}`);
 
       res.json({ 
         message: "Votre transfert est en cours de traitement",
@@ -1273,6 +1230,11 @@ export async function registerRoutes(
       await storage.updateUserBalance(userId, -totalAmount);
 
       const withdrawalRef = generateTransactionReference("withdrawal");
+      let withdrawalCountryCode = "CM";
+      if (data.countryId) {
+        const wCountry = await storage.getCountry(data.countryId);
+        if (wCountry?.code) withdrawalCountryCode = wCountry.code;
+      }
       const transaction = await storage.createTransaction({
         userId,
         type: "withdrawal",
@@ -1284,56 +1246,13 @@ export async function registerRoutes(
         reference: withdrawalRef,
         feeAmount: feeAmount.toFixed(2),
         totalAmount: totalAmount.toFixed(2),
+        recipientName: user.fullName || user.username || "Client",
+        recipientPhone: data.accountDetails,
+        recipientCountry: withdrawalCountryCode,
       });
 
-      // ── Automatic Swychr payout ──────────────────────────────────────────
-      let countryCode = "CM"; // default fallback
-      if (data.countryId) {
-        const country = await storage.getCountry(data.countryId);
-        if (country?.code) countryCode = country.code;
-      }
-
-      const payoutResult = await createSwychrPayout({
-        country_code:     countryCode,
-        beneficiary_name: user.fullName || user.username || "Client",
-        mobile_no:        formatInternationalPhone(data.accountDetails, countryCode),
-        amount:           amount,
-        transaction_id:   withdrawalRef,
-        payment_method:   data.paymentMethod,
-        remarks:          `Retrait Ashtech Pay - ${withdrawalRef}`,
-      });
-
-      if (!payoutResult.success) {
-        // Payout API rejected the request immediately → refund user
-        console.error(`[Withdrawal] Payout API failed for ${withdrawalRef}: ${payoutResult.message}`);
-        await storage.updateTransactionStatus(transaction.id, "failed");
-        await storage.updateUserBalance(userId, totalAmount);
-        await storage.createUserNotification({
-          userId,
-          type: "withdrawal_failed",
-          title: "Retrait échoué",
-          message: `Votre retrait de ${amount} XAF a échoué (${payoutResult.message}). Le montant a été recrédité.`,
-          transactionId: transaction.id,
-          isRead: false,
-        });
-        return res.status(400).json({
-          message: `Retrait échoué: ${payoutResult.message}`,
-          feeDetails: { requestedAmount: amount, feeAmount, totalDebited: totalAmount }
-        });
-      }
-
-      // Payout accepted → track it until success/failure
-      const externalTxId = payoutResult.transaction_id || withdrawalRef;
-      addPendingPayout({
-        transactionId: transaction.id,
-        reference:     externalTxId,
-        userId,
-        amount:        data.amount,
-        totalDebited:  totalAmount.toFixed(2),
-      });
-
-      console.log(`[Withdrawal] Payout submitted OK: internal=${withdrawalRef} external=${externalTxId}`);
-      // ────────────────────────────────────────────────────────────────────
+      // Transaction is pending — admin will approve and trigger payout manually
+      console.log(`[Withdrawal] Created pending withdrawal ${withdrawalRef} for ${amount} XAF`);
 
       res.json({ 
         transaction,
@@ -3077,16 +2996,70 @@ export async function registerRoutes(
         });
       }
       
-      // For withdrawals, create notification when completed
-      if (wasNotCompleted && isNowCompleted && transaction.type === "withdrawal") {
-        await storage.createUserNotification({
-          userId: transaction.userId,
-          type: "withdrawal_confirmed",
-          title: "Retrait confirmé",
-          message: `Votre retrait de ${transaction.amount} XAF a été traité avec succès.`,
-          transactionId: transaction.id,
-          isRead: false,
-        });
+      // For withdrawals/transfer_out: trigger AccountPE payout when admin approves
+      if (wasNotCompleted && isNowCompleted && (transaction.type === "withdrawal" || transaction.type === "transfer_out")) {
+        try {
+          let countryCode = "CM";
+          if (transaction.recipientCountry) {
+            const rc = transaction.recipientCountry.trim();
+            if (rc.length === 2) {
+              // Already a country code (e.g. "CM")
+              countryCode = rc.toUpperCase();
+            } else {
+              // Country name — look up code
+              const countries = await storage.getAllCountries();
+              const c = countries.find(c => c.name.toLowerCase() === rc.toLowerCase());
+              if (c?.code) countryCode = c.code;
+            }
+          }
+
+          const txAmount = parseFloat(transaction.amount);
+          const payoutRef = transaction.reference || generateTransactionReference("payout");
+
+          const payoutResult = await createSwychrPayout({
+            country_code:     countryCode,
+            beneficiary_name: transaction.recipientName || transaction.userId,
+            mobile_no:        formatInternationalPhone(
+              transaction.recipientPhone || "",
+              countryCode
+            ),
+            amount:           txAmount,
+            transaction_id:   payoutRef,
+            payment_method:   (transaction.paymentMethod === "bank_transfer") ? "bank_transfer" : "mobile_money",
+            remarks:          `Ashtech Pay - ${payoutRef}`,
+          });
+
+          if (payoutResult.success) {
+            console.log(`[Admin] Payout submitted OK for ${payoutRef} (ext: ${payoutResult.transaction_id})`);
+            const extTxId = payoutResult.transaction_id || payoutRef;
+            addPendingPayout({
+              transactionId: transaction.id,
+              reference:     extTxId,
+              userId:        transaction.userId,
+              amount:        transaction.amount,
+              totalDebited:  transaction.totalAmount || transaction.amount,
+            });
+            await storage.createUserNotification({
+              userId:        transaction.userId,
+              type:          "withdrawal_confirmed",
+              title:         transaction.type === "withdrawal" ? "Retrait approuvé" : "Transfert approuvé",
+              message:       `Votre ${transaction.type === "withdrawal" ? "retrait" : "transfert"} de ${transaction.amount} XAF est en cours de traitement.`,
+              transactionId: transaction.id,
+              isRead:        false,
+            });
+          } else {
+            console.error(`[Admin] Payout failed for ${payoutRef}: ${payoutResult.message}`);
+            // Revert to pending if payout failed
+            await storage.updateTransactionStatus(id, "pending");
+            return res.status(400).json({
+              message: `Paiement AccountPE échoué: ${payoutResult.message}. Vérifiez le solde pUSD et réessayez.`,
+            });
+          }
+        } catch (payoutErr: any) {
+          console.error("[Admin] Payout error:", payoutErr.message);
+          await storage.updateTransactionStatus(id, "pending");
+          return res.status(500).json({ message: `Erreur lors du paiement: ${payoutErr.message}` });
+        }
       }
       
       // Refund user when transfer_out or withdrawal is rejected (only if previously pending)
