@@ -12,7 +12,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { transferSchema, depositSchema, withdrawSchema, createPaymentLinkSchema, type SupportedCurrency } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { User, Transaction, PaymentLink } from "@shared/schema";
+import type { User, Transaction, PaymentLink, Wallet as WalletEntry } from "@shared/schema";
 import { formatCurrency } from "@/lib/currency";
 import { useExchangeRates } from "@/hooks/use-exchange-rates";
 import {
@@ -428,7 +428,7 @@ export default function DashboardHome() {
   const { data: transactions = [] } = useQuery<Transaction[]>({ queryKey: ["/api/transactions"] });
   const { data: paymentLinks = [] } = useQuery<PaymentLink[]>({ queryKey: ["/api/payment-links"] });
   const { data: userStats } = useQuery<UserStats>({ queryKey: ["/api/user/stats"] });
-  const { data: wallets = [] } = useQuery<any[]>({ queryKey: ["/api/wallets"] });
+  const { data: wallets = [] } = useQuery<WalletEntry[]>({ queryKey: ["/api/wallets"] });
 
   const localCurrency = user?.preferredCurrency || "XAF";
   const localBalance = localCurrency === "XAF" 
@@ -481,9 +481,9 @@ export default function DashboardHome() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between gap-4">
               <div className="flex-1">
-                <p className="text-muted-foreground text-sm mb-1">Solde disponible (XAF)</p>
+                <p className="text-muted-foreground text-sm mb-1">Solde disponible ({localCurrency})</p>
                 <p className="text-3xl font-bold text-foreground" data-testid="text-balance">
-                  {formatCurrency(user?.balance || "0", (user?.preferredCurrency || "XAF") as SupportedCurrency, rates)}
+                  {formatCurrency(localBalance, localCurrency as SupportedCurrency, rates)}
                 </p>
                 <p className="text-xs text-muted-foreground mt-2">Ashtech Pay</p>
               </div>

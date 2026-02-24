@@ -1473,51 +1473,6 @@ export async function registerRoutes(
     }
   });
 
-  // Admin: Update user balance
-  app.patch("/api/admin/users/:id/balance", requireAuth, requireAdmin, async (req, res) => {
-    try {
-      const { amount, currency, type } = req.body; // type: 'set' or 'add'
-      const userId = req.params.id;
-      
-      const user = await storage.getUser(userId);
-      if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
-
-      const amountNum = parseFloat(amount);
-      if (isNaN(amountNum)) return res.status(400).json({ message: "Montant invalide" });
-
-      if (currency === "XAF") {
-        if (type === "set") {
-          const [updated] = await db.update(users).set({ balance: amountNum.toFixed(2) }).where(eq(users.id, userId)).returning();
-          res.json({ success: true, user: updated });
-        } else {
-          const updated = await storage.updateUserBalance(userId, amountNum);
-          res.json({ success: true, user: updated });
-        }
-      } else {
-        if (type === "set") {
-          const wallet = await storage.setWalletBalance(userId, currency, amountNum);
-          res.json({ success: true, wallet });
-        } else {
-          const wallet = await storage.upsertWallet(userId, currency, amountNum);
-          res.json({ success: true, wallet });
-        }
-      }
-    } catch (error) {
-      console.error("Update balance error:", error);
-      res.status(500).json({ message: "Erreur serveur" });
-    }
-  });
-
-  // Admin: Get all wallets for a user
-  app.get("/api/admin/users/:id/wallets", requireAuth, requireAdmin, async (req, res) => {
-    try {
-      const wallets = await storage.getUserWallets(req.params.id);
-      res.json(wallets);
-    } catch (error) {
-      res.status(500).json({ message: "Erreur serveur" });
-    }
-  });
-
   // GET /api/admin/conversion-requests — list all conversion requests
   app.get("/api/admin/conversion-requests", requireAuth, requireAdmin, async (req, res) => {
     try {
@@ -2684,12 +2639,13 @@ export async function registerRoutes(
 
       if (currency === "XAF") {
         if (type === "set") {
-          const [updated] = await db.update(users).set({ balance: amountNum.toFixed(2) }).where(eq(users.id, userId)).returning();
-          const { password, ...safeUser } = updated;
+          const updated = await storage.updateUser(userId, { balance: amountNum.toFixed(2) });
+          if (!updated) return res.status(500).json({ message: "Mise à jour échouée" });
+          const safeUser = (({ password: _pw, ...rest }) => rest)(updated as any);
           res.json({ success: true, user: safeUser });
         } else {
           const updated = await storage.updateUserBalance(userId, amountNum);
-          const { password, ...safeUser } = updated;
+          const safeUser = (({ password: _pw, ...rest }) => rest)(updated as any);
           res.json({ success: true, user: safeUser });
         }
       } else {

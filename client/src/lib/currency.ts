@@ -12,7 +12,7 @@ export function formatCurrency(amount: string | number, currency: SupportedCurre
   
   const symbol = CURRENCY_SYMBOLS[currency];
   
-  if (currency === "USD" || currency === "EUR") {
+  if (currency === "USD" || (currency as string) === "EUR") {
     const formatted = new Intl.NumberFormat("fr-FR", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
