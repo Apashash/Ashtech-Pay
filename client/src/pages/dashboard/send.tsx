@@ -61,12 +61,16 @@ const COUNTRY_FLAGS: Record<string, string> = {
   "Guinée-Bissau": "🇬🇼",
   "Kenya": "🇰🇪",
   "Mali": "🇲🇱",
+  "Niger": "🇳🇪",
+  "Nigeria": "🇳🇬",
   "Nigéria": "🇳🇬",
-  "Rwanda": "🇷🇼",
-  "Tanzanie": "🇹🇿",
   "Ouganda": "🇺🇬",
+  "RD Congo": "🇨🇩",
+  "Rwanda": "🇷🇼",
   "Sénégal": "🇸🇳",
-  "RDC": "🇨🇩",
+  "Tanzanie": "🇹🇿",
+  "Tchad": "🇹🇩",
+  "Togo": "🇹🇬",
   "USA": "🇺🇸"
 };
 
