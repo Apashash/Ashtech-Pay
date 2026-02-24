@@ -6,51 +6,28 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Pencil, Trash2, DollarSign, Percent, ArrowUpCircle, Filter } from "lucide-react";
+import { Pencil, ArrowUpCircle, Filter, Info } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { Fee, Country, Operator } from "@shared/schema";
+import type { Fee, Country } from "@shared/schema";
 
 export default function AdminFeesWithdrawals() {
   const { toast } = useToast();
   const [showModal, setShowModal] = useState(false);
   const [editingFee, setEditingFee] = useState<Fee | null>(null);
   const [filterCountry, setFilterCountry] = useState<string>("all");
-  const [filterOperator, setFilterOperator] = useState<string>("all");
-  const [formData, setFormData] = useState({
-    name: "",
-    transactionType: "withdrawal",
-    feeType: "percentage",
-    feeValue: "",
-    minFee: "",
-    maxFee: "",
-    countryId: "",
-    operatorId: "",
-    isActive: true,
-  });
+  const [ashtechMargin, setAshtechMargin] = useState("");
+  const [isActive, setIsActive] = useState(true);
 
   const { data: fees, isLoading } = useQuery<Fee[]>({
     queryKey: ["/api/admin/fees"],
@@ -60,127 +37,69 @@ export default function AdminFeesWithdrawals() {
     queryKey: ["/api/admin/countries"],
   });
 
-  const { data: operators } = useQuery<Operator[]>({
-    queryKey: ["/api/admin/operators"],
-  });
-
   const withdrawalFees = useMemo(() => {
     let filtered = fees?.filter(f => f.transactionType === "withdrawal") || [];
     if (filterCountry !== "all") {
-      filtered = filtered.filter(f => f.countryId === filterCountry || !f.countryId);
+      filtered = filtered.filter(f => f.countryId === filterCountry);
     }
-    if (filterOperator !== "all") {
-      filtered = filtered.filter(f => f.operatorId === filterOperator || !f.operatorId);
-    }
-    return filtered;
-  }, [fees, filterCountry, filterOperator]);
+    return filtered.sort((a, b) => {
+      const ca = countries?.find(c => c.id === a.countryId)?.name || "";
+      const cb = countries?.find(c => c.id === b.countryId)?.name || "";
+      return ca.localeCompare(cb);
+    });
+  }, [fees, filterCountry, countries]);
 
-  const filteredOperators = useMemo(() => {
-    if (filterCountry === "all") return operators || [];
-    return operators?.filter(op => op.countryId === filterCountry) || [];
-  }, [operators, filterCountry]);
-
-  const formOperators = useMemo(() => {
-    if (!formData.countryId) return [];
-    return operators?.filter(op => op.countryId === formData.countryId) || [];
-  }, [operators, formData.countryId]);
-
-  const createMutation = useMutation({
-    mutationFn: async (data: typeof formData) => {
-      return apiRequest("POST", "/api/admin/fees", {
-        ...data,
-        feeValue: data.feeValue,
-        minFee: data.minFee || null,
-        maxFee: data.maxFee || null,
-        countryId: data.countryId || null,
-        operatorId: data.operatorId || null,
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, margin, active }: { id: string; margin: string; active: boolean }) => {
+      const swychrFee = parseFloat((editingFee as any)?.swychrFee || "0");
+      const newMargin = parseFloat(margin);
+      const newTotal = (swychrFee + newMargin).toFixed(4);
+      return apiRequest("PATCH", `/api/admin/fees/${id}`, {
+        ashtechMargin: margin,
+        feeValue: newTotal,
+        isActive: active,
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/fees"] });
-      toast({ title: "Frais de retrait créé" });
+      toast({ title: "Marge mise à jour avec succès" });
       resetForm();
     },
     onError: () => {
-      toast({ title: "Erreur", variant: "destructive" });
-    },
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: Partial<typeof formData> }) => {
-      return apiRequest("PATCH", `/api/admin/fees/${id}`, data);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/fees"] });
-      toast({ title: "Frais mis à jour" });
-      resetForm();
-    },
-    onError: () => {
-      toast({ title: "Erreur", variant: "destructive" });
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      return apiRequest("DELETE", `/api/admin/fees/${id}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/fees"] });
-      toast({ title: "Frais supprimé" });
-    },
-    onError: () => {
-      toast({ title: "Erreur", variant: "destructive" });
+      toast({ title: "Erreur lors de la mise à jour", variant: "destructive" });
     },
   });
 
   const resetForm = () => {
     setShowModal(false);
     setEditingFee(null);
-    setFormData({
-      name: "",
-      transactionType: "withdrawal",
-      feeType: "percentage",
-      feeValue: "",
-      minFee: "",
-      maxFee: "",
-      countryId: "",
-      operatorId: "",
-      isActive: true,
-    });
+    setAshtechMargin("");
+    setIsActive(true);
   };
 
   const openEdit = (fee: Fee) => {
     setEditingFee(fee);
-    setFormData({
-      name: fee.name,
-      transactionType: fee.transactionType,
-      feeType: fee.feeType,
-      feeValue: fee.feeValue,
-      minFee: fee.minFee || "",
-      maxFee: fee.maxFee || "",
-      countryId: fee.countryId || "",
-      operatorId: fee.operatorId || "",
-      isActive: fee.isActive ?? true,
-    });
+    setAshtechMargin((fee as any).ashtechMargin || "2");
+    setIsActive(fee.isActive ?? true);
     setShowModal(true);
-  };
-
-  const handleSubmit = () => {
-    if (editingFee) {
-      updateMutation.mutate({ id: editingFee.id, data: formData });
-    } else {
-      createMutation.mutate(formData);
-    }
   };
 
   const getCountryName = (id: string | null) => {
     if (!id) return "Global";
-    return countries?.find(c => c.id === id)?.name || "Inconnu";
+    const c = countries?.find(c => c.id === id);
+    return c ? `${c.flag || ""} ${c.name}`.trim() : "Inconnu";
   };
 
-  const getOperatorName = (id: string | null) => {
-    if (!id) return "Tous";
-    return operators?.find(o => o.id === id)?.name || "Inconnu";
+  const getCountryCode = (id: string | null) => {
+    if (!id) return "";
+    return countries?.find(c => c.id === id)?.code || "";
+  };
+
+  const computedTotal = () => {
+    if (!editingFee) return "0";
+    const s = parseFloat((editingFee as any).swychrFee || "0");
+    const m = parseFloat(ashtechMargin || "0");
+    return (s + m).toFixed(2);
   };
 
   return (
@@ -193,59 +112,55 @@ export default function AdminFeesWithdrawals() {
             </div>
             <div>
               <h1 className="text-2xl font-bold">Frais de Retrait</h1>
-              <p className="text-muted-foreground">Configurez les frais pour les retraits</p>
+              <p className="text-muted-foreground">Frais Swychr + marge Ashtech Pay par pays</p>
             </div>
           </div>
-          <Button onClick={() => setShowModal(true)} className="gap-2" data-testid="button-add-withdrawal-fee">
-            <Plus className="w-4 h-4" />
-            Nouveau frais
-          </Button>
         </div>
+
+        <Card className="border-blue-500/20 bg-blue-500/5">
+          <CardContent className="pt-4 pb-3">
+            <div className="flex items-start gap-2 text-sm text-blue-400">
+              <Info className="w-4 h-4 mt-0.5 shrink-0" />
+              <div>
+                <span className="font-medium">Structure des frais Swychr :</span> Frais Swychr (fixé par Swychr, non modifiable) + Marge Ashtech (modifiable) = Total facturé au client.
+                Seule la <span className="font-semibold">marge Ashtech</span> peut être modifiée par l'admin.
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-4 mb-6 flex-wrap">
               <div className="flex items-center gap-2">
                 <Filter className="w-4 h-4 text-muted-foreground" />
-                <span className="text-sm text-muted-foreground">Filtrer:</span>
+                <span className="text-sm text-muted-foreground">Filtrer par pays:</span>
               </div>
-              <Select value={filterCountry} onValueChange={(v) => { setFilterCountry(v); setFilterOperator("all"); }}>
-                <SelectTrigger className="w-[180px]" data-testid="filter-country">
+              <Select value={filterCountry} onValueChange={setFilterCountry}>
+                <SelectTrigger className="w-[200px]">
                   <SelectValue placeholder="Tous les pays" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Tous les pays</SelectItem>
                   {countries?.map((country) => (
                     <SelectItem key={country.id} value={country.id}>
-                      {country.name}
+                      {country.flag} {country.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <Select value={filterOperator} onValueChange={setFilterOperator} disabled={filterCountry === "all"}>
-                <SelectTrigger className="w-[180px]" data-testid="filter-operator">
-                  <SelectValue placeholder={filterCountry === "all" ? "Sélectionnez un pays" : "Tous opérateurs"} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tous opérateurs</SelectItem>
-                  {filteredOperators.map((op) => (
-                    <SelectItem key={op.id} value={op.id}>
-                      {op.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <span className="text-sm text-muted-foreground ml-auto">
+                {withdrawalFees.length} pays configuré{withdrawalFees.length > 1 ? "s" : ""}
+              </span>
             </div>
 
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nom</TableHead>
-                  <TableHead>Type de frais</TableHead>
-                  <TableHead>Valeur</TableHead>
-                  <TableHead>Min/Max</TableHead>
                   <TableHead>Pays</TableHead>
-                  <TableHead>Opérateur</TableHead>
+                  <TableHead>Frais Swychr</TableHead>
+                  <TableHead>Marge Ashtech</TableHead>
+                  <TableHead className="font-bold">Total client</TableHead>
                   <TableHead>Statut</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -253,79 +168,54 @@ export default function AdminFeesWithdrawals() {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8">
-                      Chargement...
-                    </TableCell>
+                    <TableCell colSpan={6} className="text-center py-8">Chargement...</TableCell>
                   </TableRow>
                 ) : !withdrawalFees.length ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                       Aucun frais de retrait configuré
                     </TableCell>
                   </TableRow>
                 ) : (
-                  withdrawalFees.map((fee) => (
-                    <TableRow key={fee.id} data-testid={`fee-row-${fee.id}`}>
-                      <TableCell className="font-medium">{fee.name}</TableCell>
-                      <TableCell>
-                        {fee.feeType === "percentage" ? (
-                          <span className="flex items-center gap-1">
-                            <Percent className="w-4 h-4" /> Pourcentage
-                          </span>
-                        ) : (
-                          <span className="flex items-center gap-1">
-                            <DollarSign className="w-4 h-4" /> Fixe
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell className="font-bold">
-                        {fee.feeType === "percentage" 
-                          ? `${fee.feeValue}%` 
-                          : `${fee.feeValue} XAF`}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground text-sm">
-                        {fee.minFee || fee.maxFee ? (
-                          <>
-                            {fee.minFee && <span>Min: {fee.minFee} XAF</span>}
-                            {fee.minFee && fee.maxFee && " / "}
-                            {fee.maxFee && <span>Max: {fee.maxFee} XAF</span>}
-                          </>
-                        ) : "-"}
-                      </TableCell>
-                      <TableCell>{getCountryName(fee.countryId)}</TableCell>
-                      <TableCell>{getOperatorName(fee.operatorId)}</TableCell>
-                      <TableCell>
-                        <Badge variant={fee.isActive ? "default" : "secondary"}>
-                          {fee.isActive ? "Actif" : "Inactif"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button 
-                            size="icon" 
+                  withdrawalFees.map((fee) => {
+                    const swychr = parseFloat((fee as any).swychrFee || "0");
+                    const margin = parseFloat((fee as any).ashtechMargin || "0");
+                    const total = parseFloat(fee.feeValue);
+                    const cc = getCountryCode(fee.countryId);
+                    return (
+                      <TableRow key={fee.id}>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2">
+                            <span>{getCountryName(fee.countryId)}</span>
+                            {cc && <Badge variant="outline" className="text-xs">{cc}</Badge>}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-muted-foreground">{swychr.toFixed(2)}%</span>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-orange-400 font-medium">{margin.toFixed(2)}%</span>
+                        </TableCell>
+                        <TableCell>
+                          <span className="font-bold text-green-400">{total.toFixed(2)}%</span>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={fee.isActive ? "default" : "secondary"}>
+                            {fee.isActive ? "Actif" : "Inactif"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            size="icon"
                             variant="ghost"
                             onClick={() => openEdit(fee)}
-                            data-testid={`button-edit-fee-${fee.id}`}
                           >
                             <Pencil className="w-4 h-4" />
                           </Button>
-                          <Button 
-                            size="icon" 
-                            variant="ghost"
-                            onClick={() => {
-                              if (confirm("Supprimer ce frais ?")) {
-                                deleteMutation.mutate(fee.id);
-                              }
-                            }}
-                            className="text-destructive"
-                            data-testid={`button-delete-fee-${fee.id}`}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
@@ -335,131 +225,57 @@ export default function AdminFeesWithdrawals() {
         <Dialog open={showModal} onOpenChange={() => resetForm()}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>{editingFee ? "Modifier le frais de retrait" : "Nouveau frais de retrait"}</DialogTitle>
+              <DialogTitle>Modifier la marge — {editingFee ? getCountryName(editingFee.countryId) : ""}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label>Nom</Label>
+                <Label className="text-muted-foreground">Frais Swychr (non modifiable)</Label>
                 <Input
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="Ex: Frais retrait Orange Cameroun"
-                  data-testid="input-fee-name"
+                  value={`${parseFloat((editingFee as any)?.swychrFee || "0").toFixed(2)}%`}
+                  disabled
+                  className="bg-muted"
                 />
+                <p className="text-xs text-muted-foreground">Fixé par Swychr — contact Swychr pour changer</p>
               </div>
-              
+
               <div className="space-y-2">
-                <Label>Type de frais</Label>
-                <Select
-                  value={formData.feeType}
-                  onValueChange={(v) => setFormData({ ...formData, feeType: v })}
-                >
-                  <SelectTrigger data-testid="select-fee-type">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="percentage">Pourcentage (%)</SelectItem>
-                    <SelectItem value="fixed">Montant fixe</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label>Marge Ashtech Pay (%)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="10"
+                  value={ashtechMargin}
+                  onChange={(e) => setAshtechMargin(e.target.value)}
+                  placeholder="2.00"
+                />
+                <p className="text-xs text-muted-foreground">Revenu Ashtech Pay sur chaque retrait</p>
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label>Valeur</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={formData.feeValue}
-                    onChange={(e) => setFormData({ ...formData, feeValue: e.target.value })}
-                    placeholder={formData.feeType === "percentage" ? "2.5" : "100"}
-                    data-testid="input-fee-value"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Min (optionnel)</Label>
-                  <Input
-                    type="number"
-                    value={formData.minFee}
-                    onChange={(e) => setFormData({ ...formData, minFee: e.target.value })}
-                    placeholder="50"
-                    data-testid="input-fee-min"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Max (optionnel)</Label>
-                  <Input
-                    type="number"
-                    value={formData.maxFee}
-                    onChange={(e) => setFormData({ ...formData, maxFee: e.target.value })}
-                    placeholder="5000"
-                    data-testid="input-fee-max"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Pays (optionnel)</Label>
-                  <Select
-                    value={formData.countryId || "all"}
-                    onValueChange={(v) => setFormData({ 
-                      ...formData, 
-                      countryId: v === "all" ? "" : v,
-                      operatorId: "" 
-                    })}
-                  >
-                    <SelectTrigger data-testid="select-fee-country">
-                      <SelectValue placeholder="Global (tous)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Global (tous)</SelectItem>
-                      {countries?.map((country) => (
-                        <SelectItem key={country.id} value={country.id}>
-                          {country.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label>Opérateur (optionnel)</Label>
-                  <Select
-                    value={formData.operatorId || "all"}
-                    onValueChange={(v) => setFormData({ ...formData, operatorId: v === "all" ? "" : v })}
-                    disabled={!formData.countryId}
-                  >
-                    <SelectTrigger data-testid="select-fee-operator">
-                      <SelectValue placeholder={formData.countryId ? "Tous opérateurs" : "Sélectionnez d'abord un pays"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Tous opérateurs</SelectItem>
-                      {formOperators.map((op) => (
-                        <SelectItem key={op.id} value={op.id}>
-                          {op.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div className="space-y-2">
+                <Label className="text-muted-foreground">Total facturé au client</Label>
+                <Input
+                  value={`${computedTotal()}%`}
+                  disabled
+                  className="bg-muted font-bold"
+                />
               </div>
 
               <div className="flex items-center gap-2">
                 <Switch
-                  checked={formData.isActive}
-                  onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
-                  data-testid="switch-fee-active"
+                  checked={isActive}
+                  onCheckedChange={setIsActive}
                 />
                 <Label>Actif</Label>
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={resetForm}>
-                Annuler
-              </Button>
-              <Button onClick={handleSubmit} data-testid="button-save-fee">
-                {editingFee ? "Mettre à jour" : "Créer"}
+              <Button variant="outline" onClick={resetForm}>Annuler</Button>
+              <Button
+                onClick={() => editingFee && updateMutation.mutate({ id: editingFee.id, margin: ashtechMargin, active: isActive })}
+                disabled={updateMutation.isPending}
+              >
+                {updateMutation.isPending ? "Enregistrement..." : "Enregistrer"}
               </Button>
             </DialogFooter>
           </DialogContent>
