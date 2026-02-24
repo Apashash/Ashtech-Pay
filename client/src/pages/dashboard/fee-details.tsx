@@ -2,7 +2,7 @@ import React from "react";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Info, Percent, ShieldCheck, Wallet } from "lucide-react";
+import { Info, Percent, ShieldCheck, Wallet, ArrowLeftRight, AlertTriangle } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import type { Fee, Country } from "@shared/schema";
 
@@ -42,15 +42,19 @@ export default function FeeExplanationsPage() {
   const displayFees = React.useMemo(() => {
     if (!fees || !countries) return [];
     
-    // Filtrer pour n'avoir qu'une ligne par pays (les frais sont synchronisés)
     const transferFees = fees.filter(f => f.transactionType === "transfer" && f.countryId);
-    
+    const withdrawalFees = fees.filter(f => f.transactionType === "withdrawal" && f.countryId);
+
     return transferFees.map(fee => {
       const country = countries.find(c => c.id === fee.countryId);
+      const wFee = withdrawalFees.find(w => w.countryId === fee.countryId);
       return {
         country: country?.name || "Inconnu",
-        percentage: `${parseFloat(fee.feeValue).toFixed(2)}%`,
-        min: `${fee.minFee || 0} ${country?.currency || "XAF"}`
+        currency: country?.currency || "XAF",
+        transferPct: `${parseFloat(fee.feeValue).toFixed(2)}%`,
+        transferMin: `${fee.minFee || 0} ${country?.currency || "XAF"}`,
+        withdrawalPct: wFee ? `${parseFloat(wFee.feeValue).toFixed(2)}%` : "-",
+        withdrawalMin: wFee ? `${wFee.minFee || 0} ${country?.currency || "XAF"}` : "-",
       };
     }).sort((a, b) => a.country.localeCompare(b.country));
   }, [fees, countries]);
@@ -79,6 +83,24 @@ export default function FeeExplanationsPage() {
           ))}
         </div>
 
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-6 flex items-start gap-4">
+          <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">
+            <ArrowLeftRight className="w-5 h-5 text-amber-500" />
+          </div>
+          <div>
+            <h4 className="font-bold text-foreground flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-500" />
+              Transfert vers une autre devise — Conversion requise
+            </h4>
+            <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
+              Lorsque vous envoyez de l'argent vers un pays dont la devise est différente du XAF (par ex. USD, GHS, KES, NGN…), 
+              une <strong>conversion de devises est automatiquement appliquée</strong> au taux de change en vigueur. 
+              Le montant converti peut donc varier légèrement selon le taux du moment. 
+              Les frais sont ensuite calculés sur le montant converti dans la devise locale du pays destinataire.
+            </p>
+          </div>
+        </div>
+
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -86,7 +108,7 @@ export default function FeeExplanationsPage() {
               Grille tarifaire par pays
             </CardTitle>
             <CardDescription>
-              Les tarifs ci-dessous incluent les frais Swychr et la commission Ashtech Pay.
+              Les tarifs ci-dessous incluent les frais Swychr et la commission Ashtech Pay — pour les transferts et les retraits.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -94,9 +116,15 @@ export default function FeeExplanationsPage() {
               <Table>
                 <TableHeader className="bg-muted/50">
                   <TableRow>
-                    <TableHead className="font-bold">Pays</TableHead>
-                    <TableHead className="font-bold">Frais (%)</TableHead>
-                    <TableHead className="font-bold text-right">Minimum Payout Charge</TableHead>
+                    <TableHead className="font-bold" rowSpan={2}>Pays</TableHead>
+                    <TableHead className="font-bold text-center border-l" colSpan={2}>Transfert</TableHead>
+                    <TableHead className="font-bold text-center border-l" colSpan={2}>Retrait</TableHead>
+                  </TableRow>
+                  <TableRow>
+                    <TableHead className="font-semibold text-xs border-l">Frais (%)</TableHead>
+                    <TableHead className="font-semibold text-xs text-right">Min. Payout</TableHead>
+                    <TableHead className="font-semibold text-xs border-l">Frais (%)</TableHead>
+                    <TableHead className="font-semibold text-xs text-right">Min. Payout</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -104,13 +132,15 @@ export default function FeeExplanationsPage() {
                     displayFees.map((row) => (
                       <TableRow key={row.country} className="hover:bg-muted/30 transition-colors">
                         <TableCell className="font-medium">{row.country}</TableCell>
-                        <TableCell>{row.percentage}</TableCell>
-                        <TableCell className="text-right font-mono">{row.min}</TableCell>
+                        <TableCell className="border-l">{row.transferPct}</TableCell>
+                        <TableCell className="text-right font-mono text-sm">{row.transferMin}</TableCell>
+                        <TableCell className="border-l">{row.withdrawalPct}</TableCell>
+                        <TableCell className="text-right font-mono text-sm">{row.withdrawalMin}</TableCell>
                       </TableRow>
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                         Chargement de la grille tarifaire...
                       </TableCell>
                     </TableRow>
@@ -126,9 +156,11 @@ export default function FeeExplanationsPage() {
             <Info className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <h4 className="font-bold text-foreground">Note importante sur les devises</h4>
+            <h4 className="font-bold text-foreground">Note sur les montants minimums</h4>
             <p className="text-sm text-muted-foreground mt-1">
-              Les montants minimums sont indiqués dans la devise locale du pays de destination. Si votre solde est en XAF, une conversion automatique basée sur le taux de change en vigueur sera appliquée lors du calcul du minimum.
+              Les montants minimums (Min. Payout) sont indiqués dans la devise locale du pays de destination. 
+              Si votre solde est en XAF et que vous envoyez vers un autre pays, une conversion automatique 
+              basée sur le taux de change en vigueur sera appliquée.
             </p>
           </div>
         </div>

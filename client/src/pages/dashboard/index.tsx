@@ -479,9 +479,7 @@ export default function DashboardHome() {
                 <p className="text-3xl font-bold text-foreground" data-testid="text-balance">
                   {formatCurrency(user?.balance || "0", (user?.preferredCurrency || "XAF") as SupportedCurrency, rates)}
                 </p>
-                <p className="text-xs text-muted-foreground mt-2">
-                  {user?.fullName ? `Bonjour, ${user.fullName.split(" ")[0]} 👋` : "Bienvenue sur Ashtech Pay"}
-                </p>
+                <p className="text-xs text-muted-foreground mt-2">Ashtech Pay</p>
               </div>
               <img
                 src={dashboardIllustration}
