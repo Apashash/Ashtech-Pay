@@ -310,12 +310,10 @@ export default function WithdrawPage() {
                         if (amountValue > 0 && selectedOperatorData) {
                           const feePercent = selectedOperatorData.feePercentage || 0;
                           const feeFixed = selectedOperatorData.feeFixed || 0;
-                          const minFee = selectedOperatorData.minFee || 0;
-                          const maxFee = selectedOperatorData.maxFee || Infinity;
+                          const minPayoutCharge = selectedOperatorData.minFee || 0;
                           
-                          let feeAmount = (amountValue * feePercent / 100) + feeFixed;
-                          if (feeAmount < minFee) feeAmount = minFee;
-                          if (feeAmount > maxFee) feeAmount = maxFee;
+                          const percentageFee = (amountValue * feePercent / 100);
+                          const feeAmount = Math.max(percentageFee + feeFixed, minPayoutCharge);
                           
                           const amountReceived = amountValue - feeAmount;
                           

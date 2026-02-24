@@ -14,27 +14,35 @@ interface CountryFeeSpec {
 }
 
 const FEE_SPECS: CountryFeeSpec[] = [
-  { code: "CM", countryName: "Cameroun",             swychrFee: 1.50, ashtechMargin: 2.00 },
-  { code: "BF", countryName: "Burkina Faso",          swychrFee: 1.80, ashtechMargin: 2.00 },
-  { code: "BJ", countryName: "Bénin",                 swychrFee: 1.80, ashtechMargin: 2.00 },
-  { code: "CG", countryName: "Congo Brazzaville",     swychrFee: 2.00, ashtechMargin: 2.00 },
-  { code: "CD", countryName: "Congo RDC",             swychrFee: 1.80, ashtechMargin: 2.00 },
-  { code: "CI", countryName: "Côte d'Ivoire",         swychrFee: 1.80, ashtechMargin: 2.00 },
-  { code: "GA", countryName: "Gabon",                 swychrFee: 1.80, ashtechMargin: 2.00 },
-  { code: "GH", countryName: "Ghana",                 swychrFee: 2.00, ashtechMargin: 2.00 },
-  { code: "GN", countryName: "Guinée Conakry",        swychrFee: 2.00, ashtechMargin: 2.00 },
-  { code: "IN", countryName: "Inde",                  swychrFee: 1.50, ashtechMargin: 2.00 },
-  { code: "KE", countryName: "Kenya",                 swychrFee: 1.50, ashtechMargin: 2.00 },
-  { code: "ML", countryName: "Mali",                  swychrFee: 1.80, ashtechMargin: 2.00 },
-  { code: "NE", countryName: "Niger",                 swychrFee: 2.50, ashtechMargin: 2.00 },
-  { code: "NG", countryName: "Nigeria",               swychrFee: 2.00, ashtechMargin: 2.00 },
-  { code: "RW", countryName: "Rwanda",                swychrFee: 1.80, ashtechMargin: 2.00 },
-  { code: "SN", countryName: "Sénégal",               swychrFee: 1.80, ashtechMargin: 2.00 },
-  { code: "TG", countryName: "Togo",                  swychrFee: 1.80, ashtechMargin: 2.00 },
-  { code: "TZ", countryName: "Tanzanie",              swychrFee: 4.00, ashtechMargin: 2.00 },
-  { code: "UG", countryName: "Ouganda",               swychrFee: 4.00, ashtechMargin: 2.00 },
-  { code: "US", countryName: "États-Unis",            swychrFee: 3.00, ashtechMargin: 2.00 },
+  { code: "CM", countryName: "Cameroun",             swychrFee: 1.50, ashtechMargin: 2.00, minFee: 450 },
+  { code: "BF", countryName: "Burkina Faso",          swychrFee: 1.80, ashtechMargin: 2.00, minFee: 450 },
+  { code: "BJ", countryName: "Bénin",                 swychrFee: 1.80, ashtechMargin: 2.00, minFee: 0 },
+  { code: "CG", countryName: "Congo Brazzaville",     swychrFee: 2.00, ashtechMargin: 2.00, minFee: 700 },
+  { code: "CD", countryName: "Congo RDC",             swychrFee: 1.80, ashtechMargin: 2.00, minFee: 0 },
+  { code: "CI", countryName: "Côte d'Ivoire",         swychrFee: 1.80, ashtechMargin: 2.00, minFee: 450 },
+  { code: "GA", countryName: "Gabon",                 swychrFee: 1.80, ashtechMargin: 2.00, minFee: 450 },
+  { code: "GH", countryName: "Ghana",                 swychrFee: 2.00, ashtechMargin: 2.00, minFee: 15 },
+  { code: "GN", countryName: "Guinée Conakry",        swychrFee: 2.00, ashtechMargin: 2.00, minFee: 6500 },
+  { code: "IN", countryName: "Inde",                  swychrFee: 1.50, ashtechMargin: 2.00, minFee: 10 },
+  { code: "KE", countryName: "Kenya",                 swychrFee: 1.50, ashtechMargin: 2.00, minFee: 100 },
+  { code: "ML", countryName: "Mali",                  swychrFee: 1.80, ashtechMargin: 2.00, minFee: 450 },
+  { code: "NE", countryName: "Niger",                 swychrFee: 2.50, ashtechMargin: 2.00, minFee: 690 },
+  { code: "NG", countryName: "Nigeria",               swychrFee: 2.00, ashtechMargin: 2.00, minFee: 100 },
+  { code: "RW", countryName: "Rwanda",                swychrFee: 1.80, ashtechMargin: 2.00, minFee: 2300 },
+  { code: "SN", countryName: "Sénégal",               swychrFee: 1.80, ashtechMargin: 2.00, minFee: 450 },
+  { code: "TG", countryName: "Togo",                  swychrFee: 1.80, ashtechMargin: 2.00, minFee: 0 },
+  { code: "TZ", countryName: "Tanzanie",              swychrFee: 4.00, ashtechMargin: 2.00, minFee: 0 },
+  { code: "UG", countryName: "Ouganda",               swychrFee: 4.00, ashtechMargin: 2.00, minFee: 0 },
+  { code: "US", countryName: "États-Unis",            swychrFee: 3.00, ashtechMargin: 2.00, minFee: 50 },
 ];
+
+interface CountryFeeSpec {
+  code:         string;
+  countryName:  string;
+  swychrFee:    number; // %
+  ashtechMargin: number; // %
+  minFee:       number; // Fixed min
+}
 
 const TRANSACTION_TYPES = ["withdrawal", "transfer"] as const;
 
@@ -56,7 +64,7 @@ export async function seedWithdrawalTransferFees() {
       continue;
     }
 
-    const total = spec.swychrFee + spec.ashtechMargin;
+    const totalPercentage = spec.swychrFee + spec.ashtechMargin;
 
     for (const txType of TRANSACTION_TYPES) {
       // Check if a country-level fee (no operator) already exists
@@ -72,32 +80,30 @@ export async function seedWithdrawalTransferFees() {
         )
         .limit(1);
 
+      const feeData = {
+        feeValue:      totalPercentage.toFixed(4),
+        swychrFee:     spec.swychrFee.toFixed(4),
+        ashtechMargin: spec.ashtechMargin.toFixed(4),
+        minFee:        spec.minFee.toString(),
+        feeType:       "percentage",
+        isActive:      true,
+        name:          `${spec.countryName} - ${txType === "withdrawal" ? "Retrait" : "Transfert"} (${totalPercentage}% / Min ${spec.minFee})`,
+      };
+
       if (existing.length > 0) {
         // Update existing fee
         await db
           .update(fees)
-          .set({
-            feeValue:      total.toFixed(4),
-            swychrFee:     spec.swychrFee.toFixed(4),
-            ashtechMargin: spec.ashtechMargin.toFixed(4),
-            feeType:       "percentage",
-            isActive:      true,
-            name:          `${spec.countryName} - ${txType === "withdrawal" ? "Retrait" : "Transfert"} (${total}%)`,
-          })
+          .set(feeData)
           .where(eq(fees.id, existing[0].id));
         updated++;
       } else {
         // Create new fee
         await db.insert(fees).values({
-          name:          `${spec.countryName} - ${txType === "withdrawal" ? "Retrait" : "Transfert"} (${total}%)`,
+          ...feeData,
           transactionType: txType,
-          feeType:       "percentage",
-          feeValue:      total.toFixed(4),
-          swychrFee:     spec.swychrFee.toFixed(4),
-          ashtechMargin: spec.ashtechMargin.toFixed(4),
           countryId:     country.id,
           operatorId:    null,
-          isActive:      true,
         });
         created++;
       }

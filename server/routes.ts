@@ -755,18 +755,11 @@ export async function registerRoutes(
       
       if (fee) {
         feePercentage = parseFloat(fee.feeValue);
-        if (fee.feeType === "percentage") {
-          feeAmount = parsedAmount * (feePercentage / 100);
-        } else {
-          feeAmount = feePercentage;
-        }
+        const percentageFee = parsedAmount * (feePercentage / 100);
+        const minPayoutCharge = fee.minFee ? parseFloat(fee.minFee) : 0;
         
-        if (fee.minFee && feeAmount < parseFloat(fee.minFee)) {
-          feeAmount = parseFloat(fee.minFee);
-        }
-        if (fee.maxFee && feeAmount > parseFloat(fee.maxFee)) {
-          feeAmount = parseFloat(fee.maxFee);
-        }
+        // rule: higher of percentage fee or minimum payout charge
+        feeAmount = Math.max(percentageFee, minPayoutCharge);
       }
       
       const totalAmount = parsedAmount + feeAmount;
@@ -817,24 +810,17 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Pays non trouvé" });
       }
       
-      // Get fee for this operator
+      // Calculate fee for transfer
       const fee = await storage.getFeeForOperator(operatorId, "transfer");
       let feeAmount = 0;
       
       if (fee) {
-        if (fee.feeType === "percentage") {
-          feeAmount = parsedAmount * (parseFloat(fee.feeValue) / 100);
-        } else {
-          feeAmount = parseFloat(fee.feeValue);
-        }
+        const feePercentage = parseFloat(fee.feeValue);
+        const percentageFee = parsedAmount * (feePercentage / 100);
+        const minPayoutCharge = fee.minFee ? parseFloat(fee.minFee) : 0;
         
-        // Apply min/max fee limits
-        if (fee.minFee && feeAmount < parseFloat(fee.minFee)) {
-          feeAmount = parseFloat(fee.minFee);
-        }
-        if (fee.maxFee && feeAmount > parseFloat(fee.maxFee)) {
-          feeAmount = parseFloat(fee.maxFee);
-        }
+        // rule: higher of percentage fee or minimum payout charge
+        feeAmount = Math.max(percentageFee, minPayoutCharge);
       }
       
       const totalAmount = parsedAmount + feeAmount;

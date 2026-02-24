@@ -120,12 +120,10 @@ export default function SendMoneyPage() {
       if (feeAmount === 0 && selectedOperator) {
         const configFeePercent = selectedOperator.feePercentage || 0;
         const configFeeFixed = selectedOperator.feeFixed || 0;
-        const minFee = selectedOperator.minFee || 0;
-        const maxFee = selectedOperator.maxFee || Infinity;
+        const minPayoutCharge = selectedOperator.minFee || 0;
         
-        feeAmount = (amountValue * configFeePercent / 100) + configFeeFixed;
-        if (feeAmount < minFee) feeAmount = minFee;
-        if (feeAmount > maxFee) feeAmount = maxFee;
+        const percentageFee = (amountValue * configFeePercent / 100);
+        feeAmount = Math.max(percentageFee + configFeeFixed, minPayoutCharge);
         feePercentage = configFeePercent;
       }
 
