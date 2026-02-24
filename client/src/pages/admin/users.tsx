@@ -89,10 +89,27 @@ export default function AdminUsers() {
   const [balanceCurrency, setBalanceCurrency] = useState("XAF");
   const [updateType, setUpdateType] = useState<"set" | "add">("set");
 
-  const { data: userWallets } = useQuery<any[]>({
+  const { data: userWallets, refetch: refetchUserWallets } = useQuery<any[]>({
+    queryKey: [`/api/admin/users/${balanceModal?.id}/wallets`],
+    enabled: !!balanceModal,
+  });
+
+  const { data: viewUserWallets } = useQuery<any[]>({
     queryKey: [`/api/admin/users/${viewUser?.id}/wallets`],
     enabled: !!viewUser,
   });
+
+  const ALL_CURRENCIES = ["XAF", "XOF", "GHS", "NGN", "KES", "RWF", "TZS", "UGX", "CDF", "GNF", "USD"];
+  const CURRENCY_FLAGS: Record<string, string> = {
+    XAF: "🇨🇲", XOF: "🇸🇳", GHS: "🇬🇭", NGN: "🇳🇬", KES: "🇰🇪",
+    RWF: "🇷🇼", TZS: "🇹🇿", UGX: "🇺🇬", CDF: "🇨🇩", GNF: "🇬🇳", USD: "🇺🇸",
+  };
+
+  const getWalletBalance = (currency: string): string => {
+    if (!balanceModal) return "0.00";
+    if (currency === "XAF") return balanceModal.balance;
+    return userWallets?.find((w: any) => w.currency === currency)?.balance || "0.00";
+  };
 
   useEffect(() => {
     if (urlSearch) {
@@ -189,16 +206,20 @@ export default function AdminUsers() {
 
   const updateBalanceMutation = useMutation({
     mutationFn: async ({ id, balance, currency, type }: { id: string; balance: string; currency: string; type: string }) => {
-      return apiRequest("PATCH", `/api/admin/users/${id}/balance`, { amount: balance, currency, type });
+      const res = await apiRequest("PATCH", `/api/admin/users/${id}/balance`, { amount: balance, currency, type });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || "Erreur");
+      return json;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
       queryClient.invalidateQueries({ queryKey: [`/api/admin/users/${balanceModal?.id}/wallets`] });
-      toast({ title: "Solde mis à jour" });
-      setBalanceModal(null);
+      refetchUserWallets();
+      toast({ title: "Solde mis à jour avec succès" });
+      setNewBalance("");
     },
-    onError: () => {
-      toast({ title: "Erreur lors de la mise à jour du solde", variant: "destructive" });
+    onError: (err: Error) => {
+      toast({ title: "Erreur", description: err.message, variant: "destructive" });
     },
   });
 
@@ -393,7 +414,9 @@ export default function AdminUsers() {
                               <Shield className="w-4 h-4 mr-2" /> Remettre User
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => {
+                              setBalanceCurrency("XAF");
                               setNewBalance(user.balance);
+                              setUpdateType("set");
                               setBalanceModal(user);
                             }}>
                               <DollarSign className="w-4 h-4 mr-2" /> Modifier le solde
@@ -473,14 +496,21 @@ export default function AdminUsers() {
                     <p className="text-muted-foreground">Devise</p>
                     <p>{viewUser.preferredCurrency}</p>
                   </div>
-                  <div>
-                    <p className="text-muted-foreground">Solde</p>
-                    <div className="space-y-1">
-                      <p className="font-bold">{formatCurrency(parseFloat(viewUser.balance), "XAF")}</p>
-                      {userWallets?.map((wallet: any) => (
-                        <p key={wallet.id} className="text-xs font-medium">
-                          {formatCurrency(parseFloat(wallet.balance), wallet.currency as any)}
-                        </p>
+                  <div className="col-span-2">
+                    <p className="text-muted-foreground mb-2">Soldes</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="flex flex-col items-center p-2 rounded border bg-muted/40 text-center">
+                        <span className="text-base">🇨🇲</span>
+                        <span className="text-xs font-bold">XAF</span>
+                        <span className="text-xs text-green-600 font-semibold">{parseFloat(viewUser.balance).toLocaleString("fr-FR", { maximumFractionDigits: 0 })}</span>
+                      </div>
+                      {viewUserWallets?.map((wallet: any) => (
+                        <div key={wallet.id} className="flex flex-col items-center p-2 rounded border bg-muted/40 text-center">
+                          <span className="text-xs font-bold">{wallet.currency}</span>
+                          <span className={`text-xs font-semibold ${parseFloat(wallet.balance) > 0 ? "text-green-600" : "text-muted-foreground"}`}>
+                            {parseFloat(wallet.balance).toLocaleString("fr-FR", { maximumFractionDigits: 2 })}
+                          </span>
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -608,65 +638,96 @@ export default function AdminUsers() {
           </DialogContent>
         </Dialog>
 
-        <Dialog open={!!balanceModal} onOpenChange={() => setBalanceModal(null)}>
-          <DialogContent>
+        <Dialog open={!!balanceModal} onOpenChange={(open) => { if (!open) { setBalanceModal(null); setNewBalance(""); } }}>
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
-              <DialogTitle>Modifier le solde de {balanceModal?.fullName}</DialogTitle>
+              <DialogTitle>Soldes de {balanceModal?.fullName}</DialogTitle>
               <DialogDescription>
-                Créditez ou définissez le solde de l'utilisateur pour n'importe quelle devise.
+                Cliquez sur une devise pour la modifier.
               </DialogDescription>
             </DialogHeader>
-            <div className="py-4 space-y-4">
-              <div className="space-y-2">
-                <Label>Devise</Label>
-                <Select value={balanceCurrency} onValueChange={setBalanceCurrency}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {["XAF", "XOF", "GHS", "NGN", "KES", "RWF", "TZS", "UGX", "CDF", "GNF", "USD"].map(c => (
-                      <SelectItem key={c} value={c}>{c}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                {ALL_CURRENCIES.map(c => {
+                  const bal = parseFloat(getWalletBalance(c));
+                  const isSelected = balanceCurrency === c;
+                  return (
+                    <button
+                      key={c}
+                      onClick={() => { setBalanceCurrency(c); setNewBalance(getWalletBalance(c)); setUpdateType("set"); }}
+                      className={`flex flex-col items-center gap-1 p-3 rounded-lg border text-sm font-medium transition-all ${
+                        isSelected
+                          ? "border-primary bg-primary/10 text-primary shadow-sm"
+                          : "border-border hover:border-primary/50 hover:bg-muted/60"
+                      }`}
+                    >
+                      <span className="text-lg">{CURRENCY_FLAGS[c] || "🌍"}</span>
+                      <span className="font-bold">{c}</span>
+                      <span className={`text-xs ${bal > 0 ? "text-green-600 font-semibold" : "text-muted-foreground"}`}>
+                        {bal.toLocaleString("fr-FR", { maximumFractionDigits: 2 })}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
-              <div className="space-y-2">
-                <Label>Type de modification</Label>
-                <Select value={updateType} onValueChange={(v: any) => setUpdateType(v)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="set">Définir le montant exact</SelectItem>
-                    <SelectItem value="add">Ajouter au solde actuel</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Montant</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={newBalance}
-                  onChange={(e) => setNewBalance(e.target.value)}
-                  placeholder="0.00"
-                />
+
+              <div className="border-t pt-4 space-y-4">
+                <p className="text-sm font-semibold flex items-center gap-2">
+                  <span>{CURRENCY_FLAGS[balanceCurrency] || "🌍"}</span>
+                  Modifier le solde <span className="text-primary">{balanceCurrency}</span>
+                  <span className="text-muted-foreground font-normal">
+                    (actuel : {parseFloat(getWalletBalance(balanceCurrency)).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {balanceCurrency})
+                  </span>
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label>Type</Label>
+                    <Select value={updateType} onValueChange={(v: any) => setUpdateType(v)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="set">Définir le montant exact</SelectItem>
+                        <SelectItem value="add">Ajouter au solde actuel</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Montant ({balanceCurrency})</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={newBalance}
+                      onChange={(e) => setNewBalance(e.target.value)}
+                      placeholder="0.00"
+                      autoFocus
+                    />
+                  </div>
+                </div>
+                {updateType === "add" && newBalance && parseFloat(newBalance) > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Nouveau solde estimé :{" "}
+                    <span className="font-semibold text-green-600">
+                      {(parseFloat(getWalletBalance(balanceCurrency)) + parseFloat(newBalance)).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {balanceCurrency}
+                    </span>
+                  </p>
+                )}
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setBalanceModal(null)}>
-                Annuler
+              <Button variant="outline" onClick={() => { setBalanceModal(null); setNewBalance(""); }}>
+                Fermer
               </Button>
-              <Button 
-                onClick={() => balanceModal && updateBalanceMutation.mutate({ 
-                  id: balanceModal.id, 
+              <Button
+                onClick={() => balanceModal && updateBalanceMutation.mutate({
+                  id: balanceModal.id,
                   balance: newBalance,
                   currency: balanceCurrency,
                   type: updateType
                 })}
-                disabled={updateBalanceMutation.isPending}
+                disabled={updateBalanceMutation.isPending || !newBalance}
               >
-                {updateBalanceMutation.isPending ? "Mise à jour..." : "Mettre à jour le solde"}
+                {updateBalanceMutation.isPending ? "Mise à jour..." : `Mettre à jour ${balanceCurrency}`}
               </Button>
             </DialogFooter>
           </DialogContent>
