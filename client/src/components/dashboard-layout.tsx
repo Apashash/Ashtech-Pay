@@ -355,12 +355,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
-                    <SidebarMenuItem>
-                      <SidebarMenuButton onClick={() => setShowPusdConvert(true)}>
-                        <RefreshCw className="w-4 h-4" />
-                        <span>FTPUSD</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
                   </SidebarMenu>
                 </SidebarGroupContent>
               </SidebarGroup>
