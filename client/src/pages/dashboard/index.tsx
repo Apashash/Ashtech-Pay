@@ -10,7 +10,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { transferSchema, depositSchema, withdrawSchema, createPaymentLinkSchema, type SupportedCurrency } from "@shared/schema";
+import { transferSchema, depositSchema, withdrawSchema, createPaymentLinkSchema, type SupportedCurrency, COUNTRY_CURRENCIES } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User, Transaction, PaymentLink, Wallet as WalletEntry } from "@shared/schema";
 import { formatCurrency } from "@/lib/currency";
@@ -120,7 +120,7 @@ function StatCard({ title, value, icon: Icon, trend, color, href }: {
 function SendMoneyDialog({ open, onClose, wallets = [] }: { open: boolean; onClose: () => void, wallets?: WalletEntry[] }) {
   const { toast } = useToast();
   const [selectedWallet, setSelectedWallet] = useState<string>("XAF");
-  const [recipientCountry, setRecipientCountry] = useState<string>("Cameroon");
+  const [recipientCountry, setRecipientCountry] = useState<string>("Cameroun");
 
   const form = useForm<z.infer<typeof transferSchema>>({
     resolver: zodResolver(transferSchema),

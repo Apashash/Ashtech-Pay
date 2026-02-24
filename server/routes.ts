@@ -945,7 +945,7 @@ export async function registerRoutes(
         await storage.updateUserBalance(senderId, -amountNum);
         await storage.updateUserBalance(recipient.id, amountNum);
       } else {
-        const wallet = await storage.getUserWallet(senderId, currency);
+        const wallet = await storage.getWallet(senderId, currency);
         if (!wallet || parseFloat(wallet.balance) < amountNum) {
           return res.status(400).json({ message: "Solde insuffisant dans ce portefeuille" });
         }
