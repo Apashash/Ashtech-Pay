@@ -30,3 +30,17 @@ export const CURRENCY_OPTIONS = [
   { value: "USD", label: "$", flag: "🇺🇸", name: "Dollar US" },
   { value: "EUR", label: "€", flag: "🇪🇺", name: "Euro" },
 ] as const;
+
+export const ALL_CURRENCY_META: Record<string, { label: string; flag: string; name: string }> = {
+  XAF: { label: "XAF", flag: "🇨🇲", name: "Franc CFA (CEMAC)" },
+  XOF: { label: "XOF", flag: "🇸🇳", name: "Franc CFA (UEMOA)" },
+  CDF: { label: "CDF", flag: "🇨🇩", name: "Franc Congolais" },
+  USD: { label: "$",   flag: "🇺🇸", name: "Dollar US" },
+  GHS: { label: "GHS", flag: "🇬🇭", name: "Cédi Ghanéen" },
+  NGN: { label: "NGN", flag: "🇳🇬", name: "Naira Nigérian" },
+  KES: { label: "KES", flag: "🇰🇪", name: "Shilling Kenyan" },
+  RWF: { label: "RWF", flag: "🇷🇼", name: "Franc Rwandais" },
+  TZS: { label: "TZS", flag: "🇹🇿", name: "Shilling Tanzanien" },
+  UGX: { label: "UGX", flag: "🇺🇬", name: "Shilling Ougandais" },
+  GNF: { label: "GNF", flag: "🇬🇳", name: "Franc Guinéen" },
+};

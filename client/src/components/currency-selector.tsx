@@ -5,11 +5,13 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Coins, Check } from "lucide-react";
+import { Coins, Check, MapPin } from "lucide-react";
 import type { User } from "@shared/schema";
-import { CURRENCY_OPTIONS } from "@/lib/currency";
+import { COUNTRY_CURRENCIES } from "@shared/schema";
+import { CURRENCY_OPTIONS, ALL_CURRENCY_META } from "@/lib/currency";
 
 export function CurrencySelector() {
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
@@ -26,6 +28,9 @@ export function CurrencySelector() {
 
   const currentCurrency = user?.preferredCurrency || "XAF";
   const currentOption = CURRENCY_OPTIONS.find(c => c.value === currentCurrency);
+  const localCurrency = user?.country ? (COUNTRY_CURRENCIES[user.country] || "XAF") : "XAF";
+  const localCurrencyMeta = ALL_CURRENCY_META[localCurrency] || ALL_CURRENCY_META["XAF"];
+  const isOnLocalCurrency = currentCurrency === localCurrency;
 
   return (
     <DropdownMenu>
@@ -37,7 +42,26 @@ export function CurrencySelector() {
           </span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuItem
+          onClick={() => updateCurrencyMutation.mutate(localCurrency)}
+          className="flex items-center justify-between cursor-pointer bg-primary/5 focus:bg-primary/10"
+          data-testid="currency-option-local"
+        >
+          <div className="flex items-center gap-2">
+            <MapPin className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+            <div>
+              <span className="font-medium text-primary text-sm">Devise locale</span>
+              <span className="text-muted-foreground text-xs block">
+                {localCurrencyMeta.flag} {localCurrencyMeta.label} — {localCurrencyMeta.name}
+              </span>
+            </div>
+          </div>
+          {isOnLocalCurrency && (
+            <Check className="w-4 h-4 text-primary flex-shrink-0" />
+          )}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         {CURRENCY_OPTIONS.map((option) => (
           <DropdownMenuItem
             key={option.value}
@@ -46,6 +70,7 @@ export function CurrencySelector() {
             data-testid={`currency-option-${option.value}`}
           >
             <div className="flex items-center gap-2">
+              <span className="text-sm">{option.flag}</span>
               <span>{option.label}</span>
               <span className="text-muted-foreground text-xs">{option.name}</span>
             </div>
