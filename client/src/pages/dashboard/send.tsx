@@ -10,12 +10,12 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User, SupportedCurrency } from "@shared/schema";
-import { Send, Phone, User as UserIcon, Globe, Loader2, ArrowRight, AlertCircle, Shield } from "lucide-react";
+import { Send, Phone, User as UserIcon, Globe, Loader2, ArrowRight, AlertCircle, Shield, Info } from "lucide-react";
 import { z } from "zod";
 import { formatCurrency } from "@/lib/currency";
 import { useMemo, useEffect, useState, useCallback } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 
 interface OperatorConfig {
   id: string;
@@ -477,6 +477,15 @@ export default function SendMoneyPage() {
             </div>
           </div>
         )}
+        
+        <div className="flex justify-end mt-8">
+          <Link href="/dashboard/fee-details">
+            <Button variant="outline" size="sm" className="gap-2">
+              <Info className="w-4 h-4" />
+              Détails des frais
+            </Button>
+          </Link>
+        </div>
       </div>
     </DashboardLayout>
   );

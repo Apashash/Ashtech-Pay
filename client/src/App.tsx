@@ -19,6 +19,7 @@ import AddWithdrawalNumberPage from "@/pages/dashboard/add-withdrawal-number";
 import EditWithdrawalNumberPage from "@/pages/dashboard/edit-withdrawal-number";
 import TransferPage from "@/pages/dashboard/transfer";
 import SendMoneyPage from "@/pages/dashboard/send";
+import FeeExplanationsPage from "@/pages/dashboard/fee-details";
 import KYCPage from "@/pages/dashboard/kyc";
 import KYCVerifiedPage from "@/pages/dashboard/kyc-verified";
 import SupportPage from "@/pages/dashboard/support";
@@ -73,6 +74,7 @@ function Router() {
       <Route path="/dashboard/withdrawal-numbers/edit/:id" component={EditWithdrawalNumberPage} />
       <Route path="/dashboard/transfer" component={TransferPage} />
       <Route path="/dashboard/send" component={SendMoneyPage} />
+      <Route path="/dashboard/fee-details" component={FeeExplanationsPage} />
       <Route path="/dashboard/kyc" component={KYCPage} />
       <Route path="/dashboard/kyc-verified" component={KYCVerifiedPage} />
       <Route path="/dashboard/support" component={SupportPage} />

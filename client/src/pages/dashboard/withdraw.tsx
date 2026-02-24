@@ -11,7 +11,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { withdrawSchema, type SupportedCurrency, type WithdrawalNumber } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User } from "@shared/schema";
-import { Wallet, Smartphone, Building2, Loader2, CheckCircle, AlertCircle, Phone, Plus, Settings, Globe, Shield } from "lucide-react";
+import { Wallet, Smartphone, Building2, Loader2, CheckCircle, AlertCircle, Phone, Plus, Settings, Globe, Shield, Info } from "lucide-react";
 import { z } from "zod";
 import { useState, useEffect } from "react";
 import { formatCurrency } from "@/lib/currency";
@@ -440,6 +440,15 @@ export default function WithdrawPage() {
               </Form>
             </CardContent>
           </Card>
+        </div>
+        
+        <div className="flex justify-end mt-8">
+          <Link href="/dashboard/fee-details">
+            <Button variant="outline" size="sm" className="gap-2">
+              <Info className="w-4 h-4" />
+              Détails des frais
+            </Button>
+          </Link>
         </div>
       </div>
     </DashboardLayout>
