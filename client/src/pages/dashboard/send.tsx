@@ -11,7 +11,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User, SupportedCurrency } from "@shared/schema";
 import { Send, Phone, User as UserIcon, Globe, Loader2, ArrowRight, AlertCircle, Shield } from "lucide-react";
-import transferIllustration from "@assets/IMG_7792_1771906562198.jpeg";
 import { z } from "zod";
 import { formatCurrency } from "@/lib/currency";
 import { useMemo, useEffect, useState, useCallback } from "react";
@@ -409,17 +408,6 @@ export default function SendMoneyPage() {
             </Card>
 
             <div className="space-y-4">
-              <Card className="overflow-hidden border-primary/20">
-                <img
-                  src={transferIllustration}
-                  alt="Transfert d'argent en ligne"
-                  className="w-full h-40 object-cover"
-                />
-                <CardContent className="p-4">
-                  <p className="text-sm font-medium text-foreground">Transfert Mobile Money</p>
-                  <p className="text-xs text-muted-foreground mt-1">Envoyez de l'argent en toute sécurité vers 22 pays africains</p>
-                </CardContent>
-              </Card>
 
               <Card className="bg-gradient-to-br from-blue-500/10 to-transparent border-blue-500/20">
                 <CardContent className="p-6">
