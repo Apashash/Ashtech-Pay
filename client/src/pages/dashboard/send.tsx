@@ -48,6 +48,10 @@ const externalFormSchema = z.object({
 type ExternalFormData = z.infer<typeof externalFormSchema>;
 
 const COUNTRY_FLAGS: Record<string, string> = {
+  "Bénin": "🇧🇯",
+  "Burkina Faso": "🇧🇫",
+  "Cameroun": "🇨🇲",
+  "Centrafrique": "🇨🇫",
   "Congo": "🇨🇬",
   "Côte d'Ivoire": "🇨🇮",
   "Gabon": "🇬🇦",
@@ -62,7 +66,6 @@ const COUNTRY_FLAGS: Record<string, string> = {
   "Tanzanie": "🇹🇿",
   "Ouganda": "🇺🇬",
   "Sénégal": "🇸🇳",
-  "Cameroun": "🇨🇲",
   "RDC": "🇨🇩",
   "USA": "🇺🇸"
 };
