@@ -124,6 +124,34 @@ export interface SwychrPayoutStatusResult {
   message?:          string;
 }
 
+// ─── Country → Currency mapping ───────────────────────────────────────────
+const COUNTRY_CURRENCY: Record<string, string> = {
+  BJ: "XOF", BF: "XOF", CM: "XAF", CF: "XAF", CG: "XAF",
+  CI: "XOF", GA: "XAF", GH: "GHS", GN: "GNF", GQ: "XAF",
+  GW: "XOF", KE: "KES", ML: "XOF", NE: "XOF", NG: "NGN",
+  UG: "UGX", CD: "CDF", RW: "RWF", SN: "XOF", TZ: "TZS",
+  TD: "XAF", TG: "XOF",
+};
+
+// ─── Fiat → PUSD conversion (fund wallet before payout) ──────────────────
+async function convertFiatToPusd(token: string, currencyCode: string, fiatAmount: number): Promise<void> {
+  console.log(`[PayoutAPI] Converting ${fiatAmount} ${currencyCode} → PUSD before payout`);
+  const res = await fetch(`${PAYOUT_BASE_URL}/fiat_to_pusd_conversion`, {
+    method: "POST",
+    headers: {
+      "Content-Type":  "application/json",
+      "Authorization": `Bearer ${token}`,
+    },
+    body: JSON.stringify({ currency_code: currencyCode, fiat_amount: fiatAmount }),
+  });
+  const json = await res.json();
+  const bodyStatus = typeof json.status === "number" ? json.status : res.status;
+  console.log(`[PayoutAPI] fiat_to_pusd_conversion HTTP=${res.status} body.status=${bodyStatus}:`, JSON.stringify(json));
+  if (bodyStatus >= 400) {
+    throw new Error(`fiat_to_pusd_conversion échoué: ${json.message || `HTTP ${bodyStatus}`}`);
+  }
+}
+
 // ─── Create payout transaction ────────────────────────────────────────────
 
 export async function createSwychrPayout(
@@ -131,6 +159,11 @@ export async function createSwychrPayout(
 ): Promise<SwychrPayoutResult> {
   try {
     const token = await getPayoutToken();
+
+    // ── Step 1: Convert fiat → PUSD to fund the payout wallet ────────────
+    const currencyCode = COUNTRY_CURRENCY[params.country_code.toUpperCase()] || "XAF";
+    await convertFiatToPusd(token, currencyCode, params.amount);
+    // ─────────────────────────────────────────────────────────────────────
 
     console.log(`[PayoutAPI] Creating payout: ${params.country_code} ${params.amount} → ${params.mobile_no}`);
 
