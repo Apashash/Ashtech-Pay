@@ -104,6 +104,34 @@ export default function AdminUsers() {
     XAF: "🇨🇲", XOF: "🇸🇳", GHS: "🇬🇭", NGN: "🇳🇬", KES: "🇰🇪",
     RWF: "🇷🇼", TZS: "🇹🇿", UGX: "🇺🇬", CDF: "🇨🇩", GNF: "🇬🇳", USD: "🇺🇸",
   };
+  const COUNTRY_FLAGS: Record<string, string> = {
+    "Cameroun": "🇨🇲", "Cameroon": "🇨🇲",
+    "Togo": "🇹🇬",
+    "Sénégal": "🇸🇳", "Senegal": "🇸🇳",
+    "Côte d'Ivoire": "🇨🇮", "Ivory Coast": "🇨🇮",
+    "Mali": "🇲🇱",
+    "Bénin": "🇧🇯", "Benin": "🇧🇯",
+    "Burkina Faso": "🇧🇫",
+    "Niger": "🇳🇪",
+    "Guinée": "🇬🇳", "Guinée Conakry": "🇬🇳",
+    "Ghana": "🇬🇭",
+    "Nigeria": "🇳🇬", "Nigéria": "🇳🇬",
+    "Kenya": "🇰🇪",
+    "Rwanda": "🇷🇼",
+    "Tanzanie": "🇹🇿", "Tanzania": "🇹🇿",
+    "Ouganda": "🇺🇬", "Uganda": "🇺🇬",
+    "Congo RDC": "🇨🇩", "RD Congo": "🇨🇩",
+    "Congo": "🇨🇬", "Congo Brazzaville": "🇨🇬",
+    "Gabon": "🇬🇦",
+    "Guinée-Bissau": "🇬🇼",
+    "Guinée Équatoriale": "🇬🇶",
+    "Centrafrique": "🇨🇫",
+    "Tchad": "🇹🇩",
+  };
+  const getCountryFlag = (country: string | null, currency: string): string => {
+    if (country && COUNTRY_FLAGS[country]) return COUNTRY_FLAGS[country];
+    return CURRENCY_FLAGS[currency] || "🏳️";
+  };
 
   const getWalletBalance = (currency: string): string => {
     if (!balanceModal) return "0.00";
@@ -499,13 +527,16 @@ export default function AdminUsers() {
                   <div className="col-span-2">
                     <p className="text-muted-foreground mb-2">Soldes</p>
                     <div className="grid grid-cols-3 gap-2">
-                      <div className="flex flex-col items-center p-2 rounded border bg-muted/40 text-center">
-                        <span className="text-base">🇨🇲</span>
-                        <span className="text-xs font-bold">XAF</span>
-                        <span className="text-xs text-green-600 font-semibold">{parseFloat(viewUser.balance).toLocaleString("fr-FR", { maximumFractionDigits: 0 })}</span>
+                      <div className="flex flex-col items-center p-2 rounded border bg-primary/10 text-center border-primary/30">
+                        <span className="text-base">{getCountryFlag(viewUser.country, viewUser.preferredCurrency || "XAF")}</span>
+                        <span className="text-xs font-bold text-primary">{viewUser.preferredCurrency || "XAF"} ★</span>
+                        <span className={`text-xs font-semibold ${parseFloat(viewUser.balance) > 0 ? "text-green-600" : "text-muted-foreground"}`}>
+                          {parseFloat(viewUser.balance).toLocaleString("fr-FR", { maximumFractionDigits: 0 })}
+                        </span>
                       </div>
                       {viewUserWallets?.map((wallet: any) => (
                         <div key={wallet.id} className="flex flex-col items-center p-2 rounded border bg-muted/40 text-center">
+                          <span className="text-base">{CURRENCY_FLAGS[wallet.currency] || "🏳️"}</span>
                           <span className="text-xs font-bold">{wallet.currency}</span>
                           <span className={`text-xs font-semibold ${parseFloat(wallet.balance) > 0 ? "text-green-600" : "text-muted-foreground"}`}>
                             {parseFloat(wallet.balance).toLocaleString("fr-FR", { maximumFractionDigits: 2 })}
