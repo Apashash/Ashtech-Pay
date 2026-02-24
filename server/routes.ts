@@ -3563,6 +3563,11 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/swychr/webhook", (req, res) => {
+    const appUrl = process.env.APP_URL || "";
+    res.redirect(`${appUrl}/dashboard?payment=processing`);
+  });
+
   app.post("/api/swychr/webhook", async (req, res) => {
     try {
       const payload = req.body;

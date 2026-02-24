@@ -106,15 +106,14 @@ Expand all Collapse all
 }
 }
 401
-Content type
-application/json
-
-Copy
-Expand all Collapse all
 {
 "status": "error",
 "errors": [
-{}
+{
+"code": "string",
+"message": "string",
+"field": "string"
+}
 ]
 }
 500
@@ -122,12 +121,14 @@ Expand all Collapse all
 Content type
 application/json
 
-Copy
-Expand all Collapse all
 {
 "status": "error",
 "errors": [
-{}
+{
+"code": "string",
+"message": "string",
+"field": "string"
+}
 ]
 }
 Payment Link
@@ -338,90 +339,107 @@ Expand all Collapse all
 Content type
 application/json
 
-Copy
-Expand all Collapse all
 {
 "status": "string",
 "message": "string",
 "validation": {
-"property1": [],
-"property2": []
+"property1": [
+"string"
+],
+"property2": [
+"string"
+]
 }
 }
 4001
 Content type
 application/json
 
-Copy
-Expand all Collapse all
 {
 "status": "error",
 "errors": [
-{}
+{
+"code": "string",
+"message": "string",
+"field": "string"
+}
 ]
 }
+
 404
 Content type
 application/json
 
-Copy
-Expand all Collapse all
 {
 "status": "error",
 "errors": [
-{}
+{
+"code": "string",
+"message": "string",
+"field": "string"
+}
 ]
 }
 409
 Content type
 application/json
 
-Copy
-Expand all Collapse all
 {
 "status": "error",
 "errors": [
-{}
+{
+"code": "string",
+"message": "string",
+"field": "string"
+}
 ]
 }
 422
 Content type
 application/json
 
-Copy
-Expand all Collapse all
 {
 "status": "string",
 "message": "string",
 "validation": {
-"property1": [],
-"property2": []
+"property1": [
+"string"
+],
+"property2": [
+"string"
+]
 }
 }
 429
 Content type
 application/json
 
-Copy
-Expand all Collapse all
 {
 "status": "error",
 "errors": [
-{}
+{
+"code": "string",
+"message": "string",
+"field": "string"
+}
 ]
+}
 }
 500
 Content type
 application/json
 
-Copy
-Expand all Collapse all
 {
 "status": "error",
 "errors": [
-{}
+{
+"code": "string",
+"message": "string",
+"field": "string"
+}
 ]
 }
+
 Payment Link Status
 
 Retrieve or poll the status of a payment link
@@ -533,14 +551,17 @@ Copy
 Content type
 application/json
 
-Copy
-Expand all Collapse all
 {
-"data": {
-"data": {}
-},
-"message": "Payment link details retrieved successfully",
-"status": 200
+"status": "string",
+"message": "string",
+"validation": {
+"property1": [
+"string"
+],
+"property2": [
+"string"
+]
+}
 }
 Callback payload samples
 Callback
@@ -552,7 +573,43 @@ Copy
 Expand all Collapse all
 {
 "data": {
-"data": {}
+"data": {
+"type": "payment-links",
+"id": "6682",
+"attributes": {
+"id": 6682,
+"name": "Rahul Sharma",
+"email": "rahul@example.com",
+"mobile": "919876543210",
+"amount": 149.5,
+"currency_code": "XAF",
+"country": "Cameroon",
+"country_code": "CM",
+"status": 0,
+"created_at": "2025-11-27T00:04:05.835+05:30",
+"description": "Payment for order",
+"expired_at": "2025-11-27T01:04:05.833+05:30",
+"payment_uuid": "https://app.swychrconnect.com/payment/35cfd792-66b4-4db2-940d-a694f15bd11c",
+"transaction_id": "txn_20251126_0001",
+"pass_digital_charge": true,
+"net_payable": 153.2375,
+"admin_name": "harshit",
+"admin_email": "hk2604@gmail.com",
+"callback_url": "https://merchant.example.com/webhook/payment_status",
+"redirect_behavior": {
+"success": {
+"when_callback_set": "Redirects to the callback_url if set.",
+"when_callback_not_set": "Redirects to https://app.swychrconnect.com/payment_success when callback_url not set."
+},
+"failure": {
+"default_failure_url": "https://app.swychrconnect.com/payment_failed"
+}
+}
+},
+"links": {
+"self": "/payment-links/6682"
+}
+}
 },
 "message": "Payment link details retrieved successfully",
 "status": 200
@@ -561,14 +618,16 @@ Expand all Collapse all
 Content type
 application/json
 
-Copy
-Expand all Collapse all
 {
 "status": "string",
 "message": "string",
 "validation": {
-"property1": [],
-"property2": []
+"property1": [
+"string"
+],
+"property2": [
+"string"
+]
 }
 }
 Callback payload samples
@@ -581,7 +640,43 @@ Copy
 Expand all Collapse all
 {
 "data": {
-"data": {}
+"data": {
+"type": "payment-links",
+"id": "6682",
+"attributes": {
+"id": 6682,
+"name": "Rahul Sharma",
+"email": "rahul@example.com",
+"mobile": "919876543210",
+"amount": 149.5,
+"currency_code": "XAF",
+"country": "Cameroon",
+"country_code": "CM",
+"status": 0,
+"created_at": "2025-11-27T00:04:05.835+05:30",
+"description": "Payment for order",
+"expired_at": "2025-11-27T01:04:05.833+05:30",
+"payment_uuid": "https://app.swychrconnect.com/payment/35cfd792-66b4-4db2-940d-a694f15bd11c",
+"transaction_id": "txn_20251126_0001",
+"pass_digital_charge": true,
+"net_payable": 153.2375,
+"admin_name": "harshit",
+"admin_email": "hk2604@gmail.com",
+"callback_url": "https://merchant.example.com/webhook/payment_status",
+"redirect_behavior": {
+"success": {
+"when_callback_set": "Redirects to the callback_url if set.",
+"when_callback_not_set": "Redirects to https://app.swychrconnect.com/payment_success when callback_url not set."
+},
+"failure": {
+"default_failure_url": "https://app.swychrconnect.com/payment_failed"
+}
+}
+},
+"links": {
+"self": "/payment-links/6682"
+}
+}
 },
 "message": "Payment link details retrieved successfully",
 "status": 200
@@ -590,15 +685,16 @@ Expand all Collapse all
 Content type
 application/json
 
-Copy
-Expand all Collapse all
 {
 "status": "error",
 "errors": [
-{}
+{
+"code": "string",
+"message": "string",
+"field": "string"
+}
 ]
 }
-
 Callback payload samples
 Callback
 POST: Webhook POST to merchant callback_url when payment status updates
@@ -609,7 +705,43 @@ Copy
 Expand all Collapse all
 {
 "data": {
-"data": {}
+"data": {
+"type": "payment-links",
+"id": "6682",
+"attributes": {
+"id": 6682,
+"name": "Rahul Sharma",
+"email": "rahul@example.com",
+"mobile": "919876543210",
+"amount": 149.5,
+"currency_code": "XAF",
+"country": "Cameroon",
+"country_code": "CM",
+"status": 0,
+"created_at": "2025-11-27T00:04:05.835+05:30",
+"description": "Payment for order",
+"expired_at": "2025-11-27T01:04:05.833+05:30",
+"payment_uuid": "https://app.swychrconnect.com/payment/35cfd792-66b4-4db2-940d-a694f15bd11c",
+"transaction_id": "txn_20251126_0001",
+"pass_digital_charge": true,
+"net_payable": 153.2375,
+"admin_name": "harshit",
+"admin_email": "hk2604@gmail.com",
+"callback_url": "https://merchant.example.com/webhook/payment_status",
+"redirect_behavior": {
+"success": {
+"when_callback_set": "Redirects to the callback_url if set.",
+"when_callback_not_set": "Redirects to https://app.swychrconnect.com/payment_success when callback_url not set."
+},
+"failure": {
+"default_failure_url": "https://app.swychrconnect.com/payment_failed"
+}
+}
+},
+"links": {
+"self": "/payment-links/6682"
+}
+}
 },
 "message": "Payment link details retrieved successfully",
 "status": 200
@@ -702,11 +834,45 @@ Payload
 Content type
 application/json
 
-Copy
-Expand all Collapse all
 {
 "data": {
-"data": {}
+"data": {
+"type": "payment-links",
+"id": "6682",
+"attributes": {
+"id": 6682,
+"name": "Rahul Sharma",
+"email": "rahul@example.com",
+"mobile": "919876543210",
+"amount": 149.5,
+"currency_code": "XAF",
+"country": "Cameroon",
+"country_code": "CM",
+"status": 0,
+"created_at": "2025-11-27T00:04:05.835+05:30",
+"description": "Payment for order",
+"expired_at": "2025-11-27T01:04:05.833+05:30",
+"payment_uuid": "https://app.swychrconnect.com/payment/35cfd792-66b4-4db2-940d-a694f15bd11c",
+"transaction_id": "txn_20251126_0001",
+"pass_digital_charge": true,
+"net_payable": 153.2375,
+"admin_name": "harshit",
+"admin_email": "hk2604@gmail.com",
+"callback_url": "https://merchant.example.com/webhook/payment_status",
+"redirect_behavior": {
+"success": {
+"when_callback_set": "Redirects to the callback_url if set.",
+"when_callback_not_set": "Redirects to https://app.swychrconnect.com/payment_success when callback_url not set."
+},
+"failure": {
+"default_failure_url": "https://app.swychrconnect.com/payment_failed"
+}
+}
+},
+"links": {
+"self": "/payment-links/6682"
+}
+}
 },
 "message": "Payment link details retrieved successfully",
 "status": 200
