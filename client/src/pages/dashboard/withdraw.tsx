@@ -55,7 +55,7 @@ export default function WithdrawPage() {
   
   const form = useForm<z.infer<typeof withdrawSchema>>({
     resolver: zodResolver(withdrawSchema),
-    defaultValues: { amount: "", paymentMethod: "mobile_money", accountDetails: "" },
+    defaultValues: { amount: "", paymentMethod: "mobile_money", accountDetails: "", countryId: "", operatorId: "" },
   });
 
   const selectedCountryData = countriesConfig.find(c => c.id === selectedCountry);
@@ -73,15 +73,19 @@ export default function WithdrawPage() {
 
   useEffect(() => {
     setSelectedOperator("");
-  }, [selectedCountry]);
+    form.setValue("countryId", selectedCountry);
+    form.setValue("operatorId", "");
+  }, [selectedCountry, form]);
+
+  useEffect(() => {
+    form.setValue("operatorId", selectedOperator);
+  }, [selectedOperator, form]);
 
   const withdrawMutation = useMutation({
     mutationFn: async (data: z.infer<typeof withdrawSchema>) => {
       const res = await apiRequest("POST", "/api/withdrawals", { 
         ...data, 
         paymentMethod: selectedMethod,
-        countryId: selectedCountry || undefined,
-        operatorId: selectedOperator || undefined,
       });
       return res.json();
     },
@@ -97,26 +101,16 @@ export default function WithdrawPage() {
     },
   });
 
-  const renderSubmitButton = () => {
-    const amountValue = parseFloat(form.watch("amount") || "0");
-    const accountDetails = form.watch("accountDetails");
-    const isAmountValid = amountValue >= 1000 && amountValue <= balance;
-    const isMobileMoneyValid = selectedMethod === "mobile_money" ? (!!selectedCountry && !!selectedOperator && !!accountDetails) : true;
-    const isBankTransferValid = selectedMethod === "bank_transfer" ? !!accountDetails : true;
+  const [, setLocation] = useLocation();
+  const isVerified = user?.isVerified;
 
-    return (
-      <Button 
-        type="submit" 
-        className="w-full" 
-        size="lg" 
-        disabled={withdrawMutation.isPending || !isAmountValid || !isMobileMoneyValid || !isBankTransferValid}
-        data-testid="button-withdraw-confirm"
-      >
-        {withdrawMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Wallet className="w-4 h-4 mr-2" />}
-        Demander le retrait
-      </Button>
-    );
-  };
+  const watchedAmount = form.watch("amount");
+  const watchedAccountDetails = form.watch("accountDetails");
+  const amountValue = parseFloat(watchedAmount || "0");
+  const isAmountValid = amountValue >= 1000 && amountValue <= balance;
+  const isMobileMoneyValid = selectedMethod === "mobile_money" ? (!!selectedCountry && !!selectedOperator && !!watchedAccountDetails) : true;
+  const isBankTransferValid = selectedMethod === "bank_transfer" ? !!watchedAccountDetails : true;
+  const isSubmitDisabled = withdrawMutation.isPending || !isAmountValid || !isMobileMoneyValid || !isBankTransferValid;
 
   if (user && !isVerified) {
     return (
@@ -423,7 +417,16 @@ export default function WithdrawPage() {
                     />
                   )}
 
-                  {renderSubmitButton()}
+                  <Button 
+                    type="submit" 
+                    className="w-full" 
+                    size="lg" 
+                    disabled={isSubmitDisabled}
+                    data-testid="button-withdraw-confirm"
+                  >
+                    {withdrawMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Wallet className="w-4 h-4 mr-2" />}
+                    Demander le retrait
+                  </Button>
                 </form>
               </Form>
             </CardContent>
