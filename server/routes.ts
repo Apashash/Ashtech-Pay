@@ -1545,7 +1545,6 @@ export async function registerRoutes(
     }
   });
 
-    try {
   // Delete payment link
   app.delete("/api/payment-links/:id", requireAuth, async (req, res) => {
     try {
@@ -1811,25 +1810,6 @@ export async function registerRoutes(
           fullName: user?.fullName,
           isVerified: user?.isVerified,
         }
-      });
-    } catch (error) {
-      console.error("Get public payment link error:", error);
-      res.status(500).json({ message: "Erreur serveur" });
-    }
-  });
-      const paymentLink = await storage.getPaymentLinkBySlug(req.params.slug);
-      if (!paymentLink) {
-        return res.status(404).json({ message: "Lien de paiement non trouvé" });
-      }
-      if (!paymentLink.isActive) {
-        return res.status(400).json({ message: "Ce lien de paiement n'est plus actif" });
-      }
-      await storage.incrementPaymentLinkClicks(req.params.slug);
-      
-      const { pdfPath, ...safePaymentLink } = paymentLink;
-      res.json({
-        ...safePaymentLink,
-        hasPdf: !!pdfPath && !!paymentLink.hasPdfDelivery,
       });
     } catch (error) {
       console.error("Get public payment link error:", error);
