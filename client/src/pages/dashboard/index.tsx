@@ -40,6 +40,7 @@ import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Link } from "wouter";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import dashboardIllustration from "@assets/IMG_7793_1771906562197.png";
 
 const periodOptions = [
   { value: "today", label: "Aujourd'hui" },
@@ -470,18 +471,23 @@ export default function DashboardHome() {
           <p className="text-muted-foreground">Bienvenue, {user?.fullName}</p>
         </div>
 
-        <Card className="bg-gradient-to-br from-primary/20 via-primary/10 to-transparent border-primary/20">
+        <Card className="bg-gradient-to-br from-primary/20 via-primary/10 to-transparent border-primary/20 overflow-hidden">
           <CardContent className="p-6">
-            <div className="flex items-start justify-between">
-              <div>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex-1">
                 <p className="text-muted-foreground text-sm mb-1">Solde disponible</p>
                 <p className="text-3xl font-bold text-foreground" data-testid="text-balance">
                   {formatCurrency(user?.balance || "0", (user?.preferredCurrency || "XAF") as SupportedCurrency, rates)}
                 </p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  {user?.fullName ? `Bonjour, ${user.fullName.split(" ")[0]} 👋` : "Bienvenue sur Ashtech Pay"}
+                </p>
               </div>
-              <div className="w-12 h-12 bg-primary/20 rounded-xl flex items-center justify-center">
-                <Wallet className="w-6 h-6 text-primary" />
-              </div>
+              <img
+                src={dashboardIllustration}
+                alt="Tableau de bord Ashtech Pay"
+                className="h-24 w-auto object-contain hidden sm:block flex-shrink-0"
+              />
             </div>
           </CardContent>
         </Card>
