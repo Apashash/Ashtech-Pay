@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/dashboard-layout";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,8 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Wallet, ArrowLeftRight, RefreshCw, Info, Plus, Loader2 } from "lucide-react";
-import { CURRENCY_SYMBOLS, SUPPORTED_CURRENCIES, type SupportedCurrency } from "@shared/schema";
+import { Wallet, ArrowLeftRight, Info, Plus, Loader2, Clock, CheckCircle2 } from "lucide-react";
+import { CURRENCY_SYMBOLS, SUPPORTED_CURRENCIES } from "@shared/schema";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface WalletEntry {
@@ -34,31 +34,19 @@ const CURRENCY_NAMES: Record<string, string> = {
 };
 
 const CURRENCY_FLAGS: Record<string, string> = {
-  XAF: "🇨🇲",
-  XOF: "🇸🇳",
-  GHS: "🇬🇭",
-  NGN: "🇳🇬",
-  KES: "🇰🇪",
-  RWF: "🇷🇼",
-  TZS: "🇹🇿",
-  UGX: "🇺🇬",
-  CDF: "🇨🇩",
-  GNF: "🇬🇳",
-  USD: "🇺🇸",
+  XAF: "🇨🇲", XOF: "🇸🇳", GHS: "🇬🇭", NGN: "🇳🇬", KES: "🇰🇪",
+  RWF: "🇷🇼", TZS: "🇹🇿", UGX: "🇺🇬", CDF: "🇨🇩", GNF: "🇬🇳", USD: "🇺🇸",
 };
 
 export default function WalletsPage() {
   const { toast } = useToast();
   const [convertOpen, setConvertOpen] = useState(false);
   const [addWalletOpen, setAddWalletOpen] = useState(false);
-  const [selectedWallet, setSelectedWallet] = useState<WalletEntry | null>(null);
+  const [pendingSuccess, setPendingSuccess] = useState<{ fromCurrency: string; toCurrency: string; fromAmount: number } | null>(null);
 
   const [fromCurrency, setFromCurrency] = useState("XAF");
   const [toCurrency, setToCurrency] = useState("XOF");
   const [convertAmount, setConvertAmount] = useState("");
-  const [previewResult, setPreviewResult] = useState<{ toAmount: number; rate: number } | null>(null);
-  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
-
   const [newWalletCurrency, setNewWalletCurrency] = useState("");
 
   const { data: walletList = [], isLoading } = useQuery<WalletEntry[]>({
@@ -72,59 +60,41 @@ export default function WalletsPage() {
   const convertMutation = useMutation({
     mutationFn: async (data: { fromCurrency: string; toCurrency: string; amount: string }) => {
       const res = await apiRequest("POST", "/api/wallets/convert", data);
-      return res.json();
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message);
+      return json;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/wallets"] });
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
-      toast({
-        title: "Conversion réussie",
-        description: `${data.fromAmount.toFixed(2)} ${data.fromCurrency} → ${data.toAmount.toFixed(2)} ${data.toCurrency}`,
-      });
       setConvertOpen(false);
+      setPendingSuccess({
+        fromCurrency: data.fromCurrency,
+        toCurrency: data.toCurrency,
+        fromAmount: data.fromAmount,
+      });
       setConvertAmount("");
-      setPreviewResult(null);
     },
     onError: (error: Error) => {
       toast({ title: "Erreur", description: error.message, variant: "destructive" });
     },
   });
 
-  const handlePreview = async () => {
-    const amount = parseFloat(convertAmount);
-    if (!amount || amount <= 0) return;
-    setIsPreviewLoading(true);
-    try {
-      const res = await apiRequest("POST", "/api/wallets/convert-preview", {
-        fromCurrency,
-        toCurrency,
-        amount: convertAmount,
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setPreviewResult({ toAmount: data.toAmount, rate: data.rate });
-      } else {
-        toast({ title: "Erreur de taux", description: data.message, variant: "destructive" });
-        setPreviewResult(null);
-      }
-    } finally {
-      setIsPreviewLoading(false);
-    }
-  };
-
   const openConvert = (wallet: WalletEntry) => {
-    setSelectedWallet(wallet);
     setFromCurrency(wallet.currency);
-    setToCurrency(walletList.find(w => w.currency !== wallet.currency)?.currency || "XAF");
+    const other = walletList.find(w => w.currency !== wallet.currency);
+    setToCurrency(other?.currency || "XOF");
     setConvertAmount("");
-    setPreviewResult(null);
+    setPendingSuccess(null);
     setConvertOpen(true);
   };
 
   const addWalletMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/wallets/create", { currency: newWalletCurrency });
-      return res.json();
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message);
+      return json;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/wallets"] });
@@ -137,6 +107,11 @@ export default function WalletsPage() {
     },
   });
 
+  const sourceBalance = walletList.find(w => w.currency === fromCurrency);
+  const parsedAmount = parseFloat(convertAmount || "0");
+  const sourceParsedBalance = parseFloat(sourceBalance?.balance || "0");
+  const hasSufficientBalance = parsedAmount > 0 && parsedAmount <= sourceParsedBalance;
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -145,11 +120,7 @@ export default function WalletsPage() {
             <h1 className="text-2xl font-bold text-foreground">Mes Comptes</h1>
             <p className="text-muted-foreground">Gérez vos portefeuilles multi-devises</p>
           </div>
-          <Button
-            variant="outline"
-            onClick={() => setAddWalletOpen(true)}
-            className="gap-2"
-          >
+          <Button variant="outline" onClick={() => setAddWalletOpen(true)} className="gap-2">
             <Plus className="w-4 h-4" />
             Ajouter un compte
           </Button>
@@ -158,8 +129,8 @@ export default function WalletsPage() {
         <Alert>
           <Info className="h-4 w-4" />
           <AlertDescription>
-            Les dépôts sont effectués uniquement sur le compte <strong>XAF</strong> (Cameroun). 
-            Vous pouvez ensuite convertir vers d'autres devises pour effectuer des transferts et retraits internationaux.
+            Les dépôts sont effectués uniquement sur le compte <strong>XAF</strong> (Cameroun).
+            Vous pouvez demander une conversion vers d'autres devises — elle sera traitée par l'administration.
           </AlertDescription>
         </Alert>
 
@@ -204,9 +175,10 @@ export default function WalletsPage() {
                       size="sm"
                       className="w-full gap-2"
                       onClick={() => openConvert(wallet)}
+                      disabled={walletList.length < 2}
                     >
                       <ArrowLeftRight className="w-4 h-4" />
-                      Convertir
+                      Demander une conversion
                     </Button>
                   </CardContent>
                 </Card>
@@ -215,22 +187,47 @@ export default function WalletsPage() {
           </div>
         )}
 
+        {/* Pending success banner */}
+        {pendingSuccess && (
+          <Card className="border-amber-500/40 bg-amber-500/5">
+            <CardContent className="p-4 flex items-start gap-3">
+              <Clock className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="font-semibold text-amber-600">Demande de conversion soumise</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Votre demande de conversion de{" "}
+                  <strong>{pendingSuccess.fromAmount.toLocaleString("fr-FR")} {pendingSuccess.fromCurrency}</strong>{" "}
+                  vers <strong>{pendingSuccess.toCurrency}</strong> a été enregistrée.
+                  Votre compte a été débité. Le montant {pendingSuccess.toCurrency} sera crédité dès validation par l'administration.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Conversion Dialog */}
         <Dialog open={convertOpen} onOpenChange={setConvertOpen}>
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <ArrowLeftRight className="w-5 h-5" />
-                Convertir des devises
+                Demande de conversion
               </DialogTitle>
               <DialogDescription>
-                La conversion utilise le pont PUSD de Swychr pour obtenir le taux en temps réel.
+                Votre compte source sera débité immédiatement. Le montant cible sera crédité après validation par l'administration.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
+              <Alert className="border-amber-500/30 bg-amber-500/5">
+                <Clock className="h-4 w-4 text-amber-500" />
+                <AlertDescription className="text-xs text-amber-700">
+                  Les conversions sont traitées manuellement par l'administration. Délai habituel : quelques heures.
+                </AlertDescription>
+              </Alert>
+
               <div className="space-y-2">
-                <Label>Devise source</Label>
-                <Select value={fromCurrency} onValueChange={(v) => { setFromCurrency(v); setPreviewResult(null); }}>
+                <Label>Compte source (à débiter)</Label>
+                <Select value={fromCurrency} onValueChange={(v) => { setFromCurrency(v); setConvertAmount(""); }}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -245,8 +242,8 @@ export default function WalletsPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>Devise cible</Label>
-                <Select value={toCurrency} onValueChange={(v) => { setToCurrency(v); setPreviewResult(null); }}>
+                <Label>Compte cible (à créditer)</Label>
+                <Select value={toCurrency} onValueChange={setToCurrency}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -262,52 +259,37 @@ export default function WalletsPage() {
 
               <div className="space-y-2">
                 <Label>Montant à convertir ({fromCurrency})</Label>
-                <div className="flex gap-2">
-                  <Input
-                    type="number"
-                    placeholder="0"
-                    value={convertAmount}
-                    onChange={(e) => { setConvertAmount(e.target.value); setPreviewResult(null); }}
-                  />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handlePreview}
-                    disabled={!convertAmount || parseFloat(convertAmount) <= 0 || isPreviewLoading}
-                  >
-                    {isPreviewLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                  </Button>
-                </div>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  value={convertAmount}
+                  onChange={(e) => setConvertAmount(e.target.value)}
+                  min="1"
+                  max={sourceParsedBalance}
+                />
+                {convertAmount && parsedAmount > 0 && !hasSufficientBalance && (
+                  <p className="text-xs text-red-500">
+                    Solde insuffisant. Disponible : {sourceParsedBalance.toLocaleString("fr-FR")} {fromCurrency}
+                  </p>
+                )}
+                {convertAmount && hasSufficientBalance && (
+                  <p className="text-xs text-muted-foreground">
+                    Solde restant après débit : {(sourceParsedBalance - parsedAmount).toLocaleString("fr-FR")} {fromCurrency}
+                  </p>
+                )}
               </div>
-
-              {previewResult && (
-                <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Vous envoyez</span>
-                    <span className="font-medium">{parseFloat(convertAmount).toLocaleString("fr-FR")} {fromCurrency}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Vous recevez</span>
-                    <span className="font-bold text-primary">{previewResult.toAmount.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {toCurrency}</span>
-                  </div>
-                  <div className="flex justify-between text-xs text-muted-foreground border-t pt-2">
-                    <span>Taux</span>
-                    <span>1 {fromCurrency} ≈ {previewResult.rate.toFixed(4)} {toCurrency}</span>
-                  </div>
-                </div>
-              )}
 
               <div className="flex gap-3">
                 <Button variant="outline" className="flex-1" onClick={() => setConvertOpen(false)}>
                   Annuler
                 </Button>
                 <Button
-                  className="flex-1"
-                  disabled={!previewResult || convertMutation.isPending}
+                  className="flex-1 gap-2"
+                  disabled={!hasSufficientBalance || convertMutation.isPending}
                   onClick={() => convertMutation.mutate({ fromCurrency, toCurrency, amount: convertAmount })}
                 >
-                  {convertMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                  Convertir
+                  {convertMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                  Soumettre la demande
                 </Button>
               </div>
             </div>

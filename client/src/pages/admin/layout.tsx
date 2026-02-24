@@ -22,7 +22,8 @@ import {
   Send,
   Bell,
   Clock,
-  UserCheck
+  UserCheck,
+  ArrowLeftRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -91,6 +92,7 @@ const menuItems: MenuItem[] = [
       { icon: Send, label: "Frais Envoi", href: "/admin/fees/transfers" },
     ]
   },
+  { icon: ArrowLeftRight, label: "Conversions", href: "/admin/conversions" },
   { icon: Globe, label: "Pays & Opérateurs", href: "/admin/countries" },
   { icon: Link2, label: "Liens de paiement", href: "/admin/links" },
   { icon: MessageSquare, label: "Message Global", href: "/admin/global-messages" },
@@ -133,12 +135,18 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     refetchInterval: 30000,
   });
 
+  const { data: conversionCount } = useQuery<{ count: number }>({
+    queryKey: ["/api/admin/conversion-requests/count"],
+    refetchInterval: 30000,
+  });
+
   const pendingCounts: Record<string, number> = {
     "/admin/transactions/deposits": stats?.pendingDeposits || 0,
     "/admin/transactions/withdrawals": stats?.pendingWithdrawals || 0,
     "/admin/transactions/transfers": stats?.pendingTransfers || 0,
     "/admin/kyc": kycStats?.pending || 0,
     "/admin/support": ticketStats?.openCount || 0,
+    "/admin/conversions": conversionCount?.count || 0,
   };
 
   useEffect(() => {

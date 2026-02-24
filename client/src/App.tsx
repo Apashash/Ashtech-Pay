@@ -47,6 +47,7 @@ import AdminFeesWithdrawals from "@/pages/admin/fees/withdrawals";
 import AdminFeesTransfers from "@/pages/admin/fees/transfers";
 import AdminGlobalMessages from "@/pages/admin/global-messages";
 import AdminKYC from "@/pages/admin/kyc";
+import AdminConversions from "@/pages/admin/conversions";
 import TermsPage from "@/pages/terms";
 import PrivacyPage from "@/pages/privacy";
 import LegalPage from "@/pages/legal";
@@ -102,6 +103,7 @@ function Router() {
       <Route path="/admin/withdrawal-numbers" component={AdminWithdrawalNumbers} />
       <Route path="/admin/global-messages" component={AdminGlobalMessages} />
       <Route path="/admin/kyc" component={AdminKYC} />
+      <Route path="/admin/conversions" component={AdminConversions} />
       <Route path="/terms" component={TermsPage} />
       <Route path="/privacy" component={PrivacyPage} />
       <Route path="/legal" component={LegalPage} />

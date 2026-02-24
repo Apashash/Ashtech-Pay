@@ -838,6 +838,25 @@ export const insertWalletSchema = createInsertSchema(wallets).omit({ id: true, u
 export type Wallet = typeof wallets.$inferSelect;
 export type InsertWallet = z.infer<typeof insertWalletSchema>;
 
+// ─── Conversion requests (pending admin approval) ────────────────────────────
+export const conversionRequests = pgTable("conversion_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  fromCurrency: text("from_currency").notNull(),
+  toCurrency: text("to_currency").notNull(),
+  fromAmount: decimal("from_amount", { precision: 15, scale: 2 }).notNull(),
+  toAmount: decimal("to_amount", { precision: 15, scale: 2 }),
+  status: text("status").default("pending").notNull(), // 'pending' | 'completed' | 'cancelled'
+  notes: text("notes"),
+  executedAt: timestamp("executed_at"),
+  executedById: varchar("executed_by_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertConversionRequestSchema = createInsertSchema(conversionRequests).omit({ id: true, createdAt: true });
+export type ConversionRequest = typeof conversionRequests.$inferSelect;
+export type InsertConversionRequest = z.infer<typeof insertConversionRequestSchema>;
+
 // ─── Currency zones mapping ───────────────────────────────────────────────────
 // Which wallet (currency) to use for each destination country
 export const CURRENCY_ZONE: Record<string, SupportedCurrency> = {

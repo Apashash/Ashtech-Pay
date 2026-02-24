@@ -14,6 +14,7 @@ import {
   SUPPORTED_CURRENCIES,
   CURRENCY_ZONE,
   CURRENCY_SYMBOLS,
+  EXCHANGE_RATES,
   type SupportedCurrency
 } from "@shared/schema";
 import crypto from "crypto";
@@ -1334,7 +1335,7 @@ export async function registerRoutes(
     }
   });
 
-  // POST /api/wallets/convert — convert between wallets via Swychr PUSD bridge
+  // POST /api/wallets/convert — submit a conversion request (saved as pending, admin executes it)
   app.post("/api/wallets/convert", requireAuth, async (req, res) => {
     try {
       const userId = req.userId!;
@@ -1355,7 +1356,7 @@ export async function registerRoutes(
       const user = await storage.getUser(userId);
       if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
 
-      // Check source balance
+      // Check & debit source balance immediately
       let sourceBalance: number;
       if (fromCurrency === "XAF") {
         sourceBalance = parseFloat(user.balance);
@@ -1367,52 +1368,187 @@ export async function registerRoutes(
         return res.status(400).json({ message: `Solde insuffisant en ${fromCurrency} (disponible: ${sourceBalance.toFixed(2)})` });
       }
 
-      // Convert via PUSD bridge (pure rate calculation, no Swychr wallet balance needed)
-      const convResult = await getConversionRate(fromCurrency, toCurrency, parsedAmount);
-      if (!convResult.success || convResult.targetAmount === undefined) {
-        return res.status(400).json({ message: `Conversion ${fromCurrency}→${toCurrency} échouée: ${convResult.message}` });
-      }
-
-      const receivedAmount = convResult.targetAmount;
-
-      // Debit source wallet
+      // Debit source wallet immediately (funds held pending conversion)
       if (fromCurrency === "XAF") {
         await storage.updateUserBalance(userId, -parsedAmount);
       } else {
         await storage.upsertWallet(userId, fromCurrency, -parsedAmount);
       }
 
-      // Credit target wallet
-      if (toCurrency === "XAF") {
-        await storage.updateUserBalance(userId, receivedAmount);
-      } else {
-        await storage.upsertWallet(userId, toCurrency, receivedAmount);
-      }
-
-      // Record transaction
-      await storage.createTransaction({
+      // Save as pending conversion request
+      const request = await storage.createConversionRequest({
         userId,
-        type: "conversion",
-        amount: parsedAmount.toFixed(2),
-        currency: fromCurrency,
-        status: "completed",
-        description: `Conversion ${parsedAmount.toFixed(2)} ${fromCurrency} → ${receivedAmount.toFixed(2)} ${toCurrency}`,
-        reference: `conv_${Date.now()}`,
-        feeAmount: "0",
-        totalAmount: parsedAmount.toFixed(2),
+        fromCurrency,
+        toCurrency,
+        fromAmount: parsedAmount.toFixed(2),
+        status: "pending",
+      });
+
+      // Notify user
+      await storage.createUserNotification({
+        userId,
+        title: "Conversion en attente",
+        message: `Votre demande de conversion de ${parsedAmount.toFixed(2)} ${fromCurrency} → ${toCurrency} est en attente de traitement par l'administration.`,
+        type: "info",
       });
 
       res.json({
         success: true,
+        pending: true,
+        requestId: request.id,
         fromAmount: parsedAmount,
         fromCurrency,
-        toAmount: receivedAmount,
         toCurrency,
-        message: `Conversion réussie : ${parsedAmount.toFixed(2)} ${fromCurrency} → ${receivedAmount.toFixed(2)} ${toCurrency}`,
+        message: `Demande de conversion soumise avec succès. Votre compte ${fromCurrency} a été débité de ${parsedAmount.toFixed(2)}. Le montant ${toCurrency} sera crédité après validation par l'administration.`,
       });
     } catch (error) {
       console.error("Convert wallet error:", error);
       res.status(500).json({ message: "Erreur serveur lors de la conversion" });
+    }
+  });
+
+  // ── Admin: conversion requests ────────────────────────────────────────────
+
+  // GET /api/admin/conversion-requests — list all conversion requests
+  app.get("/api/admin/conversion-requests", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const filter = req.query.status as string | undefined;
+      let requests;
+      if (filter === "pending") {
+        requests = await storage.getPendingConversionRequests();
+      } else {
+        requests = await storage.getAllConversionRequests();
+      }
+      res.json(requests);
+    } catch (error) {
+      console.error("Admin get conversion requests error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // GET /api/admin/conversion-requests/count — pending count for sidebar badge
+  app.get("/api/admin/conversion-requests/count", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const count = await storage.countPendingConversions();
+      res.json({ count });
+    } catch (error) {
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // POST /api/admin/conversion-requests/:id/execute — execute a pending conversion
+  app.post("/api/admin/conversion-requests/:id/execute", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const adminId = req.userId!;
+      const { id } = req.params;
+      const request = await storage.getConversionRequest(id);
+      if (!request) return res.status(404).json({ message: "Demande non trouvée" });
+      if (request.status !== "pending") return res.status(400).json({ message: `Statut invalide: ${request.status}` });
+
+      const fromAmount = parseFloat(request.fromAmount);
+
+      // Try to get real Swychr rate
+      const convResult = await getConversionRate(request.fromCurrency, request.toCurrency, fromAmount);
+      let receivedAmount: number;
+      if (convResult.success && convResult.targetAmount !== undefined) {
+        receivedAmount = convResult.targetAmount;
+      } else {
+        // Fallback: use EXCHANGE_RATES static rates
+        const fromRate = EXCHANGE_RATES[request.fromCurrency as SupportedCurrency] || 1;
+        const toRate = EXCHANGE_RATES[request.toCurrency as SupportedCurrency] || 1;
+        receivedAmount = fromAmount * (fromRate / toRate);
+      }
+
+      // Credit target wallet
+      if (request.toCurrency === "XAF") {
+        await storage.updateUserBalance(request.userId, receivedAmount);
+      } else {
+        // Ensure target wallet exists
+        await storage.upsertWallet(request.userId, request.toCurrency, receivedAmount);
+      }
+
+      // Update request
+      await storage.updateConversionRequest(id, {
+        status: "completed",
+        toAmount: receivedAmount.toFixed(2),
+        executedAt: new Date(),
+        executedById: adminId,
+      });
+
+      // Record transaction
+      await storage.createTransaction({
+        userId: request.userId,
+        type: "conversion",
+        amount: fromAmount.toFixed(2),
+        currency: request.fromCurrency,
+        status: "completed",
+        description: `Conversion ${fromAmount.toFixed(2)} ${request.fromCurrency} → ${receivedAmount.toFixed(2)} ${request.toCurrency}`,
+        reference: `conv_${id}`,
+        feeAmount: "0",
+        totalAmount: fromAmount.toFixed(2),
+      });
+
+      // Notify user
+      await storage.createUserNotification({
+        userId: request.userId,
+        title: "Conversion effectuée",
+        message: `Votre conversion de ${fromAmount.toFixed(2)} ${request.fromCurrency} → ${receivedAmount.toFixed(2)} ${request.toCurrency} a été effectuée avec succès.`,
+        type: "success",
+      });
+
+      res.json({
+        success: true,
+        fromAmount,
+        fromCurrency: request.fromCurrency,
+        toAmount: receivedAmount,
+        toCurrency: request.toCurrency,
+        message: `Conversion exécutée : ${fromAmount.toFixed(2)} ${request.fromCurrency} → ${receivedAmount.toFixed(2)} ${request.toCurrency}`,
+      });
+    } catch (error) {
+      console.error("Admin execute conversion error:", error);
+      res.status(500).json({ message: "Erreur serveur lors de l'exécution" });
+    }
+  });
+
+  // POST /api/admin/conversion-requests/:id/cancel — cancel & refund
+  app.post("/api/admin/conversion-requests/:id/cancel", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const adminId = req.userId!;
+      const { id } = req.params;
+      const { reason } = req.body;
+      const request = await storage.getConversionRequest(id);
+      if (!request) return res.status(404).json({ message: "Demande non trouvée" });
+      if (request.status !== "pending") return res.status(400).json({ message: `Statut invalide: ${request.status}` });
+
+      const fromAmount = parseFloat(request.fromAmount);
+
+      // Refund source wallet
+      if (request.fromCurrency === "XAF") {
+        await storage.updateUserBalance(request.userId, fromAmount);
+      } else {
+        await storage.upsertWallet(request.userId, request.fromCurrency, fromAmount);
+      }
+
+      // Update request
+      await storage.updateConversionRequest(id, {
+        status: "cancelled",
+        notes: reason || "Annulé par l'administration",
+        executedAt: new Date(),
+        executedById: adminId,
+      });
+
+      // Notify user
+      await storage.createUserNotification({
+        userId: request.userId,
+        title: "Conversion annulée",
+        message: `Votre demande de conversion de ${fromAmount.toFixed(2)} ${request.fromCurrency} → ${request.toCurrency} a été annulée. Le montant a été remboursé sur votre compte.`,
+        type: "warning",
+      });
+
+      res.json({ success: true, message: "Demande annulée et remboursée" });
+    } catch (error) {
+      console.error("Admin cancel conversion error:", error);
+      res.status(500).json({ message: "Erreur serveur lors de l'annulation" });
     }
   });
 

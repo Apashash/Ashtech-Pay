@@ -51,6 +51,9 @@ import {
   type InsertKycSubmission,
   wallets,
   type Wallet,
+  conversionRequests,
+  type ConversionRequest,
+  type InsertConversionRequest,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, sql, and, or, like, count } from "drizzle-orm";
@@ -243,6 +246,13 @@ export interface IStorage {
   getWallet(userId: string, currency: string): Promise<Wallet | undefined>;
   upsertWallet(userId: string, currency: string, balanceDelta: number): Promise<Wallet>;
   setWalletBalance(userId: string, currency: string, newBalance: number): Promise<Wallet>;
+  // Conversion requests
+  createConversionRequest(data: InsertConversionRequest): Promise<ConversionRequest>;
+  getConversionRequest(id: string): Promise<ConversionRequest | undefined>;
+  getPendingConversionRequests(): Promise<(ConversionRequest & { userFullName: string; userEmail: string })[]>;
+  getAllConversionRequests(): Promise<(ConversionRequest & { userFullName: string; userEmail: string })[]>;
+  updateConversionRequest(id: string, data: Partial<ConversionRequest>): Promise<ConversionRequest>;
+  countPendingConversions(): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1090,6 +1100,67 @@ export class DatabaseStorage implements IStorage {
         .returning();
       return created;
     }
+  }
+
+  // ── Conversion requests ─────────────────────────────────────────────────────
+
+  async createConversionRequest(data: InsertConversionRequest): Promise<ConversionRequest> {
+    const [created] = await db.insert(conversionRequests).values(data).returning();
+    return created;
+  }
+
+  async getConversionRequest(id: string): Promise<ConversionRequest | undefined> {
+    const [req] = await db.select().from(conversionRequests).where(eq(conversionRequests.id, id));
+    return req;
+  }
+
+  private async _getConversionRequestsWithUser(whereClause?: any): Promise<(ConversionRequest & { userFullName: string; userEmail: string })[]> {
+    const rows = await db
+      .select({
+        id: conversionRequests.id,
+        userId: conversionRequests.userId,
+        fromCurrency: conversionRequests.fromCurrency,
+        toCurrency: conversionRequests.toCurrency,
+        fromAmount: conversionRequests.fromAmount,
+        toAmount: conversionRequests.toAmount,
+        status: conversionRequests.status,
+        notes: conversionRequests.notes,
+        executedAt: conversionRequests.executedAt,
+        executedById: conversionRequests.executedById,
+        createdAt: conversionRequests.createdAt,
+        userFullName: users.fullName,
+        userEmail: users.email,
+      })
+      .from(conversionRequests)
+      .innerJoin(users, eq(conversionRequests.userId, users.id))
+      .where(whereClause)
+      .orderBy(desc(conversionRequests.createdAt));
+    return rows as (ConversionRequest & { userFullName: string; userEmail: string })[];
+  }
+
+  async getPendingConversionRequests(): Promise<(ConversionRequest & { userFullName: string; userEmail: string })[]> {
+    return this._getConversionRequestsWithUser(eq(conversionRequests.status, "pending"));
+  }
+
+  async getAllConversionRequests(): Promise<(ConversionRequest & { userFullName: string; userEmail: string })[]> {
+    return this._getConversionRequestsWithUser();
+  }
+
+  async updateConversionRequest(id: string, data: Partial<ConversionRequest>): Promise<ConversionRequest> {
+    const [updated] = await db
+      .update(conversionRequests)
+      .set(data)
+      .where(eq(conversionRequests.id, id))
+      .returning();
+    return updated;
+  }
+
+  async countPendingConversions(): Promise<number> {
+    const [{ cnt }] = await db
+      .select({ cnt: count() })
+      .from(conversionRequests)
+      .where(eq(conversionRequests.status, "pending"));
+    return Number(cnt);
   }
 }
 
