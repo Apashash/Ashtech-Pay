@@ -1,5 +1,13 @@
 import { EXCHANGE_RATES, CURRENCY_SYMBOLS, type SupportedCurrency } from "@shared/schema";
 
+export function formatWalletBalance(amount: string | number, currency: string): string {
+  const num = typeof amount === "string" ? parseFloat(amount) : amount;
+  const symbol = CURRENCY_SYMBOLS[currency as SupportedCurrency] || currency;
+  if (currency === "USD") return `$${num.toFixed(2)}`;
+  if ((currency as string) === "EUR") return `${num.toFixed(2)} €`;
+  return `${new Intl.NumberFormat("fr-FR").format(Math.round(num))} ${symbol}`;
+}
+
 export function convertCurrency(amountXAF: number, toCurrency: SupportedCurrency, customRates?: Record<string, number>): number {
   const rates = customRates || EXCHANGE_RATES;
   const rate = rates[toCurrency] ?? EXCHANGE_RATES[toCurrency] ?? 1;

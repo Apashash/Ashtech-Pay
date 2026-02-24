@@ -61,9 +61,10 @@ import { fr } from "date-fns/locale";
 import { Link as RouterLink } from "wouter";
 import logoImage from "@assets/logo.png";
 import { CurrencySelector } from "@/components/currency-selector";
-import { formatCurrency } from "@/lib/currency";
+import { formatCurrency, formatWalletBalance } from "@/lib/currency";
 import { useExchangeRates } from "@/hooks/use-exchange-rates";
 import type { SupportedCurrency } from "@shared/schema";
+import { COUNTRY_CURRENCIES } from "@shared/schema";
 
 const menuItems = [
   { title: "Tableau de bord", url: "/dashboard", icon: LayoutDashboard },
@@ -91,6 +92,16 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { data: user, isLoading } = useQuery<User>({
     queryKey: ["/api/user"],
   });
+
+  const { data: wallets = [] } = useQuery<{ currency: string; balance: string }[]>({
+    queryKey: ["/api/wallets"],
+    enabled: !!user,
+  });
+
+  const preferredCurrency = user?.preferredCurrency || "XAF";
+  const sidebarBalance = preferredCurrency === "XAF"
+    ? (user?.balance || "0")
+    : (wallets.find(w => w.currency === preferredCurrency)?.balance || "0");
 
   const handleKycClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -225,7 +236,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               <div className="px-4 py-3 mx-2 my-2 bg-primary/10 rounded-lg border border-primary/20">
                 <p className="text-xs text-muted-foreground mb-1">Solde disponible</p>
                 <p className="text-lg font-bold text-primary" data-testid="text-sidebar-balance">
-                  {formatCurrency(user.balance, user.preferredCurrency as SupportedCurrency, rates)}
+                  {formatWalletBalance(sidebarBalance, preferredCurrency)}
                 </p>
               </div>
             </SidebarGroup>

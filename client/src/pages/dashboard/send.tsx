@@ -12,7 +12,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User, SupportedCurrency, Wallet } from "@shared/schema";
 import { Send, Globe, Loader2, ArrowRight, AlertCircle, Shield, CheckCircle2 } from "lucide-react";
 import { z } from "zod";
-import { formatCurrency } from "@/lib/currency";
+import { formatCurrency, formatWalletBalance } from "@/lib/currency";
 import { useMemo, useEffect, useState, useCallback } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useLocation } from "wouter";
@@ -446,7 +446,7 @@ export default function SendMoneyPage() {
               <CardContent className="p-6">
                 <p className="text-sm text-muted-foreground mb-1">Votre solde ({localCurrency})</p>
                 <p className="text-2xl font-bold text-foreground">
-                  {formatCurrency(balance, localCurrency as SupportedCurrency)}
+                  {formatWalletBalance(balance, localCurrency)}
                 </p>
               </CardContent>
             </Card>
@@ -459,15 +459,15 @@ export default function SendMoneyPage() {
                   </p>
                   <div className="flex justify-between">
                     <span>Montant</span>
-                    <span className="font-medium">{formatCurrency(amountValue, localCurrency as SupportedCurrency)}</span>
+                    <span className="font-medium">{formatWalletBalance(amountValue, localCurrency)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Frais ({feePreview.feePercentage || selectedOperator.feePercentage}%)</span>
-                    <span className="font-medium text-orange-500">{formatCurrency(feePreview.feeAmount, localCurrency as SupportedCurrency)}</span>
+                    <span className="font-medium text-orange-500">{formatWalletBalance(feePreview.feeAmount, localCurrency)}</span>
                   </div>
                   <div className="border-t pt-3 flex justify-between font-bold">
                     <span>Total débité</span>
-                    <span>{formatCurrency(feePreview.totalAmount, localCurrency as SupportedCurrency)}</span>
+                    <span>{formatWalletBalance(feePreview.totalAmount, localCurrency)}</span>
                   </div>
                   {feePreview.totalAmount > balance && (
                     <Alert variant="destructive">
@@ -476,10 +476,10 @@ export default function SendMoneyPage() {
                     </Alert>
                   )}
                   <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                    <span>{formatCurrency(balance, localCurrency as SupportedCurrency)}</span>
+                    <span>{formatWalletBalance(balance, localCurrency)}</span>
                     <ArrowRight className="w-3 h-3" />
                     <span className={feePreview.totalAmount > balance ? "text-destructive" : ""}>
-                      {formatCurrency(Math.max(0, balance - feePreview.totalAmount), localCurrency as SupportedCurrency)}
+                      {formatWalletBalance(Math.max(0, balance - feePreview.totalAmount), localCurrency)}
                     </span>
                   </div>
                 </CardContent>

@@ -13,7 +13,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { transferSchema, depositSchema, withdrawSchema, createPaymentLinkSchema, type SupportedCurrency, COUNTRY_CURRENCIES } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User, Transaction, PaymentLink, Wallet as WalletEntry } from "@shared/schema";
-import { formatCurrency } from "@/lib/currency";
+import { formatCurrency, formatWalletBalance } from "@/lib/currency";
 import { useExchangeRates } from "@/hooks/use-exchange-rates";
 import {
   Wallet,
@@ -588,7 +588,7 @@ export default function DashboardHome() {
               <div className="flex-1">
                 <p className="text-muted-foreground text-sm mb-1">Solde disponible ({localCurrency})</p>
                 <p className="text-3xl font-bold text-foreground" data-testid="text-balance">
-                  {formatCurrency(localBalance, localCurrency as SupportedCurrency, rates)}
+                  {formatWalletBalance(localBalance, localCurrency)}
                 </p>
                 <p className="text-xs text-muted-foreground mt-2">Ashtech Pay</p>
               </div>

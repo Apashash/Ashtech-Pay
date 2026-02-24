@@ -10,7 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Wallet, ArrowLeftRight, Info, Plus, Loader2, Clock, CheckCircle2 } from "lucide-react";
-import { CURRENCY_SYMBOLS, SUPPORTED_CURRENCIES, EXCHANGE_RATES } from "@shared/schema";
+import { CURRENCY_SYMBOLS, SUPPORTED_CURRENCIES, EXCHANGE_RATES, COUNTRY_CURRENCIES } from "@shared/schema";
+import type { User } from "@shared/schema";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface WalletEntry {
@@ -49,10 +50,13 @@ export default function WalletsPage() {
   const [convertAmount, setConvertAmount] = useState("");
   const [newWalletCurrency, setNewWalletCurrency] = useState("");
 
+  const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const { data: walletList = [], isLoading } = useQuery<WalletEntry[]>({
     queryKey: ["/api/wallets"],
     refetchInterval: 30000,
   });
+
+  const primaryCurrency = user?.country ? (COUNTRY_CURRENCIES[user.country] || "XAF") : "XAF";
 
   const existingCurrencies = walletList.map(w => w.currency);
   const availableCurrencies = SUPPORTED_CURRENCIES.filter(c => !existingCurrencies.includes(c) && c !== "XAF");
@@ -159,7 +163,7 @@ export default function WalletsPage() {
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {walletList.map((wallet) => {
               const balance = parseFloat(wallet.balance);
-              const isMain = wallet.currency === "XAF";
+              const isMain = wallet.currency === primaryCurrency;
               return (
                 <Card
                   key={wallet.currency}
