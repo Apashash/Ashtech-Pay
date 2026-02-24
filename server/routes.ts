@@ -921,7 +921,98 @@ export async function registerRoutes(
     }
   });
 
-  // Transfer money (internal - between users)
+  // Transfer between Ashtech Pay accounts (by email or username)
+  app.post("/api/transfers/internal", requireAuth, async (req, res) => {
+    try {
+      const { recipientIdentifier, amount, description, sourceCurrency } = req.body;
+      const senderId = req.userId!;
+      const amountNum = parseFloat(amount);
+
+      if (!recipientIdentifier || !recipientIdentifier.trim()) {
+        return res.status(400).json({ message: "Identifiant du destinataire requis" });
+      }
+      if (!amountNum || amountNum <= 0) {
+        return res.status(400).json({ message: "Montant invalide" });
+      }
+
+      const sender = await storage.getUser(senderId);
+      if (!sender) return res.status(404).json({ message: "Utilisateur non trouvé" });
+
+      // Lookup recipient by email or username
+      const identifier = recipientIdentifier.trim();
+      let recipient = await storage.getUserByEmail(identifier);
+      if (!recipient) {
+        recipient = await storage.getUserByUsername(identifier);
+      }
+      if (!recipient) {
+        return res.status(404).json({ message: "Aucun compte Ashtech Pay trouvé avec cet identifiant" });
+      }
+      if (recipient.id === senderId) {
+        return res.status(400).json({ message: "Vous ne pouvez pas vous envoyer de l'argent à vous-même" });
+      }
+
+      const currency = sourceCurrency || "XAF";
+
+      // Vérifier solde et débiter
+      if (currency === "XAF") {
+        if (parseFloat(sender.balance) < amountNum) {
+          return res.status(400).json({ message: "Solde insuffisant" });
+        }
+        await storage.updateUserBalance(senderId, -amountNum);
+        await storage.updateUserBalance(recipient.id, amountNum);
+      } else {
+        const wallet = await storage.getWallet(senderId, currency);
+        if (!wallet || parseFloat(wallet.balance) < amountNum) {
+          return res.status(400).json({ message: "Solde insuffisant dans ce portefeuille" });
+        }
+        await storage.upsertWallet(senderId, currency, -amountNum);
+        await storage.upsertWallet(recipient.id, currency, amountNum);
+      }
+
+      const transferRef = generateTransactionReference("transfer_out");
+
+      const transactionOut = await storage.createTransaction({
+        userId: senderId,
+        type: "transfer_out",
+        amount: amountNum.toFixed(2),
+        currency,
+        status: "completed",
+        description: description || `Transfert à ${recipient.fullName}`,
+        recipientId: recipient.id,
+        recipientName: recipient.fullName,
+        reference: transferRef,
+        totalAmount: amountNum.toFixed(2),
+      });
+
+      const transactionIn = await storage.createTransaction({
+        userId: recipient.id,
+        type: "transfer_in",
+        amount: amountNum.toFixed(2),
+        currency,
+        status: "completed",
+        description: `Reçu de ${sender.fullName}`,
+        recipientId: senderId,
+        reference: transferRef,
+        totalAmount: amountNum.toFixed(2),
+      });
+
+      await storage.createUserNotification({
+        userId: recipient.id,
+        type: "transfer_received",
+        title: "Argent reçu",
+        message: `Vous avez reçu ${amountNum.toFixed(2)} ${currency} de ${sender.fullName}.`,
+        transactionId: transactionIn.id,
+        isRead: false,
+      });
+
+      res.json({ message: "Transfert réussi", transaction: transactionOut, recipientName: recipient.fullName });
+    } catch (error) {
+      console.error("Internal transfer error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // Transfer money (international - mobile money)
   app.post("/api/transfers", requireAuth, async (req, res) => {
     try {
       const { recipientUsername, amount, description, sourceCurrency } = req.body;
