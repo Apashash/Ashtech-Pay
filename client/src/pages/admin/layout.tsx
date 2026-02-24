@@ -466,18 +466,20 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>Pays (Source Fiat)</Label>
+              <Label>Wallet Source (Fiat Holding)</Label>
               <Select value={pusdCountry} onValueChange={setPusdCountry}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="CM">Cameroun (XAF)</SelectItem>
-                  <SelectItem value="SN">Sénégal (XOF)</SelectItem>
-                  <SelectItem value="CI">Côte d'Ivoire (XOF)</SelectItem>
-                  <SelectItem value="GH">Ghana (GHS)</SelectItem>
-                  <SelectItem value="NG">Nigéria (NGN)</SelectItem>
-                  <SelectItem value="KE">Kenya (KES)</SelectItem>
+                  <SelectItem value="XAF">XAF Wallet (Cameroun)</SelectItem>
+                  <SelectItem value="XOFB">XOFB Wallet (Benin)</SelectItem>
+                  <SelectItem value="XAFG">XAFG Wallet (Gabon)</SelectItem>
+                  <SelectItem value="XOFF">XOFF Wallet (Burkina Faso)</SelectItem>
+                  <SelectItem value="XOFT">XOFT Wallet (Togo)</SelectItem>
+                  <SelectItem value="GH">GHS Wallet (Ghana)</SelectItem>
+                  <SelectItem value="NG">NGN Wallet (Nigéria)</SelectItem>
+                  <SelectItem value="KE">KES Wallet (Kenya)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

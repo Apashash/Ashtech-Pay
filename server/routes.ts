@@ -2742,9 +2742,14 @@ export async function registerRoutes(
         GW: "XOF", KE: "KES", ML: "XOF", NE: "XOF", NG: "NGN",
         UG: "UGX", CD: "CDF", RW: "RWF", SN: "XOF", TZ: "TZS",
         TD: "XAF", TG: "XOF",
+        XAF: "XAF",
+        XOFB: "XOF",
+        XAFG: "XAF",
+        XOFF: "XOF",
+        XOFT: "XOF"
       };
 
-      const currencyCode = COUNTRY_CURRENCY[countryCode.toUpperCase()] || "XAF";
+      const currencyCode = COUNTRY_CURRENCY[countryCode.toUpperCase()] || countryCode.toUpperCase();
       const token = await getPayoutToken();
       const success = await convertFiatToPusd(token, currencyCode, parsedAmount);
 
