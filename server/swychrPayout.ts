@@ -5,6 +5,47 @@
 // Status: POST /transaction_status
 
 const PAYOUT_BASE_URL = "https://api.accountpe.com/api/payout";
+
+// ─── Country dial code mapping ────────────────────────────────────────────
+const DIAL_CODES: Record<string, string> = {
+  BJ: "229",  // Bénin
+  BF: "226",  // Burkina Faso
+  CM: "237",  // Cameroun
+  CF: "236",  // Centrafrique
+  CG: "242",  // Congo
+  CI: "225",  // Côte d'Ivoire
+  GA: "241",  // Gabon
+  GH: "233",  // Ghana
+  GN: "224",  // Guinée Conakry
+  GQ: "240",  // Guinée équatoriale
+  GW: "245",  // Guinée-Bissau
+  KE: "254",  // Kenya
+  ML: "223",  // Mali
+  NE: "227",  // Niger
+  NG: "234",  // Nigeria
+  UG: "256",  // Ouganda
+  CD: "243",  // RD Congo
+  RW: "250",  // Rwanda
+  SN: "221",  // Sénégal
+  TZ: "255",  // Tanzanie
+  TD: "235",  // Tchad
+  TG: "228",  // Togo
+};
+
+/**
+ * Format a phone number to E.164 international format: +<dialCode><localNumber>
+ * If number already starts with +, return as-is.
+ * Strips spaces, dashes, parentheses before formatting.
+ */
+export function formatInternationalPhone(phone: string, country_code: string): string {
+  const cleaned = phone.replace(/[\s\-().]/g, "");
+  if (cleaned.startsWith("+")) return cleaned;
+  const dialCode = DIAL_CODES[country_code.toUpperCase()];
+  if (!dialCode) return cleaned;
+  // Remove leading 0 if present (local format)
+  const local = cleaned.startsWith("0") ? cleaned.slice(1) : cleaned;
+  return `+${dialCode}${local}`;
+}
 const SWYCHR_EMAIL    = process.env.SWYCHR_EMAIL    || "";
 const SWYCHR_PASSWORD = process.env.SWYCHR_PASSWORD || "";
 

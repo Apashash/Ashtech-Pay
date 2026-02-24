@@ -25,7 +25,7 @@ import fs from "fs";
 import { uploadToSupabase } from "./supabase";
 import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, fetchPaymentLinkDetails, ASHTECH_MARGIN } from "./swychr";
 import { addPendingPayment } from "./paymentPoller";
-import { createSwychrPayout } from "./swychrPayout";
+import { createSwychrPayout, formatInternationalPhone } from "./swychrPayout";
 import { addPendingPayout } from "./payoutPoller";
 
 const uploadsDir = path.join(process.cwd(), "uploads");
@@ -876,7 +876,7 @@ export async function registerRoutes(
       const transferPayoutResult = await createSwychrPayout({
         country_code:     country.code,
         beneficiary_name: recipientName,
-        mobile_no:        recipientPhone,
+        mobile_no:        formatInternationalPhone(recipientPhone, country.code),
         amount:           parsedAmount,
         transaction_id:   reference,
         payment_method:   payoutMethod,
@@ -1197,7 +1197,7 @@ export async function registerRoutes(
       const payoutResult = await createSwychrPayout({
         country_code:     countryCode,
         beneficiary_name: user.fullName || user.username || "Client",
-        mobile_no:        data.accountDetails,
+        mobile_no:        formatInternationalPhone(data.accountDetails, countryCode),
         amount:           amount,
         transaction_id:   withdrawalRef,
         payment_method:   data.paymentMethod,
