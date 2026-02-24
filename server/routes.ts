@@ -23,7 +23,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { uploadToSupabase } from "./supabase";
-import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, fetchPaymentLinkDetails } from "./swychr";
+import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, fetchPaymentLinkDetails, ASHTECH_MARGIN } from "./swychr";
 import { addPendingPayment } from "./paymentPoller";
 
 const uploadsDir = path.join(process.cwd(), "uploads");
@@ -982,11 +982,19 @@ export async function registerRoutes(
         }
       }
 
-      // Calculate fee using Swychr fee structure
-      // pass_digital_charge=true: customer pays Swychr's fee on top; we deduct Ashtech margin only
-      const swychrFees = computeSwychrFees(amount, countryCode);
+      // Resolve Ashtech margin from operator's fee in DB (fallback to default 2%)
+      let ashtechMarginPct = ASHTECH_MARGIN;
+      if (data.operatorId || data.countryId) {
+        const resolvedFee = await storage.resolveFee("deposit", data.countryId, data.operatorId);
+        if (resolvedFee && (resolvedFee as any).ashtechMargin != null) {
+          ashtechMarginPct = parseFloat((resolvedFee as any).ashtechMargin);
+        }
+      }
+
+      // Calculate fee using Swychr fee structure (Swychr rate per country + Ashtech margin per operator)
+      const swychrFees = computeSwychrFees(amount, countryCode, ashtechMarginPct);
       const totalAmount = amount;
-      const feeAmount = swychrFees.totalFeeAmount;
+      const feeAmount = swychrFees.ashtechFeeAmount; // Only Ashtech margin (for admin revenue stats)
       const creditedAmount = swychrFees.creditedAmount;
 
       const depositRef = generateTransactionReference("deposit");
@@ -1803,38 +1811,26 @@ export async function registerRoutes(
         resolvedOperatorId = operatorData?.id || undefined;
       }
 
-      // Calculate deposit fees (same fees apply for payment links)
-      const fee = await storage.resolveFee("deposit", countryId, resolvedOperatorId);
-      let feeAmount = 0;
+      // Resolve Ashtech margin per operator from DB (fallback to default 2%)
       const numAmount = parseFloat(baseAmount);
-      
-      console.log("Payment link fee calculation:", {
-        countryId,
-        resolvedOperatorId,
-        fee: fee ? { feeType: fee.feeType, feeValue: fee.feeValue, minFee: fee.minFee, maxFee: fee.maxFee } : null,
-        numAmount
-      });
-      
-      if (fee) {
-        if (fee.feeType === "percentage") {
-          feeAmount = (numAmount * parseFloat(fee.feeValue)) / 100;
-        } else {
-          feeAmount = parseFloat(fee.feeValue);
-        }
-        if (fee.minFee && feeAmount < parseFloat(fee.minFee)) {
-          feeAmount = parseFloat(fee.minFee);
-        }
-        if (fee.maxFee && feeAmount > parseFloat(fee.maxFee)) {
-          feeAmount = parseFloat(fee.maxFee);
-        }
+      const fee = await storage.resolveFee("deposit", countryId, resolvedOperatorId);
+      let ashtechMarginPct = ASHTECH_MARGIN;
+      if (fee && (fee as any).ashtechMargin != null) {
+        ashtechMarginPct = parseFloat((fee as any).ashtechMargin);
       }
-      
-      console.log("Calculated feeAmount:", feeAmount);
-      
-      // Customer pays the base amount (no extra fees added)
+
+      // Use same Swychr fee structure as deposits (Swychr rate per country + Ashtech margin per operator)
+      const swychrCountryCode = countryData?.code || "CM";
+      const swychrFeesCalc = computeSwychrFees(numAmount, swychrCountryCode, ashtechMarginPct);
+      const feeAmount = swychrFeesCalc.ashtechFeeAmount; // Only Ashtech margin for admin revenue stats
+      const netAmount = swychrFeesCalc.creditedAmount.toFixed(2);
       const totalAmount = numAmount.toFixed(2);
-      // Net amount merchant receives = base amount - fees (fees deducted from merchant)
-      const netAmount = (numAmount - feeAmount).toFixed(2);
+
+      console.log("Payment link fee calculation:", {
+        countryId, resolvedOperatorId, ashtechMarginPct,
+        swychrRate: swychrFeesCalc.swychrFeeRate, numAmount,
+        ashtechFee: feeAmount, credited: netAmount,
+      });
 
       // Generate unique ASHPAY reference
       const reference = generateTransactionReference("payment_link");

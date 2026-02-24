@@ -43,18 +43,20 @@ export function getSwychrFeeRate(countryCode: string): number {
 
 /**
  * Fee breakdown per tariff table (simple addition):
- *   totalRate      = swychrRate + 2%
+ *   totalRate      = swychrRate + ashtechMarginPct (default 2%)
  *   swychrFeeAmt   = gross × swychrRate%   (passed to client via pass_digital_charge)
- *   ashtechFeeAmt  = gross × 2%
+ *   ashtechFeeAmt  = gross × ashtechMarginPct%
  *   creditedAmount = gross × (1 - totalRate%)
  *   amountToSwychr = gross - swychrFeeAmt  (what we send; Swychr adds its fee on top)
  *
- * Example CM (swychr 2.5%), gross = 1000 XAF:
+ * Example CM (swychr 2.5%, ashtech 2%), gross = 1000 XAF:
  *   swychrFee=25, ashtechFee=20, totalFee=45 (4.5%), credited=955, toSwychr=975
+ *
+ * @param ashtechMarginPct - Ashtech margin % (from DB per operator, defaults to ASHTECH_MARGIN)
  */
-export function computeSwychrFees(grossAmount: number, countryCode: string) {
+export function computeSwychrFees(grossAmount: number, countryCode: string, ashtechMarginPct?: number) {
   const swychrFeeRate  = getSwychrFeeRate(countryCode);
-  const ashtechFeeRate = ASHTECH_MARGIN;
+  const ashtechFeeRate = ashtechMarginPct ?? ASHTECH_MARGIN;
   const totalFeeRate   = swychrFeeRate + ashtechFeeRate;
 
   const swychrFeeAmount  = grossAmount * swychrFeeRate  / 100;

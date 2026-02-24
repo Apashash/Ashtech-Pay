@@ -142,7 +142,7 @@ export default function AdminDashboard() {
       bgColor: "bg-red-500/10",
     },
     {
-      title: "Revenus Total (Frais)",
+      title: "Revenus Ashtech Pay (Marge)",
       value: formatCurrency(parseFloat(stats?.totalRevenue || "0"), "XAF"),
       icon: DollarSign,
       color: "text-primary",
@@ -213,7 +213,7 @@ export default function AdminDashboard() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <DollarSign className="w-5 h-5 text-primary" />
-              Détail des Revenus (Frais)
+              Revenus Ashtech Pay — Marge uniquement
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -221,7 +221,7 @@ export default function AdminDashboard() {
               <div className="p-4 rounded-lg bg-background border border-border">
                 <div className="flex items-center gap-2 mb-2">
                   <ArrowDownCircle className="w-4 h-4 text-green-500" />
-                  <span className="text-sm text-muted-foreground">Frais Dépôts</span>
+                  <span className="text-sm text-muted-foreground">Marge Dépôts</span>
                 </div>
                 {isLoading ? (
                   <Skeleton className="h-6 w-20" />
@@ -260,7 +260,7 @@ export default function AdminDashboard() {
               <div className="p-4 rounded-lg bg-background border border-border">
                 <div className="flex items-center gap-2 mb-2">
                   <Link2 className="w-4 h-4 text-purple-500" />
-                  <span className="text-sm text-muted-foreground">Frais Liens</span>
+                  <span className="text-sm text-muted-foreground">Marge Liens Paiement</span>
                 </div>
                 {isLoading ? (
                   <Skeleton className="h-6 w-20" />
