@@ -1,14 +1,14 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { AdminLayout } from "@/pages/admin/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { ArrowLeftRight, CheckCircle, XCircle, Clock, RefreshCw, Loader2, User, Calendar } from "lucide-react";
+import { ArrowLeftRight, CheckCircle, Clock, RefreshCw, Loader2, User, Calendar, Settings, Percent } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 
@@ -40,65 +40,55 @@ const CURRENCY_FLAGS: Record<string, string> = {
 
 export default function AdminConversionsPage() {
   const { toast } = useToast();
-  const [filter, setFilter] = useState<"all" | "pending">("pending");
-  const [cancelTarget, setCancelTarget] = useState<ConversionRequest | null>(null);
-  const [cancelReason, setCancelReason] = useState("");
+  const [feePercent, setFeePercent] = useState("6");
 
-  const { data: requests = [], isLoading, refetch } = useQuery<ConversionRequest[]>({
-    queryKey: ["/api/admin/conversion-requests", filter],
+  const { data: setting, isLoading: isLoadingSetting } = useQuery<{ value: string }>({
+    queryKey: ["/api/admin/settings/conversion_fee_percent"],
     queryFn: async () => {
-      const res = await apiRequest("GET", `/api/admin/conversion-requests?status=${filter === "pending" ? "pending" : "all"}`);
+      const res = await apiRequest("GET", "/api/admin/settings/conversion_fee_percent");
       return res.json();
     },
-    refetchInterval: 30000,
   });
 
-  const executeMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await apiRequest("POST", `/api/admin/conversion-requests/${id}/execute`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
-      return data;
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/conversion-requests"] });
-      toast({
-        title: "Conversion exécutée",
-        description: data.message,
+  useEffect(() => {
+    if (setting?.value) {
+      setFeePercent(setting.value);
+    }
+  }, [setting]);
+
+  const updateFeeMutation = useMutation({
+    mutationFn: async (value: string) => {
+      const res = await apiRequest("POST", "/api/admin/settings", {
+        key: "conversion_fee_percent",
+        value,
+        description: "Pourcentage de frais pour les conversions de devises"
       });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Erreur", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const cancelMutation = useMutation({
-    mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
-      const res = await apiRequest("POST", `/api/admin/conversion-requests/${id}/cancel`, { reason });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
-      return data;
+      return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/conversion-requests"] });
-      toast({ title: "Annulation effectuée", description: "La demande a été annulée et le montant remboursé." });
-      setCancelTarget(null);
-      setCancelReason("");
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/settings/conversion_fee_percent"] });
+      toast({ title: "Frais mis à jour", description: `Les frais de conversion sont maintenant de ${feePercent}%` });
     },
     onError: (error: Error) => {
       toast({ title: "Erreur", description: error.message, variant: "destructive" });
     },
   });
 
-  const pendingCount = requests.filter(r => r.status === "pending").length;
+  const { data: requests = [], isLoading, refetch } = useQuery<ConversionRequest[]>({
+    queryKey: ["/api/admin/conversion-requests"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/admin/conversion-requests?status=all");
+      return res.json();
+    },
+  });
 
   return (
     <AdminLayout>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">Conversions en attente</h1>
-            <p className="text-muted-foreground">Gérez les demandes de conversion de devises des utilisateurs</p>
+            <h1 className="text-2xl font-bold">Gestion des Conversions</h1>
+            <p className="text-muted-foreground">Historique des conversions et configuration des frais</p>
           </div>
           <Button variant="outline" onClick={() => refetch()} className="gap-2">
             <RefreshCw className="w-4 h-4" />
@@ -106,150 +96,98 @@ export default function AdminConversionsPage() {
           </Button>
         </div>
 
-        {pendingCount > 0 && (
-          <Card className="border-amber-500/30 bg-amber-500/5">
-            <CardContent className="p-4 flex items-center gap-3">
-              <Clock className="w-5 h-5 text-amber-500 flex-shrink-0" />
-              <div>
-                <p className="font-semibold text-amber-600">{pendingCount} demande{pendingCount > 1 ? "s" : ""} en attente</p>
-                <p className="text-sm text-muted-foreground">
-                  Rechargez le compte Swychr puis cliquez sur "Exécuter" pour traiter ces conversions.
-                </p>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Settings className="w-5 h-5 text-primary" />
+              Paramètres de conversion
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col sm:flex-row items-end gap-4">
+              <div className="space-y-2 flex-1 max-w-xs">
+                <Label htmlFor="fee">Frais de conversion par défaut (%)</Label>
+                <div className="relative">
+                  <Percent className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    id="fee"
+                    type="number"
+                    value={feePercent}
+                    onChange={(e) => setFeePercent(e.target.value)}
+                    className="pl-9"
+                    step="0.1"
+                    min="0"
+                  />
+                </div>
               </div>
-            </CardContent>
-          </Card>
-        )}
+              <Button 
+                onClick={() => updateFeeMutation.mutate(feePercent)}
+                disabled={updateFeeMutation.isPending || isLoadingSetting}
+                className="gap-2"
+              >
+                {updateFeeMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                Enregistrer les frais
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-3">
+              Ces frais sont appliqués automatiquement lors de chaque conversion effectuée par les utilisateurs.
+            </p>
+          </CardContent>
+        </Card>
 
-        <div className="flex gap-2">
-          <Button
-            variant={filter === "pending" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setFilter("pending")}
-          >
-            <Clock className="w-4 h-4 mr-2" />
-            En attente
-          </Button>
-          <Button
-            variant={filter === "all" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setFilter("all")}
-          >
-            Toutes
-          </Button>
-        </div>
-
-        {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-          </div>
-        ) : requests.length === 0 ? (
-          <Card>
-            <CardContent className="py-12 text-center text-muted-foreground">
-              <ArrowLeftRight className="w-12 h-12 mx-auto mb-4 opacity-30" />
-              <p className="font-medium">Aucune demande de conversion</p>
-              <p className="text-sm mt-1">Les demandes des utilisateurs apparaîtront ici</p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-3">
-            {requests.map((req) => (
-              <Card key={req.id} className={req.status === "pending" ? "border-amber-500/30" : ""}>
-                <CardContent className="p-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div className="space-y-2 flex-1">
-                      <div className="flex items-center gap-3 flex-wrap">
-                        <div className="flex items-center gap-2 text-lg font-bold">
-                          <span>{CURRENCY_FLAGS[req.fromCurrency] || "🌍"} {parseFloat(req.fromAmount).toLocaleString("fr-FR")} {req.fromCurrency}</span>
-                          <ArrowLeftRight className="w-4 h-4 text-muted-foreground" />
-                          <span>{CURRENCY_FLAGS[req.toCurrency] || "🌍"}
-                            {req.toAmount
-                              ? ` ${parseFloat(req.toAmount).toLocaleString("fr-FR")} ${req.toCurrency}`
-                              : ` ? ${req.toCurrency}`
-                            }
-                          </span>
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <Calendar className="w-5 h-5 text-primary" />
+            Historique des conversions
+          </h2>
+          
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : requests.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center text-muted-foreground">
+                <ArrowLeftRight className="w-12 h-12 mx-auto mb-4 opacity-30" />
+                <p className="font-medium">Aucun historique de conversion</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {requests.map((req) => (
+                <Card key={req.id}>
+                  <CardContent className="p-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="space-y-2 flex-1">
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <div className="flex items-center gap-2 text-lg font-bold">
+                            <span>{CURRENCY_FLAGS[req.fromCurrency] || "🌍"} {parseFloat(req.fromAmount).toLocaleString("fr-FR")} {req.fromCurrency}</span>
+                            <ArrowLeftRight className="w-4 h-4 text-muted-foreground" />
+                            <span>{CURRENCY_FLAGS[req.toCurrency] || "🌍"} {req.toAmount ? `${parseFloat(req.toAmount).toLocaleString("fr-FR")} ${req.toCurrency}` : "?"}</span>
+                          </div>
+                          <Badge variant={STATUS_LABELS[req.status]?.variant || "default"}>
+                            {STATUS_LABELS[req.status]?.label || req.status}
+                          </Badge>
                         </div>
-                        <Badge variant={STATUS_LABELS[req.status]?.variant || "default"}>
-                          {STATUS_LABELS[req.status]?.label || req.status}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
-                        <span className="flex items-center gap-1">
-                          <User className="w-3 h-3" />
-                          {req.userFullName} ({req.userEmail})
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Calendar className="w-3 h-3" />
-                          {req.createdAt ? format(new Date(req.createdAt), "dd MMM yyyy à HH:mm", { locale: fr }) : "-"}
-                        </span>
-                        {req.executedAt && (
+                        <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
                           <span className="flex items-center gap-1">
-                            <CheckCircle className="w-3 h-3" />
-                            Traité le {format(new Date(req.executedAt), "dd MMM yyyy à HH:mm", { locale: fr })}
+                            <User className="w-3 h-3" />
+                            {req.userFullName}
                           </span>
-                        )}
-                        {req.notes && <span className="italic">Note: {req.notes}</span>}
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {req.createdAt ? format(new Date(req.createdAt), "dd/MM/yyyy HH:mm", { locale: fr }) : "-"}
+                          </span>
+                          {req.notes && <span className="text-xs italic bg-muted px-2 py-0.5 rounded">Note sync Swychr: {req.notes}</span>}
+                        </div>
                       </div>
                     </div>
-                    {req.status === "pending" && (
-                      <div className="flex gap-2 flex-shrink-0">
-                        <Button
-                          size="sm"
-                          onClick={() => executeMutation.mutate(req.id)}
-                          disabled={executeMutation.isPending}
-                          className="gap-2 bg-green-600 hover:bg-green-700 text-white"
-                        >
-                          {executeMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-                          Exécuter
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => { setCancelTarget(req); setCancelReason(""); }}
-                          disabled={cancelMutation.isPending}
-                          className="gap-2 border-red-500/30 text-red-600 hover:bg-red-500/10"
-                        >
-                          <XCircle className="w-4 h-4" />
-                          Annuler
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-
-        <Dialog open={!!cancelTarget} onOpenChange={(o) => { if (!o) setCancelTarget(null); }}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Annuler la conversion</DialogTitle>
-              <DialogDescription>
-                Le montant de {cancelTarget && parseFloat(cancelTarget.fromAmount).toLocaleString("fr-FR")} {cancelTarget?.fromCurrency} sera remboursé à l'utilisateur.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-3">
-              <Textarea
-                placeholder="Raison de l'annulation (optionnel)"
-                value={cancelReason}
-                onChange={(e) => setCancelReason(e.target.value)}
-                rows={3}
-              />
-              <div className="flex gap-3">
-                <Button variant="outline" className="flex-1" onClick={() => setCancelTarget(null)}>Retour</Button>
-                <Button
-                  variant="destructive"
-                  className="flex-1"
-                  disabled={cancelMutation.isPending}
-                  onClick={() => cancelTarget && cancelMutation.mutate({ id: cancelTarget.id, reason: cancelReason })}
-                >
-                  {cancelMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                  Confirmer l'annulation
-                </Button>
-              </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
-          </DialogContent>
-        </Dialog>
+          )}
+        </div>
       </div>
     </AdminLayout>
   );

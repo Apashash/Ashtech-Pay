@@ -1368,99 +1368,74 @@ export async function registerRoutes(
         return res.status(400).json({ message: `Solde insuffisant en ${fromCurrency} (disponible: ${sourceBalance.toFixed(2)})` });
       }
 
-      // Try auto-conversion via Swychr rate API first
-      const convResult = await getConversionRate(fromCurrency, toCurrency, parsedAmount);
+      // Use a default conversion fee of 6% (admin can modify this via platform settings)
+      const conversionFeePercentSetting = await storage.getSetting("conversion_fee_percent");
+      const conversionFeePercent = conversionFeePercentSetting ? parseFloat(conversionFeePercentSetting.value) : 6;
+      const feeAmount = (parsedAmount * conversionFeePercent) / 100;
+      const amountAfterFee = parsedAmount - feeAmount;
 
-      if (convResult.success && convResult.targetAmount !== undefined) {
-        // ── Swychr rate available → execute immediately ──────────────────────
-        const receivedAmount = convResult.targetAmount;
+      // Use EXCHANGE_RATES for internal conversion (Ashtech Pay side)
+      const fromRate = EXCHANGE_RATES[fromCurrency as SupportedCurrency] || 1;
+      const toRate = EXCHANGE_RATES[toCurrency as SupportedCurrency] || 1;
+      const receivedAmount = amountAfterFee * (fromRate / toRate);
 
-        // Debit source
-        if (fromCurrency === "XAF") {
-          await storage.updateUserBalance(userId, -parsedAmount);
-        } else {
-          await storage.upsertWallet(userId, fromCurrency, -parsedAmount);
-        }
-
-        // Credit target
-        if (toCurrency === "XAF") {
-          await storage.updateUserBalance(userId, receivedAmount);
-        } else {
-          await storage.upsertWallet(userId, toCurrency, receivedAmount);
-        }
-
-        // Record transaction
-        await storage.createTransaction({
-          userId,
-          type: "conversion",
-          amount: parsedAmount.toFixed(2),
-          currency: fromCurrency,
-          status: "completed",
-          description: `Conversion ${parsedAmount.toFixed(2)} ${fromCurrency} → ${receivedAmount.toFixed(2)} ${toCurrency}`,
-          reference: `conv_${Date.now()}`,
-          feeAmount: "0",
-          totalAmount: parsedAmount.toFixed(2),
-        });
-
-        return res.json({
-          success: true,
-          pending: false,
-          fromAmount: parsedAmount,
-          fromCurrency,
-          toAmount: receivedAmount,
-          toCurrency,
-          rate: convResult.rate,
-          message: `Conversion effectuée : ${parsedAmount.toFixed(2)} ${fromCurrency} → ${receivedAmount.toFixed(2)} ${toCurrency}`,
-        });
-      }
-
-      // ── Swychr rate unavailable → debit & save as pending ───────────────────
-      // Debit source wallet immediately (funds held pending conversion)
+      // Debit source
       if (fromCurrency === "XAF") {
         await storage.updateUserBalance(userId, -parsedAmount);
       } else {
         await storage.upsertWallet(userId, fromCurrency, -parsedAmount);
       }
 
-      // Save as pending conversion request
-      const request = await storage.createConversionRequest({
-        userId,
-        fromCurrency,
-        toCurrency,
-        fromAmount: parsedAmount.toFixed(2),
-        status: "pending",
-        notes: `Swychr indisponible au moment de la demande: ${convResult.message || "taux non disponible"}`,
-      });
+      // Credit target
+      if (toCurrency === "XAF") {
+        await storage.updateUserBalance(userId, receivedAmount);
+      } else {
+        await storage.upsertWallet(userId, toCurrency, receivedAmount);
+      }
 
-      // Record pending transaction
-      await storage.createTransaction({
+      // Record transaction
+      const transaction = await storage.createTransaction({
         userId,
         type: "conversion",
         amount: parsedAmount.toFixed(2),
         currency: fromCurrency,
-        status: "pending",
-        description: `Conversion en attente : ${parsedAmount.toFixed(2)} ${fromCurrency} → ${toCurrency}`,
-        reference: `conv_pending_${request.id}`,
-        feeAmount: "0",
+        status: "completed",
+        description: `Conversion ${parsedAmount.toFixed(2)} ${fromCurrency} → ${receivedAmount.toFixed(2)} ${toCurrency} (Frais: ${conversionFeePercent}%)`,
+        reference: generateTransactionReference("CONV"),
+        feeAmount: feeAmount.toFixed(2),
         totalAmount: parsedAmount.toFixed(2),
+      });
+
+      // Save as a completed conversion request for admin record (manual Swychr sync)
+      await storage.createConversionRequest({
+        userId,
+        fromCurrency,
+        toCurrency,
+        fromAmount: parsedAmount.toFixed(2),
+        toAmount: receivedAmount.toFixed(2),
+        status: "completed",
+        notes: `Conversion automatique sur Ashtech Pay. À synchroniser manuellement sur Swychr. Frais: ${feeAmount.toFixed(2)} ${fromCurrency} (${conversionFeePercent}%)`,
+        executedAt: new Date(),
+        executedById: userId, // Self-executed by user action
       });
 
       // Notify user
       await storage.createUserNotification({
         userId,
-        title: "Conversion en attente",
-        message: `Votre demande de conversion de ${parsedAmount.toFixed(2)} ${fromCurrency} → ${toCurrency} est en attente de traitement par l'administration.`,
-        type: "info",
+        title: "Conversion effectuée",
+        message: `Votre conversion de ${parsedAmount.toFixed(2)} ${fromCurrency} → ${receivedAmount.toFixed(2)} ${toCurrency} a été effectuée. Frais appliqués: ${feeAmount.toFixed(2)} ${fromCurrency}.`,
+        transactionId: transaction.id,
+        type: "success",
       });
 
-      res.json({
+      return res.json({
         success: true,
-        pending: true,
-        requestId: request.id,
         fromAmount: parsedAmount,
         fromCurrency,
+        toAmount: receivedAmount,
         toCurrency,
-        message: `Demande de conversion soumise avec succès. Votre compte ${fromCurrency} a été débité de ${parsedAmount.toFixed(2)}. Le montant ${toCurrency} sera crédité après validation par l'administration.`,
+        feeAmount,
+        message: `Conversion effectuée avec succès sur votre compte Ashtech Pay.`,
       });
     } catch (error) {
       console.error("Convert wallet error:", error);
@@ -1468,7 +1443,25 @@ export async function registerRoutes(
     }
   });
 
-  // ── Admin: conversion requests ────────────────────────────────────────────
+  // Admin: settings
+  app.get("/api/admin/settings/:key", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const setting = await storage.getSetting(req.params.key);
+      res.json(setting || { value: "" });
+    } catch (error) {
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  app.post("/api/admin/settings", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { key, value, description } = req.body;
+      const setting = await storage.upsertSetting(key, value, description);
+      res.json(setting);
+    } catch (error) {
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
 
   // GET /api/admin/conversion-requests — list all conversion requests
   app.get("/api/admin/conversion-requests", requireAuth, requireAdmin, async (req, res) => {
