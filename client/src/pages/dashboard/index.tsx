@@ -530,49 +530,14 @@ export default function DashboardHome() {
   const { rates } = useExchangeRates();
   
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
-  const { data: transactions = [] } = useQuery<Transaction[]>({ queryKey: ["/api/transactions"] });
-  const { data: paymentLinks = [] } = useQuery<PaymentLink[]>({ queryKey: ["/api/payment-links"] });
-  const { data: userStats } = useQuery<UserStats>({ queryKey: ["/api/user/stats"] });
   const { data: wallets = [] } = useQuery<WalletEntry[]>({ queryKey: ["/api/wallets"] });
 
   const localCurrency = user?.preferredCurrency || "XAF";
-  const localBalance = localCurrency === "XAF" 
-    ? (user?.balance || "0.00")
-    : (wallets.find(w => w.currency === localCurrency)?.balance || "0.00");
+  const balance = localCurrency === "XAF" 
+    ? parseFloat(user?.balance || "0")
+    : parseFloat(wallets.find(w => w.currency === localCurrency)?.balance || "0");
 
-  const recentTransactions = transactions.slice(0, 5);
-  const isVerified = user?.isVerified ?? false;
-
-  const [, setLocation] = useLocation();
-
-  const handleAction = (action: string) => {
-    if (action === "deposit") {
-      setLocation("/dashboard/deposit");
-    } else if (!isVerified) {
-      setShowVerificationDialog(true);
-    } else {
-      setActiveDialog(action);
-    }
-  };
-
-  const chartData = useMemo(() => {
-    const days = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
-    const now = new Date();
-    const weekData = Array.from({ length: 7 }, (_, i) => {
-      const date = new Date(now);
-      date.setDate(date.getDate() - (6 - i));
-      const dayTransactions = transactions.filter(t => {
-        if (!t.createdAt) return false;
-        const tDate = new Date(t.createdAt);
-        return tDate.toDateString() === date.toDateString() && t.status === "completed";
-      });
-      return {
-        period: days[date.getDay()],
-        amount: dayTransactions.reduce((sum, t) => sum + parseFloat(t.amount), 0),
-      };
-    });
-    return weekData;
-  }, [transactions]);
+  const { data: limits } = useQuery<{ minTransfer: number; maxTransfer: number; minWithdrawal: number; maxWithdrawal: number }>({
 
   return (
     <DashboardLayout>

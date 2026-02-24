@@ -80,7 +80,11 @@ export default function SendMoneyPage() {
 
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const { data: wallets = [] } = useQuery<Wallet[]>({ queryKey: ["/api/wallets"] });
-  const balance = parseFloat(user?.balance || "0");
+  
+  const localCurrency = user?.preferredCurrency || "XAF";
+  const balance = localCurrency === "XAF" 
+    ? parseFloat(user?.balance || "0")
+    : parseFloat(wallets.find(w => w.currency === localCurrency)?.balance || "0");
 
   const { data: limits } = useQuery<{ minTransfer: number; maxTransfer: number }>({
     queryKey: ["/api/public/limits"],
@@ -96,7 +100,13 @@ export default function SendMoneyPage() {
 
   const [internalIdentifier, setInternalIdentifier] = useState("");
   const [internalAmount, setInternalAmount] = useState("");
-  const [internalWallet, setInternalWallet] = useState("XAF");
+  const [internalWallet, setInternalWallet] = useState(user?.preferredCurrency || "XAF");
+
+  useEffect(() => {
+    if (user?.preferredCurrency) {
+      setInternalWallet(user.preferredCurrency);
+    }
+  }, [user?.preferredCurrency]);
 
   const form = useForm<ExternalFormData>({
     resolver: zodResolver(externalFormSchema),
@@ -412,7 +422,7 @@ export default function SendMoneyPage() {
 
                     <Button type="submit" className="w-full" size="lg" disabled={!canSubmitExternal}>
                       {externalMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
-                      Envoyer {amountValue > 0 ? formatCurrency(amountValue, (user?.preferredCurrency || "XAF") as SupportedCurrency) : ""}
+                      Envoyer {amountValue > 0 ? formatCurrency(amountValue, localCurrency as SupportedCurrency) : ""}
                     </Button>
                   </form>
                 </Form>
@@ -421,14 +431,12 @@ export default function SendMoneyPage() {
           </Card>
 
           <div className="space-y-4">
-            <Card className="bg-gradient-to-br from-blue-500/10 to-transparent border-blue-500/20">
-              <CardContent className="p-6">
-                <p className="text-sm text-muted-foreground mb-1">Votre solde</p>
-                <p className="text-2xl font-bold">
-                  {formatCurrency(balance, (user?.preferredCurrency || "XAF") as SupportedCurrency)}
-                </p>
-              </CardContent>
-            </Card>
+                <CardContent className="p-6">
+                  <p className="text-sm text-muted-foreground mb-1">Votre solde ({localCurrency})</p>
+                  <p className="text-2xl font-bold text-foreground">
+                    {formatCurrency(balance, localCurrency as SupportedCurrency)}
+                  </p>
+                </CardContent>
 
             {!isInternal && amountValue > 0 && selectedOperator && (
               <Card>
@@ -436,17 +444,16 @@ export default function SendMoneyPage() {
                   <p className="text-sm text-muted-foreground">
                     Résumé {feePreview.isLoading && <Loader2 className="inline w-3 h-3 ml-1 animate-spin" />}
                   </p>
-                  <div className="flex justify-between">
                     <span>Montant</span>
-                    <span className="font-medium">{formatCurrency(amountValue, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</span>
+                    <span className="font-medium">{formatCurrency(amountValue, localCurrency as SupportedCurrency)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Frais ({feePreview.feePercentage || selectedOperator.feePercentage}%)</span>
-                    <span className="font-medium text-orange-500">{formatCurrency(feePreview.feeAmount, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</span>
+                    <span className="font-medium text-orange-500">{formatCurrency(feePreview.feeAmount, localCurrency as SupportedCurrency)}</span>
                   </div>
                   <div className="border-t pt-3 flex justify-between font-bold">
                     <span>Total débité</span>
-                    <span>{formatCurrency(feePreview.totalAmount, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</span>
+                    <span>{formatCurrency(feePreview.totalAmount, localCurrency as SupportedCurrency)}</span>
                   </div>
                   {feePreview.totalAmount > balance && (
                     <Alert variant="destructive">
@@ -455,10 +462,10 @@ export default function SendMoneyPage() {
                     </Alert>
                   )}
                   <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                    <span>{formatCurrency(balance, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</span>
+                    <span>{formatCurrency(balance, localCurrency as SupportedCurrency)}</span>
                     <ArrowRight className="w-3 h-3" />
                     <span className={feePreview.totalAmount > balance ? "text-destructive" : ""}>
-                      {formatCurrency(Math.max(0, balance - feePreview.totalAmount), (user?.preferredCurrency || "XAF") as SupportedCurrency)}
+                      {formatCurrency(Math.max(0, balance - feePreview.totalAmount), localCurrency as SupportedCurrency)}
                     </span>
                   </div>
                 </CardContent>
