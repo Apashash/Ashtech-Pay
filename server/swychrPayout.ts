@@ -134,21 +134,29 @@ const COUNTRY_CURRENCY: Record<string, string> = {
 };
 
 // ─── Fiat → PUSD conversion (fund wallet before payout) ──────────────────
-async function convertFiatToPusd(token: string, currencyCode: string, fiatAmount: number): Promise<void> {
+// Returns true if conversion succeeded, false if it failed (non-fatal: PUSD may already be available)
+async function convertFiatToPusd(token: string, currencyCode: string, fiatAmount: number): Promise<boolean> {
   console.log(`[PayoutAPI] Converting ${fiatAmount} ${currencyCode} → PUSD before payout`);
-  const res = await fetch(`${PAYOUT_BASE_URL}/fiat_to_pusd_conversion`, {
-    method: "POST",
-    headers: {
-      "Content-Type":  "application/json",
-      "Authorization": `Bearer ${token}`,
-    },
-    body: JSON.stringify({ currency_code: currencyCode, fiat_amount: fiatAmount }),
-  });
-  const json = await res.json();
-  const bodyStatus = typeof json.status === "number" ? json.status : res.status;
-  console.log(`[PayoutAPI] fiat_to_pusd_conversion HTTP=${res.status} body.status=${bodyStatus}:`, JSON.stringify(json));
-  if (bodyStatus >= 400) {
-    throw new Error(`fiat_to_pusd_conversion échoué: ${json.message || `HTTP ${bodyStatus}`}`);
+  try {
+    const res = await fetch(`${PAYOUT_BASE_URL}/fiat_to_pusd_conversion`, {
+      method: "POST",
+      headers: {
+        "Content-Type":  "application/json",
+        "Authorization": `Bearer ${token}`,
+      },
+      body: JSON.stringify({ currency_code: currencyCode, fiat_amount: fiatAmount }),
+    });
+    const json = await res.json();
+    const bodyStatus = typeof json.status === "number" ? json.status : res.status;
+    console.log(`[PayoutAPI] fiat_to_pusd_conversion HTTP=${res.status} body.status=${bodyStatus}:`, JSON.stringify(json));
+    if (bodyStatus >= 400) {
+      console.warn(`[PayoutAPI] fiat_to_pusd_conversion failed (${json.message}), will attempt payout with existing PUSD balance`);
+      return false;
+    }
+    return true;
+  } catch (err: any) {
+    console.warn(`[PayoutAPI] fiat_to_pusd_conversion error: ${err.message}, will attempt payout with existing PUSD balance`);
+    return false;
   }
 }
 
