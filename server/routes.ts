@@ -3564,8 +3564,10 @@ export async function registerRoutes(
   });
 
   app.get("/api/swychr/webhook", (req, res) => {
-    const appUrl = process.env.APP_URL || "";
-    res.redirect(`${appUrl}/dashboard?payment=processing`);
+    const proto = (req.headers["x-forwarded-proto"] as string) || (req.secure ? "https" : "http");
+    const host  = req.headers["x-forwarded-host"] as string || req.headers.host || "";
+    const baseUrl = process.env.APP_URL || `${proto}://${host}`;
+    res.redirect(`${baseUrl}/dashboard?payment=processing`);
   });
 
   app.post("/api/swychr/webhook", async (req, res) => {
