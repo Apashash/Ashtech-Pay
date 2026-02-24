@@ -984,6 +984,7 @@ export async function registerRoutes(
         recipientId: recipient.id,
         recipientName: recipient.fullName,
         reference: transferRef,
+        feeAmount: "0.00",
         totalAmount: amountNum.toFixed(2),
       });
 
@@ -996,6 +997,7 @@ export async function registerRoutes(
         description: `Reçu de ${sender.fullName}`,
         recipientId: senderId,
         reference: transferRef,
+        feeAmount: "0.00",
         totalAmount: amountNum.toFixed(2),
       });
 
@@ -1059,6 +1061,7 @@ export async function registerRoutes(
         recipientId: recipient.id,
         recipientName: recipient.fullName,
         reference: transferRef,
+        feeAmount: "0.00",
         totalAmount: amountNum.toFixed(2),
       });
 
@@ -1071,6 +1074,7 @@ export async function registerRoutes(
         description: `Reçu de ${sender.fullName}`,
         recipientId: senderId,
         reference: transferRef,
+        feeAmount: "0.00",
         totalAmount: amountNum.toFixed(2),
       });
 
