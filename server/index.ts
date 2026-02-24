@@ -4,6 +4,7 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import { startPaymentPoller } from "./paymentPoller";
 import { startPayoutPoller } from "./payoutPoller";
+import { seedWithdrawalTransferFees } from "./seedWithdrawalTransferFees";
 
 const app = express();
 const httpServer = createServer(app);
@@ -97,6 +98,9 @@ app.use((req, res, next) => {
       log(`serving on port ${port}`);
       startPaymentPoller();
       startPayoutPoller();
+      seedWithdrawalTransferFees().catch(err =>
+        console.error("[FeesSeed] Error during fee seeding:", err)
+      );
     },
   );
 })();

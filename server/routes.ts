@@ -867,9 +867,55 @@ export async function registerRoutes(
         paymentMethod: operator.type,
         reference,
       });
-      
+
+      // ── Automatic Swychr payout ──────────────────────────────────────────
+      const payoutMethod = (operator.type === "bank_transfer")
+        ? "bank_transfer"
+        : "mobile_money";
+
+      const transferPayoutResult = await createSwychrPayout({
+        country_code:     country.code,
+        beneficiary_name: recipientName,
+        mobile_no:        recipientPhone,
+        amount:           parsedAmount,
+        transaction_id:   reference,
+        payment_method:   payoutMethod,
+        remarks:          `Transfert Ashtech Pay - ${reference}`,
+      });
+
+      if (!transferPayoutResult.success) {
+        console.error(`[Transfer] Payout API failed for ${reference}: ${transferPayoutResult.message}`);
+        await storage.updateTransactionStatus(transaction.id, "failed");
+        await storage.updateUserBalance(senderId, totalAmount);
+        await storage.createUserNotification({
+          userId: senderId,
+          type: "withdrawal_failed",
+          title: "Transfert échoué",
+          message: `Votre transfert de ${parsedAmount.toFixed(0)} XAF vers ${recipientName} a échoué (${transferPayoutResult.message}). Le montant a été recrédité.`,
+          transactionId: transaction.id,
+          isRead: false,
+        });
+        return res.status(400).json({
+          message: `Transfert échoué: ${transferPayoutResult.message}`,
+          feeAmount: feeAmount.toFixed(2),
+          totalAmount: totalAmount.toFixed(2),
+        });
+      }
+
+      const externalTxId = transferPayoutResult.transaction_id || reference;
+      addPendingPayout({
+        transactionId: transaction.id,
+        reference:     externalTxId,
+        userId:        senderId,
+        amount:        parsedAmount.toFixed(2),
+        totalDebited:  totalAmount.toFixed(2),
+      });
+
+      console.log(`[Transfer] Payout submitted OK: internal=${reference} external=${externalTxId}`);
+      // ────────────────────────────────────────────────────────────────────
+
       res.json({ 
-        message: "Votre transaction est en cours de vérification",
+        message: "Votre transfert est en cours de traitement",
         transaction,
         feeAmount: feeAmount.toFixed(2),
         totalAmount: totalAmount.toFixed(2),
@@ -1150,7 +1196,7 @@ export async function registerRoutes(
 
       const payoutResult = await createSwychrPayout({
         country_code:     countryCode,
-        beneficiary_name: `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.username || "Client",
+        beneficiary_name: user.fullName || user.username || "Client",
         mobile_no:        data.accountDetails,
         amount:           amount,
         transaction_id:   withdrawalRef,
