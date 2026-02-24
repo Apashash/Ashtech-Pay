@@ -849,18 +849,33 @@ function SecuritySection() {
   const securityFeatures = [
     {
       icon: Lock,
-      title: "Chiffrement des données",
-      description: "Vos données personnelles et financières sont chiffrées selon les standards internationaux."
-    },
-    {
-      icon: Shield,
-      title: "Protection anti-fraude",
-      description: "Surveillance continue des transactions et vérification des comptes."
+      title: "Chiffrement SSL (HTTPS)",
+      description: "Toutes les communications entre votre navigateur et nos serveurs sont chiffrées via le protocole SSL/TLS. Vos données ne peuvent pas être interceptées."
     },
     {
       icon: FileCheck,
+      title: "Vérification KYC",
+      description: "Chaque marchand passe par une vérification d'identité (Know Your Customer) avant activation. Seuls les utilisateurs vérifiés peuvent encaisser et retirer."
+    },
+    {
+      icon: Shield,
+      title: "Monitoring anti-fraude",
+      description: "Un système de surveillance temps réel analyse chaque transaction. Toute activité anormale déclenche une alerte immédiate et un blocage préventif."
+    },
+    {
+      icon: Zap,
+      title: "Surveillance des transactions",
+      description: "Chaque paiement et retrait est journalisé, horodaté et vérifié. Vous disposez d'un historique complet et immuable de toutes vos opérations."
+    },
+    {
+      icon: Globe,
+      title: "Politique AML/CFT",
+      description: "Ashtech Pay applique une politique stricte de lutte contre le blanchiment de capitaux et le financement du terrorisme, conforme aux standards GAFI/FATF."
+    },
+    {
+      icon: Headphones,
       title: "Partenaires agréés",
-      description: "Nous travaillons avec des partenaires de paiement agréés et conformes."
+      description: "Nous travaillons exclusivement avec des partenaires de paiement reconnus et conformes — dont Swychr — garantissant la fiabilité de chaque transaction."
     }
   ];
 
@@ -876,24 +891,32 @@ function SecuritySection() {
             Sécurité & Conformité
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Votre argent est protégé par des standards de sécurité internationaux.
+            Ashtech Pay applique des standards stricts de sécurité et de conformité réglementaire 
+            pour protéger chaque transaction et chaque utilisateur.
           </p>
         </div>
         
-        <div className="grid md:grid-cols-3 gap-8">
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {securityFeatures.map((feature, index) => (
             <Card 
               key={index} 
-              className="p-8 bg-card border-border text-center"
+              className="p-6 bg-card border-border hover-elevate transition-all duration-300 group"
               data-testid={`security-${index}`}
             >
-              <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                <feature.icon className="w-8 h-8 text-primary" />
+              <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center mb-5 group-hover:bg-primary/20 transition-colors">
+                <feature.icon className="w-7 h-7 text-primary" />
               </div>
-              <h3 className="text-xl font-semibold text-foreground mb-3">{feature.title}</h3>
-              <p className="text-muted-foreground">{feature.description}</p>
+              <h3 className="text-lg font-semibold text-foreground mb-3">{feature.title}</h3>
+              <p className="text-muted-foreground text-sm leading-relaxed">{feature.description}</p>
             </Card>
           ))}
+        </div>
+
+        <div className="mt-12 p-6 bg-primary/5 border border-primary/20 rounded-2xl text-center animate-on-scroll">
+          <p className="text-muted-foreground text-sm max-w-2xl mx-auto">
+            La sécurité des utilisateurs et la conformité réglementaire sont au cœur de toutes nos opérations.
+            {" "}<Link href="/legal" className="text-primary hover:underline font-medium">Consulter notre politique AML/CFT complète →</Link>
+          </p>
         </div>
       </div>
     </section>
