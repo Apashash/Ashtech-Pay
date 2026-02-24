@@ -551,7 +551,7 @@ export default function AdminUsers() {
         </Dialog>
 
         <Dialog open={!!editUser} onOpenChange={() => setEditUser(null)}>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Modifier {editUser?.fullName}</DialogTitle>
               <DialogDescription>Modifiez les informations de l'utilisateur</DialogDescription>
@@ -639,7 +639,7 @@ export default function AdminUsers() {
         </Dialog>
 
         <Dialog open={!!balanceModal} onOpenChange={(open) => { if (!open) { setBalanceModal(null); setNewBalance(""); } }}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Soldes de {balanceModal?.fullName}</DialogTitle>
               <DialogDescription>

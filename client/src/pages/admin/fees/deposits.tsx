@@ -223,7 +223,7 @@ export default function AdminFeesDeposits() {
         </Card>
 
         <Dialog open={showModal} onOpenChange={() => resetForm()}>
-          <DialogContent>
+          <DialogContent className="max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Modifier la marge — {editingFee ? getCountryName(editingFee.countryId) : ""}</DialogTitle>
             </DialogHeader>
