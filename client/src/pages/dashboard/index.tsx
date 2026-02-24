@@ -235,9 +235,9 @@ function SendMoneyDialog({ open, onClose, wallets = [] }: { open: boolean; onClo
             </div>
 
             <div className="space-y-2">
-              <FormLabel>Email ou nom d'utilisateur du destinataire</FormLabel>
+              <FormLabel>Email, téléphone ou nom d'utilisateur</FormLabel>
               <Input
-                placeholder="exemple@email.com ou username"
+                placeholder="exemple@email.com / +237600000000 / username"
                 value={recipientIdentifier}
                 onChange={e => setRecipientIdentifier(e.target.value)}
                 data-testid="input-recipient-identifier"

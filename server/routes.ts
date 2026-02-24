@@ -938,9 +938,12 @@ export async function registerRoutes(
       const sender = await storage.getUser(senderId);
       if (!sender) return res.status(404).json({ message: "Utilisateur non trouvé" });
 
-      // Lookup recipient by email or username
+      // Lookup recipient by email, phone or username
       const identifier = recipientIdentifier.trim();
       let recipient = await storage.getUserByEmail(identifier);
+      if (!recipient) {
+        recipient = await storage.getUserByPhone(identifier);
+      }
       if (!recipient) {
         recipient = await storage.getUserByUsername(identifier);
       }
