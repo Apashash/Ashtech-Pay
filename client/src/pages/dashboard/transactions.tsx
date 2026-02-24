@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import type { Transaction, User, SupportedCurrency } from "@shared/schema";
-import { History, TrendingUp, TrendingDown, Clock, CheckCircle, XCircle, Loader2, Search, Link2, Copy, ArrowRight, User as UserIcon, Mail, Phone, MapPin, CreditCard, FileText } from "lucide-react";
+import { History, TrendingUp, TrendingDown, Clock, CheckCircle, XCircle, Loader2, Search, Link2, Copy, ArrowRight, ArrowLeftRight, User as UserIcon, Mail, Phone, MapPin, CreditCard, FileText } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { useState } from "react";
@@ -58,6 +58,7 @@ export default function TransactionsPage() {
     transfer_in: "Reçu",
     transfer_out: "Envoyé",
     payment_link: "Lien de paiement",
+    conversion: "Conversion",
   };
 
   const paymentMethodLabels: Record<string, string> = {
@@ -121,6 +122,7 @@ export default function TransactionsPage() {
               <SelectItem value="transfer_in">Reçus</SelectItem>
               <SelectItem value="transfer_out">Envoyés</SelectItem>
               <SelectItem value="payment_link">Liens de paiement</SelectItem>
+              <SelectItem value="conversion">Conversions</SelectItem>
             </SelectContent>
           </Select>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -157,6 +159,7 @@ export default function TransactionsPage() {
               <div className="overflow-x-auto -mx-4 px-4">
                 <div className="space-y-2 min-w-[320px]">
                   {filteredTransactions.map((tx) => {
+                    const isConversion = tx.type === "conversion";
                     const isIncoming = ["deposit", "transfer_in", "payment_link"].includes(tx.type);
                     const isPaymentLink = tx.type === "payment_link";
                     return (
@@ -168,15 +171,19 @@ export default function TransactionsPage() {
                       >
                         <div className="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
                           <div className={`w-10 h-10 sm:w-12 sm:h-12 shrink-0 rounded-full flex items-center justify-center ${
-                            isPaymentLink 
-                              ? 'bg-primary/10' 
-                              : isIncoming ? 'bg-green-500/10' : 'bg-red-500/10'
+                            isConversion
+                              ? 'bg-blue-500/10'
+                              : isPaymentLink 
+                                ? 'bg-primary/10' 
+                                : isIncoming ? 'bg-green-500/10' : 'bg-red-500/10'
                           }`}>
-                            {isPaymentLink 
-                              ? <Link2 className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
-                              : isIncoming 
-                                ? <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-green-500" /> 
-                                : <TrendingDown className="w-5 h-5 sm:w-6 sm:h-6 text-red-500" />
+                            {isConversion
+                              ? <ArrowLeftRight className="w-5 h-5 sm:w-6 sm:h-6 text-blue-500" />
+                              : isPaymentLink 
+                                ? <Link2 className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
+                                : isIncoming 
+                                  ? <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-green-500" /> 
+                                  : <TrendingDown className="w-5 h-5 sm:w-6 sm:h-6 text-red-500" />
                             }
                           </div>
                           <div className="flex-1 min-w-0">
@@ -203,13 +210,15 @@ export default function TransactionsPage() {
                         </div>
                         <div className="flex flex-col items-end gap-1 shrink-0">
                           <span className={`font-bold text-sm sm:text-lg whitespace-nowrap ${
-                            tx.status === "completed" 
-                              ? (isIncoming ? 'text-green-500' : 'text-red-500')
-                              : tx.status === "pending" 
-                                ? 'text-amber-500' 
-                                : 'text-muted-foreground'
+                            isConversion
+                              ? 'text-blue-500'
+                              : tx.status === "completed" 
+                                ? (isIncoming ? 'text-green-500' : 'text-red-500')
+                                : tx.status === "pending" 
+                                  ? 'text-amber-500' 
+                                  : 'text-muted-foreground'
                           }`}>
-                            {isIncoming ? '+' : '-'}{formatCurrency(tx.amount, (user?.preferredCurrency || "XAF") as SupportedCurrency)}
+                            {isConversion ? '⇄ ' : (isIncoming ? '+' : '-')}{formatCurrency(tx.amount, (user?.preferredCurrency || "XAF") as SupportedCurrency)}
                           </span>
                           <div className="sm:hidden">{getStatusBadge(tx.status)}</div>
                           <ArrowRight className="w-4 h-4 text-muted-foreground hidden sm:block" />
@@ -237,13 +246,15 @@ export default function TransactionsPage() {
               <div className="text-center p-4 bg-muted/50 rounded-lg">
                 <p className="text-sm text-muted-foreground mb-1">{typeLabels[tx.type] || tx.type}</p>
                 <p className={`text-3xl font-bold ${
-                  tx.status === "completed" 
-                    ? (isIncomingSelected ? 'text-green-500' : 'text-red-500')
-                    : tx.status === "pending" 
-                      ? 'text-amber-500' 
-                      : 'text-muted-foreground'
+                  tx.type === "conversion"
+                    ? 'text-blue-500'
+                    : tx.status === "completed" 
+                      ? (isIncomingSelected ? 'text-green-500' : 'text-red-500')
+                      : tx.status === "pending" 
+                        ? 'text-amber-500' 
+                        : 'text-muted-foreground'
                 }`}>
-                  {isIncomingSelected ? '+' : '-'}{formatCurrency(tx.amount, (user?.preferredCurrency || "XAF") as SupportedCurrency)}
+                  {tx.type === "conversion" ? '⇄ ' : (isIncomingSelected ? '+' : '-')}{formatCurrency(tx.amount, (user?.preferredCurrency || "XAF") as SupportedCurrency)}
                 </p>
                 <div className="mt-2">{getStatusBadge(tx.status)}</div>
               </div>

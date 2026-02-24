@@ -1368,6 +1368,53 @@ export async function registerRoutes(
         return res.status(400).json({ message: `Solde insuffisant en ${fromCurrency} (disponible: ${sourceBalance.toFixed(2)})` });
       }
 
+      // Try auto-conversion via Swychr rate API first
+      const convResult = await getConversionRate(fromCurrency, toCurrency, parsedAmount);
+
+      if (convResult.success && convResult.targetAmount !== undefined) {
+        // ── Swychr rate available → execute immediately ──────────────────────
+        const receivedAmount = convResult.targetAmount;
+
+        // Debit source
+        if (fromCurrency === "XAF") {
+          await storage.updateUserBalance(userId, -parsedAmount);
+        } else {
+          await storage.upsertWallet(userId, fromCurrency, -parsedAmount);
+        }
+
+        // Credit target
+        if (toCurrency === "XAF") {
+          await storage.updateUserBalance(userId, receivedAmount);
+        } else {
+          await storage.upsertWallet(userId, toCurrency, receivedAmount);
+        }
+
+        // Record transaction
+        await storage.createTransaction({
+          userId,
+          type: "conversion",
+          amount: parsedAmount.toFixed(2),
+          currency: fromCurrency,
+          status: "completed",
+          description: `Conversion ${parsedAmount.toFixed(2)} ${fromCurrency} → ${receivedAmount.toFixed(2)} ${toCurrency}`,
+          reference: `conv_${Date.now()}`,
+          feeAmount: "0",
+          totalAmount: parsedAmount.toFixed(2),
+        });
+
+        return res.json({
+          success: true,
+          pending: false,
+          fromAmount: parsedAmount,
+          fromCurrency,
+          toAmount: receivedAmount,
+          toCurrency,
+          rate: convResult.rate,
+          message: `Conversion effectuée : ${parsedAmount.toFixed(2)} ${fromCurrency} → ${receivedAmount.toFixed(2)} ${toCurrency}`,
+        });
+      }
+
+      // ── Swychr rate unavailable → debit & save as pending ───────────────────
       // Debit source wallet immediately (funds held pending conversion)
       if (fromCurrency === "XAF") {
         await storage.updateUserBalance(userId, -parsedAmount);
@@ -1382,6 +1429,20 @@ export async function registerRoutes(
         toCurrency,
         fromAmount: parsedAmount.toFixed(2),
         status: "pending",
+        notes: `Swychr indisponible au moment de la demande: ${convResult.message || "taux non disponible"}`,
+      });
+
+      // Record pending transaction
+      await storage.createTransaction({
+        userId,
+        type: "conversion",
+        amount: parsedAmount.toFixed(2),
+        currency: fromCurrency,
+        status: "pending",
+        description: `Conversion en attente : ${parsedAmount.toFixed(2)} ${fromCurrency} → ${toCurrency}`,
+        reference: `conv_pending_${request.id}`,
+        feeAmount: "0",
+        totalAmount: parsedAmount.toFixed(2),
       });
 
       // Notify user
@@ -1447,17 +1508,14 @@ export async function registerRoutes(
 
       const fromAmount = parseFloat(request.fromAmount);
 
-      // Try to get real Swychr rate
+      // Get real Swychr rate — no fallback, must succeed
       const convResult = await getConversionRate(request.fromCurrency, request.toCurrency, fromAmount);
-      let receivedAmount: number;
-      if (convResult.success && convResult.targetAmount !== undefined) {
-        receivedAmount = convResult.targetAmount;
-      } else {
-        // Fallback: use EXCHANGE_RATES static rates
-        const fromRate = EXCHANGE_RATES[request.fromCurrency as SupportedCurrency] || 1;
-        const toRate = EXCHANGE_RATES[request.toCurrency as SupportedCurrency] || 1;
-        receivedAmount = fromAmount * (fromRate / toRate);
+      if (!convResult.success || convResult.targetAmount === undefined) {
+        return res.status(400).json({
+          message: `Solde Swychr insuffisant pour exécuter cette conversion. Rechargez le compte Swychr avant de réessayer. (${convResult.message || "taux indisponible"})`,
+        });
       }
+      const receivedAmount = convResult.targetAmount;
 
       // Credit target wallet
       if (request.toCurrency === "XAF") {
