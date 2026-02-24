@@ -17,17 +17,22 @@ import { useState, useEffect } from "react";
 import { formatCurrency } from "@/lib/currency";
 import { Link, useLocation } from "wouter";
 
+interface OperatorConfig {
+  id: string;
+  name: string;
+  type: string;
+  feePercentage: number;
+  feeFixed: number;
+  minFee: number | null;
+  maxFee: number | null;
+}
+
 interface CountryConfig {
   id: string;
   name: string;
   code: string;
   currency: string;
-  operators: {
-    id: string;
-    name: string;
-    feePercentage: number;
-    feeFixed: number;
-  }[];
+  operators: OperatorConfig[];
 }
 
 const withdrawMethods = [
@@ -305,7 +310,13 @@ export default function WithdrawPage() {
                         if (amountValue > 0 && selectedOperatorData) {
                           const feePercent = selectedOperatorData.feePercentage || 0;
                           const feeFixed = selectedOperatorData.feeFixed || 0;
-                          const feeAmount = (amountValue * feePercent / 100) + feeFixed;
+                          const minFee = selectedOperatorData.minFee || 0;
+                          const maxFee = selectedOperatorData.maxFee || Infinity;
+                          
+                          let feeAmount = (amountValue * feePercent / 100) + feeFixed;
+                          if (feeAmount < minFee) feeAmount = minFee;
+                          if (feeAmount > maxFee) feeAmount = maxFee;
+                          
                           const amountReceived = amountValue - feeAmount;
                           
                           return (

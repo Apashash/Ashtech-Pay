@@ -23,6 +23,7 @@ interface OperatorConfig {
   name: string;
   type: string;
   feePercentage: number;
+  feeFixed: number;
   minFee: number | null;
   maxFee: number | null;
 }
@@ -112,16 +113,33 @@ export default function SendMoneyPage() {
         amount: amountValue.toString(),
       });
       const data = await res.json();
+      
+      // Ensure we use the fee details from the operator config if API returns 0 but config has values
+      let feeAmount = data.feeAmount;
+      let feePercentage = data.feePercentage;
+      
+      if (feeAmount === 0 && selectedOperator) {
+        const configFeePercent = selectedOperator.feePercentage || 0;
+        const configFeeFixed = selectedOperator.feeFixed || 0;
+        const minFee = selectedOperator.minFee || 0;
+        const maxFee = selectedOperator.maxFee || Infinity;
+        
+        feeAmount = (amountValue * configFeePercent / 100) + configFeeFixed;
+        if (feeAmount < minFee) feeAmount = minFee;
+        if (feeAmount > maxFee) feeAmount = maxFee;
+        feePercentage = configFeePercent;
+      }
+
       setFeePreview({
-        feeAmount: data.feeAmount,
-        feePercentage: data.feePercentage,
-        totalAmount: data.totalAmount,
+        feeAmount: feeAmount,
+        feePercentage: feePercentage,
+        totalAmount: amountValue + feeAmount,
         isLoading: false,
       });
     } catch {
       setFeePreview(prev => ({ ...prev, isLoading: false }));
     }
-  }, [watchedOperatorId, amountValue]);
+  }, [watchedOperatorId, amountValue, selectedOperator]);
   
   useEffect(() => {
     const timer = setTimeout(fetchFeePreview, 300);

@@ -708,7 +708,7 @@ export async function registerRoutes(
               type: op.type,
               gateway: (op as any).gateway || "soleapay",
               feePercentage: operatorFee?.feeType === "percentage" ? parseFloat(operatorFee.feeValue) : 0,
-              fixedFee: operatorFee?.feeType === "fixed" ? parseFloat(operatorFee.feeValue) : 0,
+              feeFixed: operatorFee?.feeType === "fixed" ? parseFloat(operatorFee.feeValue) : 0,
               minFee: operatorFee?.minFee ? parseFloat(operatorFee.minFee) : null,
               maxFee: operatorFee?.maxFee ? parseFloat(operatorFee.maxFee) : null,
             };
