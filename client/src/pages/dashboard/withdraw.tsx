@@ -409,7 +409,7 @@ export default function WithdrawPage() {
                     type="submit" 
                     className="w-full" 
                     size="lg" 
-                    disabled={withdrawMutation.isPending || balance < 1000}
+                    disabled={withdrawMutation.isPending || balance < 1000 || !selectedCountry || !selectedOperator || (selectedMethod === "mobile_money" && !form.watch("accountDetails"))}
                     data-testid="button-withdraw-confirm"
                   >
                     {withdrawMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Wallet className="w-4 h-4 mr-2" />}
