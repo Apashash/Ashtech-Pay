@@ -51,4 +51,4 @@ SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 APP_URL = "https://f96a6379-f341-4944-8f17-8e8a1d157003-00-rvqhzlc1jkpk.worf.replit.dev"
 
 [userenv.production]
-APP_URL = "https://adhtechpay.top"
+APP_URL = "https://ashtechpay.top"
