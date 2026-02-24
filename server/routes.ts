@@ -1443,6 +1443,16 @@ export async function registerRoutes(
     }
   });
 
+  // Public settings
+  app.get("/api/settings/:key", async (req, res) => {
+    try {
+      const setting = await storage.getSetting(req.params.key);
+      res.json(setting || { value: "" });
+    } catch (error) {
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   // Admin: settings
   app.get("/api/admin/settings/:key", requireAuth, requireAdmin, async (req, res) => {
     try {

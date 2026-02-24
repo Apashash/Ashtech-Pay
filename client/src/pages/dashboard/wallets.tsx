@@ -107,10 +107,27 @@ export default function WalletsPage() {
     },
   });
 
+  const { data: setting } = useQuery<{ value: string }>({
+    queryKey: ["/api/settings/conversion_fee_percent"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/settings/conversion_fee_percent");
+      return res.json();
+    },
+  });
+
+  const conversionFeePercent = setting?.value ? parseFloat(setting.value) : 6;
   const sourceBalance = walletList.find(w => w.currency === fromCurrency);
   const parsedAmount = parseFloat(convertAmount || "0");
   const sourceParsedBalance = parseFloat(sourceBalance?.balance || "0");
   const hasSufficientBalance = parsedAmount > 0 && parsedAmount <= sourceParsedBalance;
+
+  const feeAmount = (parsedAmount * conversionFeePercent) / 100;
+  const finalAmount = parsedAmount - feeAmount;
+
+  // Internal rates for preview
+  const fromRate = EXCHANGE_RATES[fromCurrency as keyof typeof EXCHANGE_RATES] || 1;
+  const toRate = EXCHANGE_RATES[toCurrency as keyof typeof EXCHANGE_RATES] || 1;
+  const previewAmount = finalAmount * (fromRate / toRate);
 
   return (
     <DashboardLayout>
@@ -130,7 +147,7 @@ export default function WalletsPage() {
           <Info className="h-4 w-4" />
           <AlertDescription>
             Les dépôts sont effectués uniquement sur le compte <strong>XAF</strong> (Cameroun).
-            Vous pouvez demander une conversion vers d'autres devises — elle sera traitée par l'administration.
+            Vous pouvez convertir vos fonds instantanément entre vos différents portefeuilles.
           </AlertDescription>
         </Alert>
 
@@ -193,12 +210,12 @@ export default function WalletsPage() {
             <CardContent className="p-4 flex items-start gap-3">
               <Clock className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
               <div>
-                <p className="font-semibold text-amber-600">Demande de conversion soumise</p>
+                <p className="font-semibold text-green-600">Conversion effectuée</p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Votre demande de conversion de{" "}
+                  Votre conversion de{" "}
                   <strong>{pendingSuccess.fromAmount.toLocaleString("fr-FR")} {pendingSuccess.fromCurrency}</strong>{" "}
-                  vers <strong>{pendingSuccess.toCurrency}</strong> a été enregistrée.
-                  Votre compte a été débité. Le montant {pendingSuccess.toCurrency} sera crédité dès validation par l'administration.
+                  vers <strong>{pendingSuccess.toCurrency}</strong> a été traitée avec succès.
+                  Votre compte a été mis à jour instantanément.
                 </p>
               </div>
             </CardContent>
@@ -211,19 +228,13 @@ export default function WalletsPage() {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <ArrowLeftRight className="w-5 h-5" />
-                Demande de conversion
+                Conversion de devises
               </DialogTitle>
               <DialogDescription>
-                Votre compte source sera débité immédiatement. Le montant cible sera crédité après validation par l'administration.
+                Convertissez vos fonds instantanément. Les frais de conversion sont appliqués automatiquement.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
-              <Alert className="border-amber-500/30 bg-amber-500/5">
-                <Clock className="h-4 w-4 text-amber-500" />
-                <AlertDescription className="text-xs text-amber-700">
-                  Les conversions sont traitées manuellement par l'administration. Délai habituel : quelques heures.
-                </AlertDescription>
-              </Alert>
 
               <div className="space-y-2">
                 <Label>Compte source (à débiter)</Label>
@@ -273,9 +284,23 @@ export default function WalletsPage() {
                   </p>
                 )}
                 {convertAmount && hasSufficientBalance && (
-                  <p className="text-xs text-muted-foreground">
-                    Solde restant après débit : {(sourceParsedBalance - parsedAmount).toLocaleString("fr-FR")} {fromCurrency}
-                  </p>
+                  <div className="mt-4 p-3 bg-primary/5 border border-primary/10 rounded-lg space-y-1">
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Montant brut</span>
+                      <span>{parsedAmount.toLocaleString("fr-FR")} {fromCurrency}</span>
+                    </div>
+                    <div className="flex justify-between text-xs text-amber-600 font-medium">
+                      <span>Frais de conversion ({conversionFeePercent}%)</span>
+                      <span>-{feeAmount.toLocaleString("fr-FR")} {fromCurrency}</span>
+                    </div>
+                    <div className="flex justify-between text-sm font-bold border-t border-primary/10 pt-1 mt-1">
+                      <span>Vous recevrez environ</span>
+                      <span className="text-primary">{previewAmount.toLocaleString("fr-FR")} {toCurrency}</span>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-2 italic text-center">
+                      Le taux final peut varier légèrement.
+                    </p>
+                  </div>
                 )}
               </div>
 
@@ -289,7 +314,7 @@ export default function WalletsPage() {
                   onClick={() => convertMutation.mutate({ fromCurrency, toCurrency, amount: convertAmount })}
                 >
                   {convertMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                  Soumettre la demande
+                  Convertir maintenant
                 </Button>
               </div>
             </div>
