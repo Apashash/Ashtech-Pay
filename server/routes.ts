@@ -878,7 +878,7 @@ export async function registerRoutes(
           mobile_no:        formatInternationalPhone(recipientPhone, transferCountryCode),
           amount:           parsedAmount,
           transaction_id:   reference,
-          payment_method:   "mobile_money",
+          payment_method:   req.body.paymentMethod || "mobile_money",
           remarks:          `Ashtech Pay - ${reference}`,
         });
 
@@ -1315,7 +1315,7 @@ export async function registerRoutes(
           mobile_no:        formatInternationalPhone(data.accountDetails, withdrawalCountryCode),
           amount:           amount,
           transaction_id:   withdrawalRef,
-          payment_method:   "mobile_money",
+          payment_method:   data.paymentMethod || "mobile_money",
           remarks:          `Ashtech Pay - ${withdrawalRef}`,
         });
 
@@ -3128,7 +3128,7 @@ export async function registerRoutes(
             ),
             amount:           txAmount,
             transaction_id:   payoutRef,
-            payment_method:   "mobile_money",
+            payment_method:   transaction.paymentMethod || "mobile_money",
             remarks:          `Ashtech Pay - ${payoutRef}`,
           });
 
