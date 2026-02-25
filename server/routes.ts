@@ -1306,6 +1306,7 @@ export async function registerRoutes(
       }
 
       await storage.updateUserBalance(userId, -totalAmount);
+      console.log(`[Withdrawal] User=${userId}, Amount=${amount}, Fee=${feeAmount}, TotalDebited=${totalAmount}`);
 
       const withdrawalRef = generateTransactionReference("withdrawal");
       let withdrawalCountryCode = "CM";

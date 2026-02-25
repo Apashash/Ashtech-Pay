@@ -117,7 +117,17 @@ export default function WithdrawPage() {
   const watchedAmount = form.watch("amount");
   const watchedAccountDetails = form.watch("accountDetails");
   const amountValue = parseFloat(watchedAmount || "0");
-  const isAmountValid = amountValue >= minWithdrawal && amountValue <= balance;
+  const feePercent = selectedOperatorData?.feePercentage || 0;
+  const feeFixed = selectedOperatorData?.feeFixed || 0;
+  const minPayoutCharge = selectedOperatorData?.minFee || 0;
+  
+  const percentageFee = (amountValue * feePercent / 100);
+  const feeAmount = (amountValue > 0 && selectedOperatorData) 
+    ? Math.max(percentageFee + feeFixed, minPayoutCharge) 
+    : 0;
+  const totalAmount = amountValue + feeAmount;
+
+  const isAmountValid = amountValue >= minWithdrawal && totalAmount <= balance;
   const isMobileMoneyValid = selectedMethod === "mobile_money" ? (!!selectedCountry && !!selectedOperator && !!watchedAccountDetails) : true;
   const isBankTransferValid = selectedMethod === "bank_transfer" ? !!watchedAccountDetails : true;
   const isSubmitDisabled = withdrawMutation.isPending || !isAmountValid || !isMobileMoneyValid || !isBankTransferValid;
@@ -262,6 +272,12 @@ export default function WithdrawPage() {
                             Montant minimum de retrait : {minWithdrawal.toLocaleString()} XAF
                           </p>
                         )}
+                        {amountValue > 0 && totalAmount > balance && (
+                          <p className="text-sm text-destructive flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3" />
+                            Solde insuffisant pour couvrir le retrait et les frais ({totalAmount.toLocaleString()} XAF requis)
+                          </p>
+                        )}
                       </FormItem>
                     )}
                   />
@@ -316,43 +332,28 @@ export default function WithdrawPage() {
                         </div>
                       </div>
 
-                      {(() => {
-                        const amountValue = parseFloat(form.watch("amount") || "0");
-                        if (amountValue > 0 && selectedOperatorData) {
-                          const feePercent = selectedOperatorData.feePercentage || 0;
-                          const feeFixed = selectedOperatorData.feeFixed || 0;
-                          const minPayoutCharge = selectedOperatorData.minFee || 0;
-                          
-                          const percentageFee = (amountValue * feePercent / 100);
-                          const feeAmount = Math.max(percentageFee + feeFixed, minPayoutCharge);
-                          
-                          const amountReceived = amountValue - feeAmount;
-                          
-                          return (
-                            <Card className="border-primary/30 bg-primary/5">
-                              <CardContent className="p-4 space-y-3">
-                                <div className="flex justify-between items-center text-sm">
-                                  <span className="text-muted-foreground">Montant demandé</span>
-                                  <span className="font-medium">{formatCurrency(amountValue, "XAF")}</span>
-                                </div>
-                                <div className="flex justify-between items-center text-sm">
-                                  <span className="text-muted-foreground">
-                                    Frais ({feePercent}%{feeFixed > 0 ? ` + ${formatCurrency(feeFixed, "XAF")}` : ''})
-                                  </span>
-                                  <span className="font-medium text-red-500">- {formatCurrency(feeAmount, "XAF")}</span>
-                                </div>
-                                <div className="border-t border-border pt-3">
-                                  <div className="flex justify-between items-center">
-                                    <span className="font-semibold text-foreground">Vous recevrez</span>
-                                    <span className="font-bold text-lg text-primary">{formatCurrency(amountReceived, "XAF")}</span>
-                                  </div>
-                                </div>
-                              </CardContent>
-                            </Card>
-                          );
-                        }
-                        return null;
-                      })()}
+                      {amountValue > 0 && selectedOperatorData && (
+                        <Card className="border-primary/30 bg-primary/5">
+                          <CardContent className="p-4 space-y-3">
+                            <div className="flex justify-between items-center text-sm">
+                              <span className="text-muted-foreground">Montant à recevoir</span>
+                              <span className="font-medium">{formatCurrency(amountValue, "XAF")}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-sm">
+                              <span className="text-muted-foreground">
+                                Frais ({feePercent}%{feeFixed > 0 ? ` + ${formatCurrency(feeFixed, "XAF")}` : ''})
+                              </span>
+                              <span className="font-medium text-red-500">+ {formatCurrency(feeAmount, "XAF")}</span>
+                            </div>
+                            <div className="border-t border-border pt-3">
+                              <div className="flex justify-between items-center">
+                                <span className="font-semibold text-foreground">Total à débiter</span>
+                                <span className="font-bold text-lg text-primary">{formatCurrency(totalAmount, "XAF")}</span>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
                     </>
                   )}
 
