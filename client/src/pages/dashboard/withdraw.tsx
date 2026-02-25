@@ -168,44 +168,43 @@ export default function WithdrawPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="space-y-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Retirer de l'argent</h1>
           <p className="text-muted-foreground">Retirez vos fonds vers votre compte</p>
         </div>
 
         <Card className="bg-gradient-to-br from-orange-500/10 to-transparent border-orange-500/20">
-          <CardContent className="p-6">
+          <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Solde disponible</p>
-                <p className="text-3xl font-bold text-foreground">{formatCurrency(balance, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</p>
+                <p className="text-2xl font-bold text-foreground">{formatCurrency(balance, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</p>
               </div>
-              <Wallet className="w-10 h-10 text-orange-500" />
+              <Wallet className="w-8 h-8 text-orange-500" />
             </div>
           </CardContent>
         </Card>
 
         {balance < minWithdrawal && (
           <Card className="border-yellow-500/50 bg-yellow-500/5">
-            <CardContent className="p-4 flex items-center gap-3">
-              <AlertCircle className="w-5 h-5 text-yellow-500" />
-              <p className="text-sm text-foreground">Solde insuffisant. Le montant minimum de retrait est de {minWithdrawal.toLocaleString()} XAF.</p>
+            <CardContent className="p-3 flex items-center gap-3">
+              <AlertCircle className="w-4 h-4 text-yellow-500" />
+              <p className="text-xs text-foreground">Solde insuffisant. Minimum : {minWithdrawal.toLocaleString()} XAF.</p>
             </CardContent>
           </Card>
         )}
 
-        <div className="grid md:grid-cols-2 gap-6">
+        <div className="grid md:grid-cols-2 gap-4">
           <Card>
-            <CardHeader>
-              <CardTitle>Mode de retrait</CardTitle>
-              <CardDescription>Comment souhaitez-vous recevoir vos fonds?</CardDescription>
+            <CardHeader className="py-4">
+              <CardTitle className="text-lg">Mode de retrait</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-2 pb-4">
               {withdrawMethods.map((method) => (
                 <div
                   key={method.id}
-                  className={`p-4 rounded-lg border cursor-pointer transition-all ${
+                  className={`p-3 rounded-lg border cursor-pointer transition-all ${
                     selectedMethod === method.id 
                       ? 'border-primary bg-primary/5' 
                       : 'border-border hover-elevate'
@@ -222,20 +221,17 @@ export default function WithdrawPage() {
                   }}
                   data-testid={`withdraw-method-${method.id}`}
                 >
-                  <div className="flex items-center gap-4">
-                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
                       selectedMethod === method.id ? 'bg-primary/20' : 'bg-muted'
                     }`}>
-                      <method.icon className={`w-6 h-6 ${selectedMethod === method.id ? 'text-primary' : 'text-muted-foreground'}`} />
+                      <method.icon className={`w-5 h-5 ${selectedMethod === method.id ? 'text-primary' : 'text-muted-foreground'}`} />
                     </div>
                     <div className="flex-1">
-                      <p className="font-medium text-foreground">{method.name}</p>
-                      <p className="text-sm text-muted-foreground">{method.description}</p>
-                      {method.id === "bank_transfer" && (
-                        <p className="text-xs text-primary mt-1">Bientôt disponible</p>
-                      )}
+                      <p className="text-sm font-medium text-foreground">{method.name}</p>
+                      <p className="text-xs text-muted-foreground">{method.description}</p>
                     </div>
-                    {selectedMethod === method.id && <CheckCircle className="w-5 h-5 text-primary" />}
+                    {selectedMethod === method.id && <CheckCircle className="w-4 h-4 text-primary" />}
                   </div>
                 </div>
               ))}
@@ -243,11 +239,10 @@ export default function WithdrawPage() {
           </Card>
 
           <Card>
-            <CardHeader>
-              <CardTitle>Détails du retrait</CardTitle>
-              <CardDescription>Entrez les informations de votre compte</CardDescription>
+            <CardHeader className="py-4">
+              <CardTitle className="text-lg">Détails du retrait</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pb-4">
               <Form {...form}>
                 <form onSubmit={form.handleSubmit((d) => withdrawMutation.mutate(d))} className="space-y-4">
                   <FormField
@@ -260,7 +255,7 @@ export default function WithdrawPage() {
                           <Input 
                             type="number" 
                             placeholder={minWithdrawal.toString()} 
-                            className="text-xl h-12"
+                            className="text-lg h-10"
                             {...field} 
                             data-testid="input-withdraw-amount"
                           />
@@ -269,13 +264,13 @@ export default function WithdrawPage() {
                         {amountValue > 0 && amountValue < minWithdrawal && (
                           <p className="text-sm text-destructive flex items-center gap-1">
                             <AlertCircle className="w-3 h-3" />
-                            Montant minimum de retrait : {minWithdrawal.toLocaleString()} XAF
+                            Minimum : {minWithdrawal.toLocaleString()} XAF
                           </p>
                         )}
                         {amountValue > 0 && totalAmount > balance && (
                           <p className="text-sm text-destructive flex items-center gap-1">
                             <AlertCircle className="w-3 h-3" />
-                            Solde insuffisant pour couvrir le retrait et les frais ({totalAmount.toLocaleString()} XAF requis)
+                            Solde insuffisant ({totalAmount.toLocaleString()} XAF requis)
                           </p>
                         )}
                       </FormItem>
@@ -286,17 +281,17 @@ export default function WithdrawPage() {
                     <>
                       <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-2">
-                          <FormLabel className="flex items-center gap-1">
+                          <FormLabel className="text-xs flex items-center gap-1">
                             <Globe className="w-3 h-3" />
                             Pays
                           </FormLabel>
                           <Select value={selectedCountry} onValueChange={setSelectedCountry}>
-                            <SelectTrigger data-testid="select-country">
-                              <SelectValue placeholder="Sélectionner" />
+                            <SelectTrigger className="h-9 text-xs" data-testid="select-country">
+                              <SelectValue placeholder="Pays" />
                             </SelectTrigger>
                             <SelectContent>
                               {countriesConfig.map((country) => (
-                                <SelectItem key={country.id} value={country.id}>
+                                <SelectItem key={country.id} value={country.id} className="text-xs">
                                   {country.name}
                                 </SelectItem>
                               ))}
@@ -304,7 +299,7 @@ export default function WithdrawPage() {
                           </Select>
                         </div>
                         <div className="space-y-2">
-                          <FormLabel className="flex items-center gap-1">
+                          <FormLabel className="text-xs flex items-center gap-1">
                             <Smartphone className="w-3 h-3" />
                             Opérateur
                           </FormLabel>
@@ -313,18 +308,13 @@ export default function WithdrawPage() {
                             onValueChange={setSelectedOperator}
                             disabled={!selectedCountry}
                           >
-                            <SelectTrigger data-testid="select-operator">
-                              <SelectValue placeholder={selectedCountry ? "Sélectionner" : "Choisir un pays"} />
+                            <SelectTrigger className="h-9 text-xs" data-testid="select-operator">
+                              <SelectValue placeholder={selectedCountry ? "Opérateur" : "Pays..."} />
                             </SelectTrigger>
                             <SelectContent>
                               {operators.map((op) => (
-                                <SelectItem key={op.id} value={op.id}>
+                                <SelectItem key={op.id} value={op.id} className="text-xs">
                                   {op.name}
-                                  {op.feePercentage > 0 && (
-                                    <span className="text-xs text-muted-foreground ml-1">
-                                      ({op.feePercentage}%)
-                                    </span>
-                                  )}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -334,21 +324,19 @@ export default function WithdrawPage() {
 
                       {amountValue > 0 && selectedOperatorData && (
                         <Card className="border-primary/30 bg-primary/5">
-                          <CardContent className="p-4 space-y-3">
-                            <div className="flex justify-between items-center text-sm">
-                              <span className="text-muted-foreground">Montant à recevoir</span>
+                          <CardContent className="p-3 space-y-2">
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-muted-foreground">À recevoir</span>
                               <span className="font-medium">{formatCurrency(amountValue, "XAF")}</span>
                             </div>
-                            <div className="flex justify-between items-center text-sm">
-                              <span className="text-muted-foreground">
-                                Frais ({feePercent}%{feeFixed > 0 ? ` + ${formatCurrency(feeFixed, "XAF")}` : ''})
-                              </span>
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-muted-foreground">Frais</span>
                               <span className="font-medium text-red-500">+ {formatCurrency(feeAmount, "XAF")}</span>
                             </div>
-                            <div className="border-t border-border pt-3">
+                            <div className="border-t border-border pt-2">
                               <div className="flex justify-between items-center">
-                                <span className="font-semibold text-foreground">Total à débiter</span>
-                                <span className="font-bold text-lg text-primary">{formatCurrency(totalAmount, "XAF")}</span>
+                                <span className="font-semibold text-xs text-foreground">Total à débiter</span>
+                                <span className="font-bold text-base text-primary">{formatCurrency(totalAmount, "XAF")}</span>
                               </div>
                             </div>
                           </CardContent>
@@ -358,33 +346,24 @@ export default function WithdrawPage() {
                   )}
 
                   {selectedMethod === "mobile_money" && withdrawalNumbers.length > 0 && (
-                    <div className="space-y-2">
-                      <FormLabel>Numéro enregistré</FormLabel>
+                    <div className="space-y-1">
+                      <FormLabel className="text-xs">Numéro enregistré</FormLabel>
                       <Select value={selectedNumber} onValueChange={setSelectedNumber}>
-                        <SelectTrigger data-testid="select-withdrawal-number">
-                          <SelectValue placeholder="Choisir un numéro enregistré" />
+                        <SelectTrigger className="h-9 text-xs" data-testid="select-withdrawal-number">
+                          <SelectValue placeholder="Choisir un numéro" />
                         </SelectTrigger>
                         <SelectContent>
                           {withdrawalNumbers.map((number) => (
-                            <SelectItem key={number.id} value={number.id}>
-                              <div className="flex items-center gap-2">
-                                <Phone className="w-4 h-4" />
-                                <div className="flex flex-col">
-                                  <span>{number.phoneNumber}</span>
-                                  <span className="text-xs text-muted-foreground">
-                                    {number.operatorName}
-                                    {number.label && ` - ${number.label}`}
-                                  </span>
-                                </div>
-                              </div>
+                            <SelectItem key={number.id} value={number.id} className="text-xs">
+                              {number.phoneNumber} ({number.operatorName})
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
-                      <div className="flex items-center gap-2 mt-1">
+                      <div className="flex items-center gap-2">
                         <Link href="/dashboard/withdrawal-numbers">
-                          <Button variant="ghost" size="sm" className="p-0 h-auto text-xs" data-testid="link-manage-numbers">
-                            <Settings className="w-3 h-3 mr-1" />
+                          <Button variant="ghost" size="sm" className="p-0 h-auto text-[10px]" data-testid="link-manage-numbers">
+                            <Settings className="w-2.5 h-2.5 mr-1" />
                             Gérer mes numéros
                           </Button>
                         </Link>
@@ -394,19 +373,16 @@ export default function WithdrawPage() {
 
                   {selectedMethod === "mobile_money" && withdrawalNumbers.length === 0 && (
                     <Card className="border-blue-500/30 bg-blue-500/5">
-                      <CardContent className="p-4">
-                        <div className="flex items-start gap-3">
-                          <Phone className="w-5 h-5 text-blue-500 mt-0.5" />
+                      <CardContent className="p-3">
+                        <div className="flex items-start gap-2">
+                          <Phone className="w-4 h-4 text-blue-500 mt-0.5" />
                           <div className="flex-1">
-                            <p className="text-sm font-medium text-foreground mb-1">
-                              Aucun numéro de retrait enregistré
-                            </p>
-                            <p className="text-xs text-muted-foreground mb-3">
-                              Enregistrez vos numéros de téléphone pour les retraits rapides
+                            <p className="text-xs font-medium text-foreground">
+                              Aucun numéro enregistré
                             </p>
                             <Link href="/dashboard/withdrawal-numbers">
-                              <Button size="sm" variant="outline" data-testid="button-add-withdrawal-number">
-                                <Plus className="w-4 h-4 mr-2" />
+                              <Button size="sm" variant="link" className="p-0 h-auto text-[10px]" data-testid="button-add-withdrawal-number">
+                                <Plus className="w-3 h-3 mr-1" />
                                 Ajouter un numéro
                               </Button>
                             </Link>
@@ -422,12 +398,13 @@ export default function WithdrawPage() {
                       name="accountDetails"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>
+                          <FormLabel className="text-xs">
                             {selectedMethod === "mobile_money" ? "Numéro de téléphone" : "Numéro de compte bancaire"}
                           </FormLabel>
                           <FormControl>
                             <Input 
-                              placeholder={selectedMethod === "mobile_money" ? "+237 6XX XXX XXX" : "IBAN ou numéro de compte"}
+                              placeholder={selectedMethod === "mobile_money" ? "+237 6XX XXX XXX" : "IBAN..."}
+                              className="h-9 text-xs"
                               {...field}
                               data-testid="input-account-details"
                             />
@@ -448,19 +425,19 @@ export default function WithdrawPage() {
                     {withdrawMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Wallet className="w-4 h-4 mr-2" />}
                     Demander le retrait
                   </Button>
+
+                  <div className="flex justify-center pt-2">
+                    <Link href="/dashboard/fee-details">
+                      <Button variant="link" size="sm" className="text-muted-foreground text-xs h-auto p-0 gap-1">
+                        <Info className="w-3 h-3" />
+                        Détails des frais
+                      </Button>
+                    </Link>
+                  </div>
                 </form>
               </Form>
             </CardContent>
           </Card>
-        </div>
-        
-        <div className="flex justify-end mt-8">
-          <Link href="/dashboard/fee-details">
-            <Button variant="outline" size="sm" className="gap-2">
-              <Info className="w-4 h-4" />
-              Détails des frais
-            </Button>
-          </Link>
         </div>
       </div>
     </DashboardLayout>
