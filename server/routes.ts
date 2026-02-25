@@ -872,19 +872,28 @@ export async function registerRoutes(
       console.log(`[Transfer] Payout Data: Country=${transferCountryCode}, Amount=${parsedAmount}, Method=${req.body.paymentMethod}, Operator=${operator.name}`);
 
       try {
-        // Map common operator names to AccountPE specific method names
-        const operatorName = (operator.name || "").toLowerCase();
+        // Map common operator names to AccountPE specific method names for all 22+ countries
+        const operatorName = (operator.name || "").toUpperCase();
+        const countryCode = transferCountryCode.toUpperCase();
         let finalPaymentMethod = "mobile_money";
         
-        if (operatorName.includes("mtn")) finalPaymentMethod = "MTN";
-        else if (operatorName.includes("orange")) finalPaymentMethod = "Orange";
-        else if (operatorName.includes("moov") || operatorName.includes("flooz")) finalPaymentMethod = "Moov";
-        else if (operatorName.includes("wave")) finalPaymentMethod = "Wave";
-        else if (operatorName.includes("tmoney")) finalPaymentMethod = "Tmoney";
-        else if (operatorName.includes("free")) finalPaymentMethod = "Free";
-        else if (operatorName.includes("airtel")) finalPaymentMethod = "Airtel";
-        else if (operatorName.includes("opay")) finalPaymentMethod = "OPay";
-        else if (operatorName.includes("palmpay")) finalPaymentMethod = "PalmPay";
+        // Comprehensive mapping based on AccountPE supported methods
+        if (operatorName.includes("MTN")) finalPaymentMethod = "MTN";
+        else if (operatorName.includes("ORANGE")) finalPaymentMethod = "Orange";
+        else if (operatorName.includes("MOOV") || operatorName.includes("FLOOZ")) finalPaymentMethod = "Moov";
+        else if (operatorName.includes("WAVE")) finalPaymentMethod = "Wave";
+        else if (operatorName.includes("TMONEY")) finalPaymentMethod = "Tmoney";
+        else if (operatorName.includes("FREE")) finalPaymentMethod = "Free";
+        else if (operatorName.includes("AIRTEL")) finalPaymentMethod = "Airtel";
+        else if (operatorName.includes("MPESA") || operatorName.includes("M-PESA")) finalPaymentMethod = "MPESA";
+        else if (operatorName.includes("VODAFONE") || operatorName.includes("TELECEL")) finalPaymentMethod = (countryCode === "GH") ? "Vodafone" : "Telecel";
+        else if (operatorName.includes("OPAY")) finalPaymentMethod = "OPay";
+        else if (operatorName.includes("PALMPAY")) finalPaymentMethod = "PalmPay";
+        else if (operatorName.includes("PAGA")) finalPaymentMethod = "Paga";
+        else if (operatorName.includes("TIGO")) finalPaymentMethod = "TIGO PESA";
+        else if (operatorName.includes("HALO")) finalPaymentMethod = "HALO PESA";
+        else if (operatorName.includes("EZY")) finalPaymentMethod = "EZY PESA";
+        else if (operatorName.includes("TTCL")) finalPaymentMethod = "TTCL";
         
         const payoutResult = await createSwychrPayout({
           country_code:     transferCountryCode,
@@ -1324,16 +1333,19 @@ export async function registerRoutes(
       // Call AccountPE payout API immediately
       try {
         const operator = await storage.getOperator(data.operatorId);
-        const operatorName = (operator?.name || "").toLowerCase();
+        const operatorName = (operator?.name || "").toUpperCase();
+        const countryCode = withdrawalCountryCode.toUpperCase();
         let finalPaymentMethod = "mobile_money";
         
-        if (operatorName.includes("mtn")) finalPaymentMethod = "MTN";
-        else if (operatorName.includes("orange")) finalPaymentMethod = "Orange";
-        else if (operatorName.includes("moov") || operatorName.includes("flooz")) finalPaymentMethod = "Moov";
-        else if (operatorName.includes("wave")) finalPaymentMethod = "Wave";
-        else if (operatorName.includes("tmoney")) finalPaymentMethod = "Tmoney";
-        else if (operatorName.includes("free")) finalPaymentMethod = "Free";
-        else if (operatorName.includes("airtel")) finalPaymentMethod = "Airtel";
+        if (operatorName.includes("MTN")) finalPaymentMethod = "MTN";
+        else if (operatorName.includes("ORANGE")) finalPaymentMethod = "Orange";
+        else if (operatorName.includes("MOOV") || operatorName.includes("FLOOZ")) finalPaymentMethod = "Moov";
+        else if (operatorName.includes("WAVE")) finalPaymentMethod = "Wave";
+        else if (operatorName.includes("TMONEY")) finalPaymentMethod = "Tmoney";
+        else if (operatorName.includes("FREE")) finalPaymentMethod = "Free";
+        else if (operatorName.includes("AIRTEL")) finalPaymentMethod = "Airtel";
+        else if (operatorName.includes("MPESA") || operatorName.includes("M-PESA")) finalPaymentMethod = "MPESA";
+        else if (operatorName.includes("VODAFONE") || operatorName.includes("TELECEL")) finalPaymentMethod = (countryCode === "GH") ? "Vodafone" : "Telecel";
         
         const payoutResult = await createSwychrPayout({
           country_code:     withdrawalCountryCode,
@@ -3147,16 +3159,19 @@ export async function registerRoutes(
 
           const operatorId = transaction.operatorId;
           const operator = operatorId ? await storage.getOperator(operatorId) : null;
-          const operatorName = (operator?.name || "").toLowerCase();
+          const operatorName = (operator?.name || "").toUpperCase();
+          const countryCodeStr = countryCode.toUpperCase();
           let finalPaymentMethod = "mobile_money";
           
-          if (operatorName.includes("mtn")) finalPaymentMethod = "MTN";
-          else if (operatorName.includes("orange")) finalPaymentMethod = "Orange";
-          else if (operatorName.includes("moov") || operatorName.includes("flooz")) finalPaymentMethod = "Moov";
-          else if (operatorName.includes("wave")) finalPaymentMethod = "Wave";
-          else if (operatorName.includes("tmoney")) finalPaymentMethod = "Tmoney";
-          else if (operatorName.includes("free")) finalPaymentMethod = "Free";
-          else if (operatorName.includes("airtel")) finalPaymentMethod = "Airtel";
+          if (operatorName.includes("MTN")) finalPaymentMethod = "MTN";
+          else if (operatorName.includes("ORANGE")) finalPaymentMethod = "Orange";
+          else if (operatorName.includes("MOOV") || operatorName.includes("FLOOZ")) finalPaymentMethod = "Moov";
+          else if (operatorName.includes("WAVE")) finalPaymentMethod = "Wave";
+          else if (operatorName.includes("TMONEY")) finalPaymentMethod = "Tmoney";
+          else if (operatorName.includes("FREE")) finalPaymentMethod = "Free";
+          else if (operatorName.includes("AIRTEL")) finalPaymentMethod = "Airtel";
+          else if (operatorName.includes("MPESA") || operatorName.includes("M-PESA")) finalPaymentMethod = "MPESA";
+          else if (operatorName.includes("VODAFONE") || operatorName.includes("TELECEL")) finalPaymentMethod = (countryCodeStr === "GH") ? "Vodafone" : "Telecel";
 
           const payoutResult = await createSwychrPayout({
             country_code:     countryCode,
