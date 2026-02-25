@@ -926,7 +926,7 @@ export async function registerRoutes(
               userId: senderId,
               type: "transfer_pending",
               title: "Transfert approuvé",
-              message: `Votre transfert de ${parsedAmount.toLocaleString()} XAF vers ${recipientName} a été validé.`,
+              message: `Votre transfert de ${parsedAmount.toLocaleString()} ${currency} vers ${recipientName} a été validé.`,
               transactionId: transaction.id,
               isRead: false,
             });
@@ -1378,7 +1378,7 @@ export async function registerRoutes(
               userId,
               type: "withdrawal_pending",
               title: "Retrait approuvé",
-              message: `Votre retrait de ${amount.toLocaleString()} XAF a été validé.`,
+              message: `Votre retrait de ${amount.toLocaleString()} ${currency} a été validé.`,
               transactionId: transaction.id,
               isRead: false,
             });
@@ -3201,7 +3201,7 @@ export async function registerRoutes(
               userId:        transaction.userId,
               type:          "withdrawal_confirmed",
               title:         transaction.type === "withdrawal" ? "Retrait approuvé" : "Transfert approuvé",
-              message:       `Votre ${transaction.type === "withdrawal" ? "retrait" : "transfert"} de ${transaction.amount} XAF a été validé.`,
+              message:       `Votre ${transaction.type === "withdrawal" ? "retrait" : "transfert"} de ${transaction.amount} ${transaction.currency} a été validé.`,
               transactionId: transaction.id,
               isRead:        false,
             });
