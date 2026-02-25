@@ -81,7 +81,6 @@ export interface IStorage {
   getTransactionByReference(reference: string): Promise<Transaction | undefined>;
   createTransaction(transaction: InsertTransaction): Promise<Transaction>;
   updateTransactionStatus(id: string, status: string): Promise<Transaction | undefined>;
-  updateTransactionMetadata(id: string, metadata: any): Promise<Transaction | undefined>;
   updateTransactionExternalReference(id: string, externalReference: string): Promise<Transaction | undefined>;
   
   // Payment link operations
@@ -418,17 +417,6 @@ export class DatabaseStorage implements IStorage {
       .where(eq(transactions.id, id))
       .returning();
     return transaction || undefined;
-  }
-
-  async updateTransactionMetadata(id: string, metadata: any): Promise<Transaction | undefined> {
-    const [transaction] = await db.select().from(transactions).where(eq(transactions.id, id));
-    if (!transaction) return undefined;
-    
-    // We'll use the existing description or a hidden field if available, 
-    // but since we want to be clean, let's check schema.
-    // For now, let's assume we can store it in metadata if we add it to schema or just use separate table.
-    // Given Fast Mode, I will just ensure the stats calculation is correct.
-    return transaction;
   }
 
   async updateTransactionExternalReference(id: string, externalReference: string): Promise<Transaction | undefined> {
@@ -847,14 +835,8 @@ export class DatabaseStorage implements IStorage {
     const withdrawalFees = withdrawals.reduce((sum, t) => sum + parseFloat(t.feeAmount || "0"), 0);
     const transferFees = transfers.reduce((sum, t) => sum + parseFloat(t.feeAmount || "0"), 0);
     
-    // For payment links, we use the 2% margin rule (or the specifically calculated ashtechFeeAmount if stored)
-    const paymentLinkFees = links.reduce((sum, t) => {
-      // If we have ashtechFeeAmount stored in some metadata or if it's the whole fee_amount
-      // Based on server/routes.ts implementation, fee_amount stored is the TOTAL fee.
-      // Ashtech's share is typically 2% of the gross amount.
-      const totalAmount = parseFloat(t.totalAmount || t.amount);
-      return sum + (totalAmount * 0.02);
-    }, 0);
+    // For payment links: feeAmount already stores ashtechFeeAmount (2% of gross, set in routes.ts)
+    const paymentLinkFees = links.reduce((sum, t) => sum + parseFloat(t.feeAmount || "0"), 0);
 
     const totalRevenue = depositFees + withdrawalFees + transferFees + paymentLinkFees;
     
