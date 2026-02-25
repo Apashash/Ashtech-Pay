@@ -872,13 +872,27 @@ export async function registerRoutes(
       console.log(`[Transfer] Payout Data: Country=${transferCountryCode}, Amount=${parsedAmount}, Method=${req.body.paymentMethod}, Operator=${operator.name}`);
 
       try {
+        // Map common operator names to AccountPE specific method names
+        const operatorName = (operator.name || "").toLowerCase();
+        let finalPaymentMethod = "mobile_money";
+        
+        if (operatorName.includes("mtn")) finalPaymentMethod = "MTN";
+        else if (operatorName.includes("orange")) finalPaymentMethod = "Orange";
+        else if (operatorName.includes("moov") || operatorName.includes("flooz")) finalPaymentMethod = "Moov";
+        else if (operatorName.includes("wave")) finalPaymentMethod = "Wave";
+        else if (operatorName.includes("tmoney")) finalPaymentMethod = "Tmoney";
+        else if (operatorName.includes("free")) finalPaymentMethod = "Free";
+        else if (operatorName.includes("airtel")) finalPaymentMethod = "Airtel";
+        else if (operatorName.includes("opay")) finalPaymentMethod = "OPay";
+        else if (operatorName.includes("palmpay")) finalPaymentMethod = "PalmPay";
+        
         const payoutResult = await createSwychrPayout({
           country_code:     transferCountryCode,
           beneficiary_name: recipientName,
           mobile_no:        formatInternationalPhone(recipientPhone, transferCountryCode),
           amount:           parsedAmount,
           transaction_id:   reference,
-          payment_method:   req.body.paymentMethod || "mobile_money",
+          payment_method:   finalPaymentMethod as any,
           remarks:          `Ashtech Pay - ${reference}`,
         });
 
@@ -1309,13 +1323,25 @@ export async function registerRoutes(
 
       // Call AccountPE payout API immediately
       try {
+        const operator = await storage.getOperator(data.operatorId);
+        const operatorName = (operator?.name || "").toLowerCase();
+        let finalPaymentMethod = "mobile_money";
+        
+        if (operatorName.includes("mtn")) finalPaymentMethod = "MTN";
+        else if (operatorName.includes("orange")) finalPaymentMethod = "Orange";
+        else if (operatorName.includes("moov") || operatorName.includes("flooz")) finalPaymentMethod = "Moov";
+        else if (operatorName.includes("wave")) finalPaymentMethod = "Wave";
+        else if (operatorName.includes("tmoney")) finalPaymentMethod = "Tmoney";
+        else if (operatorName.includes("free")) finalPaymentMethod = "Free";
+        else if (operatorName.includes("airtel")) finalPaymentMethod = "Airtel";
+        
         const payoutResult = await createSwychrPayout({
           country_code:     withdrawalCountryCode,
           beneficiary_name: user.fullName || user.username || "Client",
           mobile_no:        formatInternationalPhone(data.accountDetails, withdrawalCountryCode),
           amount:           amount,
           transaction_id:   withdrawalRef,
-          payment_method:   data.paymentMethod || "mobile_money",
+          payment_method:   finalPaymentMethod as any,
           remarks:          `Ashtech Pay - ${withdrawalRef}`,
         });
 
@@ -3119,6 +3145,19 @@ export async function registerRoutes(
           const txAmount = parseFloat(transaction.amount);
           const payoutRef = transaction.reference || generateTransactionReference("payout");
 
+          const operatorId = transaction.operatorId;
+          const operator = operatorId ? await storage.getOperator(operatorId) : null;
+          const operatorName = (operator?.name || "").toLowerCase();
+          let finalPaymentMethod = "mobile_money";
+          
+          if (operatorName.includes("mtn")) finalPaymentMethod = "MTN";
+          else if (operatorName.includes("orange")) finalPaymentMethod = "Orange";
+          else if (operatorName.includes("moov") || operatorName.includes("flooz")) finalPaymentMethod = "Moov";
+          else if (operatorName.includes("wave")) finalPaymentMethod = "Wave";
+          else if (operatorName.includes("tmoney")) finalPaymentMethod = "Tmoney";
+          else if (operatorName.includes("free")) finalPaymentMethod = "Free";
+          else if (operatorName.includes("airtel")) finalPaymentMethod = "Airtel";
+
           const payoutResult = await createSwychrPayout({
             country_code:     countryCode,
             beneficiary_name: transaction.recipientName || transaction.userId,
@@ -3128,7 +3167,7 @@ export async function registerRoutes(
             ),
             amount:           txAmount,
             transaction_id:   payoutRef,
-            payment_method:   transaction.paymentMethod || "mobile_money",
+            payment_method:   finalPaymentMethod as any,
             remarks:          `Ashtech Pay - ${payoutRef}`,
           });
 
