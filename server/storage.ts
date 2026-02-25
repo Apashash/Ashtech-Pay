@@ -827,29 +827,56 @@ export class DatabaseStorage implements IStorage {
     const [pendingCount] = await db.select({ count: count() }).from(transactions).where(eq(transactions.status, "pending"));
     const [bannedCount] = await db.select({ count: count() }).from(users).where(eq(users.isBanned, true));
     
-    const [depositsSum] = await db.select({ sum: sql<string>`sum(amount)` }).from(transactions).where(and(eq(transactions.type, "deposit"), eq(transactions.status, "completed")));
-    const [withdrawalsSum] = await db.select({ sum: sql<string>`sum(amount)` }).from(transactions).where(and(eq(transactions.type, "withdrawal"), eq(transactions.status, "completed")));
-    const [revenueSum] = await db.select({ sum: sql<string>`sum(fee_amount)` }).from(transactions).where(eq(transactions.status, "completed"));
+    // Get all completed transactions to calculate margins correctly
+    const completedTx = await db.select().from(transactions).where(eq(transactions.status, "completed"));
+    
+    const deposits = completedTx.filter(t => t.type === "deposit");
+    const withdrawals = completedTx.filter(t => t.type === "withdrawal");
+    const transfers = completedTx.filter(t => t.type === "transfer_out");
+    const links = completedTx.filter(t => t.type === "payment_link");
+    
+    const depositVol = deposits.reduce((sum, t) => sum + parseFloat(t.amount), 0);
+    const withdrawalVol = withdrawals.reduce((sum, t) => sum + parseFloat(t.amount), 0);
+    const transferVol = transfers.reduce((sum, t) => sum + parseFloat(t.amount), 0);
+    const linkVol = links.reduce((sum, t) => sum + parseFloat(t.amount), 0);
+    
+    // For deposits, the margin is the fee amount charged to the user
+    const depositFees = deposits.reduce((sum, t) => sum + parseFloat(t.feeAmount || "0"), 0);
+    
+    // For withdrawals and transfers, the user pays the fee, which is Ashtech's revenue
+    const withdrawalFees = withdrawals.reduce((sum, t) => sum + parseFloat(t.feeAmount || "0"), 0);
+    const transferFees = transfers.reduce((sum, t) => sum + parseFloat(t.feeAmount || "0"), 0);
+    
+    // For payment links, we use the 2% margin rule (or the specifically calculated ashtechFeeAmount if stored)
+    const paymentLinkFees = links.reduce((sum, t) => {
+      // If we have ashtechFeeAmount stored in some metadata or if it's the whole fee_amount
+      // Based on server/routes.ts implementation, fee_amount stored is the TOTAL fee.
+      // Ashtech's share is typically 2% of the gross amount.
+      const totalAmount = parseFloat(t.totalAmount || t.amount);
+      return sum + (totalAmount * 0.02);
+    }, 0);
+
+    const totalRevenue = depositFees + withdrawalFees + transferFees + paymentLinkFees;
     
     return {
       totalUsers: usersCount.count,
       totalTransactions: transactionsCount.count,
-      totalVolume: volumeSum.sum || "0",
-      monthlyTransactions: 0, // Simplified
+      totalVolume: (depositVol + withdrawalVol + transferVol + linkVol).toFixed(2),
+      monthlyTransactions: 0, 
       rejectedTransactions: rejectedCount.count,
       pendingTransactions: pendingCount.count,
       bannedUsers: bannedCount.count,
-      totalDeposits: depositsSum.sum || "0",
-      totalWithdrawals: withdrawalsSum.sum || "0",
-      totalRevenue: revenueSum.sum || "0",
-      depositFees: "0",
-      withdrawalFees: "0",
-      transferFees: "0",
-      paymentLinkFees: "0",
-      depositCount: 0,
-      withdrawalCount: 0,
-      transferCount: 0,
-      paymentLinkCount: 0,
+      totalDeposits: depositVol.toFixed(2),
+      totalWithdrawals: withdrawalVol.toFixed(2),
+      totalRevenue: totalRevenue.toFixed(2),
+      depositFees: depositFees.toFixed(2),
+      withdrawalFees: withdrawalFees.toFixed(2),
+      transferFees: transferFees.toFixed(2),
+      paymentLinkFees: paymentLinkFees.toFixed(2),
+      depositCount: deposits.length,
+      withdrawalCount: withdrawals.length,
+      transferCount: transfers.length,
+      paymentLinkCount: links.length,
       pendingDeposits: 0,
       pendingWithdrawals: 0,
       pendingTransfers: 0,
