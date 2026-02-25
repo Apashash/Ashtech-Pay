@@ -173,6 +173,16 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     },
   });
 
+  const deleteAllNotificationsMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("DELETE", "/api/notifications");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      toast({ title: "Notifications supprimées", description: "Toutes vos notifications ont été effacées." });
+    },
+  });
+
   const [showPusdConvert, setShowPusdConvert] = useState(false);
   const [pusdAmount, setPusdAmount] = useState("");
   const [pusdCountry, setPusdCountry] = useState("CM");
@@ -414,6 +424,18 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                       >
                         <CheckCheck className="w-3 h-3 mr-1" />
                         Tout lire
+                      </Button>
+                    )}
+                    {(notificationData?.notifications && notificationData.notifications.length > 0) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => deleteAllNotificationsMutation.mutate()}
+                        className="text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                        data-testid="button-delete-all-notifications"
+                      >
+                        <X className="w-3 h-3 mr-1" />
+                        Tout supprimer
                       </Button>
                     )}
                   </div>
