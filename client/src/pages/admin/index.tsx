@@ -17,7 +17,8 @@ import {
   DollarSign,
   Filter,
   Send,
-  Link2
+  Link2,
+  RefreshCw
 } from "lucide-react";
 import { formatCurrency } from "@/lib/currency";
 
@@ -49,6 +50,7 @@ interface AdminStats {
   withdrawalFees: string;
   transferFees: string;
   paymentLinkFees: string;
+  conversionFees: string;
   depositCount: number;
   withdrawalCount: number;
   transferCount: number;
@@ -217,7 +219,7 @@ export default function AdminDashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
               <div className="p-4 rounded-lg bg-background border border-border">
                 <div className="flex items-center gap-2 mb-2">
                   <ArrowDownCircle className="w-4 h-4 text-green-500" />
@@ -267,6 +269,19 @@ export default function AdminDashboard() {
                 ) : (
                   <p className="text-lg font-bold text-purple-500">
                     {formatCurrency(parseFloat(stats?.paymentLinkFees || "0"), "XAF")}
+                  </p>
+                )}
+              </div>
+              <div className="p-4 rounded-lg bg-background border border-border">
+                <div className="flex items-center gap-2 mb-2">
+                  <RefreshCw className="w-4 h-4 text-teal-500" />
+                  <span className="text-sm text-muted-foreground">Frais Conversion</span>
+                </div>
+                {isLoading ? (
+                  <Skeleton className="h-6 w-20" />
+                ) : (
+                  <p className="text-lg font-bold text-teal-500">
+                    {formatCurrency(parseFloat(stats?.conversionFees || "0"), "XAF")}
                   </p>
                 )}
               </div>

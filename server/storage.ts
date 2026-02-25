@@ -822,23 +822,27 @@ export class DatabaseStorage implements IStorage {
     const withdrawals = completedTx.filter(t => t.type === "withdrawal");
     const transfers = completedTx.filter(t => t.type === "transfer_out");
     const links = completedTx.filter(t => t.type === "payment_link");
+    const conversions = completedTx.filter(t => t.type === "conversion");
     
     const depositVol = deposits.reduce((sum, t) => sum + parseFloat(t.amount), 0);
     const withdrawalVol = withdrawals.reduce((sum, t) => sum + parseFloat(t.amount), 0);
     const transferVol = transfers.reduce((sum, t) => sum + parseFloat(t.amount), 0);
     const linkVol = links.reduce((sum, t) => sum + parseFloat(t.amount), 0);
     
-    // For deposits, the margin is the fee amount charged to the user
+    // For deposits: feeAmount = Ashtech margin (ashtechFeeAmount, ~2% of gross)
     const depositFees = deposits.reduce((sum, t) => sum + parseFloat(t.feeAmount || "0"), 0);
     
-    // For withdrawals and transfers, the user pays the fee, which is Ashtech's revenue
+    // For withdrawals/transfers: feeAmount = max(percentage%, minPayoutCharge) = Ashtech revenue
     const withdrawalFees = withdrawals.reduce((sum, t) => sum + parseFloat(t.feeAmount || "0"), 0);
     const transferFees = transfers.reduce((sum, t) => sum + parseFloat(t.feeAmount || "0"), 0);
     
-    // For payment links: feeAmount already stores ashtechFeeAmount (2% of gross, set in routes.ts)
+    // For payment links: feeAmount = Ashtech margin (ashtechFeeAmount, ~2% of gross)
     const paymentLinkFees = links.reduce((sum, t) => sum + parseFloat(t.feeAmount || "0"), 0);
+    
+    // For conversions: feeAmount = conversion fee (default 6% of amount)
+    const conversionFees = conversions.reduce((sum, t) => sum + parseFloat(t.feeAmount || "0"), 0);
 
-    const totalRevenue = depositFees + withdrawalFees + transferFees + paymentLinkFees;
+    const totalRevenue = depositFees + withdrawalFees + transferFees + paymentLinkFees + conversionFees;
     
     return {
       totalUsers: usersCount.count,
@@ -855,6 +859,7 @@ export class DatabaseStorage implements IStorage {
       withdrawalFees: withdrawalFees.toFixed(2),
       transferFees: transferFees.toFixed(2),
       paymentLinkFees: paymentLinkFees.toFixed(2),
+      conversionFees: conversionFees.toFixed(2),
       depositCount: deposits.length,
       withdrawalCount: withdrawals.length,
       transferCount: transfers.length,
