@@ -842,6 +842,7 @@ export async function registerRoutes(
       }
       
       // Debit user balance immediately
+      console.log(`[Transfer] Sender=${senderId}, Amount=${parsedAmount}, Fee=${feeAmount}, Total=${totalAmount}`);
       await storage.updateUserBalance(senderId, -totalAmount);
       
       // Create pending transaction
