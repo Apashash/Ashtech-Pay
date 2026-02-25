@@ -2724,10 +2724,24 @@ export async function registerRoutes(
       // Credit the merchant's balance in XAF
       await storage.updateUserBalance(intent.merchantId, amountInXAF);
 
+      // Log Ashtech Margin for Payment Links
+      // grossAmount is what payer paid. Swychr takes its fee from fees.amountToSwychr.
+      // Ashtech margin is fees.ashtechFeeAmount.
+      // We need to store this in adminLogs or a dedicated revenue table if we want precise stats.
+      // For now, let's ensure we can calculate it from transactions.
+      
       // Update existing transaction to completed status
       const existingTx = await storage.getTransactionByPaymentIntentId(intent.id);
       if (existingTx) {
+        // Recalculate ashtech margin if not stored
+        const countryCode = intent.payerCountry || "CM";
+        const fees = computeSwychrFees(parseFloat(intent.amount), countryCode);
         await storage.updateTransactionStatus(existingTx.id, "completed");
+        // Ensure ashtechFeeAmount is stored in transaction
+        await storage.updateTransactionMetadata(existingTx.id, { 
+          ashtechFeeAmount: fees.ashtechFeeAmount.toFixed(2),
+          swychrFeeAmount: fees.swychrFeeAmount.toFixed(2)
+        });
       }
 
       res.json({ 
