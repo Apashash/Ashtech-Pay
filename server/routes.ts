@@ -876,7 +876,7 @@ export async function registerRoutes(
           mobile_no:        formatInternationalPhone(recipientPhone, transferCountryCode),
           amount:           parsedAmount,
           transaction_id:   reference,
-          payment_method:   operator.type === "bank_transfer" ? "bank_transfer" : "mobile_money",
+          payment_method:   req.body.paymentMethod === "bank_transfer" ? "bank_transfer" : "mobile_money",
           remarks:          `Ashtech Pay - ${reference}`,
         });
 
