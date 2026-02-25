@@ -4065,6 +4065,16 @@ export async function registerRoutes(
   });
 
   // Delete notification (handles global messages too)
+  app.delete("/api/notifications", requireAuth, async (req, res) => {
+    try {
+      await storage.deleteAllUserNotifications(req.userId!);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete all notifications error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   app.delete("/api/notifications/:id", requireAuth, async (req, res) => {
     try {
       const notificationId = req.params.id;

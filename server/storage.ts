@@ -218,6 +218,7 @@ export interface IStorage {
   markNotificationAsRead(id: string, userId: string): Promise<void>;
   markAllNotificationsAsRead(userId: string): Promise<void>;
   deleteUserNotification(id: string, userId: string): Promise<void>;
+  deleteAllUserNotifications(userId: string): Promise<void>;
   
   // Global messages
   getActiveGlobalMessages(): Promise<GlobalMessage[]>;
@@ -957,6 +958,10 @@ export class DatabaseStorage implements IStorage {
 
   async deleteUserNotification(id: string, userId: string): Promise<void> {
     await db.delete(userNotifications).where(and(eq(userNotifications.id, id), eq(userNotifications.userId, userId)));
+  }
+
+  async deleteAllUserNotifications(userId: string): Promise<void> {
+    await db.delete(userNotifications).where(eq(userNotifications.userId, userId));
   }
   
   // Global messages
