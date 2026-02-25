@@ -431,11 +431,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                         variant="ghost"
                         size="sm"
                         onClick={() => deleteAllNotificationsMutation.mutate()}
-                        className="text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                        className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        title="Tout supprimer"
                         data-testid="button-delete-all-notifications"
                       >
-                        <X className="w-3 h-3 mr-1" />
-                        Tout supprimer
+                        <X className="w-4 h-4" />
                       </Button>
                     )}
                   </div>
