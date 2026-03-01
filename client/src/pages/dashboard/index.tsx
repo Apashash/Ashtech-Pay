@@ -540,9 +540,17 @@ export default function DashboardHome() {
   const { data: wallets = [] } = useQuery<WalletEntry[]>({ queryKey: ["/api/wallets"] });
 
   const localCurrency = user?.preferredCurrency || "XAF";
-  const localBalance = localCurrency === "XAF"
-    ? (user?.balance || "0.00")
-    : (wallets.find(w => w.currency === localCurrency)?.balance || "0.00");
+
+  const totalBalanceInLocalCurrency = useMemo(() => {
+    if (wallets.length === 0) return user?.balance || "0.00";
+    const localRate = rates[localCurrency] || 1;
+    let total = 0;
+    for (const wallet of wallets) {
+      const walletRate = rates[wallet.currency] || 1;
+      total += parseFloat(wallet.balance || "0") * (localRate / walletRate);
+    }
+    return total.toFixed(2);
+  }, [wallets, rates, localCurrency, user?.balance]);
 
   const recentTransactions = transactions.slice(0, 5);
   const isVerified = user?.isVerified ?? false;
@@ -590,9 +598,9 @@ export default function DashboardHome() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between gap-4">
               <div className="flex-1">
-                <p className="text-muted-foreground text-sm mb-1">Solde disponible ({localCurrency})</p>
+                <p className="text-muted-foreground text-sm mb-1">Solde total ({localCurrency})</p>
                 <p className="text-3xl font-bold text-foreground" data-testid="text-balance">
-                  {formatWalletBalance(localBalance, localCurrency)}
+                  {formatWalletBalance(totalBalanceInLocalCurrency, localCurrency)}
                 </p>
                 <p className="text-xs text-muted-foreground mt-2">Ashtech Pay</p>
               </div>

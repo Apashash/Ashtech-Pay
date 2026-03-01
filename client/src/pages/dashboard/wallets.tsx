@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Wallet, ArrowLeftRight, Info, Plus, Loader2, Clock, CheckCircle2 } from "lucide-react";
 import { CURRENCY_SYMBOLS, SUPPORTED_CURRENCIES, EXCHANGE_RATES, COUNTRY_CURRENCIES } from "@shared/schema";
-import type { User } from "@shared/schema";
+import type { User, Transaction } from "@shared/schema";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface WalletEntry {
@@ -51,12 +51,32 @@ export default function WalletsPage() {
   const [newWalletCurrency, setNewWalletCurrency] = useState("");
 
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
-  const { data: walletList = [], isLoading } = useQuery<WalletEntry[]>({
+  const { data: rawWalletList = [], isLoading } = useQuery<WalletEntry[]>({
     queryKey: ["/api/wallets"],
     refetchInterval: 30000,
   });
+  const { data: transactions = [] } = useQuery<Transaction[]>({
+    queryKey: ["/api/transactions"],
+  });
 
   const primaryCurrency = user?.preferredCurrency || "XAF";
+
+  const walletList = useMemo(() => {
+    const lastTxDate: Record<string, number> = {};
+    for (const tx of transactions) {
+      if (!tx.currency || !tx.createdAt) continue;
+      const ts = new Date(tx.createdAt).getTime();
+      if (!lastTxDate[tx.currency] || ts > lastTxDate[tx.currency]) {
+        lastTxDate[tx.currency] = ts;
+      }
+    }
+    return [...rawWalletList].sort((a, b) => {
+      const dateA = lastTxDate[a.currency] ?? 0;
+      const dateB = lastTxDate[b.currency] ?? 0;
+      if (dateB !== dateA) return dateB - dateA;
+      return parseFloat(b.balance || "0") - parseFloat(a.balance || "0");
+    });
+  }, [rawWalletList, transactions]);
 
   const existingCurrencies = walletList.map(w => w.currency);
   const availableCurrencies = SUPPORTED_CURRENCIES.filter(c => !existingCurrencies.includes(c) && c !== primaryCurrency);
