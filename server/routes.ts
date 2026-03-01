@@ -15,6 +15,7 @@ import {
   CURRENCY_ZONE,
   CURRENCY_SYMBOLS,
   EXCHANGE_RATES,
+  ALL_FX_CURRENCIES,
   type SupportedCurrency
 } from "@shared/schema";
 import crypto from "crypto";
@@ -2206,23 +2207,25 @@ export async function registerRoutes(
     }
   });
 
-  // Public exchange rates route
+  // Public exchange rates route — returns all fx_rate_XXX as units per 1 USD
   app.get("/api/public/exchange-rates", async (_req, res) => {
     try {
       const settings = await storage.getAllSettings();
-      const rates: Record<string, number> = {
-        XAF: 1,
-        XOF: 1,
-      };
-      
-      const usdRate = settings.find(s => s.key === "exchange_rate_usd")?.value;
-      const eurRate = settings.find(s => s.key === "exchange_rate_eur")?.value;
-      const cdfRate = settings.find(s => s.key === "exchange_rate_cdf")?.value;
-      
-      if (usdRate) rates.USD = 1 / parseFloat(usdRate);
-      if (eurRate) rates.EUR = 1 / parseFloat(eurRate);
-      if (cdfRate) rates.CDF = parseFloat(cdfRate);
-      
+      const rates: Record<string, number> = {};
+
+      settings.forEach(s => {
+        if (s.key.startsWith("fx_rate_")) {
+          const code = s.key.replace("fx_rate_", "");
+          const val = parseFloat(s.value);
+          if (!isNaN(val) && val > 0) rates[code] = val;
+        }
+      });
+
+      // Fallback defaults if not in DB yet
+      ALL_FX_CURRENCIES.forEach(c => {
+        if (!rates[c.code]) rates[c.code] = c.defaultRate;
+      });
+
       res.json(rates);
     } catch (error) {
       console.error("Get exchange rates error:", error);
@@ -2292,24 +2295,20 @@ export async function registerRoutes(
         };
       });
       
-      // Get global exchange rates from settings
-      // Rates are stored as "how many XAF for 1 unit of currency"
-      // We convert to "how many of currency for 1 XAF" for easy multiplication
-      const exchangeRates: Record<string, number> = {
-        XAF: 1,
-        XOF: 1,
-        CDF: 4.5,
-        GHS: 14.0,
-        NGN: 0.44,
-        KES: 6.0,
-        RWF: 0.66,
-        GNF: 0.076,
-        TZS: 0.24,
-        UGX: 0.17,
-        INR: 7.5,
-        USD: 0.00165,
-      };
-      
+      // Load fx rates from DB (units per 1 USD) with fallback to defaults
+      const allSettings = await storage.getAllSettings();
+      const exchangeRates: Record<string, number> = {};
+      allSettings.forEach(s => {
+        if (s.key.startsWith("fx_rate_")) {
+          const code = s.key.replace("fx_rate_", "");
+          const val = parseFloat(s.value);
+          if (!isNaN(val) && val > 0) exchangeRates[code] = val;
+        }
+      });
+      ALL_FX_CURRENCIES.forEach(c => {
+        if (!exchangeRates[c.code]) exchangeRates[c.code] = c.defaultRate;
+      });
+
       res.json({ countries: config, exchangeRates });
     } catch (error) {
       console.error("Get public deposit config error:", error);

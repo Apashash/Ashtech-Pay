@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
 import { 
   Settings,
   Save,
@@ -16,11 +16,14 @@ import {
   AlertTriangle,
   MessageCircle,
   Mail,
-  Phone
+  Phone,
+  Search,
+  RefreshCw
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { PlatformSetting } from "@shared/schema";
+import { ALL_FX_CURRENCIES } from "@shared/schema";
 
 export default function AdminSettings() {
   const { toast } = useToast();
@@ -28,7 +31,7 @@ export default function AdminSettings() {
     platform_name: "Ashtech Pay",
     default_currency: "XAF",
     maintenance_mode: "false",
-    exchange_rate_usd: "625",
+    exchange_rate_usd: "585",
     exchange_rate_eur: "656",
     exchange_rate_cdf: "0.27",
     min_transfer: "2650",
@@ -42,6 +45,17 @@ export default function AdminSettings() {
     contact_telegram: "",
   });
 
+  const [fxRates, setFxRates] = useState<Record<string, string>>(() => {
+    const defaults: Record<string, string> = {};
+    ALL_FX_CURRENCIES.forEach(c => {
+      defaults[`fx_rate_${c.code}`] = String(c.defaultRate);
+    });
+    return defaults;
+  });
+
+  const [rateSearch, setRateSearch] = useState("");
+  const [ratesModified, setRatesModified] = useState(false);
+
   const { data: savedSettings, isLoading } = useQuery<PlatformSetting[]>({
     queryKey: ["/api/admin/settings"],
   });
@@ -49,10 +63,16 @@ export default function AdminSettings() {
   useEffect(() => {
     if (savedSettings) {
       const newSettings = { ...settings };
+      const newFxRates = { ...fxRates };
       savedSettings.forEach(s => {
-        newSettings[s.key] = s.value;
+        if (s.key.startsWith("fx_rate_")) {
+          newFxRates[s.key] = s.value;
+        } else {
+          newSettings[s.key] = s.value;
+        }
       });
       setSettings(newSettings);
+      setFxRates(newFxRates);
     }
   }, [savedSettings]);
 
@@ -75,9 +95,23 @@ export default function AdminSettings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/settings"] });
       queryClient.invalidateQueries({ queryKey: ["/api/contact-info"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/public/exchange-rates"] });
       toast({ title: "Tous les paramètres ont été enregistrés" });
     },
     onError: () => toast({ title: "Erreur lors de l'enregistrement", variant: "destructive" }),
+  });
+
+  const saveFxRatesMutation = useMutation({
+    mutationFn: async (rates: Record<string, string>) => {
+      return apiRequest("POST", "/api/admin/settings/bulk", { settings: rates });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/settings"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/public/exchange-rates"] });
+      setRatesModified(false);
+      toast({ title: "Taux de change enregistrés", description: `${ALL_FX_CURRENCIES.length} devises mises à jour` });
+    },
+    onError: () => toast({ title: "Erreur lors de l'enregistrement des taux", variant: "destructive" }),
   });
 
   const handleSave = (key: string, description?: string) => {
@@ -87,6 +121,25 @@ export default function AdminSettings() {
   const handleSaveAll = () => {
     saveAllMutation.mutate(settings);
   };
+
+  const handleSaveFxRates = () => {
+    saveFxRatesMutation.mutate(fxRates);
+  };
+
+  const handleFxRateChange = (code: string, value: string) => {
+    setFxRates(prev => ({ ...prev, [`fx_rate_${code}`]: value }));
+    setRatesModified(true);
+  };
+
+  const handleResetRate = (code: string, defaultRate: number) => {
+    setFxRates(prev => ({ ...prev, [`fx_rate_${code}`]: String(defaultRate) }));
+    setRatesModified(true);
+  };
+
+  const filteredCurrencies = ALL_FX_CURRENCIES.filter(c =>
+    c.code.toLowerCase().includes(rateSearch.toLowerCase()) ||
+    c.name.toLowerCase().includes(rateSearch.toLowerCase())
+  );
 
   if (isLoading) {
     return (
@@ -210,52 +263,94 @@ export default function AdminSettings() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <DollarSign className="w-5 h-5" />
-                Devises & Taux de change
-              </CardTitle>
-              <CardDescription>
-                Configurez les taux de conversion vers XAF
-              </CardDescription>
+              <div className="flex items-start justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <DollarSign className="w-5 h-5" />
+                    Devises & Taux de change
+                  </CardTitle>
+                  <CardDescription className="mt-1">
+                    Taux utilisés pour la conversion lors des paiements par lien. Format : 1 USD = X devise.
+                    Ces taux s'appliquent quand un client d'un autre pays effectue un dépôt via lien de paiement.
+                  </CardDescription>
+                </div>
+                <div className="flex items-center gap-2 shrink-0 ml-4">
+                  {ratesModified && (
+                    <Badge variant="outline" className="text-yellow-600 border-yellow-500">
+                      Modifié
+                    </Badge>
+                  )}
+                  <Button
+                    onClick={handleSaveFxRates}
+                    disabled={saveFxRatesMutation.isPending || !ratesModified}
+                    className="gap-2"
+                    data-testid="button-save-fx-rates"
+                  >
+                    <Save className="w-4 h-4" />
+                    {saveFxRatesMutation.isPending ? "Enregistrement..." : "Enregistrer les taux"}
+                  </Button>
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Devise par défaut</Label>
-                  <Input
-                    value={settings.default_currency}
-                    onChange={(e) => setSettings({ ...settings, default_currency: e.target.value })}
-                    data-testid="input-default-currency"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>1 USD = ? XAF</Label>
-                  <Input
-                    type="number"
-                    value={settings.exchange_rate_usd}
-                    onChange={(e) => setSettings({ ...settings, exchange_rate_usd: e.target.value })}
-                    data-testid="input-rate-usd"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>1 EUR = ? XAF</Label>
-                  <Input
-                    type="number"
-                    value={settings.exchange_rate_eur}
-                    onChange={(e) => setSettings({ ...settings, exchange_rate_eur: e.target.value })}
-                    data-testid="input-rate-eur"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>1 CDF = ? XAF</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={settings.exchange_rate_cdf}
-                    onChange={(e) => setSettings({ ...settings, exchange_rate_cdf: e.target.value })}
-                    data-testid="input-rate-cdf"
-                  />
-                </div>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Rechercher une devise (ex: KES, Kenya...)"
+                  value={rateSearch}
+                  onChange={(e) => setRateSearch(e.target.value)}
+                  className="pl-9"
+                  data-testid="input-rate-search"
+                />
+              </div>
+
+              <div className="text-xs text-muted-foreground">
+                {filteredCurrencies.length} devise{filteredCurrencies.length !== 1 ? "s" : ""} — taux exprimé en unités par 1 USD
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[600px] overflow-y-auto pr-1">
+                {filteredCurrencies.map((currency) => {
+                  const key = `fx_rate_${currency.code}`;
+                  const currentVal = fxRates[key] ?? String(currency.defaultRate);
+                  const isModified = currentVal !== String(currency.defaultRate) &&
+                    savedSettings?.find(s => s.key === key)?.value !== currentVal;
+                  return (
+                    <div
+                      key={currency.code}
+                      className="flex items-center gap-3 p-3 rounded-lg border bg-card"
+                      data-testid={`fx-rate-row-${currency.code}`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-sm">{currency.name}</div>
+                        <Badge variant="outline" className="text-xs mt-0.5 font-mono">
+                          {currency.code}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">1 USD =</span>
+                        <Input
+                          type="number"
+                          step="any"
+                          min="0"
+                          value={currentVal}
+                          onChange={(e) => handleFxRateChange(currency.code, e.target.value)}
+                          className="w-28 h-8 text-sm text-right font-mono"
+                          data-testid={`input-fx-rate-${currency.code}`}
+                        />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 shrink-0 text-muted-foreground"
+                          title="Réinitialiser au taux par défaut"
+                          onClick={() => handleResetRate(currency.code, currency.defaultRate)}
+                          data-testid={`button-reset-rate-${currency.code}`}
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
@@ -264,7 +359,7 @@ export default function AdminSettings() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Globe className="w-5 h-5" />
-                Limites globales de transaction (XAF)
+                Limites globales de transaction
               </CardTitle>
               <CardDescription>
                 Montants minimum et maximum autorisés pour les transferts et retraits
@@ -273,7 +368,7 @@ export default function AdminSettings() {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Montant minimum — Transfert (XAF)</Label>
+                  <Label>Montant minimum — Transfert</Label>
                   <Input
                     type="number"
                     value={settings.min_transfer}
@@ -282,7 +377,7 @@ export default function AdminSettings() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Montant maximum — Transfert (XAF)</Label>
+                  <Label>Montant maximum — Transfert</Label>
                   <Input
                     type="number"
                     value={settings.max_transfer}
@@ -291,7 +386,7 @@ export default function AdminSettings() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Montant minimum — Retrait (XAF)</Label>
+                  <Label>Montant minimum — Retrait</Label>
                   <Input
                     type="number"
                     value={settings.min_withdrawal}
@@ -300,7 +395,7 @@ export default function AdminSettings() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Montant maximum — Retrait (XAF)</Label>
+                  <Label>Montant maximum — Retrait</Label>
                   <Input
                     type="number"
                     value={settings.max_withdrawal}
