@@ -163,6 +163,31 @@ function generateTransactionReference(type: string): string {
   return `${prefix}-${typeCode}-${timestamp}-${random}`;
 }
 
+// Load fx rates (units per 1 USD) from DB with defaults fallback
+async function loadFxRates(): Promise<Record<string, number>> {
+  const allSettings = await storage.getAllSettings();
+  const rates: Record<string, number> = {};
+  allSettings.forEach(s => {
+    if (s.key.startsWith("fx_rate_")) {
+      const code = s.key.replace("fx_rate_", "");
+      const val = parseFloat(s.value);
+      if (!isNaN(val) && val > 0) rates[code] = val;
+    }
+  });
+  ALL_FX_CURRENCIES.forEach(c => {
+    if (!rates[c.code]) rates[c.code] = c.defaultRate;
+  });
+  return rates;
+}
+
+// Convert an amount in XAF to the target currency using fx rates
+function convertFromXAF(amountXAF: number, targetCurrency: string, fxRates: Record<string, number>): number {
+  if (targetCurrency === "XAF") return amountXAF;
+  const xafRate = fxRates["XAF"] || 585;
+  const targetRate = fxRates[targetCurrency] || xafRate;
+  return amountXAF * (targetRate / xafRate);
+}
+
 async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, 10);
 }
@@ -798,17 +823,18 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Montant invalide" });
       }
 
-      const minTransferSetting = await storage.getSetting("min_transfer");
-      const minTransfer = minTransferSetting ? parseFloat(minTransferSetting.value) : 2650;
-      if (parsedAmount < minTransfer) {
-        const sender0 = await storage.getUser(senderId);
-        const txCurrency0 = (sourceCurrency || sender0?.preferredCurrency || "XAF");
-        return res.status(400).json({ message: `Le montant minimum de transfert est de ${minTransfer.toLocaleString()} ${txCurrency0}` });
-      }
-      
       const sender = await storage.getUser(senderId);
       if (!sender) {
         return res.status(404).json({ message: "Utilisateur non trouvé" });
+      }
+
+      const txCurrency = sourceCurrency || sender.preferredCurrency || "XAF";
+      const fxRates = await loadFxRates();
+      const minTransferSetting = await storage.getSetting("min_transfer");
+      const minTransferXAF = minTransferSetting ? parseFloat(minTransferSetting.value) : 2650;
+      const minTransfer = Math.ceil(convertFromXAF(minTransferXAF, txCurrency, fxRates));
+      if (parsedAmount < minTransfer) {
+        return res.status(400).json({ message: `Le montant minimum de transfert est de ${minTransfer.toLocaleString()} ${txCurrency}` });
       }
       
       // Get operator and calculate fee
@@ -1297,11 +1323,20 @@ export async function registerRoutes(
       }
 
       const userCurrency = user.preferredCurrency || "XAF";
+      const fxRates = await loadFxRates();
 
       const minWithdrawalSetting = await storage.getSetting("min_withdrawal");
-      const minWithdrawal = minWithdrawalSetting ? parseFloat(minWithdrawalSetting.value) : 2650;
+      const minWithdrawalXAF = minWithdrawalSetting ? parseFloat(minWithdrawalSetting.value) : 2650;
+      const minWithdrawal = Math.ceil(convertFromXAF(minWithdrawalXAF, userCurrency, fxRates));
+      const maxWithdrawalSetting = await storage.getSetting("max_withdrawal");
+      const maxWithdrawalXAF = maxWithdrawalSetting ? parseFloat(maxWithdrawalSetting.value) : 5000000;
+      const maxWithdrawal = Math.floor(convertFromXAF(maxWithdrawalXAF, userCurrency, fxRates));
+
       if (amount < minWithdrawal) {
         return res.status(400).json({ message: `Le montant minimum de retrait est de ${minWithdrawal.toLocaleString()} ${userCurrency}` });
+      }
+      if (amount > maxWithdrawal) {
+        return res.status(400).json({ message: `Le montant maximum de retrait est de ${maxWithdrawal.toLocaleString()} ${userCurrency}` });
       }
 
       // Calculate fee using fee resolution

@@ -16,6 +16,7 @@ import { formatCurrency, formatWalletBalance } from "@/lib/currency";
 import { useMemo, useEffect, useState, useCallback } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useLocation } from "wouter";
+import { useExchangeRates } from "@/hooks/use-exchange-rates";
 
 const INTERNAL_KEY = "__ashtech_interne__";
 
@@ -102,7 +103,12 @@ export default function SendMoneyPage() {
   const { data: limits } = useQuery<{ minTransfer: number; maxTransfer: number }>({
     queryKey: ["/api/public/limits"],
   });
-  const minTransfer = limits?.minTransfer ?? 2650;
+  const { rates: fxRates } = useExchangeRates();
+  const senderCurrency = (selectedWallet || primaryCurrency || "XAF") as string;
+  const xafFxRate = fxRates["XAF"] || 585;
+  const senderFxRate = fxRates[senderCurrency] || xafFxRate;
+  const minTransfer = Math.ceil((limits?.minTransfer ?? 2650) * senderFxRate / xafFxRate);
+  const maxTransfer = Math.floor((limits?.maxTransfer ?? 5000000) * senderFxRate / xafFxRate);
 
   const { data: countries, isLoading: isLoadingConfig } = useQuery<CountryConfig[]>({
     queryKey: ["/api/transfers/config"],
@@ -219,6 +225,7 @@ export default function SendMoneyPage() {
   const currencyMismatch = !isInternal && selectedCountry && selectedWallet !== selectedCountry.currency;
 
   const canSubmitExternal = amountValue >= minTransfer &&
+    amountValue <= maxTransfer &&
     feePreview.totalAmount <= balance &&
     feePreview.totalAmount > 0 &&
     watchedCountryId &&
@@ -420,7 +427,13 @@ export default function SendMoneyPage() {
                         {amountValue > 0 && amountValue < minTransfer && (
                           <p className="text-sm text-destructive flex items-center gap-1">
                             <AlertCircle className="w-3 h-3" />
-                            Montant minimum: {minTransfer.toLocaleString()} XAF
+                            Montant minimum: {minTransfer.toLocaleString()} {senderCurrency}
+                          </p>
+                        )}
+                        {amountValue > 0 && amountValue > maxTransfer && (
+                          <p className="text-sm text-destructive flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3" />
+                            Montant maximum: {maxTransfer.toLocaleString()} {senderCurrency}
                           </p>
                         )}
                       </FormItem>

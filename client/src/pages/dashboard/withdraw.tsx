@@ -16,6 +16,7 @@ import { z } from "zod";
 import { useState, useEffect } from "react";
 import { formatCurrency } from "@/lib/currency";
 import { Link, useLocation } from "wouter";
+import { useExchangeRates } from "@/hooks/use-exchange-rates";
 
 interface OperatorConfig {
   id: string;
@@ -53,7 +54,13 @@ export default function WithdrawPage() {
   const { data: limits } = useQuery<{ minWithdrawal: number; maxWithdrawal: number; minTransfer: number; maxTransfer: number }>({
     queryKey: ["/api/public/limits"],
   });
-  const minWithdrawal = limits?.minWithdrawal ?? 2650;
+  const { rates: fxRates } = useExchangeRates();
+  const userCurrency = user?.preferredCurrency || "XAF";
+  const xafRate = fxRates["XAF"] || 585;
+  const userFxRate = fxRates[userCurrency] || xafRate;
+  const convertFromXAF = (xaf: number) => Math.ceil(xaf * userFxRate / xafRate);
+  const minWithdrawal = convertFromXAF(limits?.minWithdrawal ?? 2650);
+  const maxWithdrawal = Math.floor((limits?.maxWithdrawal ?? 5000000) * userFxRate / xafRate);
 
   const { data: withdrawalNumbers = [] } = useQuery<WithdrawalNumber[]>({
     queryKey: ["/api/withdrawal-numbers"],
@@ -127,7 +134,7 @@ export default function WithdrawPage() {
     : 0;
   const totalAmount = amountValue + feeAmount;
 
-  const isAmountValid = amountValue >= minWithdrawal && totalAmount <= balance;
+  const isAmountValid = amountValue >= minWithdrawal && amountValue <= maxWithdrawal && totalAmount <= balance;
   const isMobileMoneyValid = selectedMethod === "mobile_money" ? (!!selectedCountry && !!selectedOperator && !!watchedAccountDetails) : true;
   const isBankTransferValid = selectedMethod === "bank_transfer" ? !!watchedAccountDetails : true;
   const isSubmitDisabled = withdrawMutation.isPending || !isAmountValid || !isMobileMoneyValid || !isBankTransferValid;
