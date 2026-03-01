@@ -447,24 +447,6 @@ export default function DepositPage() {
                           )}
                         />
 
-                        <FormField
-                          control={form.control}
-                          name="description"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Description (optionnel)</FormLabel>
-                              <FormControl>
-                                <Input 
-                                  placeholder="Ajouter une note..."
-                                  {...field} 
-                                  data-testid="input-description"
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
                         <Button 
                           type="button"
                           className="w-full" 
