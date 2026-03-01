@@ -784,7 +784,7 @@ export async function registerRoutes(
   // Send money externally (with operator and fees)
   app.post("/api/transfers/send", requireAuth, async (req, res) => {
     try {
-      const { recipientName, recipientPhone, countryId, operatorId, amount, description } = req.body;
+      const { recipientName, recipientPhone, countryId, operatorId, amount, description, sourceCurrency } = req.body;
       
       if (!recipientName || !recipientPhone || !countryId || !operatorId || !amount) {
         return res.status(400).json({ message: "Tous les champs sont requis" });
@@ -817,6 +817,11 @@ export async function registerRoutes(
       const country = await storage.getCountry(countryId);
       if (!country) {
         return res.status(404).json({ message: "Pays non trouvé" });
+      }
+
+      // Currency mismatch check: selected wallet currency must match destination country currency
+      if (sourceCurrency && sourceCurrency !== country.currency) {
+        return res.status(403).json({ message: `Transaction non autorisée — Le compte sélectionné est en ${sourceCurrency} mais ${country.name} utilise ${country.currency}` });
       }
       
       // Calculate fee for transfer
@@ -1073,6 +1078,11 @@ export async function registerRoutes(
 
       const operator = await storage.getOperator(operatorId);
       if (!operator) return res.status(400).json({ message: "Opérateur non trouvé" });
+
+      // Currency mismatch check
+      if (sourceCurrency && sourceCurrency !== country.currency) {
+        return res.status(403).json({ message: `Transaction non autorisée — Le compte sélectionné est en ${sourceCurrency} mais ${country.name} utilise ${country.currency}` });
+      }
 
       // Resolve fees
       const fee = await storage.getFeeByCriteria("transfer", country.id, operator.id);

@@ -195,7 +195,9 @@ export default function SendMoneyPage() {
         ...data,
         sourceCurrency: selectedWallet
       });
-      return res.json();
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || "Erreur lors du transfert");
+      return json;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
@@ -208,13 +210,16 @@ export default function SendMoneyPage() {
     },
   });
 
+  const currencyMismatch = !isInternal && selectedCountry && selectedWallet !== selectedCountry.currency;
+
   const canSubmitExternal = amountValue >= minTransfer &&
     feePreview.totalAmount <= balance &&
     feePreview.totalAmount > 0 &&
     watchedCountryId &&
     watchedOperatorId &&
     !externalMutation.isPending &&
-    !feePreview.isLoading;
+    !feePreview.isLoading &&
+    !currencyMismatch;
 
   if (user && !user.isVerified) {
     return (
@@ -415,6 +420,15 @@ export default function SendMoneyPage() {
                         )}
                       </FormItem>
                     )} />
+
+                    {currencyMismatch && (
+                      <Alert variant="destructive">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>
+                          Transaction non autorisée — Le compte sélectionné est en <strong>{selectedWallet}</strong> mais {selectedCountry?.name} utilise <strong>{selectedCountry?.currency}</strong>. Veuillez choisir le bon compte.
+                        </AlertDescription>
+                      </Alert>
+                    )}
 
                     <Button type="submit" className="w-full bg-[#F0B90B] hover:bg-[#D4A30A] text-black font-bold" size="lg" disabled={!canSubmitExternal}>
                       {externalMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
