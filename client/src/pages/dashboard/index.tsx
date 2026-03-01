@@ -288,6 +288,7 @@ function SendMoneyDialog({ open, onClose, wallets = [] }: { open: boolean; onClo
 
 function DepositDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { toast } = useToast();
+  const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const form = useForm<z.infer<typeof depositSchema>>({
     resolver: zodResolver(depositSchema),
     defaultValues: { amount: "", paymentMethod: "mobile_money" },
@@ -321,7 +322,7 @@ function DepositDialog({ open, onClose }: { open: boolean; onClose: () => void }
           <form onSubmit={form.handleSubmit((d) => depositMutation.mutate(d))} className="space-y-4">
             <FormField control={form.control} name="amount" render={({ field }) => (
               <FormItem>
-                <FormLabel>Montant (XAF)</FormLabel>
+                <FormLabel>Montant ({user?.preferredCurrency || "XAF"})</FormLabel>
                 <FormControl><Input type="number" placeholder="10000" {...field} data-testid="input-deposit-amount" /></FormControl>
                 <FormMessage />
               </FormItem>
@@ -354,6 +355,7 @@ function DepositDialog({ open, onClose }: { open: boolean; onClose: () => void }
 
 function WithdrawDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { toast } = useToast();
+  const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const form = useForm<z.infer<typeof withdrawSchema>>({
     resolver: zodResolver(withdrawSchema),
     defaultValues: { amount: "", paymentMethod: "mobile_money", accountDetails: "" },
@@ -387,7 +389,7 @@ function WithdrawDialog({ open, onClose }: { open: boolean; onClose: () => void 
           <form onSubmit={form.handleSubmit((d) => withdrawMutation.mutate(d))} className="space-y-4">
             <FormField control={form.control} name="amount" render={({ field }) => (
               <FormItem>
-                <FormLabel>Montant (XAF)</FormLabel>
+                <FormLabel>Montant ({user?.preferredCurrency || "XAF"})</FormLabel>
                 <FormControl><Input type="number" placeholder="10000" {...field} data-testid="input-withdraw-amount" /></FormControl>
                 <FormMessage />
               </FormItem>
@@ -459,6 +461,7 @@ function VerificationRequiredDialog({ open, onClose }: { open: boolean; onClose:
 
 function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { toast } = useToast();
+  const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const form = useForm<z.infer<typeof createPaymentLinkSchema>>({
     resolver: zodResolver(createPaymentLinkSchema),
     defaultValues: { title: "", description: "", amount: "" },
@@ -498,7 +501,7 @@ function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => voi
             )} />
             <FormField control={form.control} name="amount" render={({ field }) => (
               <FormItem>
-                <FormLabel>Montant (XAF)</FormLabel>
+                <FormLabel>Montant ({user?.preferredCurrency || "XAF"})</FormLabel>
                 <FormControl><Input type="number" placeholder="10000" {...field} data-testid="input-link-amount" /></FormControl>
                 <FormMessage />
               </FormItem>

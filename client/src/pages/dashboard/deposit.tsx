@@ -432,7 +432,7 @@ export default function DepositPage() {
                           name="amount"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Montant (XAF)</FormLabel>
+                              <FormLabel>Montant ({user?.preferredCurrency || "XAF"})</FormLabel>
                               <FormControl>
                                 <Input 
                                   type="number" 

@@ -190,7 +190,7 @@ export default function WithdrawPage() {
           <Card className="border-yellow-500/50 bg-yellow-500/5">
             <CardContent className="p-3 flex items-center gap-3">
               <AlertCircle className="w-4 h-4 text-yellow-500" />
-              <p className="text-xs text-foreground">Solde insuffisant. Minimum : {minWithdrawal.toLocaleString()} XAF.</p>
+              <p className="text-xs text-foreground">Solde insuffisant. Minimum : {minWithdrawal.toLocaleString()} {user?.preferredCurrency || "XAF"}.</p>
             </CardContent>
           </Card>
         )}
@@ -250,7 +250,7 @@ export default function WithdrawPage() {
                     name="amount"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Montant (XAF)</FormLabel>
+                        <FormLabel>Montant ({user?.preferredCurrency || "XAF"})</FormLabel>
                         <FormControl>
                           <Input 
                             type="number" 
@@ -264,13 +264,13 @@ export default function WithdrawPage() {
                         {amountValue > 0 && amountValue < minWithdrawal && (
                           <p className="text-sm text-destructive flex items-center gap-1">
                             <AlertCircle className="w-3 h-3" />
-                            Minimum : {minWithdrawal.toLocaleString()} XAF
+                            Minimum : {minWithdrawal.toLocaleString()} {user?.preferredCurrency || "XAF"}
                           </p>
                         )}
                         {amountValue > 0 && totalAmount > balance && (
                           <p className="text-sm text-destructive flex items-center gap-1">
                             <AlertCircle className="w-3 h-3" />
-                            Solde insuffisant ({totalAmount.toLocaleString()} XAF requis)
+                            Solde insuffisant ({totalAmount.toLocaleString()} {user?.preferredCurrency || "XAF"} requis)
                           </p>
                         )}
                       </FormItem>
@@ -327,16 +327,16 @@ export default function WithdrawPage() {
                           <CardContent className="p-3 space-y-2">
                             <div className="flex justify-between items-center text-xs">
                               <span className="text-muted-foreground">À recevoir</span>
-                              <span className="font-medium">{formatCurrency(amountValue, "XAF")}</span>
+                              <span className="font-medium">{formatCurrency(amountValue, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</span>
                             </div>
                             <div className="flex justify-between items-center text-xs">
                               <span className="text-muted-foreground">Frais</span>
-                              <span className="font-medium text-red-500">+ {formatCurrency(feeAmount, "XAF")}</span>
+                              <span className="font-medium text-red-500">+ {formatCurrency(feeAmount, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</span>
                             </div>
                             <div className="border-t border-border pt-2">
                               <div className="flex justify-between items-center">
                                 <span className="font-semibold text-xs text-foreground">Total à débiter</span>
-                                <span className="font-bold text-base text-primary">{formatCurrency(totalAmount, "XAF")}</span>
+                                <span className="font-bold text-base text-primary">{formatCurrency(totalAmount, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</span>
                               </div>
                             </div>
                           </CardContent>

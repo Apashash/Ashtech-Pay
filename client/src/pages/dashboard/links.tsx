@@ -64,6 +64,7 @@ const countryCodeMap: Record<string, string> = {
 
 function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { toast } = useToast();
+  const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const imageInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -384,7 +385,7 @@ function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => voi
                   name="amount"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Montant (XAF) *</FormLabel>
+                      <FormLabel>Montant ({user?.preferredCurrency || "XAF"}) *</FormLabel>
                       <FormControl>
                         <Input type="number" placeholder="10000" {...field} data-testid="input-link-amount" />
                       </FormControl>
@@ -791,7 +792,7 @@ function EditLinkDialog({ link, onClose, userCurrency }: {
                   name="amount"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Montant (XAF) *</FormLabel>
+                      <FormLabel>Montant ({userCurrency}) *</FormLabel>
                       <FormControl>
                         <Input type="number" placeholder="10000" {...field} data-testid="input-edit-amount" />
                       </FormControl>
