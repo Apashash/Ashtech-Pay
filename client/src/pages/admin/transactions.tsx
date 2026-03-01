@@ -64,7 +64,10 @@ export default function AdminTransactions() {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("status") || "all";
+  });
   const [selectedTxId, setSelectedTxId] = useState<string | null>(null);
 
   const { data: transactions, isLoading } = useQuery<EnrichedTransaction[]>({

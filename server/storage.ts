@@ -867,7 +867,7 @@ export class DatabaseStorage implements IStorage {
       paymentLinkCount: links.length,
       pendingDeposits: allTx.filter(t => t.status === "pending" && (t.type === "deposit" || t.type === "payment_link")).length,
       pendingWithdrawals: allTx.filter(t => t.status === "pending" && t.type === "withdrawal").length,
-      pendingTransfers: allTx.filter(t => t.status === "pending" && t.type === "transfer_out").length,
+      pendingTransfers: allTx.filter(t => t.status === "pending" && (t.type === "transfer_out" || t.type === "transfer_in")).length,
     };
   }
   

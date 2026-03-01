@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { AdminLayout } from "./layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -97,6 +98,7 @@ export default function AdminDashboard() {
       color: "text-green-500",
       bgColor: "bg-green-500/10",
       pending: stats?.pendingDeposits || 0,
+      href: stats?.pendingDeposits ? "/admin/transactions/deposits?status=pending" : "/admin/transactions/deposits",
     },
     {
       title: "Retraits",
@@ -106,6 +108,7 @@ export default function AdminDashboard() {
       color: "text-orange-500",
       bgColor: "bg-orange-500/10",
       pending: stats?.pendingWithdrawals || 0,
+      href: stats?.pendingWithdrawals ? "/admin/transactions/withdrawals?status=pending" : "/admin/transactions/withdrawals",
     },
     {
       title: "Envois",
@@ -114,6 +117,7 @@ export default function AdminDashboard() {
       color: "text-blue-500",
       bgColor: "bg-blue-500/10",
       pending: stats?.pendingTransfers || 0,
+      href: stats?.pendingTransfers ? "/admin/transactions/transfers?status=pending" : "/admin/transactions/transfers",
     },
     {
       title: "Liens de paiement",
@@ -121,6 +125,7 @@ export default function AdminDashboard() {
       icon: Link2,
       color: "text-purple-500",
       bgColor: "bg-purple-500/10",
+      href: "/admin/transactions/deposits",
     },
     {
       title: "Transactions Rejetées",
@@ -128,6 +133,7 @@ export default function AdminDashboard() {
       icon: XCircle,
       color: "text-red-500",
       bgColor: "bg-red-500/10",
+      href: "/admin/transactions?status=failed",
     },
     {
       title: "En Attente",
@@ -135,6 +141,7 @@ export default function AdminDashboard() {
       icon: Clock,
       color: "text-amber-500",
       bgColor: "bg-amber-500/10",
+      href: "/admin/transactions?status=pending",
     },
     {
       title: "Utilisateurs Bannis",
@@ -178,37 +185,42 @@ export default function AdminDashboard() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {kpiCards.map((card, index) => (
-            <Card key={index} data-testid={`kpi-card-${index}`}>
-              <CardHeader className="flex flex-row items-center justify-between pb-2 gap-2">
-                <div className="flex items-center gap-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    {card.title}
-                  </CardTitle>
-                  {"pending" in card && (card.pending as number) > 0 && (
-                    <Badge className="bg-amber-500/20 text-amber-500 border-amber-500/30 text-xs">
-                      {card.pending} en attente
-                    </Badge>
-                  )}
-                </div>
-                <div className={`p-2 rounded-lg ${card.bgColor}`}>
-                  <card.icon className={`w-4 h-4 ${card.color}`} />
-                </div>
-              </CardHeader>
-              <CardContent>
-                {isLoading ? (
-                  <Skeleton className="h-8 w-24" />
-                ) : (
-                  <div>
-                    <p className="text-2xl font-bold">{card.value}</p>
-                    {"subValue" in card && card.subValue && (
-                      <p className="text-sm text-muted-foreground mt-1">{card.subValue}</p>
+          {kpiCards.map((card, index) => {
+            const cardContent = (
+              <Card key={index} data-testid={`kpi-card-${index}`} className={"href" in card ? "cursor-pointer hover:border-primary/50 transition-colors" : ""}>
+                <CardHeader className="flex flex-row items-center justify-between pb-2 gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
+                      {card.title}
+                    </CardTitle>
+                    {"pending" in card && (card.pending as number) > 0 && (
+                      <Badge className="bg-amber-500/20 text-amber-500 border-amber-500/30 text-xs">
+                        {card.pending} en attente
+                      </Badge>
                     )}
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          ))}
+                  <div className={`p-2 rounded-lg ${card.bgColor}`}>
+                    <card.icon className={`w-4 h-4 ${card.color}`} />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? (
+                    <Skeleton className="h-8 w-24" />
+                  ) : (
+                    <div>
+                      <p className="text-2xl font-bold">{card.value}</p>
+                      {"subValue" in card && card.subValue && (
+                        <p className="text-sm text-muted-foreground mt-1">{card.subValue}</p>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+            return "href" in card ? (
+              <Link key={index} href={(card as any).href}>{cardContent}</Link>
+            ) : cardContent;
+          })}
         </div>
 
         <Card className="border-primary/30 bg-primary/5">

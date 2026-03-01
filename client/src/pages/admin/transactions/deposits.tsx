@@ -57,7 +57,7 @@ export default function AdminDeposits() {
   const { toast } = useToast();
   const [location] = useLocation();
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>(() => { const params = new URLSearchParams(window.location.search); return params.get("status") || "all"; });
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [selectedTxId, setSelectedTxId] = useState<string | null>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);

@@ -56,7 +56,7 @@ interface TransactionDetails extends Transaction {
 export default function AdminTransfers() {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>(() => { const params = new URLSearchParams(window.location.search); return params.get("status") || "all"; });
   const [selectedTxId, setSelectedTxId] = useState<string | null>(null);
 
   const { data: transactions, isLoading } = useQuery<EnrichedTransaction[]>({
