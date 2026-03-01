@@ -43,11 +43,10 @@ import { useTheme } from "@/components/theme-provider";
 import { useScrollAnimation } from "@/hooks/use-scroll-animation";
 import logoImage from "@assets/logo.png";
 import heroBgImage from "@assets/generated_images/hands_exchanging_money_and_package.png";
-const paymentMethodsImage = logoImage;
-const paymentValidatedImage = logoImage;
-const globalReachImage = logoImage;
-const withdrawalImage = logoImage;
-const shareImage = logoImage;
+import paymentValidatedImage from "@assets/IMG_7981_1772401047932.jpeg";
+import withdrawalImage from "@assets/IMG_7982_1772401047932.jpeg";
+import globalReachImage from "@assets/IMG_7984_1772401047932.jpeg";
+import shareImage from "@assets/IMG_7985_1772401047932.jpeg";
 
 const paymentMethods = [
   { name: "Orange Money" },
