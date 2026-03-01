@@ -121,6 +121,7 @@ const INTERNAL_TRANSFER_KEY = "__ashtech_interne__";
 
 function SendMoneyDialog({ open, onClose, wallets = [] }: { open: boolean; onClose: () => void, wallets?: WalletEntry[] }) {
   const { toast } = useToast();
+  const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const [selectedWallet, setSelectedWallet] = useState<string>("XAF");
   const [destination, setDestination] = useState<string>(INTERNAL_TRANSFER_KEY);
   const [recipientIdentifier, setRecipientIdentifier] = useState<string>("");
