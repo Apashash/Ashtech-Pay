@@ -465,7 +465,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                                 }}
                               >
                                 <p className="text-sm font-medium truncate">{notification.title}</p>
-                                <p className="text-xs text-muted-foreground line-clamp-2">{notification.message}</p>
+                                <p className="text-xs text-muted-foreground line-clamp-2">{notification.message?.replace(/\bXAF\b/g, preferredCurrency)}</p>
                                 {notification.createdAt && (
                                   <p className="text-xs text-muted-foreground mt-1">
                                     {format(new Date(notification.createdAt), "dd MMM à HH:mm", { locale: fr })}
