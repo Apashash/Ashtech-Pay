@@ -35,7 +35,7 @@ localPort = 5000
 externalPort = 80
 
 [deployment]
-run = ["npm", "run", "start"]
+run = ["node", "./dist/index.cjs"]
 deploymentTarget = "autoscale"
 build = ["npm", "run", "build"]
 publicDir = "dist/public"
@@ -43,7 +43,6 @@ publicDir = "dist/public"
 [userenv]
 
 [userenv.shared]
-SUPABASE_DATABASE_URL = "postgresql://postgres.vngfjjfgaxkcwtrzawdq:bHOFcwceoFfvhzMo@aws-1-eu-west-3.pooler.supabase.com:6543/postgres"
 SUPABASE_URL = "https://vngfjjfgaxkcwtrzawdq.supabase.co/"
 SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZuZ2ZqamZnYXhrY3d0cnphd2RxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4NDQzNTIsImV4cCI6MjA4NzQyMDM1Mn0.gh76rmi7uEzjLbqGjiRIckoaKxmOAyiLyy9QZOxuucc"
 
