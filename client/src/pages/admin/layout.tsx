@@ -154,7 +154,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
 
   const { data: notifications = [] } = useQuery<Notification[]>({
     queryKey: ["/api/admin/notifications"],
-    refetchInterval: 30000,
+    refetchInterval: 3000,
   });
 
   const { data: stats } = useQuery<{
@@ -163,27 +163,27 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     pendingTransfers: number;
   }>({
     queryKey: ["/api/admin/stats"],
-    refetchInterval: 30000,
+    refetchInterval: 3000,
   });
 
   const { data: kycStats } = useQuery<{ pending: number; approved: number; rejected: number }>({
     queryKey: ["/api/admin/kyc/stats"],
-    refetchInterval: 30000,
+    refetchInterval: 3000,
   });
 
   const { data: ticketStats } = useQuery<{ openCount: number; totalCount: number }>({
     queryKey: ["/api/admin/tickets/stats"],
-    refetchInterval: 30000,
+    refetchInterval: 3000,
   });
 
   const { data: conversionCount } = useQuery<{ count: number }>({
     queryKey: ["/api/admin/conversion-requests/count"],
-    refetchInterval: 30000,
+    refetchInterval: 3000,
   });
 
   const { data: withdrawalNumberCount } = useQuery<{ count: number }>({
     queryKey: ["/api/admin/withdrawal-number-changes/count"],
-    refetchInterval: 30000,
+    refetchInterval: 3000,
   });
 
   const pendingCounts: Record<string, number> = {
