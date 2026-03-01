@@ -2,7 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
-import { startPaymentPoller } from "./paymentPoller";
+import { startPaymentPoller, recoverPendingDeposits } from "./paymentPoller";
 import { startPayoutPoller, recoverPendingPayouts } from "./payoutPoller";
 import { seedWithdrawalTransferFees } from "./seedWithdrawalTransferFees";
 
@@ -97,6 +97,9 @@ app.use((req, res, next) => {
     () => {
       log(`serving on port ${port}`);
       startPaymentPoller();
+      recoverPendingDeposits().catch(err =>
+        console.error("[PaymentPoller] Recovery error:", err)
+      );
       startPayoutPoller();
       recoverPendingPayouts().catch(err =>
         console.error("[PayoutPoller] Recovery error:", err)

@@ -56,7 +56,7 @@ import {
   type InsertConversionRequest,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, sql, and, or, like, count } from "drizzle-orm";
+import { eq, desc, sql, and, or, like, count, inArray } from "drizzle-orm";
 
 export interface IStorage {
   // User operations
@@ -82,6 +82,7 @@ export interface IStorage {
   createTransaction(transaction: InsertTransaction): Promise<Transaction>;
   updateTransactionStatus(id: string, status: string): Promise<Transaction | undefined>;
   updateTransactionExternalReference(id: string, externalReference: string): Promise<Transaction | undefined>;
+  getPendingDepositTransactions(): Promise<Transaction[]>;
   
   // Payment link operations
   getPaymentLinksByUserId(userId: string): Promise<PaymentLink[]>;
@@ -590,6 +591,15 @@ export class DatabaseStorage implements IStorage {
     await db.delete(conversionRequests).where(eq(conversionRequests.userId, id));
     await db.delete(wallets).where(eq(wallets.userId, id));
     await db.delete(users).where(eq(users.id, id));
+  }
+
+  async getPendingDepositTransactions(): Promise<Transaction[]> {
+    return await db.select().from(transactions).where(
+      and(
+        eq(transactions.status, "pending"),
+        inArray(transactions.type, ["deposit", "payment_link"])
+      )
+    ).orderBy(desc(transactions.createdAt));
   }
 
   // Admin: Transaction management
