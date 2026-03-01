@@ -815,8 +815,9 @@ export class DatabaseStorage implements IStorage {
     const [pendingCount] = await db.select({ count: count() }).from(transactions).where(eq(transactions.status, "pending"));
     const [bannedCount] = await db.select({ count: count() }).from(users).where(eq(users.isBanned, true));
     
-    // Get all completed transactions to calculate margins correctly
-    const completedTx = await db.select().from(transactions).where(eq(transactions.status, "completed"));
+    // Get all transactions to calculate margins and pending counts
+    const allTx = await db.select().from(transactions);
+    const completedTx = allTx.filter(t => t.status === "completed");
     
     const deposits = completedTx.filter(t => t.type === "deposit");
     const withdrawals = completedTx.filter(t => t.type === "withdrawal");
@@ -864,9 +865,9 @@ export class DatabaseStorage implements IStorage {
       withdrawalCount: withdrawals.length,
       transferCount: transfers.length,
       paymentLinkCount: links.length,
-      pendingDeposits: 0,
-      pendingWithdrawals: 0,
-      pendingTransfers: 0,
+      pendingDeposits: allTx.filter(t => t.status === "pending" && (t.type === "deposit" || t.type === "payment_link")).length,
+      pendingWithdrawals: allTx.filter(t => t.status === "pending" && t.type === "withdrawal").length,
+      pendingTransfers: allTx.filter(t => t.status === "pending" && t.type === "transfer_out").length,
     };
   }
   

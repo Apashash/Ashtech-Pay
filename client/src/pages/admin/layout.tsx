@@ -181,6 +181,11 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     refetchInterval: 30000,
   });
 
+  const { data: withdrawalNumberCount } = useQuery<{ count: number }>({
+    queryKey: ["/api/admin/withdrawal-number-changes/count"],
+    refetchInterval: 30000,
+  });
+
   const pendingCounts: Record<string, number> = {
     "/admin/transactions/deposits": stats?.pendingDeposits || 0,
     "/admin/transactions/withdrawals": stats?.pendingWithdrawals || 0,
@@ -188,6 +193,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     "/admin/kyc": kycStats?.pending || 0,
     "/admin/support": ticketStats?.openCount || 0,
     "/admin/conversions": conversionCount?.count || 0,
+    "/admin/withdrawal-numbers": withdrawalNumberCount?.count || 0,
   };
 
   useEffect(() => {

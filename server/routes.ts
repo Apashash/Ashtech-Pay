@@ -3906,6 +3906,17 @@ export async function registerRoutes(
     }
   });
 
+  // Admin: Count pending withdrawal number changes (for sidebar badge)
+  app.get("/api/admin/withdrawal-number-changes/count", requireAdmin, async (req, res) => {
+    try {
+      const changes = await storage.getPendingWithdrawalNumberChanges();
+      res.json({ count: changes.length });
+    } catch (error) {
+      console.error("Admin withdrawal number changes count error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   // Admin: Get pending withdrawal number changes
   app.get("/api/admin/withdrawal-number-changes", requireAdmin, async (req, res) => {
     try {
