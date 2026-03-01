@@ -1053,79 +1053,84 @@ export async function registerRoutes(
   });
 
   // Transfer money (international - mobile money)
-  app.post("/api/transfers", requireAuth, async (req, res) => {
+  // Send money to international recipient (AccountPE)
+  app.post("/api/transfers/send", requireAuth, async (req, res) => {
     try {
-      const { recipientUsername, amount, description, sourceCurrency } = req.body;
+      const { recipientName, recipientPhone, countryId, operatorId, amount, sourceCurrency } = req.body;
       const senderId = req.userId!;
-      const amountNum = parseFloat(amount);
+      const parsedAmount = parseFloat(amount);
+
+      if (isNaN(parsedAmount) || parsedAmount <= 0) {
+        return res.status(400).json({ message: "Montant invalide" });
+      }
 
       const sender = await storage.getUser(senderId);
       if (!sender) return res.status(404).json({ message: "Utilisateur non trouvé" });
 
-      const recipient = await storage.getUserByUsername(recipientUsername);
-      if (!recipient) return res.status(404).json({ message: "Destinataire non trouvé" });
-      if (recipient.id === senderId) return res.status(400).json({ message: "Vous ne pouvez pas vous envoyer de l'argent" });
-
       const currency = sourceCurrency || "XAF";
+      const country = await storage.getCountry(countryId);
+      if (!country) return res.status(400).json({ message: "Pays non trouvé" });
 
-      // Vérifier le solde
-      if (currency === "XAF") {
-        if (parseFloat(sender.balance) < amountNum) {
-          return res.status(400).json({ message: "Solde insuffisant" });
+      const operator = await storage.getOperator(operatorId);
+      if (!operator) return res.status(400).json({ message: "Opérateur non trouvé" });
+
+      // Resolve fees
+      const fee = await storage.getFeeByCriteria("transfer", country.id, operator.id);
+      let feeAmount = 0;
+      if (fee) {
+        if (fee.feeType === "percentage") {
+          feeAmount = parsedAmount * (parseFloat(fee.feeValue) / 100);
+        } else {
+          feeAmount = parseFloat(fee.feeValue);
         }
-        await storage.updateUserBalance(senderId, -amountNum);
-        await storage.updateUserBalance(recipient.id, amountNum);
+      }
+      
+      const totalAmount = parsedAmount + feeAmount;
+
+      // Check balance in the selected wallet/currency
+      if (currency === "XAF") {
+        if (parseFloat(sender.balance) < totalAmount) {
+          return res.status(400).json({ 
+            message: `Solde insuffisant. Vous avez besoin de ${totalAmount.toFixed(2)} XAF (montant + frais)` 
+          });
+        }
+        await storage.updateUserBalance(senderId, -totalAmount);
       } else {
         const wallet = await storage.getWallet(senderId, currency);
-        if (!wallet || parseFloat(wallet.balance) < amountNum) {
-          return res.status(400).json({ message: "Solde insuffisant dans ce portefeuille" });
+        if (!wallet || parseFloat(wallet.balance) < totalAmount) {
+          return res.status(400).json({ 
+            message: `Solde insuffisant dans votre compte ${currency}. Besoin de ${totalAmount.toFixed(2)} ${currency}` 
+          });
         }
-        await storage.upsertWallet(senderId, currency, -amountNum);
-        await storage.upsertWallet(recipient.id, currency, amountNum);
+        await storage.upsertWallet(senderId, currency, -totalAmount);
       }
-
-      const transferRef = generateTransactionReference("transfer_out");
-
-      const transactionOut = await storage.createTransaction({
+      
+      // Create pending transaction
+      const reference = generateTransactionReference("transfer_out");
+      const transaction = await storage.createTransaction({
         userId: senderId,
         type: "transfer_out",
-        amount: amountNum.toFixed(2),
+        amount: parsedAmount.toFixed(2),
         currency,
-        status: "completed",
-        description: description || `Transfert à ${recipient.fullName}`,
-        recipientId: recipient.id,
-        recipientName: recipient.fullName,
-        reference: transferRef,
-        feeAmount: "0.00",
-        totalAmount: amountNum.toFixed(2),
+        status: "pending",
+        description: `Envoi vers ${country.name} (${operator.name})`,
+        recipientName,
+        recipientPhone,
+        recipientCountry: country.name,
+        operatorId: operator.id,
+        feeAmount: feeAmount.toFixed(2),
+        totalAmount: totalAmount.toFixed(2),
+        reference,
       });
 
-      const transactionIn = await storage.createTransaction({
-        userId: recipient.id,
-        type: "transfer_in",
-        amount: amountNum.toFixed(2),
-        currency,
-        status: "completed",
-        description: `Reçu de ${sender.fullName}`,
-        recipientId: senderId,
-        reference: transferRef,
-        feeAmount: "0.00",
-        totalAmount: amountNum.toFixed(2),
+      res.json({ 
+        message: "Votre transfert est en cours de traitement",
+        transaction,
+        feeAmount: feeAmount.toFixed(2),
+        totalAmount: totalAmount.toFixed(2),
       });
-
-      // Notify recipient
-      await storage.createUserNotification({
-        userId: recipient.id,
-        type: "transfer_received",
-        title: "Argent reçu",
-        message: `Vous avez reçu ${amountNum.toFixed(2)} ${currency} de ${sender.fullName}.`,
-        transactionId: transactionIn.id,
-        isRead: false,
-      });
-
-      res.json(transactionOut);
     } catch (error) {
-      console.error("Transfer error:", error);
+      console.error("Send international transfer error:", error);
       res.status(500).json({ message: "Erreur serveur" });
     }
   });

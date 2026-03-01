@@ -163,16 +163,13 @@ function SendMoneyDialog({ open, onClose, wallets = [] }: { open: boolean; onClo
 
   const internationalTransferMutation = useMutation({
     mutationFn: async () => {
-      const expectedCurrency = COUNTRY_CURRENCIES[destination];
-      if (selectedWallet !== expectedCurrency) {
-        throw new Error(`Impossible d'effectuer cette opération! Le compte ${selectedWallet} ne correspond pas au pays ${destination} (devise attendue: ${expectedCurrency}).`);
-      }
       if (!recipientIdentifier.trim()) throw new Error("Veuillez entrer l'identifiant du destinataire");
       if (!amount || parseFloat(amount) <= 0) throw new Error("Veuillez entrer un montant valide");
       const res = await apiRequest("POST", "/api/transfers", {
         recipientUsername: recipientIdentifier.trim(),
         amount,
         sourceCurrency: selectedWallet,
+        destinationCountry: destination,
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.message || "Erreur lors du transfert");
@@ -213,13 +210,13 @@ function SendMoneyDialog({ open, onClose, wallets = [] }: { open: boolean; onClo
           <div className="space-y-2">
             <label className="text-sm font-medium">Solde à débiter</label>
             <Select value={selectedWallet} onValueChange={setSelectedWallet}>
-              <SelectTrigger>
+              <SelectTrigger className="border-[#F0B90B]/30">
                 <SelectValue placeholder="Choisir un compte" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="XAF">Compte Principal (XAF)</SelectItem>
+                <SelectItem value="XAF">Compte Principal — {parseFloat(user?.balance || "0").toLocaleString()} XAF</SelectItem>
                 {wallets.filter(w => w.currency !== "XAF").map(w => (
-                  <SelectItem key={w.id} value={w.currency}>Compte {w.currency} — {w.balance} {w.currency}</SelectItem>
+                  <SelectItem key={w.id} value={w.currency}>Compte {w.currency} — {parseFloat(w.balance).toLocaleString()} {w.currency}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -228,7 +225,7 @@ function SendMoneyDialog({ open, onClose, wallets = [] }: { open: boolean; onClo
           <div className="space-y-2">
             <label className="text-sm font-medium">Destination</label>
             <Select value={destination} onValueChange={setDestination}>
-              <SelectTrigger>
+              <SelectTrigger className="border-[#F0B90B]/50 ring-offset-background focus:ring-2 focus:ring-[#F0B90B]">
                 <SelectValue placeholder="Choisir la destination" />
               </SelectTrigger>
               <SelectContent>
@@ -243,8 +240,9 @@ function SendMoneyDialog({ open, onClose, wallets = [] }: { open: boolean; onClo
           </div>
 
           {isInternal && (
-            <div className="flex items-center gap-2 px-3 py-2 bg-green-50 dark:bg-green-950/30 rounded-lg border border-green-200 dark:border-green-800">
-              <span className="text-green-600 text-sm font-medium">Frais: 0 — Transfert gratuit et instantané</span>
+            <div className="flex items-center gap-2 px-3 py-2 bg-green-500/10 dark:bg-green-500/10 rounded-lg border border-green-500/20">
+              <CheckCircle className="w-4 h-4 text-green-500" />
+              <span className="text-green-500 text-sm font-medium">Frais: 0 — Transfert gratuit et instantané</span>
             </div>
           )}
 

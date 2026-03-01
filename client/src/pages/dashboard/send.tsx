@@ -81,11 +81,18 @@ export default function SendMoneyPage() {
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const { data: wallets = [] } = useQuery<Wallet[]>({ queryKey: ["/api/wallets"] });
   
-  const localCurrency = user?.preferredCurrency || "XAF";
-  const balance = localCurrency === "XAF" 
-    ? parseFloat(user?.balance || "0")
-    : parseFloat(wallets.find(w => w.currency === localCurrency)?.balance || "0");
+  const [selectedWallet, setSelectedWallet] = useState<string>("XAF");
+  const [destination, setDestination] = useState<string>(INTERNAL_KEY);
+  const [internalIdentifier, setInternalIdentifier] = useState("");
+  const [internalAmount, setInternalAmount] = useState("");
 
+  const isInternal = destination === INTERNAL_KEY;
+
+  const balance = selectedWallet === "XAF" 
+    ? parseFloat(user?.balance || "0")
+    : parseFloat(wallets.find(w => w.currency === selectedWallet)?.balance || "0");
+
+  const localCurrency = user?.preferredCurrency || "XAF";
   const { data: limits } = useQuery<{ minTransfer: number; maxTransfer: number }>({
     queryKey: ["/api/public/limits"],
   });
@@ -94,19 +101,6 @@ export default function SendMoneyPage() {
   const { data: countries, isLoading: isLoadingConfig } = useQuery<CountryConfig[]>({
     queryKey: ["/api/transfers/config"],
   });
-
-  const [destination, setDestination] = useState<string>(INTERNAL_KEY);
-  const isInternal = destination === INTERNAL_KEY;
-
-  const [internalIdentifier, setInternalIdentifier] = useState("");
-  const [internalAmount, setInternalAmount] = useState("");
-  const [internalWallet, setInternalWallet] = useState(user?.preferredCurrency || "XAF");
-
-  useEffect(() => {
-    if (user?.preferredCurrency) {
-      setInternalWallet(user.preferredCurrency);
-    }
-  }, [user?.preferredCurrency]);
 
   const form = useForm<ExternalFormData>({
     resolver: zodResolver(externalFormSchema),
@@ -176,7 +170,7 @@ export default function SendMoneyPage() {
       const res = await apiRequest("POST", "/api/transfers/internal", {
         recipientIdentifier: internalIdentifier.trim(),
         amount: internalAmount,
-        sourceCurrency: internalWallet,
+        sourceCurrency: selectedWallet,
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Erreur lors du transfert");
@@ -197,7 +191,10 @@ export default function SendMoneyPage() {
 
   const externalMutation = useMutation({
     mutationFn: async (data: ExternalFormData) => {
-      const res = await apiRequest("POST", "/api/transfers/send", data);
+      const res = await apiRequest("POST", "/api/transfers/send", {
+        ...data,
+        sourceCurrency: selectedWallet
+      });
       return res.json();
     },
     onSuccess: () => {
@@ -266,6 +263,23 @@ export default function SendMoneyPage() {
             </CardHeader>
             <CardContent className="space-y-5">
               <div className="space-y-2">
+                <label className="text-sm font-medium">Solde à débiter</label>
+                <Select value={selectedWallet} onValueChange={setSelectedWallet}>
+                  <SelectTrigger className="border-[#F0B90B]/30">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="XAF">Compte Principal — {parseFloat(user?.balance || "0").toLocaleString()} XAF</SelectItem>
+                    {wallets.filter(w => w.currency !== "XAF").map(w => (
+                      <SelectItem key={w.id} value={w.currency}>
+                        Compte {w.currency} — {parseFloat(w.balance).toLocaleString()} {w.currency}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
                 <label className="text-sm font-medium">Destination</label>
                 <Select
                   value={destination}
@@ -276,7 +290,7 @@ export default function SendMoneyPage() {
                     }
                   }}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="border-[#F0B90B]/50 ring-offset-background focus:ring-2 focus:ring-[#F0B90B]">
                     <Globe className="w-4 h-4 text-muted-foreground mr-2" />
                     <SelectValue placeholder="Sélectionner la destination" />
                   </SelectTrigger>
@@ -302,34 +316,6 @@ export default function SendMoneyPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Solde à débiter</label>
-                    <Select value={internalWallet} onValueChange={setInternalWallet}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {localCurrency === "XAF" ? (
-                          <SelectItem value="XAF">Compte Principal — {parseFloat(user?.balance || "0").toLocaleString()} XAF</SelectItem>
-                        ) : (
-                          <>
-                            <SelectItem value={localCurrency}>
-                              Compte Principal — {balance.toLocaleString()} {localCurrency}
-                            </SelectItem>
-                            <SelectItem value="XAF">
-                              Compte XAF — {parseFloat(user?.balance || "0").toLocaleString()} XAF
-                            </SelectItem>
-                          </>
-                        )}
-                        {wallets.filter(w => w.currency !== "XAF" && w.currency !== localCurrency).map(w => (
-                          <SelectItem key={w.id} value={w.currency}>
-                            Compte {w.currency} — {parseFloat(w.balance).toLocaleString()} {w.currency}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
                     <label className="text-sm font-medium">Email, téléphone ou nom d'utilisateur</label>
                     <Input
                       placeholder="exemple@email.com / +237600000000 / username"
@@ -339,7 +325,7 @@ export default function SendMoneyPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Montant ({internalWallet})</label>
+                    <label className="text-sm font-medium">Montant ({selectedWallet})</label>
                     <Input
                       type="number"
                       placeholder="10000"
@@ -350,7 +336,7 @@ export default function SendMoneyPage() {
                   </div>
 
                   <Button
-                    className="w-full"
+                    className="w-full bg-[#F0B90B] hover:bg-[#D4A30A] text-black font-bold"
                     size="lg"
                     onClick={() => internalMutation.mutate()}
                     disabled={internalMutation.isPending}
@@ -362,7 +348,6 @@ export default function SendMoneyPage() {
               ) : (
                 <Form {...form}>
                   <form onSubmit={form.handleSubmit((d) => externalMutation.mutate({ ...d, countryId: destination }))} className="space-y-4">
-
                     <div className="space-y-2">
                       <label className="text-sm font-medium">Opérateur</label>
                       <FormField
@@ -431,7 +416,7 @@ export default function SendMoneyPage() {
                       </FormItem>
                     )} />
 
-                    <Button type="submit" className="w-full" size="lg" disabled={!canSubmitExternal}>
+                    <Button type="submit" className="w-full bg-[#F0B90B] hover:bg-[#D4A30A] text-black font-bold" size="lg" disabled={!canSubmitExternal}>
                       {externalMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
                       Envoyer {amountValue > 0 ? formatCurrency(amountValue, localCurrency as SupportedCurrency) : ""}
                     </Button>
