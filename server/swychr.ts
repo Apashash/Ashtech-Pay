@@ -190,8 +190,8 @@ export async function createSwychrPaymentLink(
     const fees  = computeSwychrFees(params.grossAmount, params.country_code);
 
     console.log(
-      `[Swychr] Creating link: gross=${params.grossAmount}, toSwychr=${fees.amountToSwychr}, ` +
-      `credited=${fees.creditedAmount}, totalFee=${fees.totalFeeRate}%`
+      `[Swychr] Creating link: gross=${params.grossAmount}, swychrFee=${fees.swychrFeeAmount}, ` +
+      `ashtechFee=${fees.ashtechFeeAmount}, credited=${fees.creditedAmount}, totalFee=${fees.totalFeeRate}%`
     );
 
     const res = await fetch(`${SWYCHR_BASE_URL}/create_payment_links`, {
@@ -206,11 +206,11 @@ export async function createSwychrPaymentLink(
         name:                params.name,
         email:               params.email,
         mobile:              params.mobile,
-        amount:              fees.amountToSwychr,
+        amount:              params.grossAmount,
         currency:            params.currency,
         transaction_id:      params.transaction_id,
         description:         params.description,
-        pass_digital_charge: true,
+        pass_digital_charge: false,
         callback_url:        params.callback_url,
       }),
     });
