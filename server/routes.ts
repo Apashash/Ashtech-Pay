@@ -800,7 +800,9 @@ export async function registerRoutes(
       const minTransferSetting = await storage.getSetting("min_transfer");
       const minTransfer = minTransferSetting ? parseFloat(minTransferSetting.value) : 2650;
       if (parsedAmount < minTransfer) {
-        return res.status(400).json({ message: `Le montant minimum de transfert est de ${minTransfer.toLocaleString()} XAF` });
+        const sender0 = await storage.getUser(senderId);
+        const txCurrency0 = (sourceCurrency || sender0?.preferredCurrency || "XAF");
+        return res.status(400).json({ message: `Le montant minimum de transfert est de ${minTransfer.toLocaleString()} ${txCurrency0}` });
       }
       
       const sender = await storage.getUser(senderId);
@@ -841,8 +843,9 @@ export async function registerRoutes(
       
       // Check balance
       if (parseFloat(sender.balance) < totalAmount) {
+        const txCurr = sourceCurrency || sender.preferredCurrency || "XAF";
         return res.status(400).json({ 
-          message: `Solde insuffisant. Vous avez besoin de ${totalAmount.toFixed(2)} XAF (montant + frais)` 
+          message: `Solde insuffisant. Vous avez besoin de ${totalAmount.toFixed(2)} ${txCurr} (montant + frais)` 
         });
       }
       
@@ -1098,10 +1101,10 @@ export async function registerRoutes(
       const totalAmount = parsedAmount + feeAmount;
 
       // Check balance in the selected wallet/currency
-      if (currency === "XAF") {
+      if (currency === "XAF" || currency === (sender.preferredCurrency || "XAF")) {
         if (parseFloat(sender.balance) < totalAmount) {
           return res.status(400).json({ 
-            message: `Solde insuffisant. Vous avez besoin de ${totalAmount.toFixed(2)} XAF (montant + frais)` 
+            message: `Solde insuffisant. Vous avez besoin de ${totalAmount.toFixed(2)} ${currency} (montant + frais)` 
           });
         }
         await storage.updateUserBalance(senderId, -totalAmount);
@@ -1287,15 +1290,17 @@ export async function registerRoutes(
       const userId = req.userId!;
       const amount = parseFloat(data.amount);
 
-      const minWithdrawalSetting = await storage.getSetting("min_withdrawal");
-      const minWithdrawal = minWithdrawalSetting ? parseFloat(minWithdrawalSetting.value) : 2650;
-      if (amount < minWithdrawal) {
-        return res.status(400).json({ message: `Le montant minimum de retrait est de ${minWithdrawal.toLocaleString()} XAF` });
-      }
-
       const user = await storage.getUser(userId);
       if (!user) {
         return res.status(404).json({ message: "Utilisateur non trouvé" });
+      }
+
+      const userCurrency = user.preferredCurrency || "XAF";
+
+      const minWithdrawalSetting = await storage.getSetting("min_withdrawal");
+      const minWithdrawal = minWithdrawalSetting ? parseFloat(minWithdrawalSetting.value) : 2650;
+      if (amount < minWithdrawal) {
+        return res.status(400).json({ message: `Le montant minimum de retrait est de ${minWithdrawal.toLocaleString()} ${userCurrency}` });
       }
 
       // Calculate fee using fee resolution
@@ -1317,7 +1322,7 @@ export async function registerRoutes(
       const totalAmount = amount + feeAmount;
 
       if (parseFloat(user.balance) < totalAmount) {
-        return res.status(400).json({ message: `Solde insuffisant (montant + frais = ${totalAmount.toFixed(0)} XAF)` });
+        return res.status(400).json({ message: `Solde insuffisant (montant + frais = ${totalAmount.toFixed(0)} ${userCurrency})` });
       }
 
       await storage.updateUserBalance(userId, -totalAmount);
@@ -1804,8 +1809,10 @@ export async function registerRoutes(
       if (!currency || !SUPPORTED_CURRENCIES.includes(currency)) {
         return res.status(400).json({ message: "Devise non supportée" });
       }
-      if (currency === "XAF") {
-        return res.status(400).json({ message: "Le compte XAF est votre compte principal" });
+      const walletUser = await storage.getUser(userId);
+      const primaryCurr = walletUser?.preferredCurrency || "XAF";
+      if (currency === primaryCurr) {
+        return res.status(400).json({ message: `Le compte ${primaryCurr} est votre compte principal` });
       }
       const existing = await storage.getWallet(userId, currency);
       if (existing) {
@@ -3156,7 +3163,7 @@ export async function registerRoutes(
           userId: transaction.userId,
           type: "deposit_confirmed",
           title: "Dépôt confirmé",
-          message: `Votre dépôt de ${transaction.amount} XAF a été confirmé et crédité sur votre compte.`,
+          message: `Votre dépôt de ${transaction.amount} ${transaction.currency || "XAF"} a été confirmé et crédité sur votre compte.`,
           transactionId: transaction.id,
           isRead: false,
         });
@@ -3266,7 +3273,7 @@ export async function registerRoutes(
             userId:        transaction.userId,
             type:          "withdrawal_failed",
             title:         "Retrait annulé",
-            message:       `Votre retrait de ${transaction.amount} XAF a été annulé. Le montant de ${refundAmount.toFixed(0)} XAF a été recrédité.`,
+            message:       `Votre retrait de ${transaction.amount} ${transaction.currency || "XAF"} a été annulé. Le montant de ${refundAmount.toFixed(0)} ${transaction.currency || "XAF"} a été recrédité.`,
             transactionId: transaction.id,
             isRead:        false,
           });
