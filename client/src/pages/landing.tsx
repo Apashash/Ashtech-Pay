@@ -42,12 +42,12 @@ import { useState } from "react";
 import { useTheme } from "@/components/theme-provider";
 import { useScrollAnimation } from "@/hooks/use-scroll-animation";
 import logoImage from "@assets/logo.png";
-import paymentMethodsImage from "@assets/image_1768083090679.png";
-import paymentValidatedImage from "@assets/image_1768076940034.png";
-import globalReachImage from "@assets/image_1768076949520.png";
-import withdrawalImage from "@assets/image_1768083078697.png";
-import shareImage from "@assets/image_1768076993874.png";
 import heroBgImage from "@assets/generated_images/hands_exchanging_money_and_package.png";
+const paymentMethodsImage = logoImage;
+const paymentValidatedImage = logoImage;
+const globalReachImage = logoImage;
+const withdrawalImage = logoImage;
+const shareImage = logoImage;
 
 const paymentMethods = [
   { name: "Orange Money" },

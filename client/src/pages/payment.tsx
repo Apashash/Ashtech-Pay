@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { SiPaypal } from "react-icons/si";
-import logoImage from "@assets/image_1768087588517.png";
+import logoImage from "@assets/logo.png";
 import { Progress } from "@/components/ui/progress";
 
 const CURRENCY_FLAGS: Record<SupportedCurrency, string> = {

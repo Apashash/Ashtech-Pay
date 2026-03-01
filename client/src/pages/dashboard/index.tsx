@@ -40,7 +40,7 @@ import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Link } from "wouter";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import dashboardIllustration from "@assets/IMG_7793_1771906562197.png";
+import dashboardIllustration from "@assets/logo.png";
 
 const periodOptions = [
   { value: "today", label: "Aujourd'hui" },
