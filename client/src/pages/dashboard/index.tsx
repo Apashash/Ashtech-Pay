@@ -122,7 +122,8 @@ const INTERNAL_TRANSFER_KEY = "__ashtech_interne__";
 function SendMoneyDialog({ open, onClose, wallets = [] }: { open: boolean; onClose: () => void, wallets?: WalletEntry[] }) {
   const { toast } = useToast();
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
-  const [selectedWallet, setSelectedWallet] = useState<string>("XAF");
+  const primaryCurrency = user?.preferredCurrency || "XAF";
+  const [selectedWallet, setSelectedWallet] = useState<string>(primaryCurrency);
   const [destination, setDestination] = useState<string>(INTERNAL_TRANSFER_KEY);
   const [recipientIdentifier, setRecipientIdentifier] = useState<string>("");
   const [amount, setAmount] = useState<string>("");
@@ -132,7 +133,7 @@ function SendMoneyDialog({ open, onClose, wallets = [] }: { open: boolean; onClo
   const reset = () => {
     setRecipientIdentifier("");
     setAmount("");
-    setSelectedWallet("XAF");
+    setSelectedWallet(primaryCurrency);
     setDestination(INTERNAL_TRANSFER_KEY);
   };
 
@@ -215,9 +216,10 @@ function SendMoneyDialog({ open, onClose, wallets = [] }: { open: boolean; onClo
                 <SelectValue placeholder="Choisir un compte" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="XAF">Compte Principal — {parseFloat(user?.balance || "0").toLocaleString()} XAF</SelectItem>
-                {wallets.filter(w => w.currency !== "XAF").map(w => (
-                  <SelectItem key={w.id} value={w.currency}>Compte {w.currency} — {parseFloat(w.balance).toLocaleString()} {w.currency}</SelectItem>
+                {wallets.map((w, idx) => (
+                  <SelectItem key={w.currency || idx} value={w.currency}>
+                    {idx === 0 ? "Compte Principal" : `Compte ${w.currency}`} — {parseFloat(w.balance || "0").toLocaleString()} {w.currency}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>

@@ -1491,16 +1491,24 @@ export async function registerRoutes(
 
       const extraWallets = await storage.getUserWallets(userId);
 
-      // XAF is always first (from user.balance)
-      const xafWallet = { currency: "XAF", balance: user.balance, symbol: "FCFA" };
+      // Primary wallet uses the user's preferred currency (not hardcoded XAF)
+      const primaryCurrency = (user.preferredCurrency || "XAF") as SupportedCurrency;
+      const primaryWallet = {
+        currency: primaryCurrency,
+        balance: user.balance,
+        symbol: CURRENCY_SYMBOLS[primaryCurrency] || primaryCurrency,
+      };
 
+      // Extra wallets: exclude the primary currency to avoid duplicates
       const result = [
-        xafWallet,
-        ...extraWallets.map(w => ({
-          currency: w.currency,
-          balance: w.balance,
-          symbol: CURRENCY_SYMBOLS[w.currency as SupportedCurrency] || w.currency,
-        })),
+        primaryWallet,
+        ...extraWallets
+          .filter(w => w.currency !== primaryCurrency)
+          .map(w => ({
+            currency: w.currency,
+            balance: w.balance,
+            symbol: CURRENCY_SYMBOLS[w.currency as SupportedCurrency] || w.currency,
+          })),
       ];
 
       res.json(result);

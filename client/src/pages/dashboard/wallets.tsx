@@ -56,10 +56,10 @@ export default function WalletsPage() {
     refetchInterval: 30000,
   });
 
-  const primaryCurrency = user?.country ? (COUNTRY_CURRENCIES[user.country] || "XAF") : "XAF";
+  const primaryCurrency = user?.preferredCurrency || "XAF";
 
   const existingCurrencies = walletList.map(w => w.currency);
-  const availableCurrencies = SUPPORTED_CURRENCIES.filter(c => !existingCurrencies.includes(c) && c !== "XAF");
+  const availableCurrencies = SUPPORTED_CURRENCIES.filter(c => !existingCurrencies.includes(c) && c !== primaryCurrency);
 
   const convertMutation = useMutation({
     mutationFn: async (data: { fromCurrency: string; toCurrency: string; amount: string }) => {
@@ -150,7 +150,7 @@ export default function WalletsPage() {
         <Alert>
           <Info className="h-4 w-4" />
           <AlertDescription>
-            Les dépôts sont effectués uniquement sur le compte <strong>XAF</strong> (Cameroun).
+            Les dépôts sont effectués sur votre compte principal <strong>{primaryCurrency}</strong>{user?.country ? ` (${user.country})` : ""}.
             Vous pouvez convertir vos fonds instantanément entre vos différents portefeuilles.
           </AlertDescription>
         </Alert>

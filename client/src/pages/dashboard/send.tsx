@@ -80,19 +80,25 @@ export default function SendMoneyPage() {
 
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const { data: wallets = [] } = useQuery<Wallet[]>({ queryKey: ["/api/wallets"] });
-  
-  const [selectedWallet, setSelectedWallet] = useState<string>("XAF");
+
+  const primaryCurrency = user?.preferredCurrency || "XAF";
+  const [selectedWallet, setSelectedWallet] = useState<string>(primaryCurrency);
   const [destination, setDestination] = useState<string>(INTERNAL_KEY);
   const [internalIdentifier, setInternalIdentifier] = useState("");
   const [internalAmount, setInternalAmount] = useState("");
 
+  // Sync selectedWallet when user data loads
+  useEffect(() => {
+    if (primaryCurrency && selectedWallet === "XAF" && primaryCurrency !== "XAF") {
+      setSelectedWallet(primaryCurrency);
+    }
+  }, [primaryCurrency]);
+
   const isInternal = destination === INTERNAL_KEY;
 
-  const balance = selectedWallet === "XAF" 
-    ? parseFloat(user?.balance || "0")
-    : parseFloat(wallets.find(w => w.currency === selectedWallet)?.balance || "0");
+  const balance = parseFloat(wallets.find(w => w.currency === selectedWallet)?.balance || "0");
 
-  const localCurrency = user?.preferredCurrency || "XAF";
+  const localCurrency = primaryCurrency;
   const { data: limits } = useQuery<{ minTransfer: number; maxTransfer: number }>({
     queryKey: ["/api/public/limits"],
   });
@@ -274,10 +280,9 @@ export default function SendMoneyPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="XAF">Compte Principal — {parseFloat(user?.balance || "0").toLocaleString()} XAF</SelectItem>
-                    {wallets.filter(w => w.currency !== "XAF").map(w => (
-                      <SelectItem key={w.id} value={w.currency}>
-                        Compte {w.currency} — {parseFloat(w.balance).toLocaleString()} {w.currency}
+                    {wallets.map((w, idx) => (
+                      <SelectItem key={w.currency} value={w.currency}>
+                        {idx === 0 ? "Compte Principal" : `Compte ${w.currency}`} — {parseFloat(w.balance || "0").toLocaleString()} {w.currency}
                       </SelectItem>
                     ))}
                   </SelectContent>
