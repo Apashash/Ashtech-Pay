@@ -28,7 +28,7 @@ export async function loadFxRates(): Promise<Record<string, number>> {
     }
   });
   ALL_FX_CURRENCIES.forEach(c => {
-    if (!rates[c.code]) rates[code] = c.defaultRate;
+    if (!rates[c.code]) rates[c.code] = c.defaultRate;
   });
   return rates;
 }
