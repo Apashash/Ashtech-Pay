@@ -29,7 +29,7 @@ import fs from "fs";
 import { uploadToSupabase } from "./supabase";
 import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, fetchPaymentLinkDetails, ASHTECH_MARGIN } from "./swychr";
 import { addPendingPayment } from "./paymentPoller";
-import { loadFxRates, convertFromXAF, convertToXAF, creditUserWallet, cleanupEmptyWallets } from "./walletHelper";
+import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, cleanupEmptyWallets } from "./walletHelper";
 import { createSwychrPayout, formatInternationalPhone, fiatToPusd, pusdToFiatRate, getConversionRate, convertFiatToPusd, getPayoutToken, COUNTRY_CURRENCY } from "./swychrPayout";
 import { addPendingPayout } from "./payoutPoller";
 import {
@@ -2640,6 +2640,14 @@ export async function registerRoutes(
         recipientCountry: countryDisplay,
         operatorId: resolvedOperatorId || null,
       });
+
+      // Get operator name for Swychr
+      let operatorName = "Mobile Money";
+      if (operator && countryId) {
+        const operators = await storage.getOperatorsByCountry(countryId);
+        const operatorData = operators.find((o: { name: string; id: string }) => o.name === operator || o.id === operator);
+        operatorName = operatorData?.name || operator;
+      }
 
       // Call Swychr API for Mobile Money payments
       if (paymentMethod === "mobile_money") {
