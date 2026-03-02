@@ -1128,11 +1128,11 @@ export async function registerRoutes(
       
       const totalAmount = parsedAmount + feeAmount;
 
-      // Check balance in the selected wallet/currency
-      if (currency === "XAF" || currency === (sender.preferredCurrency || "XAF")) {
+      // Check balance in the selected wallet/currency - Strict matching (no XAF/XOF auto-parity)
+      if (currency === (sender.preferredCurrency || "XAF")) {
         if (parseFloat(sender.balance) < totalAmount) {
           return res.status(400).json({ 
-            message: `Solde insuffisant. Vous avez besoin de ${totalAmount.toFixed(2)} ${currency} (montant + frais)` 
+            message: `Solde insuffisant dans votre compte principal. Besoin de ${totalAmount.toFixed(2)} ${currency}` 
           });
         }
         await storage.updateUserBalance(senderId, -totalAmount);
@@ -1369,8 +1369,8 @@ export async function registerRoutes(
 
       const withdrawalCurrencyNorm = normalizeCurrency(withdrawalCurrency);
       
-      // Ensure we are pulling from the correct wallet
-      const isPrimary = (withdrawalCurrencyNorm === "XAF" || withdrawalCurrencyNorm === "XOF" || withdrawalCurrency === (user.preferredCurrency || "XAF"));
+      // Strict currency matching: must match exactly, no auto-parity between XAF/XOF for withdrawals
+      const isPrimary = (withdrawalCurrency === (user.preferredCurrency || "XAF"));
       
       if (isPrimary) {
         if (parseFloat(user.balance) < totalAmount) {
