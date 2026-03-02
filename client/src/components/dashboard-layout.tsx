@@ -53,6 +53,8 @@ import {
   Check,
   Coins,
   RefreshCw,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { 
   Dialog, 
@@ -186,6 +188,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [showPusdConvert, setShowPusdConvert] = useState(false);
   const [pusdAmount, setPusdAmount] = useState("");
   const [pusdCountry, setPusdCountry] = useState("CM");
+  const [expandedNotifId, setExpandedNotifId] = useState<string | null>(null);
 
   const convertPusdMutation = useMutation({
     mutationFn: async () => {
@@ -448,47 +451,50 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                       </div>
                     ) : (
                       <div className="divide-y divide-border">
-                        {notificationData.notifications.slice(0, 20).map((notification) => (
+                        {notificationData.notifications.slice(0, 20).map((notification) => {
+                          const isExpanded = expandedNotifId === notification.id;
+                          return (
                           <div
                             key={notification.id}
-                            className={`p-3 ${!notification.isRead ? "bg-primary/5" : ""}`}
+                            className={`p-3 transition-colors ${!notification.isRead ? "bg-primary/5" : ""} hover:bg-muted/40 cursor-pointer`}
                             data-testid={`notification-item-${notification.id}`}
+                            onClick={() => {
+                              setExpandedNotifId(isExpanded ? null : notification.id);
+                              if (!notification.isRead) markAsReadMutation.mutate(notification.id);
+                            }}
                           >
                             <div className="flex items-start gap-3">
-                              <div className="mt-0.5">
+                              <div className="mt-0.5 shrink-0">
                                 {getNotificationIcon(notification.type)}
                               </div>
-                              <div 
-                                className="flex-1 min-w-0 cursor-pointer"
-                                onClick={() => {
-                                  if (notification.transactionId) {
-                                    setLocation("/dashboard/transactions");
-                                  }
-                                }}
-                              >
-                                <p className="text-sm font-medium truncate">{notification.title}</p>
-                                <p className="text-xs text-muted-foreground line-clamp-2">{notification.message?.replace(/\bXAF\b/g, preferredCurrency)}</p>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between gap-1">
+                                  <p className="text-sm font-medium truncate">{notification.title}</p>
+                                  <span className="text-muted-foreground shrink-0">
+                                    {isExpanded
+                                      ? <ChevronUp className="w-3 h-3" />
+                                      : <ChevronDown className="w-3 h-3" />}
+                                  </span>
+                                </div>
+                                <p className={`text-xs text-muted-foreground mt-0.5 ${isExpanded ? "whitespace-pre-wrap break-words" : "line-clamp-2"}`}>
+                                  {notification.message?.replace(/\bXAF\b/g, preferredCurrency)}
+                                </p>
                                 {notification.createdAt && (
                                   <p className="text-xs text-muted-foreground mt-1">
                                     {format(new Date(notification.createdAt), "dd MMM à HH:mm", { locale: fr })}
                                   </p>
                                 )}
-                              </div>
-                              <div className="flex items-center gap-1">
-                                {!notification.isRead && (
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      markAsReadMutation.mutate(notification.id);
-                                    }}
-                                    data-testid={`button-mark-read-${notification.id}`}
+                                {isExpanded && notification.transactionId && (
+                                  <button
+                                    className="text-xs text-primary mt-2 underline"
+                                    onClick={(e) => { e.stopPropagation(); setLocation("/dashboard/transactions"); }}
+                                    data-testid={`button-notif-goto-tx-${notification.id}`}
                                   >
-                                    <Check className="w-3 h-3" />
-                                  </Button>
+                                    Voir la transaction →
+                                  </button>
                                 )}
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -504,7 +510,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                               </div>
                             </div>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </ScrollArea>
