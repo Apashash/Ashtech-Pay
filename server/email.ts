@@ -7,7 +7,7 @@ const APP_URL      = "https://ashtechpay.top";
 const LOGO_URL     = "https://ashtechpay.top/logo.png";
 const FACEBOOK_URL = "https://www.facebook.com/share/1Eczpeowdp/?mibextid=wwXIfr";
 const WHATSAPP_URL = "https://whatsapp.com/channel/0029VbC5tPPCxoAveJ44Vs2w";
-const SUPPORT_PHONE = "+237 690 000 000";
+const SUPPORT_PHONE = "+237 6 83 67 78 72";
 
 export async function sendWelcomeEmail(to: string, fullName: string): Promise<void> {
   const firstName = (fullName?.trim().split(" ")[0]) || "cher(e) client(e)";
