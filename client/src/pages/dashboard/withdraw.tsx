@@ -11,7 +11,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { withdrawSchema, type SupportedCurrency, type WithdrawalNumber } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User } from "@shared/schema";
-import { Wallet, Smartphone, Building2, Loader2, CheckCircle, AlertCircle, Phone, Plus, Settings, Globe, Shield, Info } from "lucide-react";
+import { Wallet, Smartphone, Building2, Loader2, CheckCircle, AlertCircle, Phone, Plus, Settings, Globe, Shield, Info, ArrowLeftRight } from "lucide-react";
 import { z } from "zod";
 import { useState, useEffect } from "react";
 import { formatCurrency } from "@/lib/currency";
@@ -48,8 +48,11 @@ export default function WithdrawPage() {
   const [selectedOperator, setSelectedOperator] = useState<string>("");
   const { toast } = useToast();
   
-  const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
-  const balance = parseFloat(user?.balance || "0");
+    const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
+    const { data: wallets = [] } = useQuery<{currency: string, balance: string}[]>({ queryKey: ["/api/wallets"] });
+  const selectedCountryCurrency = selectedCountryData?.currency || user?.preferredCurrency || "XAF";
+    const selectedWallet = wallets.find(w => w.currency === selectedCountryCurrency) || (selectedCountryCurrency === (user?.preferredCurrency || "XAF") ? { balance: user?.balance } : null);
+    const balance = parseFloat(selectedWallet?.balance || "0");
 
   const { data: limits } = useQuery<{ minWithdrawal: number; maxWithdrawal: number; minTransfer: number; maxTransfer: number }>({
     queryKey: ["/api/public/limits"],
@@ -186,7 +189,10 @@ export default function WithdrawPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Solde disponible</p>
-                <p className="text-2xl font-bold text-foreground">{formatCurrency(balance, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</p>
+                <div className="flex flex-col">
+                    <p className="text-2xl font-bold text-foreground">{formatCurrency(balance, selectedCountryCurrency as SupportedCurrency)}</p>
+                    <p className="text-[10px] text-muted-foreground">Compte utilisé: {selectedCountryCurrency}</p>
+                  </div>
               </div>
               <Wallet className="w-8 h-8 text-orange-500" />
             </div>
