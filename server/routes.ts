@@ -2704,7 +2704,7 @@ export async function registerRoutes(
               gateway: "swychr",
               redirectUrl: paymentLink.redirectUrl || null,
               amount: numAmount,
-              feeAmount: feeAmount,
+              feeAmount: parseFloat(totalFeeAmount),
               totalAmount: parseFloat(totalAmount),
             });
           } else {
@@ -2730,7 +2730,7 @@ export async function registerRoutes(
           reference: intent.reference,
           redirectUrl: paymentLink.redirectUrl || null,
           amount: numAmount,
-          feeAmount: feeAmount,
+          feeAmount: parseFloat(totalFeeAmount),
           totalAmount: parseFloat(totalAmount),
         });
       }
