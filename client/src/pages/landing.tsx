@@ -42,7 +42,6 @@ import { useState } from "react";
 import { useTheme } from "@/components/theme-provider";
 import { useScrollAnimation } from "@/hooks/use-scroll-animation";
 import logoImage from "@assets/logo.png";
-import heroBgImage from "@assets/generated_images/hands_exchanging_money_and_package.png";
 import paymentValidatedImage from "@assets/IMG_7981_1772401047932.jpeg";
 import withdrawalImage from "@assets/IMG_7982_1772401047932.jpeg";
 import globalReachImage from "@assets/IMG_7984_1772401047932.jpeg";
@@ -181,13 +180,19 @@ function Navbar() {
 function HeroSection() {
   return (
     <section className="relative min-h-screen flex items-center pt-16 overflow-hidden">
-      <div 
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-40 dark:opacity-30"
-        style={{ backgroundImage: `url(${heroBgImage})` }}
-      />
-      <div className="absolute inset-0 bg-gradient-to-br from-background/90 via-background/70 to-transparent" />
-      <div className="absolute top-1/4 right-0 w-96 h-96 bg-primary/10 rounded-full blur-3xl" />
-      <div className="absolute bottom-1/4 left-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl" />
+      <video
+        autoPlay
+        muted
+        loop
+        playsInline
+        className="absolute inset-0 w-full h-full object-cover opacity-35 dark:opacity-25"
+        style={{ zIndex: 0 }}
+      >
+        <source src="/africa_hero.mp4" type="video/mp4" />
+      </video>
+      <div className="absolute inset-0 bg-gradient-to-br from-background/95 via-background/75 to-background/40" style={{ zIndex: 1 }} />
+      <div className="absolute top-1/4 right-0 w-96 h-96 bg-primary/10 rounded-full blur-3xl" style={{ zIndex: 1 }} />
+      <div className="absolute bottom-1/4 left-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl" style={{ zIndex: 1 }} />
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-32 relative z-10">
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
