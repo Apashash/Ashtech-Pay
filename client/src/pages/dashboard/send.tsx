@@ -139,8 +139,15 @@ export default function SendMoneyPage() {
     if (watchedCountryId !== prevCountryId) {
       form.setValue("operatorId", "");
       setPrevCountryId(watchedCountryId);
+      // Auto-switch wallet to match destination country currency if user has that wallet
+      if (selectedCountry?.currency) {
+        const matchingWallet = wallets.find(w => w.currency === selectedCountry.currency);
+        if (matchingWallet) {
+          setSelectedWallet(selectedCountry.currency);
+        }
+      }
     }
-  }, [watchedCountryId, prevCountryId, form]);
+  }, [watchedCountryId, prevCountryId, form, selectedCountry, wallets]);
 
   const fetchFeePreview = useCallback(async () => {
     if (!watchedOperatorId || amountValue <= 0) {

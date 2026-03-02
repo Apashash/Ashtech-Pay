@@ -868,26 +868,42 @@ export async function registerRoutes(
       }
       
       const totalAmount = parsedAmount + feeAmount;
-      
-      // Check balance
-      if (parseFloat(sender.balance) < totalAmount) {
-        const txCurr = sourceCurrency || sender.preferredCurrency || "XAF";
-        return res.status(400).json({ 
-          message: `Solde insuffisant. Vous avez besoin de ${totalAmount.toFixed(2)} ${txCurr} (montant + frais)` 
-        });
+
+      // Determine if debiting primary wallet or secondary wallet
+      const isPrimaryTransfer = (txCurrency === (sender.preferredCurrency || "XAF"));
+
+      // Check balance in the correct wallet
+      if (isPrimaryTransfer) {
+        if (parseFloat(sender.balance) < totalAmount) {
+          return res.status(400).json({
+            message: `Solde insuffisant. Vous avez besoin de ${totalAmount.toFixed(2)} ${txCurrency} (montant + frais)`,
+          });
+        }
+      } else {
+        const wallet = await storage.getWallet(senderId, txCurrency);
+        if (!wallet || parseFloat(wallet.balance) < totalAmount) {
+          return res.status(400).json({
+            message: `Solde insuffisant dans votre compte ${txCurrency}. Besoin de ${totalAmount.toFixed(2)} ${txCurrency} (montant + frais)`,
+          });
+        }
       }
-      
-      // Debit user balance immediately
-      console.log(`[Transfer] Sender=${senderId}, Amount=${parsedAmount}, Fee=${feeAmount}, Total=${totalAmount}`);
-      await storage.updateUserBalance(senderId, -totalAmount);
-      
+
+      // Debit the correct wallet immediately
+      console.log(`[Transfer] Sender=${senderId}, Amount=${parsedAmount}, Fee=${feeAmount}, Total=${totalAmount} (${txCurrency})`);
+      if (isPrimaryTransfer) {
+        await storage.updateUserBalance(senderId, -totalAmount);
+      } else {
+        await storage.upsertWallet(senderId, txCurrency, -totalAmount);
+        await cleanupEmptyWallets(senderId);
+      }
+
       // Create pending transaction
       const reference = generateTransactionReference("transfer_out");
       const transaction = await storage.createTransaction({
         userId: senderId,
         type: "transfer_out",
         amount: parsedAmount.toFixed(2),
-        currency: "XAF",
+        currency: txCurrency,
         status: "pending",
         description: description || `Envoi à ${recipientName}`,
         recipientName,
@@ -969,7 +985,11 @@ export async function registerRoutes(
           } else {
             console.error(`[Transfer] Payout failed for ${reference}: ${payoutResult.message}`);
             await storage.updateTransactionStatus(transaction.id, "failed");
-            await storage.updateUserBalance(senderId, totalAmount);
+            if (isPrimaryTransfer) {
+              await storage.updateUserBalance(senderId, totalAmount);
+            } else {
+              await storage.upsertWallet(senderId, txCurrency, totalAmount);
+            }
             return res.status(400).json({
               message: `Le transfert a échoué: ${payoutResult.message}`,
             });
