@@ -71,7 +71,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Link as RouterLink } from "wouter";
-import logoImage from "@assets/logo.png";
+
 import { CurrencySelector } from "@/components/currency-selector";
 import { formatCurrency, formatWalletBalance } from "@/lib/currency";
 import { useExchangeRates } from "@/hooks/use-exchange-rates";
@@ -274,7 +274,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             <Link href="/dashboard">
               <div className="flex items-center cursor-pointer">
                 <div className="bg-black rounded-xl px-3 py-1.5">
-                  <img src={logoImage} alt="Ashtech-Pay" className="h-9 w-auto" />
+                  <img src="/logo.png" alt="Ashtech-Pay" className="h-9 w-auto" />
                 </div>
               </div>
             </Link>

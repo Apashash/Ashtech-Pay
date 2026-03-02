@@ -40,7 +40,7 @@ import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Link } from "wouter";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import dashboardIllustration from "@assets/logo.png";
+
 
 const periodOptions = [
   { value: "today", label: "Aujourd'hui" },
@@ -615,7 +615,7 @@ export default function DashboardHome() {
                 </button>
                 <div className="bg-black rounded-xl p-2 hidden sm:block">
                   <img
-                    src={dashboardIllustration}
+                    src="/logo.png"
                     alt="Tableau de bord Ashtech Pay"
                     className="h-14 w-auto object-contain"
                   />

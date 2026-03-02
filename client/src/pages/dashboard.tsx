@@ -35,7 +35,7 @@ import {
   User as UserIcon,
   Menu
 } from "lucide-react";
-import logoImage from "@assets/logo.png";
+
 import { z } from "zod";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -53,7 +53,7 @@ function DashboardHeader({ user, onLogout }: { user: User; onLogout: () => void 
           <Link href="/dashboard">
             <div className="flex items-center cursor-pointer">
               <div className="bg-black rounded-xl px-3 py-1.5">
-                <img src={logoImage} alt="Ashtech-Pay Afrique" className="h-10 w-auto" />
+                <img src="/logo.png" alt="Ashtech-Pay Afrique" className="h-10 w-auto" />
               </div>
             </div>
           </Link>

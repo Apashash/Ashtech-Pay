@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { SiPaypal } from "react-icons/si";
-import logoImage from "@assets/logo.png";
+
 import { Progress } from "@/components/ui/progress";
 
 const CURRENCY_FLAGS: Record<SupportedCurrency, string> = {
@@ -489,7 +489,7 @@ export default function PaymentPage() {
       
       <header className="flex justify-between items-center px-4 py-4 relative z-10">
         <div className="bg-black rounded-xl px-3 py-1.5">
-          <img src={logoImage} alt="Ashtech Pay Afrique" className="h-9 object-contain" data-testid="img-logo" />
+          <img src="/logo.png" alt="Ashtech Pay Afrique" className="h-9 object-contain" data-testid="img-logo" />
         </div>
         <Select value={displayCurrency || linkCurrency} onValueChange={(val) => setDisplayCurrency(val as SupportedCurrency)}>
           <SelectTrigger className="w-auto gap-2 bg-muted/50 border-border">
@@ -895,7 +895,7 @@ function Footer() {
       <div className="max-w-lg mx-auto text-center space-y-4">
         <div className="flex items-center justify-center gap-3">
           <div className="bg-black rounded-xl px-3 py-1.5">
-            <img src={logoImage} alt="Ashtech Pay" className="h-9 w-auto" />
+            <img src="/logo.png" alt="Ashtech Pay" className="h-9 w-auto" />
           </div>
         </div>
         

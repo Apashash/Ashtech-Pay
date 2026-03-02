@@ -2,7 +2,7 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, HelpCircle, ChevronDown } from "lucide-react";
 import { useState } from "react";
-import logoImage from "@assets/logo.png";
+
 
 interface FAQItem {
   question: string;
@@ -81,7 +81,7 @@ export default function FAQPage() {
           <div className="flex items-center justify-between h-16">
             <Link href="/">
               <div className="flex items-center gap-2 cursor-pointer">
-                <img src={logoImage} alt="Ashtech-Pay Afrique" className="h-14 w-auto" />
+                <img src="/logo.png" alt="Ashtech-Pay Afrique" className="h-14 w-auto" />
               </div>
             </Link>
             <Link href="/">

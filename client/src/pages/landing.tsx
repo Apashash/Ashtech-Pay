@@ -41,7 +41,7 @@ import {
 import { useState } from "react";
 import { useTheme } from "@/components/theme-provider";
 import { useScrollAnimation } from "@/hooks/use-scroll-animation";
-import logoImage from "@assets/logo.png";
+
 import paymentValidatedImage from "@assets/IMG_7981_1772401047932.jpeg";
 import withdrawalImage from "@assets/IMG_7982_1772401047932.jpeg";
 import globalReachImage from "@assets/IMG_7984_1772401047932.jpeg";
@@ -109,7 +109,7 @@ function Navbar() {
             <Link href="/">
               <div className="flex items-center gap-2 cursor-pointer">
                 <div className="bg-black rounded-xl px-3 py-1.5">
-                  <img src={logoImage} alt="Ashtech-Pay Afrique" className="h-10 w-auto" />
+                  <img src="/logo.png" alt="Ashtech-Pay Afrique" className="h-10 w-auto" />
                 </div>
               </div>
             </Link>
@@ -972,7 +972,7 @@ function Footer() {
           <div>
             <div className="flex items-center gap-2 mb-4">
               <div className="bg-black rounded-xl px-3 py-1.5">
-                <img src={logoImage} alt="Ashtech-Pay Afrique" className="h-10 w-auto" />
+                <img src="/logo.png" alt="Ashtech-Pay Afrique" className="h-10 w-auto" />
               </div>
             </div>
             <p className="text-muted-foreground text-sm">

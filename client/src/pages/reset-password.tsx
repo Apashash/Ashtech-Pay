@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { resetPasswordSchema } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { Lock, Loader2, ArrowLeft, Eye, EyeOff, CheckCircle } from "lucide-react";
-import logoImage from "@assets/logo.png";
+
 import { z } from "zod";
 
 type ResetPasswordFormData = z.infer<typeof resetPasswordSchema>;
@@ -71,7 +71,7 @@ export default function ResetPasswordPage() {
             <Link href="/">
               <div className="flex items-center justify-center cursor-pointer">
                 <div className="bg-black rounded-2xl px-6 py-3">
-                  <img src={logoImage} alt="Ashtech-Pay Afrique" className="h-20 w-auto" />
+                  <img src="/logo.png" alt="Ashtech-Pay Afrique" className="h-20 w-auto" />
                 </div>
               </div>
             </Link>
@@ -111,7 +111,7 @@ export default function ResetPasswordPage() {
             <Link href="/">
               <div className="flex items-center justify-center cursor-pointer">
                 <div className="bg-black rounded-2xl px-6 py-3">
-                  <img src={logoImage} alt="Ashtech-Pay Afrique" className="h-20 w-auto" />
+                  <img src="/logo.png" alt="Ashtech-Pay Afrique" className="h-20 w-auto" />
                 </div>
               </div>
             </Link>
@@ -154,7 +154,7 @@ export default function ResetPasswordPage() {
           <Link href="/">
             <div className="flex items-center justify-center cursor-pointer pt-4">
               <div className="bg-black rounded-2xl px-6 py-3">
-                <img src={logoImage} alt="Ashtech-Pay Afrique" className="h-20 w-auto" />
+                <img src="/logo.png" alt="Ashtech-Pay Afrique" className="h-20 w-auto" />
               </div>
             </div>
           </Link>

@@ -2,7 +2,7 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ArrowLeft, HelpCircle, Link2, Wallet, ArrowDownUp, Shield, CreditCard, Users } from "lucide-react";
-import logoImage from "@assets/logo.png";
+
 
 export default function HelpPage() {
   const categories = [
@@ -51,7 +51,7 @@ export default function HelpPage() {
           <div className="flex items-center justify-between h-16">
             <Link href="/">
               <div className="flex items-center gap-2 cursor-pointer">
-                <img src={logoImage} alt="Ashtech-Pay Afrique" className="h-14 w-auto" />
+                <img src="/logo.png" alt="Ashtech-Pay Afrique" className="h-14 w-auto" />
               </div>
             </Link>
             <Link href="/">

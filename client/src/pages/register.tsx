@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { registerSchema } from "@shared/schema";
 import { apiRequest, queryClient, setAuthToken } from "@/lib/queryClient";
 import { Mail, Lock, User, Phone, Loader2, Eye, EyeOff, Home } from "lucide-react";
-import logoImage from "@assets/logo.png";
+
 import { z } from "zod";
 
 interface CountryData {
@@ -111,7 +111,7 @@ export default function RegisterPage() {
         <div className="flex flex-col items-center gap-3 mb-8">
           <Link href="/">
             <div className="bg-black rounded-xl p-2 cursor-pointer inline-flex border border-white/10">
-              <img src={logoImage} alt="Ashtech-Pay Afrique" className="h-9 w-auto" />
+              <img src="/logo.png" alt="Ashtech-Pay Afrique" className="h-9 w-auto" />
             </div>
           </Link>
           <div className="text-center">
