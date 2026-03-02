@@ -112,19 +112,17 @@ function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => voi
     if (imageInputRef.current) imageInputRef.current.value = "";
   };
 
-  const uploadFileLocally = async (file: File): Promise<string> => {
+  const uploadImage = async (file: File): Promise<string> => {
     const formData = new FormData();
     formData.append("file", file);
-    const response = await fetch("/api/uploads/local", {
+    const response = await fetch("/api/uploads/file", {
       method: "POST",
       credentials: "include",
       body: formData,
     });
-    if (!response.ok) {
-      throw new Error("Échec de l'upload");
-    }
+    if (!response.ok) throw new Error("Échec de l'upload");
     const result = await response.json();
-    return result.objectPath;
+    return result.url || result.objectPath;
   };
 
   const createMutation = useMutation({
@@ -132,8 +130,8 @@ function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => voi
       let finalData = { ...data };
       
       if (imageFile) {
-        const localPath = await uploadFileLocally(imageFile);
-        finalData.imagePath = localPath;
+        const imageUrl = await uploadImage(imageFile);
+        finalData.imagePath = imageUrl;
       }
       
       const res = await apiRequest("POST", "/api/payment-links", finalData);
@@ -478,19 +476,17 @@ function EditLinkDialog({ link, onClose, userCurrency }: {
     if (imageInputRef.current) imageInputRef.current.value = "";
   };
 
-  const uploadFileLocally = async (file: File): Promise<string> => {
+  const uploadImage = async (file: File): Promise<string> => {
     const formData = new FormData();
     formData.append("file", file);
-    const response = await fetch("/api/uploads/local", {
+    const response = await fetch("/api/uploads/file", {
       method: "POST",
       credentials: "include",
       body: formData,
     });
-    if (!response.ok) {
-      throw new Error("Échec de l'upload");
-    }
+    if (!response.ok) throw new Error("Échec de l'upload");
     const result = await response.json();
-    return result.objectPath;
+    return result.url || result.objectPath;
   };
 
   const updateMutation = useMutation({
@@ -509,8 +505,8 @@ function EditLinkDialog({ link, onClose, userCurrency }: {
       
       // Handle image upload
       if (imageFile) {
-        const localPath = await uploadFileLocally(imageFile);
-        finalData.imagePath = localPath;
+        const imageUrl = await uploadImage(imageFile);
+        finalData.imagePath = imageUrl;
       } else if (!imagePreview) {
         finalData.imagePath = null;
       }
