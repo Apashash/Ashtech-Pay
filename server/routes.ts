@@ -31,7 +31,7 @@ import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, f
 import { addPendingPayment } from "./paymentPoller";
 import { createSwychrPayout, formatInternationalPhone, fiatToPusd, pusdToFiatRate, getConversionRate, convertFiatToPusd, getPayoutToken } from "./swychrPayout";
 import { addPendingPayout } from "./payoutPoller";
-import { sendWelcomeEmail } from "./email";
+import { sendWelcomeEmail, sendPasswordResetEmail } from "./email";
 
 const uploadsDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadsDir)) {
@@ -443,10 +443,14 @@ export async function registerRoutes(
       const expiry = new Date(Date.now() + 60 * 60 * 1000);
       
       await storage.setResetToken(user.id, resetToken, expiry);
+
+      // Send reset email if user has an email address
+      if (user.email) {
+        sendPasswordResetEmail(user.email, user.fullName || user.username, resetToken).catch(() => {});
+      }
       
       res.json({ 
-        message: "Lien de réinitialisation généré",
-        resetToken
+        message: "Un lien de réinitialisation a été envoyé à votre adresse email."
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
