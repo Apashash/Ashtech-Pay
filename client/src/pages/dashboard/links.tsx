@@ -66,26 +66,14 @@ function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => voi
   const { toast } = useToast();
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const imageInputRef = useRef<HTMLInputElement>(null);
-  const pdfInputRef = useRef<HTMLInputElement>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  
   const imageUpload = useUpload({
     onSuccess: (response) => {
       form.setValue("imagePath", response.objectPath);
     },
     onError: (error) => {
       toast({ title: "Erreur upload image", description: error.message, variant: "destructive" });
-    }
-  });
-  
-  const pdfUpload = useUpload({
-    onSuccess: (response) => {
-      form.setValue("pdfPath", response.objectPath);
-    },
-    onError: (error) => {
-      toast({ title: "Erreur upload PDF", description: error.message, variant: "destructive" });
     }
   });
 
@@ -107,6 +95,7 @@ function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => voi
 
   const isFixedAmount = form.watch("isFixedAmount");
   const hasPdfDelivery = form.watch("hasPdfDelivery");
+  const pdfPathValue = form.watch("pdfPath");
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -116,25 +105,11 @@ function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => voi
     }
   };
 
-  const handlePdfSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setPdfFile(file);
-    }
-  };
-
   const clearImage = () => {
     setImageFile(null);
     setImagePreview(null);
     form.setValue("imagePath", "");
     if (imageInputRef.current) imageInputRef.current.value = "";
-  };
-
-  const clearPdf = () => {
-    setPdfFile(null);
-    form.setValue("pdfPath", "");
-    form.setValue("hasPdfDelivery", false);
-    if (pdfInputRef.current) pdfInputRef.current.value = "";
   };
 
   const uploadFileLocally = async (file: File): Promise<string> => {
@@ -161,11 +136,6 @@ function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => voi
         finalData.imagePath = localPath;
       }
       
-      if (pdfFile) {
-        const localPath = await uploadFileLocally(pdfFile);
-        finalData.pdfPath = localPath;
-      }
-      
       const res = await apiRequest("POST", "/api/payment-links", finalData);
       return res.json();
     },
@@ -174,7 +144,6 @@ function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => voi
       toast({ title: "Lien créé", description: "Votre lien de paiement a été créé avec succès" });
       form.reset();
       setImageFile(null);
-      setPdfFile(null);
       setImagePreview(null);
       onClose();
     },
@@ -286,54 +255,34 @@ function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => voi
                 </div>
               </FormItem>
 
-              <FormItem>
-                <FormLabel className="flex items-center gap-2">
-                  <FileText className="w-4 h-4" />
-                  PDF (optionnel)
-                </FormLabel>
-                <FormDescription className="text-xs text-amber-500">
-                  Ce PDF sera accessible uniquement après paiement réussi
-                </FormDescription>
-                <div className="space-y-2">
-                  <input
-                    ref={pdfInputRef}
-                    type="file"
-                    accept=".pdf,application/pdf"
-                    onChange={handlePdfSelect}
-                    className="hidden"
-                    data-testid="input-link-pdf"
-                  />
-                  {pdfFile ? (
-                    <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/50">
+              <FormField
+                control={form.control}
+                name="pdfPath"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-2">
+                      <FileText className="w-4 h-4" />
+                      Lien PDF (optionnel)
+                    </FormLabel>
+                    <FormDescription className="text-xs text-amber-500">
+                      Ce PDF sera envoyé au client uniquement après paiement réussi
+                    </FormDescription>
+                    <FormControl>
                       <div className="flex items-center gap-2">
-                        <FileText className="w-5 h-5 text-red-500" />
-                        <span className="text-sm truncate max-w-[200px]">{pdfFile.name}</span>
+                        <LinkIcon className="w-4 h-4 text-muted-foreground shrink-0" />
+                        <Input
+                          placeholder="https://drive.google.com/file/d/..."
+                          {...field}
+                          data-testid="input-link-pdf-url"
+                        />
                       </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6"
-                        onClick={clearPdf}
-                      >
-                        <X className="w-3 h-3" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => pdfInputRef.current?.click()}
-                    >
-                      <Upload className="w-4 h-4 mr-2" />
-                      Choisir un PDF
-                    </Button>
-                  )}
-                </div>
-              </FormItem>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-              {pdfFile && (
+              {pdfPathValue && (
                 <FormField
                   control={form.control}
                   name="hasPdfDelivery"
@@ -342,7 +291,7 @@ function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => voi
                       <div className="space-y-0.5">
                         <FormLabel className="text-amber-500">Livraison PDF après paiement</FormLabel>
                         <FormDescription className="text-xs">
-                          Le client recevra ce PDF après avoir payé avec succès
+                          Le client recevra ce lien PDF après avoir payé avec succès
                         </FormDescription>
                       </div>
                       <FormControl>
@@ -473,21 +422,12 @@ function EditLinkDialog({ link, onClose, userCurrency }: {
 }) {
   const { toast } = useToast();
   const imageInputRef = useRef<HTMLInputElement>(null);
-  const pdfInputRef = useRef<HTMLInputElement>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(link.imagePath || null);
-  const [currentPdfPath, setCurrentPdfPath] = useState<string | null>(link.pdfPath || null);
   
   const imageUpload = useUpload({
     onError: (error) => {
       toast({ title: "Erreur upload image", description: error.message, variant: "destructive" });
-    }
-  });
-  
-  const pdfUpload = useUpload({
-    onError: (error) => {
-      toast({ title: "Erreur upload PDF", description: error.message, variant: "destructive" });
     }
   });
 
@@ -531,27 +471,11 @@ function EditLinkDialog({ link, onClose, userCurrency }: {
     }
   };
 
-  const handlePdfSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setPdfFile(file);
-      setCurrentPdfPath(file.name);
-    }
-  };
-
   const clearImage = () => {
     setImageFile(null);
     setImagePreview(null);
     form.setValue("imagePath", "");
     if (imageInputRef.current) imageInputRef.current.value = "";
-  };
-
-  const clearPdf = () => {
-    setPdfFile(null);
-    setCurrentPdfPath(null);
-    form.setValue("pdfPath", "");
-    form.setValue("hasPdfDelivery", false);
-    if (pdfInputRef.current) pdfInputRef.current.value = "";
   };
 
   const uploadFileLocally = async (file: File): Promise<string> => {
@@ -578,6 +502,7 @@ function EditLinkDialog({ link, onClose, userCurrency }: {
         isFixedAmount: data.isFixedAmount,
         amount: data.isFixedAmount ? data.amount : "0",
         hasPdfDelivery: data.hasPdfDelivery,
+        pdfPath: data.pdfPath || null,
         redirectUrl: data.redirectUrl || null,
         expiresAt: data.expiresAt || null,
       };
@@ -588,14 +513,6 @@ function EditLinkDialog({ link, onClose, userCurrency }: {
         finalData.imagePath = localPath;
       } else if (!imagePreview) {
         finalData.imagePath = null;
-      }
-      
-      // Handle PDF upload
-      if (pdfFile) {
-        const localPath = await uploadFileLocally(pdfFile);
-        finalData.pdfPath = localPath;
-      } else if (!currentPdfPath) {
-        finalData.pdfPath = null;
       }
       
       const res = await apiRequest("PATCH", `/api/payment-links/${link.id}`, finalData);
@@ -712,56 +629,56 @@ function EditLinkDialog({ link, onClose, userCurrency }: {
 
               <FormField
                 control={form.control}
-                name="hasPdfDelivery"
+                name="pdfPath"
                 render={({ field }) => (
-                  <FormItem className="flex items-center justify-between rounded-lg border p-3">
-                    <div className="space-y-0.5">
-                      <FormLabel className="flex items-center gap-2">
-                        <FileText className="w-4 h-4" />
-                        Livraison PDF
-                      </FormLabel>
-                      <FormDescription className="text-xs">
-                        Envoyer un PDF après paiement
-                      </FormDescription>
-                    </div>
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-2">
+                      <FileText className="w-4 h-4" />
+                      Lien PDF (optionnel)
+                    </FormLabel>
+                    <FormDescription className="text-xs text-amber-500">
+                      Ce PDF sera envoyé au client uniquement après paiement réussi
+                    </FormDescription>
                     <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                        data-testid="switch-edit-pdf-delivery"
-                      />
+                      <div className="flex items-center gap-2">
+                        <LinkIcon className="w-4 h-4 text-muted-foreground shrink-0" />
+                        <Input
+                          placeholder="https://drive.google.com/file/d/..."
+                          {...field}
+                          data-testid="input-edit-pdf-url"
+                        />
+                      </div>
                     </FormControl>
+                    <FormMessage />
                   </FormItem>
                 )}
               />
 
-              {hasPdfDelivery && (
-                <div className="space-y-2 ml-4 p-3 border-l-2 border-primary/30">
-                  {currentPdfPath ? (
-                    <div className="flex items-center justify-between p-2 bg-muted rounded">
-                      <span className="text-sm truncate">{currentPdfPath.split('/').pop()}</span>
-                      <Button type="button" variant="ghost" size="icon" onClick={clearPdf} data-testid="button-edit-clear-pdf">
-                        <X className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <div 
-                      className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover-elevate"
-                      onClick={() => pdfInputRef.current?.click()}
-                    >
-                      <FileText className="w-6 h-6 mx-auto mb-2 text-muted-foreground" />
-                      <p className="text-xs text-muted-foreground">Cliquez pour ajouter un PDF</p>
-                    </div>
+              {form.watch("pdfPath") && (
+                <FormField
+                  control={form.control}
+                  name="hasPdfDelivery"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center justify-between rounded-lg border border-amber-500/50 bg-amber-500/10 p-3">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-amber-500 flex items-center gap-2">
+                          <FileText className="w-4 h-4" />
+                          Livraison PDF après paiement
+                        </FormLabel>
+                        <FormDescription className="text-xs">
+                          Le client recevra ce lien PDF après avoir payé avec succès
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          data-testid="switch-edit-pdf-delivery"
+                        />
+                      </FormControl>
+                    </FormItem>
                   )}
-                  <input
-                    ref={pdfInputRef}
-                    type="file"
-                    accept=".pdf"
-                    className="hidden"
-                    onChange={handlePdfSelect}
-                    data-testid="input-edit-pdf-file"
-                  />
-                </div>
+                />
               )}
 
               <FormField
