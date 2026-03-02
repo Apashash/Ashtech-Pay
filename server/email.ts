@@ -2,8 +2,8 @@ import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-const FROM_EMAIL = "Ashtech Pay <onboarding@resend.dev>";
-const APP_URL = process.env.APP_URL || `https://${(process.env.REPLIT_DOMAINS || "").split(",")[0]}` || "https://ashtech-pay.replit.app";
+const FROM_EMAIL = "Ashtech Pay <noreply@ashtechpay.top>";
+const APP_URL = "https://ashtechpay.top";
 
 export async function sendWelcomeEmail(to: string, fullName: string): Promise<void> {
   const firstName = fullName?.split(" ")[0] || fullName || "cher(e) client(e)";
