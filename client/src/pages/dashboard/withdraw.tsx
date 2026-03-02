@@ -49,10 +49,7 @@ export default function WithdrawPage() {
   const { toast } = useToast();
   
     const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
-    const { data: wallets = [] } = useQuery<{currency: string, balance: string}[]>({ queryKey: ["/api/wallets"] });
-  const selectedCountryCurrency = selectedCountryData?.currency || user?.preferredCurrency || "XAF";
-    const selectedWallet = wallets.find(w => w.currency === selectedCountryCurrency) || (selectedCountryCurrency === (user?.preferredCurrency || "XAF") ? { balance: user?.balance } : null);
-    const balance = parseFloat(selectedWallet?.balance || "0");
+  const { data: wallets = [] } = useQuery<{currency: string, balance: string}[]>({ queryKey: ["/api/wallets"] });
 
   const { data: limits } = useQuery<{ minWithdrawal: number; maxWithdrawal: number; minTransfer: number; maxTransfer: number }>({
     queryKey: ["/api/public/limits"],
@@ -72,7 +69,7 @@ export default function WithdrawPage() {
   const { data: countriesConfig = [] } = useQuery<CountryConfig[]>({
     queryKey: ["/api/transfers/config?type=withdrawal"],
   });
-  
+
   const form = useForm<z.infer<typeof withdrawSchema>>({
     resolver: zodResolver(withdrawSchema),
     defaultValues: { amount: "", paymentMethod: "mobile_money", accountDetails: "", countryId: "", operatorId: "" },
@@ -81,6 +78,9 @@ export default function WithdrawPage() {
   const selectedCountryData = countriesConfig.find(c => c.id === selectedCountry);
   const operators = selectedCountryData?.operators || [];
   const selectedOperatorData = operators.find(o => o.id === selectedOperator);
+  const selectedCountryCurrency = selectedCountryData?.currency || user?.preferredCurrency || "XAF";
+  const selectedWallet = wallets.find(w => w.currency === selectedCountryCurrency) || (selectedCountryCurrency === (user?.preferredCurrency || "XAF") ? { balance: user?.balance } : null);
+  const balance = parseFloat(selectedWallet?.balance || "0");
 
   useEffect(() => {
     if (selectedNumber && withdrawalNumbers.length > 0) {
