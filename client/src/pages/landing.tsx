@@ -240,7 +240,7 @@ function HeroSection() {
                 </Button>
               </Link>
               <Link href="/login">
-                <Button size="lg" variant="outline" className="w-full sm:w-auto text-lg px-8" data-testid="button-hero-login">
+                <Button size="lg" className="w-full sm:w-auto text-lg px-8 bg-blue-600 hover:bg-blue-700 text-white border-none" data-testid="button-hero-login">
                   Créer un lien de paiement
                 </Button>
               </Link>
