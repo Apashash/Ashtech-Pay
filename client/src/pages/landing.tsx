@@ -1027,57 +1027,64 @@ function Footer() {
   );
 }
 
-function PaymentMethodsMarquee() {
+function VideoPaymentSection() {
   const duplicatedMethods = [...paymentMethods, ...paymentMethods];
-  
-  return (
-    <section className="py-12 bg-card/30 overflow-hidden">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-6">
-        <h3 className="text-center text-lg font-semibold text-muted-foreground">
-          Modes de paiement acceptés
-        </h3>
-      </div>
-      <div className="relative">
-        <div className="flex animate-marquee">
-          {duplicatedMethods.map((method, index) => (
-            <div
-              key={index}
-              className="flex-shrink-0 mx-4 px-6 py-3 bg-card rounded-lg border border-border flex items-center"
-            >
-              <span className="text-foreground font-medium whitespace-nowrap">{method.name}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function CountriesMarquee() {
   const duplicatedCountries = [...countries, ...countries];
-  
+
   return (
-    <section className="py-12 bg-card/30 overflow-hidden">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-6">
-        <h3 className="text-center text-lg font-semibold text-muted-foreground">
-          Disponible dans +18 pays africains
-        </h3>
-      </div>
-      <div className="relative">
-        <div className="flex animate-marquee-reverse">
-          {duplicatedCountries.map((country, index) => (
-            <div
-              key={index}
-              className="flex-shrink-0 mx-4 px-6 py-3 bg-card rounded-lg border border-border flex items-center gap-3"
-            >
-              <img 
-                src={`https://flagcdn.com/w40/${country.code}.png`}
-                alt={`Drapeau ${country.name}`}
-                className="w-8 h-6 rounded object-cover"
-              />
-              <span className="text-foreground font-medium whitespace-nowrap">{country.name}</span>
-            </div>
-          ))}
+    <section className="relative overflow-hidden">
+      <video
+        autoPlay
+        muted
+        loop
+        playsInline
+        className="absolute inset-0 w-full h-full object-cover"
+        style={{ zIndex: 0 }}
+      >
+        <source src="/payment_video.mp4" type="video/mp4" />
+      </video>
+      <div className="absolute inset-0 bg-black/70" style={{ zIndex: 1 }} />
+
+      <div className="relative py-14" style={{ zIndex: 2 }}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-6">
+          <h3 className="text-center text-lg font-semibold text-white/80">
+            Modes de paiement acceptés
+          </h3>
+        </div>
+        <div className="relative overflow-hidden">
+          <div className="flex animate-marquee">
+            {duplicatedMethods.map((method, index) => (
+              <div
+                key={index}
+                className="flex-shrink-0 mx-4 px-6 py-3 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 flex items-center"
+              >
+                <span className="text-white font-medium whitespace-nowrap">{method.name}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-10 mb-6">
+          <h3 className="text-center text-lg font-semibold text-white/80">
+            Disponible dans +18 pays africains
+          </h3>
+        </div>
+        <div className="relative overflow-hidden">
+          <div className="flex animate-marquee-reverse">
+            {duplicatedCountries.map((country, index) => (
+              <div
+                key={index}
+                className="flex-shrink-0 mx-4 px-6 py-3 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 flex items-center gap-3"
+              >
+                <img
+                  src={`https://flagcdn.com/w40/${country.code}.png`}
+                  alt={`Drapeau ${country.name}`}
+                  className="w-8 h-6 rounded object-cover"
+                />
+                <span className="text-white font-medium whitespace-nowrap">{country.name}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </section>
@@ -1091,8 +1098,7 @@ export default function LandingPage() {
     <div className="min-h-screen bg-background">
       <Navbar />
       <HeroSection />
-      <PaymentMethodsMarquee />
-      <CountriesMarquee />
+      <VideoPaymentSection />
       <OnlineSalesSection />
       <PaymentLinksSection />
       <ShareSection />
