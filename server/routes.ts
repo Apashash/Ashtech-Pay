@@ -2589,7 +2589,7 @@ export async function registerRoutes(
       const swychrCountryCode = countryData?.code || "CM";
       const swychrFeesCalc = computeSwychrFees(numAmount, swychrCountryCode, ashtechMarginPct);
       const feeAmount = swychrFeesCalc.ashtechFeeAmount; // Only Ashtech margin for admin revenue stats
-      const netAmount = swychrFeesCalc.creditedAmount.toFixed(2);
+      const netAmount = (numAmount - feeAmount).toFixed(2);
       const totalAmount = numAmount.toFixed(2);
 
       console.log("Payment link fee calculation:", {
