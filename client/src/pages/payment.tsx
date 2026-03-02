@@ -363,23 +363,23 @@ export default function PaymentPage() {
       
       <div className="flex-1 flex items-start justify-center p-4 relative z-10">
         <Card className="w-full max-w-lg overflow-hidden">
-          {paymentLink.imagePath && (
-            <div className="w-full overflow-hidden">
-              <img src={paymentLink.imagePath} alt={paymentLink.title} className="w-full h-52 object-cover" data-testid="img-payment-link" />
-            </div>
-          )}
           <CardHeader className="text-center space-y-3 pb-4">
             <CardTitle className="text-2xl" data-testid="text-payment-title">{paymentLink.title}</CardTitle>
             {paymentLink.description && (
               <CardDescription>{paymentLink.description}</CardDescription>
             )}
-            {paymentLink.hasPdfDelivery && (
-              <div className="flex items-center gap-2 text-amber-500 text-sm bg-amber-500/10 p-2 rounded-lg">
-                <FileText className="w-4 h-4" />
-                <span>Un lien de téléchargement vous sera envoyé après le paiement</span>
-              </div>
-            )}
           </CardHeader>
+          {paymentLink.imagePath && (
+            <div className="w-full overflow-hidden">
+              <img src={paymentLink.imagePath} alt={paymentLink.title} className="w-full h-52 object-cover" data-testid="img-payment-link" />
+            </div>
+          )}
+          {paymentLink.hasPdfDelivery && (
+            <div className="flex items-center gap-2 text-amber-500 text-sm bg-amber-500/10 p-3 mx-4 mt-4 rounded-lg">
+              <FileText className="w-4 h-4 shrink-0" />
+              <span>Un lien de téléchargement vous sera envoyé après le paiement</span>
+            </div>
+          )}
           
           <CardContent className="space-y-5">
 
