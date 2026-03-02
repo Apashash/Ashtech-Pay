@@ -5,11 +5,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Wallet, ArrowLeftRight, Info, Plus, Loader2, CheckCircle2 } from "lucide-react";
+import { Wallet, ArrowLeftRight, Info, Plus, Loader2, CheckCircle2, X, AlertTriangle } from "lucide-react";
 import { ALL_FX_CURRENCIES, CURRENCY_SYMBOLS } from "@shared/schema";
 import type { User, Transaction } from "@shared/schema";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -39,7 +39,6 @@ const CURRENCY_FLAGS: Record<string, string> = {
   BRL: "🇧🇷", MXN: "🇲🇽", ARS: "🇦🇷", CLP: "🇨🇱", COP: "🇨🇴",
 };
 
-// Build currency name map from ALL_FX_CURRENCIES
 const CURRENCY_NAMES: Record<string, string> = {};
 ALL_FX_CURRENCIES.forEach(c => { CURRENCY_NAMES[c.code] = c.name; });
 
@@ -48,6 +47,7 @@ export default function WalletsPage() {
   const [convertOpen, setConvertOpen] = useState(false);
   const [addWalletOpen, setAddWalletOpen] = useState(false);
   const [pendingSuccess, setPendingSuccess] = useState<{ fromCurrency: string; toCurrency: string; fromAmount: number } | null>(null);
+  const [walletToDelete, setWalletToDelete] = useState<WalletEntry | null>(null);
 
   const [fromCurrency, setFromCurrency] = useState("XAF");
   const [toCurrency, setToCurrency] = useState("XOF");
@@ -86,11 +86,7 @@ export default function WalletsPage() {
   }, [rawWalletList, transactions]);
 
   const existingCurrencies = new Set(walletList.map(w => w.currency));
-
-  // All currencies from admin panel, excluding currencies already having a wallet
-  const availableCurrencies = ALL_FX_CURRENCIES.filter(
-    c => !existingCurrencies.has(c.code)
-  );
+  const availableCurrencies = ALL_FX_CURRENCIES.filter(c => !existingCurrencies.has(c.code));
 
   const convertMutation = useMutation({
     mutationFn: async (data: { fromCurrency: string; toCurrency: string; amount: string }) => {
@@ -103,11 +99,7 @@ export default function WalletsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/wallets"] });
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       setConvertOpen(false);
-      setPendingSuccess({
-        fromCurrency: data.fromCurrency,
-        toCurrency: data.toCurrency,
-        fromAmount: data.fromAmount,
-      });
+      setPendingSuccess({ fromCurrency: data.fromCurrency, toCurrency: data.toCurrency, fromAmount: data.fromAmount });
       setConvertAmount("");
     },
     onError: (error: Error) => {
@@ -142,6 +134,24 @@ export default function WalletsPage() {
     },
   });
 
+  const deleteWalletMutation = useMutation({
+    mutationFn: async (currency: string) => {
+      const res = await apiRequest("DELETE", `/api/wallets/${currency}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message);
+      return json;
+    },
+    onSuccess: (_, currency) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/wallets"] });
+      toast({ title: "Compte désactivé", description: `Le compte ${currency} a été supprimé` });
+      setWalletToDelete(null);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+      setWalletToDelete(null);
+    },
+  });
+
   const { data: setting } = useQuery<{ value: string }>({
     queryKey: ["/api/settings/conversion_fee_percent"],
     queryFn: async () => {
@@ -158,7 +168,6 @@ export default function WalletsPage() {
   const feeAmount = (parsedAmount * conversionFeePercent) / 100;
   const amountAfterFee = parsedAmount - feeAmount;
 
-  // Compute preview using admin exchange rates (via XAF as pivot)
   const xafRate = fxRates["XAF"] || 585;
   const fromRateUSD = fxRates[fromCurrency] || xafRate;
   const toRateUSD = fxRates[toCurrency] || xafRate;
@@ -168,6 +177,9 @@ export default function WalletsPage() {
   const walletSymbol = (currency: string) =>
     (CURRENCY_SYMBOLS as Record<string, string>)[currency] || currency;
 
+  const deleteBalance = parseFloat(walletToDelete?.balance || "0");
+  const hasBalanceToLose = deleteBalance > 0;
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -176,7 +188,7 @@ export default function WalletsPage() {
             <h1 className="text-2xl font-bold text-foreground">Mes Comptes</h1>
             <p className="text-muted-foreground">Gérez vos portefeuilles multi-devises</p>
           </div>
-          <Button variant="outline" onClick={() => setAddWalletOpen(true)} className="gap-2">
+          <Button variant="outline" onClick={() => setAddWalletOpen(true)} className="gap-2" data-testid="button-add-wallet">
             <Plus className="w-4 h-4" />
             Ajouter un compte
           </Button>
@@ -213,11 +225,23 @@ export default function WalletsPage() {
                           <p className="text-xs text-muted-foreground">{CURRENCY_NAMES[wallet.currency] || wallet.currency}</p>
                         </div>
                       </div>
-                      {isMain && (
-                        <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full font-medium">
-                          Principal
-                        </span>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {isMain && (
+                          <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full font-medium">
+                            Principal
+                          </span>
+                        )}
+                        {!isMain && (
+                          <button
+                            onClick={() => setWalletToDelete(wallet)}
+                            className="w-7 h-7 flex items-center justify-center rounded-full bg-destructive/10 hover:bg-destructive/20 text-destructive transition-colors"
+                            title="Désactiver ce compte"
+                            data-testid={`button-disable-wallet-${wallet.currency}`}
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <div className="mb-4">
                       <p className="text-muted-foreground text-sm mb-1">Solde</p>
@@ -404,6 +428,55 @@ export default function WalletsPage() {
                 </Button>
               </div>
             </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Disable Wallet Confirmation Dialog */}
+        <Dialog open={!!walletToDelete} onOpenChange={(open) => { if (!open) setWalletToDelete(null); }}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-destructive">
+                <AlertTriangle className="w-5 h-5" />
+                Désactiver ce compte
+              </DialogTitle>
+              <DialogDescription>
+                {hasBalanceToLose ? (
+                  <>
+                    Ce compte <strong>{walletToDelete?.currency}</strong> contient un solde de{" "}
+                    <strong className="text-destructive">
+                      {deleteBalance.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {walletToDelete?.symbol || walletToDelete?.currency}
+                    </strong>.{" "}
+                    <span className="text-destructive font-semibold">Ce montant sera définitivement perdu</span> si vous désactivez ce compte.
+                    Voulez-vous vraiment continuer ?
+                  </>
+                ) : (
+                  <>
+                    Voulez-vous désactiver le compte <strong>{walletToDelete?.currency}</strong> ?
+                    Ce compte sera supprimé de votre liste.
+                  </>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="flex gap-3 mt-4">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setWalletToDelete(null)}
+                data-testid="button-cancel-disable"
+              >
+                Annuler
+              </Button>
+              <Button
+                variant="destructive"
+                className="flex-1 gap-2"
+                disabled={deleteWalletMutation.isPending}
+                onClick={() => walletToDelete && deleteWalletMutation.mutate(walletToDelete.currency)}
+                data-testid="button-confirm-disable"
+              >
+                {deleteWalletMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
+                {hasBalanceToLose ? "Désactiver et perdre le solde" : "Désactiver"}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>

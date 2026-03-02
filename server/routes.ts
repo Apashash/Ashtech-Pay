@@ -1869,6 +1869,27 @@ export async function registerRoutes(
     }
   });
 
+  // DELETE /api/wallets/:currency — désactiver un wallet secondaire (la somme est perdue)
+  app.delete('/api/wallets/:currency', requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId!;
+      const { currency } = req.params;
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(404).json({ message: 'Utilisateur non trouvé' });
+      const primaryCurr = user.preferredCurrency || 'XAF';
+      if (currency === primaryCurr) {
+        return res.status(400).json({ message: 'Impossible de désactiver le compte principal' });
+      }
+      const wallet = await storage.getWallet(userId, currency);
+      if (!wallet) return res.status(404).json({ message: 'Compte non trouvé' });
+      await storage.deleteWallet(wallet.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Delete wallet error:', error);
+      res.status(500).json({ message: 'Erreur serveur' });
+    }
+  });
+
   // POST /api/wallets/convert-preview — preview conversion rate (no actual conversion, no Swychr balance needed)
   app.post("/api/wallets/convert-preview", requireAuth, async (req, res) => {
     try {
