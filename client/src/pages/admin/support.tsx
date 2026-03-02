@@ -309,7 +309,7 @@ export default function AdminSupport() {
         </Card>
 
         <Dialog open={!!selectedTicket} onOpenChange={() => setSelectedTicket(null)}>
-          <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
+          <DialogContent className="max-w-3xl h-[85vh] flex flex-col overflow-hidden">
             <DialogHeader>
               <DialogTitle className="flex items-center justify-between gap-4 flex-wrap">
                 <span className="truncate flex-1">{ticketDetail?.ticket.subject}</span>
@@ -368,7 +368,7 @@ export default function AdminSupport() {
               </div>
             )}
 
-            <ScrollArea className="flex-1 pr-4">
+            <ScrollArea className="flex-1 min-h-0 pr-4">
               <div className="space-y-4 py-4">
                 {ticketDetail?.messages.map((msg) => (
                   <div 
