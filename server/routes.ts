@@ -2514,7 +2514,7 @@ export async function registerRoutes(
   // Pay via payment link - PUBLIC endpoint, creates pending payment intent
   app.post("/api/payment-links/:slug/pay", async (req, res) => {
     try {
-      const { fullName, email, country, phone, amount: customAmount, paymentMethod, operator } = req.body;
+      const { fullName, email, country, phone, amount: providedAmount, currency: providedCurrency, paymentMethod, operator } = req.body;
       
       // Validate required fields
       if (!fullName || !email || !country || !phone || !paymentMethod) {
@@ -2556,20 +2556,23 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Ce lien de paiement a expiré" });
       }
 
-      // Determine the base amount (what merchant will receive)
-      const baseAmount = paymentLink.isFixedAmount 
-        ? paymentLink.amount 
-        : (customAmount || "0");
-
-      if (parseFloat(baseAmount) <= 0) {
-        return res.status(400).json({ message: "Le montant doit être positif" });
-      }
-
       // Get country and operator IDs for fee calculation
       const allCountries = await storage.getAllCountries();
       const countryData = allCountries.find((c: { id: string; code: string; name: string }) => c.id === country || c.code === country || c.name === country);
       const countryId = countryData?.id || undefined;
-      
+      const paymentCountryCode = countryData?.code || "CM";
+      const paymentCurrency = countryData?.currency || providedCurrency || paymentLink.currency || "XAF";
+
+      // The amount provided by the frontend is in providedCurrency (or paymentCurrency)
+      const numAmount = parseFloat(providedAmount || "0");
+      if (numAmount <= 0) {
+        return res.status(400).json({ message: "Le montant doit être positif" });
+      }
+
+      // We need to calculate what the merchant gets in THEIR link currency
+      const fxRates = await loadFxRates();
+      const amountInLinkCurrency = convertCurrency(numAmount, paymentCurrency, paymentLink.currency, fxRates);
+
       let resolvedOperatorId: string | undefined = undefined;
       if (operator && countryId) {
         const operators = await storage.getOperatorsByCountry(countryId);
@@ -2578,24 +2581,24 @@ export async function registerRoutes(
       }
 
       // Resolve Ashtech margin per operator from DB (fallback to default 2%)
-      const numAmount = parseFloat(baseAmount);
       const fee = await storage.resolveFee("deposit", countryId, resolvedOperatorId);
       let ashtechMarginPct = ASHTECH_MARGIN;
       if (fee && (fee as any).ashtechMargin != null) {
         ashtechMarginPct = parseFloat((fee as any).ashtechMargin);
       }
 
-      // Use same Swychr fee structure as deposits (Swychr rate per country + Ashtech margin per operator)
-      const swychrCountryCode = countryData?.code || "CM";
-      const swychrFeesCalc = computeSwychrFees(numAmount, swychrCountryCode, ashtechMarginPct);
-      const feeAmount = swychrFeesCalc.ashtechFeeAmount; // Only Ashtech margin for admin revenue stats
-      const netAmount = (numAmount - feeAmount).toFixed(2);
+      // Compute fees based on the amount the user entered
+      const swychrFeesCalc = computeSwychrFees(numAmount, paymentCountryCode, ashtechMarginPct);
+      const feeAmount = swychrFeesCalc.ashtechFeeAmount; 
+      
+      // netAmount is what the merchant gets (converted back to link currency for their balance)
+      const netAmount = (amountInLinkCurrency - (amountInLinkCurrency * ashtechMarginPct / 100)).toFixed(2);
       const totalAmount = numAmount.toFixed(2);
 
       console.log("Payment link fee calculation:", {
         countryId, resolvedOperatorId, ashtechMarginPct,
-        swychrRate: swychrFeesCalc.swychrFeeRate, numAmount,
-        ashtechFee: feeAmount, credited: netAmount,
+        numAmount, currency: paymentCurrency,
+        ashtechFee: feeAmount, creditedInLinkCurrency: netAmount,
       });
 
       // Generate unique ASHPAY reference
@@ -2637,16 +2640,6 @@ export async function registerRoutes(
         recipientCountry: countryDisplay,
         operatorId: resolvedOperatorId || null,
       });
-
-      // Get operator name and country code for Swychr
-      let operatorName = "Mobile Money";
-      if (operator && countryId) {
-        const operators = await storage.getOperatorsByCountry(countryId);
-        const operatorData = operators.find((o: { name: string; id: string }) => o.name === operator || o.id === operator);
-        operatorName = operatorData?.name || operator;
-      }
-      const paymentCountryCode = countryData?.code || "CM";
-      const paymentCurrency = countryData?.currency || paymentLink.currency || "XAF";
 
       // Call Swychr API for Mobile Money payments
       if (paymentMethod === "mobile_money") {
