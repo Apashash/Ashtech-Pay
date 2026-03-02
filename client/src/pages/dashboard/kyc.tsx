@@ -161,7 +161,7 @@ export default function KYCPage() {
       const formData = new FormData();
       formData.append("file", file);
 
-      const response = await fetch("/api/uploads/local", {
+      const response = await fetch("/api/uploads/file", {
         method: "POST",
         credentials: "include",
         body: formData,
@@ -171,9 +171,10 @@ export default function KYCPage() {
         throw new Error("Échec du téléchargement");
       }
 
-      const { objectPath } = await response.json();
+      const result = await response.json();
+      const storedPath = result.url || result.objectPath;
 
-      setUploadedPaths(prev => ({ ...prev, [field]: objectPath }));
+      setUploadedPaths(prev => ({ ...prev, [field]: storedPath }));
       
       const reader = new FileReader();
       reader.onload = (e) => {
