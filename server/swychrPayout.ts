@@ -130,13 +130,33 @@ export interface SwychrPayoutStatusResult {
   message?:          string;
 }
 
-// ─── Country → Currency mapping ───────────────────────────────────────────
-const COUNTRY_CURRENCY: Record<string, string> = {
-  BJ: "XOF", BF: "XOF", CM: "XAF", CF: "XAF", CG: "XAF",
-  CI: "XOF", GA: "XAF", GH: "GHS", GN: "GNF", GQ: "XAF",
-  GW: "XOF", KE: "KES", ML: "XOF", NE: "XOF", NG: "NGN",
-  UG: "UGX", CD: "CDF", RW: "RWF", SN: "XOF", TZ: "TZS",
-  TD: "XAF", TG: "XOF",
+// ─── Country → Swychr currency code mapping ───────────────────────────────
+// Source: live /payout_methods API response (currency_code field).
+// NOTE: Swychr uses country-suffixed codes for XOF/XAF zones (XOFB, XAFC…).
+// Unsupported countries (CF, GQ, GW, TD) fall back to ISO for reference only.
+export const COUNTRY_CURRENCY: Record<string, string> = {
+  BJ: "XOFB", // Bénin
+  BF: "XOFF", // Burkina Faso
+  CM: "XAF",  // Cameroun ✅
+  CF: "XAF",  // Centrafrique — NOT SUPPORTED by Swychr
+  CG: "XAFC", // Congo Brazzaville
+  CI: "XOFC", // Côte d'Ivoire
+  GA: "XAFG", // Gabon
+  GH: "GHS",  // Ghana ✅
+  GN: "GNF",  // Guinée ✅
+  GQ: "XAF",  // Guinée Équatoriale — NOT SUPPORTED by Swychr
+  GW: "XOF",  // Guinée-Bissau — NOT SUPPORTED by Swychr
+  KE: "KES",  // Kenya ✅
+  ML: "XOF",  // Mali ✅ (Swychr uses standard XOF)
+  NE: "XOF",  // Niger ✅ (Swychr uses standard XOF)
+  NG: "NGN",  // Nigeria ✅
+  UG: "UGX",  // Ouganda ✅
+  CD: "CDF",  // RD Congo ✅
+  RW: "RWF",  // Rwanda ✅
+  SN: "XOFS", // Sénégal
+  TZ: "TZS",  // Tanzanie ✅
+  TD: "XAF",  // Tchad — NOT SUPPORTED by Swychr
+  TG: "XOFT", // Togo
 };
 
 // ─── Fiat → PUSD conversion (fund wallet before payout) ──────────────────

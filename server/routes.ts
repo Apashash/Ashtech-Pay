@@ -29,7 +29,7 @@ import fs from "fs";
 import { uploadToSupabase } from "./supabase";
 import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, fetchPaymentLinkDetails, ASHTECH_MARGIN } from "./swychr";
 import { addPendingPayment } from "./paymentPoller";
-import { createSwychrPayout, formatInternationalPhone, fiatToPusd, pusdToFiatRate, getConversionRate, convertFiatToPusd, getPayoutToken } from "./swychrPayout";
+import { createSwychrPayout, formatInternationalPhone, fiatToPusd, pusdToFiatRate, getConversionRate, convertFiatToPusd, getPayoutToken, COUNTRY_CURRENCY } from "./swychrPayout";
 import { addPendingPayout } from "./payoutPoller";
 import {
   sendWelcomeEmail,
@@ -2885,19 +2885,6 @@ export async function registerRoutes(
       if (isNaN(parsedAmount) || parsedAmount <= 0) {
         return res.status(400).json({ message: "Montant invalide" });
       }
-
-      const COUNTRY_CURRENCY: Record<string, string> = {
-        BJ: "XOF", BF: "XOF", CM: "XAF", CF: "XAF", CG: "XAF",
-        CI: "XOF", GA: "XAF", GH: "GHS", GN: "GNF", GQ: "XAF",
-        GW: "XOF", KE: "KES", ML: "XOF", NE: "XOF", NG: "NGN",
-        UG: "UGX", CD: "CDF", RW: "RWF", SN: "XOF", TZ: "TZS",
-        TD: "XAF", TG: "XOF",
-        XAF: "XAF",
-        XOFB: "XOF",
-        XAFG: "XAF",
-        XOFF: "XOF",
-        XOFT: "XOF"
-      };
 
       const currencyCode = COUNTRY_CURRENCY[countryCode.toUpperCase()] || countryCode.toUpperCase();
       const token = await getPayoutToken();
