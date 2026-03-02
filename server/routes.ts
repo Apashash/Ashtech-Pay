@@ -1378,7 +1378,7 @@ export async function registerRoutes(
       }
       const totalAmount = amount + feeAmount;
 
-      // Determine withdrawal currency and country code
+      // Determine withdrawal country code from the selected country
       let withdrawalCountryCode = "CM";
       let withdrawalCurrency = userCurrency;
       if (data.countryId) {
@@ -1387,26 +1387,21 @@ export async function registerRoutes(
         if (wCountry?.currency) withdrawalCurrency = wCountry.currency;
       }
 
-      const withdrawalCurrencyNorm = normalizeCurrency(withdrawalCurrency);
-      
-      // Strict currency matching: must match exactly, no auto-parity between XAF/XOF for withdrawals
-      const isPrimary = (withdrawalCurrency === (user.preferredCurrency || "XAF"));
-      
-      if (isPrimary) {
-        if (parseFloat(user.balance) < totalAmount) {
-          return res.status(400).json({ message: `Solde insuffisant dans votre compte principal (${totalAmount.toFixed(0)} ${userCurrency} requis)` });
-        }
-        await storage.updateUserBalance(userId, -totalAmount);
-      } else {
-        const wallet = await storage.getWallet(userId, withdrawalCurrency);
-        if (!wallet || parseFloat(wallet.balance) < totalAmount) {
-          return res.status(400).json({ message: `Solde insuffisant dans votre compte ${withdrawalCurrency}. Besoin de ${totalAmount.toFixed(0)} ${withdrawalCurrency}` });
-        }
-        await storage.upsertWallet(userId, withdrawalCurrency, -totalAmount);
+      // RULE: Withdrawal is ONLY allowed from the primary wallet (user.preferredCurrency)
+      // The selected country's currency must match the user's primary currency
+      if (withdrawalCurrency !== userCurrency) {
+        return res.status(403).json({
+          message: `Retrait non autorisé — Votre compte principal est en ${userCurrency}. Pour retirer en ${withdrawalCurrency}, sélectionnez votre pays principal.`,
+        });
       }
-      
-      // Cleanup empty wallets after deduction
-      await cleanupEmptyWallets(userId);
+
+      // Check primary wallet balance
+      if (parseFloat(user.balance) < totalAmount) {
+        return res.status(400).json({ message: `Solde insuffisant dans votre compte principal (${totalAmount.toFixed(0)} ${userCurrency} requis)` });
+      }
+
+      // Debit primary wallet only
+      await storage.updateUserBalance(userId, -totalAmount);
 
       console.log(`[Withdrawal] User=${userId}, Amount=${amount}, Fee=${feeAmount}, TotalDebited=${totalAmount} (${withdrawalCurrency})`);
 

@@ -47,9 +47,8 @@ export default function WithdrawPage() {
   const [selectedCountry, setSelectedCountry] = useState<string>("");
   const [selectedOperator, setSelectedOperator] = useState<string>("");
   const { toast } = useToast();
-  
-    const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
-  const { data: wallets = [] } = useQuery<{currency: string, balance: string}[]>({ queryKey: ["/api/wallets"] });
+
+  const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
 
   const { data: limits } = useQuery<{ minWithdrawal: number; maxWithdrawal: number; minTransfer: number; maxTransfer: number }>({
     queryKey: ["/api/public/limits"],
@@ -61,6 +60,9 @@ export default function WithdrawPage() {
   const convertFromXAF = (xaf: number) => Math.ceil(xaf * userFxRate / xafRate);
   const minWithdrawal = convertFromXAF(limits?.minWithdrawal ?? 2650);
   const maxWithdrawal = Math.floor((limits?.maxWithdrawal ?? 5000000) * userFxRate / xafRate);
+
+  // Primary balance = user.balance (always, regardless of currency)
+  const balance = parseFloat(user?.balance || "0");
 
   const { data: withdrawalNumbers = [] } = useQuery<WithdrawalNumber[]>({
     queryKey: ["/api/withdrawal-numbers"],
@@ -78,9 +80,20 @@ export default function WithdrawPage() {
   const selectedCountryData = countriesConfig.find(c => c.id === selectedCountry);
   const operators = selectedCountryData?.operators || [];
   const selectedOperatorData = operators.find(o => o.id === selectedOperator);
-  const selectedCountryCurrency = selectedCountryData?.currency || user?.preferredCurrency || "XAF";
-  const selectedWallet = wallets.find(w => w.currency === selectedCountryCurrency) || (selectedCountryCurrency === (user?.preferredCurrency || "XAF") ? { balance: user?.balance } : null);
-  const balance = parseFloat(selectedWallet?.balance || "0");
+
+  // Auto-select user's registered country on load (locked — withdrawal only from primary country)
+  useEffect(() => {
+    if (user?.countryId && countriesConfig.length > 0 && !selectedCountry) {
+      const userCountry = countriesConfig.find(c => c.id === user.countryId);
+      if (userCountry) {
+        setSelectedCountry(userCountry.id);
+      } else {
+        // Fallback: match by primary currency
+        const byCurrency = countriesConfig.find(c => c.currency === userCurrency);
+        if (byCurrency) setSelectedCountry(byCurrency.id);
+      }
+    }
+  }, [user?.countryId, countriesConfig, userCurrency]);
 
   useEffect(() => {
     if (selectedNumber && withdrawalNumbers.length > 0) {
@@ -188,11 +201,13 @@ export default function WithdrawPage() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground mb-1">Solde disponible</p>
+                <p className="text-sm text-muted-foreground mb-1">Solde compte principal</p>
                 <div className="flex flex-col">
-                    <p className="text-2xl font-bold text-foreground">{formatCurrency(balance, selectedCountryCurrency as SupportedCurrency)}</p>
-                    <p className="text-[10px] text-muted-foreground">Compte utilisé: {selectedCountryCurrency}</p>
-                  </div>
+                  <p className="text-2xl font-bold text-foreground">{formatCurrency(balance, userCurrency as SupportedCurrency)}</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {selectedCountryData?.name || "Votre pays"} · {userCurrency}
+                  </p>
+                </div>
               </div>
               <Wallet className="w-8 h-8 text-orange-500" />
             </div>
@@ -296,20 +311,18 @@ export default function WithdrawPage() {
                         <div className="space-y-2">
                           <FormLabel className="text-xs flex items-center gap-1">
                             <Globe className="w-3 h-3" />
-                            Pays
+                            Pays (compte principal)
                           </FormLabel>
-                          <Select value={selectedCountry} onValueChange={setSelectedCountry}>
-                            <SelectTrigger className="h-9 text-xs" data-testid="select-country">
-                              <SelectValue placeholder="Pays" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {countriesConfig.map((country) => (
-                                <SelectItem key={country.id} value={country.id} className="text-xs">
-                                  {country.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <div
+                            className="h-9 flex items-center px-3 rounded-md border border-border bg-muted/50 text-xs text-foreground gap-2"
+                            data-testid="display-country"
+                          >
+                            <Globe className="w-3 h-3 text-muted-foreground shrink-0" />
+                            <span className="font-medium">
+                              {selectedCountryData?.name || (countriesConfig.length === 0 ? "Chargement..." : "Non défini")}
+                            </span>
+                            <span className="ml-auto text-muted-foreground">{userCurrency}</span>
+                          </div>
                         </div>
                         <div className="space-y-2">
                           <FormLabel className="text-xs flex items-center gap-1">
@@ -319,10 +332,10 @@ export default function WithdrawPage() {
                           <Select 
                             value={selectedOperator} 
                             onValueChange={setSelectedOperator}
-                            disabled={!selectedCountry}
+                            disabled={!selectedCountry || operators.length === 0}
                           >
                             <SelectTrigger className="h-9 text-xs" data-testid="select-operator">
-                              <SelectValue placeholder={selectedCountry ? "Opérateur" : "Pays..."} />
+                              <SelectValue placeholder={selectedCountry ? "Choisir un opérateur" : "Chargement..."} />
                             </SelectTrigger>
                             <SelectContent>
                               {operators.map((op) => (
