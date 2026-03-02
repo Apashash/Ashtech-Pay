@@ -64,7 +64,9 @@ export default function ForgotPasswordPage() {
           <CardHeader className="text-center space-y-4">
             <Link href="/">
               <div className="flex items-center justify-center cursor-pointer">
-                <img src={logoImage} alt="Ashtech-Pay Afrique" className="h-24 w-auto" />
+                <div className="bg-black rounded-2xl px-6 py-3">
+                  <img src={logoImage} alt="Ashtech-Pay Afrique" className="h-20 w-auto" />
+                </div>
               </div>
             </Link>
             <div className="flex justify-center">
@@ -126,7 +128,9 @@ export default function ForgotPasswordPage() {
           </Link>
           <Link href="/">
             <div className="flex items-center justify-center cursor-pointer pt-4">
-              <img src={logoImage} alt="Ashtech-Pay Afrique" className="h-24 w-auto" />
+              <div className="bg-black rounded-2xl px-6 py-3">
+                <img src={logoImage} alt="Ashtech-Pay Afrique" className="h-20 w-auto" />
+              </div>
             </div>
           </Link>
           <CardTitle className="text-2xl font-bold">Mot de passe oublié</CardTitle>

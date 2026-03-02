@@ -613,11 +613,13 @@ export default function DashboardHome() {
                   <Wallet className="w-4 h-4" />
                   Comptes
                 </button>
-                <img
-                  src={dashboardIllustration}
-                  alt="Tableau de bord Ashtech Pay"
-                  className="h-16 w-auto object-contain hidden sm:block"
-                />
+                <div className="bg-black rounded-xl p-2 hidden sm:block">
+                  <img
+                    src={dashboardIllustration}
+                    alt="Tableau de bord Ashtech Pay"
+                    className="h-14 w-auto object-contain"
+                  />
+                </div>
               </div>
             </div>
           </CardContent>

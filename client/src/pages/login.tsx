@@ -74,7 +74,9 @@ export default function LoginPage() {
           </Link>
           <Link href="/">
             <div className="flex items-center justify-center cursor-pointer pt-4">
-              <img src={logoImage} alt="Ashtech-Pay Afrique" className="h-24 w-auto" />
+              <div className="bg-black rounded-2xl px-6 py-3">
+                <img src={logoImage} alt="Ashtech-Pay Afrique" className="h-20 w-auto" />
+              </div>
             </div>
           </Link>
           <CardTitle className="text-2xl font-bold">Connexion</CardTitle>

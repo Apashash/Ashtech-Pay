@@ -273,7 +273,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           <SidebarHeader className="p-4 border-b border-sidebar-border">
             <Link href="/dashboard">
               <div className="flex items-center cursor-pointer">
-                <img src={logoImage} alt="Ashtech-Pay" className="h-10 w-auto" />
+                <div className="bg-black rounded-xl px-3 py-1.5">
+                  <img src={logoImage} alt="Ashtech-Pay" className="h-9 w-auto" />
+                </div>
               </div>
             </Link>
           </SidebarHeader>

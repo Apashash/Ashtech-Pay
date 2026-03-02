@@ -52,7 +52,9 @@ function DashboardHeader({ user, onLogout }: { user: User; onLogout: () => void 
         <div className="flex items-center justify-between h-16 gap-4">
           <Link href="/dashboard">
             <div className="flex items-center cursor-pointer">
-              <img src={logoImage} alt="Ashtech-Pay Afrique" className="h-12 w-auto" />
+              <div className="bg-black rounded-xl px-3 py-1.5">
+                <img src={logoImage} alt="Ashtech-Pay Afrique" className="h-10 w-auto" />
+              </div>
             </div>
           </Link>
           
