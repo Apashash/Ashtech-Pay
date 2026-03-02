@@ -9,8 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Wallet, ArrowLeftRight, Info, Plus, Loader2, Clock, CheckCircle2 } from "lucide-react";
-import { CURRENCY_SYMBOLS, SUPPORTED_CURRENCIES, EXCHANGE_RATES, COUNTRY_CURRENCIES } from "@shared/schema";
+import { Wallet, ArrowLeftRight, Info, Plus, Loader2, CheckCircle2 } from "lucide-react";
+import { ALL_FX_CURRENCIES, CURRENCY_SYMBOLS } from "@shared/schema";
 import type { User, Transaction } from "@shared/schema";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -20,24 +20,28 @@ interface WalletEntry {
   symbol: string;
 }
 
-const CURRENCY_NAMES: Record<string, string> = {
-  XAF: "Franc CFA (Afrique Centrale)",
-  XOF: "Franc CFA (Afrique de l'Ouest)",
-  GHS: "Cédi Ghanéen",
-  NGN: "Naira Nigérian",
-  KES: "Shilling Kenyan",
-  RWF: "Franc Rwandais",
-  TZS: "Shilling Tanzanien",
-  UGX: "Shilling Ougandais",
-  CDF: "Franc Congolais",
-  GNF: "Franc Guinéen",
-  USD: "Dollar Américain",
+const CURRENCY_FLAGS: Record<string, string> = {
+  XAF: "🇨🇲", XAFC: "🇨🇬", XAFG: "🇬🇦",
+  XOF: "🇸🇳", XOFC: "🇨🇮", XOFF: "🇧🇫", XOFN: "🇳🇪", XOFB: "🇧🇯", XOFT: "🇹🇬", XOFS: "🇸🇳", XOFM: "🇲🇱",
+  GHS: "🇬🇭", NGN: "🇳🇬", KES: "🇰🇪", RWF: "🇷🇼", TZS: "🇹🇿",
+  UGX: "🇺🇬", CDF: "🇨🇩", GNF: "🇬🇳", GMD: "🇬🇲", SLL: "🇸🇱",
+  MWK: "🇲🇼", ZMK: "🇿🇲", ZAR: "🇿🇦", EGP: "🇪🇬", MAD: "🇲🇦",
+  ETB: "🇪🇹", MZN: "🇲🇿", ZWE: "🇿🇼", CVE: "🇨🇻",
+  USD: "🇺🇸", EUR: "🇪🇺", GBP: "🇬🇧", CHF: "🇨🇭",
+  CAD: "🇨🇦", AUD: "🇦🇺", NZD: "🇳🇿",
+  INR: "🇮🇳", PKR: "🇵🇰", BDT: "🇧🇩", LRK: "🇱🇰",
+  PHP: "🇵🇭", IDR: "🇮🇩", MYR: "🇲🇾", THB: "🇹🇭",
+  VND: "🇻🇳", KRW: "🇰🇷", JPY: "🇯🇵", HKD: "🇭🇰", CHN: "🇨🇳",
+  SAR: "🇸🇦", AED: "🇦🇪", QAR: "🇶🇦", KWD: "🇰🇼", BHD: "🇧🇭",
+  ILS: "🇮🇱", TRY: "🇹🇷",
+  SEK: "🇸🇪", NOK: "🇳🇴", DKK: "🇩🇰", PLN: "🇵🇱",
+  CZK: "🇨🇿", HUF: "🇭🇺", RON: "🇷🇴", BGN: "🇧🇬", ISK: "🇮🇸",
+  BRL: "🇧🇷", MXN: "🇲🇽", ARS: "🇦🇷", CLP: "🇨🇱", COP: "🇨🇴",
 };
 
-const CURRENCY_FLAGS: Record<string, string> = {
-  XAF: "🇨🇲", XOF: "🇸🇳", GHS: "🇬🇭", NGN: "🇳🇬", KES: "🇰🇪",
-  RWF: "🇷🇼", TZS: "🇹🇿", UGX: "🇺🇬", CDF: "🇨🇩", GNF: "🇬🇳", USD: "🇺🇸",
-};
+// Build currency name map from ALL_FX_CURRENCIES
+const CURRENCY_NAMES: Record<string, string> = {};
+ALL_FX_CURRENCIES.forEach(c => { CURRENCY_NAMES[c.code] = c.name; });
 
 export default function WalletsPage() {
   const { toast } = useToast();
@@ -57,6 +61,9 @@ export default function WalletsPage() {
   });
   const { data: transactions = [] } = useQuery<Transaction[]>({
     queryKey: ["/api/transactions"],
+  });
+  const { data: fxRates = {} } = useQuery<Record<string, number>>({
+    queryKey: ["/api/public/exchange-rates"],
   });
 
   const primaryCurrency = user?.preferredCurrency || "XAF";
@@ -78,8 +85,12 @@ export default function WalletsPage() {
     });
   }, [rawWalletList, transactions]);
 
-  const existingCurrencies = walletList.map(w => w.currency);
-  const availableCurrencies = SUPPORTED_CURRENCIES.filter(c => !existingCurrencies.includes(c) && c !== primaryCurrency);
+  const existingCurrencies = new Set(walletList.map(w => w.currency));
+
+  // All currencies from admin panel, excluding currencies already having a wallet
+  const availableCurrencies = ALL_FX_CURRENCIES.filter(
+    c => !existingCurrencies.has(c.code)
+  );
 
   const convertMutation = useMutation({
     mutationFn: async (data: { fromCurrency: string; toCurrency: string; amount: string }) => {
@@ -107,7 +118,7 @@ export default function WalletsPage() {
   const openConvert = (wallet: WalletEntry) => {
     setFromCurrency(wallet.currency);
     const other = walletList.find(w => w.currency !== wallet.currency);
-    setToCurrency(other?.currency || "XOF");
+    setToCurrency(other?.currency || primaryCurrency);
     setConvertAmount("");
     setPendingSuccess(null);
     setConvertOpen(true);
@@ -144,14 +155,18 @@ export default function WalletsPage() {
   const parsedAmount = parseFloat(convertAmount || "0");
   const sourceParsedBalance = parseFloat(sourceBalance?.balance || "0");
   const hasSufficientBalance = parsedAmount > 0 && parsedAmount <= sourceParsedBalance;
-
   const feeAmount = (parsedAmount * conversionFeePercent) / 100;
-  const finalAmount = parsedAmount - feeAmount;
+  const amountAfterFee = parsedAmount - feeAmount;
 
-  // Internal rates for preview
-  const fromRate = EXCHANGE_RATES[fromCurrency as keyof typeof EXCHANGE_RATES] || 1;
-  const toRate = EXCHANGE_RATES[toCurrency as keyof typeof EXCHANGE_RATES] || 1;
-  const previewAmount = finalAmount * (fromRate / toRate);
+  // Compute preview using admin exchange rates (via XAF as pivot)
+  const xafRate = fxRates["XAF"] || 585;
+  const fromRateUSD = fxRates[fromCurrency] || xafRate;
+  const toRateUSD = fxRates[toCurrency] || xafRate;
+  const amountInXAF = amountAfterFee * (xafRate / fromRateUSD);
+  const previewAmount = amountInXAF * (toRateUSD / xafRate);
+
+  const walletSymbol = (currency: string) =>
+    (CURRENCY_SYMBOLS as Record<string, string>)[currency] || currency;
 
   return (
     <DashboardLayout>
@@ -170,8 +185,8 @@ export default function WalletsPage() {
         <Alert>
           <Info className="h-4 w-4" />
           <AlertDescription>
-            Les dépôts sont effectués sur votre compte principal <strong>{primaryCurrency}</strong>{user?.country ? ` (${user.country})` : ""}.
-            Vous pouvez convertir vos fonds instantanément entre vos différents portefeuilles.
+            Les paiements reçus sont crédités dans le wallet correspondant à la devise du paiement.
+            Utilisez la conversion pour transférer entre vos comptes.
           </AlertDescription>
         </Alert>
 
@@ -182,7 +197,7 @@ export default function WalletsPage() {
         ) : (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {walletList.map((wallet) => {
-              const balance = parseFloat(wallet.balance);
+              const balance = parseFloat(wallet.balance || "0");
               const isMain = wallet.currency === primaryCurrency;
               return (
                 <Card
@@ -208,7 +223,7 @@ export default function WalletsPage() {
                       <p className="text-muted-foreground text-sm mb-1">Solde</p>
                       <p className="text-2xl font-bold">
                         {balance.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        <span className="text-base font-normal text-muted-foreground ml-1">{wallet.symbol || wallet.currency}</span>
+                        <span className="text-base font-normal text-muted-foreground ml-1">{wallet.symbol || walletSymbol(wallet.currency)}</span>
                       </p>
                     </div>
                     <Button
@@ -217,6 +232,7 @@ export default function WalletsPage() {
                       className="w-full gap-2"
                       onClick={() => openConvert(wallet)}
                       disabled={walletList.length < 2}
+                      data-testid={`button-convert-${wallet.currency}`}
                     >
                       <ArrowLeftRight className="w-4 h-4" />
                       Demander une conversion
@@ -230,16 +246,15 @@ export default function WalletsPage() {
 
         {/* Pending success banner */}
         {pendingSuccess && (
-          <Card className="border-amber-500/40 bg-amber-500/5">
+          <Card className="border-green-500/40 bg-green-500/5">
             <CardContent className="p-4 flex items-start gap-3">
-              <Clock className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
+              <CheckCircle2 className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
               <div>
                 <p className="font-semibold text-green-600">Conversion effectuée</p>
                 <p className="text-sm text-muted-foreground mt-1">
                   Votre conversion de{" "}
                   <strong>{pendingSuccess.fromAmount.toLocaleString("fr-FR")} {pendingSuccess.fromCurrency}</strong>{" "}
                   vers <strong>{pendingSuccess.toCurrency}</strong> a été traitée avec succès.
-                  Votre compte a été mis à jour instantanément.
                 </p>
               </div>
             </CardContent>
@@ -259,17 +274,16 @@ export default function WalletsPage() {
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
-
               <div className="space-y-2">
                 <Label>Compte source (à débiter)</Label>
                 <Select value={fromCurrency} onValueChange={(v) => { setFromCurrency(v); setConvertAmount(""); }}>
-                  <SelectTrigger>
+                  <SelectTrigger data-testid="select-from-currency">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {walletList.map(w => (
                       <SelectItem key={w.currency} value={w.currency}>
-                        {CURRENCY_FLAGS[w.currency] || "🌍"} {w.currency} — {parseFloat(w.balance).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {w.symbol}
+                        {CURRENCY_FLAGS[w.currency] || "🌍"} {w.currency} — {parseFloat(w.balance || "0").toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {w.symbol || walletSymbol(w.currency)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -279,7 +293,7 @@ export default function WalletsPage() {
               <div className="space-y-2">
                 <Label>Compte cible (à créditer)</Label>
                 <Select value={toCurrency} onValueChange={setToCurrency}>
-                  <SelectTrigger>
+                  <SelectTrigger data-testid="select-to-currency">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -301,6 +315,7 @@ export default function WalletsPage() {
                   onChange={(e) => setConvertAmount(e.target.value)}
                   min="1"
                   max={sourceParsedBalance}
+                  data-testid="input-convert-amount"
                 />
                 {convertAmount && parsedAmount > 0 && !hasSufficientBalance && (
                   <p className="text-xs text-red-500">
@@ -319,7 +334,7 @@ export default function WalletsPage() {
                     </div>
                     <div className="flex justify-between text-sm font-bold border-t border-primary/10 pt-1 mt-1">
                       <span>Vous recevrez environ</span>
-                      <span className="text-primary">{previewAmount.toLocaleString("fr-FR")} {toCurrency}</span>
+                      <span className="text-primary">{previewAmount.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {toCurrency}</span>
                     </div>
                     <p className="text-[10px] text-muted-foreground mt-2 italic text-center">
                       Le taux final peut varier légèrement.
@@ -336,6 +351,7 @@ export default function WalletsPage() {
                   className="flex-1 gap-2"
                   disabled={!hasSufficientBalance || convertMutation.isPending}
                   onClick={() => convertMutation.mutate({ fromCurrency, toCurrency, amount: convertAmount })}
+                  data-testid="button-confirm-convert"
                 >
                   {convertMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                   Convertir maintenant
@@ -361,24 +377,27 @@ export default function WalletsPage() {
               <div className="space-y-2">
                 <Label>Devise</Label>
                 <Select value={newWalletCurrency} onValueChange={setNewWalletCurrency}>
-                  <SelectTrigger>
+                  <SelectTrigger data-testid="select-new-wallet-currency">
                     <SelectValue placeholder="Choisir une devise" />
                   </SelectTrigger>
                   <SelectContent>
                     {availableCurrencies.map(c => (
-                      <SelectItem key={c} value={c}>
-                        {CURRENCY_FLAGS[c] || "🌍"} {c} — {CURRENCY_NAMES[c] || c}
+                      <SelectItem key={c.code} value={c.code}>
+                        {CURRENCY_FLAGS[c.code] || "🌍"} {c.code} — {c.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="flex gap-3">
-                <Button variant="outline" className="flex-1" onClick={() => setAddWalletOpen(false)}>Annuler</Button>
+                <Button variant="outline" className="flex-1" onClick={() => setAddWalletOpen(false)} data-testid="button-cancel-wallet">
+                  Annuler
+                </Button>
                 <Button
                   className="flex-1"
                   disabled={!newWalletCurrency || addWalletMutation.isPending}
                   onClick={() => addWalletMutation.mutate()}
+                  data-testid="button-create-wallet"
                 >
                   {addWalletMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                   Créer

@@ -1848,7 +1848,8 @@ export async function registerRoutes(
     try {
       const userId = req.userId!;
       const { currency } = req.body;
-      if (!currency || !SUPPORTED_CURRENCIES.includes(currency)) {
+      const validCurrencyCodes = new Set(ALL_FX_CURRENCIES.map((c: { code: string }) => c.code));
+      if (!currency || !validCurrencyCodes.has(currency)) {
         return res.status(400).json({ message: "Devise non supportée" });
       }
       const walletUser = await storage.getUser(userId);

@@ -1,25 +1,28 @@
 import { useQuery } from "@tanstack/react-query";
-import { EXCHANGE_RATES, type SupportedCurrency } from "@shared/schema";
+import { ALL_FX_CURRENCIES } from "@shared/schema";
 
 type ExchangeRates = Record<string, number>;
+
+// Build default rates from ALL_FX_CURRENCIES (admin panel currencies)
+const DEFAULT_RATES: ExchangeRates = {};
+ALL_FX_CURRENCIES.forEach(c => { DEFAULT_RATES[c.code] = c.defaultRate; });
 
 export function useExchangeRates() {
   const { data: rates } = useQuery<ExchangeRates>({
     queryKey: ["/api/public/exchange-rates"],
     queryFn: async () => {
       const res = await fetch("/api/public/exchange-rates");
-      if (!res.ok) return EXCHANGE_RATES;
+      if (!res.ok) return DEFAULT_RATES;
       return res.json();
     },
     staleTime: 60000,
   });
 
-  const getRate = (currency: SupportedCurrency): number => {
-    if (rates && rates[currency] !== undefined) {
-      return rates[currency];
-    }
-    return EXCHANGE_RATES[currency] || 1;
+  const activeRates = rates || DEFAULT_RATES;
+
+  const getRate = (currency: string): number => {
+    return activeRates[currency] ?? DEFAULT_RATES[currency] ?? 1;
   };
 
-  return { rates: rates || EXCHANGE_RATES, getRate };
+  return { rates: activeRates, getRate };
 }
