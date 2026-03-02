@@ -2605,6 +2605,7 @@ export async function registerRoutes(
       const reference = generateTransactionReference("payment_link");
 
       // Create payment intent (pending status)
+      // amount/currency stored in link currency (XAF) so wallet crediting is consistent
       const countryDisplay = countryData ? `${countryData.flag || ''} ${countryData.name}`.trim() : country;
       const intent = await storage.createPaymentIntent({
         paymentLinkId: paymentLink.id,
@@ -2613,7 +2614,7 @@ export async function registerRoutes(
         payerEmail: email,
         payerPhone: phone,
         payerCountry: countryDisplay,
-        amount: totalAmount,
+        amount: netAmount,
         feeAmount: feeAmount.toFixed(2),
         currency: paymentLink.currency || "XAF",
         paymentMethod,
@@ -2626,8 +2627,8 @@ export async function registerRoutes(
         userId: paymentLink.userId,
         type: "payment_link",
         amount: netAmount,
-        totalAmount: totalAmount,
-        feeAmount: feeAmount.toFixed(2),
+        totalAmount: amountInLinkCurrency.toFixed(2),
+        feeAmount: (amountInLinkCurrency - parseFloat(netAmount)).toFixed(2),
         currency: paymentLink.currency || "XAF",
         status: "pending",
         description: `Paiement en attente de ${fullName} (${email}) via ${paymentLink.title}`,
