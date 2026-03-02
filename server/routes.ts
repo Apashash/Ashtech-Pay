@@ -31,6 +31,7 @@ import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, f
 import { addPendingPayment } from "./paymentPoller";
 import { createSwychrPayout, formatInternationalPhone, fiatToPusd, pusdToFiatRate, getConversionRate, convertFiatToPusd, getPayoutToken } from "./swychrPayout";
 import { addPendingPayout } from "./payoutPoller";
+import { sendWelcomeEmail } from "./email";
 
 const uploadsDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadsDir)) {
@@ -346,6 +347,11 @@ export async function registerRoutes(
         password: hashedPassword,
         preferredCurrency,
       });
+
+      // Send welcome email asynchronously (non-blocking)
+      if (user.email) {
+        sendWelcomeEmail(user.email, user.fullName || user.username).catch(() => {});
+      }
 
       // Generate auth token for token-based auth (works in iframes where cookies fail)
       const authToken = storeAuthToken(user.id);
