@@ -210,7 +210,7 @@ export async function createSwychrPaymentLink(
         currency:            params.currency,
         transaction_id:      params.transaction_id,
         description:         params.description,
-        pass_digital_charge: true,
+        pass_digital_charge: false,
         callback_url:        params.callback_url,
       }),
     });
