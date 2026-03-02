@@ -1366,15 +1366,17 @@ export async function registerRoutes(
 
       const withdrawalRef = generateTransactionReference("withdrawal");
       let withdrawalCountryCode = "CM";
+      let withdrawalCurrency = userCurrency;
       if (data.countryId) {
         const wCountry = await storage.getCountry(data.countryId);
         if (wCountry?.code) withdrawalCountryCode = wCountry.code;
+        if (wCountry?.currency) withdrawalCurrency = wCountry.currency;
       }
       const transaction = await storage.createTransaction({
         userId,
         type: "withdrawal",
         amount: data.amount,
-        currency: "XAF",
+        currency: withdrawalCurrency,
         status: "pending",
         description: `Retrait vers ${data.accountDetails}`,
         paymentMethod: data.paymentMethod,
