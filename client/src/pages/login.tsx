@@ -48,15 +48,15 @@ export default function LoginPage() {
 
       <div className="w-full max-w-md relative z-10 bg-card border border-border rounded-2xl shadow-xl overflow-hidden">
         <div className="px-8 pt-8 pb-6">
-          <div className="flex items-center gap-3 mb-6">
+          <div className="flex flex-col items-center gap-3 mb-7">
             <Link href="/">
               <div className="bg-black rounded-xl p-2 cursor-pointer inline-flex">
                 <img src={logoImage} alt="Ashtech-Pay Afrique" className="h-9 w-auto" />
               </div>
             </Link>
-            <div>
+            <div className="text-center">
               <h1 className="text-xl font-bold text-foreground">Connexion</h1>
-              <p className="text-sm text-muted-foreground">Accédez à votre compte</p>
+              <p className="text-sm text-muted-foreground mt-0.5">Accédez à votre compte</p>
             </div>
           </div>
 
