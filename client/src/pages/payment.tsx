@@ -365,73 +365,7 @@ export default function PaymentPage() {
           
           <CardContent className="space-y-5">
 
-            {/* Amount */}
-            {paymentLink.isFixedAmount ? (
-              <div className="bg-muted/30 border border-border rounded-xl p-4 text-center">
-                <p className="text-sm text-muted-foreground mb-1">Montant à payer</p>
-                <p className="text-3xl font-bold text-foreground" data-testid="text-payment-amount">
-                  {formatAmount(convertedDisplayAmount, selectedDisplayCurrency)}
-                </p>
-                {selectedDisplayCurrency !== linkCurrency && (
-                  <p className="text-sm text-muted-foreground mt-1">= {formatAmount(displayAmount, linkCurrency)}</p>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <Label htmlFor="amount">Montant à payer ({CURRENCY_SYMBOLS[selectedDisplayCurrency]}) *</Label>
-                <Input
-                  id="amount"
-                  type="number"
-                  placeholder="Entrez le montant"
-                  value={customAmount}
-                  onChange={(e) => { setCustomAmount(e.target.value); setErrors(p => ({...p, amount: undefined as any})); }}
-                  className={`text-xl h-12 text-center ${errors.amount ? "border-red-500" : ""}`}
-                  data-testid="input-payment-amount"
-                />
-                {errors.amount && <p className="text-xs text-red-500">{errors.amount}</p>}
-                {selectedDisplayCurrency !== linkCurrency && customAmount && (
-                  <p className="text-xs text-muted-foreground text-center">≈ {formatAmount(amountInLinkCurrency, linkCurrency)}</p>
-                )}
-              </div>
-            )}
-
-            {/* Name */}
-            <div className="space-y-2">
-              <Label htmlFor="fullName">Nom complet *</Label>
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  id="fullName"
-                  type="text"
-                  placeholder="Votre nom complet"
-                  value={fullName}
-                  onChange={(e) => { setFullName(e.target.value); setErrors(p => ({...p, fullName: undefined as any})); }}
-                  className={`pl-10 ${errors.fullName ? "border-red-500" : ""}`}
-                  data-testid="input-full-name"
-                />
-              </div>
-              {errors.fullName && <p className="text-xs text-red-500">{errors.fullName}</p>}
-            </div>
-
-            {/* Email */}
-            <div className="space-y-2">
-              <Label htmlFor="email">Email *</Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="votre@email.com"
-                  value={email}
-                  onChange={(e) => { setEmail(e.target.value); setErrors(p => ({...p, email: undefined as any})); }}
-                  className={`pl-10 ${errors.email ? "border-red-500" : ""}`}
-                  data-testid="input-email"
-                />
-              </div>
-              {errors.email && <p className="text-xs text-red-500">{errors.email}</p>}
-            </div>
-
-            {/* Country */}
+            {/* Country — first field */}
             <div className="space-y-2">
               <Label htmlFor="country">Pays *</Label>
               <Select value={country} onValueChange={(val) => { setCountry(val); setOperator(""); setErrors(p => ({...p, country: undefined as any})); }}>
@@ -527,6 +461,72 @@ export default function PaymentPage() {
                 Aucun opérateur disponible pour ce pays
               </div>
             )}
+
+            {/* Amount */}
+            {paymentLink.isFixedAmount ? (
+              <div className="bg-muted/30 border border-border rounded-xl p-4 text-center">
+                <p className="text-sm text-muted-foreground mb-1">Montant à payer</p>
+                <p className="text-3xl font-bold text-foreground" data-testid="text-payment-amount">
+                  {formatAmount(convertedDisplayAmount, selectedDisplayCurrency)}
+                </p>
+                {selectedDisplayCurrency !== linkCurrency && (
+                  <p className="text-sm text-muted-foreground mt-1">= {formatAmount(displayAmount, linkCurrency)}</p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label htmlFor="amount">Montant à payer ({CURRENCY_SYMBOLS[selectedDisplayCurrency]}) *</Label>
+                <Input
+                  id="amount"
+                  type="number"
+                  placeholder="Entrez le montant"
+                  value={customAmount}
+                  onChange={(e) => { setCustomAmount(e.target.value); setErrors(p => ({...p, amount: undefined as any})); }}
+                  className={`text-xl h-12 text-center ${errors.amount ? "border-red-500" : ""}`}
+                  data-testid="input-payment-amount"
+                />
+                {errors.amount && <p className="text-xs text-red-500">{errors.amount}</p>}
+                {selectedDisplayCurrency !== linkCurrency && customAmount && (
+                  <p className="text-xs text-muted-foreground text-center">≈ {formatAmount(amountInLinkCurrency, linkCurrency)}</p>
+                )}
+              </div>
+            )}
+
+            {/* Name */}
+            <div className="space-y-2">
+              <Label htmlFor="fullName">Nom complet *</Label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  id="fullName"
+                  type="text"
+                  placeholder="Votre nom complet"
+                  value={fullName}
+                  onChange={(e) => { setFullName(e.target.value); setErrors(p => ({...p, fullName: undefined as any})); }}
+                  className={`pl-10 ${errors.fullName ? "border-red-500" : ""}`}
+                  data-testid="input-full-name"
+                />
+              </div>
+              {errors.fullName && <p className="text-xs text-red-500">{errors.fullName}</p>}
+            </div>
+
+            {/* Email */}
+            <div className="space-y-2">
+              <Label htmlFor="email">Email *</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="votre@email.com"
+                  value={email}
+                  onChange={(e) => { setEmail(e.target.value); setErrors(p => ({...p, email: undefined as any})); }}
+                  className={`pl-10 ${errors.email ? "border-red-500" : ""}`}
+                  data-testid="input-email"
+                />
+              </div>
+              {errors.email && <p className="text-xs text-red-500">{errors.email}</p>}
+            </div>
 
             {/* Phone */}
             <div className="space-y-2">
