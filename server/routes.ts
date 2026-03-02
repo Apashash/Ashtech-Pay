@@ -2587,25 +2587,24 @@ export async function registerRoutes(
         ashtechMarginPct = parseFloat((fee as any).ashtechMargin);
       }
 
-      // Compute fees based on the amount the user entered
+      // Compute fees in payer's currency — merchant is credited in paymentCurrency (KES, NGN, etc.)
       const swychrFeesCalc = computeSwychrFees(numAmount, paymentCountryCode, ashtechMarginPct);
-      const feeAmount = swychrFeesCalc.ashtechFeeAmount; 
-      
-      // netAmount is what the merchant gets (converted back to link currency for their balance)
-      const netAmount = (amountInLinkCurrency - (amountInLinkCurrency * ashtechMarginPct / 100)).toFixed(2);
+      // netAmount = what merchant receives, in payer's currency
+      const netAmount = swychrFeesCalc.creditedAmount.toFixed(2);
+      const totalFeeAmount = swychrFeesCalc.totalFeeAmount.toFixed(2);
       const totalAmount = numAmount.toFixed(2);
 
       console.log("Payment link fee calculation:", {
         countryId, resolvedOperatorId, ashtechMarginPct,
-        numAmount, currency: paymentCurrency,
-        ashtechFee: feeAmount, creditedInLinkCurrency: netAmount,
+        numAmount, paymentCurrency,
+        swychrFee: swychrFeesCalc.swychrFeeAmount, ashtechFee: swychrFeesCalc.ashtechFeeAmount,
+        totalFee: swychrFeesCalc.totalFeeAmount, merchantReceives: netAmount,
       });
 
       // Generate unique ASHPAY reference
       const reference = generateTransactionReference("payment_link");
 
-      // Create payment intent (pending status)
-      // amount/currency stored in link currency (XAF) so wallet crediting is consistent
+      // Create payment intent — amount & currency in payer's currency so wallet crediting is correct
       const countryDisplay = countryData ? `${countryData.flag || ''} ${countryData.name}`.trim() : country;
       const intent = await storage.createPaymentIntent({
         paymentLinkId: paymentLink.id,
@@ -2615,8 +2614,8 @@ export async function registerRoutes(
         payerPhone: phone,
         payerCountry: countryDisplay,
         amount: netAmount,
-        feeAmount: feeAmount.toFixed(2),
-        currency: paymentLink.currency || "XAF",
+        feeAmount: totalFeeAmount,
+        currency: paymentCurrency,
         paymentMethod,
         operator: operator || null,
         reference,
@@ -2627,9 +2626,9 @@ export async function registerRoutes(
         userId: paymentLink.userId,
         type: "payment_link",
         amount: netAmount,
-        totalAmount: amountInLinkCurrency.toFixed(2),
-        feeAmount: (amountInLinkCurrency - parseFloat(netAmount)).toFixed(2),
-        currency: paymentLink.currency || "XAF",
+        totalAmount: totalAmount,
+        feeAmount: totalFeeAmount,
+        currency: paymentCurrency,
         status: "pending",
         description: `Paiement en attente de ${fullName} (${email}) via ${paymentLink.title}`,
         paymentMethod,
