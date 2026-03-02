@@ -59,12 +59,28 @@ Three main tables:
 │       ├── hooks/          # Custom React hooks
 │       └── lib/            # Utilities and query client
 ├── server/           # Express backend
-│   ├── routes.ts     # API route definitions
-│   ├── storage.ts    # Database operations interface
-│   └── db.ts         # Database connection
+│   ├── routes.ts         # API route definitions
+│   ├── storage.ts        # Database operations interface
+│   ├── walletHelper.ts   # Smart wallet crediting: loadFxRates, convertFromXAF, convertToXAF, creditUserWallet, cleanupEmptyWallets
+│   ├── paymentPoller.ts  # Polls Swychr payment status, credits wallets on completion
+│   ├── payoutPoller.ts   # Polls Swychr payout status
+│   ├── swychr.ts         # Swychr payin API (deposits, payment links)
+│   ├── swychrPayout.ts   # Swychr/AccountPE payout API (withdrawals, transfers)
+│   └── db.ts             # Database connection
 ├── shared/           # Shared code (schemas, types)
 └── migrations/       # Database migrations
 ```
+
+### Wallet Crediting Logic (`server/walletHelper.ts`)
+
+All payment credits (deposits, payment links, conversions) go through `creditUserWallet`:
+1. **CFA franc payments** (XAF, XOF, XAFC, XAFG, XOFC, XOFF, XOFB, XOFT, XOFS, etc.) → always credit `users.balance` (primary wallet, 1:1 parity)
+2. **Same currency as `preferredCurrency`** → credit `users.balance`
+3. **Different non-CFA currency** → auto-create secondary wallet in payment currency via `upsertWallet`
+
+After any wallet deduction, `cleanupEmptyWallets` removes zero-balance secondary wallets.
+
+Exchange rate conversions use admin-configured rates (`fx_rate_XXX` settings from "Devises & Taux de change" panel) loaded via `loadFxRates()`. Swychr country-specific codes (XOFB, XAFC, etc.) are normalized to standard XAF/XOF via `normalizeCurrency()`.
 
 ### Design System
 - Dark mode default with Binance-inspired color palette

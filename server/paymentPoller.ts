@@ -1,5 +1,6 @@
 import { storage } from "./storage";
 import { checkSwychrPaymentStatus } from "./swychr";
+import { creditUserWallet } from "./walletHelper";
 
 const POLL_INTERVAL = 3000;            // 3 seconds
 const MAX_POLL_DURATION_MS = 10 * 60 * 1000; // 10 minutes in ms
@@ -61,11 +62,11 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
     await storage.updateTransactionStatus(transaction.id, status);
 
     if (status === "completed") {
-      await storage.updateUserBalance(payment.userId, parseFloat(payment.amount));
+      const paymentCurrency = transaction.currency || "XAF";
+      await creditUserWallet(payment.userId, parseFloat(payment.amount), paymentCurrency);
 
       const isPaymentLink = payment.type === "payment_link";
-      const user = await storage.getUser(payment.userId);
-      const currency = transaction.currency || user?.preferredCurrency || "XAF";
+      const currency = paymentCurrency;
       await storage.createUserNotification({
         userId: payment.userId,
         type: isPaymentLink ? "payment_link_received" : "deposit_confirmed",

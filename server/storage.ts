@@ -248,6 +248,7 @@ export interface IStorage {
   getWallet(userId: string, currency: string): Promise<Wallet | undefined>;
   upsertWallet(userId: string, currency: string, balanceDelta: number): Promise<Wallet>;
   setWalletBalance(userId: string, currency: string, newBalance: number): Promise<Wallet>;
+  deleteWallet(walletId: string): Promise<void>;
   // Conversion requests
   createConversionRequest(data: InsertConversionRequest): Promise<ConversionRequest>;
   getConversionRequest(id: string): Promise<ConversionRequest | undefined>;
@@ -1144,6 +1145,10 @@ export class DatabaseStorage implements IStorage {
         .returning();
       return created;
     }
+  }
+
+  async deleteWallet(walletId: string): Promise<void> {
+    await db.delete(wallets).where(eq(wallets.id, walletId));
   }
 
   // ── Conversion requests ─────────────────────────────────────────────────────

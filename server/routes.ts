@@ -29,6 +29,7 @@ import fs from "fs";
 import { uploadToSupabase } from "./supabase";
 import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, fetchPaymentLinkDetails, ASHTECH_MARGIN } from "./swychr";
 import { addPendingPayment } from "./paymentPoller";
+import { loadFxRates, convertFromXAF, convertToXAF, creditUserWallet, cleanupEmptyWallets } from "./walletHelper";
 import { createSwychrPayout, formatInternationalPhone, fiatToPusd, pusdToFiatRate, getConversionRate, convertFiatToPusd, getPayoutToken, COUNTRY_CURRENCY } from "./swychrPayout";
 import { addPendingPayout } from "./payoutPoller";
 import {
@@ -171,30 +172,8 @@ function generateTransactionReference(type: string): string {
   return `${prefix}-${typeCode}-${timestamp}-${random}`;
 }
 
-// Load fx rates (units per 1 USD) from DB with defaults fallback
-async function loadFxRates(): Promise<Record<string, number>> {
-  const allSettings = await storage.getAllSettings();
-  const rates: Record<string, number> = {};
-  allSettings.forEach(s => {
-    if (s.key.startsWith("fx_rate_")) {
-      const code = s.key.replace("fx_rate_", "");
-      const val = parseFloat(s.value);
-      if (!isNaN(val) && val > 0) rates[code] = val;
-    }
-  });
-  ALL_FX_CURRENCIES.forEach(c => {
-    if (!rates[c.code]) rates[c.code] = c.defaultRate;
-  });
-  return rates;
-}
-
-// Convert an amount in XAF to the target currency using fx rates
-function convertFromXAF(amountXAF: number, targetCurrency: string, fxRates: Record<string, number>): number {
-  if (targetCurrency === "XAF") return amountXAF;
-  const xafRate = fxRates["XAF"] || 585;
-  const targetRate = fxRates[targetCurrency] || xafRate;
-  return amountXAF * (targetRate / xafRate);
-}
+// loadFxRates, convertFromXAF, convertToXAF, creditUserWallet, cleanupEmptyWallets
+// are imported from ./walletHelper
 
 async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, 10);
@@ -1622,10 +1601,10 @@ export async function registerRoutes(
       const feeAmount = (parsedAmount * conversionFeePercent) / 100;
       const amountAfterFee = parsedAmount - feeAmount;
 
-      // Use EXCHANGE_RATES for internal conversion (Ashtech Pay side)
-      const fromRate = EXCHANGE_RATES[fromCurrency as SupportedCurrency] || 1;
-      const toRate = EXCHANGE_RATES[toCurrency as SupportedCurrency] || 1;
-      const receivedAmount = amountAfterFee * (fromRate / toRate);
+      // Use admin "Devises & Taux de change" rates for conversion
+      const convFxRates = await loadFxRates();
+      const amountInXAF = convertToXAF(amountAfterFee, fromCurrency, convFxRates);
+      const receivedAmount = convertFromXAF(amountInXAF, toCurrency, convFxRates);
 
       // Debit source
       if (fromCurrency === "XAF") {
@@ -1640,6 +1619,9 @@ export async function registerRoutes(
       } else {
         await storage.upsertWallet(userId, toCurrency, receivedAmount);
       }
+
+      // Clean up any zero-balance secondary wallets after conversion
+      await cleanupEmptyWallets(userId);
 
       // Record transaction
       const transaction = await storage.createTransaction({
@@ -2798,19 +2780,10 @@ export async function registerRoutes(
         return res.status(500).json({ message: "Erreur lors de la mise à jour du statut" });
       }
 
-      // Convert amount to XAF (base currency for balances)
-      const EXCHANGE_TO_XAF: Record<string, number> = {
-        "XAF": 1,
-        "XOF": 1,
-        "USD": 625,
-        "EUR": 656,
-      };
+      // Credit the merchant's wallet using admin exchange rates
       const intentAmount = parseFloat(intent.amount);
-      const rate = EXCHANGE_TO_XAF[intent.currency] || 1;
-      const amountInXAF = intentAmount * rate;
-
-      // Credit the merchant's balance in XAF
-      await storage.updateUserBalance(intent.merchantId, amountInXAF);
+      const intentCurrency = intent.currency || "XAF";
+      await creditUserWallet(intent.merchantId, intentAmount, intentCurrency);
 
       // Update existing transaction to completed status
       const existingTx = await storage.getTransactionByPaymentIntentId(intent.id);
@@ -2820,8 +2793,8 @@ export async function registerRoutes(
 
       res.json({ 
         message: "Paiement confirmé et crédité avec succès",
-        amount: amountInXAF.toFixed(2),
-        currency: "XAF",
+        amount: intentAmount.toFixed(2),
+        currency: intentCurrency,
         originalAmount: intent.amount,
         originalCurrency: intent.currency
       });
@@ -3177,38 +3150,32 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Erreur lors de la mise à jour" });
       }
       
-      // Credit user balance when transaction is approved (payment_link type)
+      // Credit user wallet when transaction is approved (payment_link type)
+      // Uses admin "Devises & Taux de change" rates; auto-creates wallet if currency not found
       if (wasNotCompleted && isNowCompleted && transaction.type === "payment_link") {
-        // Convert amount to XAF if needed
-        const EXCHANGE_TO_XAF: Record<string, number> = {
-          "XAF": 1,
-          "XOF": 1,
-          "USD": 625,
-          "EUR": 656,
-        };
         const txAmount = parseFloat(transaction.amount);
-        const rate = EXCHANGE_TO_XAF[transaction.currency || "XAF"] || 1;
-        const amountInXAF = txAmount * rate;
-        
-        await storage.updateUserBalance(transaction.userId, amountInXAF);
-        
+        const txCurrency = transaction.currency || "XAF";
+        await creditUserWallet(transaction.userId, txAmount, txCurrency);
+
         // Also update the payment intent status if exists
         if (transaction.paymentIntentId) {
           await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "completed");
         }
       }
-      
-      // For deposits, credit the user and create notification
+
+      // For deposits, credit the right wallet and create notification
+      // Uses admin "Devises & Taux de change" rates; auto-creates wallet if currency not found
       if (wasNotCompleted && isNowCompleted && transaction.type === "deposit") {
         const txAmount = parseFloat(transaction.amount);
-        await storage.updateUserBalance(transaction.userId, txAmount);
-        
+        const txCurrency = transaction.currency || "XAF";
+        await creditUserWallet(transaction.userId, txAmount, txCurrency);
+
         // Create notification for user
         await storage.createUserNotification({
           userId: transaction.userId,
           type: "deposit_confirmed",
           title: "Dépôt confirmé",
-          message: `Votre dépôt de ${transaction.amount} ${transaction.currency || "XAF"} a été confirmé et crédité sur votre compte.`,
+          message: `Votre dépôt de ${transaction.amount} ${txCurrency} a été confirmé et crédité sur votre compte.`,
           transactionId: transaction.id,
           isRead: false,
         });
