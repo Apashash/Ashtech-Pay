@@ -363,16 +363,16 @@ export default function PaymentPage() {
       
       <div className="flex-1 flex items-start justify-center p-4 relative z-10">
         <Card className="w-full max-w-lg overflow-hidden">
-          <CardHeader className="text-center space-y-3 pb-4">
+          <CardHeader className="text-center pb-0">
             <CardTitle className="text-2xl" data-testid="text-payment-title">{paymentLink.title}</CardTitle>
-            {paymentLink.description && (
-              <CardDescription>{paymentLink.description}</CardDescription>
-            )}
           </CardHeader>
           {paymentLink.imagePath && (
-            <div className="w-full overflow-hidden">
+            <div className="w-full overflow-hidden mt-4">
               <img src={paymentLink.imagePath} alt={paymentLink.title} className="w-full h-52 object-cover" data-testid="img-payment-link" />
             </div>
+          )}
+          {paymentLink.description && (
+            <p className="text-sm text-muted-foreground text-center px-6 pt-4" data-testid="text-payment-description">{paymentLink.description}</p>
           )}
           {paymentLink.hasPdfDelivery && (
             <div className="flex items-center gap-2 text-amber-500 text-sm bg-amber-500/10 p-3 mx-4 mt-4 rounded-lg">
