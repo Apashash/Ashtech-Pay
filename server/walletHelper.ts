@@ -28,41 +28,37 @@ export async function loadFxRates(): Promise<Record<string, number>> {
     }
   });
   ALL_FX_CURRENCIES.forEach(c => {
-    if (!rates[c.code]) rates[c.code] = c.defaultRate;
+    if (!rates[c.code]) rates[code] = c.defaultRate;
   });
   return rates;
 }
 
-// Convert an XAF amount to the target currency using admin rates
+// Convert an amount to the target currency using admin rates (Strict country codes)
 export function convertFromXAF(amountXAF: number, targetCurrency: string, fxRates: Record<string, number>): number {
-  const target = normalizeCurrency(targetCurrency);
-  if (target === "XAF" || target === "XOF") return amountXAF; // CFA franc: 1:1
+  if (targetCurrency === "XAF") return amountXAF;
   const xafRate = fxRates["XAF"] || 585;
-  const targetRate = fxRates[target] || xafRate;
+  const targetRate = fxRates[targetCurrency] || xafRate;
   return amountXAF * (targetRate / xafRate);
 }
 
-// Convert any currency amount to XAF using admin rates
+// Convert any currency amount to XAF using admin rates (Strict country codes)
 export function convertToXAF(amount: number, fromCurrency: string, fxRates: Record<string, number>): number {
-  const from = normalizeCurrency(fromCurrency);
-  if (from === "XAF" || from === "XOF") return amount; // CFA franc: 1:1
+  if (fromCurrency === "XAF") return amount;
   const xafRate = fxRates["XAF"] || 585;
-  const fromRate = fxRates[from] || xafRate;
+  const fromRate = fxRates[fromCurrency] || xafRate;
   return amount * (xafRate / fromRate);
 }
 
-// Convert between two arbitrary currencies via XAF as pivot
+// Convert between two arbitrary currencies via XAF as pivot (Strict country codes)
 export function convertCurrency(
   amount: number,
   fromCurrency: string,
   toCurrency: string,
   fxRates: Record<string, number>
 ): number {
-  const fromNorm = normalizeCurrency(fromCurrency);
-  const toNorm = normalizeCurrency(toCurrency);
-  if (fromNorm === toNorm) return amount;
-  const amountInXAF = convertToXAF(amount, fromNorm, fxRates);
-  return convertFromXAF(amountInXAF, toNorm, fxRates);
+  if (fromCurrency === toCurrency) return amount;
+  const amountInXAF = convertToXAF(amount, fromCurrency, fxRates);
+  return convertFromXAF(amountInXAF, toCurrency, fxRates);
 }
 
 // Delete zero-balance secondary wallets for a user (cleanup unused wallets)
@@ -82,9 +78,8 @@ export async function cleanupEmptyWallets(userId: string): Promise<void> {
 // Smart wallet crediting using admin exchange rates:
 //
 // Rules (in order):
-//  1. Both payment currency and preferred currency are CFA francs → credit primary balance (1:1 parity)
-//  2. Payment currency matches preferred currency → credit primary balance (no conversion)
-//  3. Different non-CFA currency → credit (or auto-create) a secondary wallet in payment currency
+//  1. Exact match with preferred currency → credit primary balance
+//  2. Different currency (even XOF/XAF from different countries) → credit secondary wallet
 //
 // After any secondary wallet operation, zero-balance wallets are cleaned up.
 export async function creditUserWallet(
@@ -101,24 +96,16 @@ export async function creditUserWallet(
   }
 
   const preferredCurrency = user.preferredCurrency || "XAF";
-  const normalizedPayment = normalizeCurrency(paymentCurrency);
-  const normalizedPreferred = normalizeCurrency(preferredCurrency);
 
-  // Rule 1: Both currencies are CFA francs → credit primary balance
-  if (CFA_CURRENCIES.has(paymentCurrency) && CFA_CURRENCIES.has(preferredCurrency)) {
+  // Rule 1: Exact match with preferred currency → credit primary balance
+  if (paymentCurrency === preferredCurrency) {
     await storage.updateUserBalance(userId, amount);
     return;
   }
 
-  // Rule 2: Same currency as preferred → credit primary balance
-  if (normalizedPayment === normalizedPreferred) {
-    await storage.updateUserBalance(userId, amount);
-    return;
-  }
-
-  // Rule 3: Different currency → credit secondary wallet (auto-create if needed)
-  console.log(`[walletHelper] Crediting secondary wallet ${normalizedPayment} for user ${userId}: +${amount}`);
-  await storage.upsertWallet(userId, normalizedPayment, amount);
+  // Rule 2: Different currency → credit secondary wallet (specific code like XOFB, XOFF, XAFG, etc.)
+  console.log(`[walletHelper] Crediting secondary wallet ${paymentCurrency} for user ${userId}: +${amount}`);
+  await storage.upsertWallet(userId, paymentCurrency, amount);
 
   // Cleanup any zero-balance secondary wallets
   await cleanupEmptyWallets(userId);
