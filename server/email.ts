@@ -879,3 +879,149 @@ export async function sendAccountDeletedEmail(to: string, fullName: string): Pro
 
   await sendEmail(to, "🗑️ Compte Ashtech Pay supprimé — Confirmation", html, "account deleted");
 }
+
+// ─── PAYER PAYMENT CONFIRMATION ──────────────────────────────────────────────
+
+export async function sendPayerConfirmationEmail(
+  to: string,
+  payerName: string,
+  linkTitle: string,
+  amount: string,
+  currency: string,
+  reference: string,
+  pdfUrl?: string | null,
+): Promise<void> {
+  const firstName = payerName?.trim().split(" ")[0] || "cher(e) client(e)";
+
+  const pdfBlock = pdfUrl ? `
+              <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                     style="background:rgba(240,185,11,0.08);border:1px solid rgba(240,185,11,0.25);border-radius:14px;margin-top:24px;">
+                <tr>
+                  <td style="padding:20px 24px;text-align:center;">
+                    <p style="margin:0 0 6px;font-size:13px;font-weight:700;color:#F0B90B;">📄 Votre document est disponible</p>
+                    <p style="margin:0 0 16px;font-size:12px;color:#9BA3AF;">Cliquez sur le bouton ci-dessous pour accéder à votre fichier</p>
+                    <a href="${pdfUrl}" target="_blank"
+                       style="display:inline-block;background:#F0B90B;color:#000000;font-size:13px;font-weight:700;padding:12px 28px;border-radius:10px;text-decoration:none;">
+                      Accéder au document →
+                    </a>
+                    <p style="margin:14px 0 0;font-size:11px;color:#6B7280;word-break:break-all;">${pdfUrl}</p>
+                  </td>
+                </tr>
+              </table>` : "";
+
+  const body = `
+          <tr>
+            <td style="padding:36px 40px;">
+
+              <p style="margin:0 0 24px;font-size:14px;color:#CBD5E1;line-height:1.75;">
+                Votre paiement pour <strong style="color:#FFFFFF;">${linkTitle}</strong> a été
+                <strong style="color:#22C55E;">confirmé avec succès</strong>. Merci pour votre confiance !
+              </p>
+
+              <!-- Receipt box -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                     style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;margin-bottom:24px;">
+                <tr>
+                  <td style="padding:20px 24px;">
+                    <p style="margin:0 0 16px;font-size:11px;font-weight:700;color:#F0B90B;letter-spacing:2px;text-transform:uppercase;">
+                      🧾 Reçu de paiement
+                    </p>
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="padding:6px 0;font-size:13px;color:#9BA3AF;border-bottom:1px solid rgba(255,255,255,0.05);">Service</td>
+                        <td style="padding:6px 0;font-size:13px;color:#FFFFFF;text-align:right;border-bottom:1px solid rgba(255,255,255,0.05);">${linkTitle}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:6px 0;font-size:13px;color:#9BA3AF;border-bottom:1px solid rgba(255,255,255,0.05);">Montant payé</td>
+                        <td style="padding:6px 0;font-size:16px;font-weight:700;color:#22C55E;text-align:right;border-bottom:1px solid rgba(255,255,255,0.05);">${amount} ${currency}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:6px 0;font-size:13px;color:#9BA3AF;">Référence</td>
+                        <td style="padding:6px 0;font-size:12px;font-family:monospace;color:#F0B90B;text-align:right;">${reference}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              ${pdfBlock}
+
+              <!-- Support -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:28px;">
+                <tr>
+                  <td align="center">
+                    <p style="margin:0 0 12px;font-size:12px;color:#6B7280;">Un problème ? Contactez notre support :</p>
+                    <table cellpadding="0" cellspacing="0" border="0" align="center">
+                      <tr>
+                        <td style="padding:0 6px;">
+                          <a href="https://wa.me/${SUPPORT_PHONE.replace(/[\s+]/g, "")}"
+                             style="display:inline-block;background:#25D366;color:#FFFFFF;font-size:12px;font-weight:700;padding:9px 18px;border-radius:8px;text-decoration:none;">
+                            💬 WhatsApp
+                          </a>
+                        </td>
+                        <td style="padding:0 6px;">
+                          <a href="${FACEBOOK_URL}"
+                             style="display:inline-block;background:#1877F2;color:#FFFFFF;font-size:12px;font-weight:700;padding:9px 18px;border-radius:8px;text-decoration:none;">
+                            📘 Facebook
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+            </td>
+          </tr>`;
+
+  const html = `<!DOCTYPE html>
+<html lang="fr" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Paiement confirmé — Ashtech Pay</title>
+</head>
+<body style="margin:0;padding:0;background-color:#0B0E11;font-family:Arial,Helvetica,sans-serif;color:#FFFFFF;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#0B0E11;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#13161D;border-radius:20px;border:1px solid rgba(240,185,11,0.2);overflow:hidden;">
+          <tr>
+            <td style="background:linear-gradient(135deg,#0D1017 0%,#1A1F2C 100%);padding:36px 40px 28px;text-align:center;border-bottom:1px solid rgba(240,185,11,0.15);">
+              <div style="margin-bottom:22px;">
+                <table cellpadding="0" cellspacing="0" border="0" align="center">
+                  <tr>
+                    <td style="background:#000000;border-radius:14px;padding:10px 20px;">
+                      <img src="${LOGO_URL}" alt="Ashtech Pay" width="140" height="auto" style="display:block;max-height:45px;width:auto;" />
+                    </td>
+                  </tr>
+                </table>
+              </div>
+              <div style="display:inline-block;background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);color:#22C55E;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;padding:5px 16px;border-radius:100px;margin-bottom:18px;">
+                ✅ &nbsp;Paiement confirmé
+              </div>
+              <h1 style="margin:0;font-size:26px;font-weight:700;color:#FFFFFF;line-height:1.3;">
+                Merci, ${firstName} !
+              </h1>
+              <p style="margin:12px 0 0;font-size:14px;color:#9BA3AF;line-height:1.6;">
+                Votre paiement a été reçu et traité avec succès.
+              </p>
+            </td>
+          </tr>
+          ${body}
+          <tr>
+            <td style="padding:20px 40px 26px;border-top:1px solid rgba(255,255,255,0.06);text-align:center;">
+              <p style="margin:0 0 6px;font-size:11px;color:#4B5563;line-height:1.7;">
+                Paiement sécurisé via <a href="${APP_URL}" style="color:#F0B90B;text-decoration:none;">Ashtech Pay</a> — Afrique digitale
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  await sendEmail(to, `✅ Paiement confirmé — ${linkTitle}`, html, "payer confirmation");
+}

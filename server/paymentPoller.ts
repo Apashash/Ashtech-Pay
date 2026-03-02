@@ -1,6 +1,7 @@
 import { storage } from "./storage";
 import { checkSwychrPaymentStatus } from "./swychr";
 import { creditUserWallet } from "./walletHelper";
+import { sendPayerConfirmationEmail } from "./email";
 
 const POLL_INTERVAL = 3000;            // 3 seconds
 const MAX_POLL_DURATION_MS = 10 * 60 * 1000; // 10 minutes in ms
@@ -81,6 +82,24 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
 
       if (payment.paymentIntentId) {
         await storage.updatePaymentIntentStatus(payment.paymentIntentId, "completed");
+      }
+
+      if (isPaymentLink && transaction.payerEmail && transaction.paymentLinkId) {
+        try {
+          const paymentLink = await storage.getPaymentLinkById(transaction.paymentLinkId);
+          const pdfUrl = (paymentLink?.hasPdfDelivery && paymentLink?.pdfPath) ? paymentLink.pdfPath : null;
+          await sendPayerConfirmationEmail(
+            transaction.payerEmail,
+            transaction.payerName || "Client",
+            paymentLink?.title || "Lien de paiement",
+            parseFloat(transaction.amount).toFixed(2),
+            transaction.currency || "XAF",
+            transaction.reference,
+            pdfUrl,
+          );
+        } catch (emailErr: any) {
+          console.error("[PaymentPoller] Failed to send payer email:", emailErr.message);
+        }
       }
     } else {
       const isPaymentLink = payment.type === "payment_link";

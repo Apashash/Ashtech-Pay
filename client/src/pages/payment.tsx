@@ -306,18 +306,27 @@ export default function PaymentPage() {
                 </div>
               )}
               <div className="text-2xl font-bold text-primary">{formatAmount(displayAmount, selectedDisplayCurrency)}</div>
-              {paymentLink?.hasPdf && paymentStatus === "success" && (
+              {paymentLink?.hasPdfDelivery && paymentStatus === "success" && (
                 <div className="pt-4 border-t">
                   {pdfDownloadUrl ? (
-                    <>
-                      <p className="text-sm text-muted-foreground mb-3">Votre document est prêt à télécharger</p>
-                      <a href={pdfDownloadUrl} target="_blank" rel="noopener noreferrer" className="inline-block">
-                        <Button className="gap-2"><FileText className="w-4 h-4" />Télécharger le PDF</Button>
+                    <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 text-center space-y-3">
+                      <FileText className="w-8 h-8 text-amber-500 mx-auto" />
+                      <p className="text-sm font-medium">Votre document est prêt</p>
+                      <p className="text-xs text-muted-foreground">Un email avec ce lien a également été envoyé à votre adresse</p>
+                      <a
+                        href={pdfDownloadUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 bg-amber-500 text-black font-semibold px-4 py-2 rounded-lg text-sm hover:bg-amber-400 transition-colors"
+                        data-testid="link-pdf-download"
+                      >
+                        <FileText className="w-4 h-4" />
+                        Accéder au document →
                       </a>
-                    </>
+                    </div>
                   ) : (
                     <div className="text-sm text-amber-500 bg-amber-500/10 p-3 rounded-lg">
-                      <p className="flex items-center gap-2"><FileText className="w-4 h-4" />Le PDF sera disponible après confirmation de votre paiement</p>
+                      <p className="flex items-center gap-2"><FileText className="w-4 h-4" />Le lien vers votre document sera disponible après confirmation du paiement</p>
                     </div>
                   )}
                 </div>
@@ -352,21 +361,21 @@ export default function PaymentPage() {
       </header>
       
       <div className="flex-1 flex items-start justify-center p-4 relative z-10">
-        <Card className="w-full max-w-lg">
+        <Card className="w-full max-w-lg overflow-hidden">
+          {paymentLink.imagePath && (
+            <div className="w-full overflow-hidden">
+              <img src={paymentLink.imagePath} alt={paymentLink.title} className="w-full h-52 object-cover" data-testid="img-payment-link" />
+            </div>
+          )}
           <CardHeader className="text-center space-y-3 pb-4">
             <CardTitle className="text-2xl" data-testid="text-payment-title">{paymentLink.title}</CardTitle>
             {paymentLink.description && (
               <CardDescription>{paymentLink.description}</CardDescription>
             )}
-            {paymentLink.imagePath && (
-              <div className="w-full rounded-lg overflow-hidden border border-border">
-                <img src={paymentLink.imagePath} alt={paymentLink.title} className="w-full h-48 object-cover" />
-              </div>
-            )}
-            {paymentLink.hasPdf && (
+            {paymentLink.hasPdfDelivery && (
               <div className="flex items-center gap-2 text-amber-500 text-sm bg-amber-500/10 p-2 rounded-lg">
                 <FileText className="w-4 h-4" />
-                <span>Un document PDF sera disponible après le paiement</span>
+                <span>Un lien de téléchargement vous sera envoyé après le paiement</span>
               </div>
             )}
           </CardHeader>
