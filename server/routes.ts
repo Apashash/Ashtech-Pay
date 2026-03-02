@@ -31,7 +31,14 @@ import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, f
 import { addPendingPayment } from "./paymentPoller";
 import { createSwychrPayout, formatInternationalPhone, fiatToPusd, pusdToFiatRate, getConversionRate, convertFiatToPusd, getPayoutToken } from "./swychrPayout";
 import { addPendingPayout } from "./payoutPoller";
-import { sendWelcomeEmail, sendPasswordResetEmail } from "./email";
+import {
+  sendWelcomeEmail,
+  sendPasswordResetEmail,
+  sendKycApprovedEmail,
+  sendWithdrawalApprovedEmail,
+  sendWithdrawalNumberApprovedEmail,
+  sendAccountDeletedEmail,
+} from "./email";
 
 const uploadsDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadsDir)) {
@@ -614,6 +621,11 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Le nom d'utilisateur ne correspond pas" });
       }
       
+      // Send confirmation email before deleting (async, non-blocking)
+      if (user.email) {
+        sendAccountDeletedEmail(user.email, user.fullName || user.username).catch(() => {});
+      }
+
       await storage.deleteUser(userId);
       
       req.session.destroy((err) => {
@@ -3274,6 +3286,17 @@ export async function registerRoutes(
               amount:        transaction.amount,
               totalDebited:  transaction.totalAmount || transaction.amount,
             });
+            // Send withdrawal approved email
+            const txUser = await storage.getUser(transaction.userId).catch(() => null);
+            if (txUser?.email) {
+              sendWithdrawalApprovedEmail(
+                txUser.email,
+                txUser.fullName || txUser.username,
+                transaction.amount,
+                transaction.currency || "XAF",
+                transaction.reference || undefined
+              ).catch(() => {});
+            }
             await storage.createUserNotification({
               userId:        transaction.userId,
               type:          "withdrawal_confirmed",
@@ -4035,7 +4058,20 @@ export async function registerRoutes(
       if (!change) {
         return res.status(404).json({ message: "Demande non trouvée" });
       }
-      
+
+      // Send withdrawal number approved email
+      const wnUser = await storage.getUser(change.userId).catch(() => null);
+      if (wnUser?.email) {
+        const wNumbers = await storage.getWithdrawalNumbersByUserId(change.userId).catch(() => []);
+        const wn = wNumbers.find((n: any) => n.id === change.withdrawalNumberId);
+        sendWithdrawalNumberApprovedEmail(
+          wnUser.email,
+          wnUser.fullName || wnUser.username,
+          wn?.phoneNumber || change.newPhoneNumber || "",
+          wn?.operatorName || change.newOperatorName || undefined
+        ).catch(() => {});
+      }
+
       await storage.createAdminLog({
         adminId: req.userId!,
         action: "approve_withdrawal_number_change",
@@ -4436,6 +4472,12 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Soumission KYC non trouvée" });
       }
       
+      // Send KYC approved email
+      const kycUser = await storage.getUser(submission.userId).catch(() => null);
+      if (kycUser?.email) {
+        sendKycApprovedEmail(kycUser.email, kycUser.fullName || kycUser.username).catch(() => {});
+      }
+
       // Create notification for user
       await storage.createUserNotification({
         userId: submission.userId,
