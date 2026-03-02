@@ -4,7 +4,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 const FROM_EMAIL   = "Ashtech Pay <noreply@ashtechpay.top>";
 const APP_URL      = "https://ashtechpay.top";
-const LOGO_URL     = "https://ashtechpay.top/logo.png";
+const LOGO_URL     = "https://ashtechpay.top/email-logo.jpeg";
 const FACEBOOK_URL = "https://www.facebook.com/share/1Eczpeowdp/?mibextid=wwXIfr";
 const WHATSAPP_URL = "https://whatsapp.com/channel/0029VbC5tPPCxoAveJ44Vs2w";
 const SUPPORT_PHONE = "+237 6 83 67 78 72";
