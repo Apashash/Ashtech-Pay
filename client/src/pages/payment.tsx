@@ -152,7 +152,7 @@ export default function PaymentPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           fullName, email, country, phone,
-          amount: paymentLink?.isFixedAmount ? paymentLink.amount : amountInLinkCurrency.toString(),
+          amount: selectedDisplayCurrency === linkCurrency ? (paymentLink?.isFixedAmount ? paymentLink.amount : customAmount) : amountInLinkCurrency.toString(),
           paymentMethod,
           operator: paymentMethod === "mobile_money" ? operator : null,
         }),
