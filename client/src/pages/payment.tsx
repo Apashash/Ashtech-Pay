@@ -75,7 +75,8 @@ export default function PaymentPage() {
     queryFn: async () => {
       const res = await fetch(`/api/payment-links/public/${params?.slug}`);
       if (!res.ok) throw new Error("Lien de paiement introuvable");
-      return res.json();
+      const data = await res.json();
+      return data.link ?? data;
     },
     enabled: !!params?.slug,
   });
