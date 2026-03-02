@@ -37,13 +37,13 @@ interface DepositConfigResponse {
   exchangeRates: Record<string, number>;
 }
 
-function formatAmount(amount: number, currency: SupportedCurrency): string {
-  const symbol = CURRENCY_SYMBOLS[currency];
-  const useDecimals = ["USD", "GHS", "KES", "NGN", "INR"].includes(currency);
+function formatAmount(amount: number, currency: string): string {
+  const symbol = (CURRENCY_SYMBOLS as Record<string, string>)[currency] || currency;
+  const useDecimals = ["USD", "GHS", "KES", "NGN", "INR", "TZS", "UGX", "RWF", "CDF", "GNF"].includes(currency);
   const formatted = new Intl.NumberFormat("fr-FR", {
-    minimumFractionDigits: useDecimals ? 2 : 0,
-    maximumFractionDigits: 2,
-  }).format(amount);
+    minimumFractionDigits: 0,
+    maximumFractionDigits: useDecimals ? 2 : 0,
+  }).format(Math.round(amount));
   if (["USD", "NGN", "GHS", "KES", "INR"].includes(currency)) return `${symbol}${formatted}`;
   return `${formatted} ${symbol}`;
 }
@@ -90,6 +90,13 @@ export default function PaymentPage() {
   const linkCurrency = useMemo(() => (paymentLink?.currency as SupportedCurrency) || "XAF", [paymentLink]);
 
   const selectedCountryData = useMemo(() => depositConfig.find(c => c.id === country), [depositConfig, country]);
+
+  // Auto-switch display currency to the selected country's currency
+  useEffect(() => {
+    if (selectedCountryData?.currency) {
+      setDisplayCurrency(selectedCountryData.currency as SupportedCurrency);
+    }
+  }, [selectedCountryData]);
 
   const selectedDisplayCurrency = useMemo(() => displayCurrency || linkCurrency, [displayCurrency, linkCurrency]);
 
@@ -445,10 +452,7 @@ export default function PaymentPage() {
                   </SelectTrigger>
                   <SelectContent>
                     {operators.map((op) => (
-                      <SelectItem key={op.id} value={op.id}>
-                        {op.name}
-                        {op.feePercentage > 0 && <span className="text-xs text-muted-foreground ml-1">({op.feePercentage}%)</span>}
-                      </SelectItem>
+                      <SelectItem key={op.id} value={op.id}>{op.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
