@@ -83,17 +83,19 @@ export default function WithdrawPage() {
 
   // Auto-select user's registered country on load (locked — withdrawal only from primary country)
   useEffect(() => {
-    if (user?.countryId && countriesConfig.length > 0 && !selectedCountry) {
-      const userCountry = countriesConfig.find(c => c.id === user.countryId);
-      if (userCountry) {
-        setSelectedCountry(userCountry.id);
-      } else {
-        // Fallback: match by primary currency
-        const byCurrency = countriesConfig.find(c => c.currency === userCurrency);
-        if (byCurrency) setSelectedCountry(byCurrency.id);
+    if (countriesConfig.length > 0 && !selectedCountry) {
+      // 1. Try matching by country name (user.country is a text like "Cameroon")
+      if (user?.country) {
+        const byName = countriesConfig.find(
+          c => c.name.toLowerCase() === (user.country || "").toLowerCase()
+        );
+        if (byName) { setSelectedCountry(byName.id); return; }
       }
+      // 2. Fallback: match by primary currency (most reliable for single-currency countries)
+      const byCurrency = countriesConfig.find(c => c.currency === userCurrency);
+      if (byCurrency) setSelectedCountry(byCurrency.id);
     }
-  }, [user?.countryId, countriesConfig, userCurrency]);
+  }, [user?.country, countriesConfig, userCurrency]);
 
   useEffect(() => {
     if (selectedNumber && withdrawalNumbers.length > 0) {
