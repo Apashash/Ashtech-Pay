@@ -38,6 +38,8 @@ export default function AdminSettings() {
     max_transfer: "5000000",
     min_withdrawal: "2650",
     max_withdrawal: "5000000",
+    payment_link_fee_percent: "2",
+    deposit_fee_percent: "0",
     support_email: "support@ashtechpay.com",
     support_phone: "+237 6XX XXX XXX",
     contact_email: "",
@@ -401,6 +403,26 @@ export default function AdminSettings() {
                     value={settings.max_withdrawal}
                     onChange={(e) => setSettings({ ...settings, max_withdrawal: e.target.value })}
                     data-testid="input-max-withdrawal"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Frais Lien de paiement (%)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={settings.payment_link_fee_percent}
+                    onChange={(e) => setSettings({ ...settings, payment_link_fee_percent: e.target.value })}
+                    data-testid="input-payment-link-fee"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Frais Dépôt (%)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={settings.deposit_fee_percent}
+                    onChange={(e) => setSettings({ ...settings, deposit_fee_percent: e.target.value })}
+                    data-testid="input-deposit-fee"
                   />
                 </div>
               </div>

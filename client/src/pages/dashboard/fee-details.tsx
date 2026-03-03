@@ -1,168 +1,271 @@
-import React from "react";
 import { DashboardLayout } from "@/components/dashboard-layout";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Info, Percent, ShieldCheck, Wallet, ArrowLeftRight, AlertTriangle } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
 import type { Fee, Country } from "@shared/schema";
+import {
+  ArrowDownCircle,
+  ArrowUpCircle,
+  ArrowLeftRight,
+  Link2,
+  RefreshCw,
+  Info,
+  Loader2,
+} from "lucide-react";
 
-const FEE_EXPLANATIONS = [
-  {
-    title: "Frais en pourcentage (%)",
-    description: "C'est la commission prélevée sur le montant total envoyé ou retiré. Elle inclut les frais de Swychr et la marge de service Ashtech Pay.",
-    icon: Percent,
-    color: "text-blue-500",
-    bg: "bg-blue-500/10"
-  },
-  {
-    title: "Minimum Payout Charge",
-    description: "C'est le montant minimum garanti. Si le calcul du pourcentage est inférieur à ce seuil, c'est ce montant fixe qui s'applique.",
-    icon: Wallet,
-    color: "text-orange-500",
-    bg: "bg-orange-500/10"
-  },
-  {
-    title: "Règle du montant élevé",
-    description: "Le système compare toujours le pourcentage et le frais minimum, puis retient automatiquement le montant le plus élevé des deux.",
-    icon: ShieldCheck,
-    color: "text-green-500",
-    bg: "bg-green-500/10"
+interface FeeSettings {
+  conversionFeePercent: number;
+  depositFeePercent: number;
+  paymentLinkFeePercent: number;
+}
+
+function formatFeeValue(fee: Fee, currency?: string): string {
+  if (fee.feeType === "percentage") {
+    return `${parseFloat(fee.feeValue).toFixed(2)}%`;
   }
+  return `${parseFloat(fee.feeValue).toFixed(0)} ${currency || ""}`.trim();
+}
+
+function minFeeLabel(fee: Fee, currency?: string): string | null {
+  if (!fee.minFee || parseFloat(fee.minFee) === 0) return null;
+  return `min. ${parseFloat(fee.minFee).toLocaleString()} ${currency || ""}`.trim();
+}
+
+const SECTION_CONFIG = [
+  {
+    key: "deposit",
+    label: "Dépôt",
+    description: "Frais appliqués lorsque vous rechargez votre portefeuille.",
+    icon: ArrowDownCircle,
+    color: "text-green-500",
+    bg: "bg-green-500/10",
+    border: "border-green-500/20",
+  },
+  {
+    key: "withdrawal",
+    label: "Retrait",
+    description: "Frais appliqués lorsque vous retirez des fonds vers votre mobile money.",
+    icon: ArrowUpCircle,
+    color: "text-orange-500",
+    bg: "bg-orange-500/10",
+    border: "border-orange-500/20",
+  },
+  {
+    key: "transfer",
+    label: "Transfert",
+    description: "Frais appliqués lorsque vous envoyez de l'argent vers un autre utilisateur ou un autre pays.",
+    icon: ArrowLeftRight,
+    color: "text-blue-500",
+    bg: "bg-blue-500/10",
+    border: "border-blue-500/20",
+  },
 ];
 
-export default function FeeExplanationsPage() {
-  const { data: fees } = useQuery<Fee[]>({
+export default function FeeDetailsPage() {
+  const { data: fees = [], isLoading: feesLoading } = useQuery<Fee[]>({
     queryKey: ["/api/public/fees"],
   });
 
-  const { data: countries } = useQuery<Country[]>({
+  const { data: countries = [] } = useQuery<Country[]>({
     queryKey: ["/api/public/countries"],
   });
 
-  const displayFees = React.useMemo(() => {
-    if (!fees || !countries) return [];
-    
-    const transferFees = fees.filter(f => f.transactionType === "transfer" && f.countryId);
-    const withdrawalFees = fees.filter(f => f.transactionType === "withdrawal" && f.countryId);
+  const { data: feeSettings } = useQuery<FeeSettings>({
+    queryKey: ["/api/public/fee-settings"],
+  });
 
-    return transferFees.map(fee => {
-      const country = countries.find(c => c.id === fee.countryId);
-      const wFee = withdrawalFees.find(w => w.countryId === fee.countryId);
-      return {
-        country: country?.name || "Inconnu",
-        currency: country?.currency || "XAF",
-        transferPct: `${parseFloat(fee.feeValue).toFixed(2)}%`,
-        transferMin: `${fee.minFee || 0} ${country?.currency || "XAF"}`,
-        withdrawalPct: wFee ? `${parseFloat(wFee.feeValue).toFixed(2)}%` : "-",
-        withdrawalMin: wFee ? `${wFee.minFee || 0} ${country?.currency || "XAF"}` : "-",
-      };
-    }).sort((a, b) => a.country.localeCompare(b.country));
-  }, [fees, countries]);
+  const getCountryName = (id: string | null | undefined) =>
+    countries.find((c) => c.id === id)?.name || null;
+
+  const getCountryCurrency = (id: string | null | undefined) =>
+    countries.find((c) => c.id === id)?.currency || "";
+
+  const getFeesForType = (type: string) =>
+    fees.filter((f) => f.transactionType === type);
+
+  if (feesLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
-      <div className="space-y-8 pb-10">
+      <div className="space-y-8 pb-10 max-w-3xl mx-auto">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Détails des Frais</h1>
-          <p className="text-muted-foreground mt-2">Comprendre comment sont calculés vos frais de transfert et de retrait</p>
+          <h1 className="text-3xl font-bold text-foreground" data-testid="text-fees-title">Grille des frais</h1>
+          <p className="text-muted-foreground mt-2">
+            Tous les frais appliqués sur la plateforme, mis à jour en temps réel.
+          </p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6">
-          {FEE_EXPLANATIONS.map((item, index) => (
-            <Card key={index} className="border-none shadow-sm hover:shadow-md transition-shadow">
-              <CardContent className="pt-6">
-                <div className={`w-12 h-12 rounded-lg ${item.bg} flex items-center justify-center mb-4`}>
-                  <item.icon className={`w-6 h-6 ${item.color}`} />
-                </div>
-                <h3 className="font-bold text-lg mb-2">{item.title}</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  {item.description}
-                </p>
+        {SECTION_CONFIG.map(({ key, label, description, icon: Icon, color, bg, border }) => {
+          const sectionFees = getFeesForType(key);
+          const globalFee = sectionFees.find((f) => !f.countryId && !f.operatorId);
+          const countryFees = sectionFees.filter((f) => f.countryId);
+
+          const depositOverride =
+            key === "deposit" && feeSettings?.depositFeePercent !== undefined
+              ? feeSettings.depositFeePercent
+              : null;
+
+          return (
+            <Card key={key} className={`border ${border}`} data-testid={`card-fees-${key}`}>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-3 text-lg">
+                  <div className={`w-9 h-9 rounded-lg ${bg} flex items-center justify-center shrink-0`}>
+                    <Icon className={`w-5 h-5 ${color}`} />
+                  </div>
+                  {label}
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">{description}</p>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {key === "deposit" ? (
+                  <div className="flex items-center justify-between bg-muted/40 rounded-lg px-4 py-3">
+                    <span className="text-sm font-medium">Frais de dépôt</span>
+                    <Badge
+                      variant="secondary"
+                      className="text-sm font-semibold"
+                      data-testid="badge-deposit-fee"
+                    >
+                      {depositOverride !== null && depositOverride !== undefined
+                        ? depositOverride === 0
+                          ? "Gratuit"
+                          : `${depositOverride.toFixed(2)}%`
+                        : globalFee
+                        ? formatFeeValue(globalFee)
+                        : "Gratuit"}
+                    </Badge>
+                  </div>
+                ) : globalFee ? (
+                  <div className="flex items-center justify-between bg-muted/40 rounded-lg px-4 py-3">
+                    <span className="text-sm font-medium">Tarif général</span>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary" className="text-sm font-semibold">
+                        {formatFeeValue(globalFee)}
+                      </Badge>
+                      {minFeeLabel(globalFee) && (
+                        <span className="text-xs text-muted-foreground">
+                          {minFeeLabel(globalFee)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+
+                {countryFees.length > 0 && (
+                  <div className="space-y-2">
+                    {globalFee || key === "deposit" ? (
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-1">
+                        Par pays
+                      </p>
+                    ) : null}
+                    <div className="divide-y divide-border rounded-lg border overflow-hidden">
+                      {countryFees
+                        .sort((a, b) =>
+                          (getCountryName(a.countryId) || "").localeCompare(
+                            getCountryName(b.countryId) || ""
+                          )
+                        )
+                        .map((fee) => {
+                          const cName = getCountryName(fee.countryId) || "Pays inconnu";
+                          const cCurrency = getCountryCurrency(fee.countryId);
+                          const min = minFeeLabel(fee, cCurrency);
+                          return (
+                            <div
+                              key={fee.id}
+                              className="flex items-center justify-between px-4 py-2.5 hover:bg-muted/30 transition-colors"
+                              data-testid={`row-fee-${key}-${fee.id}`}
+                            >
+                              <span className="text-sm">{cName}</span>
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="text-xs font-semibold">
+                                  {formatFeeValue(fee, cCurrency)}
+                                </Badge>
+                                {min && (
+                                  <span className="text-xs text-muted-foreground hidden sm:inline">
+                                    {min}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </div>
+                )}
+
+                {!globalFee && countryFees.length === 0 && key !== "deposit" && (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    Aucun frais configuré pour cette opération.
+                  </p>
+                )}
               </CardContent>
             </Card>
-          ))}
-        </div>
+          );
+        })}
 
-        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-6 flex items-start gap-4">
-          <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">
-            <ArrowLeftRight className="w-5 h-5 text-amber-500" />
-          </div>
-          <div>
-            <h4 className="font-bold text-foreground flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-500" />
-              Transfert vers une autre devise — Conversion requise
-            </h4>
-            <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
-              Lorsque vous envoyez de l'argent vers un pays dont la devise est différente du XAF (par ex. USD, GHS, KES, NGN…), 
-              une <strong>conversion de devises est automatiquement appliquée</strong> au taux de change en vigueur. 
-              Le montant converti peut donc varier légèrement selon le taux du moment. 
-              Les frais sont ensuite calculés sur le montant converti dans la devise locale du pays destinataire.
-            </p>
-          </div>
-        </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Info className="w-5 h-5 text-primary" />
-              Grille tarifaire par pays
+        <Card className="border border-purple-500/20" data-testid="card-fees-payment-link">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-3 text-lg">
+              <div className="w-9 h-9 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0">
+                <Link2 className="w-5 h-5 text-purple-500" />
+              </div>
+              Lien de paiement
             </CardTitle>
-            <CardDescription>
-              Les tarifs ci-dessous incluent les frais Swychr et la commission Ashtech Pay — pour les transferts et les retraits.
-            </CardDescription>
+            <p className="text-sm text-muted-foreground">
+              Frais déduits automatiquement de chaque paiement reçu via vos liens.
+            </p>
           </CardHeader>
           <CardContent>
-            <div className="rounded-md border overflow-hidden">
-              <Table>
-                <TableHeader className="bg-muted/50">
-                  <TableRow>
-                    <TableHead className="font-bold" rowSpan={2}>Pays</TableHead>
-                    <TableHead className="font-bold text-center border-l" colSpan={2}>Transfert</TableHead>
-                    <TableHead className="font-bold text-center border-l" colSpan={2}>Retrait</TableHead>
-                  </TableRow>
-                  <TableRow>
-                    <TableHead className="font-semibold text-xs border-l">Frais (%)</TableHead>
-                    <TableHead className="font-semibold text-xs text-right">Min. Payout</TableHead>
-                    <TableHead className="font-semibold text-xs border-l">Frais (%)</TableHead>
-                    <TableHead className="font-semibold text-xs text-right">Min. Payout</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {displayFees.length > 0 ? (
-                    displayFees.map((row) => (
-                      <TableRow key={row.country} className="hover:bg-muted/30 transition-colors">
-                        <TableCell className="font-medium">{row.country}</TableCell>
-                        <TableCell className="border-l">{row.transferPct}</TableCell>
-                        <TableCell className="text-right font-mono text-sm">{row.transferMin}</TableCell>
-                        <TableCell className="border-l">{row.withdrawalPct}</TableCell>
-                        <TableCell className="text-right font-mono text-sm">{row.withdrawalMin}</TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                        Chargement de la grille tarifaire...
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+            <div className="flex items-center justify-between bg-muted/40 rounded-lg px-4 py-3">
+              <span className="text-sm font-medium">Commission par transaction</span>
+              <Badge variant="secondary" className="text-sm font-semibold" data-testid="badge-link-fee">
+                {feeSettings?.paymentLinkFeePercent !== undefined
+                  ? feeSettings.paymentLinkFeePercent === 0
+                    ? "Gratuit"
+                    : `${feeSettings.paymentLinkFeePercent.toFixed(2)}%`
+                  : "2.00%"}
+              </Badge>
             </div>
           </CardContent>
         </Card>
 
-        <div className="bg-primary/5 border border-primary/10 rounded-xl p-6 flex items-start gap-4">
-          <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
-            <Info className="w-5 h-5 text-primary" />
-          </div>
-          <div>
-            <h4 className="font-bold text-foreground">Note sur les montants minimums</h4>
-            <p className="text-sm text-muted-foreground mt-1">
-              Les montants minimums (Min. Payout) sont indiqués dans la devise locale du pays de destination. 
-              Si votre solde est en XAF et que vous envoyez vers un autre pays, une conversion automatique 
-              basée sur le taux de change en vigueur sera appliquée.
+        <Card className="border border-yellow-500/20" data-testid="card-fees-conversion">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-3 text-lg">
+              <div className="w-9 h-9 rounded-lg bg-yellow-500/10 flex items-center justify-center shrink-0">
+                <RefreshCw className="w-5 h-5 text-yellow-500" />
+              </div>
+              Conversion de devises
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Frais appliqués lorsque vous convertissez entre deux devises différentes.
             </p>
-          </div>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between bg-muted/40 rounded-lg px-4 py-3">
+              <span className="text-sm font-medium">Frais de conversion</span>
+              <Badge variant="secondary" className="text-sm font-semibold" data-testid="badge-conversion-fee">
+                {feeSettings?.conversionFeePercent !== undefined
+                  ? `${feeSettings.conversionFeePercent.toFixed(2)}%`
+                  : "6.00%"}
+              </Badge>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="flex items-start gap-3 bg-primary/5 border border-primary/15 rounded-xl p-4">
+          <Info className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Les frais sont calculés automatiquement au moment de chaque opération et déduits du montant
+            traité. Les frais minimums s'appliquent lorsque le pourcentage calculé est inférieur au seuil défini.
+          </p>
         </div>
       </div>
     </DashboardLayout>

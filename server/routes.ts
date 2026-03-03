@@ -2384,6 +2384,19 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/public/fee-settings", async (_req, res) => {
+    try {
+      const settings = await storage.getAllSettings();
+      const conversionFeePercent = parseFloat(settings.find(s => s.key === "conversion_fee_percent")?.value || "6");
+      const depositFeePercent = parseFloat(settings.find(s => s.key === "deposit_fee_percent")?.value || "0");
+      const paymentLinkFeePercent = parseFloat(settings.find(s => s.key === "payment_link_fee_percent")?.value || "2");
+      res.json({ conversionFeePercent, depositFeePercent, paymentLinkFeePercent });
+    } catch (error) {
+      console.error("Get fee settings error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   // Public deposit config for payment links (uses deposit fees)
   app.get("/api/public/deposit-config", async (_req, res) => {
     try {

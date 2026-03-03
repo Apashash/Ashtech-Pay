@@ -55,6 +55,7 @@ import {
   RefreshCw,
   ChevronDown,
   ChevronUp,
+  Receipt,
 } from "lucide-react";
 import { 
   Dialog, 
@@ -95,6 +96,7 @@ const settingsItems = [
   { title: "Support", url: "/dashboard/support", icon: Headphones },
   { title: "Clés API", url: "/dashboard/api-keys", icon: Key },
   { title: "Paramètres", url: "/dashboard/settings", icon: Settings },
+  { title: "Frais", url: "/dashboard/fee-details", icon: Receipt },
 ];
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
