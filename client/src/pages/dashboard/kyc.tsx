@@ -171,7 +171,7 @@ export default function KYCPage() {
       const formData = new FormData();
       formData.append("file", file);
 
-      const response = await fetch("/api/uploads/file", {
+      const response = await fetch("/api/uploads/file?folder=kyc", {
         method: "POST",
         credentials: "include",
         body: formData,

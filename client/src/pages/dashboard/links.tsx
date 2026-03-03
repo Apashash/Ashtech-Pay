@@ -15,6 +15,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createPaymentLinkSchema, type SupportedCurrency, EXCHANGE_RATES } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { getImageSrc } from "@/lib/image";
 import type { PaymentLink, Transaction, User, PaymentIntent } from "@shared/schema";
 import { 
   Link2, Plus, Copy, ExternalLink, Loader2, CheckCircle, XCircle, 
@@ -820,7 +821,7 @@ function LinkAnalyticsDialog({
           <DialogTitle className="flex items-center gap-3">
             {data?.paymentLink.imagePath && (
               <img 
-                src={data.paymentLink.imagePath} 
+                src={getImageSrc(data.paymentLink.imagePath)} 
                 alt="" 
                 className="w-10 h-10 rounded-lg object-cover"
               />
@@ -1237,7 +1238,7 @@ export default function PaymentLinksPage() {
                         <div className="flex items-start gap-3">
                           {link.imagePath ? (
                             <img 
-                              src={link.imagePath} 
+                              src={getImageSrc(link.imagePath)} 
                               alt={link.title}
                               className="w-12 h-12 rounded-lg object-cover flex-shrink-0"
                             />

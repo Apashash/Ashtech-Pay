@@ -26,7 +26,7 @@ import bcrypt from "bcrypt";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { uploadToSupabase } from "./supabase";
+import { uploadToSupabase, getSignedImageUrl } from "./supabase";
 import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, fetchPaymentLinkDetails, ASHTECH_MARGIN } from "./swychr";
 import { addPendingPayment } from "./paymentPoller";
 import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, cleanupEmptyWallets } from "./walletHelper";
@@ -309,6 +309,22 @@ export async function registerRoutes(
     }
   });
 
+  // Image proxy - generates a signed URL for private Supabase bucket images
+  app.get("/api/image-proxy", async (req, res) => {
+    try {
+      const storagePath = req.query.path as string;
+      if (!storagePath) return res.status(400).send("Path required");
+
+      const signedUrl = await getSignedImageUrl(storagePath);
+      if (!signedUrl) return res.status(404).send("Image not found");
+
+      res.redirect(302, signedUrl);
+    } catch (error) {
+      console.error("Image proxy error:", error);
+      res.status(500).send("Erreur serveur");
+    }
+  });
+
   // Direct file upload endpoint - uses Supabase Storage for persistence
   app.post("/api/uploads/file", requireAuth, upload.single("file"), async (req, res) => {
     try {
@@ -316,12 +332,17 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Aucun fichier fourni" });
       }
 
+      const folder = (req.query.folder as string) || "payment-links";
+      const allowedFolders = ["payment-links", "kyc"];
+      const safeFolder = allowedFolders.includes(folder) ? folder : "payment-links";
+
       // Try Supabase Storage first for persistent storage
       const fileBuffer = fs.readFileSync(req.file.path);
       const supabaseResult = await uploadToSupabase(
         fileBuffer,
         req.file.originalname,
-        req.file.mimetype
+        req.file.mimetype,
+        safeFolder
       );
 
       if (supabaseResult) {

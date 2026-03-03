@@ -51,6 +51,7 @@ import { fr } from "date-fns/locale";
 import { apiRequest, queryClient, getAuthHeaders } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { KYC_DOCUMENT_TYPES, BUSINESS_CATEGORIES } from "@shared/schema";
+import { getImageSrc } from "@/lib/image";
 
 interface KycSubmission {
   id: string;
@@ -168,11 +169,7 @@ export default function AdminKYC() {
     }
   };
 
-  const getImageUrl = (path: string) => {
-    if (path.startsWith("http")) return path;
-    if (path.startsWith("/uploads/")) return path;
-    return `/api/objects/public/${path}`;
-  };
+  const getImageUrl = (path: string) => getImageSrc(path);
 
   const filteredSubmissions = submissions?.filter(sub => {
     if (!search) return true;

@@ -32,13 +32,14 @@ export const STORAGE_BUCKET = "uploads";
 export async function uploadToSupabase(
   fileBuffer: Buffer,
   filename: string,
-  contentType: string
+  contentType: string,
+  folder: string = "payment-links"
 ): Promise<{ url: string; path: string } | null> {
   if (!supabase) {
     return null;
   }
 
-  const filePath = `payment-links/${Date.now()}-${filename}`;
+  const filePath = `${folder}/${Date.now()}-${filename}`;
 
   const { data, error } = await supabase.storage
     .from(STORAGE_BUCKET)
@@ -53,12 +54,28 @@ export async function uploadToSupabase(
     return null;
   }
 
-  const { data: urlData } = supabase.storage
-    .from(STORAGE_BUCKET)
-    .getPublicUrl(data.path);
-
   return {
-    url: urlData.publicUrl,
+    url: data.path,
     path: data.path,
   };
+}
+
+export async function getSignedImageUrl(storagePath: string, expiresIn = 3600): Promise<string | null> {
+  if (!supabase) return null;
+
+  let cleanPath = storagePath;
+  if (storagePath.includes("/storage/v1/object/")) {
+    const match = storagePath.match(/\/storage\/v1\/object\/(?:public|sign)\/[^/]+\/(.+?)(?:\?|$)/);
+    if (match) cleanPath = decodeURIComponent(match[1]);
+  }
+
+  const { data, error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .createSignedUrl(cleanPath, expiresIn);
+
+  if (error || !data) {
+    console.error("Supabase signed URL error:", error);
+    return null;
+  }
+  return data.signedUrl;
 }

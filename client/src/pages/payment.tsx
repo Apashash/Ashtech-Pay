@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import type { PaymentLink, SupportedCurrency } from "@shared/schema";
 import { CURRENCY_SYMBOLS, SUPPORTED_CURRENCIES } from "@shared/schema";
+import { getImageSrc } from "@/lib/image";
 import { 
   Loader2, CheckCircle, XCircle, Shield, 
   Smartphone, CreditCard, ExternalLink, FileText, AlertTriangle, Globe,
@@ -368,7 +369,7 @@ export default function PaymentPage() {
           </CardHeader>
           {paymentLink.imagePath && (
             <div className="w-full overflow-hidden mt-4">
-              <img src={paymentLink.imagePath} alt={paymentLink.title} className="w-full h-52 object-cover" data-testid="img-payment-link" />
+              <img src={getImageSrc(paymentLink.imagePath)} alt={paymentLink.title} className="w-full h-52 object-cover" data-testid="img-payment-link" />
             </div>
           )}
           {paymentLink.description && (
