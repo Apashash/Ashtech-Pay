@@ -845,16 +845,20 @@ export class DatabaseStorage implements IStorage {
   }
   
   // Admin: Stats
+  async resetStats(): Promise<void> {
+    await this.upsertSetting("stats_reset_at", new Date().toISOString(), "Date de réinitialisation des statistiques financières");
+  }
+
   async getAdminStats(period: string = "all"): Promise<any> {
+    const resetSetting = await this.getSetting("stats_reset_at");
+    const resetAt: Date | null = resetSetting ? new Date(resetSetting.value) : null;
+
     const [usersCount] = await db.select({ count: count() }).from(users);
-    const [transactionsCount] = await db.select({ count: count() }).from(transactions);
-    const [volumeSum] = await db.select({ sum: sql<string>`sum(amount)` }).from(transactions).where(eq(transactions.status, "completed"));
-    const [rejectedCount] = await db.select({ count: count() }).from(transactions).where(eq(transactions.status, "failed"));
-    const [pendingCount] = await db.select({ count: count() }).from(transactions).where(eq(transactions.status, "pending"));
     const [bannedCount] = await db.select({ count: count() }).from(users).where(eq(users.isBanned, true));
     
-    // Get all transactions to calculate margins and pending counts
-    const allTx = await db.select().from(transactions);
+    // Get all transactions — filter by resetAt in memory
+    const rawAllTx = await db.select().from(transactions);
+    const allTx = resetAt ? rawAllTx.filter(t => t.createdAt && new Date(t.createdAt) > resetAt) : rawAllTx;
     const completedTx = allTx.filter(t => t.status === "completed");
     
     const deposits = completedTx.filter(t => t.type === "deposit");
@@ -883,14 +887,16 @@ export class DatabaseStorage implements IStorage {
 
     const totalRevenue = depositFees + withdrawalFees + transferFees + paymentLinkFees + conversionFees;
     
+    const resetAt2 = resetAt;
     return {
       totalUsers: usersCount.count,
-      totalTransactions: transactionsCount.count,
+      totalTransactions: allTx.length,
       totalVolume: (depositVol + withdrawalVol + transferVol + linkVol).toFixed(2),
-      monthlyTransactions: 0, 
-      rejectedTransactions: rejectedCount.count,
-      pendingTransactions: pendingCount.count,
+      monthlyTransactions: 0,
+      rejectedTransactions: allTx.filter(t => t.status === "failed").length,
+      pendingTransactions: allTx.filter(t => t.status === "pending").length,
       bannedUsers: bannedCount.count,
+      statsResetAt: resetAt2 ? resetAt2.toISOString() : null,
       totalDeposits: depositVol.toFixed(2),
       totalWithdrawals: withdrawalVol.toFixed(2),
       totalCollected: (depositVol + linkVol).toFixed(2),

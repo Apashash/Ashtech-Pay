@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { AdminLayout } from "./layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { 
   Users, 
   CreditCard, 
@@ -19,9 +21,15 @@ import {
   Filter,
   Send,
   Link2,
-  RefreshCw
+  RefreshCw,
+  RotateCcw,
+  AlertTriangle
 } from "lucide-react";
 import { formatCurrency } from "@/lib/currency";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { format } from "date-fns";
+import { fr } from "date-fns/locale";
 
 type StatsPeriod = "last_year" | "this_year" | "last_month" | "this_month" | "last_week" | "this_week" | "yesterday" | "today";
 
@@ -61,13 +69,28 @@ interface AdminStats {
   pendingDeposits: number;
   pendingWithdrawals: number;
   pendingTransfers: number;
+  statsResetAt: string | null;
 }
 
 export default function AdminDashboard() {
   const [period, setPeriod] = useState<StatsPeriod>("this_month");
+  const [showResetDialog, setShowResetDialog] = useState(false);
+  const { toast } = useToast();
   
   const { data: stats, isLoading } = useQuery<AdminStats>({
     queryKey: [`/api/admin/stats?period=${period}`],
+  });
+
+  const resetMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/admin/reset-stats"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/admin/stats?period=${period}`] });
+      setShowResetDialog(false);
+      toast({ title: "Réinitialisé", description: "Les statistiques ont été remises à zéro." });
+    },
+    onError: () => {
+      toast({ title: "Erreur", description: "La réinitialisation a échoué.", variant: "destructive" });
+    },
   });
 
   const kpiCards = [
@@ -183,9 +206,26 @@ export default function AdminDashboard() {
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
             <h1 className="text-2xl font-bold">Dashboard Administrateur</h1>
-            <p className="text-muted-foreground">Vue d'ensemble de la plateforme</p>
+            <p className="text-muted-foreground">
+              Vue d'ensemble de la plateforme
+              {stats?.statsResetAt && (
+                <span className="ml-2 text-xs text-amber-500">
+                  · Réinitialisé le {format(new Date(stats.statsResetAt), "dd/MM/yyyy à HH:mm", { locale: fr })}
+                </span>
+              )}
+            </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 border-red-500/50 text-red-500 hover:bg-red-500/10"
+              onClick={() => setShowResetDialog(true)}
+              data-testid="button-reset-stats"
+            >
+              <RotateCcw className="w-4 h-4" />
+              Réinitialiser
+            </Button>
             <Filter className="w-4 h-4 text-muted-foreground" />
             <Select value={period} onValueChange={(value) => setPeriod(value as StatsPeriod)}>
               <SelectTrigger className="w-[180px]" data-testid="select-period">
@@ -202,7 +242,7 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-3 gap-4">
           {kpiCards.map((card, index) => {
             const cardContent = (
               <Card key={index} data-testid={`kpi-card-${index}`} className={"href" in card ? "cursor-pointer hover:border-primary/50 transition-colors" : ""}>
@@ -355,6 +395,38 @@ export default function AdminDashboard() {
           </Card>
         </div>
       </div>
+
+      <Dialog open={showResetDialog} onOpenChange={setShowResetDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-500">
+              <AlertTriangle className="w-5 h-5" />
+              Réinitialiser les statistiques
+            </DialogTitle>
+            <DialogDescription>
+              Cette action va remettre à zéro tous les compteurs du dashboard : volume, transactions, dépôts, retraits, envois, revenus et marges. Les données en base ne seront pas supprimées — seul l'affichage sera réinitialisé à partir de maintenant.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setShowResetDialog(false)}>
+              Annuler
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => resetMutation.mutate()}
+              disabled={resetMutation.isPending}
+              data-testid="button-confirm-reset"
+            >
+              {resetMutation.isPending ? (
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <RotateCcw className="w-4 h-4 mr-2" />
+              )}
+              Confirmer la réinitialisation
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AdminLayout>
   );
 }

@@ -2896,6 +2896,17 @@ export async function registerRoutes(
     }
   });
 
+  // Admin: Reset stats (store current timestamp as reset baseline)
+  app.post("/api/admin/reset-stats", requireAdmin, async (req, res) => {
+    try {
+      await storage.resetStats();
+      res.json({ message: "Statistiques réinitialisées avec succès" });
+    } catch (error) {
+      console.error("Reset stats error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   // Admin: Get pending notifications
   app.get("/api/admin/notifications", requireAdmin, async (req, res) => {
     try {
