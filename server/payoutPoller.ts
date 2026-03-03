@@ -1,8 +1,8 @@
 import { storage } from "./storage";
 import { checkSwychrPayoutStatus } from "./swychrPayout";
 
-const POLL_INTERVAL  = 30_000; // 30 seconds
-const MAX_ATTEMPTS   = 120;    // 120 × 30s = 60 minutes max
+const POLL_INTERVAL  = 6_000; // 6 seconds
+const MAX_ATTEMPTS   = 600;    // 600 × 6s = 60 minutes max
 
 interface PendingPayout {
   transactionId:  string;
