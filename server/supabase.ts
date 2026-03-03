@@ -1,6 +1,7 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
 let supabase: SupabaseClient | null = null;
@@ -14,12 +15,22 @@ function isValidUrl(url: string): boolean {
   }
 }
 
-if (supabaseUrl && supabaseAnonKey && isValidUrl(supabaseUrl)) {
-  try {
-    supabase = createClient(supabaseUrl, supabaseAnonKey);
-    console.log("Supabase client initialized successfully");
-  } catch (error) {
-    console.warn("Failed to initialize Supabase client:", error);
+if (supabaseUrl && isValidUrl(supabaseUrl)) {
+  const key = supabaseServiceRoleKey || supabaseAnonKey;
+  if (key) {
+    try {
+      supabase = createClient(supabaseUrl, key, {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      });
+      console.log(`Supabase client initialized successfully (using ${supabaseServiceRoleKey ? "service role" : "anon"} key)`);
+    } catch (error) {
+      console.warn("Failed to initialize Supabase client:", error);
+    }
+  } else {
+    console.warn("Supabase key not configured. File uploads will use local storage.");
   }
 } else {
   console.warn("Supabase credentials not configured or invalid. File uploads will use local storage.");
@@ -60,13 +71,18 @@ export async function uploadToSupabase(
   };
 }
 
-export async function getSignedImageUrl(storagePath: string, expiresIn = 3600): Promise<string | null> {
+export async function getSignedImageUrl(storagePath: string, expiresIn = 86400): Promise<string | null> {
   if (!supabase) return null;
 
   let cleanPath = storagePath;
-  if (storagePath.includes("/storage/v1/object/")) {
+
+  if (storagePath.startsWith("http")) {
     const match = storagePath.match(/\/storage\/v1\/object\/(?:public|sign)\/[^/]+\/(.+?)(?:\?|$)/);
-    if (match) cleanPath = decodeURIComponent(match[1]);
+    if (match) {
+      cleanPath = decodeURIComponent(match[1]);
+    } else {
+      return storagePath;
+    }
   }
 
   const { data, error } = await supabase.storage
@@ -74,7 +90,7 @@ export async function getSignedImageUrl(storagePath: string, expiresIn = 3600): 
     .createSignedUrl(cleanPath, expiresIn);
 
   if (error || !data) {
-    console.error("Supabase signed URL error:", error);
+    console.error("Supabase signed URL error:", error, "path:", cleanPath);
     return null;
   }
   return data.signedUrl;
