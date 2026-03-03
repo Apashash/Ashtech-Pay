@@ -46,6 +46,8 @@ interface AdminStats {
   bannedUsers: number;
   totalDeposits: string;
   totalWithdrawals: string;
+  totalCollected: string;
+  totalWithdrawn: string;
   totalRevenue: string;
   depositFees: string;
   withdrawalFees: string;
@@ -89,6 +91,22 @@ export default function AdminDashboard() {
       icon: TrendingUp,
       color: "text-primary",
       bgColor: "bg-primary/10",
+    },
+    {
+      title: "Total Collecté",
+      value: formatCurrency(parseFloat(stats?.totalCollected || "0"), "XAF"),
+      subValue: "Dépôts + Liens de paiement",
+      icon: ArrowDownCircle,
+      color: "text-emerald-500",
+      bgColor: "bg-emerald-500/10",
+    },
+    {
+      title: "Total Retiré",
+      value: formatCurrency(parseFloat(stats?.totalWithdrawn || "0"), "XAF"),
+      subValue: "Retraits + Envois",
+      icon: ArrowUpCircle,
+      color: "text-rose-500",
+      bgColor: "bg-rose-500/10",
     },
     {
       title: "Dépôts",
@@ -184,7 +202,7 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {kpiCards.map((card, index) => {
             const cardContent = (
               <Card key={index} data-testid={`kpi-card-${index}`} className={"href" in card ? "cursor-pointer hover:border-primary/50 transition-colors" : ""}>

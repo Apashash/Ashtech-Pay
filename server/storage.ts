@@ -893,6 +893,8 @@ export class DatabaseStorage implements IStorage {
       bannedUsers: bannedCount.count,
       totalDeposits: depositVol.toFixed(2),
       totalWithdrawals: withdrawalVol.toFixed(2),
+      totalCollected: (depositVol + linkVol).toFixed(2),
+      totalWithdrawn: (withdrawalVol + transferVol).toFixed(2),
       totalRevenue: totalRevenue.toFixed(2),
       depositFees: depositFees.toFixed(2),
       withdrawalFees: withdrawalFees.toFixed(2),

@@ -397,21 +397,44 @@ export function AdminLayout({ children }: AdminLayoutProps) {
               <PopoverTrigger asChild>
                 <Button variant="ghost" size="icon" className="relative" data-testid="button-notifications">
                   <Bell className="w-5 h-5" />
-                  {notifications.length > 0 && (
+                  {(notifications.length + (ticketUnread?.count || 0)) > 0 && (
                     <Badge className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center bg-red-500 text-white text-xs">
-                      {notifications.length > 9 ? "9+" : notifications.length}
+                      {(notifications.length + (ticketUnread?.count || 0)) > 9 ? "9+" : notifications.length + (ticketUnread?.count || 0)}
                     </Badge>
                   )}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-80 p-0" align="end">
+                {(ticketUnread?.count || 0) > 0 && (
+                  <>
+                    <div className="p-3 border-b border-border">
+                      <h4 className="font-semibold flex items-center gap-2">
+                        <MessageSquare className="w-4 h-4 text-blue-500" />
+                        Messages Support non lus
+                      </h4>
+                    </div>
+                    <Link href="/admin/support" onClick={() => setNotificationsOpen(false)}>
+                      <div className="p-3 hover-elevate cursor-pointer flex items-center justify-between gap-2 border-b border-border">
+                        <div>
+                          <span className="text-sm font-medium text-blue-500">
+                            {ticketUnread!.count} message{ticketUnread!.count > 1 ? "s" : ""} non lu{ticketUnread!.count > 1 ? "s" : ""}
+                          </span>
+                          <p className="text-xs text-muted-foreground">Cliquez pour voir les conversations</p>
+                        </div>
+                        <Badge className="bg-blue-500/20 text-blue-500 border-blue-500/30 shrink-0">
+                          {ticketUnread!.count}
+                        </Badge>
+                      </div>
+                    </Link>
+                  </>
+                )}
                 <div className="p-3 border-b border-border">
                   <h4 className="font-semibold flex items-center gap-2">
                     <Clock className="w-4 h-4 text-amber-500" />
                     Transactions en attente
                   </h4>
                 </div>
-                <ScrollArea className="max-h-80">
+                <ScrollArea className="max-h-64">
                   {notifications.length === 0 ? (
                     <div className="p-4 text-center text-muted-foreground text-sm">
                       Aucune transaction en attente
