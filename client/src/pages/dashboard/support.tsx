@@ -8,9 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { 
-  MessageSquare, Mail, Phone, Clock, ChevronRight, Send, Plus, ArrowLeft,
-  CheckCircle, Loader2, AlertCircle, Check
+  MessageSquare, Mail, ExternalLink, ChevronRight, Send, Plus, ArrowLeft,
+  CheckCircle, Loader2, Check
 } from "lucide-react";
+import { SiWhatsapp } from "react-icons/si";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -106,11 +107,18 @@ export default function SupportPage() {
   const typingSentRef = useRef(false);
 
   const { data: supportContact } = useQuery<SupportContact>({ queryKey: ["/api/public/support-contact"] });
+  const { data: ticketStats } = useQuery<{ unreadCount: number; totalCount: number }>({
+    queryKey: ["/api/tickets/stats"],
+    refetchInterval: 10000,
+  });
+
+  const whatsappPhone = (supportContact?.phone || "+237600000000").replace(/\D/g, "");
+  const whatsappUrl = `https://wa.me/${whatsappPhone}?text=Bonjour%20Ashtech%20Pay%2C%20j%27ai%20besoin%20d%27aide.`;
 
   const contactOptions = [
-    { icon: MessageSquare, title: "Chat en direct", description: "Réponse en quelques minutes", available: true, action: "chat" },
-    { icon: Mail, title: "Email", description: supportContact?.email || "support@ashtechpay.com", available: true, action: "email" },
-    { icon: Phone, title: "Téléphone", description: supportContact?.phone || "+237 6XX XXX XXX", available: true, action: "phone" },
+    { icon: MessageSquare, title: "Chat en direct", description: "Réponse en quelques minutes", available: true, action: "chat", badge: ticketStats?.unreadCount || 0 },
+    { icon: Mail, title: "Email", description: supportContact?.email || "support@ashtechpay.com", available: true, action: "email", badge: 0 },
+    { icon: SiWhatsapp, title: "WhatsApp", description: supportContact?.phone || "+237 6XX XXX XXX", available: true, action: "whatsapp", badge: 0 },
   ];
 
   const { data: tickets, isLoading: ticketsLoading } = useQuery<SupportTicket[]>({ queryKey: ["/api/tickets"] });
@@ -281,9 +289,9 @@ export default function SupportPage() {
       setShowChat(true);
       if (!tickets || tickets.length === 0) setShowNewTicket(true);
     } else if (action === "email") {
-      window.location.href = "mailto:support@ashtechpay.com";
-    } else if (action === "phone") {
-      window.location.href = "tel:+237600000000";
+      window.location.href = `mailto:${supportContact?.email || "support@ashtechpay.com"}`;
+    } else if (action === "whatsapp") {
+      window.open(whatsappUrl, "_blank", "noopener,noreferrer");
     }
   };
 
@@ -499,11 +507,16 @@ export default function SupportPage() {
             <Card key={option.title} className="hover-elevate cursor-pointer overflow-hidden" onClick={() => handleContactClick(option.action)} data-testid={`contact-option-${option.action}`}>
               <CardContent className="p-6">
                 <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 shrink-0 rounded-xl bg-primary/10 flex items-center justify-center">
-                    <option.icon className="w-6 h-6 text-primary" />
+                  <div className={cn("w-12 h-12 shrink-0 rounded-xl flex items-center justify-center", option.action === "whatsapp" ? "bg-green-500/10" : "bg-primary/10")}>
+                    <option.icon className={cn("w-6 h-6", option.action === "whatsapp" ? "text-green-500" : "text-primary")} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-foreground">{option.title}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-semibold text-foreground">{option.title}</p>
+                      {option.badge > 0 && (
+                        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold" data-testid="badge-unread-chat">{option.badge}</span>
+                      )}
+                    </div>
                     <p className="text-sm text-muted-foreground truncate">{option.description}</p>
                     {option.available && (
                       <span className="inline-flex items-center gap-1 text-xs text-green-500 mt-1">
@@ -516,6 +529,32 @@ export default function SupportPage() {
             </Card>
           ))}
         </div>
+
+        <Card className="border-green-500/30 bg-green-500/5">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-green-500/15 flex items-center justify-center shrink-0">
+                  <SiWhatsapp className="w-5 h-5 text-green-500" />
+                </div>
+                <div>
+                  <p className="font-semibold text-foreground">Rejoindre notre chaîne WhatsApp</p>
+                  <p className="text-sm text-muted-foreground">Restez informé des dernières actualités et mises à jour d'Ashtech Pay</p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                className="border-green-500 text-green-500 hover:bg-green-500 hover:text-white gap-2 shrink-0"
+                onClick={() => window.open("https://whatsapp.com/channel/0029VbC5tPPCxoAveJ44Vs2w", "_blank", "noopener,noreferrer")}
+                data-testid="button-join-whatsapp-channel"
+              >
+                <SiWhatsapp className="w-4 h-4" />
+                Rejoindre la chaîne
+                <ExternalLink className="w-3 h-3" />
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
         {tickets && tickets.length > 0 && (
           <Card>
