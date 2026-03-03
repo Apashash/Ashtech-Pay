@@ -201,15 +201,7 @@ export default function EditWithdrawalNumberPage() {
                 id="phoneNumber"
                 placeholder="XXXXXXXXX"
                 value={phoneNumber}
-                onChange={(e) => {
-                  let val = e.target.value;
-                  if (val && !val.startsWith("+")) {
-                    if (user?.country?.toLowerCase().includes("cameroun") || user?.country?.toLowerCase().includes("cameroon")) {
-                      val = "+237" + val;
-                    }
-                  }
-                  setPhoneNumber(val);
-                }}
+                onChange={(e) => setPhoneNumber(e.target.value)}
               />
             </div>
             <div className="space-y-2">

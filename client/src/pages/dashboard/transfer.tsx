@@ -115,15 +115,6 @@ export default function TransferPage() {
                               placeholder="XXXXXXXXX"
                               className="pl-10"
                               {...field} 
-                              onChange={(e) => {
-                                let val = e.target.value;
-                                if (val && !val.startsWith("+") && /^\d/.test(val)) {
-                                  if (user?.country?.toLowerCase().includes("cameroun") || user?.country?.toLowerCase().includes("cameroon")) {
-                                    val = "+237" + val;
-                                  }
-                                }
-                                field.onChange(val);
-                              }}
                               data-testid="input-recipient"
                             />
                           </div>

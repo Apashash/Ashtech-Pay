@@ -418,15 +418,7 @@ export default function SendMoneyPage() {
                       <FormField control={form.control} name="recipientPhone" render={({ field }) => (
                         <FormItem>
                           <FormLabel>Numéro de téléphone</FormLabel>
-                      <FormControl><Input placeholder="XXXXXXXXX" {...field} onChange={(e) => {
-                        let val = e.target.value;
-                        if (val && !val.startsWith("+") && /^\d/.test(val)) {
-                          if (user?.country?.toLowerCase().includes("cameroun") || user?.country?.toLowerCase().includes("cameroon")) {
-                            val = "+237" + val;
-                          }
-                        }
-                        field.onChange(val);
-                      }} /></FormControl>
+                      <FormControl><Input placeholder="XXXXXXXXX" {...field} /></FormControl>
                           <FormMessage />
                         </FormItem>
                       )} />
