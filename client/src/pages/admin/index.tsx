@@ -30,6 +30,10 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
+import {
+  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, Legend
+} from "recharts";
 
 type StatsPeriod = "last_year" | "this_year" | "last_month" | "this_month" | "last_week" | "this_week" | "yesterday" | "today";
 
@@ -85,6 +89,8 @@ export default function AdminDashboard() {
     mutationFn: () => apiRequest("POST", "/api/admin/reset-stats"),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/admin/stats?period=${period}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/stats/activity"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/stats/by-country"] });
       setShowResetDialog(false);
       toast({ title: "Réinitialisé", description: "Les statistiques ont été remises à zéro." });
     },
@@ -92,6 +98,21 @@ export default function AdminDashboard() {
       toast({ title: "Erreur", description: "La réinitialisation a échoué.", variant: "destructive" });
     },
   });
+
+  const { data: activityData = [] } = useQuery<{ date: string; total: number; completed: number; failed: number; volume: number }[]>({
+    queryKey: ["/api/admin/stats/activity"],
+    refetchInterval: 30000,
+  });
+
+  const { data: countryData = [] } = useQuery<{ country: string; volume: number; count: number }[]>({
+    queryKey: ["/api/admin/stats/by-country"],
+    refetchInterval: 30000,
+  });
+
+  const chartActivity = activityData.map(d => ({
+    ...d,
+    label: format(new Date(d.date), "dd/MM", { locale: fr }),
+  }));
 
   const kpiCards = [
     {
@@ -370,27 +391,91 @@ export default function AdminDashboard() {
         </Card>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Activité des 30 derniers jours */}
           <Card>
             <CardHeader>
-              <CardTitle>Activité Récente</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <CreditCard className="w-5 h-5 text-primary" />
+                Activité — 30 derniers jours
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-8 text-muted-foreground">
-                <CreditCard className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p>Les graphiques d'activité seront affichés ici</p>
-              </div>
+              {activityData.length === 0 || activityData.every(d => d.total === 0) ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <CreditCard className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                  <p className="text-sm">Aucune activité sur cette période</p>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={220}>
+                  <AreaChart data={chartActivity} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorCompleted" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="colorFailed" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#888" }} interval={4} />
+                    <YAxis tick={{ fontSize: 10, fill: "#888" }} allowDecimals={false} />
+                    <Tooltip
+                      contentStyle={{ background: "#1a1a1a", border: "1px solid #333", borderRadius: 8, fontSize: 12 }}
+                      labelStyle={{ color: "#ccc" }}
+                      formatter={(value: number, name: string) => [value, name === "completed" ? "Réussies" : name === "failed" ? "Échouées" : "Total"]}
+                    />
+                    <Legend formatter={(v) => v === "completed" ? "Réussies" : v === "failed" ? "Échouées" : "Total"} wrapperStyle={{ fontSize: 11 }} />
+                    <Area type="monotone" dataKey="completed" stroke="#22c55e" fill="url(#colorCompleted)" strokeWidth={2} dot={false} />
+                    <Area type="monotone" dataKey="failed" stroke="#ef4444" fill="url(#colorFailed)" strokeWidth={2} dot={false} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
             </CardContent>
           </Card>
 
+          {/* Volume par pays */}
           <Card>
             <CardHeader>
-              <CardTitle>Volume par Pays</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="w-5 h-5 text-primary" />
+                Volume par Pays (Top 10)
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-8 text-muted-foreground">
-                <TrendingUp className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p>Les statistiques par pays seront affichées ici</p>
-              </div>
+              {countryData.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <TrendingUp className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                  <p className="text-sm">Aucune donnée disponible</p>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={countryData} layout="vertical" margin={{ top: 0, right: 8, left: 8, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false} />
+                    <XAxis type="number" tick={{ fontSize: 10, fill: "#888" }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                    <YAxis type="category" dataKey="country" tick={{ fontSize: 10, fill: "#ccc" }} width={80} />
+                    <Tooltip
+                      contentStyle={{ background: "#1a1a1a", border: "1px solid #333", borderRadius: 8, fontSize: 12 }}
+                      formatter={(value: number) => [formatCurrency(value, "XAF"), "Volume"]}
+                    />
+                    <Bar dataKey="volume" fill="#F0B90B" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+              {countryData.length > 0 && (
+                <div className="mt-3 space-y-1">
+                  {countryData.slice(0, 5).map((c, i) => (
+                    <div key={c.country} className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-4 h-4 rounded-sm bg-primary/20 flex items-center justify-center text-primary font-bold">{i + 1}</span>
+                        {c.country}
+                      </span>
+                      <span className="font-medium text-foreground">{formatCurrency(c.volume, "XAF")} · {c.count} tx</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

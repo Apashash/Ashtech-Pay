@@ -849,6 +849,70 @@ export class DatabaseStorage implements IStorage {
     await this.upsertSetting("stats_reset_at", new Date().toISOString(), "Date de réinitialisation des statistiques financières");
   }
 
+  async getStatsByCountry(): Promise<{ country: string; volume: number; count: number }[]> {
+    const resetSetting = await this.getSetting("stats_reset_at");
+    const resetAt: Date | null = resetSetting ? new Date(resetSetting.value) : null;
+
+    const allUsers = await db.select({ id: users.id, country: users.country }).from(users);
+    const userCountryMap = new Map(allUsers.map(u => [u.id, u.country || "Inconnu"]));
+
+    const allTx = await db.select().from(transactions);
+    const filtered = allTx.filter(t =>
+      t.status === "completed" &&
+      (t.type === "deposit" || t.type === "payment_link" || t.type === "withdrawal" || t.type === "transfer_out") &&
+      (!resetAt || (t.createdAt && new Date(t.createdAt) > resetAt))
+    );
+
+    const byCountry: Record<string, { volume: number; count: number }> = {};
+    for (const tx of filtered) {
+      const country = userCountryMap.get(tx.userId) || "Inconnu";
+      if (!byCountry[country]) byCountry[country] = { volume: 0, count: 0 };
+      byCountry[country].volume += parseFloat(tx.amount);
+      byCountry[country].count += 1;
+    }
+
+    return Object.entries(byCountry)
+      .map(([country, data]) => ({ country, volume: data.volume, count: data.count }))
+      .sort((a, b) => b.volume - a.volume)
+      .slice(0, 10);
+  }
+
+  async getStatsActivity(): Promise<{ date: string; total: number; completed: number; failed: number; volume: number }[]> {
+    const resetSetting = await this.getSetting("stats_reset_at");
+    const resetAt: Date | null = resetSetting ? new Date(resetSetting.value) : null;
+
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29);
+
+    const allTx = await db.select().from(transactions);
+    const filtered = allTx.filter(t => {
+      if (!t.createdAt) return false;
+      const d = new Date(t.createdAt);
+      if (d < thirtyDaysAgo) return false;
+      if (resetAt && d <= resetAt) return false;
+      return true;
+    });
+
+    const byDay: Record<string, { date: string; total: number; completed: number; failed: number; volume: number }> = {};
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      byDay[key] = { date: key, total: 0, completed: 0, failed: 0, volume: 0 };
+    }
+
+    for (const tx of filtered) {
+      const key = new Date(tx.createdAt!).toISOString().slice(0, 10);
+      if (byDay[key]) {
+        byDay[key].total += 1;
+        if (tx.status === "completed") { byDay[key].completed += 1; byDay[key].volume += parseFloat(tx.amount); }
+        if (tx.status === "failed") byDay[key].failed += 1;
+      }
+    }
+
+    return Object.values(byDay);
+  }
+
   async getAdminStats(period: string = "all"): Promise<any> {
     const resetSetting = await this.getSetting("stats_reset_at");
     const resetAt: Date | null = resetSetting ? new Date(resetSetting.value) : null;

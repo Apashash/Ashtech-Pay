@@ -2896,6 +2896,28 @@ export async function registerRoutes(
     }
   });
 
+  // Admin: Volume par pays
+  app.get("/api/admin/stats/by-country", requireAdmin, async (req, res) => {
+    try {
+      const result = await storage.getStatsByCountry();
+      res.json(result);
+    } catch (error) {
+      console.error("Stats by country error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // Admin: Activité récente (30 derniers jours)
+  app.get("/api/admin/stats/activity", requireAdmin, async (req, res) => {
+    try {
+      const result = await storage.getStatsActivity();
+      res.json(result);
+    } catch (error) {
+      console.error("Stats activity error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   // Admin: Reset stats (store current timestamp as reset baseline)
   app.post("/api/admin/reset-stats", requireAdmin, async (req, res) => {
     try {
