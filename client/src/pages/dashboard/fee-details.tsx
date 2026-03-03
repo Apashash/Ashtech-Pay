@@ -23,12 +23,12 @@ function formatFeeValue(fee: Fee, currency?: string): string {
   if (fee.feeType === "percentage") {
     return `${parseFloat(fee.feeValue).toFixed(2)}%`;
   }
-  return `${parseFloat(fee.feeValue).toFixed(0)} ${currency || ""}`.trim();
+  return `${parseFloat(fee.feeValue).toLocaleString()} ${currency || ""}`.trim();
 }
 
 function minFeeLabel(fee: Fee, currency?: string): string | null {
   if (!fee.minFee || parseFloat(fee.minFee) === 0) return null;
-  return `min. ${parseFloat(fee.minFee).toLocaleString()} ${currency || ""}`.trim();
+  return `${parseFloat(fee.minFee).toLocaleString()} ${currency || ""}`.trim();
 }
 
 const SECTION_CONFIG = [
@@ -125,46 +125,8 @@ export default function FeeDetailsPage() {
                 <p className="text-sm text-muted-foreground">{description}</p>
               </CardHeader>
               <CardContent className="space-y-3">
-                {key === "deposit" ? (
-                  <div className="flex items-center justify-between bg-muted/40 rounded-lg px-4 py-3">
-                    <span className="text-sm font-medium">Frais de dépôt</span>
-                    <Badge
-                      variant="secondary"
-                      className="text-sm font-semibold"
-                      data-testid="badge-deposit-fee"
-                    >
-                      {depositOverride !== null && depositOverride !== undefined
-                        ? depositOverride === 0
-                          ? "Gratuit"
-                          : `${depositOverride.toFixed(2)}%`
-                        : globalFee
-                        ? formatFeeValue(globalFee)
-                        : "Gratuit"}
-                    </Badge>
-                  </div>
-                ) : globalFee ? (
-                  <div className="flex items-center justify-between bg-muted/40 rounded-lg px-4 py-3">
-                    <span className="text-sm font-medium">Tarif général</span>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary" className="text-sm font-semibold">
-                        {formatFeeValue(globalFee)}
-                      </Badge>
-                      {minFeeLabel(globalFee) && (
-                        <span className="text-xs text-muted-foreground">
-                          {minFeeLabel(globalFee)}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ) : null}
-
                 {countryFees.length > 0 && (
                   <div className="space-y-2">
-                    {globalFee || key === "deposit" ? (
-                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-1">
-                        Par pays
-                      </p>
-                    ) : null}
                     <div className="divide-y divide-border rounded-lg border overflow-hidden">
                       {countryFees
                         .sort((a, b) =>
@@ -179,20 +141,20 @@ export default function FeeDetailsPage() {
                           return (
                             <div
                               key={fee.id}
-                              className="flex items-center justify-between px-4 py-2.5 hover:bg-muted/30 transition-colors"
+                              className="flex items-center justify-between px-4 py-3 hover:bg-muted/30 transition-colors"
                               data-testid={`row-fee-${key}-${fee.id}`}
                             >
-                              <span className="text-sm">{cName}</span>
-                              <div className="flex items-center gap-2">
-                                <Badge variant="outline" className="text-xs font-semibold">
-                                  {formatFeeValue(fee, cCurrency)}
-                                </Badge>
+                              <div className="flex flex-col">
+                                <span className="text-sm font-medium">{cName}</span>
                                 {min && (
-                                  <span className="text-xs text-muted-foreground hidden sm:inline">
-                                    {min}
+                                  <span className="text-xs text-muted-foreground">
+                                    Frais minimum : {min}
                                   </span>
                                 )}
                               </div>
+                              <Badge variant="outline" className="text-sm font-semibold">
+                                {formatFeeValue(fee, cCurrency)}
+                              </Badge>
                             </div>
                           );
                         })}
@@ -209,32 +171,6 @@ export default function FeeDetailsPage() {
             </Card>
           );
         })}
-
-        <Card className="border border-purple-500/20" data-testid="card-fees-payment-link">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-3 text-lg">
-              <div className="w-9 h-9 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0">
-                <Link2 className="w-5 h-5 text-purple-500" />
-              </div>
-              Lien de paiement
-            </CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Frais déduits automatiquement de chaque paiement reçu via vos liens.
-            </p>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between bg-muted/40 rounded-lg px-4 py-3">
-              <span className="text-sm font-medium">Commission par transaction</span>
-              <Badge variant="secondary" className="text-sm font-semibold" data-testid="badge-link-fee">
-                {feeSettings?.paymentLinkFeePercent !== undefined
-                  ? feeSettings.paymentLinkFeePercent === 0
-                    ? "Gratuit"
-                    : `${feeSettings.paymentLinkFeePercent.toFixed(2)}%`
-                  : "2.00%"}
-              </Badge>
-            </div>
-          </CardContent>
-        </Card>
 
         <Card className="border border-yellow-500/20" data-testid="card-fees-conversion">
           <CardHeader className="pb-3">
@@ -260,13 +196,19 @@ export default function FeeDetailsPage() {
           </CardContent>
         </Card>
 
-        <div className="flex items-start gap-3 bg-primary/5 border border-primary/15 rounded-xl p-4">
-          <Info className="w-5 h-5 text-primary shrink-0 mt-0.5" />
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            Les frais sont calculés automatiquement au moment de chaque opération et déduits du montant
-            traité. Les frais minimums s'appliquent lorsque le pourcentage calculé est inférieur au seuil défini.
-          </p>
-        </div>
+        <Card className="border border-primary/20 bg-primary/5">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Info className="w-5 h-5 text-primary" />
+              Note sur le "Minimum Payout Fee"
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground leading-relaxed">
+            Pour chaque pays, un montant minimum de frais (Frais minimum) est défini. 
+            Si le calcul du pourcentage est inférieur à ce montant, c'est le frais minimum qui sera appliqué. 
+            Le système retient toujours le montant le plus élevé entre le pourcentage et le frais minimum.
+          </CardContent>
+        </Card>
       </div>
     </DashboardLayout>
   );
