@@ -5,6 +5,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Check, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { User, KycSubmission } from "@shared/schema";
@@ -23,7 +27,7 @@ import {
   X,
   Image as ImageIcon
 } from "lucide-react";
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 
 const africanCountries = [
@@ -72,6 +76,7 @@ export default function KYCPage() {
   const [businessType, setBusinessType] = useState<"physical" | "online" | "">("");
   const [businessCategory, setBusinessCategory] = useState("");
   const [businessDescription, setBusinessDescription] = useState("");
+  const [categoryOpen, setCategoryOpen] = useState(false);
   
   const [uploadedPaths, setUploadedPaths] = useState<UploadState>({
     front: null,
@@ -95,9 +100,14 @@ export default function KYCPage() {
   const backInputRef = useRef<HTMLInputElement>(null);
   const selfieInputRef = useRef<HTMLInputElement>(null);
 
-  const filteredCategories = businessType 
+  const filteredCategories = useMemo(() => businessType
     ? BUSINESS_CATEGORIES.filter(cat => cat.type === businessType)
-    : BUSINESS_CATEGORIES;
+    : BUSINESS_CATEGORIES, [businessType]);
+
+  const descriptionWordCount = useMemo(() => {
+    const words = businessDescription.trim().split(/\s+/).filter(Boolean);
+    return words.length;
+  }, [businessDescription]);
 
   const submitMutation = useMutation({
     mutationFn: async (data: {
@@ -217,10 +227,19 @@ export default function KYCPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!documentType || !documentNumber || !businessType || !businessCategory || !businessDescription) {
+    if (!documentType || !documentNumber || !city || !postalCode || !businessType || !businessCategory || !businessDescription) {
       toast({
         title: "Champs requis",
-        description: "Veuillez remplir tous les champs obligatoires",
+        description: "Veuillez remplir tous les champs obligatoires (ville et code postal inclus)",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (descriptionWordCount > 250) {
+      toast({
+        title: "Description trop longue",
+        description: `La description ne peut pas dépasser 250 mots (actuellement ${descriptionWordCount} mots)`,
         variant: "destructive",
       });
       return;
@@ -242,8 +261,8 @@ export default function KYCPage() {
       documentBackPath: uploadedPaths.back,
       selfiePath: uploadedPaths.selfie,
       country: user?.country || undefined,
-      city: city || undefined,
-      postalCode: postalCode || undefined,
+      city,
+      postalCode,
       businessType,
       businessCategory,
       businessDescription,
@@ -474,7 +493,7 @@ export default function KYCPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Ville</Label>
+                    <Label>Ville *</Label>
                     <Input
                       value={city}
                       onChange={(e) => setCity(e.target.value)}
@@ -483,7 +502,7 @@ export default function KYCPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Code postal</Label>
+                    <Label>Code postal *</Label>
                     <Input
                       value={postalCode}
                       onChange={(e) => setPostalCode(e.target.value)}
@@ -591,22 +610,48 @@ export default function KYCPage() {
 
                   <div className="space-y-2">
                     <Label>Catégorie d'activité *</Label>
-                    <Select 
-                      value={businessCategory} 
-                      onValueChange={setBusinessCategory}
-                      disabled={!businessType}
-                    >
-                      <SelectTrigger data-testid="select-business-category">
-                        <SelectValue placeholder={businessType ? "Choisir la catégorie" : "Sélectionnez d'abord le type"} />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-[300px]">
-                        {filteredCategories.map((cat) => (
-                          <SelectItem key={cat.id} value={cat.id}>
-                            {cat.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Popover open={categoryOpen} onOpenChange={setCategoryOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={categoryOpen}
+                          disabled={!businessType}
+                          className="w-full justify-between font-normal"
+                          data-testid="select-business-category"
+                        >
+                          {businessCategory
+                            ? filteredCategories.find(c => c.id === businessCategory)?.name ?? "Choisir la catégorie"
+                            : businessType ? "Choisir la catégorie" : "Sélectionnez d'abord le type"}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-full p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder="Rechercher une catégorie..." data-testid="input-category-search" />
+                          <CommandList>
+                            <CommandEmpty>Aucune catégorie trouvée.</CommandEmpty>
+                            <CommandGroup>
+                              {filteredCategories.map((cat) => (
+                                <CommandItem
+                                  key={cat.id}
+                                  value={cat.name}
+                                  onSelect={() => {
+                                    setBusinessCategory(cat.id);
+                                    setCategoryOpen(false);
+                                  }}
+                                >
+                                  <Check
+                                    className={cn("mr-2 h-4 w-4", businessCategory === cat.id ? "opacity-100" : "opacity-0")}
+                                  />
+                                  {cat.name}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                   </div>
 
                   <div className="space-y-2">
@@ -618,8 +663,8 @@ export default function KYCPage() {
                       rows={4}
                       data-testid="textarea-business-description"
                     />
-                    <p className="text-xs text-muted-foreground">
-                      Minimum 20 caractères
+                    <p className={cn("text-xs", descriptionWordCount > 250 ? "text-destructive font-medium" : "text-muted-foreground")}>
+                      {descriptionWordCount} / 250 mots
                     </p>
                   </div>
 

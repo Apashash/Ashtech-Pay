@@ -485,48 +485,37 @@ export default function AdminKYC() {
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-3 gap-4">
-                      <div>
-                        <p className="text-sm text-muted-foreground mb-2">Recto du document</p>
-                        <button
-                          onClick={() => setImageModal({ url: getImageUrl(viewSubmission.documentFrontPath), title: "Recto du document" })}
-                          className="w-full aspect-video bg-muted rounded-lg overflow-hidden hover:opacity-80 transition-opacity"
-                          data-testid="button-view-front"
-                        >
-                          <img
-                            src={getImageUrl(viewSubmission.documentFrontPath)}
-                            alt="Document recto"
-                            className="w-full h-full object-cover"
-                          />
-                        </button>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground mb-2">Verso du document</p>
-                        <button
-                          onClick={() => setImageModal({ url: getImageUrl(viewSubmission.documentBackPath), title: "Verso du document" })}
-                          className="w-full aspect-video bg-muted rounded-lg overflow-hidden hover:opacity-80 transition-opacity"
-                          data-testid="button-view-back"
-                        >
-                          <img
-                            src={getImageUrl(viewSubmission.documentBackPath)}
-                            alt="Document verso"
-                            className="w-full h-full object-cover"
-                          />
-                        </button>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground mb-2">Selfie avec document</p>
-                        <button
-                          onClick={() => setImageModal({ url: getImageUrl(viewSubmission.selfiePath), title: "Selfie avec document" })}
-                          className="w-full aspect-video bg-muted rounded-lg overflow-hidden hover:opacity-80 transition-opacity"
-                          data-testid="button-view-selfie"
-                        >
-                          <img
-                            src={getImageUrl(viewSubmission.selfiePath)}
-                            alt="Selfie"
-                            className="w-full h-full object-cover"
-                          />
-                        </button>
-                      </div>
+                      {[
+                        { path: viewSubmission.documentFrontPath, label: "Recto du document", testId: "button-view-front", alt: "Document recto" },
+                        { path: viewSubmission.documentBackPath, label: "Verso du document", testId: "button-view-back", alt: "Document verso" },
+                        { path: viewSubmission.selfiePath, label: "Selfie avec document", testId: "button-view-selfie", alt: "Selfie" },
+                      ].map(({ path, label, testId, alt }) => (
+                        <div key={testId}>
+                          <p className="text-sm text-muted-foreground mb-2">{label}</p>
+                          <button
+                            onClick={() => setImageModal({ url: getImageUrl(path), title: label })}
+                            className="w-full aspect-video bg-muted rounded-lg overflow-hidden hover:opacity-80 transition-opacity relative"
+                            data-testid={testId}
+                          >
+                            <img
+                              src={getImageUrl(path)}
+                              alt={alt}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                const target = e.currentTarget;
+                                target.style.display = "none";
+                                const parent = target.parentElement;
+                                if (parent && !parent.querySelector(".img-error-msg")) {
+                                  const msg = document.createElement("div");
+                                  msg.className = "img-error-msg flex flex-col items-center justify-center h-full text-muted-foreground text-xs p-2 text-center";
+                                  msg.innerHTML = `<svg xmlns='http://www.w3.org/2000/svg' class='w-6 h-6 mb-1 opacity-40' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z'/></svg>Document non disponible`;
+                                  parent.appendChild(msg);
+                                }
+                              }}
+                            />
+                          </button>
+                        </div>
+                      ))}
                     </div>
                   </CardContent>
                 </Card>
