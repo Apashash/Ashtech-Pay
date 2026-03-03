@@ -176,6 +176,11 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     refetchInterval: 3000,
   });
 
+  const { data: ticketUnread } = useQuery<{ count: number }>({
+    queryKey: ["/api/admin/tickets/unread-count"],
+    refetchInterval: 6000,
+  });
+
   const { data: conversionCount } = useQuery<{ count: number }>({
     queryKey: ["/api/admin/conversion-requests/count"],
     refetchInterval: 3000,
@@ -191,7 +196,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     "/admin/transactions/withdrawals": stats?.pendingWithdrawals || 0,
     "/admin/transactions/transfers": stats?.pendingTransfers || 0,
     "/admin/kyc": kycStats?.pending || 0,
-    "/admin/support": ticketStats?.openCount || 0,
+    "/admin/support": ticketUnread?.count || ticketStats?.openCount || 0,
     "/admin/conversions": conversionCount?.count || 0,
     "/admin/withdrawal-numbers": withdrawalNumberCount?.count || 0,
   };

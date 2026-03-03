@@ -19,6 +19,7 @@ export const users = pgTable("users", {
   banReason: text("ban_reason"),
   role: text("role").default("user").notNull(), // 'user', 'admin', 'support', 'finance'
   lastLoginAt: timestamp("last_login_at"),
+  lastSeenAt: timestamp("last_seen_at"),
   resetToken: text("reset_token"),
   resetTokenExpiry: timestamp("reset_token_expiry"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -262,6 +263,8 @@ export const ticketMessages = pgTable("ticket_messages", {
   senderId: varchar("sender_id").notNull().references(() => users.id),
   message: text("message").notNull(),
   isAdmin: boolean("is_admin").default(false),
+  readByAdmin: boolean("read_by_admin").default(false),
+  readByUser: boolean("read_by_user").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

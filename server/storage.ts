@@ -150,6 +150,10 @@ export interface IStorage {
   // Admin: Ticket messages
   getTicketMessages(ticketId: string): Promise<TicketMessage[]>;
   createTicketMessage(message: InsertTicketMessage): Promise<TicketMessage>;
+  markTicketMessagesReadByUser(ticketId: string): Promise<void>;
+  markTicketMessagesReadByAdmin(ticketId: string): Promise<void>;
+  countUnreadUserMessagesForAdmin(): Promise<number>;
+  updateUserLastSeen(userId: string): Promise<void>;
   
   // Admin: Logs
   createAdminLog(log: InsertAdminLog): Promise<AdminLog>;
@@ -781,7 +785,30 @@ export class DatabaseStorage implements IStorage {
     const [newMessage] = await db.insert(ticketMessages).values(message).returning();
     return newMessage;
   }
-  
+
+  async markTicketMessagesReadByUser(ticketId: string): Promise<void> {
+    await db.update(ticketMessages)
+      .set({ readByUser: true })
+      .where(and(eq(ticketMessages.ticketId, ticketId), eq(ticketMessages.isAdmin, true)));
+  }
+
+  async markTicketMessagesReadByAdmin(ticketId: string): Promise<void> {
+    await db.update(ticketMessages)
+      .set({ readByAdmin: true })
+      .where(and(eq(ticketMessages.ticketId, ticketId), eq(ticketMessages.isAdmin, false)));
+  }
+
+  async countUnreadUserMessagesForAdmin(): Promise<number> {
+    const result = await db.select({ count: sql<number>`count(*)` })
+      .from(ticketMessages)
+      .where(and(eq(ticketMessages.isAdmin, false), eq(ticketMessages.readByAdmin, false)));
+    return Number(result[0]?.count ?? 0);
+  }
+
+  async updateUserLastSeen(userId: string): Promise<void> {
+    await db.update(users).set({ lastSeenAt: new Date() }).where(eq(users.id, userId));
+  }
+
   // Admin: Logs
   async createAdminLog(log: InsertAdminLog): Promise<AdminLog> {
     const [newLog] = await db.insert(adminLogs).values(log).returning();

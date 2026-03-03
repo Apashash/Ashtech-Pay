@@ -32,6 +32,7 @@ import { addPendingPayment } from "./paymentPoller";
 import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, cleanupEmptyWallets } from "./walletHelper";
 import { createSwychrPayout, formatInternationalPhone, fiatToPusd, pusdToFiatRate, getConversionRate, convertFiatToPusd, getPayoutToken, COUNTRY_CURRENCY } from "./swychrPayout";
 import { addPendingPayout } from "./payoutPoller";
+import { addSSEClient, removeSSEClient, setActiveTicket, isUserOnline, getOnlineUserIds, getAdminViewingTicket, getUserViewingTicket, notifyUser, notifyAdmins, broadcastOnlineStatus } from "./sse";
 import {
   sendWelcomeEmail,
   sendPasswordResetEmail,
@@ -3686,7 +3687,8 @@ export async function registerRoutes(
       res.json({ 
         ticket, 
         messages,
-        user: user ? { id: user.id, fullName: user.fullName, email: user.email, phone: user.phone } : null
+        user: user ? { id: user.id, fullName: user.fullName, email: user.email, phone: user.phone, lastSeenAt: user.lastSeenAt } : null,
+        userOnline: isUserOnline(ticket.userId),
       });
     } catch (error) {
       console.error("Admin get ticket error:", error);
@@ -3761,12 +3763,38 @@ export async function registerRoutes(
 
   app.post("/api/admin/tickets/:id/messages", requireAdmin, async (req, res) => {
     try {
+      const ticket = await storage.getTicket(req.params.id);
+      if (!ticket) return res.status(404).json({ message: "Ticket non trouvé" });
+
+      const isUserViewing = getUserViewingTicket(ticket.userId, req.params.id);
       const message = await storage.createTicketMessage({
         ticketId: req.params.id,
         senderId: req.userId!,
         message: req.body.message,
         isAdmin: true,
+        readByAdmin: true,
+        readByUser: isUserViewing,
       });
+
+      // Update ticket updatedAt
+      await storage.updateTicket(req.params.id, { status: ticket.status === "open" ? "in_progress" : ticket.status });
+
+      // Push new message via SSE to user
+      notifyUser(ticket.userId, "new_message", {
+        ticketId: req.params.id,
+        message,
+      });
+
+      // Create notification for user
+      await storage.createUserNotification({
+        userId: ticket.userId,
+        type: "admin_message",
+        title: "Nouveau message du support",
+        message: `Réponse à votre ticket : ${ticket.subject}`,
+        transactionId: null,
+        isRead: false,
+      });
+
       res.json(message);
     } catch (error) {
       console.error("Admin create ticket message error:", error);
@@ -3839,7 +3867,9 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Ticket non trouvé" });
       }
       const messages = await storage.getTicketMessages(req.params.id);
-      res.json({ ticket, messages });
+      // Check if any admin is currently online
+      const adminsOnline = getOnlineUserIds().length > 1; // simplification: if more than 1 user online, admin might be
+      res.json({ ticket, messages, adminsOnline });
     } catch (error) {
       console.error("Get ticket messages error:", error);
       res.status(500).json({ message: "Erreur serveur" });
@@ -3853,18 +3883,29 @@ export async function registerRoutes(
       if (!ticket || ticket.userId !== req.userId) {
         return res.status(404).json({ message: "Ticket non trouvé" });
       }
-      
+
+      const isAdminViewing = getAdminViewingTicket(req.params.id);
       const message = await storage.createTicketMessage({
         ticketId: req.params.id,
         senderId: req.userId!,
         message: req.body.message,
         isAdmin: false,
+        readByUser: true,
+        readByAdmin: isAdminViewing,
       });
       
       // Reopen ticket if closed
       if (ticket.status === "closed" || ticket.status === "resolved") {
         await storage.updateTicket(req.params.id, { status: "open" });
       }
+
+      // Push new message via SSE to admins
+      notifyAdmins("new_message", {
+        ticketId: req.params.id,
+        message,
+        userFullName: (await storage.getUser(req.userId!))?.fullName || "Utilisateur",
+        subject: ticket.subject,
+      });
       
       res.json(message);
     } catch (error) {
@@ -3885,6 +3926,117 @@ export async function registerRoutes(
       res.json(updatedTicket);
     } catch (error) {
       console.error("Close ticket error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // ─── Real-time SSE ────────────────────────────────────────────────────────
+
+  // User SSE connection
+  app.get("/api/sse", requireAuth, async (req, res) => {
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders();
+
+    const user = await storage.getUser(req.userId!);
+    const isAdmin = user?.role === "admin" || user?.role === "support";
+    const connId = addSSEClient(req.userId!, !!isAdmin, res);
+
+    // Update last seen
+    await storage.updateUserLastSeen(req.userId!);
+
+    // Broadcast updated online list to all
+    broadcastOnlineStatus();
+
+    // Ping every 25s to keep connection alive
+    const pingInterval = setInterval(() => {
+      try { res.write(":ping\n\n"); } catch {}
+    }, 25000);
+
+    req.on("close", async () => {
+      clearInterval(pingInterval);
+      removeSSEClient(connId);
+      await storage.updateUserLastSeen(req.userId!);
+      broadcastOnlineStatus();
+    });
+  });
+
+  // User: Mark ticket messages as read (user side)
+  app.post("/api/tickets/:id/read", requireAuth, async (req, res) => {
+    try {
+      const ticket = await storage.getTicket(req.params.id);
+      if (!ticket || ticket.userId !== req.userId) {
+        return res.status(404).json({ message: "Ticket non trouvé" });
+      }
+      await storage.markTicketMessagesReadByUser(req.params.id);
+      // Notify admin that user read the messages
+      notifyAdmins("messages_read", { ticketId: req.params.id, by: "user" });
+      res.json({ ok: true });
+    } catch (error) {
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // Admin: Mark ticket messages as read (admin side)
+  app.post("/api/admin/tickets/:id/read", requireAdmin, async (req, res) => {
+    try {
+      await storage.markTicketMessagesReadByAdmin(req.params.id);
+      const ticket = await storage.getTicket(req.params.id);
+      if (ticket) {
+        notifyUser(ticket.userId, "messages_read", { ticketId: req.params.id, by: "admin" });
+      }
+      res.json({ ok: true });
+    } catch (error) {
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // User: Send typing indicator
+  app.post("/api/tickets/:id/typing", requireAuth, async (req, res) => {
+    try {
+      const ticket = await storage.getTicket(req.params.id);
+      if (!ticket || ticket.userId !== req.userId) {
+        return res.status(404).json({ message: "Ticket non trouvé" });
+      }
+      const { isTyping } = req.body;
+      notifyAdmins("typing", { ticketId: req.params.id, from: "user", isTyping: !!isTyping });
+      res.json({ ok: true });
+    } catch (error) {
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // Admin: Send typing indicator
+  app.post("/api/admin/tickets/:id/typing", requireAdmin, async (req, res) => {
+    try {
+      const ticket = await storage.getTicket(req.params.id);
+      if (!ticket) return res.status(404).json({ message: "Ticket non trouvé" });
+      const { isTyping } = req.body;
+      notifyUser(ticket.userId, "typing", { ticketId: req.params.id, from: "admin", isTyping: !!isTyping });
+      res.json({ ok: true });
+    } catch (error) {
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // Set active ticket for SSE client (for online-in-ticket tracking)
+  app.post("/api/sse/active-ticket", requireAuth, async (req, res) => {
+    // This is handled client-side via the SSE connection id; here we just acknowledge
+    res.json({ ok: true });
+  });
+
+  // Get online status
+  app.get("/api/online-status", requireAuth, async (_req, res) => {
+    res.json({ onlineIds: getOnlineUserIds() });
+  });
+
+  // Admin: Unread ticket messages count
+  app.get("/api/admin/tickets/unread-count", requireAdmin, async (_req, res) => {
+    try {
+      const count = await storage.countUnreadUserMessagesForAdmin();
+      res.json({ count });
+    } catch (error) {
       res.status(500).json({ message: "Erreur serveur" });
     }
   });

@@ -493,6 +493,15 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                                     Voir la transaction →
                                   </button>
                                 )}
+                                {isExpanded && notification.type === "admin_message" && (
+                                  <button
+                                    className="text-xs text-primary mt-2 underline"
+                                    onClick={(e) => { e.stopPropagation(); setLocation("/dashboard/support"); }}
+                                    data-testid={`button-notif-goto-support-${notification.id}`}
+                                  >
+                                    Voir le message →
+                                  </button>
+                                )}
                               </div>
                               <div className="flex items-center gap-1 shrink-0">
                                 <Button
