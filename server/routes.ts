@@ -1003,8 +1003,8 @@ export async function registerRoutes(
             await storage.createUserNotification({
               userId: senderId,
               type: "transfer_pending",
-              title: "Transfert approuvé",
-              message: `Votre transfert de ${parsedAmount.toLocaleString()} ${currency} vers ${recipientName} a été validé.`,
+              title: "Transfert en attente",
+              message: `Votre transfert de ${parsedAmount.toLocaleString()} ${currency} vers ${recipientName} est en cours de traitement et sera envoyé dès validation par l'équipe Ashtech Pay.`,
               transactionId: transaction.id,
               isRead: false,
             });
@@ -1486,8 +1486,8 @@ export async function registerRoutes(
             await storage.createUserNotification({
               userId,
               type: "withdrawal_pending",
-              title: "Retrait approuvé",
-              message: `Votre retrait de ${amount.toLocaleString()} ${currency} a été validé.`,
+              title: "Retrait en attente",
+              message: `Votre retrait de ${amount.toLocaleString()} ${currency} est en cours de traitement. Il sera envoyé sur votre mobile dès validation par l'équipe Ashtech Pay.`,
               transactionId: transaction.id,
               isRead: false,
             });
