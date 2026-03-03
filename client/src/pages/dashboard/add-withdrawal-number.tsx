@@ -154,7 +154,7 @@ export default function AddWithdrawalNumberPage() {
                 <Label htmlFor="phoneNumber">Numéro de téléphone</Label>
                 <Input
                   id="phoneNumber"
-                  placeholder="+237 6XX XXX XXX"
+                  placeholder="6XX XXX XXX"
                   value={phoneNumber}
                   onChange={(e) => {
                     let val = e.target.value;
