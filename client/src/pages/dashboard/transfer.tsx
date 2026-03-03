@@ -112,9 +112,18 @@ export default function TransferPage() {
                           <div className="relative">
                             <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                             <Input 
-                              placeholder="Nom d'utilisateur du destinataire"
+                              placeholder="+237 6XX XXX XXX"
                               className="pl-10"
                               {...field} 
+                              onChange={(e) => {
+                                let val = e.target.value;
+                                if (val && !val.startsWith("+") && /^\d/.test(val)) {
+                                  if (user?.country?.toLowerCase().includes("cameroun") || user?.country?.toLowerCase().includes("cameroon")) {
+                                    val = "+237" + val;
+                                  }
+                                }
+                                field.onChange(val);
+                              }}
                               data-testid="input-recipient"
                             />
                           </div>
