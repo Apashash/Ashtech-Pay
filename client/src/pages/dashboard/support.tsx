@@ -345,7 +345,7 @@ export default function SupportPage() {
                 </Badge>
               )}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col items-end gap-1 shrink-0">
               {selectedTicket && selectedTicket.status !== "closed" && (
                 <Button variant="outline" size="sm" onClick={() => closeTicketMutation.mutate()} disabled={closeTicketMutation.isPending} data-testid="button-close-ticket">
                   {closeTicketMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <><CheckCircle className="w-4 h-4 mr-1" />Clôturer</>}
