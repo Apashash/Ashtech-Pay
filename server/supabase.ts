@@ -38,7 +38,7 @@ if (supabaseUrl && isValidUrl(supabaseUrl)) {
 
 export { supabase };
 
-export const STORAGE_BUCKET = "uploads";
+export const STORAGE_BUCKET = "payment-links";
 
 export async function uploadToSupabase(
   fileBuffer: Buffer,
