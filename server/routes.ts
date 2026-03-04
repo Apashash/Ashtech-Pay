@@ -928,8 +928,13 @@ export async function registerRoutes(
       }
 
       // Currency mismatch check: selected wallet currency must match destination country currency
-      if (sourceCurrency && sourceCurrency !== country.currency) {
-        return res.status(403).json({ message: `Transaction non autorisée — Le compte sélectionné est en ${sourceCurrency} mais ${country.name} utilise ${country.currency}` });
+      // Also accept Swychr-specific codes (e.g. XOFB for Bénin, XOFF for Burkina Faso, etc.)
+      if (sourceCurrency) {
+        const swychrCurrency = COUNTRY_CURRENCY[country.code?.toUpperCase() ?? ""];
+        const isValidCurrency = sourceCurrency === country.currency || (swychrCurrency && sourceCurrency === swychrCurrency);
+        if (!isValidCurrency) {
+          return res.status(403).json({ message: `Transaction non autorisée — Le compte sélectionné est en ${sourceCurrency} mais ${country.name} utilise ${swychrCurrency || country.currency}` });
+        }
       }
       
       // Calculate fee for transfer
@@ -1190,9 +1195,13 @@ export async function registerRoutes(
       const operator = await storage.getOperator(operatorId);
       if (!operator) return res.status(400).json({ message: "Opérateur non trouvé" });
 
-      // Currency mismatch check
-      if (sourceCurrency && sourceCurrency !== country.currency) {
-        return res.status(403).json({ message: `Transaction non autorisée — Le compte sélectionné est en ${sourceCurrency} mais ${country.name} utilise ${country.currency}` });
+      // Currency mismatch check: also accept Swychr-specific codes (XOFB, XOFF, XAFC, etc.)
+      if (sourceCurrency) {
+        const swychrCurrency = COUNTRY_CURRENCY[country.code?.toUpperCase() ?? ""];
+        const isValidCurrency = sourceCurrency === country.currency || (swychrCurrency && sourceCurrency === swychrCurrency);
+        if (!isValidCurrency) {
+          return res.status(403).json({ message: `Transaction non autorisée — Le compte sélectionné est en ${sourceCurrency} mais ${country.name} utilise ${swychrCurrency || country.currency}` });
+        }
       }
 
       // Resolve fees
