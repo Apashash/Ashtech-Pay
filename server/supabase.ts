@@ -71,6 +71,44 @@ export async function uploadToSupabase(
   };
 }
 
+export async function downloadFromSupabase(storagePath: string): Promise<{ data: Blob; contentType: string } | null> {
+  if (!supabase) return null;
+
+  let cleanPath = storagePath;
+
+  if (storagePath.startsWith("http")) {
+    const match = storagePath.match(/\/storage\/v1\/object\/(?:public|sign)\/[^/]+\/(.+?)(?:\?|$)/);
+    if (match) {
+      cleanPath = decodeURIComponent(match[1]);
+    } else {
+      return null;
+    }
+  }
+
+  const { data, error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .download(cleanPath);
+
+  if (error || !data) {
+    console.error("Supabase download error:", error, "path:", cleanPath);
+    return null;
+  }
+
+  const ext = cleanPath.split(".").pop()?.toLowerCase() ?? "";
+  const contentTypeMap: Record<string, string> = {
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+    gif: "image/gif",
+    webp: "image/webp",
+    svg: "image/svg+xml",
+    pdf: "application/pdf",
+  };
+  const contentType = contentTypeMap[ext] ?? data.type ?? "application/octet-stream";
+
+  return { data, contentType };
+}
+
 export async function getSignedImageUrl(storagePath: string, expiresIn = 86400): Promise<string | null> {
   if (!supabase) return null;
 

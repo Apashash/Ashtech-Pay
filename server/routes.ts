@@ -26,7 +26,7 @@ import bcrypt from "bcrypt";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { uploadToSupabase, getSignedImageUrl } from "./supabase";
+import { uploadToSupabase, getSignedImageUrl, downloadFromSupabase } from "./supabase";
 import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, fetchPaymentLinkDetails, ASHTECH_MARGIN } from "./swychr";
 import { addPendingPayment } from "./paymentPoller";
 import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, cleanupEmptyWallets } from "./walletHelper";
@@ -309,16 +309,20 @@ export async function registerRoutes(
     }
   });
 
-  // Image proxy - generates a signed URL for private Supabase bucket images
+  // Image proxy - streams image bytes through server to prevent cached signed URL expiry
   app.get("/api/image-proxy", async (req, res) => {
     try {
       const storagePath = req.query.path as string;
       if (!storagePath) return res.status(400).send("Path required");
 
-      const signedUrl = await getSignedImageUrl(storagePath);
-      if (!signedUrl) return res.status(404).send("Image not found");
+      const result = await downloadFromSupabase(storagePath);
+      if (!result) return res.status(404).send("Image not found");
 
-      res.redirect(302, signedUrl);
+      const buffer = Buffer.from(await result.data.arrayBuffer());
+      res.setHeader("Content-Type", result.contentType);
+      res.setHeader("Cache-Control", "private, max-age=3600");
+      res.setHeader("Content-Length", buffer.length);
+      res.end(buffer);
     } catch (error) {
       console.error("Image proxy error:", error);
       res.status(500).send("Erreur serveur");
