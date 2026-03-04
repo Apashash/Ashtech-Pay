@@ -320,7 +320,14 @@ export async function registerRoutes(
 
       const buffer = Buffer.from(await result.data.arrayBuffer());
       res.setHeader("Content-Type", result.contentType);
-      // Increased cache to 1 year for the browser as the path is unique (includes timestamp)
+      // Use ETag for efficient revalidation
+      const etag = `"${storagePath.replace(/[^a-zA-Z0-9]/g, '')}-${buffer.length}"`;
+      res.setHeader("ETag", etag);
+      
+      if (req.headers['if-none-match'] === etag) {
+        return res.status(304).end();
+      }
+
       res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
       res.setHeader("Content-Length", buffer.length);
       res.end(buffer);
