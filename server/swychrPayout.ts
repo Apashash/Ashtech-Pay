@@ -193,7 +193,19 @@ export async function createSwychrPayout(
   try {
     const token = await getPayoutToken();
 
-    console.log(`[PayoutAPI] Creating payout: ${params.country_code} ${params.amount} → ${params.mobile_no}`);
+    const payoutBody = {
+      country_code:     params.country_code,
+      beneficiary_name: params.beneficiary_name,
+      mobile_no:        params.mobile_no,
+      amount:           params.amount,
+      transaction_id:   params.transaction_id,
+      payment_method:   params.payment_method,
+      remarks:          params.remarks || "Retrait Ashtech Pay",
+      ...(params.bank_code      && { bank_code:      params.bank_code }),
+      ...(params.account_number && { account_number: params.account_number }),
+      ...(params.address        && { address:         params.address }),
+    };
+    console.log(`[PayoutAPI] create_transaction REQUEST:`, JSON.stringify(payoutBody));
 
     const res = await fetch(`${PAYOUT_BASE_URL}/create_transaction`, {
       method:  "POST",
@@ -201,18 +213,7 @@ export async function createSwychrPayout(
         "Content-Type":  "application/json",
         "Authorization": `Bearer ${token}`,
       },
-      body: JSON.stringify({
-        country_code:     params.country_code,
-        beneficiary_name: params.beneficiary_name,
-        mobile_no:        params.mobile_no,
-        amount:           params.amount,
-        transaction_id:   params.transaction_id,
-        payment_method:   params.payment_method,
-        remarks:          params.remarks || "Retrait Ashtech Pay",
-        ...(params.bank_code     && { bank_code:      params.bank_code }),
-        ...(params.account_number && { account_number: params.account_number }),
-        ...(params.address       && { address:         params.address }),
-      }),
+      body: JSON.stringify(payoutBody),
     });
 
     const rawText = await res.text();
