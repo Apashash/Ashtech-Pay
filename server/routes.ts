@@ -201,11 +201,11 @@ function resolvePaymentMethod(operatorName: string, countryCode: string): string
   if (op.includes("PALMPAY"))  return "PalmPay";
   if (op.includes("PAGA"))     return "Paga";
 
-  // AIRTEL — exact case varies by country per AccountPE API
+  // AIRTEL — exact case varies by country per AccountPE payout_methods API
   if (op.includes("AIRTEL")) {
-    // UG, KE, TZ, CD use uppercase "AIRTEL"
-    if (["UG", "KE", "TZ", "CD", "NE"].includes(cc)) return "AIRTEL";
-    return "Airtel"; // GA, CG, RW, GH, BJ use "Airtel"
+    // UG, KE, TZ, CD use uppercase "AIRTEL" (verified via payout_methods API)
+    if (["UG", "KE", "TZ", "CD"].includes(cc)) return "AIRTEL";
+    return "Airtel"; // NE, GA, CG, RW, GH use "Airtel"
   }
 
   // MPESA / M-PESA — exact case varies by country
