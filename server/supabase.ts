@@ -106,6 +106,7 @@ export async function downloadFromSupabase(storagePath: string): Promise<{ data:
   };
   const contentType = contentTypeMap[ext] ?? data.type ?? "application/octet-stream";
 
+  // Add strong caching headers for the proxy to use
   return { data, contentType };
 }
 

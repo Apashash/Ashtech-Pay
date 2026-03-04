@@ -320,7 +320,8 @@ export async function registerRoutes(
 
       const buffer = Buffer.from(await result.data.arrayBuffer());
       res.setHeader("Content-Type", result.contentType);
-      res.setHeader("Cache-Control", "private, max-age=3600");
+      // Increased cache to 1 year for the browser as the path is unique (includes timestamp)
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
       res.setHeader("Content-Length", buffer.length);
       res.end(buffer);
     } catch (error) {
