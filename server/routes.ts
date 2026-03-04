@@ -615,6 +615,56 @@ export async function registerRoutes(
     }
   });
 
+  // Combined dashboard endpoint — returns all data needed for dashboard in one request
+  app.get("/api/dashboard", requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId!;
+      const [user, transactions, paymentLinks, extraWallets, notifications] = await Promise.all([
+        storage.getUser(userId),
+        storage.getTransactionsByUserId(userId),
+        storage.getPaymentLinksByUserId(userId),
+        storage.getUserWallets(userId),
+        storage.getUserNotifications(userId, 20),
+      ]);
+
+      if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
+
+      // Build wallets list
+      const primaryCurrency = (user.preferredCurrency || "XAF") as SupportedCurrency;
+      const wallets = [
+        { currency: primaryCurrency, balance: user.balance, symbol: CURRENCY_SYMBOLS[primaryCurrency] || primaryCurrency },
+        ...extraWallets
+          .filter(w => w.currency !== primaryCurrency)
+          .map(w => ({ currency: w.currency, balance: w.balance, symbol: CURRENCY_SYMBOLS[w.currency as SupportedCurrency] || w.currency })),
+      ];
+
+      // Compute stats inline
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const completed = transactions.filter(t => t.status === "completed");
+      const totalReceived = completed.filter(t => ["deposit","transfer_in","payment_link"].includes(t.type)).reduce((s,t)=>s+parseFloat(t.amount),0);
+      const totalSent = completed.filter(t => ["withdrawal","transfer_out"].includes(t.type)).reduce((s,t)=>s+parseFloat(t.amount),0);
+      const linkPayments = completed.filter(t => t.type === "payment_link");
+      const stats = {
+        totalReceived: totalReceived.toFixed(2),
+        totalSent: totalSent.toFixed(2),
+        totalTransactions: transactions.length,
+        monthlyTransactions: transactions.filter(t => t.createdAt && new Date(t.createdAt) >= startOfMonth).length,
+        pendingTransactions: transactions.filter(t => t.status === "pending").length,
+        totalClicks: paymentLinks.reduce((s,l) => s + (l.clickCount||0), 0),
+        linkPayments: linkPayments.length,
+        totalCollected: linkPayments.reduce((s,t)=>s+parseFloat(t.amount),0).toFixed(2),
+        activeLinks: paymentLinks.filter(l=>l.isActive).length,
+      };
+
+      const { password: _, ...safeUser } = user;
+      res.json({ user: safeUser, transactions, paymentLinks, wallets, stats, notifications });
+    } catch (error) {
+      console.error("Dashboard error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   // Update user currency preference
   app.patch("/api/user/currency", requireAuth, async (req, res) => {
     try {

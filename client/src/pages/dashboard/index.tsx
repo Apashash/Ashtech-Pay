@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -532,12 +532,30 @@ export default function DashboardHome() {
   const [selectedPeriod, setSelectedPeriod] = useState("month");
   const [selectedLink, setSelectedLink] = useState("all");
   const { rates } = useExchangeRates();
-  
-  const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
-  const { data: transactions = [] } = useQuery<Transaction[]>({ queryKey: ["/api/transactions"] });
-  const { data: paymentLinks = [] } = useQuery<PaymentLink[]>({ queryKey: ["/api/payment-links"] });
-  const { data: userStats } = useQuery<UserStats>({ queryKey: ["/api/user/stats"] });
-  const { data: wallets = [] } = useQuery<WalletEntry[]>({ queryKey: ["/api/wallets"] });
+
+  const { data: dashboardData, isLoading: isDashboardLoading } = useQuery<{
+    user: User;
+    transactions: Transaction[];
+    paymentLinks: PaymentLink[];
+    wallets: WalletEntry[];
+    stats: UserStats;
+  }>({ queryKey: ["/api/dashboard"] });
+
+  useEffect(() => {
+    if (dashboardData) {
+      queryClient.setQueryData(["/api/user"], dashboardData.user);
+      queryClient.setQueryData(["/api/transactions"], dashboardData.transactions);
+      queryClient.setQueryData(["/api/payment-links"], dashboardData.paymentLinks);
+      queryClient.setQueryData(["/api/wallets"], dashboardData.wallets);
+      queryClient.setQueryData(["/api/user/stats"], dashboardData.stats);
+    }
+  }, [dashboardData]);
+
+  const user = dashboardData?.user;
+  const transactions = dashboardData?.transactions ?? [];
+  const paymentLinks = dashboardData?.paymentLinks ?? [];
+  const userStats = dashboardData?.stats;
+  const wallets = dashboardData?.wallets ?? [];
 
   const localCurrency = user?.preferredCurrency || "XAF";
 
@@ -585,6 +603,31 @@ export default function DashboardHome() {
     });
     return weekData;
   }, [transactions]);
+
+  if (isDashboardLoading) {
+    return (
+      <DashboardLayout>
+        <div className="space-y-6 animate-pulse">
+          <div>
+            <div className="h-8 w-48 bg-muted rounded mb-2" />
+            <div className="h-4 w-36 bg-muted rounded" />
+          </div>
+          <div className="h-36 bg-muted rounded-xl" />
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => <div key={i} className="h-24 bg-muted rounded-xl" />)}
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {[...Array(4)].map((_, i) => <div key={i} className="h-28 bg-muted rounded-xl" />)}
+          </div>
+          <div className="grid lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 h-80 bg-muted rounded-xl" />
+            <div className="h-80 bg-muted rounded-xl" />
+          </div>
+          <div className="h-72 bg-muted rounded-xl" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>

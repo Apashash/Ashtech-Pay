@@ -180,6 +180,26 @@ export default function WalletsPage() {
   const deleteBalance = parseFloat(walletToDelete?.balance || "0");
   const hasBalanceToLose = deleteBalance > 0;
 
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="space-y-6 animate-pulse">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="h-8 w-40 bg-muted rounded mb-2" />
+              <div className="h-4 w-60 bg-muted rounded" />
+            </div>
+            <div className="h-10 w-36 bg-muted rounded" />
+          </div>
+          <div className="h-14 bg-muted rounded-xl" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[...Array(3)].map((_, i) => <div key={i} className="h-44 bg-muted rounded-xl" />)}
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout>
       <div className="space-y-6">

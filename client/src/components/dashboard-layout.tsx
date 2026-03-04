@@ -114,6 +114,14 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     enabled: !!user,
   });
 
+  useEffect(() => {
+    if (user) {
+      queryClient.prefetchQuery({ queryKey: ["/api/dashboard"] });
+      queryClient.prefetchQuery({ queryKey: ["/api/transactions"] });
+      queryClient.prefetchQuery({ queryKey: ["/api/payment-links"] });
+    }
+  }, [!!user]);
+
   const preferredCurrency = user?.preferredCurrency || "XAF";
   const sidebarBalance = preferredCurrency === "XAF"
     ? (user?.balance || "0")

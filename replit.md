@@ -82,6 +82,12 @@ After any wallet deduction, `cleanupEmptyWallets` removes zero-balance secondary
 
 Exchange rate conversions use admin-configured rates (`fx_rate_XXX` settings from "Devises & Taux de change" panel) loaded via `loadFxRates()`. Swychr country-specific codes (XOFB, XAFC, etc.) are normalized to standard XAF/XOF via `normalizeCurrency()`.
 
+### Performance Optimizations
+- **`GET /api/dashboard`**: Combined endpoint — fetches user, transactions, paymentLinks, wallets, stats, notifications in parallel with `Promise.all`. Returns all data in one round trip (~5ms). Dashboard index uses this instead of 5 separate queries.
+- **Cache population**: Dashboard response sets query cache for `/api/user`, `/api/transactions`, `/api/payment-links`, `/api/wallets`, `/api/user/stats` via `useEffect`. Navigating to sub-pages is instant.
+- **Prefetch on layout mount**: `DashboardLayout` prefetches `/api/dashboard`, `/api/transactions`, `/api/payment-links` as soon as the user is known.
+- **Skeleton loaders**: All key pages (dashboard, transactions, wallets, KYC) show animated skeleton during initial load.
+
 ### Design System
 - Dark mode default with Binance-inspired color palette
 - Primary accent: Golden yellow (#F0B90B)

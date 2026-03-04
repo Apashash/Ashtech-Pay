@@ -430,6 +430,22 @@ export default function KYCPage() {
 
   const canSubmitForm = !kycSubmission || kycSubmission.status === "rejected";
 
+  if (isLoadingKyc) {
+    return (
+      <DashboardLayout>
+        <div className="space-y-6 animate-pulse">
+          <div>
+            <div className="h-8 w-48 bg-muted rounded mb-2" />
+            <div className="h-4 w-72 bg-muted rounded" />
+          </div>
+          <div className="h-24 bg-muted rounded-xl" />
+          <div className="h-64 bg-muted rounded-xl" />
+          <div className="h-48 bg-muted rounded-xl" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
