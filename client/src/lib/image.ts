@@ -15,9 +15,8 @@ export function getImageSrc(pathOrUrl: string | null | undefined): string {
       finalPath = finalPath.substring(1);
     }
     
-    // The user has a bucket named 'payment-links' as seen in the screenshot
-    // We'll use that as the default public access point
-    return `${supabaseUrl}/storage/v1/object/public/payment-links/${finalPath}`;
+    // The bucket is 'uploads', and the path already includes 'payment-links/' as seen in the database
+    return `${supabaseUrl}/storage/v1/object/public/uploads/${finalPath}`;
   }
 
   return pathOrUrl;
