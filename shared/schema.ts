@@ -25,26 +25,55 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const SUPPORTED_CURRENCIES = ["XAF", "XOF", "CDF", "GHS", "NGN", "KES", "RWF", "GNF", "TZS", "UGX", "INR", "USD"] as const;
+export const SUPPORTED_CURRENCIES = [
+  "XAF",  // Cameroun, Centrafrique, Guinée Équatoriale, Tchad
+  "XAFC", // Congo Brazzaville
+  "XAFG", // Gabon
+  "XOF",  // Mali, Niger, Guinée-Bissau
+  "XOFB", // Bénin
+  "XOFC", // Côte d'Ivoire
+  "XOFF", // Burkina Faso
+  "XOFS", // Sénégal
+  "XOFT", // Togo
+  "CDF",  // RD Congo
+  "GHS",  // Ghana
+  "GNF",  // Guinée Conakry
+  "KES",  // Kenya
+  "NGN",  // Nigeria
+  "RWF",  // Rwanda
+  "TZS",  // Tanzanie
+  "UGX",  // Ouganda
+  "INR",  // Inde
+  "USD",  // USA
+] as const;
 export type SupportedCurrency = typeof SUPPORTED_CURRENCIES[number];
 
 export const COUNTRY_CURRENCIES: Record<string, SupportedCurrency> = {
   "Cameroun": "XAF",
   "Cameroon": "XAF",
-  "Congo Brazzaville": "XAF",
-  "Republic of the Congo": "XAF",
-  "Gabon": "XAF",
+  "Centrafrique": "XAF",
+  "Central African Republic": "XAF",
+  "Guinée équatoriale": "XAF",
+  "Equatorial Guinea": "XAF",
+  "Tchad": "XAF",
+  "Chad": "XAF",
+  "Congo": "XAFC",
+  "Congo Brazzaville": "XAFC",
+  "Republic of the Congo": "XAFC",
+  "Gabon": "XAFG",
   "RD Congo": "CDF",
   "Congo DRC": "CDF",
-  "Sénégal": "XOF",
-  "Senegal": "XOF",
-  "Côte d'Ivoire": "XOF",
+  "Sénégal": "XOFS",
+  "Senegal": "XOFS",
+  "Côte d'Ivoire": "XOFC",
   "Mali": "XOF",
-  "Burkina Faso": "XOF",
+  "Burkina Faso": "XOFF",
   "Niger": "XOF",
-  "Togo": "XOF",
-  "Bénin": "XOF",
-  "Benin": "XOF",
+  "Togo": "XOFT",
+  "Bénin": "XOFB",
+  "Benin": "XOFB",
+  "Guinée-Bissau": "XOF",
+  "Guinea-Bissau": "XOF",
   "Nigeria": "NGN",
   "Nigéria": "NGN",
   "Ghana": "GHS",
@@ -63,18 +92,25 @@ export const COUNTRY_CURRENCIES: Record<string, SupportedCurrency> = {
 };
 
 export const EXCHANGE_RATES: Record<SupportedCurrency, number> = {
-  "XAF": 1,
-  "XOF": 1,
-  "CDF": 0.27,
-  "GHS": 0.057,
-  "NGN": 0.44,
-  "KES": 0.052,
-  "RWF": 0.00066,
-  "GNF": 0.0076,
-  "TZS": 0.026,
-  "UGX": 0.0019,
-  "INR": 0.0083,
-  "USD": 0.00165,
+  "XAF":  1,
+  "XAFC": 1,
+  "XAFG": 1,
+  "XOF":  1,
+  "XOFB": 1,
+  "XOFC": 1,
+  "XOFF": 1,
+  "XOFS": 1,
+  "XOFT": 1,
+  "CDF":  0.27,
+  "GHS":  0.057,
+  "GNF":  0.0076,
+  "KES":  0.052,
+  "NGN":  0.44,
+  "RWF":  0.00066,
+  "TZS":  0.026,
+  "UGX":  0.0019,
+  "INR":  0.0083,
+  "USD":  0.00165,
 };
 
 export interface FxCurrency {
@@ -108,18 +144,25 @@ export const ALL_FX_CURRENCIES: FxCurrency[] = [
 ];
 
 export const CURRENCY_SYMBOLS: Record<SupportedCurrency, string> = {
-  "XAF": "FCFA",
-  "XOF": "FCFA",
-  "CDF": "FC",
-  "GHS": "₵",
-  "NGN": "₦",
-  "KES": "KSh",
-  "RWF": "RWF",
-  "GNF": "GNF",
-  "TZS": "TZS",
-  "UGX": "UGX",
-  "INR": "₹",
-  "USD": "$",
+  "XAF":  "FCFA",
+  "XAFC": "FCFA",
+  "XAFG": "FCFA",
+  "XOF":  "FCFA",
+  "XOFB": "FCFA",
+  "XOFC": "FCFA",
+  "XOFF": "FCFA",
+  "XOFS": "FCFA",
+  "XOFT": "FCFA",
+  "CDF":  "FC",
+  "GHS":  "₵",
+  "GNF":  "GNF",
+  "KES":  "KSh",
+  "NGN":  "₦",
+  "RWF":  "RWF",
+  "TZS":  "TZS",
+  "UGX":  "UGX",
+  "INR":  "₹",
+  "USD":  "$",
 };
 
 export const transactions = pgTable("transactions", {
