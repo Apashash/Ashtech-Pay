@@ -56,7 +56,7 @@ export async function uploadToSupabase(
     .from(STORAGE_BUCKET)
     .upload(filePath, fileBuffer, {
       contentType,
-      cacheControl: "3600",
+      cacheControl: "31536000",
       upsert: false,
     });
 
