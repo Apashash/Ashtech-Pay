@@ -1584,26 +1584,30 @@ export async function registerRoutes(
         return res.status(400).json({ message: `Le montant maximum de retrait est de ${maxWithdrawal.toLocaleString()} ${userCurrency}` });
       }
 
+      // Resolve country info for currency and country code
+      const withdrawalCountry = await storage.getCountry(data.countryId);
+      const withdrawalCurrency = withdrawalCountry?.currency || userCurrency;
+      const withdrawalCountryCode = withdrawalCountry?.code || "CM";
+
       // Calculate fee using fee resolution
       const fee = await storage.resolveFee("withdrawal", data.countryId, data.operatorId);
       let feeAmount = 0;
+      let ashtechFeeAmount = 0;
       if (fee) {
         const swychrRate = fee.swychrFee ? parseFloat(fee.swychrFee.toString()) : 0;
         const marginRate = fee.ashtechMargin ? parseFloat(fee.ashtechMargin.toString()) : 0;
         const totalRate = swychrRate + marginRate;
         const minCharge = fee.minFee ? parseFloat(fee.minFee.toString()) : 0;
 
-        let ashtechFeeAmount = 0;
         let calculatedFee = 0;
         if (fee.feeType === "percentage" || totalRate > 0) {
           const rateToUse = totalRate > 0 ? totalRate : parseFloat(fee.feeValue.toString());
           calculatedFee = (amount * rateToUse) / 100;
           
-          // Determine Ashtech Margin for admin revenue stats
           if (totalRate > 0) {
             ashtechFeeAmount = (amount * marginRate) / 100;
           } else {
-            ashtechFeeAmount = calculatedFee; // Fallback if only feeValue is set
+            ashtechFeeAmount = calculatedFee;
           }
         } else {
           calculatedFee = parseFloat(fee.feeValue.toString());
@@ -1613,7 +1617,6 @@ export async function registerRoutes(
         // Rule: If calculated fee < minCharge, use minCharge
         if (calculatedFee < minCharge) {
           calculatedFee = minCharge;
-          // User rule: if minCharge is used, Ashtech margin is exactly 100
           ashtechFeeAmount = 100;
         }
 
@@ -1624,8 +1627,9 @@ export async function registerRoutes(
         feeAmount = calculatedFee;
       }
       const creditedAmount = amount - feeAmount;
+      const totalAmount = amount;
 
-      // Check primary wallet balance (user must have the full 'amount' since it's inclusive of fees)
+      // Check primary wallet balance BEFORE any deduction
       if (parseFloat(user.balance) < amount) {
         return res.status(400).json({ message: `Solde insuffisant dans votre compte principal (${amount.toFixed(0)} ${userCurrency} requis)` });
       }
@@ -1645,7 +1649,7 @@ export async function registerRoutes(
         description: `Retrait vers ${data.accountDetails}`,
         paymentMethod: data.paymentMethod,
         reference: withdrawalRef,
-        feeAmount: ashtechFeeAmount.toFixed(2), // Save ONLY Ashtech margin for dashboard stats
+        feeAmount: ashtechFeeAmount.toFixed(2),
         totalAmount: amount.toFixed(2),
         recipientName: user.fullName || user.username || "Client",
         recipientPhone: data.accountDetails,
@@ -1692,7 +1696,7 @@ export async function registerRoutes(
               userId,
               type: "withdrawal_pending",
               title: "Retrait en attente",
-              message: `Votre retrait de ${amount.toLocaleString()} ${currency} est en cours de traitement. Il sera envoyé sur votre mobile dès validation par l'équipe Ashtech Pay.`,
+              message: `Votre retrait de ${amount.toLocaleString()} ${withdrawalCurrency} est en cours de traitement. Il sera envoyé sur votre mobile dès validation par l'équipe Ashtech Pay.`,
               transactionId: transaction.id,
               isRead: false,
             });
