@@ -1254,21 +1254,33 @@ export async function registerRoutes(
         const totalRate = swychrRate + marginRate;
         const minCharge = fee.minFee ? parseFloat(fee.minFee.toString()) : 0;
 
+        let ashtechFeeAmount = 0;
+        let calculatedFee = 0;
         if (fee.feeType === "percentage" || totalRate > 0) {
           const rateToUse = totalRate > 0 ? totalRate : parseFloat(fee.feeValue.toString());
-          feeAmount = (parsedAmount * rateToUse) / 100;
+          calculatedFee = (parsedAmount * rateToUse) / 100;
+          
+          if (totalRate > 0) {
+            ashtechFeeAmount = (parsedAmount * marginRate) / 100;
+          } else {
+            ashtechFeeAmount = calculatedFee;
+          }
         } else {
-          feeAmount = parseFloat(fee.feeValue.toString());
+          calculatedFee = parseFloat(fee.feeValue.toString());
+          ashtechFeeAmount = calculatedFee;
         }
 
         // Apply Min Charge Rule
-        if (feeAmount < minCharge) {
-          feeAmount = minCharge;
+        if (calculatedFee < minCharge) {
+          calculatedFee = minCharge;
+          ashtechFeeAmount = 100; // Fixed Ashtech margin if minCharge applied
         }
 
-        if (fee.maxFee && feeAmount > parseFloat(fee.maxFee.toString())) {
-          feeAmount = parseFloat(fee.maxFee.toString());
+        if (fee.maxFee && calculatedFee > parseFloat(fee.maxFee.toString())) {
+          calculatedFee = parseFloat(fee.maxFee.toString());
         }
+        
+        feeAmount = calculatedFee;
       }
       
       const creditedAmount = parsedAmount - feeAmount;
@@ -1305,7 +1317,7 @@ export async function registerRoutes(
         recipientPhone,
         recipientCountry: country.name,
         operatorId: operator.id,
-        feeAmount: feeAmount.toFixed(2),
+        feeAmount: ashtechFeeAmount.toFixed(2), // Save Ashtech margin
         totalAmount: totalAmount.toFixed(2),
         reference,
       });
@@ -1393,37 +1405,37 @@ export async function registerRoutes(
         }
       }
 
-      // Resolve Ashtech margin from operator's fee in DB (fallback to default 2%)
-      let ashtechMarginPct = ASHTECH_MARGIN;
-      if (data.operatorId || data.countryId) {
-        const resolvedFee = await storage.resolveFee("deposit", data.countryId, data.operatorId);
-        if (resolvedFee && (resolvedFee as any).ashtechMargin != null) {
-          ashtechMarginPct = parseFloat((resolvedFee as any).ashtechMargin);
+        // Resolve Ashtech margin from operator's fee in DB (fallback to default 2%)
+        let ashtechMarginPct = ASHTECH_MARGIN;
+        if (data.operatorId || data.countryId) {
+          const resolvedFee = await storage.resolveFee("deposit", data.countryId, data.operatorId);
+          if (resolvedFee && (resolvedFee as any).ashtechMargin != null) {
+            ashtechMarginPct = parseFloat((resolvedFee as any).ashtechMargin);
+          }
         }
-      }
 
-      // Calculate fee using Swychr fee structure (Swychr rate per country + Ashtech margin per operator)
-      const swychrFees = computeSwychrFees(amount, countryCode, ashtechMarginPct);
-      const totalAmount = amount;
-      const feeAmount = swychrFees.ashtechFeeAmount; // Only Ashtech margin (for admin revenue stats)
-      const creditedAmount = swychrFees.creditedAmount;
+        // Calculate fee using Swychr fee structure (Swychr rate per country + Ashtech margin per operator)
+        const swychrFees = computeSwychrFees(amount, countryCode, ashtechMarginPct);
+        const totalAmount = amount;
+        const ashtechFeeAmount = swychrFees.ashtechFeeAmount; // This is the margin
+        const creditedAmount = swychrFees.creditedAmount;
 
-      const depositRef = generateTransactionReference("deposit");
-      
-      // Create pending transaction first
-      const transaction = await storage.createTransaction({
-        userId,
-        type: "deposit",
-        amount: creditedAmount.toString(),
-        currency: countryCurrency,
-        status: "pending",
-        description: `Recharge via ${data.paymentMethod === "mobile_money" ? "Mobile Money" : "Crypto"}`,
-        paymentMethod: data.paymentMethod,
-        reference: depositRef,
-        operatorId: data.operatorId,
-        feeAmount: feeAmount.toFixed(2),
-        totalAmount: totalAmount.toFixed(2),
-      });
+        const depositRef = generateTransactionReference("deposit");
+        
+        // Create pending transaction first
+        const transaction = await storage.createTransaction({
+          userId,
+          type: "deposit",
+          amount: creditedAmount.toString(),
+          currency: countryCurrency,
+          status: "pending",
+          description: `Recharge via ${data.paymentMethod === "mobile_money" ? "Mobile Money" : "Crypto"}`,
+          paymentMethod: data.paymentMethod,
+          reference: depositRef,
+          operatorId: data.operatorId,
+          feeAmount: ashtechFeeAmount.toFixed(2), // Save margin for admin stats
+          totalAmount: totalAmount.toFixed(2),
+        });
 
       // Call Swychr API for mobile money deposits
       if (data.paymentMethod === "mobile_money" && data.phoneNumber) {
@@ -1460,7 +1472,7 @@ export async function registerRoutes(
               message: "Veuillez compléter le paiement sur la page sécurisée",
               feeDetails: {
                 grossAmount: totalAmount,
-                feeAmount,
+                feeAmount: (totalAmount - creditedAmount),
                 creditedAmount
               }
             });
@@ -1475,7 +1487,7 @@ export async function registerRoutes(
             message: "Dépôt en attente de confirmation",
             feeDetails: {
               grossAmount: totalAmount,
-              feeAmount,
+              feeAmount: (totalAmount - creditedAmount),
               creditedAmount
             }
           });
@@ -1486,7 +1498,7 @@ export async function registerRoutes(
           message: "Dépôt en attente de confirmation",
           feeDetails: {
             grossAmount: totalAmount,
-            feeAmount,
+            feeAmount: (totalAmount - creditedAmount),
             creditedAmount
           }
         });
@@ -1538,21 +1550,35 @@ export async function registerRoutes(
         const totalRate = swychrRate + marginRate;
         const minCharge = fee.minFee ? parseFloat(fee.minFee.toString()) : 0;
 
+        let ashtechFeeAmount = 0;
+        let calculatedFee = 0;
         if (fee.feeType === "percentage" || totalRate > 0) {
           const rateToUse = totalRate > 0 ? totalRate : parseFloat(fee.feeValue.toString());
-          feeAmount = (amount * rateToUse) / 100;
+          calculatedFee = (amount * rateToUse) / 100;
+          
+          // Determine Ashtech Margin for admin revenue stats
+          if (totalRate > 0) {
+            ashtechFeeAmount = (amount * marginRate) / 100;
+          } else {
+            ashtechFeeAmount = calculatedFee; // Fallback if only feeValue is set
+          }
         } else {
-          feeAmount = parseFloat(fee.feeValue.toString());
+          calculatedFee = parseFloat(fee.feeValue.toString());
+          ashtechFeeAmount = calculatedFee;
         }
 
         // Rule: If calculated fee < minCharge, use minCharge
-        if (feeAmount < minCharge) {
-          feeAmount = minCharge;
+        if (calculatedFee < minCharge) {
+          calculatedFee = minCharge;
+          // User rule: if minCharge is used, Ashtech margin is exactly 100
+          ashtechFeeAmount = 100;
         }
 
-        if (fee.maxFee && feeAmount > parseFloat(fee.maxFee.toString())) {
-          feeAmount = parseFloat(fee.maxFee.toString());
+        if (fee.maxFee && calculatedFee > parseFloat(fee.maxFee.toString())) {
+          calculatedFee = parseFloat(fee.maxFee.toString());
         }
+        
+        feeAmount = calculatedFee;
       }
       const creditedAmount = amount - feeAmount;
 
@@ -1576,7 +1602,7 @@ export async function registerRoutes(
         description: `Retrait vers ${data.accountDetails}`,
         paymentMethod: data.paymentMethod,
         reference: withdrawalRef,
-        feeAmount: feeAmount.toFixed(2),
+        feeAmount: ashtechFeeAmount.toFixed(2), // Save ONLY Ashtech margin for dashboard stats
         totalAmount: amount.toFixed(2),
         recipientName: user.fullName || user.username || "Client",
         recipientPhone: data.accountDetails,
@@ -1791,8 +1817,13 @@ export async function registerRoutes(
       // Use a default conversion fee of 6% (admin can modify this via platform settings)
       const conversionFeePercentSetting = await storage.getSetting("conversion_fee_percent");
       const conversionFeePercent = conversionFeePercentSetting ? parseFloat(conversionFeePercentSetting.value) : 6;
-      const feeAmount = (parsedAmount * conversionFeePercent) / 100;
-      const amountAfterFee = parsedAmount - feeAmount;
+      const totalFeeAmount = (parsedAmount * conversionFeePercent) / 100;
+      
+      // Ashtech margin for conversion is strictly 2% as per user request
+      const ashtechMarginPercent = 2;
+      const ashtechFeeAmount = (parsedAmount * ashtechMarginPercent) / 100;
+      
+      const amountAfterFee = parsedAmount - totalFeeAmount;
 
       // Use admin "Devises & Taux de change" rates for conversion
       const convFxRates = await loadFxRates();
@@ -1825,7 +1856,7 @@ export async function registerRoutes(
         status: "completed",
         description: `Conversion ${parsedAmount.toFixed(2)} ${fromCurrency} → ${receivedAmount.toFixed(2)} ${toCurrency} (Frais: ${conversionFeePercent}%)`,
         reference: generateTransactionReference("CONV"),
-        feeAmount: feeAmount.toFixed(2),
+        feeAmount: ashtechFeeAmount.toFixed(2),
         totalAmount: parsedAmount.toFixed(2),
       });
 
@@ -1837,7 +1868,7 @@ export async function registerRoutes(
         fromAmount: parsedAmount.toFixed(2),
         toAmount: receivedAmount.toFixed(2),
         status: "completed",
-        notes: `Conversion automatique sur Ashtech Pay. À synchroniser manuellement sur Swychr. Frais: ${feeAmount.toFixed(2)} ${fromCurrency} (${conversionFeePercent}%)`,
+        notes: `Conversion automatique sur Ashtech Pay. À synchroniser manuellement sur Swychr. Frais: ${totalFeeAmount.toFixed(2)} ${fromCurrency} (${conversionFeePercent}%)`,
         executedAt: new Date(),
         executedById: userId, // Self-executed by user action
       });
@@ -1846,7 +1877,7 @@ export async function registerRoutes(
       await storage.createUserNotification({
         userId,
         title: "Conversion effectuée",
-        message: `Votre conversion de ${parsedAmount.toFixed(2)} ${fromCurrency} → ${receivedAmount.toFixed(2)} ${toCurrency} a été effectuée. Frais appliqués: ${feeAmount.toFixed(2)} ${fromCurrency}.`,
+        message: `Votre conversion de ${parsedAmount.toFixed(2)} ${fromCurrency} → ${receivedAmount.toFixed(2)} ${toCurrency} a été effectuée. Frais appliqués: ${totalFeeAmount.toFixed(2)} ${fromCurrency}.`,
         transactionId: transaction.id,
         type: "success",
       });
@@ -1857,7 +1888,7 @@ export async function registerRoutes(
         fromCurrency,
         toAmount: receivedAmount,
         toCurrency,
-        feeAmount,
+        feeAmount: totalFeeAmount,
         message: `Conversion effectuée avec succès sur votre compte Ashtech Pay.`,
       });
     } catch (error) {
@@ -1933,7 +1964,7 @@ export async function registerRoutes(
         status: "completed",
         description: `Conversion admin: ${parsedAmount.toFixed(2)} ${fromCurrency} → ${receivedAmount.toFixed(2)} ${toCurrency} (Frais: ${conversionFeePercent}%)`,
         reference: generateTransactionReference("CONV"),
-        feeAmount: feeAmount.toFixed(2),
+        feeAmount: ashtechFeeAmount.toFixed(2),
         totalAmount: parsedAmount.toFixed(2),
       });
 
