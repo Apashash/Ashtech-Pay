@@ -482,16 +482,20 @@ export default function SendMoneyPage() {
                     Résumé {feePreview.isLoading && <Loader2 className="inline w-3 h-3 ml-1 animate-spin" />}
                   </p>
                   <div className="flex justify-between">
-                    <span>Montant</span>
+                    <span>Montant à envoyer</span>
                     <span className="font-medium">{formatWalletBalance(amountValue, localCurrency)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Frais ({feePreview.feePercentage || selectedOperator.feePercentage}%)</span>
-                    <span className="font-medium text-orange-500">{formatWalletBalance(feePreview.feeAmount, localCurrency)}</span>
+                    <span className="font-medium text-orange-500">- {formatWalletBalance(feePreview.feeAmount, localCurrency)}</span>
                   </div>
                   <div className="border-t pt-3 flex justify-between font-bold">
-                    <span>Total débité</span>
-                    <span>{formatWalletBalance(feePreview.totalAmount, localCurrency)}</span>
+                    <span>Net envoyé</span>
+                    <span>{formatWalletBalance(amountValue - feePreview.feeAmount, localCurrency)}</span>
+                  </div>
+                  <div className="border-t pt-2 flex justify-between text-sm text-muted-foreground">
+                    <span>Total débité (votre solde)</span>
+                    <span>{formatWalletBalance(amountValue, localCurrency)}</span>
                   </div>
                   {feePreview.totalAmount > balance && (
                     <Alert variant="destructive">

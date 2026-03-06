@@ -354,18 +354,22 @@ export default function WithdrawPage() {
                         <Card className="border-primary/30 bg-primary/5">
                           <CardContent className="p-3 space-y-2">
                             <div className="flex justify-between items-center text-xs">
-                              <span className="text-muted-foreground">À recevoir</span>
+                              <span className="text-muted-foreground">Montant saisi</span>
                               <span className="font-medium">{formatCurrency(amountValue, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</span>
                             </div>
                             <div className="flex justify-between items-center text-xs">
                               <span className="text-muted-foreground">Frais</span>
-                              <span className="font-medium text-red-500">+ {formatCurrency(feeAmount, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</span>
+                              <span className="font-medium text-red-500">- {formatCurrency(feeAmount, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</span>
                             </div>
                             <div className="border-t border-border pt-2">
                               <div className="flex justify-between items-center">
-                                <span className="font-semibold text-xs text-foreground">Total à débiter</span>
-                                <span className="font-bold text-base text-primary">{formatCurrency(totalAmount, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</span>
+                                <span className="font-semibold text-xs text-foreground">Net à recevoir</span>
+                                <span className="font-bold text-base text-primary">{formatCurrency(amountValue - feeAmount, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</span>
                               </div>
+                            </div>
+                            <div className="mt-1 pt-1 border-t border-dashed border-border flex justify-between items-center text-[10px] text-muted-foreground">
+                              <span>Total débité de votre solde</span>
+                              <span>{formatCurrency(amountValue, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</span>
                             </div>
                           </CardContent>
                         </Card>
