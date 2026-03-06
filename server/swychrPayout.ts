@@ -33,6 +33,70 @@ const DIAL_CODES: Record<string, string> = {
 };
 
 /**
+ * Detect AccountPE payment_method from phone number prefix when operator is unknown.
+ * Returns null if detection is not possible for the given country.
+ */
+export function detectMethodFromPhone(phone: string, countryCode: string): string | null {
+  const cc = countryCode.toUpperCase();
+  // Strip everything except digits
+  const digits = phone.replace(/\D/g, "");
+  const dialCode = DIAL_CODES[cc] || "";
+
+  // Get local digits (strip leading dial code if present)
+  let local = digits;
+  if (dialCode && local.startsWith(dialCode)) {
+    local = local.slice(dialCode.length);
+  } else if (local.startsWith("0")) {
+    local = local.slice(1);
+  }
+
+  const prefix3 = local.slice(0, 3);
+  const prefix2 = local.slice(0, 2);
+
+  switch (cc) {
+    case "CM": // Cameroun: MTN=65x/67x/68x, Orange=69x
+      if (["650","651","652","653","654","655","656","657","658","659",
+           "670","671","672","673","674","675","676","677","678","679",
+           "680","681","682","683","684","685","686","687","688","689"].includes(prefix3)) return "MTN";
+      if (prefix2 === "69") return "Orange";
+      return "MTN"; // default for CM
+    case "CI": // Côte d'Ivoire: Orange=07x, MTN=05x, Moov=01x, Wave=05x
+      if (prefix2 === "07") return "Orange";
+      if (prefix2 === "05") return "MTN";
+      if (prefix2 === "01") return "Moov";
+      return null;
+    case "SN": // Sénégal: Orange=77x, Free=76x/78x, Wave=70x
+      if (prefix2 === "77") return "Orange";
+      if (["76","78"].includes(prefix2)) return "Free";
+      if (prefix2 === "70") return "Wave";
+      return null;
+    case "BJ": // Bénin: MTN=6x, Moov=9x
+      if (local.startsWith("6")) return "MTN";
+      if (local.startsWith("9")) return "Moov";
+      return null;
+    case "BF": // Burkina Faso: Moov=7x, Orange=7x (overlap, can't detect)
+      return null;
+    case "GN": // Guinée: MTN=6x, Orange=6x (overlap)
+      return null;
+    case "ML": // Mali: Orange=7x, Moov=7x, Wave=7x (overlap)
+      return null;
+    case "UG": // Uganda: MTN=077x/078x, AIRTEL=070x/075x
+      if (["077","078"].includes(prefix3)) return "MTN";
+      if (["070","075"].includes(prefix3)) return "AIRTEL";
+      return null;
+    case "KE": // Kenya: MPESA=07xx/01xx, AIRTEL=073x/078x
+      if (["073","078"].includes(prefix3)) return "AIRTEL";
+      return "MPESA"; // default for KE
+    case "RW": // Rwanda: MTN=078x, Airtel=073x
+      if (prefix3 === "078") return "MTN";
+      if (prefix3 === "073") return "Airtel";
+      return null;
+    default:
+      return null;
+  }
+}
+
+/**
  * Format a phone number to E.164 international format: +<dialCode><localNumber>
  * If number already starts with +, return as-is.
  * Strips spaces, dashes, parentheses before formatting.

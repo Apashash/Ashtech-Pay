@@ -30,7 +30,7 @@ import { uploadToSupabase, getSignedImageUrl, downloadFromSupabase } from "./sup
 import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, fetchPaymentLinkDetails, ASHTECH_MARGIN } from "./swychr";
 import { addPendingPayment } from "./paymentPoller";
 import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, cleanupEmptyWallets } from "./walletHelper";
-import { createSwychrPayout, formatInternationalPhone, fiatToPusd, pusdToFiatRate, getConversionRate, convertFiatToPusd, getPayoutToken, COUNTRY_CURRENCY } from "./swychrPayout";
+import { createSwychrPayout, formatInternationalPhone, detectMethodFromPhone, fiatToPusd, pusdToFiatRate, getConversionRate, convertFiatToPusd, getPayoutToken, COUNTRY_CURRENCY } from "./swychrPayout";
 import { addPendingPayout } from "./payoutPoller";
 import { addSSEClient, removeSSEClient, setActiveTicket, isUserOnline, getOnlineUserIds, getAdminViewingTicket, getUserViewingTicket, notifyUser, notifyAdmins, broadcastOnlineStatus } from "./sse";
 import {
@@ -3592,9 +3592,17 @@ export async function registerRoutes(
           const operatorName = (operator?.name || "").toUpperCase();
           let finalPaymentMethod = resolvePaymentMethod(operatorName, countryCode);
 
-          // Fallback: if operator not found but paymentMethod is bank_transfer, use bank method
-          if (!operator && transaction.paymentMethod === "bank_transfer") {
-            finalPaymentMethod = countryCode === "NG" ? "All Banks Transfer" : "bank_transfer";
+          // Fallback when operator is not found: try phone prefix detection, then bank transfer
+          if (!operator) {
+            if (transaction.paymentMethod === "bank_transfer") {
+              finalPaymentMethod = countryCode === "NG" ? "All Banks Transfer" : "bank_transfer";
+            } else {
+              const detected = detectMethodFromPhone(transaction.recipientPhone || "", countryCode);
+              if (detected) {
+                console.log(`[Admin] Operator not found — detected method from phone prefix: ${detected}`);
+                finalPaymentMethod = detected;
+              }
+            }
           }
 
           console.log(`[Admin] Payout params: country=${countryCode}, operatorId=${operatorId}, operatorName=${operatorName}, resolved_method=${finalPaymentMethod}, txPaymentMethod=${transaction.paymentMethod}`);
