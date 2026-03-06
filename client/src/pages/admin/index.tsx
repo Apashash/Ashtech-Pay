@@ -137,25 +137,29 @@ export default function AdminDashboard() {
       bgColor: "bg-primary/10",
     },
     {
-      title: "Total Collecté",
-      value: formatCurrency(parseFloat(stats?.totalCollected || "0"), "XAF"),
-      subValue: "Dépôts + Liens de paiement",
+      title: "Volume Dépôts",
+      value: formatCurrency(parseFloat(stats?.totalDeposits || "0"), "XAF"),
       icon: ArrowDownCircle,
-      color: "text-emerald-500",
-      bgColor: "bg-emerald-500/10",
+      color: "text-green-500",
+      bgColor: "bg-green-500/10",
     },
     {
-      title: "Total Retiré",
-      value: formatCurrency(parseFloat(stats?.totalWithdrawn || "0"), "XAF"),
-      subValue: "Retraits + Envois",
+      title: "Volume Retraits",
+      value: formatCurrency(parseFloat(stats?.totalWithdrawals || "0"), "XAF"),
       icon: ArrowUpCircle,
-      color: "text-rose-500",
-      bgColor: "bg-rose-500/10",
+      color: "text-orange-500",
+      bgColor: "bg-orange-500/10",
+    },
+    {
+      title: "Revenus Ashtech Pay (Marge)",
+      value: formatCurrency(parseFloat(stats?.totalRevenue || "0"), "XAF"),
+      icon: DollarSign,
+      color: "text-primary",
+      bgColor: "bg-primary/10",
     },
     {
       title: "Dépôts",
       value: stats?.depositCount || 0,
-      subValue: formatCurrency(parseFloat(stats?.totalDeposits || "0"), "XAF"),
       icon: ArrowDownCircle,
       color: "text-green-500",
       bgColor: "bg-green-500/10",
@@ -165,7 +169,6 @@ export default function AdminDashboard() {
     {
       title: "Retraits",
       value: stats?.withdrawalCount || 0,
-      subValue: formatCurrency(parseFloat(stats?.totalWithdrawals || "0"), "XAF"),
       icon: ArrowUpCircle,
       color: "text-orange-500",
       bgColor: "bg-orange-500/10",
@@ -212,14 +215,9 @@ export default function AdminDashboard() {
       color: "text-red-500",
       bgColor: "bg-red-500/10",
     },
-    {
-      title: "Revenus Ashtech Pay (Marge)",
-      value: formatCurrency(parseFloat(stats?.totalRevenue || "0"), "XAF"),
-      icon: DollarSign,
-      color: "text-primary",
-      bgColor: "bg-primary/10",
-    },
   ];
+
+  const gridCols = kpiCards.length > 9 ? "grid-cols-2 md:grid-cols-3 lg:grid-cols-4" : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3";
 
   return (
     <AdminLayout>
@@ -263,7 +261,7 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-4">
+        <div className={`grid ${gridCols} gap-4`}>
           {kpiCards.map((card, index) => {
             const cardContent = (
               <Card key={index} data-testid={`kpi-card-${index}`} className={"href" in card ? "cursor-pointer hover:border-primary/50 transition-colors" : ""}>

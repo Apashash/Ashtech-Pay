@@ -951,7 +951,6 @@ export class DatabaseStorage implements IStorage {
 
     const totalRevenue = depositFees + withdrawalFees + transferFees + paymentLinkFees + conversionFees;
     
-    const resetAt2 = resetAt;
     return {
       totalUsers: usersCount.count,
       totalTransactions: allTx.length,
@@ -960,7 +959,7 @@ export class DatabaseStorage implements IStorage {
       rejectedTransactions: allTx.filter(t => t.status === "failed").length,
       pendingTransactions: allTx.filter(t => t.status === "pending").length,
       bannedUsers: bannedCount.count,
-      statsResetAt: resetAt2 ? resetAt2.toISOString() : null,
+      statsResetAt: resetAt ? resetAt.toISOString() : null,
       totalDeposits: depositVol.toFixed(2),
       totalWithdrawals: withdrawalVol.toFixed(2),
       totalCollected: (depositVol + linkVol).toFixed(2),
