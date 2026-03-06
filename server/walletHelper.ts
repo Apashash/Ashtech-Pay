@@ -11,16 +11,38 @@ export const CFA_CURRENCIES = new Set([
 // Normalize Swychr country-specific CFA codes to standard codes
 // NOTE: We keep specific codes like XOFT for Togo as requested
 export function normalizeCurrency(currency: string, preferredCurrency?: string): string {
-  // If the user's preferred currency is one of the variants, we respect it
-  if (preferredCurrency && (currency === "XOF" || currency === "XAF" || CFA_CURRENCIES.has(currency))) {
-    if (["XOF", "XOFC", "XOFF", "XOFN", "XOFB", "XOFT", "XOFS", "XOFM"].includes(currency) && 
-        ["XOF", "XOFC", "XOFF", "XOFN", "XOFB", "XOFT", "XOFS", "XOFM"].includes(preferredCurrency)) {
-      return preferredCurrency;
+  // Swychr/AccountPE specific mappings from documentation
+  const countryToCurrency: Record<string, string> = {
+    "TG": "XOFT",
+    "BJ": "XOFB",
+    "CI": "XOFC",
+    "BF": "XOFF",
+    "SN": "XOFS",
+    "ML": "XOFM",
+    "NE": "XOFN",
+    "GW": "XOF",
+    "CM": "XAF",
+    "GA": "XAFG",
+    "CG": "XAFC",
+    "TD": "XAF",
+    "CF": "XAF",
+    "GQ": "XAF"
+  };
+
+  // If the currency matches a known specific code, keep it
+  if (SUPPORTED_CURRENCIES.includes(currency as any)) {
+    // If user preferred is a variant and payment is a variant in same zone, use preferred
+    if (preferredCurrency) {
+      if (["XOF", "XOFC", "XOFF", "XOFN", "XOFB", "XOFT", "XOFS", "XOFM"].includes(currency) && 
+          ["XOF", "XOFC", "XOFF", "XOFN", "XOFB", "XOFT", "XOFS", "XOFM"].includes(preferredCurrency)) {
+        return preferredCurrency;
+      }
+      if (["XAF", "XAFC", "XAFG"].includes(currency) && 
+          ["XAF", "XAFC", "XAFG"].includes(preferredCurrency)) {
+        return preferredCurrency;
+      }
     }
-    if (["XAF", "XAFC", "XAFG"].includes(currency) && 
-        ["XAF", "XAFC", "XAFG"].includes(preferredCurrency)) {
-      return preferredCurrency;
-    }
+    return currency;
   }
 
   // Fallback to standard normalization if no preferred match
