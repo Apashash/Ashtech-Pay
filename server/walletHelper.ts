@@ -33,44 +33,42 @@ export async function loadFxRates(): Promise<Record<string, number>> {
   return rates;
 }
 
-// Convert an amount to the target currency using admin rates (Strict country codes)
+// Convert an amount to the target currency using admin rates (USD as pivot)
 export function convertFromXAF(amountXAF: number, targetCurrency: string, fxRates: Record<string, number>): number {
   if (targetCurrency === "XAF") return amountXAF;
   
-  // All rates in fxRates are "Units per 1 USD" (e.g., XAF=585, GHS=12)
+  // 1. Convert XAF to USD (A to USD)
   const xafRate = fxRates["XAF"] || 585;
-  const targetRate = fxRates[targetCurrency];
+  const amountUSD = amountXAF / xafRate;
   
+  // 2. Convert USD to Target (USD to B)
+  const targetRate = fxRates[targetCurrency];
   if (targetRate === undefined) {
-    console.warn(`[walletHelper] No rate found for ${targetCurrency}, falling back to 1:1 with XAF`);
-    return amountXAF;
+    console.warn(`[walletHelper] No rate found for ${targetCurrency}, falling back to 1:1 with USD`);
+    return amountUSD;
   }
 
-  // Formula: Amount_Target = Amount_XAF * (Rate_Target / Rate_XAF)
-  // Example: 585 XAF -> ? GHS with XAF=585, GHS=12
-  // 585 * (12 / 585) = 12 GHS. Correct.
-  return amountXAF * (targetRate / xafRate);
+  return amountUSD * targetRate;
 }
 
-// Convert any currency amount to XAF using admin rates (Strict country codes)
+// Convert any currency amount to XAF using admin rates (USD as pivot)
 export function convertToXAF(amount: number, fromCurrency: string, fxRates: Record<string, number>): number {
   if (fromCurrency === "XAF") return amount;
   
-  const xafRate = fxRates["XAF"] || 585;
+  // 1. Convert Source to USD (A to USD)
   const fromRate = fxRates[fromCurrency];
-
   if (fromRate === undefined) {
-    console.warn(`[walletHelper] No rate found for ${fromCurrency}, falling back to 1:1 with XAF`);
-    return amount;
+    console.warn(`[walletHelper] No rate found for ${fromCurrency}, falling back to 1:1 with USD`);
+    return amount; // Treat as USD if no rate
   }
+  const amountUSD = amount / fromRate;
 
-  // Formula: Amount_XAF = Amount_From * (Rate_XAF / Rate_From)
-  // Example: 12 GHS -> ? XAF with XAF=585, GHS=12
-  // 12 * (585 / 12) = 585 XAF. Correct.
-  return amount * (xafRate / fromRate);
+  // 2. Convert USD to XAF (USD to B)
+  const xafRate = fxRates["XAF"] || 585;
+  return amountUSD * xafRate;
 }
 
-// Convert between two arbitrary currencies via XAF as pivot (Strict country codes)
+// Convert between two arbitrary currencies via USD as pivot
 export function convertCurrency(
   amount: number,
   fromCurrency: string,
@@ -78,8 +76,14 @@ export function convertCurrency(
   fxRates: Record<string, number>
 ): number {
   if (fromCurrency === toCurrency) return amount;
-  const amountInXAF = convertToXAF(amount, fromCurrency, fxRates);
-  return convertFromXAF(amountInXAF, toCurrency, fxRates);
+  
+  // 1. Convert Source to USD
+  const fromRate = fxRates[fromCurrency];
+  const amountUSD = fromRate ? (amount / fromRate) : amount;
+
+  // 2. Convert USD to Target
+  const targetRate = fxRates[toCurrency];
+  return targetRate ? (amountUSD * targetRate) : amountUSD;
 }
 
 // Delete zero-balance secondary wallets for a user (cleanup unused wallets)
