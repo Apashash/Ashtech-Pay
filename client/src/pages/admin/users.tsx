@@ -339,6 +339,42 @@ export default function AdminUsers() {
     }
   };
 
+  const getDisplayCurrency = (user: User) => {
+    const COUNTRY_CURRENCIES = {
+      "Cameroun": "XAF",
+      "Sénégal": "XOF",
+      "Côte d'Ivoire": "XOF",
+      "Togo": "XOF",
+      "Bénin": "XOF",
+      "Burkina Faso": "XOF",
+      "Mali": "XOF",
+      "Niger": "XOF",
+      "Gabon": "XAF",
+      "Congo Brazzaville": "XAF",
+      "Tchad": "XAF",
+      "République Centrafricaine": "XAF",
+      "Guinée Équatoriale": "XAF",
+      "Nigeria": "NGN",
+      "Ghana": "GHS",
+      "Kenya": "KES",
+      "Ouganda": "UGX",
+      "Rwanda": "RWF",
+      "Tanzanie": "TZS",
+      "RDC": "CDF"
+    };
+
+    // Priority 1: Use the user's selected preferred currency if it's not the system default XAF
+    if (user.preferredCurrency && user.preferredCurrency !== "XAF") {
+      return user.preferredCurrency;
+    }
+    // Priority 2: Use the currency associated with their country
+    if (user.country && COUNTRY_CURRENCIES[user.country as keyof typeof COUNTRY_CURRENCIES]) {
+      return COUNTRY_CURRENCIES[user.country as keyof typeof COUNTRY_CURRENCIES];
+    }
+    // Fallback to XAF
+    return "XAF";
+  };
+
   const filteredUsers = users?.filter(user => 
     user.fullName.toLowerCase().includes(search.toLowerCase()) ||
     user.email.toLowerCase().includes(search.toLowerCase()) ||
@@ -427,7 +463,7 @@ export default function AdminUsers() {
                       </TableCell>
                       <TableCell>{user.country || "-"}</TableCell>
                       <TableCell className="font-medium">
-                        {formatCurrency(parseFloat(user.balance), user.preferredCurrency as any)}
+                        {formatCurrency(parseFloat(user.balance), getDisplayCurrency(user) as any)}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
