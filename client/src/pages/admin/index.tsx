@@ -325,7 +325,7 @@ export default function AdminDashboard() {
               <div className="p-4 rounded-lg bg-background border border-border">
                 <div className="flex items-center gap-2 mb-2">
                   <ArrowUpCircle className="w-4 h-4 text-orange-500" />
-                  <span className="text-sm text-muted-foreground">Frais Retraits</span>
+                  <span className="text-sm text-muted-foreground">Marge Retraits</span>
                 </div>
                 {isLoading ? (
                   <Skeleton className="h-6 w-20" />
@@ -338,7 +338,7 @@ export default function AdminDashboard() {
               <div className="p-4 rounded-lg bg-background border border-border">
                 <div className="flex items-center gap-2 mb-2">
                   <Send className="w-4 h-4 text-blue-500" />
-                  <span className="text-sm text-muted-foreground">Frais Envois</span>
+                  <span className="text-sm text-muted-foreground">Marge Envois</span>
                 </div>
                 {isLoading ? (
                   <Skeleton className="h-6 w-20" />
@@ -364,7 +364,7 @@ export default function AdminDashboard() {
               <div className="p-4 rounded-lg bg-background border border-border">
                 <div className="flex items-center gap-2 mb-2">
                   <RefreshCw className="w-4 h-4 text-teal-500" />
-                  <span className="text-sm text-muted-foreground">Frais Conversion</span>
+                  <span className="text-sm text-muted-foreground">Marge Conversion</span>
                 </div>
                 {isLoading ? (
                   <Skeleton className="h-6 w-20" />
