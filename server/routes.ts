@@ -983,14 +983,14 @@ export async function registerRoutes(
   app.post("/api/transfers/send", requireAuth, async (req, res) => {
     try {
       const { recipientName, recipientPhone, countryId, operatorId, amount, description, sourceCurrency } = req.body;
-      
+
       if (!recipientName || !recipientPhone || !countryId || !operatorId || !amount) {
         return res.status(400).json({ message: "Tous les champs sont requis" });
       }
-      
+
       const senderId = req.userId!;
       const parsedAmount = parseFloat(amount);
-      
+
       if (isNaN(parsedAmount) || parsedAmount <= 0) {
         return res.status(400).json({ message: "Montant invalide" });
       }
@@ -1008,37 +1008,57 @@ export async function registerRoutes(
       if (parsedAmount < minTransfer) {
         return res.status(400).json({ message: `Le montant minimum de transfert est de ${minTransfer.toLocaleString()} ${txCurrency}` });
       }
-      
-      // Get operator and calculate fee
+
       const operator = await storage.getOperator(operatorId);
       if (!operator) {
         return res.status(404).json({ message: "Opérateur non trouvé" });
       }
-      
+
       const country = await storage.getCountry(countryId);
       if (!country) {
         return res.status(404).json({ message: "Pays non trouvé" });
       }
 
-      // Currency mismatch check: DB and Swychr codes are now aligned (e.g. XOFB for Bénin)
       if (sourceCurrency && sourceCurrency !== country.currency) {
         return res.status(403).json({ message: `Transaction non autorisée — Le compte sélectionné est en ${sourceCurrency} mais ${country.name} utilise ${country.currency}` });
       }
-      
-      // Calculate fee for transfer
-      const fee = await storage.getFeeForOperator(operatorId, "transfer");
+
+      // Resolve fees using unified fee resolution (swychrFee + ashtechMargin)
+      const fee = await storage.resolveFee("transfer", countryId, operatorId);
       let feeAmount = 0;
-      
+      let ashtechFeeAmount = 0;
+
       if (fee) {
-        const feePercentage = parseFloat(fee.feeValue);
-        const percentageFee = parsedAmount * (feePercentage / 100);
-        const minPayoutCharge = fee.minFee ? parseFloat(fee.minFee) : 0;
-        
-        // rule: higher of percentage fee or minimum payout charge
-        feeAmount = Math.max(percentageFee, minPayoutCharge);
+        const swychrRate = fee.swychrFee ? parseFloat(fee.swychrFee.toString()) : 0;
+        const marginRate = fee.ashtechMargin ? parseFloat(fee.ashtechMargin.toString()) : 0;
+        const totalRate = swychrRate + marginRate;
+        const minCharge = fee.minFee ? parseFloat(fee.minFee.toString()) : 0;
+
+        let calculatedFee = 0;
+        if (fee.feeType === "percentage" || totalRate > 0) {
+          const rateToUse = totalRate > 0 ? totalRate : parseFloat(fee.feeValue.toString());
+          calculatedFee = (parsedAmount * rateToUse) / 100;
+          ashtechFeeAmount = totalRate > 0 ? (parsedAmount * marginRate) / 100 : calculatedFee;
+        } else {
+          calculatedFee = parseFloat(fee.feeValue.toString());
+          ashtechFeeAmount = calculatedFee;
+        }
+
+        if (calculatedFee < minCharge) {
+          calculatedFee = minCharge;
+          ashtechFeeAmount = 100;
+        }
+
+        if (fee.maxFee && calculatedFee > parseFloat(fee.maxFee.toString())) {
+          calculatedFee = parseFloat(fee.maxFee.toString());
+        }
+
+        feeAmount = calculatedFee;
       }
-      
-      const totalAmount = parsedAmount + feeAmount;
+
+      // Transfer rule: user pays parsedAmount (total), fees deducted internally, net sent to recipient
+      const creditedAmount = parsedAmount - feeAmount;
+      const totalAmount = parsedAmount;
 
       // Determine if debiting primary wallet or secondary wallet
       const isPrimaryTransfer = (txCurrency === (sender.preferredCurrency || "XAF"));
@@ -1047,20 +1067,20 @@ export async function registerRoutes(
       if (isPrimaryTransfer) {
         if (parseFloat(sender.balance) < totalAmount) {
           return res.status(400).json({
-            message: `Solde insuffisant. Vous avez besoin de ${totalAmount.toFixed(2)} ${txCurrency} (montant + frais)`,
+            message: `Solde insuffisant. Vous avez besoin de ${totalAmount.toFixed(2)} ${txCurrency}`,
           });
         }
       } else {
         const wallet = await storage.getWallet(senderId, txCurrency);
         if (!wallet || parseFloat(wallet.balance) < totalAmount) {
           return res.status(400).json({
-            message: `Solde insuffisant dans votre compte ${txCurrency}. Besoin de ${totalAmount.toFixed(2)} ${txCurrency} (montant + frais)`,
+            message: `Solde insuffisant dans votre compte ${txCurrency}. Besoin de ${totalAmount.toFixed(2)} ${txCurrency}`,
           });
         }
       }
 
       // Debit the correct wallet immediately
-      console.log(`[Transfer] Sender=${senderId}, Amount=${parsedAmount}, Fee=${feeAmount}, Total=${totalAmount} (${txCurrency})`);
+      console.log(`[Transfer] Sender=${senderId}, Amount=${parsedAmount}, Fee=${feeAmount}, Net=${creditedAmount} (${txCurrency})`);
       if (isPrimaryTransfer) {
         await storage.updateUserBalance(senderId, -totalAmount);
       } else {
@@ -1073,7 +1093,7 @@ export async function registerRoutes(
       const transaction = await storage.createTransaction({
         userId: senderId,
         type: "transfer_out",
-        amount: parsedAmount.toFixed(2),
+        amount: creditedAmount.toFixed(2),
         currency: txCurrency,
         status: "pending",
         description: description || `Envoi à ${recipientName}`,
@@ -1081,22 +1101,20 @@ export async function registerRoutes(
         recipientPhone,
         recipientCountry: country.name,
         operatorId,
-        feeAmount: feeAmount.toFixed(2),
+        feeAmount: ashtechFeeAmount.toFixed(2),
         totalAmount: totalAmount.toFixed(2),
         paymentMethod: operator.type,
         reference,
       });
 
-      console.log(`[Transfer] Created transfer ${reference} for ${parsedAmount} to ${recipientName} — calling AccountPE immediately`);
+      console.log(`[Transfer] Created transfer ${reference} for ${creditedAmount} net to ${recipientName} — calling AccountPE immediately`);
 
-      // Call AccountPE payout API immediately
       let transferCountryCode = "CM";
       if (country?.code) transferCountryCode = country.code;
 
-      console.log(`[Transfer] Payout Data: Country=${transferCountryCode}, Amount=${parsedAmount}, Method=${req.body.paymentMethod}, Operator=${operator.name}`);
+      console.log(`[Transfer] Payout Data: Country=${transferCountryCode}, Amount=${creditedAmount}, Operator=${operator.name}`);
 
       try {
-        // Map common operator names to AccountPE specific method names for all 22+ countries
         const operatorName = (operator.name || "").toUpperCase();
         const countryCode = transferCountryCode.toUpperCase();
         const finalPaymentMethod = resolvePaymentMethod(operatorName, countryCode);
@@ -1105,7 +1123,7 @@ export async function registerRoutes(
           country_code:     transferCountryCode,
           beneficiary_name: recipientName,
           mobile_no:        formatInternationalPhone(recipientPhone, transferCountryCode),
-          amount:           parsedAmount,
+          amount:           creditedAmount,
           transaction_id:   reference,
           payment_method:   finalPaymentMethod as any,
           remarks:          `Ashtech Pay - ${reference}`,
@@ -1113,12 +1131,11 @@ export async function registerRoutes(
 
         if (payoutResult.success) {
           console.log(`[Transfer] Payout submitted OK: ${reference} (ext: ${payoutResult.transaction_id})`);
-          const extTxId = payoutResult.transaction_id || reference;
           addPendingPayout({
             transactionId: transaction.id,
-            reference:     extTxId,
+            reference:     payoutResult.transaction_id || reference,
             userId:        senderId,
-            amount:        parsedAmount.toFixed(2),
+            amount:        creditedAmount.toFixed(2),
             totalDebited:  totalAmount.toFixed(2),
           });
         } else {
@@ -1131,7 +1148,7 @@ export async function registerRoutes(
               userId: senderId,
               type: "transfer_pending",
               title: "Transfert en attente",
-              message: `Votre transfert de ${parsedAmount.toLocaleString()} ${currency} vers ${recipientName} est en cours de traitement et sera envoyé dès validation par l'équipe Ashtech Pay.`,
+              message: `Votre transfert de ${parsedAmount.toLocaleString()} ${txCurrency} vers ${recipientName} est en cours de traitement et sera envoyé dès validation par l'équipe Ashtech Pay.`,
               transactionId: transaction.id,
               isRead: false,
             });
@@ -1153,7 +1170,7 @@ export async function registerRoutes(
         // Keep pending for admin retry on network errors
       }
 
-      res.json({ 
+      res.json({
         message: "Votre transfert est en cours de traitement",
         transaction,
         feeAmount: feeAmount.toFixed(2),
@@ -1198,26 +1215,25 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Vous ne pouvez pas vous envoyer de l'argent à vous-même" });
       }
 
-      const currency = sourceCurrency || "XAF";
+      const currency = sourceCurrency || sender.preferredCurrency || "XAF";
+      const senderPrimary = sender.preferredCurrency || "XAF";
+      const recipientPrimary = recipient.preferredCurrency || "XAF";
 
-      // Vérifier solde et débiter
-      if (currency === "XAF") {
+      // Check balance before any debit
+      if (currency === senderPrimary) {
         if (parseFloat(sender.balance) < amountNum) {
           return res.status(400).json({ message: "Solde insuffisant" });
         }
-        await storage.updateUserBalance(senderId, -amountNum);
-        await storage.updateUserBalance(recipient.id, amountNum);
       } else {
         const wallet = await storage.getWallet(senderId, currency);
         if (!wallet || parseFloat(wallet.balance) < amountNum) {
           return res.status(400).json({ message: "Solde insuffisant dans ce portefeuille" });
         }
-        await storage.upsertWallet(senderId, currency, -amountNum);
-        await storage.upsertWallet(recipient.id, currency, amountNum);
       }
 
       const transferRef = generateTransactionReference("transfer_out");
 
+      // Create transaction records BEFORE moving money
       const transactionOut = await storage.createTransaction({
         userId: senderId,
         type: "transfer_out",
@@ -1245,6 +1261,18 @@ export async function registerRoutes(
         totalAmount: amountNum.toFixed(2),
       });
 
+      // Move money only after both transactions are created
+      if (currency === senderPrimary) {
+        await storage.updateUserBalance(senderId, -amountNum);
+      } else {
+        await storage.upsertWallet(senderId, currency, -amountNum);
+      }
+      if (currency === recipientPrimary) {
+        await storage.updateUserBalance(recipient.id, amountNum);
+      } else {
+        await storage.upsertWallet(recipient.id, currency, amountNum);
+      }
+
       await storage.createUserNotification({
         userId: recipient.id,
         type: "transfer_received",
@@ -1257,165 +1285,6 @@ export async function registerRoutes(
       res.json({ message: "Transfert réussi", transaction: transactionOut, recipientName: recipient.fullName });
     } catch (error) {
       console.error("Internal transfer error:", error);
-      res.status(500).json({ message: "Erreur serveur" });
-    }
-  });
-
-  // Transfer money (international - mobile money)
-  // Send money to international recipient (AccountPE)
-  app.post("/api/transfers/send", requireAuth, async (req, res) => {
-    try {
-      const { recipientName, recipientPhone, countryId, operatorId, amount, sourceCurrency } = req.body;
-      const senderId = req.userId!;
-      const parsedAmount = parseFloat(amount);
-
-      if (isNaN(parsedAmount) || parsedAmount <= 0) {
-        return res.status(400).json({ message: "Montant invalide" });
-      }
-
-      const sender = await storage.getUser(senderId);
-      if (!sender) return res.status(404).json({ message: "Utilisateur non trouvé" });
-
-      const currency = sourceCurrency || "XAF";
-      const country = await storage.getCountry(countryId);
-      if (!country) return res.status(400).json({ message: "Pays non trouvé" });
-
-      const operator = await storage.getOperator(operatorId);
-      if (!operator) return res.status(400).json({ message: "Opérateur non trouvé" });
-
-      // Currency mismatch check: DB and Swychr codes are now aligned (e.g. XOFB for Bénin)
-      if (sourceCurrency && sourceCurrency !== country.currency) {
-        return res.status(403).json({ message: `Transaction non autorisée — Le compte sélectionné est en ${sourceCurrency} mais ${country.name} utilise ${country.currency}` });
-      }
-
-      // Resolve fees
-      const fee = await storage.resolveFee("transfer", country.id, operator.id);
-      let feeAmount = 0;
-      if (fee) {
-        const swychrRate = fee.swychrFee ? parseFloat(fee.swychrFee.toString()) : 0;
-        const marginRate = fee.ashtechMargin ? parseFloat(fee.ashtechMargin.toString()) : 0;
-        const totalRate = swychrRate + marginRate;
-        const minCharge = fee.minFee ? parseFloat(fee.minFee.toString()) : 0;
-
-        let ashtechFeeAmount = 0;
-        let calculatedFee = 0;
-        if (fee.feeType === "percentage" || totalRate > 0) {
-          const rateToUse = totalRate > 0 ? totalRate : parseFloat(fee.feeValue.toString());
-          calculatedFee = (parsedAmount * rateToUse) / 100;
-          
-          if (totalRate > 0) {
-            ashtechFeeAmount = (parsedAmount * marginRate) / 100;
-          } else {
-            ashtechFeeAmount = calculatedFee;
-          }
-        } else {
-          calculatedFee = parseFloat(fee.feeValue.toString());
-          ashtechFeeAmount = calculatedFee;
-        }
-
-        // Apply Min Charge Rule
-        if (calculatedFee < minCharge) {
-          calculatedFee = minCharge;
-          ashtechFeeAmount = 100; // Fixed Ashtech margin if minCharge applied
-        }
-
-        if (fee.maxFee && calculatedFee > parseFloat(fee.maxFee.toString())) {
-          calculatedFee = parseFloat(fee.maxFee.toString());
-        }
-        
-        feeAmount = calculatedFee;
-      }
-      
-      const creditedAmount = parsedAmount - feeAmount;
-      const totalAmount = parsedAmount;
-
-      // Check balance in the selected wallet/currency
-      if (currency === (sender.preferredCurrency || "XAF")) {
-        if (parseFloat(sender.balance) < totalAmount) {
-          return res.status(400).json({ 
-            message: `Solde insuffisant dans votre compte principal. Besoin de ${totalAmount.toFixed(2)} ${currency}` 
-          });
-        }
-        await storage.updateUserBalance(senderId, -totalAmount);
-      } else {
-        const wallet = await storage.getWallet(senderId, currency);
-        if (!wallet || parseFloat(wallet.balance) < totalAmount) {
-          return res.status(400).json({ 
-            message: `Solde insuffisant dans votre compte ${currency}. Besoin de ${totalAmount.toFixed(2)} ${currency}` 
-          });
-        }
-        await storage.upsertWallet(senderId, currency, -totalAmount);
-      }
-      
-      // Create pending transaction
-      const reference = generateTransactionReference("transfer_out");
-      const transaction = await storage.createTransaction({
-        userId: senderId,
-        type: "transfer_out",
-        amount: creditedAmount.toFixed(2),
-        currency,
-        status: "pending",
-        description: `Envoi vers ${country.name} (${operator.name})`,
-        recipientName,
-        recipientPhone,
-        recipientCountry: country.name,
-        operatorId: operator.id,
-        feeAmount: ashtechFeeAmount.toFixed(2), // Save Ashtech margin
-        totalAmount: totalAmount.toFixed(2),
-        reference,
-      });
-
-      console.log(`[Transfer] Calling Swychr Payout: Amount=${creditedAmount}, Ref=${reference}`);
-      
-      try {
-        const operatorName = (operator.name || "").toUpperCase();
-        const countryCode = country.code.toUpperCase();
-        const finalPaymentMethod = resolvePaymentMethod(operatorName, countryCode);
-
-        const payoutResult = await createSwychrPayout({
-          country_code:     country.code,
-          beneficiary_name: recipientName,
-          mobile_no:        formatInternationalPhone(recipientPhone, country.code),
-          amount:           creditedAmount,
-          transaction_id:   reference,
-          payment_method:   finalPaymentMethod as any,
-          remarks:          `Ashtech Pay - ${reference}`,
-        });
-
-        if (payoutResult.success) {
-          addPendingPayout({
-            transactionId: transaction.id,
-            reference:     payoutResult.transaction_id || reference,
-            userId:        senderId,
-            amount:        creditedAmount.toFixed(2),
-            totalDebited:  totalAmount.toFixed(2),
-          });
-        } else {
-          // Handle failure/insufficient balance as before...
-          const isInsufficientBalance = (payoutResult.message || "").toLowerCase().includes("insuffi") ||
-                                         (payoutResult.message || "").toLowerCase().includes("solde") ||
-                                         (payoutResult.message || "").toLowerCase().includes("balance");
-          if (!isInsufficientBalance) {
-            await storage.updateTransactionStatus(transaction.id, "failed");
-            if (currency === (sender.preferredCurrency || "XAF")) {
-              await storage.updateUserBalance(senderId, totalAmount);
-            } else {
-              await storage.upsertWallet(senderId, currency, totalAmount);
-            }
-          }
-        }
-      } catch (e) {
-        console.error("Payout error:", e);
-      }
-
-      res.json({ 
-        message: "Votre transfert est en cours de traitement",
-        transaction,
-        feeAmount: feeAmount.toFixed(2),
-        totalAmount: totalAmount.toFixed(2),
-      });
-    } catch (error) {
-      console.error("Send international transfer error:", error);
       res.status(500).json({ message: "Erreur serveur" });
     }
   });
@@ -1849,9 +1718,11 @@ export async function registerRoutes(
       const user = await storage.getUser(userId);
       if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
 
-      // Check & debit source balance immediately
+      const userPrimary = user.preferredCurrency || "XAF";
+
+      // Check source balance
       let sourceBalance: number;
-      if (fromCurrency === "XAF") {
+      if (fromCurrency === userPrimary) {
         sourceBalance = parseFloat(user.balance);
       } else {
         const w = await storage.getWallet(userId, fromCurrency);
@@ -1865,11 +1736,11 @@ export async function registerRoutes(
       const conversionFeePercentSetting = await storage.getSetting("conversion_fee_percent");
       const conversionFeePercent = conversionFeePercentSetting ? parseFloat(conversionFeePercentSetting.value) : 6;
       const totalFeeAmount = (parsedAmount * conversionFeePercent) / 100;
-      
+
       // Ashtech margin for conversion is strictly 2% as per user request
       const ashtechMarginPercent = 2;
       const ashtechFeeAmount = (parsedAmount * ashtechMarginPercent) / 100;
-      
+
       const amountAfterFee = parsedAmount - totalFeeAmount;
 
       // Use admin "Devises & Taux de change" rates for conversion
@@ -1877,24 +1748,7 @@ export async function registerRoutes(
       const amountInXAF = convertToXAF(amountAfterFee, fromCurrency, convFxRates);
       const receivedAmount = convertFromXAF(amountInXAF, toCurrency, convFxRates);
 
-      // Debit source
-      if (fromCurrency === "XAF") {
-        await storage.updateUserBalance(userId, -parsedAmount);
-      } else {
-        await storage.upsertWallet(userId, fromCurrency, -parsedAmount);
-      }
-
-      // Credit target
-      if (toCurrency === "XAF") {
-        await storage.updateUserBalance(userId, receivedAmount);
-      } else {
-        await storage.upsertWallet(userId, toCurrency, receivedAmount);
-      }
-
-      // Clean up any zero-balance secondary wallets after conversion
-      await cleanupEmptyWallets(userId);
-
-      // Record transaction
+      // Record transaction BEFORE moving money
       const transaction = await storage.createTransaction({
         userId,
         type: "conversion",
@@ -1907,6 +1761,19 @@ export async function registerRoutes(
         totalAmount: parsedAmount.toFixed(2),
       });
 
+      // Debit source and credit target after transaction is created
+      if (fromCurrency === userPrimary) {
+        await storage.updateUserBalance(userId, -parsedAmount);
+      } else {
+        await storage.upsertWallet(userId, fromCurrency, -parsedAmount);
+      }
+      if (toCurrency === userPrimary) {
+        await storage.updateUserBalance(userId, receivedAmount);
+      } else {
+        await storage.upsertWallet(userId, toCurrency, receivedAmount);
+      }
+      await cleanupEmptyWallets(userId);
+
       // Save as a completed conversion request for admin record (manual Swychr sync)
       await storage.createConversionRequest({
         userId,
@@ -1917,7 +1784,7 @@ export async function registerRoutes(
         status: "completed",
         notes: `Conversion automatique sur Ashtech Pay. À synchroniser manuellement sur Swychr. Frais: ${totalFeeAmount.toFixed(2)} ${fromCurrency} (${conversionFeePercent}%)`,
         executedAt: new Date(),
-        executedById: userId, // Self-executed by user action
+        executedById: userId,
       });
 
       // Notify user
@@ -1981,28 +1848,14 @@ export async function registerRoutes(
       const conversionFeePercentSetting = await storage.getSetting("conversion_fee_percent");
       const conversionFeePercent = conversionFeePercentSetting ? parseFloat(conversionFeePercentSetting.value) : 6;
       const feeAmount = (parsedAmount * conversionFeePercent) / 100;
+      const adminAshtechFeeAmount = (parsedAmount * 2) / 100;
       const amountAfterFee = parsedAmount - feeAmount;
 
       const convFxRates = await loadFxRates();
       const amountInXAF = convertToXAF(amountAfterFee, fromCurrency, convFxRates);
       const receivedAmount = convertFromXAF(amountInXAF, toCurrency, convFxRates);
 
-      // Debit source
-      if (fromCurrency === primaryCurrency) {
-        await storage.updateUserBalance(userId, -parsedAmount);
-      } else {
-        await storage.upsertWallet(userId, fromCurrency, -parsedAmount);
-      }
-
-      // Credit target
-      if (toCurrency === primaryCurrency) {
-        await storage.updateUserBalance(userId, receivedAmount);
-      } else {
-        await storage.upsertWallet(userId, toCurrency, receivedAmount);
-      }
-
-      await cleanupEmptyWallets(userId);
-
+      // Record transaction BEFORE moving money
       const transaction = await storage.createTransaction({
         userId,
         type: "conversion",
@@ -2011,9 +1864,22 @@ export async function registerRoutes(
         status: "completed",
         description: `Conversion admin: ${parsedAmount.toFixed(2)} ${fromCurrency} → ${receivedAmount.toFixed(2)} ${toCurrency} (Frais: ${conversionFeePercent}%)`,
         reference: generateTransactionReference("CONV"),
-        feeAmount: ashtechFeeAmount.toFixed(2),
+        feeAmount: adminAshtechFeeAmount.toFixed(2),
         totalAmount: parsedAmount.toFixed(2),
       });
+
+      // Debit source and credit target after transaction is created
+      if (fromCurrency === primaryCurrency) {
+        await storage.updateUserBalance(userId, -parsedAmount);
+      } else {
+        await storage.upsertWallet(userId, fromCurrency, -parsedAmount);
+      }
+      if (toCurrency === primaryCurrency) {
+        await storage.updateUserBalance(userId, receivedAmount);
+      } else {
+        await storage.upsertWallet(userId, toCurrency, receivedAmount);
+      }
+      await cleanupEmptyWallets(userId);
 
       await storage.createConversionRequest({
         userId,
