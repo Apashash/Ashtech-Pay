@@ -9,8 +9,23 @@ export const CFA_CURRENCIES = new Set([
 ]);
 
 // Normalize Swychr country-specific CFA codes to standard codes
-// XAFC (Congo Brazza) → XAF, XOFC (Côte d'Ivoire) → XOF, etc.
-export function normalizeCurrency(currency: string): string {
+// NOTE: We keep specific codes like XOFT if the user's preferred currency is XOFT
+export function normalizeCurrency(currency: string, preferredCurrency?: string): string {
+  if (preferredCurrency && currency !== preferredCurrency) {
+    // If the payment is XOFT and user prefers XOFT, keep it.
+    // If payment is XOF and user prefers XOFT, we might want to keep it as XOF or map it.
+    // The user specifically wants XOFT to be the main account for Togo.
+    if (["XOF", "XOFC", "XOFF", "XOFN", "XOFB", "XOFT", "XOFS", "XOFM"].includes(currency) && 
+        ["XOF", "XOFC", "XOFF", "XOFN", "XOFB", "XOFT", "XOFS", "XOFM"].includes(preferredCurrency)) {
+      return preferredCurrency;
+    }
+    if (["XAF", "XAFC", "XAFG"].includes(currency) && 
+        ["XAF", "XAFC", "XAFG"].includes(preferredCurrency)) {
+      return preferredCurrency;
+    }
+  }
+
+  // Fallback to standard normalization if no preferred match
   if (["XAF", "XAFC", "XAFG"].includes(currency)) return "XAF";
   if (["XOF", "XOFC", "XOFF", "XOFN", "XOFB", "XOFT", "XOFS", "XOFM"].includes(currency)) return "XOF";
   return currency;
@@ -121,19 +136,16 @@ export async function creditUserWallet(
     return;
   }
 
-  const normalizedPayment = normalizeCurrency(paymentCurrency);
-  const normalizedPreferred = normalizeCurrency(user.preferredCurrency || "XAF");
+  const preferredCurrency = user.preferredCurrency || "XAF";
+  const normalizedPayment = normalizeCurrency(paymentCurrency, preferredCurrency);
 
   // Rule 1: Match normalized currencies → credit primary balance
-  if (normalizedPayment === normalizedPreferred) {
+  if (normalizedPayment === preferredCurrency) {
     await storage.updateUserBalance(userId, amount);
     return;
   }
 
   // Rule 2: Different currency → credit secondary wallet using normalized code
-  // Special case for Togo (XOFT) and other West African countries: 
-  // If user is from Togo and paid in XOFT, but their preferred is XOF, it should go to primary.
-  // The normalization already handles this (XOFT -> XOF), but we ensure the upsert also uses XOF.
   console.log(`[walletHelper] Crediting secondary wallet ${normalizedPayment} for user ${userId}: +${amount}`);
   await storage.upsertWallet(userId, normalizedPayment, amount);
 
