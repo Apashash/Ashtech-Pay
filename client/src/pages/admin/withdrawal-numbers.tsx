@@ -144,29 +144,29 @@ export default function AdminWithdrawalNumbersPage() {
                     className="p-4 rounded-lg border bg-card"
                     data-testid={`pending-request-${request.id}`}
                   >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 space-y-2">
+                    <div className="flex flex-col gap-3">
+                      <div className="space-y-2">
                         <div className="flex items-center gap-2 flex-wrap">
                           {getActionBadge(request.action)}
                           {getStatusBadge(request.status)}
                         </div>
-                        
+
                         {request.user && (
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <User className="w-4 h-4" />
-                            <span>{request.user.fullName}</span>
-                            <span className="text-muted-foreground/50">({request.user.email})</span>
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
+                            <User className="w-4 h-4 shrink-0" />
+                            <span className="font-medium">{request.user.fullName}</span>
+                            <span className="text-muted-foreground/60 break-all">({request.user.email})</span>
                           </div>
                         )}
 
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Calendar className="w-4 h-4" />
+                          <Calendar className="w-4 h-4 shrink-0" />
                           <span>{format(new Date(request.createdAt), "dd MMM yyyy à HH:mm", { locale: fr })}</span>
                         </div>
 
                         {request.newPhoneNumber && (
-                          <div className="flex items-center gap-2 mt-2">
-                            <Phone className="w-4 h-4 text-primary" />
+                          <div className="flex items-center gap-2">
+                            <Phone className="w-4 h-4 text-primary shrink-0" />
                             <span className="font-medium">{request.newPhoneNumber}</span>
                             {request.newOperatorName && (
                               <span className="text-muted-foreground">({request.newOperatorName})</span>
@@ -179,11 +179,11 @@ export default function AdminWithdrawalNumbersPage() {
                         )}
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 pt-1 border-t">
                         <Button
                           variant="outline"
                           size="sm"
-                          className="text-green-500 border-green-500/30 hover:bg-green-500/10"
+                          className="flex-1 text-green-600 border-green-500/40 hover:bg-green-500/10 hover:text-green-700"
                           onClick={() => {
                             setSelectedRequest(request);
                             setIsApproveDialogOpen(true);
@@ -196,7 +196,7 @@ export default function AdminWithdrawalNumbersPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="text-red-500 border-red-500/30 hover:bg-red-500/10"
+                          className="flex-1 text-red-600 border-red-500/40 hover:bg-red-500/10 hover:text-red-700"
                           onClick={() => {
                             setSelectedRequest(request);
                             setIsRejectDialogOpen(true);
