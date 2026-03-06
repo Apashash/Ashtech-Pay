@@ -55,6 +55,7 @@ import { fr } from "date-fns/locale";
 import { formatCurrency } from "@/lib/currency";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { ALL_FX_CURRENCIES } from "@shared/schema";
 
 interface User {
   id: string;
@@ -99,10 +100,13 @@ export default function AdminUsers() {
     enabled: !!viewUser,
   });
 
-  const ALL_CURRENCIES = ["XAF", "XOF", "GHS", "NGN", "KES", "RWF", "TZS", "UGX", "CDF", "GNF", "USD"];
   const CURRENCY_FLAGS: Record<string, string> = {
-    XAF: "🇨🇲", XOF: "🇸🇳", GHS: "🇬🇭", NGN: "🇳🇬", KES: "🇰🇪",
-    RWF: "🇷🇼", TZS: "🇹🇿", UGX: "🇺🇬", CDF: "🇨🇩", GNF: "🇬🇳", USD: "🇺🇸",
+    XAF: "🇨🇲", XAFC: "🇨🇬", XAFG: "🇬🇦",
+    XOF: "🇸🇳", XOFC: "🇨🇮", XOFF: "🇧🇫", XOFN: "🇳🇪", XOFB: "🇧🇯", XOFT: "🇹🇬", XOFS: "🇸🇳", XOFM: "🇲🇱",
+    GHS: "🇬🇭", NGN: "🇳🇬", KES: "🇰🇪", RWF: "🇷🇼", TZS: "🇹🇿",
+    UGX: "🇺🇬", CDF: "🇨🇩", GNF: "🇬🇳", GMD: "🇬🇲",
+    USD: "🇺🇸", EUR: "🇪🇺", GBP: "🇬🇧", CHF: "🇨🇭",
+    MAD: "🇲🇦", EGP: "🇪🇬", ZAR: "🇿🇦",
   };
   const COUNTRY_FLAGS: Record<string, string> = {
     "Cameroun": "🇨🇲", "Cameroon": "🇨🇲",
@@ -135,9 +139,16 @@ export default function AdminUsers() {
 
   const getWalletBalance = (currency: string): string => {
     if (!balanceModal) return "0.00";
-    if (currency === "XAF") return balanceModal.balance;
+    if (currency === balanceModal.preferredCurrency) return balanceModal.balance;
     return userWallets?.find((w: any) => w.currency === currency)?.balance || "0.00";
   };
+
+  const userWalletList = balanceModal ? [
+    { currency: balanceModal.preferredCurrency, balance: balanceModal.balance, isPrimary: true },
+    ...(userWallets || [])
+      .filter((w: any) => w.currency !== balanceModal.preferredCurrency)
+      .map((w: any) => ({ currency: w.currency, balance: w.balance, isPrimary: false })),
+  ] : [];
 
   useEffect(() => {
     if (urlSearch) {
@@ -442,7 +453,7 @@ export default function AdminUsers() {
                               <Shield className="w-4 h-4 mr-2" /> Remettre User
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => {
-                              setBalanceCurrency("XAF");
+                              setBalanceCurrency(user.preferredCurrency || "XAF");
                               setNewBalance(user.balance);
                               setUpdateType("set");
                               setBalanceModal(user);
@@ -678,28 +689,55 @@ export default function AdminUsers() {
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                {ALL_CURRENCIES.map(c => {
-                  const bal = parseFloat(getWalletBalance(c));
-                  const isSelected = balanceCurrency === c;
-                  return (
-                    <button
-                      key={c}
-                      onClick={() => { setBalanceCurrency(c); setNewBalance(getWalletBalance(c)); setUpdateType("set"); }}
-                      className={`flex flex-col items-center gap-1 p-3 rounded-lg border text-sm font-medium transition-all ${
-                        isSelected
-                          ? "border-primary bg-primary/10 text-primary shadow-sm"
-                          : "border-border hover:border-primary/50 hover:bg-muted/60"
-                      }`}
-                    >
-                      <span className="text-lg">{CURRENCY_FLAGS[c] || "🌍"}</span>
-                      <span className="font-bold">{c}</span>
-                      <span className={`text-xs ${bal > 0 ? "text-green-600 font-semibold" : "text-muted-foreground"}`}>
-                        {bal.toLocaleString("fr-FR", { maximumFractionDigits: 2 })}
-                      </span>
-                    </button>
-                  );
-                })}
+              <div>
+                <p className="text-xs text-muted-foreground mb-2">Comptes existants — cliquez pour modifier</p>
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                  {userWalletList.map(w => {
+                    const bal = parseFloat(w.balance);
+                    const isSelected = balanceCurrency === w.currency;
+                    return (
+                      <button
+                        key={w.currency}
+                        onClick={() => { setBalanceCurrency(w.currency); setNewBalance(w.balance); setUpdateType("set"); }}
+                        className={`relative flex flex-col items-center gap-1 p-3 rounded-lg border text-sm font-medium transition-all ${
+                          isSelected
+                            ? "border-primary bg-primary/10 text-primary shadow-sm"
+                            : "border-border hover:border-primary/50 hover:bg-muted/60"
+                        }`}
+                      >
+                        {w.isPrimary && (
+                          <span className="absolute top-1 right-1 text-[9px] bg-primary/20 text-primary rounded px-1">Principal</span>
+                        )}
+                        <span className="text-lg">{CURRENCY_FLAGS[w.currency] || "🌍"}</span>
+                        <span className="font-bold">{w.currency}</span>
+                        <span className={`text-xs ${bal > 0 ? "text-green-600 font-semibold" : "text-muted-foreground"}`}>
+                          {bal.toLocaleString("fr-FR", { maximumFractionDigits: 2 })}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="border rounded-lg p-3 bg-muted/30">
+                <p className="text-xs text-muted-foreground mb-2">Modifier une autre devise (ajouter ou corriger)</p>
+                <Select
+                  value={userWalletList.some(w => w.currency === balanceCurrency) ? "" : balanceCurrency}
+                  onValueChange={(v) => { setBalanceCurrency(v); setNewBalance(getWalletBalance(v)); setUpdateType("set"); }}
+                >
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue placeholder="Choisir une devise…" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-60">
+                    {ALL_FX_CURRENCIES
+                      .filter(c => !userWalletList.some(w => w.currency === c.code))
+                      .map(c => (
+                        <SelectItem key={c.code} value={c.code}>
+                          {CURRENCY_FLAGS[c.code] || "🌍"} {c.code} — {c.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="border-t pt-4 space-y-4">

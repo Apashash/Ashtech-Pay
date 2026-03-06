@@ -3087,7 +3087,8 @@ export async function registerRoutes(
       const amountNum = parseFloat(amount);
       if (isNaN(amountNum)) return res.status(400).json({ message: "Montant invalide" });
 
-      if (currency === "XAF") {
+      const isPrimary = currency === (user.preferredCurrency || "XAF");
+      if (isPrimary) {
         if (type === "set") {
           const updated = await storage.updateUser(userId, { balance: amountNum.toFixed(2) });
           if (!updated) return res.status(500).json({ message: "Mise à jour échouée" });
