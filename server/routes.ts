@@ -405,7 +405,13 @@ export async function registerRoutes(
       }
 
       const hashedPassword = await hashPassword(data.password);
-      const preferredCurrency = COUNTRY_CURRENCIES[data.country || "Cameroon"] || "XAF";
+      
+      // Fixed: For Togo, the preferred currency must be XOFT per Swychr docs
+      let preferredCurrency = COUNTRY_CURRENCIES[data.country || "Cameroon"] || "XAF";
+      if (data.country === "Togo") {
+        preferredCurrency = "XOFT";
+      }
+
       const user = await storage.createUser({
         ...data,
         password: hashedPassword,

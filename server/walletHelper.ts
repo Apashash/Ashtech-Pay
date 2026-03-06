@@ -9,12 +9,10 @@ export const CFA_CURRENCIES = new Set([
 ]);
 
 // Normalize Swychr country-specific CFA codes to standard codes
-// NOTE: We keep specific codes like XOFT if the user's preferred currency is XOFT
+// NOTE: We keep specific codes like XOFT for Togo as requested
 export function normalizeCurrency(currency: string, preferredCurrency?: string): string {
-  if (preferredCurrency && currency !== preferredCurrency) {
-    // If the payment is XOFT and user prefers XOFT, keep it.
-    // If payment is XOF and user prefers XOFT, we might want to keep it as XOF or map it.
-    // The user specifically wants XOFT to be the main account for Togo.
+  // If the user's preferred currency is one of the variants, we respect it
+  if (preferredCurrency && (currency === "XOF" || currency === "XAF" || CFA_CURRENCIES.has(currency))) {
     if (["XOF", "XOFC", "XOFF", "XOFN", "XOFB", "XOFT", "XOFS", "XOFM"].includes(currency) && 
         ["XOF", "XOFC", "XOFF", "XOFN", "XOFB", "XOFT", "XOFS", "XOFM"].includes(preferredCurrency)) {
       return preferredCurrency;
