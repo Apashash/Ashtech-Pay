@@ -1246,19 +1246,35 @@ export async function registerRoutes(
       }
 
       // Resolve fees
-      const fee = await storage.getFeeByCriteria("transfer", country.id, operator.id);
+      const fee = await storage.resolveFee("transfer", country.id, operator.id);
       let feeAmount = 0;
       if (fee) {
-        if (fee.feeType === "percentage") {
-          feeAmount = parsedAmount * (parseFloat(fee.feeValue) / 100);
+        const swychrRate = fee.swychrFee ? parseFloat(fee.swychrFee.toString()) : 0;
+        const marginRate = fee.ashtechMargin ? parseFloat(fee.ashtechMargin.toString()) : 0;
+        const totalRate = swychrRate + marginRate;
+        const minCharge = fee.minFee ? parseFloat(fee.minFee.toString()) : 0;
+
+        if (fee.feeType === "percentage" || totalRate > 0) {
+          const rateToUse = totalRate > 0 ? totalRate : parseFloat(fee.feeValue.toString());
+          feeAmount = (parsedAmount * rateToUse) / 100;
         } else {
-          feeAmount = parseFloat(fee.feeValue);
+          feeAmount = parseFloat(fee.feeValue.toString());
+        }
+
+        // Apply Min Charge Rule
+        if (feeAmount < minCharge) {
+          feeAmount = minCharge;
+        }
+
+        if (fee.maxFee && feeAmount > parseFloat(fee.maxFee.toString())) {
+          feeAmount = parseFloat(fee.maxFee.toString());
         }
       }
       
-      const totalAmount = parsedAmount + feeAmount;
+      const creditedAmount = parsedAmount - feeAmount;
+      const totalAmount = parsedAmount;
 
-      // Check balance in the selected wallet/currency - Strict matching (no XAF/XOF auto-parity)
+      // Check balance in the selected wallet/currency
       if (currency === (sender.preferredCurrency || "XAF")) {
         if (parseFloat(sender.balance) < totalAmount) {
           return res.status(400).json({ 
@@ -1281,7 +1297,7 @@ export async function registerRoutes(
       const transaction = await storage.createTransaction({
         userId: senderId,
         type: "transfer_out",
-        amount: parsedAmount.toFixed(2),
+        amount: creditedAmount.toFixed(2),
         currency,
         status: "pending",
         description: `Envoi vers ${country.name} (${operator.name})`,
@@ -1293,6 +1309,49 @@ export async function registerRoutes(
         totalAmount: totalAmount.toFixed(2),
         reference,
       });
+
+      console.log(`[Transfer] Calling Swychr Payout: Amount=${creditedAmount}, Ref=${reference}`);
+      
+      try {
+        const operatorName = (operator.name || "").toUpperCase();
+        const countryCode = country.code.toUpperCase();
+        const finalPaymentMethod = resolvePaymentMethod(operatorName, countryCode);
+
+        const payoutResult = await createSwychrPayout({
+          country_code:     country.code,
+          beneficiary_name: recipientName,
+          mobile_no:        formatInternationalPhone(recipientPhone, country.code),
+          amount:           creditedAmount,
+          transaction_id:   reference,
+          payment_method:   finalPaymentMethod as any,
+          remarks:          `Ashtech Pay - ${reference}`,
+        });
+
+        if (payoutResult.success) {
+          addPendingPayout({
+            transactionId: transaction.id,
+            reference:     payoutResult.transaction_id || reference,
+            userId:        senderId,
+            amount:        creditedAmount.toFixed(2),
+            totalDebited:  totalAmount.toFixed(2),
+          });
+        } else {
+          // Handle failure/insufficient balance as before...
+          const isInsufficientBalance = (payoutResult.message || "").toLowerCase().includes("insuffi") ||
+                                         (payoutResult.message || "").toLowerCase().includes("solde") ||
+                                         (payoutResult.message || "").toLowerCase().includes("balance");
+          if (!isInsufficientBalance) {
+            await storage.updateTransactionStatus(transaction.id, "failed");
+            if (currency === (sender.preferredCurrency || "XAF")) {
+              await storage.updateUserBalance(senderId, totalAmount);
+            } else {
+              await storage.upsertWallet(senderId, currency, totalAmount);
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Payout error:", e);
+      }
 
       res.json({ 
         message: "Votre transfert est en cours de traitement",
