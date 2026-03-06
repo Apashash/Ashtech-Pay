@@ -1474,16 +1474,25 @@ export async function registerRoutes(
       const fee = await storage.resolveFee("withdrawal", data.countryId, data.operatorId);
       let feeAmount = 0;
       if (fee) {
-        if (fee.feeType === "percentage") {
-          feeAmount = (amount * parseFloat(fee.feeValue)) / 100;
+        const swychrRate = fee.swychrFee ? parseFloat(fee.swychrFee.toString()) : 0;
+        const marginRate = fee.ashtechMargin ? parseFloat(fee.ashtechMargin.toString()) : 0;
+        const totalRate = swychrRate + marginRate;
+        const minCharge = fee.minFee ? parseFloat(fee.minFee.toString()) : 0;
+
+        if (fee.feeType === "percentage" || totalRate > 0) {
+          const rateToUse = totalRate > 0 ? totalRate : parseFloat(fee.feeValue.toString());
+          feeAmount = (amount * rateToUse) / 100;
         } else {
-          feeAmount = parseFloat(fee.feeValue);
+          feeAmount = parseFloat(fee.feeValue.toString());
         }
-        if (fee.minFee && feeAmount < parseFloat(fee.minFee)) {
-          feeAmount = parseFloat(fee.minFee);
+
+        // Rule: If calculated fee < minCharge, use minCharge
+        if (feeAmount < minCharge) {
+          feeAmount = minCharge;
         }
-        if (fee.maxFee && feeAmount > parseFloat(fee.maxFee)) {
-          feeAmount = parseFloat(fee.maxFee);
+
+        if (fee.maxFee && feeAmount > parseFloat(fee.maxFee.toString())) {
+          feeAmount = parseFloat(fee.maxFee.toString());
         }
       }
       const totalAmount = amount + feeAmount;
@@ -1625,22 +1634,30 @@ export async function registerRoutes(
       let feePercentage = 0;
       
       if (fee) {
-        if (fee.feeType === "percentage") {
-          feePercentage = parseFloat(fee.feeValue);
+        const swychrRate = fee.swychrFee ? parseFloat(fee.swychrFee.toString()) : 0;
+        const marginRate = fee.ashtechMargin ? parseFloat(fee.ashtechMargin.toString()) : 0;
+        const totalRate = swychrRate + marginRate;
+        const minCharge = fee.minFee ? parseFloat(fee.minFee.toString()) : 0;
+
+        if (fee.feeType === "percentage" || totalRate > 0) {
+          feePercentage = totalRate > 0 ? totalRate : parseFloat(fee.feeValue.toString());
           feeAmount = (numAmount * feePercentage) / 100;
         } else {
-          feeAmount = parseFloat(fee.feeValue);
+          feeAmount = parseFloat(fee.feeValue.toString());
         }
-        if (fee.minFee && feeAmount < parseFloat(fee.minFee)) {
-          feeAmount = parseFloat(fee.minFee);
+
+        // Apply Min Charge Rule
+        if (feeAmount < minCharge) {
+          feeAmount = minCharge;
         }
-        if (fee.maxFee && feeAmount > parseFloat(fee.maxFee)) {
-          feeAmount = parseFloat(fee.maxFee);
+
+        if (fee.maxFee && feeAmount > parseFloat(fee.maxFee.toString())) {
+          feeAmount = parseFloat(fee.maxFee.toString());
         }
       }
 
-      // For deposits: netAmount = amount - fee (credited)
-      // For withdrawals: totalAmount = amount + fee (debited)
+      // For deposits: user pays 'amount', net = amount - fee
+      // For withdrawals: user pays 'amount + fee'
       const netAmount = numAmount - feeAmount;
       const totalAmount = numAmount + feeAmount;
 

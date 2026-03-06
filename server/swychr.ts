@@ -59,9 +59,9 @@ export function computeSwychrFees(grossAmount: number, countryCode: string, asht
   const ashtechFeeRate = ashtechMarginPct ?? ASHTECH_MARGIN;
   const totalFeeRate   = swychrFeeRate + ashtechFeeRate;
 
+  const totalFeeAmount   = grossAmount * totalFeeRate   / 100;
   const swychrFeeAmount  = grossAmount * swychrFeeRate  / 100;
   const ashtechFeeAmount = grossAmount * ashtechFeeRate / 100;
-  const totalFeeAmount   = grossAmount * totalFeeRate   / 100;
   const creditedAmount   = grossAmount - totalFeeAmount;
   const amountToSwychr   = grossAmount - swychrFeeAmount;
 
