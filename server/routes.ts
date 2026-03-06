@@ -285,8 +285,39 @@ export async function registerRoutes(
   
   console.log("Session configured - Secure: true, SameSite: none (for Replit HTTPS proxy)");
 
-  // Add extractUserId middleware after session middleware
-  app.use(extractUserId);
+  // Middleware to extract userId from either session or Bearer token
+  app.use(async (req, res, next) => {
+    // First check session
+    let userId = req.session?.userId;
+    
+    // Then check Bearer token
+    const authHeader = req.headers.authorization;
+    if (!userId && authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      userId = getUserIdFromToken(token);
+    }
+
+    if (userId) {
+      const user = await storage.getUser(userId);
+      if (user?.isBanned) {
+        console.log(`Banned user ${userId} attempted access. Reason: ${user.banReason}`);
+        // Clear session and token if banned
+        if (req.session) {
+          req.session.userId = undefined;
+        }
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+          const token = authHeader.substring(7);
+          removeAuthToken(token);
+        }
+        return res.status(403).json({ 
+          message: user.banReason || "Votre compte a été banni par l'administrateur.",
+          banned: true 
+        });
+      }
+      req.userId = userId;
+    }
+    next();
+  });
 
   // File upload endpoint using local storage
   app.post("/api/uploads/local", requireAuth, upload.single("file"), (req, res) => {
@@ -458,6 +489,12 @@ export async function registerRoutes(
       const isValidPassword = await verifyPassword(data.password, user.password);
       if (!isValidPassword) {
         return res.status(401).json({ message: "Email/téléphone ou mot de passe incorrect" });
+      }
+
+      if (user.isBanned) {
+        return res.status(403).json({ 
+          message: user.banReason || "Votre compte a été banni par l'administrateur." 
+        });
       }
 
       // Generate auth token for token-based auth (works in iframes where cookies fail)
