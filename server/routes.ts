@@ -1530,6 +1530,7 @@ export async function registerRoutes(
         recipientName: user.fullName || user.username || "Client",
         recipientPhone: data.accountDetails,
         recipientCountry: withdrawalCountryCode,
+        operatorId: data.operatorId ? String(data.operatorId) : undefined,
       });
 
       console.log(`[Withdrawal] Created withdrawal ${withdrawalRef} for ${amount} — calling AccountPE immediately`);
@@ -3589,7 +3590,14 @@ export async function registerRoutes(
           const operatorId = transaction.operatorId;
           const operator = operatorId ? await storage.getOperator(operatorId) : null;
           const operatorName = (operator?.name || "").toUpperCase();
-          const finalPaymentMethod = resolvePaymentMethod(operatorName, countryCode);
+          let finalPaymentMethod = resolvePaymentMethod(operatorName, countryCode);
+
+          // Fallback: if operator not found but paymentMethod is bank_transfer, use bank method
+          if (!operator && transaction.paymentMethod === "bank_transfer") {
+            finalPaymentMethod = countryCode === "NG" ? "All Banks Transfer" : "bank_transfer";
+          }
+
+          console.log(`[Admin] Payout params: country=${countryCode}, operatorId=${operatorId}, operatorName=${operatorName}, resolved_method=${finalPaymentMethod}, txPaymentMethod=${transaction.paymentMethod}`);
 
           const payoutResult = await createSwychrPayout({
             country_code:     countryCode,
