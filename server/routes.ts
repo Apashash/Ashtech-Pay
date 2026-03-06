@@ -1495,54 +1495,37 @@ export async function registerRoutes(
           feeAmount = parseFloat(fee.maxFee.toString());
         }
       }
-      const totalAmount = amount + feeAmount;
+      const creditedAmount = amount - feeAmount;
 
-      // Determine withdrawal country code from the selected country
-      let withdrawalCountryCode = "CM";
-      let withdrawalCurrency = userCurrency;
-      if (data.countryId) {
-        const wCountry = await storage.getCountry(data.countryId);
-        if (wCountry?.code) withdrawalCountryCode = wCountry.code;
-        if (wCountry?.currency) withdrawalCurrency = wCountry.currency;
+      // Check primary wallet balance (user must have the full 'amount' since it's inclusive of fees)
+      if (parseFloat(user.balance) < amount) {
+        return res.status(400).json({ message: `Solde insuffisant dans votre compte principal (${amount.toFixed(0)} ${userCurrency} requis)` });
       }
 
-      // RULE: Withdrawal is ONLY allowed from the primary wallet (user.preferredCurrency)
-      // The selected country's currency must match the user's primary currency
-      if (withdrawalCurrency !== userCurrency) {
-        return res.status(403).json({
-          message: `Retrait non autorisé — Votre compte principal est en ${userCurrency}. Pour retirer en ${withdrawalCurrency}, sélectionnez votre pays principal.`,
-        });
-      }
+      // Debit primary wallet
+      await storage.updateUserBalance(userId, -amount);
 
-      // Check primary wallet balance
-      if (parseFloat(user.balance) < totalAmount) {
-        return res.status(400).json({ message: `Solde insuffisant dans votre compte principal (${totalAmount.toFixed(0)} ${userCurrency} requis)` });
-      }
-
-      // Debit primary wallet only
-      await storage.updateUserBalance(userId, -totalAmount);
-
-      console.log(`[Withdrawal] User=${userId}, Amount=${amount}, Fee=${feeAmount}, TotalDebited=${totalAmount} (${withdrawalCurrency})`);
+      console.log(`[Withdrawal] User=${userId}, RequestedAmount=${amount}, Fee=${feeAmount}, NetToUser=${creditedAmount} (${withdrawalCurrency})`);
 
       const withdrawalRef = generateTransactionReference("withdrawal");
       const transaction = await storage.createTransaction({
         userId,
         type: "withdrawal",
-        amount: data.amount,
+        amount: creditedAmount.toFixed(2),
         currency: withdrawalCurrency,
         status: "pending",
         description: `Retrait vers ${data.accountDetails}`,
         paymentMethod: data.paymentMethod,
         reference: withdrawalRef,
         feeAmount: feeAmount.toFixed(2),
-        totalAmount: totalAmount.toFixed(2),
+        totalAmount: amount.toFixed(2),
         recipientName: user.fullName || user.username || "Client",
         recipientPhone: data.accountDetails,
         recipientCountry: withdrawalCountryCode,
         operatorId: data.operatorId ? String(data.operatorId) : undefined,
       });
 
-      console.log(`[Withdrawal] Created withdrawal ${withdrawalRef} for ${amount} — calling AccountPE immediately`);
+      console.log(`[Withdrawal] Created withdrawal ${withdrawalRef} for ${creditedAmount} — calling AccountPE immediately`);
 
       // Call AccountPE payout API immediately
       try {
@@ -1555,7 +1538,7 @@ export async function registerRoutes(
           country_code:     withdrawalCountryCode,
           beneficiary_name: user.fullName || user.username || "Client",
           mobile_no:        formatInternationalPhone(data.accountDetails, withdrawalCountryCode),
-          amount:           amount,
+          amount:           creditedAmount,
           transaction_id:   withdrawalRef,
           payment_method:   finalPaymentMethod as any,
           remarks:          `Ashtech Pay - ${withdrawalRef}`,
@@ -1657,9 +1640,9 @@ export async function registerRoutes(
       }
 
       // For deposits: user pays 'amount', net = amount - fee
-      // For withdrawals: user pays 'amount + fee'
+      // For withdrawals: user pays 'amount', net = amount - fee
       const netAmount = numAmount - feeAmount;
-      const totalAmount = numAmount + feeAmount;
+      const totalAmount = numAmount;
 
       res.json({
         feeAmount: Math.round(feeAmount * 100) / 100,
