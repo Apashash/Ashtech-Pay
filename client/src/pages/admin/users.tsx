@@ -42,7 +42,8 @@ import {
   MoreHorizontal,
   Edit,
   Trash2,
-  DollarSign
+  DollarSign,
+  RefreshCw
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -340,7 +341,7 @@ export default function AdminUsers() {
   };
 
   const getDisplayCurrency = (user: User) => {
-    const COUNTRY_CURRENCIES = {
+    const COUNTRY_CURRENCIES: Record<string, string> = {
       "Cameroun": "XAF",
       "Sénégal": "XOF",
       "Côte d'Ivoire": "XOF",
@@ -351,6 +352,7 @@ export default function AdminUsers() {
       "Niger": "XOF",
       "Gabon": "XAF",
       "Congo Brazzaville": "XAF",
+      "Congo": "XAF",
       "Tchad": "XAF",
       "République Centrafricaine": "XAF",
       "Guinée Équatoriale": "XAF",
@@ -360,18 +362,25 @@ export default function AdminUsers() {
       "Ouganda": "UGX",
       "Rwanda": "RWF",
       "Tanzanie": "TZS",
-      "RDC": "CDF"
+      "RDC": "CDF",
+      "RD Congo": "CDF"
     };
 
-    // Priority 1: Use the user's selected preferred currency if it's not the system default XAF
+    // Special cases for specific labels seen in database/UI
+    const country = user.country?.trim();
+    if (country === "Togo") return "XOF";
+    if (country === "RD Congo" || country === "RDC" || country === "Congo Kinshasa") return "CDF";
+    if (country === "Sénégal") return "XOF";
+    if (country === "Benin" || country === "Bénin") return "XOF";
+    if (country === "Ivory Coast" || country === "Côte d'Ivoire") return "XOF";
+    if (country === "Burkina Faso" || country === "Burkina") return "XOF";
+
     if (user.preferredCurrency && user.preferredCurrency !== "XAF") {
       return user.preferredCurrency;
     }
-    // Priority 2: Use the currency associated with their country
-    if (user.country && COUNTRY_CURRENCIES[user.country as keyof typeof COUNTRY_CURRENCIES]) {
-      return COUNTRY_CURRENCIES[user.country as keyof typeof COUNTRY_CURRENCIES];
+    if (country && COUNTRY_CURRENCIES[country]) {
+      return COUNTRY_CURRENCIES[country];
     }
-    // Fallback to XAF
     return "XAF";
   };
 
@@ -394,6 +403,22 @@ export default function AdminUsers() {
     }
   };
 
+  const fixCurrenciesMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/fix-currencies", {});
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || "Erreur");
+      return json;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      toast({ title: "Mise à jour réussie", description: data.message });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Erreur", description: err.message, variant: "destructive" });
+    },
+  });
+
   return (
     <AdminLayout>
       <div className="p-6 space-y-6">
@@ -402,6 +427,19 @@ export default function AdminUsers() {
             <h1 className="text-2xl font-bold">Gestion des Utilisateurs</h1>
             <p className="text-muted-foreground">{users?.length || 0} utilisateurs</p>
           </div>
+          <Button 
+            onClick={() => {
+              if (window.confirm("Voulez-vous synchroniser la devise de tous les utilisateurs avec celle de leur pays ?")) {
+                fixCurrenciesMutation.mutate();
+              }
+            }} 
+            disabled={fixCurrenciesMutation.isPending}
+            variant="outline"
+            className="gap-2"
+          >
+            <RefreshCw className={fixCurrenciesMutation.isPending ? "animate-spin w-4 h-4" : "w-4 h-4"} />
+            Actualiser les devises locales
+          </Button>
         </div>
 
         <Card>

@@ -3144,6 +3144,71 @@ export async function registerRoutes(
   });
 
   // Admin: Get all users
+  // Fix user currencies based on country
+  app.post("/api/admin/fix-currencies", requireAdmin, async (req, res) => {
+    try {
+      const COUNTRY_CURRENCIES: Record<string, string> = {
+        "Cameroun": "XAF",
+        "Sénégal": "XOF",
+        "Côte d'Ivoire": "XOF",
+        "Togo": "XOF",
+        "Bénin": "XOF",
+        "Burkina Faso": "XOF",
+        "Mali": "XOF",
+        "Niger": "XOF",
+        "Gabon": "XAF",
+        "Congo Brazzaville": "XAF",
+        "Tchad": "XAF",
+        "République Centrafricaine": "XAF",
+        "Guinée Équatoriale": "XAF",
+        "Nigeria": "NGN",
+        "Ghana": "GHS",
+        "Kenya": "KES",
+        "Ouganda": "UGX",
+        "Rwanda": "RWF",
+        "Tanzanie": "TZS",
+        "RDC": "CDF",
+        "RD Congo": "CDF",
+        "Congo Kinshasa": "CDF",
+        "Congo": "XAF",
+        "Benin": "XOF",
+        "Bénin": "XOF",
+        "Ivory Coast": "XOF",
+        "Côte d'Ivoire": "XOF",
+        "Burkina Faso": "XOF",
+        "Burkina": "XOF",
+        "Sénégal": "XOF"
+      };
+
+      const users = await storage.getAllUsers();
+      let updatedCount = 0;
+
+      for (const user of users) {
+        const country = user.country?.trim();
+        if (country && COUNTRY_CURRENCIES[country]) {
+          const localCurrency = COUNTRY_CURRENCIES[country];
+          if (user.preferredCurrency !== localCurrency) {
+            await storage.updateUserCurrency(user.id, localCurrency as any);
+            // Also notify the user about the currency synchronization
+            await storage.createNotification({
+              userId: user.id,
+              type: "admin_message",
+              title: "Devise synchronisée",
+              message: `Votre devise principale a été synchronisée avec votre devise locale (${localCurrency}).`,
+              isRead: false
+            });
+            updatedCount++;
+          }
+        }
+      }
+
+      res.json({ message: `Mise à jour de ${updatedCount} utilisateurs terminée.`, count: updatedCount });
+    } catch (error) {
+      console.error("Fix currencies error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   app.get("/api/admin/users", requireAdmin, async (req, res) => {
     try {
       const users = await storage.getAllUsers();
