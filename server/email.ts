@@ -1,6 +1,10 @@
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+if (!process.env.RESEND_API_KEY) {
+  console.warn("[Email] RESEND_API_KEY is not set. Email sending will be disabled.");
+}
+
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 const FROM_EMAIL   = "Ashtech Pay <noreply@ashtechpay.top>";
 const APP_URL      = "https://ashtechpay.top";
@@ -188,6 +192,10 @@ export async function sendPasswordResetEmail(to: string, fullName: string, reset
 </body>
 </html>`;
 
+  if (!resend) {
+    console.warn("[Email] Skipping reset email — RESEND_API_KEY not configured.");
+    return;
+  }
   try {
     const { data, error } = await resend.emails.send({
       from: FROM_EMAIL,
@@ -459,6 +467,10 @@ export async function sendWelcomeEmail(to: string, fullName: string): Promise<vo
 </body>
 </html>`;
 
+  if (!resend) {
+    console.warn("[Email] Skipping welcome email — RESEND_API_KEY not configured.");
+    return;
+  }
   try {
     const { data, error } = await resend.emails.send({
       from: FROM_EMAIL,
@@ -566,6 +578,10 @@ function emailWrap(rows: string) {
 }
 
 async function sendEmail(to: string, subject: string, html: string, label: string) {
+  if (!resend) {
+    console.warn(`[Email] Skipping ${label} — RESEND_API_KEY not configured.`);
+    return;
+  }
   try {
     const { data, error } = await resend.emails.send({ from: FROM_EMAIL, to: [to], subject, html });
     if (error) console.error(`[Email] ${label} error:`, JSON.stringify(error));
