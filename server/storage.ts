@@ -1051,7 +1051,14 @@ export class DatabaseStorage implements IStorage {
         label: change.newLabel,
       });
     } else if (change.action === "delete") {
-      await this.deleteWithdrawalNumber(change.withdrawalNumberId!);
+      const numberToDelete = change.withdrawalNumberId;
+      // Nullify the FK reference first to avoid constraint violation on deletion
+      await db.update(withdrawalNumberChanges)
+        .set({ withdrawalNumberId: null })
+        .where(eq(withdrawalNumberChanges.id, id));
+      if (numberToDelete) {
+        await this.deleteWithdrawalNumber(numberToDelete);
+      }
     }
     
     const [updated] = await db.update(withdrawalNumberChanges)
