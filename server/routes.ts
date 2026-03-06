@@ -1806,6 +1806,113 @@ export async function registerRoutes(
     }
   });
 
+  // Admin: Convert a user's balance between currencies
+  app.post("/api/admin/users/:id/convert", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const userId = req.params.id;
+      const { fromCurrency, toCurrency, amount } = req.body;
+      if (!fromCurrency || !toCurrency || !amount) {
+        return res.status(400).json({ message: "fromCurrency, toCurrency et amount sont requis" });
+      }
+      if (fromCurrency === toCurrency) {
+        return res.status(400).json({ message: "Les deux devises doivent être différentes" });
+      }
+      const parsedAmount = parseFloat(amount);
+      if (isNaN(parsedAmount) || parsedAmount <= 0) {
+        return res.status(400).json({ message: "Montant invalide" });
+      }
+
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
+
+      const primaryCurrency = user.preferredCurrency || "XAF";
+
+      // Check & verify source balance
+      let sourceBalance: number;
+      if (fromCurrency === primaryCurrency) {
+        sourceBalance = parseFloat(user.balance);
+      } else {
+        const w = await storage.getWallet(userId, fromCurrency);
+        sourceBalance = w ? parseFloat(w.balance) : 0;
+      }
+      if (sourceBalance < parsedAmount) {
+        return res.status(400).json({ message: `Solde insuffisant en ${fromCurrency} (disponible: ${sourceBalance.toFixed(2)})` });
+      }
+
+      // Apply same conversion fee as user-facing flow
+      const conversionFeePercentSetting = await storage.getSetting("conversion_fee_percent");
+      const conversionFeePercent = conversionFeePercentSetting ? parseFloat(conversionFeePercentSetting.value) : 6;
+      const feeAmount = (parsedAmount * conversionFeePercent) / 100;
+      const amountAfterFee = parsedAmount - feeAmount;
+
+      const convFxRates = await loadFxRates();
+      const amountInXAF = convertToXAF(amountAfterFee, fromCurrency, convFxRates);
+      const receivedAmount = convertFromXAF(amountInXAF, toCurrency, convFxRates);
+
+      // Debit source
+      if (fromCurrency === primaryCurrency) {
+        await storage.updateUserBalance(userId, -parsedAmount);
+      } else {
+        await storage.upsertWallet(userId, fromCurrency, -parsedAmount);
+      }
+
+      // Credit target
+      if (toCurrency === primaryCurrency) {
+        await storage.updateUserBalance(userId, receivedAmount);
+      } else {
+        await storage.upsertWallet(userId, toCurrency, receivedAmount);
+      }
+
+      await cleanupEmptyWallets(userId);
+
+      const transaction = await storage.createTransaction({
+        userId,
+        type: "conversion",
+        amount: parsedAmount.toFixed(2),
+        currency: fromCurrency,
+        status: "completed",
+        description: `Conversion admin: ${parsedAmount.toFixed(2)} ${fromCurrency} → ${receivedAmount.toFixed(2)} ${toCurrency} (Frais: ${conversionFeePercent}%)`,
+        reference: generateTransactionReference("CONV"),
+        feeAmount: feeAmount.toFixed(2),
+        totalAmount: parsedAmount.toFixed(2),
+      });
+
+      await storage.createConversionRequest({
+        userId,
+        fromCurrency,
+        toCurrency,
+        fromAmount: parsedAmount.toFixed(2),
+        toAmount: receivedAmount.toFixed(2),
+        status: "completed",
+        notes: `Conversion exécutée par admin. Frais: ${feeAmount.toFixed(2)} ${fromCurrency} (${conversionFeePercent}%)`,
+        executedAt: new Date(),
+        executedById: req.userId!,
+      });
+
+      await storage.createUserNotification({
+        userId,
+        title: "Conversion effectuée par l'admin",
+        message: `Une conversion a été effectuée sur votre compte : ${parsedAmount.toFixed(2)} ${fromCurrency} → ${receivedAmount.toFixed(2)} ${toCurrency}. Frais: ${feeAmount.toFixed(2)} ${fromCurrency}.`,
+        transactionId: transaction.id,
+        type: "success",
+      });
+
+      return res.json({
+        success: true,
+        fromAmount: parsedAmount,
+        fromCurrency,
+        toAmount: receivedAmount,
+        toCurrency,
+        feeAmount,
+        conversionFeePercent,
+        message: `Conversion effectuée avec succès.`,
+      });
+    } catch (error) {
+      console.error("Admin convert error:", error);
+      res.status(500).json({ message: "Erreur serveur lors de la conversion" });
+    }
+  });
+
   // Public settings
   app.get("/api/settings/:key", async (req, res) => {
     try {

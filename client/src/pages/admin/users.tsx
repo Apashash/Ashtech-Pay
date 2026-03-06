@@ -23,6 +23,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -89,10 +90,28 @@ export default function AdminUsers() {
   const [newBalance, setNewBalance] = useState("");
   const [balanceCurrency, setBalanceCurrency] = useState("XAF");
   const [updateType, setUpdateType] = useState<"set" | "add">("set");
+  const [balanceTab, setBalanceTab] = useState<"modifier" | "convertir">("modifier");
+  const [convFrom, setConvFrom] = useState("");
+  const [convTo, setConvTo] = useState("");
+  const [convAmount, setConvAmount] = useState("");
 
   const { data: userWallets, refetch: refetchUserWallets } = useQuery<any[]>({
     queryKey: [`/api/admin/users/${balanceModal?.id}/wallets`],
     enabled: !!balanceModal,
+  });
+
+  const { data: fxRates = {} } = useQuery<Record<string, number>>({
+    queryKey: ["/api/public/exchange-rates"],
+    enabled: !!balanceModal,
+  });
+
+  const { data: conversionFeeSetting } = useQuery<{ value: string }>({
+    queryKey: ["/api/settings/conversion_fee_percent"],
+    enabled: !!balanceModal,
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/settings/conversion_fee_percent");
+      return res.json();
+    },
   });
 
   const { data: viewUserWallets } = useQuery<any[]>({
@@ -149,6 +168,23 @@ export default function AdminUsers() {
       .filter((w: any) => w.currency !== balanceModal.preferredCurrency)
       .map((w: any) => ({ currency: w.currency, balance: w.balance, isPrimary: false })),
   ] : [];
+
+  const convFeePercent = conversionFeeSetting?.value ? parseFloat(conversionFeeSetting.value) : 6;
+  const xafRate = (fxRates as Record<string, number>)["XAF"] || 585;
+
+  const convPreview = (() => {
+    if (!convFrom || !convTo || !convAmount || convFrom === convTo) return null;
+    const amount = parseFloat(convAmount);
+    if (isNaN(amount) || amount <= 0) return null;
+    const fee = (amount * convFeePercent) / 100;
+    const afterFee = amount - fee;
+    const fromRate = (fxRates as Record<string, number>)[convFrom] || xafRate;
+    const toRate = (fxRates as Record<string, number>)[convTo] || xafRate;
+    const inXAF = afterFee * (xafRate / fromRate);
+    const received = inXAF * (toRate / xafRate);
+    const srcBalance = parseFloat(userWalletList.find(w => w.currency === convFrom)?.balance || "0");
+    return { fee, received, srcBalance, sufficient: srcBalance >= amount };
+  })();
 
   useEffect(() => {
     if (urlSearch) {
@@ -259,6 +295,28 @@ export default function AdminUsers() {
     },
     onError: (err: Error) => {
       toast({ title: "Erreur", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const adminConvertMutation = useMutation({
+    mutationFn: async ({ id, fromCurrency, toCurrency, amount }: { id: string; fromCurrency: string; toCurrency: string; amount: string }) => {
+      const res = await apiRequest("POST", `/api/admin/users/${id}/convert`, { fromCurrency, toCurrency, amount });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || "Erreur");
+      return json;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/admin/users/${balanceModal?.id}/wallets`] });
+      refetchUserWallets();
+      toast({
+        title: "Conversion effectuée",
+        description: `${data.fromAmount.toFixed(2)} ${data.fromCurrency} → ${data.toAmount.toFixed(2)} ${data.toCurrency} (Frais: ${data.feeAmount.toFixed(2)} ${data.fromCurrency})`,
+      });
+      setConvAmount("");
+    },
+    onError: (err: Error) => {
+      toast({ title: "Erreur de conversion", description: err.message, variant: "destructive" });
     },
   });
 
@@ -680,123 +738,215 @@ export default function AdminUsers() {
           </DialogContent>
         </Dialog>
 
-        <Dialog open={!!balanceModal} onOpenChange={(open) => { if (!open) { setBalanceModal(null); setNewBalance(""); } }}>
+        <Dialog open={!!balanceModal} onOpenChange={(open) => { if (!open) { setBalanceModal(null); setNewBalance(""); setConvAmount(""); setBalanceTab("modifier"); } }}>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Soldes de {balanceModal?.fullName}</DialogTitle>
               <DialogDescription>
-                Cliquez sur une devise pour la modifier.
+                Modifiez directement les soldes ou convertissez entre devises avec les frais configurés ({convFeePercent}%).
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <p className="text-xs text-muted-foreground mb-2">Comptes existants — cliquez pour modifier</p>
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                  {userWalletList.map(w => {
-                    const bal = parseFloat(w.balance);
-                    const isSelected = balanceCurrency === w.currency;
-                    return (
-                      <button
-                        key={w.currency}
-                        onClick={() => { setBalanceCurrency(w.currency); setNewBalance(w.balance); setUpdateType("set"); }}
-                        className={`relative flex flex-col items-center gap-1 p-3 rounded-lg border text-sm font-medium transition-all ${
-                          isSelected
-                            ? "border-primary bg-primary/10 text-primary shadow-sm"
-                            : "border-border hover:border-primary/50 hover:bg-muted/60"
-                        }`}
-                      >
-                        {w.isPrimary && (
-                          <span className="absolute top-1 right-1 text-[9px] bg-primary/20 text-primary rounded px-1">Principal</span>
-                        )}
-                        <span className="text-lg">{CURRENCY_FLAGS[w.currency] || "🌍"}</span>
-                        <span className="font-bold">{w.currency}</span>
-                        <span className={`text-xs ${bal > 0 ? "text-green-600 font-semibold" : "text-muted-foreground"}`}>
-                          {bal.toLocaleString("fr-FR", { maximumFractionDigits: 2 })}
-                        </span>
-                      </button>
-                    );
-                  })}
+
+            <Tabs value={balanceTab} onValueChange={(v) => setBalanceTab(v as any)}>
+              <TabsList className="w-full">
+                <TabsTrigger value="modifier" className="flex-1">Modifier solde</TabsTrigger>
+                <TabsTrigger value="convertir" className="flex-1">Convertir</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="modifier" className="space-y-4 mt-4">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-2">Comptes existants — cliquez pour sélectionner</p>
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                    {userWalletList.map(w => {
+                      const bal = parseFloat(w.balance);
+                      const isSelected = balanceCurrency === w.currency;
+                      return (
+                        <button
+                          key={w.currency}
+                          onClick={() => { setBalanceCurrency(w.currency); setNewBalance(w.balance); setUpdateType("set"); }}
+                          className={`relative flex flex-col items-center gap-1 p-3 rounded-lg border text-sm font-medium transition-all ${
+                            isSelected
+                              ? "border-primary bg-primary/10 text-primary shadow-sm"
+                              : "border-border hover:border-primary/50 hover:bg-muted/60"
+                          }`}
+                        >
+                          {w.isPrimary && (
+                            <span className="absolute top-1 right-1 text-[9px] bg-primary/20 text-primary rounded px-1">Principal</span>
+                          )}
+                          <span className="text-lg">{CURRENCY_FLAGS[w.currency] || "🌍"}</span>
+                          <span className="font-bold">{w.currency}</span>
+                          <span className={`text-xs ${bal > 0 ? "text-green-600 font-semibold" : "text-muted-foreground"}`}>
+                            {bal.toLocaleString("fr-FR", { maximumFractionDigits: 2 })}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
 
-              <div className="border rounded-lg p-3 bg-muted/30">
-                <p className="text-xs text-muted-foreground mb-2">Modifier une autre devise (ajouter ou corriger)</p>
-                <Select
-                  value={userWalletList.some(w => w.currency === balanceCurrency) ? "" : balanceCurrency}
-                  onValueChange={(v) => { setBalanceCurrency(v); setNewBalance(getWalletBalance(v)); setUpdateType("set"); }}
-                >
-                  <SelectTrigger className="h-9 text-sm">
-                    <SelectValue placeholder="Choisir une devise…" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-60">
-                    {ALL_FX_CURRENCIES
-                      .filter(c => !userWalletList.some(w => w.currency === c.code))
-                      .map(c => (
-                        <SelectItem key={c.code} value={c.code}>
-                          {CURRENCY_FLAGS[c.code] || "🌍"} {c.code} — {c.name}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                <div className="border rounded-lg p-3 bg-muted/30">
+                  <p className="text-xs text-muted-foreground mb-2">Autre devise (ajouter ou corriger)</p>
+                  <Select
+                    value={userWalletList.some(w => w.currency === balanceCurrency) ? "" : balanceCurrency}
+                    onValueChange={(v) => { setBalanceCurrency(v); setNewBalance(getWalletBalance(v)); setUpdateType("set"); }}
+                  >
+                    <SelectTrigger className="h-9 text-sm">
+                      <SelectValue placeholder="Choisir une devise…" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-60">
+                      {ALL_FX_CURRENCIES
+                        .filter(c => !userWalletList.some(w => w.currency === c.code))
+                        .map(c => (
+                          <SelectItem key={c.code} value={c.code}>
+                            {CURRENCY_FLAGS[c.code] || "🌍"} {c.code} — {c.name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <div className="border-t pt-4 space-y-4">
-                <p className="text-sm font-semibold flex items-center gap-2">
-                  <span>{CURRENCY_FLAGS[balanceCurrency] || "🌍"}</span>
-                  Modifier le solde <span className="text-primary">{balanceCurrency}</span>
-                  <span className="text-muted-foreground font-normal">
-                    (actuel : {parseFloat(getWalletBalance(balanceCurrency)).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {balanceCurrency})
-                  </span>
-                </p>
+                <div className="border-t pt-4 space-y-3">
+                  <p className="text-sm font-semibold flex items-center gap-2 flex-wrap">
+                    <span>{CURRENCY_FLAGS[balanceCurrency] || "🌍"}</span>
+                    Modifier <span className="text-primary">{balanceCurrency}</span>
+                    <span className="text-muted-foreground font-normal text-xs">
+                      (actuel : {parseFloat(getWalletBalance(balanceCurrency)).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {balanceCurrency})
+                    </span>
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label>Type</Label>
+                      <Select value={updateType} onValueChange={(v: any) => setUpdateType(v)}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="set">Définir le montant exact</SelectItem>
+                          <SelectItem value="add">Ajouter au solde actuel</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Montant ({balanceCurrency})</Label>
+                      <Input
+                        type="number" step="0.01" value={newBalance}
+                        onChange={(e) => setNewBalance(e.target.value)}
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
+                  {updateType === "add" && newBalance && parseFloat(newBalance) > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Nouveau solde estimé :{" "}
+                      <span className="font-semibold text-green-600">
+                        {(parseFloat(getWalletBalance(balanceCurrency)) + parseFloat(newBalance)).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {balanceCurrency}
+                      </span>
+                    </p>
+                  )}
+                  <Button
+                    className="w-full"
+                    onClick={() => balanceModal && updateBalanceMutation.mutate({ id: balanceModal.id, balance: newBalance, currency: balanceCurrency, type: updateType })}
+                    disabled={updateBalanceMutation.isPending || !newBalance}
+                  >
+                    {updateBalanceMutation.isPending ? "Mise à jour..." : `Mettre à jour ${balanceCurrency}`}
+                  </Button>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="convertir" className="space-y-4 mt-4">
+                <div className="rounded-lg border bg-primary/5 p-3 text-sm text-muted-foreground">
+                  Frais de conversion appliqués : <span className="font-semibold text-primary">{convFeePercent}%</span>
+                  <span className="text-xs ml-1">(configurés dans les paramètres admin)</span>
+                </div>
+
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <Label>Type</Label>
-                    <Select value={updateType} onValueChange={(v: any) => setUpdateType(v)}>
+                    <Label>Devise source</Label>
+                    <Select value={convFrom} onValueChange={(v) => { setConvFrom(v); if (v === convTo) setConvTo(""); }}>
                       <SelectTrigger>
-                        <SelectValue />
+                        <SelectValue placeholder="De…" />
                       </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="set">Définir le montant exact</SelectItem>
-                        <SelectItem value="add">Ajouter au solde actuel</SelectItem>
+                      <SelectContent className="max-h-60">
+                        {userWalletList.map(w => (
+                          <SelectItem key={w.currency} value={w.currency}>
+                            {CURRENCY_FLAGS[w.currency] || "🌍"} {w.currency}
+                            <span className="text-muted-foreground ml-1 text-xs">
+                              ({parseFloat(w.balance).toLocaleString("fr-FR", { maximumFractionDigits: 2 })})
+                            </span>
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-1">
-                    <Label>Montant ({balanceCurrency})</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={newBalance}
-                      onChange={(e) => setNewBalance(e.target.value)}
-                      placeholder="0.00"
-                      autoFocus
-                    />
+                    <Label>Devise cible</Label>
+                    <Select value={convTo} onValueChange={setConvTo}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Vers…" />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-60">
+                        {ALL_FX_CURRENCIES
+                          .filter(c => c.code !== convFrom)
+                          .map(c => (
+                            <SelectItem key={c.code} value={c.code}>
+                              {CURRENCY_FLAGS[c.code] || "🌍"} {c.code} — {c.name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
-                {updateType === "add" && newBalance && parseFloat(newBalance) > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    Nouveau solde estimé :{" "}
-                    <span className="font-semibold text-green-600">
-                      {(parseFloat(getWalletBalance(balanceCurrency)) + parseFloat(newBalance)).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {balanceCurrency}
-                    </span>
-                  </p>
+
+                <div className="space-y-1">
+                  <Label>Montant à convertir {convFrom ? `(${convFrom})` : ""}</Label>
+                  <Input
+                    type="number" step="0.01" value={convAmount}
+                    onChange={(e) => setConvAmount(e.target.value)}
+                    placeholder="0.00"
+                  />
+                  {convFrom && (
+                    <p className="text-xs text-muted-foreground">
+                      Disponible : <span className="font-medium">{parseFloat(userWalletList.find(w => w.currency === convFrom)?.balance || "0").toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {convFrom}</span>
+                    </p>
+                  )}
+                </div>
+
+                {convPreview && (
+                  <div className={`rounded-lg border p-3 space-y-2 text-sm ${convPreview.sufficient ? "bg-muted/30" : "bg-red-500/10 border-red-500/30"}`}>
+                    {!convPreview.sufficient && (
+                      <p className="text-red-500 font-medium text-xs">Solde insuffisant en {convFrom}</p>
+                    )}
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Frais ({convFeePercent}%)</span>
+                      <span className="font-medium text-orange-500">- {convPreview.fee.toLocaleString("fr-FR", { maximumFractionDigits: 4 })} {convFrom}</span>
+                    </div>
+                    <div className="flex justify-between border-t pt-2">
+                      <span className="text-muted-foreground">Montant reçu (estimation)</span>
+                      <span className="font-bold text-green-600">{convPreview.received.toLocaleString("fr-FR", { maximumFractionDigits: 4 })} {convTo}</span>
+                    </div>
+                  </div>
                 )}
-              </div>
-            </div>
+
+                <Button
+                  className="w-full"
+                  onClick={() => balanceModal && adminConvertMutation.mutate({
+                    id: balanceModal.id,
+                    fromCurrency: convFrom,
+                    toCurrency: convTo,
+                    amount: convAmount,
+                  })}
+                  disabled={adminConvertMutation.isPending || !convFrom || !convTo || !convAmount || convFrom === convTo || (convPreview ? !convPreview.sufficient : false)}
+                >
+                  {adminConvertMutation.isPending
+                    ? "Conversion en cours..."
+                    : convFrom && convTo
+                      ? `Convertir ${convFrom} → ${convTo}`
+                      : "Sélectionner les devises"}
+                </Button>
+              </TabsContent>
+            </Tabs>
+
             <DialogFooter>
-              <Button variant="outline" onClick={() => { setBalanceModal(null); setNewBalance(""); }}>
+              <Button variant="outline" onClick={() => { setBalanceModal(null); setNewBalance(""); setConvAmount(""); setBalanceTab("modifier"); }}>
                 Fermer
-              </Button>
-              <Button
-                onClick={() => balanceModal && updateBalanceMutation.mutate({
-                  id: balanceModal.id,
-                  balance: newBalance,
-                  currency: balanceCurrency,
-                  type: updateType
-                })}
-                disabled={updateBalanceMutation.isPending || !newBalance}
-              >
-                {updateBalanceMutation.isPending ? "Mise à jour..." : `Mettre à jour ${balanceCurrency}`}
               </Button>
             </DialogFooter>
           </DialogContent>
