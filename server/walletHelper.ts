@@ -103,8 +103,9 @@ export async function cleanupEmptyWallets(userId: string): Promise<void> {
 // Smart wallet crediting using admin exchange rates:
 //
 // Rules (in order):
-//  1. Exact match with preferred currency → credit primary balance
-//  2. Different currency (even XOF/XAF from different countries) → credit secondary wallet
+//  1. Normalize payment currency (e.g., XOFT -> XOF)
+//  2. Exact match with preferred currency (normalized) → credit primary balance
+//  3. Different currency → credit secondary wallet
 //
 // After any secondary wallet operation, zero-balance wallets are cleaned up.
 export async function creditUserWallet(
@@ -120,17 +121,21 @@ export async function creditUserWallet(
     return;
   }
 
-  const preferredCurrency = user.preferredCurrency || "XAF";
+  const normalizedPayment = normalizeCurrency(paymentCurrency);
+  const normalizedPreferred = normalizeCurrency(user.preferredCurrency || "XAF");
 
-  // Rule 1: Exact match with preferred currency → credit primary balance
-  if (paymentCurrency === preferredCurrency) {
+  // Rule 1: Match normalized currencies → credit primary balance
+  if (normalizedPayment === normalizedPreferred) {
     await storage.updateUserBalance(userId, amount);
     return;
   }
 
-  // Rule 2: Different currency → credit secondary wallet (specific code like XOFB, XOFF, XAFG, etc.)
-  console.log(`[walletHelper] Crediting secondary wallet ${paymentCurrency} for user ${userId}: +${amount}`);
-  await storage.upsertWallet(userId, paymentCurrency, amount);
+  // Rule 2: Different currency → credit secondary wallet using normalized code
+  // Special case for Togo (XOFT) and other West African countries: 
+  // If user is from Togo and paid in XOFT, but their preferred is XOF, it should go to primary.
+  // The normalization already handles this (XOFT -> XOF), but we ensure the upsert also uses XOF.
+  console.log(`[walletHelper] Crediting secondary wallet ${normalizedPayment} for user ${userId}: +${amount}`);
+  await storage.upsertWallet(userId, normalizedPayment, amount);
 
   // Cleanup any zero-balance secondary wallets
   await cleanupEmptyWallets(userId);
