@@ -68,7 +68,7 @@ export const COUNTRY_CURRENCIES: Record<string, SupportedCurrency> = {
   "Côte d'Ivoire": "XOFC",
   "Mali": "XOF",
   "Burkina Faso": "XOFF",
-  "Niger": "XOF",
+  "Niger": "XOFN",
   "Togo": "XOFT",
   "Bénin": "XOFB",
   "Benin": "XOFB",
