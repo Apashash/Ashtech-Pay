@@ -669,14 +669,18 @@ export default function DashboardHome() {
 
               {wallets.length > 1 && (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-primary/10">
-                  {wallets.filter(w => w.currency !== (user?.preferredCurrency || "XAF")).map((wallet) => (
-                    <div key={wallet.currency} className="bg-background/40 p-3 rounded-lg border border-primary/5">
-                      <p className="text-[10px] text-muted-foreground uppercase font-bold mb-1">{wallet.currency}</p>
-                      <p className="text-sm font-bold text-foreground">
-                        {formatWalletBalance(wallet.balance, wallet.currency)}
-                      </p>
-                    </div>
-                  ))}
+                  {wallets
+                    .filter(w => w.currency !== (user?.preferredCurrency || "XAF"))
+                    .sort((a, b) => parseFloat(b.balance || "0") - parseFloat(a.balance || "0"))
+                    .slice(0, 2)
+                    .map((wallet) => (
+                      <div key={wallet.currency} className="bg-background/40 p-3 rounded-lg border border-primary/5">
+                        <p className="text-[10px] text-muted-foreground uppercase font-bold mb-1">{wallet.currency}</p>
+                        <p className="text-sm font-bold text-foreground">
+                          {formatWalletBalance(wallet.balance, wallet.currency)}
+                        </p>
+                      </div>
+                    ))}
                 </div>
               )}
             </div>
