@@ -3143,7 +3143,6 @@ export async function registerRoutes(
     }
   });
 
-  // Admin: Get all users
   // Fix user currencies based on country
   app.post("/api/admin/fix-currencies", requireAdmin, async (req, res) => {
     try {
@@ -3180,32 +3179,43 @@ export async function registerRoutes(
         "Sénégal": "XOF"
       };
 
-      const users = await storage.getAllUsers();
+      const usersResult = await storage.getAllUsers();
       let updatedCount = 0;
 
-      for (const user of users) {
+      for (const user of usersResult) {
         const country = user.country?.trim();
         if (country && COUNTRY_CURRENCIES[country]) {
           const localCurrency = COUNTRY_CURRENCIES[country];
           if (user.preferredCurrency !== localCurrency) {
             await storage.updateUserCurrency(user.id, localCurrency as any);
             // Also notify the user about the currency synchronization
-            await storage.createNotification({
-              userId: user.id,
-              type: "admin_message",
-              title: "Devise synchronisée",
-              message: `Votre devise principale a été synchronisée avec votre devise locale (${localCurrency}).`,
-              isRead: false
-            });
+            try {
+              const notificationData = {
+                userId: user.id,
+                type: "admin_message" as const,
+                title: "Devise synchronisée",
+                message: `Votre devise principale a été synchronisée avec votre devise locale (${localCurrency}).`,
+                isRead: false
+              };
+
+              const storageAny = storage as any;
+              if (typeof storageAny.createUserNotification === 'function') {
+                await storageAny.createUserNotification(notificationData);
+              } else if (typeof storageAny.createNotification === 'function') {
+                await storageAny.createNotification(notificationData);
+              }
+            } catch (e) {
+              console.warn("Could not send notification to user", user.id);
+            }
             updatedCount++;
           }
         }
       }
 
       res.json({ message: `Mise à jour de ${updatedCount} utilisateurs terminée.`, count: updatedCount });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Fix currencies error:", error);
-      res.status(500).json({ message: "Erreur serveur" });
+      res.status(500).json({ message: error.message || "Erreur serveur" });
     }
   });
 
