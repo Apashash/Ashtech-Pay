@@ -2821,6 +2821,9 @@ export async function registerRoutes(
       }
       
       const user = await storage.getUser(link.userId);
+      if (user?.isBanned) {
+        return res.status(403).json({ message: "Ce lien de paiement est suspendu." });
+      }
       
       // Increment clicks
       await storage.incrementPaymentLinkClicks(link.slug);
@@ -2883,8 +2886,19 @@ export async function registerRoutes(
   // Pay via payment link - PUBLIC endpoint, creates pending payment intent
   app.post("/api/payment-links/:slug/pay", async (req, res) => {
     try {
+      const { slug } = req.params;
       const { fullName, email, country, phone, amount: providedAmount, currency: providedCurrency, paymentMethod, operator } = req.body;
       
+      const link = await storage.getPaymentLinkBySlug(slug);
+      if (!link || !link.isActive) {
+        return res.status(404).json({ message: "Lien de paiement non trouvé ou inactif" });
+      }
+
+      const merchant = await storage.getUser(link.userId);
+      if (merchant?.isBanned) {
+        return res.status(403).json({ message: "Ce lien de paiement est suspendu car le compte du marchand est inactif." });
+      }
+
       // Validate required fields
       if (!fullName || !email || !country || !phone || !paymentMethod) {
         return res.status(400).json({ message: "Tous les champs requis doivent être remplis" });
