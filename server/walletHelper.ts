@@ -36,16 +36,37 @@ export async function loadFxRates(): Promise<Record<string, number>> {
 // Convert an amount to the target currency using admin rates (Strict country codes)
 export function convertFromXAF(amountXAF: number, targetCurrency: string, fxRates: Record<string, number>): number {
   if (targetCurrency === "XAF") return amountXAF;
+  
+  // All rates in fxRates are "Units per 1 USD" (e.g., XAF=585, GHS=12)
   const xafRate = fxRates["XAF"] || 585;
-  const targetRate = fxRates[targetCurrency] || xafRate;
+  const targetRate = fxRates[targetCurrency];
+  
+  if (targetRate === undefined) {
+    console.warn(`[walletHelper] No rate found for ${targetCurrency}, falling back to 1:1 with XAF`);
+    return amountXAF;
+  }
+
+  // Formula: Amount_Target = Amount_XAF * (Rate_Target / Rate_XAF)
+  // Example: 585 XAF -> ? GHS with XAF=585, GHS=12
+  // 585 * (12 / 585) = 12 GHS. Correct.
   return amountXAF * (targetRate / xafRate);
 }
 
 // Convert any currency amount to XAF using admin rates (Strict country codes)
 export function convertToXAF(amount: number, fromCurrency: string, fxRates: Record<string, number>): number {
   if (fromCurrency === "XAF") return amount;
+  
   const xafRate = fxRates["XAF"] || 585;
-  const fromRate = fxRates[fromCurrency] || xafRate;
+  const fromRate = fxRates[fromCurrency];
+
+  if (fromRate === undefined) {
+    console.warn(`[walletHelper] No rate found for ${fromCurrency}, falling back to 1:1 with XAF`);
+    return amount;
+  }
+
+  // Formula: Amount_XAF = Amount_From * (Rate_XAF / Rate_From)
+  // Example: 12 GHS -> ? XAF with XAF=585, GHS=12
+  // 12 * (585 / 12) = 585 XAF. Correct.
   return amount * (xafRate / fromRate);
 }
 
