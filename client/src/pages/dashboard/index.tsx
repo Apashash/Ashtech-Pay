@@ -639,31 +639,46 @@ export default function DashboardHome() {
 
         <Card className="bg-gradient-to-br from-primary/20 via-primary/10 to-transparent border-primary/20 overflow-hidden">
           <CardContent className="p-6">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex-1">
-                <p className="text-muted-foreground text-sm mb-1">Solde total ({localCurrency})</p>
-                <p className="text-3xl font-bold text-foreground" data-testid="text-balance">
-                  {formatWalletBalance(totalBalanceInLocalCurrency, localCurrency)}
-                </p>
-                <p className="text-xs text-muted-foreground mt-2">Ashtech Pay</p>
-              </div>
-              <div className="flex flex-col items-end gap-3 flex-shrink-0">
-                <button
-                  onClick={() => setLocation("/dashboard/wallets")}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/20 hover:bg-primary/30 text-primary text-sm font-semibold transition-all border border-primary/30"
-                  data-testid="button-wallets"
-                >
-                  <Wallet className="w-4 h-4" />
-                  Comptes
-                </button>
-                <div className="bg-black rounded-xl p-2 hidden sm:block">
-                  <img
-                    src="/logo.png"
-                    alt="Tableau de bord Ashtech Pay"
-                    className="h-14 w-auto object-contain"
-                  />
+            <div className="flex flex-col gap-6">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex-1">
+                  <p className="text-muted-foreground text-sm mb-1">Solde Principal ({user?.preferredCurrency || "XAF"})</p>
+                  <p className="text-3xl font-bold text-foreground" data-testid="text-balance">
+                    {formatWalletBalance(user?.balance || "0.00", user?.preferredCurrency || "XAF")}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-2">Ashtech Pay</p>
+                </div>
+                <div className="flex flex-col items-end gap-3 flex-shrink-0">
+                  <button
+                    onClick={() => setLocation("/dashboard/wallets")}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/20 hover:bg-primary/30 text-primary text-sm font-semibold transition-all border border-primary/30"
+                    data-testid="button-wallets"
+                  >
+                    <Wallet className="w-4 h-4" />
+                    Comptes
+                  </button>
+                  <div className="bg-black rounded-xl p-2 hidden sm:block">
+                    <img
+                      src="/logo.png"
+                      alt="Tableau de bord Ashtech Pay"
+                      className="h-14 w-auto object-contain"
+                    />
+                  </div>
                 </div>
               </div>
+
+              {wallets.length > 1 && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-primary/10">
+                  {wallets.filter(w => w.currency !== (user?.preferredCurrency || "XAF")).map((wallet) => (
+                    <div key={wallet.currency} className="bg-background/40 p-3 rounded-lg border border-primary/5">
+                      <p className="text-[10px] text-muted-foreground uppercase font-bold mb-1">{wallet.currency}</p>
+                      <p className="text-sm font-bold text-foreground">
+                        {formatWalletBalance(wallet.balance, wallet.currency)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
