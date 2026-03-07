@@ -135,12 +135,12 @@ export async function cleanupEmptyWallets(userId: string): Promise<void> {
   }
 }
 
-// Smart wallet crediting using admin exchange rates:
+// Smart wallet crediting:
 //
 // Rules (in order):
-//  1. Normalize payment currency (e.g., XOFT -> XOF)
-//  2. Exact match with preferred currency (normalized) → credit primary balance
-//  3. Different currency → credit secondary wallet
+//  1. Exact match with preferred currency → credit primary balance
+//  2. Different currency → credit secondary wallet in the EXACT currency
+//     (e.g. XOFB stays XOFB, XOFT stays XOFT — merchant converts as needed)
 //
 // After any secondary wallet operation, zero-balance wallets are cleaned up.
 export async function creditUserWallet(
@@ -157,17 +157,16 @@ export async function creditUserWallet(
   }
 
   const preferredCurrency = user.preferredCurrency || "XAF";
-  const normalizedPayment = normalizeCurrency(paymentCurrency, preferredCurrency);
 
-  // Rule 1: Match normalized currencies → credit primary balance
-  if (normalizedPayment === preferredCurrency) {
+  // Rule 1: Exact match → credit primary balance
+  if (paymentCurrency === preferredCurrency) {
     await storage.updateUserBalance(userId, amount);
     return;
   }
 
-  // Rule 2: Different currency → credit secondary wallet using normalized code
-  console.log(`[walletHelper] Crediting secondary wallet ${normalizedPayment} for user ${userId}: +${amount}`);
-  await storage.upsertWallet(userId, normalizedPayment, amount);
+  // Rule 2: Different currency → credit secondary wallet in exact currency code
+  console.log(`[walletHelper] Crediting secondary wallet ${paymentCurrency} for user ${userId}: +${amount}`);
+  await storage.upsertWallet(userId, paymentCurrency, amount);
 
   // Cleanup any zero-balance secondary wallets
   await cleanupEmptyWallets(userId);
