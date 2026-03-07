@@ -1,5 +1,5 @@
 import { storage } from "./storage";
-import { ALL_FX_CURRENCIES } from "@shared/schema";
+import { ALL_FX_CURRENCIES, SUPPORTED_CURRENCIES } from "@shared/schema";
 
 // CFA franc currencies — XAF and XOF and all Swychr country-specific variants
 // All have the same value (1 XAF = 1 XOF, both pegged to EUR at same rate)
