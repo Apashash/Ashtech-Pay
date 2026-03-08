@@ -42,26 +42,21 @@ export default function LoginPage() {
   });
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
-      <video autoPlay muted loop playsInline className="absolute inset-0 w-full h-full object-cover" style={{ zIndex: 0 }}>
-        <source src="/africa_hero.mp4" type="video/mp4" />
-      </video>
-      <div className="absolute inset-0 bg-black/65" style={{ zIndex: 1 }} />
-
-      <div className="w-full max-w-md relative" style={{ zIndex: 2 }}>
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
         <div className="flex flex-col items-center gap-3 mb-8">
           <Link href="/">
-            <div className="bg-black rounded-xl p-2 cursor-pointer inline-flex border border-white/10">
+            <div className="bg-card rounded-xl p-2 cursor-pointer inline-flex border border-border">
               <img src="/logo.png" alt="Ashtech-Pay Afrique" className="h-9 w-auto" />
             </div>
           </Link>
           <div className="text-center">
-            <h1 className="text-3xl font-extrabold text-white tracking-tight">Connexion</h1>
-            <p className="text-white/60 mt-1 text-sm">Accédez à votre compte Ashtech Pay</p>
+            <h1 className="text-3xl font-extrabold text-foreground tracking-tight">Connexion</h1>
+            <p className="text-muted-foreground mt-1 text-sm">Accédez à votre compte Ashtech Pay</p>
           </div>
         </div>
 
-        <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-8">
+        <div className="bg-card border border-border rounded-2xl p-8">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(loginMutation.mutate)} className="space-y-5">
               <FormField
@@ -69,13 +64,13 @@ export default function LoginPage() {
                 name="identifier"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-white/80 font-semibold text-sm">Email ou Téléphone</FormLabel>
+                    <FormLabel className="font-semibold text-sm">Email ou Téléphone</FormLabel>
                     <FormControl>
                       <div className="relative">
-                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
+                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                         <Input
                           placeholder="votreemail@exemple.com ou +237..."
-                          className="pl-10 bg-white/10 border-white/15 text-white placeholder:text-white/30 focus:border-primary focus:bg-white/15"
+                          className="pl-10"
                           data-testid="input-identifier"
                           {...field}
                         />
@@ -91,21 +86,21 @@ export default function LoginPage() {
                 name="password"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-white/80 font-semibold text-sm">Mot de passe</FormLabel>
+                    <FormLabel className="font-semibold text-sm">Mot de passe</FormLabel>
                     <FormControl>
                       <div className="relative">
-                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                         <Input
                           type={showPassword ? "text" : "password"}
                           placeholder="••••••••"
-                          className="pl-10 pr-10 bg-white/10 border-white/15 text-white placeholder:text-white/30 focus:border-primary focus:bg-white/15"
+                          className="pl-10 pr-10"
                           data-testid="input-password"
                           {...field}
                         />
                         <button
                           type="button"
                           onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/80"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                           data-testid="button-toggle-password"
                         >
                           {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -136,12 +131,12 @@ export default function LoginPage() {
 
         <div className="mt-5 flex items-center justify-between px-1">
           <Link href="/">
-            <Button variant="ghost" size="sm" className="gap-1.5 text-white/60 hover:text-white hover:bg-white/10" data-testid="button-back-home">
+            <Button variant="ghost" size="sm" className="gap-1.5" data-testid="button-back-home">
               <Home className="w-3.5 h-3.5" />
               Accueil
             </Button>
           </Link>
-          <p className="text-white/50 text-sm">
+          <p className="text-muted-foreground text-sm">
             Pas encore de compte ?{" "}
             <Link href="/register">
               <span className="text-primary hover:underline cursor-pointer font-semibold" data-testid="link-register">
