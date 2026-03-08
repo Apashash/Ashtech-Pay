@@ -168,9 +168,10 @@ export default function WalletsPage() {
   const feeAmount = (parsedAmount * conversionFeePercent) / 100;
   const amountAfterFee = parsedAmount - feeAmount;
 
+  const CFA_CODES = new Set(["XAF","XAFC","XAFG","XOF","XOFC","XOFF","XOFN","XOFB","XOFT","XOFS","XOFM"]);
   const xafRate = fxRates["XAF"] || 585;
-  const fromRateUSD = fxRates[fromCurrency] || xafRate;
-  const toRateUSD = fxRates[toCurrency] || xafRate;
+  const fromRateUSD = CFA_CODES.has(fromCurrency) ? xafRate : (fxRates[fromCurrency] || xafRate);
+  const toRateUSD = CFA_CODES.has(toCurrency) ? xafRate : (fxRates[toCurrency] || xafRate);
   const amountInXAF = amountAfterFee * (xafRate / fromRateUSD);
   const previewAmount = amountInXAF * (toRateUSD / xafRate);
 

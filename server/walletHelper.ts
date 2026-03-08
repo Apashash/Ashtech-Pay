@@ -71,6 +71,8 @@ export async function loadFxRates(): Promise<Record<string, number>> {
 // Convert an amount to the target currency using admin rates (USD as pivot)
 export function convertFromXAF(amountXAF: number, targetCurrency: string, fxRates: Record<string, number>): number {
   if (targetCurrency === "XAF") return amountXAF;
+  // All CFA variants (XOF, XOFS, XOFC, XOFT, etc.) are 1:1 with XAF
+  if (CFA_CURRENCIES.has(targetCurrency)) return amountXAF;
   
   // 1. Convert XAF to USD (A to USD)
   const xafRate = fxRates["XAF"] || 585;
@@ -89,6 +91,8 @@ export function convertFromXAF(amountXAF: number, targetCurrency: string, fxRate
 // Convert any currency amount to XAF using admin rates (USD as pivot)
 export function convertToXAF(amount: number, fromCurrency: string, fxRates: Record<string, number>): number {
   if (fromCurrency === "XAF") return amount;
+  // All CFA variants (XOF, XOFS, XOFC, XOFT, etc.) are 1:1 with XAF
+  if (CFA_CURRENCIES.has(fromCurrency)) return amount;
   
   // 1. Convert Source to USD (A to USD)
   const fromRate = fxRates[fromCurrency];
@@ -111,13 +115,15 @@ export function convertCurrency(
   fxRates: Record<string, number>
 ): number {
   if (fromCurrency === toCurrency) return amount;
+  // CFA variants are all 1:1 with each other
+  if (CFA_CURRENCIES.has(fromCurrency) && CFA_CURRENCIES.has(toCurrency)) return amount;
   
   // 1. Convert Source to USD
-  const fromRate = fxRates[fromCurrency];
+  const fromRate = CFA_CURRENCIES.has(fromCurrency) ? (fxRates["XAF"] || 585) : fxRates[fromCurrency];
   const amountUSD = fromRate ? (amount / fromRate) : amount;
 
   // 2. Convert USD to Target
-  const targetRate = fxRates[toCurrency];
+  const targetRate = CFA_CURRENCIES.has(toCurrency) ? (fxRates["XAF"] || 585) : fxRates[toCurrency];
   return targetRate ? (amountUSD * targetRate) : amountUSD;
 }
 

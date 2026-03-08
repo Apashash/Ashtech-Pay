@@ -130,7 +130,7 @@ export const ALL_FX_CURRENCIES: FxCurrency[] = [
   { code: "XOFN", name: "Niger (XOF)", defaultRate: 585.00 },
   { code: "XOFB", name: "Bénin (XOF)", defaultRate: 585.00 },
   { code: "XOFT", name: "Togo (XOF)", defaultRate: 585.00 },
-  { code: "XOFS", name: "Sénégal (XOF)", defaultRate: 702.00 },
+  { code: "XOFS", name: "Sénégal (XOF)", defaultRate: 585.00 },
   { code: "XOFM", name: "Mali (XOF)", defaultRate: 585.00 },
   { code: "XAFC", name: "Congo Brazzaville (XAF)", defaultRate: 585.00 },
   { code: "XAFG", name: "Gabon (XAF)", defaultRate: 585.00 },
