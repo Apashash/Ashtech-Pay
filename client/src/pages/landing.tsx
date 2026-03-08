@@ -203,7 +203,7 @@ function HeroSection() {
               </Button>
             </Link>
             
-            <p className="text-lg sm:text-xl text-white/75 max-w-xl">
+            <p className="text-base sm:text-lg md:text-xl text-white/75 w-full">
               <span className="text-cyan-400 font-bold">ASHTECH PAY</span> est une <span className="font-bold text-white">plateforme de paiement innovante</span> qui permet aux créateurs, entrepreneurs et commerçants de vendre leurs <span className="font-bold text-white">produits physiques ou digitaux</span> grâce à un <span className="font-bold text-white">simple lien de paiement</span>, et de recevoir leur argent <span className="font-bold text-white">immédiatement, en toute sécurité</span>.
             </p>
             
