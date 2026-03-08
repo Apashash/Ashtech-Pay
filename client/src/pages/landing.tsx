@@ -187,22 +187,21 @@ function HeroSection() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-32 relative z-10">
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
           <div className="space-y-6">
-            <div className="flex items-center gap-2 flex-col sm:flex-row mt-0">
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/20 rounded-full border border-primary/40">
-                <Globe className="w-4 h-4 text-primary" />
-                <span className="text-sm text-primary font-medium">+18 pays africains</span>
-              </div>
-              <Link href="/login">
-                <Button className="bg-blue-600 hover:bg-blue-700 text-white rounded-full px-5 py-2 text-sm font-semibold" data-testid="button-commencer-hero">
-                  Commencer
-                </Button>
-              </Link>
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/20 rounded-full border border-primary/40 w-fit">
+              <Globe className="w-4 h-4 text-primary" />
+              <span className="text-sm text-primary font-medium">+18 pays africains</span>
             </div>
             
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white leading-tight">
               Vendez en ligne.{" "}
               <span className="text-primary">Encaissez instantanément.</span>
             </h1>
+            
+            <Link href="/login">
+              <Button className="bg-blue-600 hover:bg-blue-700 text-white rounded-full px-6 py-3 text-sm font-semibold w-fit" data-testid="button-commencer-hero">
+                Commencer
+              </Button>
+            </Link>
             
             <p className="text-lg sm:text-xl text-white/75 max-w-xl">
               <span className="text-cyan-400 font-bold">ASHTECH PAY</span> est une <span className="font-bold text-white">plateforme de paiement innovante</span> qui permet aux créateurs, entrepreneurs et commerçants de vendre leurs <span className="font-bold text-white">produits physiques ou digitaux</span> grâce à un <span className="font-bold text-white">simple lien de paiement</span>, et de recevoir leur argent <span className="font-bold text-white">immédiatement, en toute sécurité</span>.
