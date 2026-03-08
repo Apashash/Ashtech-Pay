@@ -179,18 +179,8 @@ function Navbar() {
 
 function HeroSection() {
   return (
-    <section className="relative min-h-screen flex items-center pt-16 overflow-hidden">
-      <video
-        autoPlay
-        muted
-        loop
-        playsInline
-        className="absolute inset-0 w-full h-full object-cover"
-        style={{ zIndex: 0 }}
-      >
-        <source src="/africa_hero.mp4" type="video/mp4" />
-      </video>
-      <div className="absolute inset-0" style={{ zIndex: 1, background: "linear-gradient(135deg, rgba(0,0,0,0.78) 0%, rgba(0,0,0,0.50) 55%, rgba(0,0,0,0.20) 100%)" }} />
+    <section className="relative min-h-screen flex items-center pt-16 overflow-hidden bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900">
+      <div className="absolute inset-0" style={{ zIndex: 1, background: "linear-gradient(135deg, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.2) 55%, rgba(0,0,0,0.1) 100%)" }} />
       <div className="absolute top-1/4 right-0 w-96 h-96 bg-primary/10 rounded-full blur-3xl" style={{ zIndex: 1 }} />
       <div className="absolute bottom-1/4 left-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl" style={{ zIndex: 1 }} />
       
