@@ -129,11 +129,11 @@ function Navbar() {
               </button>
               <button
                 onClick={() => setMenuOpen(!menuOpen)}
-                className="p-2 rounded-lg hover:bg-accent transition-colors"
+                className="p-2 rounded-lg hover:bg-accent transition-all duration-300"
                 aria-label="Menu"
                 data-testid="button-hamburger-menu"
               >
-                <Menu className="w-6 h-6 text-foreground" />
+                <Menu className={`w-6 h-6 text-foreground transition-transform duration-300 ${menuOpen ? 'rotate-90' : ''}`} />
               </button>
             </div>
           </div>
@@ -141,10 +141,10 @@ function Navbar() {
       </nav>
       
       {menuOpen && (
-        <div className="fixed inset-0 z-[60]" onClick={() => setMenuOpen(false)}>
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+        <div className="fixed inset-0 z-[60] animate-in fade-in duration-300" onClick={() => setMenuOpen(false)}>
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-in fade-in duration-300" />
           <div 
-            className="absolute right-0 top-0 h-full w-80 max-w-[85vw] bg-background shadow-2xl overflow-y-auto"
+            className="absolute right-0 top-0 h-full w-80 max-w-[85vw] bg-background shadow-2xl overflow-y-auto animate-in slide-in-from-right duration-300"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between p-4 border-b border-border">
