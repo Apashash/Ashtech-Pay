@@ -102,7 +102,7 @@ export default function RegisterPage() {
       <div className="w-full max-w-md">
         <div className="flex flex-col items-center gap-3 mb-8">
           <Link href="/">
-            <div className="bg-card rounded-xl p-2 cursor-pointer inline-flex border border-border">
+            <div className="bg-zinc-900 rounded-xl p-2 cursor-pointer inline-flex border border-zinc-700">
               <img src="/logo.png" alt="Ashtech-Pay Afrique" className="h-9 w-auto" />
             </div>
           </Link>
