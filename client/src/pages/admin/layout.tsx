@@ -152,6 +152,10 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     }
   });
 
+  const [conversionSeenAt, setConversionSeenAt] = useState<string>(() =>
+    localStorage.getItem("ashtech_conv_seen_at") || new Date(0).toISOString()
+  );
+
   const { data: layoutStats } = useQuery<{
     pendingDeposits: number;
     pendingWithdrawals: number;
@@ -161,6 +165,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     conversionCount: number;
     withdrawalNumberCount: number;
     notifications: Notification[];
+    latestConversionAt: string | null;
   }>({
     queryKey: ["/api/admin/layout-stats"],
     refetchInterval: 12000,
@@ -168,15 +173,29 @@ export function AdminLayout({ children }: AdminLayoutProps) {
 
   const notifications = layoutStats?.notifications || [];
 
+  const hasNewConversion = !!(
+    layoutStats?.conversionCount &&
+    layoutStats?.latestConversionAt &&
+    layoutStats.latestConversionAt > conversionSeenAt
+  );
+
   const pendingCounts: Record<string, number> = {
     "/admin/transactions/deposits": layoutStats?.pendingDeposits || 0,
     "/admin/transactions/withdrawals": layoutStats?.pendingWithdrawals || 0,
     "/admin/transactions/transfers": layoutStats?.pendingTransfers || 0,
     "/admin/kyc": layoutStats?.kycPending || 0,
     "/admin/support": layoutStats?.ticketUnread || 0,
-    "/admin/conversions": layoutStats?.conversionCount || 0,
+    "/admin/conversions": hasNewConversion ? (layoutStats?.conversionCount || 0) : 0,
     "/admin/withdrawal-numbers": layoutStats?.withdrawalNumberCount || 0,
   };
+
+  useEffect(() => {
+    if (location === "/admin/conversions") {
+      const now = new Date().toISOString();
+      localStorage.setItem("ashtech_conv_seen_at", now);
+      setConversionSeenAt(now);
+    }
+  }, [location]);
 
   useEffect(() => {
     const transactionSubItem = menuItems.find(item => item.subItems)?.subItems?.find(

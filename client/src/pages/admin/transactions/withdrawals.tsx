@@ -57,6 +57,7 @@ export default function AdminWithdrawals() {
   const [statusFilter, setStatusFilter] = useState<string>(() => { const params = new URLSearchParams(window.location.search); return params.get("status") || "all"; });
   const [selectedTxId, setSelectedTxId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  const [modalStatus, setModalStatus] = useState<string>("");
 
   useEffect(() => { setPage(1); }, [statusFilter]);
 
@@ -137,15 +138,32 @@ export default function AdminWithdrawals() {
     toast({ title: "Référence copiée" });
   };
 
-  const pendingCount = withdrawals.filter(tx => tx.status === "pending").length;
-  const totalWithdrawals = withdrawals.reduce((sum, tx) => {
-    if (tx.status === "completed") {
-      return sum + parseFloat(tx.amount);
-    }
+  const forceCompleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest("PATCH", `/api/admin/transactions/${id}`, { status: "completed", forceComplete: true });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/transactions", "withdrawals"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/layout-stats"] });
+      toast({ title: "Transaction confirmée manuellement" });
+      setSelectedTxId(null);
+    },
+    onError: (error: any) => {
+      toast({ title: "Erreur", description: error?.message, variant: "destructive" });
+    },
+  });
+
+  const pendingCount = allTransactions.filter(tx => tx.status === "pending").length;
+  const totalWithdrawals = allTransactions.reduce((sum, tx) => {
+    if (tx.status === "completed") return sum + parseFloat(tx.amount);
     return sum;
   }, 0);
 
-  const tx = txDetails || transactions?.find(t => t.id === selectedTxId);
+  const tx = txDetails || allTransactions.find(t => t.id === selectedTxId);
+
+  useEffect(() => {
+    if (tx) setModalStatus(tx.status);
+  }, [tx?.id]);
 
   return (
     <AdminLayout>
@@ -415,32 +433,63 @@ export default function AdminWithdrawals() {
                   </>
                 )}
 
-                {tx.status === "pending" && (
-                  <>
-                    <Separator />
-                    <div className="flex gap-2">
-                      <Button 
-                        className="flex-1 bg-green-600 hover:bg-green-700"
+                <Separator />
+                <div className="space-y-3">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Modifier le statut</p>
+                  <div className="flex gap-2">
+                    <Select value={modalStatus} onValueChange={setModalStatus}>
+                      <SelectTrigger className="flex-1" data-testid="select-modal-status">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pending">En attente</SelectItem>
+                        <SelectItem value="processing">En cours</SelectItem>
+                        <SelectItem value="completed">Validé</SelectItem>
+                        <SelectItem value="failed">Échoué</SelectItem>
+                        <SelectItem value="cancelled">Annulé</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      variant="outline"
+                      disabled={updateStatusMutation.isPending || !modalStatus || modalStatus === tx.status}
+                      onClick={() => updateStatusMutation.mutate({ id: tx.id, status: modalStatus })}
+                      data-testid="button-modal-apply-status"
+                    >
+                      Appliquer
+                    </Button>
+                  </div>
+                  {tx.status === "pending" && (
+                    <div className="grid grid-cols-1 gap-2 pt-1">
+                      <Button
+                        className="bg-green-600 hover:bg-green-700"
                         onClick={() => updateStatusMutation.mutate({ id: tx.id, status: "completed" })}
                         disabled={updateStatusMutation.isPending}
-                        data-testid="button-modal-approve"
+                        data-testid="button-modal-approve-swychr"
                       >
                         <CheckCircle className="w-4 h-4 mr-2" />
-                        Valider le retrait
+                        Approuver via Swychr
                       </Button>
-                      <Button 
+                      <Button
+                        className="bg-blue-600 hover:bg-blue-700"
+                        onClick={() => forceCompleteMutation.mutate(tx.id)}
+                        disabled={forceCompleteMutation.isPending}
+                        data-testid="button-modal-approve-manual"
+                      >
+                        <CheckCircle className="w-4 h-4 mr-2" />
+                        Confirmer manuellement (sans Swychr)
+                      </Button>
+                      <Button
                         variant="destructive"
-                        className="flex-1"
                         onClick={() => updateStatusMutation.mutate({ id: tx.id, status: "failed" })}
                         disabled={updateStatusMutation.isPending}
                         data-testid="button-modal-reject"
                       >
                         <XCircle className="w-4 h-4 mr-2" />
-                        Rejeter
+                        Rejeter (rembourser l'utilisateur)
                       </Button>
                     </div>
-                  </>
-                )}
+                  )}
+                </div>
               </div>
             )}
           </DialogContent>

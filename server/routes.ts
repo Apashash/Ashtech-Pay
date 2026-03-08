@@ -3561,7 +3561,7 @@ export async function registerRoutes(
   app.patch("/api/admin/transactions/:id", requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
-      const { status } = req.body;
+      const { status, forceComplete } = req.body;
       
       // Get the current transaction to check previous status
       const existingTx = await storage.getTransactionById(id);
@@ -3609,8 +3609,8 @@ export async function registerRoutes(
         });
       }
       
-      // For withdrawals/transfer_out: trigger AccountPE payout when admin approves
-      if (wasNotCompleted && isNowCompleted && (transaction.type === "withdrawal" || transaction.type === "transfer_out")) {
+      // For withdrawals/transfer_out: trigger AccountPE payout when admin approves (unless forceComplete=true)
+      if (wasNotCompleted && isNowCompleted && (transaction.type === "withdrawal" || transaction.type === "transfer_out") && !forceComplete) {
         try {
           let countryCode = "CM";
           if (transaction.recipientCountry) {
@@ -3712,6 +3712,28 @@ export async function registerRoutes(
         }
       }
       
+      // Manual confirm (forceComplete=true): send notification without Swychr
+      if (wasNotCompleted && isNowCompleted && (transaction.type === "withdrawal" || transaction.type === "transfer_out") && forceComplete) {
+        const txUser = await storage.getUser(transaction.userId).catch(() => null);
+        if (txUser?.email) {
+          sendWithdrawalApprovedEmail(
+            txUser.email,
+            txUser.fullName || txUser.username,
+            transaction.amount,
+            transaction.currency || "XAF",
+            transaction.reference || undefined
+          ).catch(() => {});
+        }
+        await storage.createUserNotification({
+          userId:        transaction.userId,
+          type:          "withdrawal_confirmed",
+          title:         transaction.type === "withdrawal" ? "Retrait approuvé" : "Transfert approuvé",
+          message:       `Votre ${transaction.type === "withdrawal" ? "retrait" : "transfert"} de ${transaction.amount} ${transaction.currency} a été validé manuellement.`,
+          transactionId: transaction.id,
+          isRead:        false,
+        });
+      }
+
       // Refund user when transfer_out or withdrawal is rejected (only if previously pending)
       const wasNotRejected = existingTx.status !== "failed" && existingTx.status !== "cancelled";
       const isNowRejected = status === "failed" || status === "cancelled";

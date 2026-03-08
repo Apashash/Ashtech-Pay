@@ -1042,7 +1042,7 @@ export class DatabaseStorage implements IStorage {
     return { data, total };
   }
 
-  async getAdminLayoutStats(): Promise<{ pendingDeposits: number; pendingWithdrawals: number; pendingTransfers: number; kycPending: number; ticketUnread: number; conversionCount: number; withdrawalNumberCount: number; notifications: any[] }> {
+  async getAdminLayoutStats(): Promise<{ pendingDeposits: number; pendingWithdrawals: number; pendingTransfers: number; kycPending: number; ticketUnread: number; conversionCount: number; withdrawalNumberCount: number; notifications: any[]; latestConversionAt: string | null }> {
     const [
       pendingDepositResult,
       pendingWithdrawalResult,
@@ -1051,6 +1051,7 @@ export class DatabaseStorage implements IStorage {
       ticketUnreadResult,
       conversionResult,
       withdrawalNumberResult,
+      latestConversionResult,
     ] = await Promise.all([
       db.select({ c: count() }).from(transactions).where(and(eq(transactions.status, "pending"), inArray(transactions.type, ["deposit", "payment_link"]))),
       db.select({ c: count() }).from(transactions).where(and(eq(transactions.status, "pending"), eq(transactions.type, "withdrawal"))),
@@ -1059,6 +1060,7 @@ export class DatabaseStorage implements IStorage {
       this.countUnreadUserMessagesForAdmin(),
       this.countPendingConversions(),
       this.getPendingWithdrawalNumberChanges(),
+      db.select({ createdAt: conversionRequests.createdAt }).from(conversionRequests).orderBy(desc(conversionRequests.createdAt)).limit(1),
     ]);
 
     const pendingTxs = await db.select({ id: transactions.id, type: transactions.type, amount: transactions.amount, userId: transactions.userId, createdAt: transactions.createdAt })
@@ -1081,6 +1083,10 @@ export class DatabaseStorage implements IStorage {
       createdAt: t.createdAt,
     }));
 
+    const latestConversionAt = latestConversionResult[0]?.createdAt
+      ? new Date(latestConversionResult[0].createdAt).toISOString()
+      : null;
+
     return {
       pendingDeposits: pendingDepositResult[0].c,
       pendingWithdrawals: pendingWithdrawalResult[0].c,
@@ -1090,6 +1096,7 @@ export class DatabaseStorage implements IStorage {
       conversionCount: conversionResult,
       withdrawalNumberCount: withdrawalNumberResult.length,
       notifications,
+      latestConversionAt,
     };
   }
   

@@ -136,15 +136,21 @@ export default function AdminTransfers() {
     toast({ title: "Référence copiée" });
   };
 
-  const pendingCount = transfers.filter(tx => tx.status === "pending").length;
-  const totalTransfers = transfers.reduce((sum, tx) => {
+  const [modalStatus, setModalStatus] = useState<string>("");
+
+  const pendingCount = allTransactions.filter(tx => tx.status === "pending").length;
+  const totalTransfers = allTransactions.reduce((sum, tx) => {
     if (tx.status === "completed" && tx.type === "transfer_out") {
       return sum + parseFloat(tx.amount);
     }
     return sum;
   }, 0);
 
-  const tx = txDetails || transactions?.find(t => t.id === selectedTxId);
+  const tx = txDetails || allTransactions.find(t => t.id === selectedTxId);
+
+  useEffect(() => {
+    if (tx) setModalStatus(tx.status);
+  }, [tx?.id]);
 
   return (
     <AdminLayout>
@@ -427,12 +433,35 @@ export default function AdminTransfers() {
                   </>
                 )}
 
-                {tx.status === "pending" && (
-                  <>
-                    <Separator />
-                    <div className="flex gap-2">
-                      <Button 
-                        className="flex-1 bg-green-600 hover:bg-green-700"
+                <Separator />
+                <div className="space-y-3">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Modifier le statut</p>
+                  <div className="flex gap-2">
+                    <Select value={modalStatus} onValueChange={setModalStatus}>
+                      <SelectTrigger className="flex-1" data-testid="select-modal-status">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pending">En attente</SelectItem>
+                        <SelectItem value="processing">En cours</SelectItem>
+                        <SelectItem value="completed">Validé</SelectItem>
+                        <SelectItem value="failed">Échoué</SelectItem>
+                        <SelectItem value="cancelled">Annulé</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      variant="outline"
+                      disabled={updateStatusMutation.isPending || !modalStatus || modalStatus === tx.status}
+                      onClick={() => updateStatusMutation.mutate({ id: tx.id, status: modalStatus })}
+                      data-testid="button-modal-apply-status"
+                    >
+                      Appliquer
+                    </Button>
+                  </div>
+                  {tx.status === "pending" && (
+                    <div className="grid grid-cols-2 gap-2 pt-1">
+                      <Button
+                        className="bg-green-600 hover:bg-green-700"
                         onClick={() => updateStatusMutation.mutate({ id: tx.id, status: "completed" })}
                         disabled={updateStatusMutation.isPending}
                         data-testid="button-modal-approve"
@@ -440,9 +469,8 @@ export default function AdminTransfers() {
                         <CheckCircle className="w-4 h-4 mr-2" />
                         Valider l'envoi
                       </Button>
-                      <Button 
+                      <Button
                         variant="destructive"
-                        className="flex-1"
                         onClick={() => updateStatusMutation.mutate({ id: tx.id, status: "failed" })}
                         disabled={updateStatusMutation.isPending}
                         data-testid="button-modal-reject"
@@ -451,8 +479,8 @@ export default function AdminTransfers() {
                         Rejeter
                       </Button>
                     </div>
-                  </>
-                )}
+                  )}
+                </div>
               </div>
             )}
           </DialogContent>
