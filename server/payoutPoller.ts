@@ -1,5 +1,6 @@
 import { storage } from "./storage";
 import { checkSwychrPayoutStatus } from "./swychrPayout";
+import { sendWithdrawalApprovedEmail } from "./email";
 
 const POLL_INTERVAL  = 6_000; // 6 seconds
 const MAX_ATTEMPTS   = 600;    // 600 × 6s = 60 minutes max
@@ -66,11 +67,26 @@ async function processPayout(payout: PendingPayout, apiStatus: string) {
 
     if (apiStatus === "success") {
       await storage.updateTransactionStatus(payout.transactionId, "completed");
+
+      // Send email notification
+      const txUser = await storage.getUser(payout.userId).catch(() => null);
+      const fullTx = await storage.getTransactionById(payout.transactionId).catch(() => null);
+      const currency = fullTx?.currency || "XAF";
+      if (txUser?.email) {
+        sendWithdrawalApprovedEmail(
+          txUser.email,
+          txUser.fullName || txUser.username,
+          payout.amount,
+          currency,
+          fullTx?.reference || undefined
+        ).catch((err: any) => console.error("[PayoutPoller] Email error:", err.message));
+      }
+
       await storage.createUserNotification({
         userId:        payout.userId,
         type:          "withdrawal_confirmed",
         title:         "Retrait confirmé",
-        message:       `Votre retrait de ${payout.amount} XAF a été envoyé avec succès.`,
+        message:       `Votre retrait de ${payout.amount} ${currency} a été envoyé avec succès.`,
         transactionId: payout.transactionId,
         isRead:        false,
       });
