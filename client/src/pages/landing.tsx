@@ -929,6 +929,43 @@ function SecuritySection() {
   );
 }
 
+function TestimonialsSection() {
+  return (
+    <section className="py-20 lg:py-28 bg-background">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="text-center mb-14 animate-on-scroll">
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20 mb-5">
+            <span className="text-sm text-primary font-medium">Ce que disent nos clients</span>
+          </div>
+          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-foreground mb-4">
+            Ils nous font confiance
+          </h2>
+          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+            Des milliers de marchands africains utilisent Ashtech Pay pour encaisser et envoyer de l'argent rapidement.
+          </p>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-8 lg:gap-12 items-center animate-on-scroll">
+          <div className="flex justify-center">
+            <img
+              src="/avis-clients.jpeg"
+              alt="Avis des clients Ashtech Pay"
+              className="w-full max-w-md rounded-2xl shadow-2xl border border-border object-cover"
+            />
+          </div>
+          <div className="flex justify-center">
+            <img
+              src="/notification-transaction.png"
+              alt="Notification de transaction Ashtech Pay"
+              className="w-full max-w-sm rounded-2xl shadow-2xl border border-border object-contain"
+            />
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function CTASection() {
   return (
     <section className="py-20 lg:py-32 relative overflow-hidden">
@@ -1113,6 +1150,7 @@ export default function LandingPage() {
       <WhyAshtechSection />
       <HowItWorksSection />
       <SecuritySection />
+      <TestimonialsSection />
       <CTASection />
       <Footer />
     </div>
