@@ -186,8 +186,8 @@ function HeroSection() {
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-32 relative z-10">
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
-          <div className="space-y-8">
-            <div className="inline-flex items-center gap-3 flex-wrap">
+          <div className="space-y-6">
+            <div className="inline-flex items-center gap-3 flex-wrap mt-0">
               <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/20 rounded-full border border-primary/40">
                 <Globe className="w-4 h-4 text-primary" />
                 <span className="text-sm text-primary font-medium">+18 pays africains</span>
