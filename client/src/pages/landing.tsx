@@ -197,9 +197,16 @@ function HeroSection() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-32 relative z-10">
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
           <div className="space-y-8">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/20 rounded-full border border-primary/40">
-              <Globe className="w-4 h-4 text-primary" />
-              <span className="text-sm text-primary font-medium">+18 pays africains</span>
+            <div className="inline-flex items-center gap-3 flex-wrap">
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/20 rounded-full border border-primary/40">
+                <Globe className="w-4 h-4 text-primary" />
+                <span className="text-sm text-primary font-medium">+18 pays africains</span>
+              </div>
+              <Link href="/login">
+                <Button className="bg-blue-600 hover:bg-blue-700 text-white rounded-full px-5 py-2 text-sm font-semibold" data-testid="button-commencer-hero">
+                  Commencer
+                </Button>
+              </Link>
             </div>
             
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white leading-tight">
@@ -1124,22 +1131,10 @@ function VideoPaymentSection() {
   const duplicatedCountries = [...countries, ...countries];
 
   return (
-    <section className="relative overflow-hidden">
-      <video
-        autoPlay
-        muted
-        loop
-        playsInline
-        className="absolute inset-0 w-full h-full object-cover"
-        style={{ zIndex: 0 }}
-      >
-        <source src="/payment_video.mp4" type="video/mp4" />
-      </video>
-      <div className="absolute inset-0 bg-black/70" style={{ zIndex: 1 }} />
-
-      <div className="relative py-14" style={{ zIndex: 2 }}>
+    <section className="bg-card border-y border-border overflow-hidden">
+      <div className="py-14">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-6">
-          <h3 className="text-center text-lg font-semibold text-white/80">
+          <h3 className="text-center text-lg font-semibold text-foreground">
             Modes de paiement acceptés
           </h3>
         </div>
@@ -1148,16 +1143,16 @@ function VideoPaymentSection() {
             {duplicatedMethods.map((method, index) => (
               <div
                 key={index}
-                className="flex-shrink-0 mx-4 px-6 py-3 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 flex items-center"
+                className="flex-shrink-0 mx-4 px-6 py-3 bg-background rounded-lg border border-border flex items-center"
               >
-                <span className="text-white font-medium whitespace-nowrap">{method.name}</span>
+                <span className="text-foreground font-medium whitespace-nowrap">{method.name}</span>
               </div>
             ))}
           </div>
         </div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-10 mb-6">
-          <h3 className="text-center text-lg font-semibold text-white/80">
+          <h3 className="text-center text-lg font-semibold text-foreground">
             Disponible dans +18 pays africains
           </h3>
         </div>
@@ -1166,14 +1161,14 @@ function VideoPaymentSection() {
             {duplicatedCountries.map((country, index) => (
               <div
                 key={index}
-                className="flex-shrink-0 mx-4 px-6 py-3 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 flex items-center gap-3"
+                className="flex-shrink-0 mx-4 px-6 py-3 bg-background rounded-lg border border-border flex items-center gap-3"
               >
                 <img
                   src={`https://flagcdn.com/w40/${country.code}.png`}
                   alt={`Drapeau ${country.name}`}
                   className="w-8 h-6 rounded object-cover"
                 />
-                <span className="text-white font-medium whitespace-nowrap">{country.name}</span>
+                <span className="text-foreground font-medium whitespace-nowrap">{country.name}</span>
               </div>
             ))}
           </div>
