@@ -205,7 +205,7 @@ function HeroSection() {
             </h1>
             
             <p className="text-lg sm:text-xl text-white/75 max-w-xl">
-              Ashtech Pay permet aux créateurs, entrepreneurs et commerçants de vendre leurs produits physiques ou digitaux grâce à un simple lien de paiement, et de recevoir leur argent immédiatement, en toute sécurité.
+              <span className="text-cyan-400 font-bold">ASHTECH PAY</span> est une <span className="font-bold text-white">plateforme de paiement innovante</span> qui permet aux créateurs, entrepreneurs et commerçants de vendre leurs <span className="font-bold text-white">produits physiques ou digitaux</span> grâce à un <span className="font-bold text-white">simple lien de paiement</span>, et de recevoir leur argent <span className="font-bold text-white">immédiatement, en toute sécurité</span>.
             </p>
             
             <div className="space-y-3">
@@ -337,7 +337,7 @@ function OnlineSalesSection() {
             Vendez tout type de produit
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Vos clients peuvent payer avec Mobile Money (MTN, Orange, Airtel, Moov...), carte bancaire (Visa, Mastercard), virements locaux et autres moyens selon le pays.
+            Vos clients peuvent payer avec <span className="font-bold text-foreground">MOBILE MONEY (MTN, ORANGE, AIRTEL, MOOV)</span>, <span className="font-bold text-foreground">CARTE BANCAIRE (VISA, MASTERCARD)</span>, virements locaux et autres moyens selon le pays.
           </p>
         </div>
         
