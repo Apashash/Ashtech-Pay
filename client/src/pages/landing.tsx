@@ -966,6 +966,56 @@ function TestimonialsSection() {
   );
 }
 
+function OperatorLogosSection() {
+  const operators = [
+    { name: "Moov Money", src: "/op-moov.png" },
+    { name: "MTN MoMo", src: "/op-mtn.jpeg" },
+    { name: "TMoney", src: "/op-tmoney.jpeg" },
+    { name: "Airtel Money", src: "/op-airtel.png" },
+    { name: "Vodacom", src: "/op-vodacom.jpeg" },
+    { name: "Wave", src: "/op-wave.png" },
+    { name: "Free Money", src: "/op-freemoney.png" },
+    { name: "Wizall Money", src: "/op-wizall.png" },
+    { name: "Zamani", src: "/op-zamani.png" },
+    { name: "SmartCash", src: "/op-smartcash.png" },
+    { name: "Telecel Money", src: "/op-telecel.jpeg" },
+  ];
+
+  const duplicated = [...operators, ...operators, ...operators];
+
+  return (
+    <section className="py-14 bg-card border-y border-border overflow-hidden">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-8 text-center">
+        <p className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
+          Opérateurs de Mobile Money acceptés
+        </p>
+      </div>
+      <div className="relative overflow-hidden">
+        <div className="flex animate-marquee">
+          {duplicated.map((op, index) => (
+            <div
+              key={index}
+              className="flex-shrink-0 flex flex-col items-center gap-2 mx-5"
+              data-testid={`operator-logo-${index}`}
+            >
+              <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-border shadow-md bg-white flex items-center justify-center">
+                <img
+                  src={op.src}
+                  alt={op.name}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <span className="text-xs text-muted-foreground font-medium whitespace-nowrap max-w-[88px] text-center leading-tight">
+                {op.name}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function CTASection() {
   return (
     <section className="py-20 lg:py-32 relative overflow-hidden">
@@ -1141,6 +1191,7 @@ export default function LandingPage() {
       <Navbar />
       <HeroSection />
       <VideoPaymentSection />
+      <OperatorLogosSection />
       <OnlineSalesSection />
       <PaymentLinksSection />
       <ShareSection />
