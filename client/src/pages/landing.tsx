@@ -334,7 +334,7 @@ function OnlineSalesSection() {
             <span className="text-sm text-primary font-medium">Un lien. Plusieurs moyens de paiement.</span>
           </div>
           <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
-            Vendez tout type de produit
+            <span className="text-cyan-600">VENDEZ</span> tout type de produit
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
             Vos clients peuvent payer avec <span className="font-bold text-foreground">MOBILE MONEY (MTN, ORANGE, AIRTEL, MOOV)</span>, <span className="font-bold text-foreground">CARTE BANCAIRE (VISA, MASTERCARD)</span>, virements locaux et autres moyens selon le pays.
@@ -495,7 +495,7 @@ function ShareSection() {
             </div>
             
             <h2 className="text-3xl sm:text-4xl font-bold text-foreground">
-              Diffusez vos liens partout
+              <span className="text-cyan-600">DIFFUSEZ</span> vos <span className="font-bold">liens de paiement</span> partout
             </h2>
             
             <p className="text-lg text-muted-foreground">
@@ -554,11 +554,11 @@ function WithdrawalSection() {
             </div>
             
             <h2 className="text-3xl sm:text-4xl font-bold text-foreground">
-              Retraits rapides et flexibles
+              <span className="text-cyan-600">RETRAITS</span> rapides et <span className="font-bold">flexibles</span>
             </h2>
             
             <p className="text-lg text-muted-foreground">
-              Retirez vos fonds facilement via Mobile Money ou carte bancaire, avec historique détaillé et confirmation instantanée.
+              Retirez vos fonds facilement via <span className="font-bold text-foreground">MOBILE MONEY</span> ou <span className="font-bold text-foreground">CARTE BANCAIRE</span>, avec <span className="font-bold text-foreground">historique détaillé</span> et <span className="font-bold text-foreground">confirmation instantanée</span>.
             </p>
             
             <ul className="space-y-4">
@@ -820,10 +820,10 @@ function HowItWorksSection() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16 animate-on-scroll">
           <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
-            Comment ça marche ?
+            <span className="text-cyan-600">COMMENT</span> ça marche ?
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Commencez à utiliser Ashtech Pay en 4 étapes simples
+            Commencez à utiliser <span className="font-bold text-foreground">ASHTECH PAY</span> en <span className="font-bold">4 étapes simples</span>
           </p>
         </div>
         
@@ -891,11 +891,11 @@ function SecuritySection() {
             <span className="text-sm text-primary font-medium">Votre confiance est notre priorité</span>
           </div>
           <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
-            Sécurité & Conformité
+            <span className="text-cyan-600">SÉCURITÉ</span> & <span className="text-cyan-600">CONFORMITÉ</span>
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Ashtech Pay applique des standards stricts de sécurité et de conformité réglementaire 
-            pour protéger chaque transaction et chaque utilisateur.
+            <span className="font-bold text-foreground">ASHTECH PAY</span> applique des <span className="font-bold">standards stricts de sécurité</span> et de <span className="font-bold">conformité réglementaire</span> 
+            pour protéger <span className="font-bold">chaque transaction</span> et <span className="font-bold">chaque utilisateur</span>.
           </p>
         </div>
         
@@ -935,10 +935,10 @@ function TestimonialsSection() {
             <span className="text-sm text-primary font-medium">Ce que disent nos clients</span>
           </div>
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-foreground mb-4">
-            Ils nous font confiance
+            <span className="text-cyan-600">ILS NOUS</span> font <span className="font-bold">confiance</span>
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Des milliers de marchands africains utilisent Ashtech Pay pour encaisser et envoyer de l'argent rapidement.
+            Des <span className="font-bold">milliers de marchands africains</span> utilisent <span className="font-bold text-foreground">ASHTECH PAY</span> pour <span className="font-bold">encaisser et envoyer</span> de l'argent <span className="font-bold">rapidement</span>.
           </p>
         </div>
 
@@ -1025,10 +1025,10 @@ function CTASection() {
           <span className="text-sm text-primary font-medium">Développez votre business sans frontières</span>
         </div>
         <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-foreground mb-6">
-          Commencez maintenant
+          <span className="text-cyan-600">COMMENCEZ</span> maintenant
         </h2>
         <p className="text-lg text-muted-foreground mb-8 max-w-2xl mx-auto">
-          Créez votre compte gratuitement et commencez à vendre dès aujourd'hui. Vendez localement ou à l'international, sans vous soucier des moyens de paiement ou de la technique.
+          Créez votre <span className="font-bold text-foreground">compte gratuitement</span> et commencez à vendre <span className="font-bold text-foreground">dès aujourd'hui</span>. Vendez <span className="font-bold">localement ou à l'international</span>, sans vous soucier des <span className="font-bold">moyens de paiement</span> ou de la <span className="font-bold">technique</span>.
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <Link href="/register">
