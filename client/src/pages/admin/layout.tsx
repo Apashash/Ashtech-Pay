@@ -152,53 +152,30 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     }
   });
 
-  const { data: notifications = [] } = useQuery<Notification[]>({
-    queryKey: ["/api/admin/notifications"],
-    refetchInterval: 3000,
-  });
-
-  const { data: stats } = useQuery<{
+  const { data: layoutStats } = useQuery<{
     pendingDeposits: number;
     pendingWithdrawals: number;
     pendingTransfers: number;
+    kycPending: number;
+    ticketUnread: number;
+    conversionCount: number;
+    withdrawalNumberCount: number;
+    notifications: Notification[];
   }>({
-    queryKey: ["/api/admin/stats"],
-    refetchInterval: 3000,
+    queryKey: ["/api/admin/layout-stats"],
+    refetchInterval: 12000,
   });
 
-  const { data: kycStats } = useQuery<{ pending: number; approved: number; rejected: number }>({
-    queryKey: ["/api/admin/kyc/stats"],
-    refetchInterval: 3000,
-  });
-
-  const { data: ticketStats } = useQuery<{ openCount: number; totalCount: number }>({
-    queryKey: ["/api/admin/tickets/stats"],
-    refetchInterval: 3000,
-  });
-
-  const { data: ticketUnread } = useQuery<{ count: number }>({
-    queryKey: ["/api/admin/tickets/unread-count"],
-    refetchInterval: 6000,
-  });
-
-  const { data: conversionCount } = useQuery<{ count: number }>({
-    queryKey: ["/api/admin/conversion-requests/count"],
-    refetchInterval: 3000,
-  });
-
-  const { data: withdrawalNumberCount } = useQuery<{ count: number }>({
-    queryKey: ["/api/admin/withdrawal-number-changes/count"],
-    refetchInterval: 3000,
-  });
+  const notifications = layoutStats?.notifications || [];
 
   const pendingCounts: Record<string, number> = {
-    "/admin/transactions/deposits": stats?.pendingDeposits || 0,
-    "/admin/transactions/withdrawals": stats?.pendingWithdrawals || 0,
-    "/admin/transactions/transfers": stats?.pendingTransfers || 0,
-    "/admin/kyc": kycStats?.pending || 0,
-    "/admin/support": ticketUnread?.count || ticketStats?.openCount || 0,
-    "/admin/conversions": conversionCount?.count || 0,
-    "/admin/withdrawal-numbers": withdrawalNumberCount?.count || 0,
+    "/admin/transactions/deposits": layoutStats?.pendingDeposits || 0,
+    "/admin/transactions/withdrawals": layoutStats?.pendingWithdrawals || 0,
+    "/admin/transactions/transfers": layoutStats?.pendingTransfers || 0,
+    "/admin/kyc": layoutStats?.kycPending || 0,
+    "/admin/support": layoutStats?.ticketUnread || 0,
+    "/admin/conversions": layoutStats?.conversionCount || 0,
+    "/admin/withdrawal-numbers": layoutStats?.withdrawalNumberCount || 0,
   };
 
   useEffect(() => {
@@ -262,7 +239,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                 const isSubmenuActive = item.subItems.some(sub => location.startsWith(sub.href));
                 const isOpen = openSubmenu === item.label;
                 const totalPending = item.label === "Transactions" 
-                  ? (stats?.pendingDeposits || 0) + (stats?.pendingWithdrawals || 0) + (stats?.pendingTransfers || 0)
+                  ? (layoutStats?.pendingDeposits || 0) + (layoutStats?.pendingWithdrawals || 0) + (layoutStats?.pendingTransfers || 0)
                   : 0;
                 
                 return (
@@ -397,15 +374,15 @@ export function AdminLayout({ children }: AdminLayoutProps) {
               <PopoverTrigger asChild>
                 <Button variant="ghost" size="icon" className="relative" data-testid="button-notifications">
                   <Bell className="w-5 h-5" />
-                  {(notifications.length + (ticketUnread?.count || 0)) > 0 && (
+                  {(notifications.length + (layoutStats?.ticketUnread || 0)) > 0 && (
                     <Badge className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center bg-red-500 text-white text-xs">
-                      {(notifications.length + (ticketUnread?.count || 0)) > 9 ? "9+" : notifications.length + (ticketUnread?.count || 0)}
+                      {(notifications.length + (layoutStats?.ticketUnread || 0)) > 9 ? "9+" : notifications.length + (layoutStats?.ticketUnread || 0)}
                     </Badge>
                   )}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-80 p-0" align="end">
-                {(ticketUnread?.count || 0) > 0 && (
+                {(layoutStats?.ticketUnread || 0) > 0 && (
                   <>
                     <div className="p-3 border-b border-border">
                       <h4 className="font-semibold flex items-center gap-2">
@@ -417,12 +394,12 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                       <div className="p-3 hover-elevate cursor-pointer flex items-center justify-between gap-2 border-b border-border">
                         <div>
                           <span className="text-sm font-medium text-blue-500">
-                            {ticketUnread!.count} message{ticketUnread!.count > 1 ? "s" : ""} non lu{ticketUnread!.count > 1 ? "s" : ""}
+                            {layoutStats!.ticketUnread} message{layoutStats!.ticketUnread > 1 ? "s" : ""} non lu{layoutStats!.ticketUnread > 1 ? "s" : ""}
                           </span>
                           <p className="text-xs text-muted-foreground">Cliquez pour voir les conversations</p>
                         </div>
                         <Badge className="bg-blue-500/20 text-blue-500 border-blue-500/30 shrink-0">
-                          {ticketUnread!.count}
+                          {layoutStats!.ticketUnread}
                         </Badge>
                       </div>
                     </Link>

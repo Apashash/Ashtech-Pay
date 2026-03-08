@@ -3150,6 +3150,17 @@ export async function registerRoutes(
     }
   });
 
+  // Admin: Combined layout stats (replaces 7 separate polling requests)
+  app.get("/api/admin/layout-stats", requireAdmin, async (req, res) => {
+    try {
+      const stats = await (storage as any).getAdminLayoutStats();
+      res.json(stats);
+    } catch (error) {
+      console.error("Admin layout stats error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   // Admin: Get pending notifications
   app.get("/api/admin/notifications", requireAdmin, async (req, res) => {
     try {
@@ -3239,9 +3250,14 @@ export async function registerRoutes(
 
   app.get("/api/admin/users", requireAdmin, async (req, res) => {
     try {
-      const users = await storage.getAllUsers();
-      const safeUsers = users.map(({ password, ...u }) => u);
-      res.json(safeUsers);
+      const page = Math.max(1, parseInt(req.query.page as string) || 1);
+      const limit = Math.min(100, parseInt(req.query.limit as string) || 50);
+      const search = (req.query.search as string) || "";
+      const offset = (page - 1) * limit;
+
+      const { data, total } = await storage.getAdminUsersPaginated({ limit, offset, search: search || undefined });
+      const safeUsers = data.map(({ password, ...u }) => u);
+      res.json({ data: safeUsers, total, page, limit, pages: Math.ceil(total / limit) });
     } catch (error) {
       console.error("Admin get users error:", error);
       res.status(500).json({ message: "Erreur serveur" });
@@ -3440,20 +3456,29 @@ export async function registerRoutes(
   // Admin: Get all transactions with user info
   app.get("/api/admin/transactions", requireAdmin, async (req, res) => {
     try {
-      const transactions = await storage.getAllTransactions();
-      
-      // Enrich with user info
-      const enrichedTransactions = await Promise.all(
-        transactions.map(async (tx) => {
-          const user = await storage.getUser(tx.userId);
-          return {
-            ...tx,
-            user: user ? { fullName: user.fullName, email: user.email, username: user.username } : null,
-          };
-        })
-      );
-      
-      res.json(enrichedTransactions);
+      const page = Math.max(1, parseInt(req.query.page as string) || 1);
+      const limit = Math.min(100, parseInt(req.query.limit as string) || 50);
+      const type = (req.query.type as string) || "all";
+      const status = (req.query.status as string) || "all";
+      const offset = (page - 1) * limit;
+
+      const typeList = type !== "all" ? type.split(",").map(t => t.trim()).filter(Boolean) : [];
+      const { data: txList, total } = await (storage as any).getAdminTransactionsPaginated({
+        limit, offset,
+        types: typeList.length > 0 ? typeList : undefined,
+        status: status !== "all" ? status : undefined,
+      });
+
+      // Batch user lookup — one query for all unique user IDs (no N+1)
+      const userIds = [...new Set(txList.map(tx => tx.userId))];
+      const userMap = await (storage as any).getUsersByIds(userIds);
+
+      const enriched = txList.map(tx => {
+        const u = userMap.get(tx.userId);
+        return { ...tx, user: u ? { fullName: u.fullName, email: u.email, username: u.username } : null };
+      });
+
+      res.json({ data: enriched, total, page, limit, pages: Math.ceil(total / limit) });
     } catch (error) {
       console.error("Admin get transactions error:", error);
       res.status(500).json({ message: "Erreur serveur" });

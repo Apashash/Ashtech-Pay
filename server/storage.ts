@@ -110,6 +110,9 @@ export interface IStorage {
   
   // Admin: Transaction management
   getAllTransactions(): Promise<Transaction[]>;
+  getAdminTransactionsPaginated(params: { limit: number; offset: number; type?: string; status?: string; search?: string }): Promise<{ data: Transaction[]; total: number }>;
+  getAdminUsersPaginated(params: { limit: number; offset: number; search?: string }): Promise<{ data: User[]; total: number }>;
+  getAdminLayoutStats(): Promise<{ pendingDeposits: number; pendingWithdrawals: number; pendingTransfers: number; kycPending: number; ticketUnread: number; conversionCount: number; withdrawalNumberCount: number; notifications: any[] }>;
   
   // Admin: Country operations
   getAllCountries(): Promise<Country[]>;
@@ -982,6 +985,112 @@ export class DatabaseStorage implements IStorage {
   
   async getPendingNotifications(): Promise<any[]> {
     return [];
+  }
+
+  async getUsersByIds(ids: string[]): Promise<Map<string, { id: string; fullName: string; email: string; username: string }>> {
+    if (ids.length === 0) return new Map();
+    const result = await db.select({ id: users.id, fullName: users.fullName, email: users.email, username: users.username })
+      .from(users)
+      .where(inArray(users.id, ids));
+    return new Map(result.map(u => [u.id, u]));
+  }
+
+  async getAdminTransactionsPaginated(params: { limit: number; offset: number; types?: string[]; type?: string; status?: string; search?: string }): Promise<{ data: Transaction[]; total: number }> {
+    const { limit, offset, types, type, status } = params;
+
+    const conditions: any[] = [];
+    if (types && types.length > 0) {
+      conditions.push(inArray(transactions.type, types));
+    } else if (type && type !== "all") {
+      conditions.push(eq(transactions.type, type));
+    }
+    if (status && status !== "all") conditions.push(eq(transactions.status, status));
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const [{ total }] = await db.select({ total: count() }).from(transactions).where(whereClause);
+    const data = await db.select().from(transactions)
+      .where(whereClause)
+      .orderBy(desc(transactions.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    return { data, total };
+  }
+
+  async getAdminUsersPaginated(params: { limit: number; offset: number; search?: string }): Promise<{ data: User[]; total: number }> {
+    const { limit, offset, search } = params;
+
+    const conditions: any[] = [];
+    if (search) {
+      conditions.push(or(
+        like(users.fullName, `%${search}%`),
+        like(users.email, `%${search}%`),
+        like(users.username, `%${search}%`),
+      ));
+    }
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const [{ total }] = await db.select({ total: count() }).from(users).where(whereClause);
+    const data = await db.select().from(users)
+      .where(whereClause)
+      .orderBy(desc(users.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    return { data, total };
+  }
+
+  async getAdminLayoutStats(): Promise<{ pendingDeposits: number; pendingWithdrawals: number; pendingTransfers: number; kycPending: number; ticketUnread: number; conversionCount: number; withdrawalNumberCount: number; notifications: any[] }> {
+    const [
+      pendingDepositResult,
+      pendingWithdrawalResult,
+      pendingTransferResult,
+      kycPendingResult,
+      ticketUnreadResult,
+      conversionResult,
+      withdrawalNumberResult,
+    ] = await Promise.all([
+      db.select({ c: count() }).from(transactions).where(and(eq(transactions.status, "pending"), inArray(transactions.type, ["deposit", "payment_link"]))),
+      db.select({ c: count() }).from(transactions).where(and(eq(transactions.status, "pending"), eq(transactions.type, "withdrawal"))),
+      db.select({ c: count() }).from(transactions).where(and(eq(transactions.status, "pending"), inArray(transactions.type, ["transfer_out", "transfer_in"]))),
+      this.countKycByStatus("pending"),
+      this.countUnreadUserMessagesForAdmin(),
+      this.countPendingConversions(),
+      this.getPendingWithdrawalNumberChanges(),
+    ]);
+
+    const pendingTxs = await db.select({ id: transactions.id, type: transactions.type, amount: transactions.amount, userId: transactions.userId, createdAt: transactions.createdAt })
+      .from(transactions)
+      .where(eq(transactions.status, "pending"))
+      .orderBy(desc(transactions.createdAt))
+      .limit(20);
+
+    const userIds = [...new Set(pendingTxs.map(t => t.userId))];
+    const txUsers = userIds.length > 0
+      ? await db.select({ id: users.id, fullName: users.fullName }).from(users).where(inArray(users.id, userIds))
+      : [];
+    const userMap = new Map(txUsers.map(u => [u.id, u.fullName]));
+
+    const notifications = pendingTxs.map(t => ({
+      id: t.id,
+      type: t.type,
+      amount: t.amount,
+      userName: userMap.get(t.userId) || "Utilisateur",
+      createdAt: t.createdAt,
+    }));
+
+    return {
+      pendingDeposits: pendingDepositResult[0].c,
+      pendingWithdrawals: pendingWithdrawalResult[0].c,
+      pendingTransfers: pendingTransferResult[0].c,
+      kycPending: kycPendingResult,
+      ticketUnread: ticketUnreadResult,
+      conversionCount: conversionResult,
+      withdrawalNumberCount: withdrawalNumberResult.length,
+      notifications,
+    };
   }
   
   // Withdrawal numbers

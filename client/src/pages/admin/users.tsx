@@ -95,6 +95,13 @@ export default function AdminUsers() {
   const [convFrom, setConvFrom] = useState("");
   const [convTo, setConvTo] = useState("");
   const [convAmount, setConvAmount] = useState("");
+  const [page, setPage] = useState(1);
+  const [debouncedSearch, setDebouncedSearch] = useState(search);
+
+  useEffect(() => {
+    const t = setTimeout(() => { setDebouncedSearch(search); setPage(1); }, 400);
+    return () => clearTimeout(t);
+  }, [search]);
 
   const { data: userWallets, refetch: refetchUserWallets } = useQuery<any[]>({
     queryKey: [`/api/admin/users/${balanceModal?.id}/wallets`],
@@ -193,9 +200,17 @@ export default function AdminUsers() {
     }
   }, [urlSearch]);
 
-  const { data: users, isLoading } = useQuery<User[]>({
-    queryKey: ["/api/admin/users"],
+  const { data: usersData, isLoading } = useQuery<{ data: User[]; total: number; pages: number }>({
+    queryKey: ["/api/admin/users", page, debouncedSearch],
+    queryFn: async () => {
+      const params = new URLSearchParams({ page: String(page), limit: "50" });
+      if (debouncedSearch) params.set("search", debouncedSearch);
+      const res = await fetch(`/api/admin/users?${params}`, { credentials: "include", headers: { ...(localStorage.getItem("ashtech_auth_token") ? { Authorization: `Bearer ${localStorage.getItem("ashtech_auth_token")}` } : {}) } });
+      if (!res.ok) throw new Error("Erreur");
+      return res.json();
+    },
   });
+  const users = usersData?.data;
 
   const banMutation = useMutation({
     mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
@@ -384,11 +399,7 @@ export default function AdminUsers() {
     return "XAF";
   };
 
-  const filteredUsers = users?.filter(user => 
-    user.fullName.toLowerCase().includes(search.toLowerCase()) ||
-    user.email.toLowerCase().includes(search.toLowerCase()) ||
-    user.username.toLowerCase().includes(search.toLowerCase())
-  ) || [];
+  const filteredUsers = users || [];
 
   const getRoleBadge = (role: string) => {
     switch (role) {
@@ -425,7 +436,7 @@ export default function AdminUsers() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold">Gestion des Utilisateurs</h1>
-            <p className="text-muted-foreground">{users?.length || 0} utilisateurs</p>
+            <p className="text-muted-foreground">{usersData?.total || 0} utilisateurs</p>
           </div>
           <Button 
             onClick={() => {
@@ -604,6 +615,21 @@ export default function AdminUsers() {
                 )}
               </TableBody>
             </Table>
+            {(usersData?.pages || 1) > 1 && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+                <span className="text-sm text-muted-foreground">
+                  Page {page} / {usersData?.pages || 1} — {usersData?.total || 0} utilisateurs
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>
+                    Précédent
+                  </Button>
+                  <Button variant="outline" size="sm" disabled={page >= (usersData?.pages || 1)} onClick={() => setPage(p => p + 1)}>
+                    Suivant
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 

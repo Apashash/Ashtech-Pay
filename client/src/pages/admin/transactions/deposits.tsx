@@ -61,8 +61,11 @@ export default function AdminDeposits() {
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [selectedTxId, setSelectedTxId] = useState<string | null>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
   const highlightRef = useRef<HTMLTableRowElement | null>(null);
-  
+
+  useEffect(() => { setPage(1); }, [statusFilter, typeFilter]);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const highlight = params.get("highlight");
@@ -76,8 +79,16 @@ export default function AdminDeposits() {
     }
   }, [location]);
 
-  const { data: transactions, isLoading } = useQuery<EnrichedTransaction[]>({
-    queryKey: ["/api/admin/transactions"],
+  const { data: txData, isLoading } = useQuery<{ data: EnrichedTransaction[]; total: number; pages: number }>({
+    queryKey: ["/api/admin/transactions", "deposits", page, statusFilter],
+    queryFn: async () => {
+      const p = new URLSearchParams({ page: String(page), limit: "50", type: "deposit,payment_link" });
+      if (statusFilter !== "all") p.set("status", statusFilter);
+      const token = localStorage.getItem("ashtech_auth_token");
+      const res = await fetch(`/api/admin/transactions?${p}`, { credentials: "include", headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      if (!res.ok) throw new Error("Erreur");
+      return res.json();
+    },
   });
 
   const { data: txDetails, isLoading: txDetailsLoading } = useQuery<TransactionDetails>({
@@ -90,7 +101,8 @@ export default function AdminDeposits() {
       return apiRequest("PATCH", `/api/admin/transactions/${id}`, { status });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/transactions", "deposits"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/layout-stats"] });
       toast({ title: "Statut mis à jour" });
       setSelectedTxId(null);
     },
@@ -99,9 +111,9 @@ export default function AdminDeposits() {
     },
   });
 
-  const deposits = transactions?.filter(tx => tx.type === "deposit" || tx.type === "payment_link") || [];
+  const allTransactions = txData?.data || [];
 
-  const filteredTransactions = deposits.filter(tx => {
+  const filteredTransactions = allTransactions.filter(tx => {
     const searchLower = search.toLowerCase();
     const matchesSearch = !search || 
       (tx.description ?? "").toLowerCase().includes(searchLower) ||
@@ -110,9 +122,8 @@ export default function AdminDeposits() {
       (tx.user?.email ?? "").toLowerCase().includes(searchLower) ||
       (tx.payerName ?? "").toLowerCase().includes(searchLower) ||
       (tx.payerEmail ?? "").toLowerCase().includes(searchLower);
-    const matchesStatus = statusFilter === "all" || tx.status === statusFilter;
     const matchesType = typeFilter === "all" || tx.type === typeFilter;
-    return matchesSearch && matchesStatus && matchesType;
+    return matchesSearch && matchesType;
   });
 
   const typeLabels: Record<string, string> = {
@@ -327,6 +338,15 @@ export default function AdminDeposits() {
                 )}
               </TableBody>
             </Table>
+            {(txData?.pages || 1) > 1 && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+                <span className="text-sm text-muted-foreground">Page {page} / {txData?.pages} — {txData?.total} transactions</span>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Précédent</Button>
+                  <Button variant="outline" size="sm" disabled={page >= (txData?.pages || 1)} onClick={() => setPage(p => p + 1)}>Suivant</Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 

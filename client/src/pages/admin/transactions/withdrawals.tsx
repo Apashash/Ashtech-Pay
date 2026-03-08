@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { AdminLayout } from "../layout";
 import { Card, CardContent } from "@/components/ui/card";
@@ -56,9 +56,20 @@ export default function AdminWithdrawals() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>(() => { const params = new URLSearchParams(window.location.search); return params.get("status") || "all"; });
   const [selectedTxId, setSelectedTxId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
-  const { data: transactions, isLoading } = useQuery<EnrichedTransaction[]>({
-    queryKey: ["/api/admin/transactions"],
+  useEffect(() => { setPage(1); }, [statusFilter]);
+
+  const { data: txData, isLoading } = useQuery<{ data: EnrichedTransaction[]; total: number; pages: number }>({
+    queryKey: ["/api/admin/transactions", "withdrawals", page, statusFilter],
+    queryFn: async () => {
+      const p = new URLSearchParams({ page: String(page), limit: "50", type: "withdrawal" });
+      if (statusFilter !== "all") p.set("status", statusFilter);
+      const token = localStorage.getItem("ashtech_auth_token");
+      const res = await fetch(`/api/admin/transactions?${p}`, { credentials: "include", headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      if (!res.ok) throw new Error("Erreur");
+      return res.json();
+    },
   });
 
   const { data: txDetails, isLoading: txDetailsLoading } = useQuery<TransactionDetails>({
@@ -71,7 +82,8 @@ export default function AdminWithdrawals() {
       return apiRequest("PATCH", `/api/admin/transactions/${id}`, { status });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/transactions", "withdrawals"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/layout-stats"] });
       toast({ title: "Statut mis à jour" });
       setSelectedTxId(null);
     },
@@ -81,17 +93,16 @@ export default function AdminWithdrawals() {
     },
   });
 
-  const withdrawals = transactions?.filter(tx => tx.type === "withdrawal") || [];
+  const allTransactions = txData?.data || [];
 
-  const filteredTransactions = withdrawals.filter(tx => {
+  const filteredTransactions = allTransactions.filter(tx => {
     const searchLower = search.toLowerCase();
     const matchesSearch = !search || 
       (tx.description ?? "").toLowerCase().includes(searchLower) ||
       (tx.reference ?? "").toLowerCase().includes(searchLower) ||
       (tx.user?.fullName ?? "").toLowerCase().includes(searchLower) ||
       (tx.user?.email ?? "").toLowerCase().includes(searchLower);
-    const matchesStatus = statusFilter === "all" || tx.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    return matchesSearch;
   });
 
   const paymentMethodLabels: Record<string, string> = {
@@ -282,6 +293,15 @@ export default function AdminWithdrawals() {
                 )}
               </TableBody>
             </Table>
+            {(txData?.pages || 1) > 1 && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+                <span className="text-sm text-muted-foreground">Page {page} / {txData?.pages} — {txData?.total} transactions</span>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Précédent</Button>
+                  <Button variant="outline" size="sm" disabled={page >= (txData?.pages || 1)} onClick={() => setPage(p => p + 1)}>Suivant</Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
