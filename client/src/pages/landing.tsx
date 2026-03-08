@@ -179,7 +179,7 @@ function Navbar() {
 
 function HeroSection() {
   return (
-    <section className="relative min-h-screen flex items-center pt-16 overflow-hidden bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900">
+    <section className="relative min-h-screen flex items-center pt-16 overflow-x-hidden bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900">
       <div className="absolute inset-0" style={{ zIndex: 1, background: "linear-gradient(135deg, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.2) 55%, rgba(0,0,0,0.1) 100%)" }} />
       <div className="absolute top-1/4 right-0 w-72 h-72 md:w-96 md:h-96 bg-primary/10 rounded-full blur-3xl" style={{ zIndex: 1 }} />
       <div className="absolute bottom-1/4 left-0 w-48 h-48 md:w-64 md:h-64 bg-primary/5 rounded-full blur-3xl" style={{ zIndex: 1 }} />
@@ -1171,7 +1171,7 @@ export default function LandingPage() {
   useScrollAnimation();
   
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background overflow-x-hidden">
       <Navbar />
       <HeroSection />
       <VideoPaymentSection />
