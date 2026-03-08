@@ -33,7 +33,7 @@ export default function LoginPage() {
     onSuccess: (data) => {
       if (data.token) setAuthToken(data.token);
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
-      toast({ title: "Connexion réussie", description: `Bienvenue, ${data.user.fullName}!` });
+      toast({ title: "Connexion réussie", description: `Bienvenue, ${data.user.fullName}!`, duration: 2000, className: "bg-blue-600 text-white border-blue-700" });
       setLocation("/dashboard");
     },
     onError: (error: Error) => {
