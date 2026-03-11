@@ -43,6 +43,37 @@ import {
   sendAccountDeletedEmail,
 } from "./email";
 
+// ─── AfribaPay: country → ISO currency (authoritative, from AfribaPay API) ───
+// Used to always send the correct ISO currency code regardless of DB value.
+const AFRIBAPAY_ISO_CURRENCY: Record<string, string> = {
+  BF: "XOF", BJ: "XOF", CD: "CDF", CF: "XAF", CG: "XAF",
+  CI: "XOF", CM: "XAF", GA: "XAF", GM: "GMD", GN: "GNF",
+  GW: "XOF", ML: "XOF", NE: "XOF", NG: "NGN", RW: "RWF",
+  SN: "XOF", TD: "XAF", TG: "XOF", KE: "KES", TZ: "TZS",
+  UG: "UGX", GH: "GHS",
+};
+
+// ─── AfribaPay: operator name → AfribaPay operator code ──────────────────────
+// Fallback if afribapayOperatorCode is not set in DB.
+const AFRIBAPAY_OPERATOR_CODE_MAP: Record<string, string> = {
+  orange: "orange", mtn: "mtn", moov: "moov", wave: "wave",
+  airtel: "airtel", free: "free", emoney: "emoney",
+  ligdicash: "wligdicash", tmoney: "tmoney", celtiis: "celtiis",
+  coris: "coris", mpesa: "mpesa", vodacom: "vodacom",
+  afrimoney: "afrimoney", amanata: "amanata", nita: "nita",
+  zamani: "zamani",
+};
+
+/** Resolve the AfribaPay operator code from the DB record or operator name. */
+function resolveAfribaPayOperatorCode(operatorRecord: any, operatorName: string): string {
+  if (operatorRecord?.afribapayOperatorCode) return operatorRecord.afribapayOperatorCode;
+  const raw = operatorName.toLowerCase()
+    .replace(/\s+money\b.*/i, "")
+    .replace(/\s+/g, "")
+    .trim();
+  return AFRIBAPAY_OPERATOR_CODE_MAP[raw] || raw;
+}
+
 const uploadsDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
@@ -1393,9 +1424,10 @@ export async function registerRoutes(
 
           if (paymentProvider === "afribapay") {
             // ─── AfribaPay Payin ──────────────────────────────────────────────
-            console.log(`[Deposit] Using AfribaPay for ${operatorName} in ${countryCode}`);
-            const afribapayOperatorCode = operatorRecord?.afribapayOperatorCode
-              || operatorName.toLowerCase().replace(/\s+money.*/i, "").trim();
+            const afribapayOperatorCode = resolveAfribaPayOperatorCode(operatorRecord, operatorName);
+            // Always use AfribaPay ISO currency (overrides DB value to avoid XOFC/XOFS/XAF mismatch)
+            const afribapayCurrency = AFRIBAPAY_ISO_CURRENCY[countryCode.toUpperCase()] || countryCurrency;
+            console.log(`[Deposit] AfribaPay | country=${countryCode} | currency=${afribapayCurrency} | operator=${afribapayOperatorCode}`);
             const callbackUrl = `${process.env.APP_URL || ""}/api/afribapay/webhook`;
 
             // Use already-resolved fee record from outer scope
@@ -1426,7 +1458,7 @@ export async function registerRoutes(
               country: countryCode,
               phone_number: localPhone,
               amount: totalAmount,
-              currency: countryCurrency,
+              currency: afribapayCurrency,
               order_id: depositRef,
               reference_id: depositRef,
               notify_url: callbackUrl,
@@ -1480,7 +1512,7 @@ export async function registerRoutes(
                   country: countryCode,
                   phone: localPhone,
                   amount: totalAmount,
-                  currency: countryCurrency,
+                  currency: afribapayCurrency,
                   afribaTransactionId: extRef,
                   expiresAt: Date.now() + 15 * 60 * 1000, // 15 min
                 });
@@ -1697,9 +1729,9 @@ export async function registerRoutes(
 
         if (paymentProvider === "afribapay") {
           // ─── AfribaPay Payout ────────────────────────────────────────────────
-          console.log(`[Withdrawal] Using AfribaPay for ${operatorName} in ${countryCode}`);
-          const afribapayOperatorCode = operator?.afribapayOperatorCode
-            || operatorName.toLowerCase().replace(/\s+money.*/i, "").trim();
+          const afribapayOperatorCode = resolveAfribaPayOperatorCode(operator, operatorName);
+          const afribapayCurrency = AFRIBAPAY_ISO_CURRENCY[countryCode.toUpperCase()] || withdrawalCurrency;
+          console.log(`[Withdrawal] AfribaPay | country=${countryCode} | currency=${afribapayCurrency} | operator=${afribapayOperatorCode}`);
           const callbackUrl = `${process.env.APP_URL || ""}/api/afribapay/webhook`;
 
           // Strip country prefix from phone
@@ -1720,7 +1752,7 @@ export async function registerRoutes(
             country: countryCode,
             phone_number: localPhone,
             amount: creditedAmount,
-            currency: withdrawalCurrency,
+            currency: afribapayCurrency,
             order_id: withdrawalRef,
             reference_id: withdrawalRef,
             notify_url: callbackUrl,
@@ -3112,13 +3144,14 @@ export async function registerRoutes(
         try {
           // ─── AfribaPay branch ─────────────────────────────────────────────
           if (paymentProvider === "afribapay") {
-            console.log(`[PaymentLink] Using AfribaPay for ${operatorName} in ${paymentCountryCode}`);
             const afribapayFeeRate = (fee as any)?.afribapayFee
               ? parseFloat((fee as any).afribapayFee.toString()) : 3.0;
             const afribaMarginPct = ashtechMarginPct;
             const afribaFees = computeAfribaPayFees(numAmount, afribapayFeeRate, afribaMarginPct);
-            const afribapayOperatorCode = operatorRecord?.afribapayOperatorCode
-              || operatorName.toLowerCase().replace(/\s+/g, "");
+            const afribapayOperatorCode = resolveAfribaPayOperatorCode(operatorRecord, operatorName);
+            // Always use AfribaPay ISO currency (overrides paymentCurrency which may be a Swychr code)
+            const afribapayCurrency = AFRIBAPAY_ISO_CURRENCY[paymentCountryCode.toUpperCase()] || paymentCurrency;
+            console.log(`[PaymentLink] AfribaPay | country=${paymentCountryCode} | currency=${afribapayCurrency} | operator=${afribapayOperatorCode}`);
             const callbackUrl = `${process.env.APP_URL || ""}/api/afribapay/webhook`;
             // Strip country dialing prefix (AfribaPay needs local number without prefix)
             const prefixMap: Record<string, string> = {
@@ -3141,7 +3174,7 @@ export async function registerRoutes(
               country: paymentCountryCode,
               phone_number: localPhone,
               amount: numAmount,
-              currency: paymentCurrency,
+              currency: afribapayCurrency,
               order_id: reference,
               reference_id: reference,
               notify_url: callbackUrl,
@@ -3203,7 +3236,7 @@ export async function registerRoutes(
                   country: paymentCountryCode,
                   phone: localPhoneForOtp,
                   amount: numAmount,
-                  currency: paymentCurrency,
+                  currency: afribapayCurrency,
                   afribaTransactionId: afribaResponse.transaction_id || reference,
                   expiresAt: Date.now() + 15 * 60 * 1000,
                 });
