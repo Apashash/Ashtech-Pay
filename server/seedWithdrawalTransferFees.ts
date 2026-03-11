@@ -7,52 +7,51 @@ import { fees, countries } from "../shared/schema";
 import { eq, and, isNull } from "drizzle-orm";
 
 interface CountryFeeSpec {
-  code:         string;
-  countryName:  string;
-  swychrFee:    number; // %
-  ashtechMargin: number; // %
+  code:          string;
+  countryName:   string;
+  swychrFee:     number;
+  afribapayFee:  number;
+  ashtechMargin: number;
+  minFee:        number;
 }
 
 const FEE_SPECS: CountryFeeSpec[] = [
-  { code: "CM", countryName: "Cameroun",             swychrFee: 1.50, ashtechMargin: 2.00, minFee: 550 },
-  { code: "BF", countryName: "Burkina Faso",          swychrFee: 1.80, ashtechMargin: 2.00, minFee: 550 },
-  { code: "BJ", countryName: "Bénin",                 swychrFee: 1.80, ashtechMargin: 2.00, minFee: 100 },
-  { code: "CG", countryName: "Congo Brazzaville",     swychrFee: 2.00, ashtechMargin: 2.00, minFee: 800 },
-  { code: "CD", countryName: "Congo RDC",             swychrFee: 1.80, ashtechMargin: 2.00, minFee: 27 },
-  { code: "CI", countryName: "Côte d'Ivoire",         swychrFee: 1.80, ashtechMargin: 2.00, minFee: 550 },
-  { code: "GA", countryName: "Gabon",                 swychrFee: 1.80, ashtechMargin: 2.00, minFee: 550 },
-  { code: "GH", countryName: "Ghana",                 swychrFee: 2.00, ashtechMargin: 2.00, minFee: 20.7 },
-  { code: "GN", countryName: "Guinée Conakry",        swychrFee: 2.00, ashtechMargin: 2.00, minFee: 6500.76 },
-  { code: "IN", countryName: "Inde",                  swychrFee: 1.50, ashtechMargin: 2.00, minFee: 10.83 },
-  { code: "KE", countryName: "Kenya",                 swychrFee: 1.50, ashtechMargin: 2.00, minFee: 105.2 },
-  { code: "ML", countryName: "Mali",                  swychrFee: 1.80, ashtechMargin: 2.00, minFee: 550 },
-  { code: "NE", countryName: "Niger",                 swychrFee: 2.50, ashtechMargin: 2.00, minFee: 790 },
-  { code: "NG", countryName: "Nigeria",               swychrFee: 2.00, ashtechMargin: 2.00, minFee: 144 },
-  { code: "RW", countryName: "Rwanda",                swychrFee: 1.80, ashtechMargin: 2.00, minFee: 2300.07 },
-  { code: "SN", countryName: "Sénégal",               swychrFee: 1.80, ashtechMargin: 2.00, minFee: 550 },
-  { code: "TG", countryName: "Togo",                  swychrFee: 1.80, ashtechMargin: 2.00, minFee: 100 },
-  { code: "TZ", countryName: "Tanzanie",              swychrFee: 4.00, ashtechMargin: 2.00, minFee: 2.6 },
-  { code: "UG", countryName: "Ouganda",               swychrFee: 4.00, ashtechMargin: 2.00, minFee: 0.19 },
-  { code: "US", countryName: "États-Unis",            swychrFee: 3.00, ashtechMargin: 2.00, minFee: 50.17 },
+  { code: "CM", countryName: "Cameroun",           swychrFee: 1.50, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 550 },
+  { code: "BF", countryName: "Burkina Faso",        swychrFee: 1.80, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 550 },
+  { code: "BJ", countryName: "Bénin",               swychrFee: 1.80, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 100 },
+  { code: "CG", countryName: "Congo Brazzaville",   swychrFee: 2.00, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 800 },
+  { code: "CD", countryName: "Congo RDC",           swychrFee: 1.80, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 27 },
+  { code: "CI", countryName: "Côte d'Ivoire",       swychrFee: 1.80, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 550 },
+  { code: "GA", countryName: "Gabon",               swychrFee: 1.80, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 550 },
+  { code: "GH", countryName: "Ghana",               swychrFee: 2.00, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 20.7 },
+  { code: "GN", countryName: "Guinée Conakry",      swychrFee: 2.00, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 6500.76 },
+  { code: "IN", countryName: "Inde",                swychrFee: 1.50, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 10.83 },
+  { code: "KE", countryName: "Kenya",               swychrFee: 1.50, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 105.2 },
+  { code: "ML", countryName: "Mali",                swychrFee: 1.80, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 550 },
+  { code: "NE", countryName: "Niger",               swychrFee: 2.50, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 790 },
+  { code: "NG", countryName: "Nigeria",             swychrFee: 2.00, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 144 },
+  { code: "RW", countryName: "Rwanda",              swychrFee: 1.80, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 2300.07 },
+  { code: "SN", countryName: "Sénégal",             swychrFee: 1.80, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 550 },
+  { code: "TG", countryName: "Togo",                swychrFee: 1.80, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 100 },
+  { code: "TZ", countryName: "Tanzanie",            swychrFee: 4.00, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 2.6 },
+  { code: "UG", countryName: "Ouganda",             swychrFee: 4.00, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 0.19 },
+  { code: "US", countryName: "États-Unis",          swychrFee: 3.00, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 50.17 },
 ];
 
-interface CountryFeeSpec {
-  code:         string;
-  countryName:  string;
-  swychrFee:    number; // %
-  ashtechMargin: number; // %
-  minFee:       number; // Fixed min
-}
+const TRANSACTION_TYPES = ["withdrawal", "transfer", "deposit"] as const;
 
-const TRANSACTION_TYPES = ["withdrawal", "transfer"] as const;
+const TX_TYPE_LABEL: Record<string, string> = {
+  withdrawal: "Retrait",
+  transfer:   "Transfert",
+  deposit:    "Dépôt",
+};
 
 export async function seedWithdrawalTransferFees() {
-  console.log("[FeesSeed] Starting withdrawal/transfer fee seeding...");
+  console.log("[FeesSeed] Starting fee seeding (withdrawal + transfer + deposit)...");
   let created = 0;
   let updated = 0;
 
   for (const spec of FEE_SPECS) {
-    // Lookup country by ISO code
     const [country] = await db
       .select()
       .from(countries)
@@ -64,10 +63,13 @@ export async function seedWithdrawalTransferFees() {
       continue;
     }
 
-    const totalPercentage = spec.swychrFee + spec.ashtechMargin;
-
     for (const txType of TRANSACTION_TYPES) {
-      // Check if a country-level fee (no operator) already exists
+      const isDeposit = txType === "deposit";
+      // For deposit: feeValue is based on AfribaPay fee (most common deposit provider)
+      const totalPercentage = isDeposit
+        ? spec.afribapayFee + spec.ashtechMargin
+        : spec.swychrFee + spec.ashtechMargin;
+
       const existing = await db
         .select()
         .from(fees)
@@ -83,27 +85,31 @@ export async function seedWithdrawalTransferFees() {
       const feeData = {
         feeValue:      totalPercentage.toFixed(4),
         swychrFee:     spec.swychrFee.toFixed(4),
+        afribapayFee:  spec.afribapayFee.toFixed(4),
         ashtechMargin: spec.ashtechMargin.toFixed(4),
         minFee:        spec.minFee.toString(),
         feeType:       "percentage",
         isActive:      true,
-        name:          `${spec.countryName} - ${txType === "withdrawal" ? "Retrait" : "Transfert"} (${totalPercentage}% / Min ${spec.minFee})`,
+        name:          `${spec.countryName} - ${TX_TYPE_LABEL[txType]} (${totalPercentage.toFixed(2)}%)`,
       };
 
       if (existing.length > 0) {
-        // Update existing fee
-        await db
-          .update(fees)
-          .set(feeData)
-          .where(eq(fees.id, existing[0].id));
+        // Only update fields that are NOT already customized — preserve admin edits
+        // For deposit fees that didn't exist before: always seed afribapayFee
+        const existingFee = existing[0];
+        const updateData: any = { ...feeData };
+        // Don't overwrite name if already set (keep admin-customized names)
+        if (existingFee.name && !existingFee.name.startsWith(spec.countryName + " - ")) {
+          delete updateData.name;
+        }
+        await db.update(fees).set(updateData).where(eq(fees.id, existingFee.id));
         updated++;
       } else {
-        // Create new fee
         await db.insert(fees).values({
           ...feeData,
           transactionType: txType,
-          countryId:     country.id,
-          operatorId:    null,
+          countryId:       country.id,
+          operatorId:      null,
         });
         created++;
       }

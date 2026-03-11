@@ -51,12 +51,13 @@ export default function AdminFeesWithdrawals() {
       .filter(Boolean) as { country: Country; ops: Operator[] }[];
   }, [countries, operators, fees]);
 
-  const findFee = (op: Operator): Fee | undefined => {
+  const findFee = (op: Operator, country: Country): Fee | undefined => {
     if (!fees) return undefined;
     const wFees = fees.filter(f => f.transactionType === "withdrawal");
     return (
       wFees.find(f => f.operatorId === op.id) ||
-      wFees.find(f => f.countryId === (op as any).countryId && !f.operatorId)
+      wFees.find(f => f.countryId === op.countryId && !f.operatorId) ||
+      wFees.find(f => f.countryId === country.id && !f.operatorId)
     );
   };
 
@@ -74,7 +75,7 @@ export default function AdminFeesWithdrawals() {
   };
 
   const openEdit = (op: Operator, country: Country) => {
-    const fee = findFee(op);
+    const fee = findFee(op, country);
     if (!fee) {
       toast({ title: "Aucun frais trouvé pour ce pays", variant: "destructive" });
       return;
@@ -110,7 +111,7 @@ export default function AdminFeesWithdrawals() {
       toast({ title: "Frais mis à jour" });
       closeEdit();
     },
-    onError: () => toast({ title: "Erreur", variant: "destructive" }),
+    onError: (err: any) => toast({ title: "Erreur lors de la mise à jour", description: err?.message || "Erreur serveur", variant: "destructive" }),
   });
 
   const afribaMutation = useMutation({
@@ -126,7 +127,7 @@ export default function AdminFeesWithdrawals() {
       toast({ title: "Frais AfribaPay mis à jour" });
       closeEdit();
     },
-    onError: () => toast({ title: "Erreur", variant: "destructive" }),
+    onError: (err: any) => toast({ title: "Erreur AfribaPay", description: err?.message || "Erreur serveur", variant: "destructive" }),
   });
 
   const handleSave = () => {
@@ -229,7 +230,7 @@ export default function AdminFeesWithdrawals() {
                         </thead>
                         <tbody>
                           {ops.map(op => {
-                            const fee = findFee(op);
+                            const fee = findFee(op, country);
                             const provider = (op as any).paymentProvider || "swychr";
                             const isAfribaPay = provider === "afribapay";
                             const provFee = isAfribaPay

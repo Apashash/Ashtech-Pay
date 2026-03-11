@@ -52,13 +52,14 @@ export default function AdminFeesDeposits() {
       .filter(Boolean) as { country: Country; ops: Operator[] }[];
   }, [countries, operators, fees]);
 
-  // Find the fee record for an operator (operator-specific first, then country-level)
-  const findFee = (op: Operator): Fee | undefined => {
+  // Find the fee record for an operator (operator-specific → country via operator → country via accordion)
+  const findFee = (op: Operator, country: Country): Fee | undefined => {
     if (!fees) return undefined;
     const depositFees = fees.filter(f => f.transactionType === "deposit");
     return (
       depositFees.find(f => f.operatorId === op.id) ||
-      depositFees.find(f => f.countryId === (op as any).countryId && !f.operatorId)
+      depositFees.find(f => f.countryId === op.countryId && !f.operatorId) ||
+      depositFees.find(f => f.countryId === country.id && !f.operatorId)
     );
   };
 
@@ -71,7 +72,7 @@ export default function AdminFeesDeposits() {
   };
 
   const openEdit = (op: Operator, country: Country) => {
-    const fee = findFee(op);
+    const fee = findFee(op, country);
     if (!fee) {
       toast({ title: "Aucun frais trouvé pour ce pays", variant: "destructive" });
       return;
@@ -105,7 +106,7 @@ export default function AdminFeesDeposits() {
       toast({ title: "Frais mis à jour" });
       closeEdit();
     },
-    onError: () => toast({ title: "Erreur", variant: "destructive" }),
+    onError: (err: any) => toast({ title: "Erreur lors de la mise à jour", description: err?.message || "Erreur serveur", variant: "destructive" }),
   });
 
   // AfribaPay: update afribapayFee + ashtechMargin
@@ -121,7 +122,7 @@ export default function AdminFeesDeposits() {
       toast({ title: "Frais AfribaPay mis à jour" });
       closeEdit();
     },
-    onError: () => toast({ title: "Erreur", variant: "destructive" }),
+    onError: (err: any) => toast({ title: "Erreur lors de la mise à jour", description: err?.message || "Erreur serveur", variant: "destructive" }),
   });
 
   const handleSave = () => {
@@ -226,7 +227,7 @@ export default function AdminFeesDeposits() {
                         </thead>
                         <tbody>
                           {ops.map(op => {
-                            const fee = findFee(op);
+                            const fee = findFee(op, country);
                             const provider = (op as any).paymentProvider || "swychr";
                             const isAfribaPay = provider === "afribapay";
                             const provFee = isAfribaPay
