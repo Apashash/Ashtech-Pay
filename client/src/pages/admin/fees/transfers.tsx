@@ -25,6 +25,21 @@ interface EditState {
   country: Country;
 }
 
+const guessAfribaCode = (name: string): string => {
+  const n = name.toLowerCase();
+  if (n.includes("orange")) return "orange";
+  if (n.includes("mtn")) return "mtn";
+  if (n.includes("wave")) return "wave";
+  if (n.includes("moov") || n.includes("flooz")) return "moov";
+  if (n.includes("ligdi")) return "ligdicash";
+  if (n.includes("t-money") || n.includes("tmoney")) return "tmoney";
+  if (n.includes("airtel")) return "airtel";
+  if (n.includes("free money") || n.includes("free")) return "free";
+  if (n.includes("afrimoney")) return "afrimoney";
+  if (n.includes("m-pesa") || n.includes("mpesa")) return "mpesa";
+  return "";
+};
+
 export default function AdminFeesTransfers() {
   const { toast } = useToast();
   const [editing, setEditing] = useState<EditState | null>(null);
@@ -89,7 +104,7 @@ export default function AdminFeesTransfers() {
     setMinFee(fee.minFee?.toString() || "");
     setIsActive(fee.isActive ?? true);
     setLocalProvider((op as any).paymentProvider || "swychr");
-    setLocalAfribapayCode((op as any).afribapayOperatorCode || "");
+    setLocalAfribapayCode((op as any).afribapayOperatorCode || guessAfribaCode(op.name));
   };
 
   const closeEdit = () => {
@@ -306,7 +321,7 @@ export default function AdminFeesTransfers() {
                 <div className="space-y-4 py-4">
                   <div className="space-y-2">
                     <Label>Fournisseur de paiement</Label>
-                    <Select value={localProvider} onValueChange={setLocalProvider} data-testid="select-provider">
+                    <Select value={localProvider} onValueChange={(v) => { setLocalProvider(v); if (v === "afribapay" && !localAfribapayCode) setLocalAfribapayCode(guessAfribaCode(editing?.operator.name || "")); }} data-testid="select-provider">
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="swychr">Swychr</SelectItem>
