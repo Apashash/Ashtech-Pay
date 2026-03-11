@@ -1356,6 +1356,7 @@ export async function registerRoutes(
           // Determine which provider to use (based on operator config)
           const operatorRecord = data.operatorId ? await storage.getOperator(data.operatorId) : null;
           const paymentProvider = operatorRecord?.paymentProvider || "swychr";
+          console.log(`[Deposit] operatorId=${data.operatorId} | name=${operatorRecord?.name || "?"} | DB provider=${operatorRecord?.paymentProvider || "null"} | resolved=${paymentProvider} | afribapayCode=${operatorRecord?.afribapayOperatorCode || "null"}`);
 
           if (paymentProvider === "afribapay") {
             // ─── AfribaPay Payin ──────────────────────────────────────────────
@@ -5502,6 +5503,7 @@ export async function registerRoutes(
 
       const updated = await storage.updateOperator(id, { paymentProvider, afribapayOperatorCode: afribapayOperatorCode || null });
       if (!updated) return res.status(404).json({ message: "Opérateur non trouvé" });
+      console.log(`[Admin] ✓ Operator ${updated.name} (${id}) → provider=${paymentProvider} | afribapayCode=${afribapayOperatorCode || "null"}`);
       res.json({ success: true, operator: updated });
     } catch (err: any) {
       console.error("[Admin Provider] Error:", err);
