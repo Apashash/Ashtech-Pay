@@ -70,6 +70,8 @@ export default function PaymentPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
+  const [otpRequired, setOtpRequired] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
 
   const { data: paymentLink, isLoading, error } = useQuery<PaymentLink & { hasPdf?: boolean }>({
     queryKey: ["/api/payment-links/public", params?.slug],
@@ -134,6 +136,41 @@ export default function PaymentPage() {
   const operators = useMemo(() => selectedCountryData?.operators || [], [selectedCountryData]);
   const selectedOperatorData = useMemo(() => operators.find(o => o.id === operator), [operators, operator]);
 
+  const startPaymentPolling = (ref: string) => {
+    setCountdown(8 * 60);
+    if (countdownRef.current) clearInterval(countdownRef.current);
+    countdownRef.current = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          if (countdownRef.current) clearInterval(countdownRef.current);
+          if (pollingRef.current) clearInterval(pollingRef.current);
+          setPaymentStatus("failed");
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    if (pollingRef.current) clearInterval(pollingRef.current);
+    pollingRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/transactions/status/${ref}`);
+        if (res.ok) {
+          const statusData = await res.json();
+          if (statusData.status === "completed") {
+            setPaymentStatus("success");
+            if (countdownRef.current) clearInterval(countdownRef.current);
+            if (pollingRef.current) clearInterval(pollingRef.current);
+          } else if (statusData.status === "failed") {
+            setPaymentStatus("failed");
+            if (countdownRef.current) clearInterval(countdownRef.current);
+            if (pollingRef.current) clearInterval(pollingRef.current);
+          }
+        }
+      } catch (e) { console.error("Error checking payment status:", e); }
+    }, 5000);
+  };
+
   const payMutation = useMutation({
     mutationFn: async () => {
       const newErrors: Record<string, string> = {};
@@ -169,41 +206,16 @@ export default function PaymentPage() {
       const ref = data.reference || "";
       setPaymentComplete(true);
       setPaymentReference(ref);
-      setCountdown(8 * 60);
+      setOtpCode("");
       toast({ title: "Paiement initié", description: data.message });
-      
-      if (countdownRef.current) clearInterval(countdownRef.current);
-      countdownRef.current = setInterval(() => {
-        setCountdown(prev => {
-          if (prev <= 1) {
-            if (countdownRef.current) clearInterval(countdownRef.current);
-            if (pollingRef.current) clearInterval(pollingRef.current);
-            setPaymentStatus("failed");
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-      
-      if (pollingRef.current) clearInterval(pollingRef.current);
-      pollingRef.current = setInterval(async () => {
-        try {
-          const res = await fetch(`/api/transactions/status/${ref}`);
-          if (res.ok) {
-            const statusData = await res.json();
-            if (statusData.status === "completed") {
-              setPaymentStatus("success");
-              if (countdownRef.current) clearInterval(countdownRef.current);
-              if (pollingRef.current) clearInterval(pollingRef.current);
-            } else if (statusData.status === "failed") {
-              setPaymentStatus("failed");
-              if (countdownRef.current) clearInterval(countdownRef.current);
-              if (pollingRef.current) clearInterval(pollingRef.current);
-            }
-          }
-        } catch (e) { console.error("Error checking payment status:", e); }
-      }, 5000);
-      
+
+      if (data.otpRequired) {
+        setOtpRequired(true);
+      } else {
+        setOtpRequired(false);
+        startPaymentPolling(ref);
+      }
+
       if (ref && paymentLink?.hasPdf) {
         try {
           const pdfRes = await fetch(`/api/payment-links/${params?.slug}/download-pdf/${ref}`);
@@ -218,6 +230,27 @@ export default function PaymentPage() {
       if (error.message !== "Veuillez corriger les erreurs ci-dessus") {
         toast({ title: "Erreur", description: error.message, variant: "destructive" });
       }
+    },
+  });
+
+  const otpMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/payment-links/${params?.slug}/confirm-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ref: paymentReference, otpCode }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Code OTP invalide");
+      return data;
+    },
+    onSuccess: () => {
+      setOtpRequired(false);
+      toast({ title: "OTP validé", description: "Paiement en cours de traitement…" });
+      startPaymentPolling(paymentReference);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erreur OTP", description: error.message, variant: "destructive" });
     },
   });
 
@@ -241,6 +274,8 @@ export default function PaymentPage() {
     setFullName(""); setEmail(""); setPhone(""); setCustomAmount("");
     setCountry(""); setOperator(""); setPaymentMethod("");
     setErrors({});
+    setOtpRequired(false);
+    setOtpCode("");
   };
 
   if (isLoading) {
@@ -275,7 +310,41 @@ export default function PaymentPage() {
         <div className="flex-1 flex items-center justify-center p-4">
           <Card className="w-full max-w-md text-center">
             <CardContent className="pt-6 space-y-4">
-              {paymentStatus === "pending" && (
+              {paymentStatus === "pending" && otpRequired && (
+                <>
+                  <div className="w-16 h-16 mx-auto rounded-full bg-amber-500/10 flex items-center justify-center">
+                    <Loader2 className="w-8 h-8 text-amber-500" />
+                  </div>
+                  <h2 className="text-xl font-bold text-foreground">Code OTP requis</h2>
+                  <p className="text-muted-foreground text-sm">
+                    Un code OTP a été envoyé par SMS sur votre téléphone. Entrez-le ci-dessous pour confirmer le paiement.
+                  </p>
+                  <div className="space-y-3 w-full max-w-xs mx-auto">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={8}
+                      placeholder="Ex : 123456"
+                      value={otpCode}
+                      onChange={e => setOtpCode(e.target.value.replace(/\D/g, ""))}
+                      className="w-full text-center text-2xl font-mono tracking-widest h-14 border rounded-md bg-background text-foreground px-3 focus:outline-none focus:ring-2 focus:ring-primary"
+                      data-testid="input-otp-code"
+                      autoFocus
+                    />
+                    <Button
+                      className="w-full"
+                      size="lg"
+                      onClick={() => otpMutation.mutate()}
+                      disabled={otpCode.length < 4 || otpMutation.isPending}
+                      data-testid="button-confirm-otp"
+                    >
+                      {otpMutation.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Validation…</> : "Confirmer le code OTP"}
+                    </Button>
+                  </div>
+                </>
+              )}
+              {paymentStatus === "pending" && !otpRequired && (
                 <>
                   <Loader2 className="w-16 h-16 text-primary mx-auto animate-spin" />
                   <h2 className="text-xl font-bold text-foreground">Validation en cours...</h2>

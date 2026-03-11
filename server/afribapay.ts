@@ -318,6 +318,98 @@ export async function getAfribaPayBalance(): Promise<any> {
   }
 }
 
+// ─── Countries cache for OTP detection ────────────────────────────────────────
+let _countriesCache: Record<string, AfribaPayCountry> | null = null;
+let _countriesCacheExpiry: number = 0;
+
+async function getCachedCountries(): Promise<Record<string, AfribaPayCountry>> {
+  if (_countriesCache && Date.now() < _countriesCacheExpiry) return _countriesCache;
+  try {
+    _countriesCache = await fetchAfribaPayCountries();
+    _countriesCacheExpiry = Date.now() + 24 * 60 * 60 * 1000; // 24h
+  } catch {
+    _countriesCache = _countriesCache || {};
+  }
+  return _countriesCache;
+}
+
+export async function isAfribaPayOtpRequired(country: string, operatorCode: string): Promise<boolean> {
+  try {
+    const countries = await getCachedCountries();
+    const countryData = countries[country.toUpperCase()];
+    if (!countryData) return false;
+    for (const [, curData] of Object.entries(countryData.currencies)) {
+      const op = curData.operators.find(o => o.operator_code === operatorCode.toLowerCase());
+      if (op) return op.otp_required === 1;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+// ─── OTP confirmation (POST /v1/pay/otp with otp_code) ────────────────────────
+export interface AfribaPayOtpParams {
+  operator: string;
+  country: string;
+  phone_number: string;
+  amount: number;
+  currency: string;
+  order_id: string;
+  reference_id?: string;
+  otp_code: string;
+  notify_url?: string;
+}
+
+export async function confirmAfribaPayOtp(params: AfribaPayOtpParams): Promise<AfribaPayinResult> {
+  try {
+    const headers = await authHeaders();
+    const body = {
+      operator: params.operator,
+      country: params.country,
+      phone_number: params.phone_number,
+      amount: params.amount,
+      currency: params.currency,
+      order_id: params.order_id,
+      merchant_key: AFRIBAPAY_MERCHANT_KEY,
+      reference_id: params.reference_id || params.order_id,
+      otp_code: params.otp_code,
+      notify_url: params.notify_url || "",
+    };
+
+    console.log(`[AfribaPay OTP] Confirming OTP for order_id=${params.order_id} operator=${params.operator}`);
+
+    const res = await fetch(`${AFRIBAPAY_PAYIN_URL}/v1/pay/otp`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    });
+
+    const data = await res.json();
+    console.log(`[AfribaPay OTP] Response:`, JSON.stringify(data));
+
+    if (!res.ok || data.error) {
+      return { success: false, message: data.error?.message || "Code OTP invalide ou expiré", raw: data };
+    }
+
+    const d = data.data;
+    if (d?.status === "FAILED" || d?.status === "ERROR") {
+      return { success: false, message: d?.message || "OTP rejeté par l'opérateur", raw: data };
+    }
+
+    return {
+      success: true,
+      transaction_id: d?.transaction_id,
+      order_id: d?.order_id,
+      status: d?.status || "PENDING",
+      raw: data,
+    };
+  } catch (err: any) {
+    console.error("[AfribaPay OTP] Error:", err);
+    return { success: false, message: err.message || "Erreur réseau OTP" };
+  }
+}
+
 // ─── Parse AfribaPay webhook ──────────────────────────────────────────────────
 export function parseAfribaPayWebhook(payload: any): {
   order_id?: string;

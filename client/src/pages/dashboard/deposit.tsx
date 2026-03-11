@@ -65,6 +65,8 @@ export default function DepositPage() {
   const [countdown, setCountdown] = useState(8 * 60);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
+  const [otpRequired, setOtpRequired] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
   
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   
@@ -148,6 +150,45 @@ export default function DepositPage() {
     }
   }, [watchedCountryId, prevCountryId, form]);
 
+  const startDepositPolling = (ref: string) => {
+    setCountdown(8 * 60);
+    if (countdownRef.current) clearInterval(countdownRef.current);
+    countdownRef.current = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          if (countdownRef.current) clearInterval(countdownRef.current);
+          if (pollingRef.current) clearInterval(pollingRef.current);
+          setPaymentStatus("failed");
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    if (pollingRef.current) clearInterval(pollingRef.current);
+    pollingRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/transactions/status/${ref}`);
+        if (res.ok) {
+          const statusData = await res.json();
+          if (statusData.status === "completed") {
+            setPaymentStatus("success");
+            if (countdownRef.current) clearInterval(countdownRef.current);
+            if (pollingRef.current) clearInterval(pollingRef.current);
+            queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
+          } else if (statusData.status === "failed") {
+            setPaymentStatus("failed");
+            if (countdownRef.current) clearInterval(countdownRef.current);
+            if (pollingRef.current) clearInterval(pollingRef.current);
+          }
+        }
+      } catch (e) {
+        console.error("Error checking deposit status:", e);
+      }
+    }, 5000);
+  };
+
   const depositMutation = useMutation({
     mutationFn: async (data: DepositFormData) => {
       const res = await apiRequest("POST", "/api/deposits", {
@@ -161,7 +202,6 @@ export default function DepositPage() {
       return res.json();
     },
     onSuccess: (data) => {
-      // If Swychr returns a checkout URL, redirect to the hosted payment page
       if (data.checkoutUrl) {
         window.location.href = data.checkoutUrl;
         return;
@@ -171,50 +211,43 @@ export default function DepositPage() {
       setShowValidationMessage(true);
       setDepositReference(ref);
       setPaymentStatus("pending");
-      setCountdown(8 * 60);
+      setOtpCode("");
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
-      
-      // Start countdown timer directly
-      if (countdownRef.current) clearInterval(countdownRef.current);
-      countdownRef.current = setInterval(() => {
-        setCountdown(prev => {
-          if (prev <= 1) {
-            if (countdownRef.current) clearInterval(countdownRef.current);
-            if (pollingRef.current) clearInterval(pollingRef.current);
-            setPaymentStatus("failed");
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-      
-      // Start polling for payment status
-      if (pollingRef.current) clearInterval(pollingRef.current);
-      pollingRef.current = setInterval(async () => {
-        try {
-          const res = await fetch(`/api/transactions/status/${ref}`);
-          if (res.ok) {
-            const statusData = await res.json();
-            if (statusData.status === "completed") {
-              setPaymentStatus("success");
-              if (countdownRef.current) clearInterval(countdownRef.current);
-              if (pollingRef.current) clearInterval(pollingRef.current);
-              queryClient.invalidateQueries({ queryKey: ["/api/user"] });
-              queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
-            } else if (statusData.status === "failed") {
-              setPaymentStatus("failed");
-              if (countdownRef.current) clearInterval(countdownRef.current);
-              if (pollingRef.current) clearInterval(pollingRef.current);
-            }
-          }
-        } catch (e) {
-          console.error("Error checking deposit status:", e);
-        }
-      }, 5000);
+
+      if (data.otpRequired) {
+        // OTP flow: wait for user to enter OTP before polling
+        setOtpRequired(true);
+      } else {
+        // USSD flow: start countdown + polling immediately
+        setOtpRequired(false);
+        startDepositPolling(ref);
+      }
     },
     onError: (error: Error) => {
       toast({ title: "Erreur", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const otpMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/deposits/confirm-otp", {
+        ref: depositReference,
+        otpCode,
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Code OTP invalide");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      setOtpRequired(false);
+      toast({ title: "OTP validé", description: "Paiement en cours de traitement…" });
+      startDepositPolling(depositReference);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erreur OTP", description: error.message, variant: "destructive" });
     },
   });
 
@@ -273,6 +306,10 @@ export default function DepositPage() {
     setShowValidationMessage(false);
     setPaymentStatus("pending");
     setDepositReference("");
+    setOtpRequired(false);
+    setOtpCode("");
+    if (countdownRef.current) clearInterval(countdownRef.current);
+    if (pollingRef.current) clearInterval(pollingRef.current);
     form.reset();
   };
 
@@ -347,7 +384,50 @@ export default function DepositPage() {
             <CardContent>
               {showValidationMessage ? (
                 <div className="text-center py-8 space-y-4">
-                  {paymentStatus === "pending" && (
+                  {paymentStatus === "pending" && otpRequired && (
+                    <>
+                      <div className="w-16 h-16 mx-auto rounded-full bg-amber-500/10 flex items-center justify-center">
+                        <Phone className="w-8 h-8 text-amber-500" />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-semibold text-foreground mb-2">Code OTP requis</h3>
+                        <p className="text-muted-foreground text-sm">
+                          Un code OTP a été envoyé par SMS sur votre téléphone. Entrez-le ci-dessous pour valider votre paiement.
+                        </p>
+                      </div>
+                      <div className="space-y-3 w-full max-w-xs mx-auto">
+                        <Input
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          maxLength={8}
+                          placeholder="Ex : 123456"
+                          value={otpCode}
+                          onChange={e => setOtpCode(e.target.value.replace(/\D/g, ""))}
+                          className="text-center text-2xl font-mono tracking-widest h-14"
+                          data-testid="input-otp-code"
+                          autoFocus
+                        />
+                        <Button
+                          className="w-full"
+                          size="lg"
+                          onClick={() => otpMutation.mutate()}
+                          disabled={otpCode.length < 4 || otpMutation.isPending}
+                          data-testid="button-confirm-otp"
+                        >
+                          {otpMutation.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Validation…</> : "Confirmer le code OTP"}
+                        </Button>
+                      </div>
+                      {depositReference && (
+                        <div className="bg-muted/30 rounded-lg p-3">
+                          <p className="text-sm text-muted-foreground">Référence</p>
+                          <p className="font-mono font-bold text-foreground">{depositReference}</p>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {paymentStatus === "pending" && !otpRequired && (
                     <>
                       <div className="w-16 h-16 mx-auto rounded-full bg-primary/10 flex items-center justify-center">
                         <Loader2 className="w-8 h-8 text-primary animate-spin" />
