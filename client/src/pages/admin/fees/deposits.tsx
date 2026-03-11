@@ -13,6 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Pencil, ArrowDownCircle, Info, ChevronDown, ChevronRight, Zap, Globe } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -29,10 +30,13 @@ export default function AdminFeesDeposits() {
   const [editing, setEditing] = useState<EditState | null>(null);
   const [openCountries, setOpenCountries] = useState<Set<string>>(new Set());
 
-  // Form fields
+  // Form fields — fees
   const [afribapayFee, setAfribapayFee] = useState("");
   const [ashtechMargin, setAshtechMargin] = useState("");
   const [isActive, setIsActive] = useState(true);
+  // Form fields — provider
+  const [localProvider, setLocalProvider] = useState("swychr");
+  const [localAfribapayCode, setLocalAfribapayCode] = useState("");
 
   const { data: fees, isLoading: feesLoading } = useQuery<Fee[]>({ queryKey: ["/api/admin/fees"] });
   const { data: countries } = useQuery<Country[]>({ queryKey: ["/api/admin/countries"] });
@@ -81,6 +85,8 @@ export default function AdminFeesDeposits() {
     setAfribapayFee((fee as any).afribapayFee ?? "3.00");
     setAshtechMargin((fee as any).ashtechMargin ?? "2.00");
     setIsActive(fee.isActive ?? true);
+    setLocalProvider((op as any).paymentProvider || "swychr");
+    setLocalAfribapayCode((op as any).afribapayOperatorCode || "");
   };
 
   const closeEdit = () => {
@@ -88,7 +94,22 @@ export default function AdminFeesDeposits() {
     setAfribapayFee("");
     setAshtechMargin("");
     setIsActive(true);
+    setLocalProvider("swychr");
+    setLocalAfribapayCode("");
   };
+
+  // Provider: update operator's payment provider
+  const providerMutation = useMutation({
+    mutationFn: async ({ opId, provider, code }: { opId: string; provider: string; code: string }) =>
+      apiRequest("PATCH", `/api/admin/operators/${opId}/provider`, {
+        paymentProvider: provider,
+        afribapayOperatorCode: code || null,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/operators"] });
+    },
+    onError: (err: any) => toast({ title: "Erreur fournisseur", description: err?.message || "Erreur serveur", variant: "destructive" }),
+  });
 
   // Swychr: update ashtechMargin only (swychrFee is fixed)
   const swychrMutation = useMutation({
@@ -125,22 +146,26 @@ export default function AdminFeesDeposits() {
     onError: (err: any) => toast({ title: "Erreur lors de la mise à jour", description: err?.message || "Erreur serveur", variant: "destructive" }),
   });
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!editing) return;
-    const provider = (editing.operator as any).paymentProvider || "swychr";
-    if (provider === "afribapay") {
+    const originalProvider = (editing.operator as any).paymentProvider || "swychr";
+    // Save provider change if needed
+    if (localProvider !== originalProvider || localAfribapayCode !== ((editing.operator as any).afribapayOperatorCode || "")) {
+      await providerMutation.mutateAsync({ opId: editing.operator.id, provider: localProvider, code: localAfribapayCode });
+    }
+    // Save fee change
+    if (localProvider === "afribapay") {
       afribaMutation.mutate({ id: editing.fee.id, afribaFee: afribapayFee, margin: ashtechMargin, active: isActive });
     } else {
       swychrMutation.mutate({ id: editing.fee.id, margin: ashtechMargin, active: isActive });
     }
   };
 
-  const isPending = swychrMutation.isPending || afribaMutation.isPending;
+  const isPending = swychrMutation.isPending || afribaMutation.isPending || providerMutation.isPending;
 
   const computeTotal = (): string => {
     if (!editing) return "0";
-    const provider = (editing.operator as any).paymentProvider || "swychr";
-    const provFee = provider === "afribapay"
+    const provFee = localProvider === "afribapay"
       ? parseFloat(afribapayFee || "0")
       : parseFloat((editing.fee as any)?.swychrFee || "0");
     const margin = parseFloat(ashtechMargin || "0");
@@ -213,67 +238,55 @@ export default function AdminFeesDeposits() {
                     </button>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
-                    <div className="border border-t-0 rounded-b-lg overflow-hidden">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="bg-muted/30 border-b">
-                            <th className="text-left px-4 py-2 font-medium text-muted-foreground">Opérateur</th>
-                            <th className="text-left px-4 py-2 font-medium text-muted-foreground">Fournisseur</th>
-                            <th className="text-left px-4 py-2 font-medium text-muted-foreground">Frais fournisseur</th>
-                            <th className="text-left px-4 py-2 font-medium text-muted-foreground">Marge Ashtech</th>
-                            <th className="text-left px-4 py-2 font-medium text-muted-foreground">Total client</th>
-                            <th className="text-right px-4 py-2 font-medium text-muted-foreground">Modifier</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {ops.map(op => {
-                            const fee = findFee(op, country);
-                            const provider = (op as any).paymentProvider || "swychr";
-                            const isAfribaPay = provider === "afribapay";
-                            const provFee = isAfribaPay
-                              ? parseFloat((fee as any)?.afribapayFee || "0")
-                              : parseFloat((fee as any)?.swychrFee || "0");
-                            const margin = parseFloat((fee as any)?.ashtechMargin || "0");
-                            const total = provFee + margin;
-                            return (
-                              <tr key={op.id} className="border-b last:border-0 hover:bg-muted/20" data-testid={`op-fee-${op.id}`}>
-                                <td className="px-4 py-3 font-medium">{op.name}</td>
-                                <td className="px-4 py-3">
-                                  {isAfribaPay ? (
-                                    <Badge className="bg-yellow-500/20 text-yellow-600 border-yellow-500/30 text-xs">
-                                      <Zap className="w-3 h-3 mr-1" />AfribaPay
-                                    </Badge>
-                                  ) : (
-                                    <Badge className="bg-blue-500/20 text-blue-600 border-blue-500/30 text-xs">Swychr</Badge>
-                                  )}
-                                </td>
-                                <td className="px-4 py-3 text-muted-foreground">
-                                  {fee ? `${provFee.toFixed(2)}%` : <span className="text-destructive text-xs">Non configuré</span>}
-                                  {isAfribaPay && fee && <span className="text-xs text-muted-foreground ml-1">(modifiable)</span>}
-                                  {!isAfribaPay && fee && <span className="text-xs text-muted-foreground ml-1">(fixe)</span>}
-                                </td>
-                                <td className="px-4 py-3 text-orange-400 font-medium">
-                                  {fee ? `${margin.toFixed(2)}%` : "—"}
-                                </td>
-                                <td className="px-4 py-3 font-bold text-green-400">
-                                  {fee ? `${total.toFixed(2)}%` : "—"}
-                                </td>
-                                <td className="px-4 py-3 text-right">
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    onClick={() => openEdit(op, country)}
-                                    disabled={!fee}
-                                    data-testid={`btn-edit-fee-${op.id}`}
-                                  >
-                                    <Pencil className="w-4 h-4" />
-                                  </Button>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
+                    <div className="border border-t-0 rounded-b-lg divide-y">
+                      {ops.map(op => {
+                        const fee = findFee(op, country);
+                        const provider = (op as any).paymentProvider || "swychr";
+                        const isAfribaPay = provider === "afribapay";
+                        const provFee = isAfribaPay
+                          ? parseFloat((fee as any)?.afribapayFee || "0")
+                          : parseFloat((fee as any)?.swychrFee || "0");
+                        const margin = parseFloat((fee as any)?.ashtechMargin || "0");
+                        const total = provFee + margin;
+                        return (
+                          <button
+                            key={op.id}
+                            className="w-full text-left px-4 py-3 hover:bg-muted/30 active:bg-muted/50 transition-colors flex items-center justify-between gap-3"
+                            onClick={() => openEdit(op, country)}
+                            data-testid={`op-fee-${op.id}`}
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-medium text-sm">{op.name}</span>
+                                {isAfribaPay ? (
+                                  <Badge className="bg-yellow-500/20 text-yellow-600 border-yellow-500/30 text-xs shrink-0">
+                                    <Zap className="w-3 h-3 mr-1" />AfribaPay
+                                  </Badge>
+                                ) : (
+                                  <Badge className="bg-blue-500/20 text-blue-600 border-blue-500/30 text-xs shrink-0">Swychr</Badge>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
+                                {fee ? (
+                                  <>
+                                    <span>
+                                      Frais : <span className="text-foreground font-medium">{provFee.toFixed(2)}%</span>
+                                      {isAfribaPay ? " (modif.)" : " (fixe)"}
+                                    </span>
+                                    <span>+</span>
+                                    <span>Marge : <span className="text-orange-400 font-medium">{margin.toFixed(2)}%</span></span>
+                                    <span>=</span>
+                                    <span>Total : <span className="text-green-400 font-bold">{total.toFixed(2)}%</span></span>
+                                  </>
+                                ) : (
+                                  <span className="text-destructive">Non configuré</span>
+                                )}
+                              </div>
+                            </div>
+                            <Pencil className="w-4 h-4 text-muted-foreground shrink-0" />
+                          </button>
+                        );
+                      })}
                     </div>
                   </CollapsibleContent>
                 </Collapsible>
@@ -290,81 +303,89 @@ export default function AdminFeesDeposits() {
                 Modifier les frais — {editing?.operator.name} ({editing?.country.flag} {editing?.country.name})
               </DialogTitle>
             </DialogHeader>
-            {editing && (() => {
-              const isAfribaPay = (editing.operator as any).paymentProvider === "afribapay";
-              return (
-                <div className="space-y-4 py-4">
-                  <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/40">
-                    {isAfribaPay ? (
-                      <Badge className="bg-yellow-500/20 text-yellow-600 border-yellow-500/30">
-                        <Zap className="w-3 h-3 mr-1" />AfribaPay
-                      </Badge>
-                    ) : (
-                      <Badge className="bg-blue-500/20 text-blue-600 border-blue-500/30">Swychr</Badge>
-                    )}
-                    <span className="text-sm text-muted-foreground">
-                      {isAfribaPay ? "Les frais AfribaPay sont modifiables" : "Les frais Swychr sont fixés par Swychr"}
-                    </span>
-                  </div>
+            {editing && (
+              <div className="space-y-4 py-4">
+                {/* Provider selector */}
+                <div className="space-y-2">
+                  <Label>Fournisseur de paiement</Label>
+                  <Select value={localProvider} onValueChange={setLocalProvider} data-testid="select-provider">
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="swychr">Swychr</SelectItem>
+                      <SelectItem value="afribapay">⚡ AfribaPay</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-                  {isAfribaPay ? (
-                    <div className="space-y-2">
-                      <Label>Frais AfribaPay (%)</Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        max="20"
-                        value={afribapayFee}
-                        onChange={(e) => setAfribapayFee(e.target.value)}
-                        placeholder="3.00"
-                        data-testid="input-afribapay-fee"
-                      />
-                      <p className="text-xs text-muted-foreground">Frais prélevés par AfribaPay sur la transaction</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <Label className="text-muted-foreground">Frais Swychr (non modifiable)</Label>
-                      <Input
-                        value={`${parseFloat((editing.fee as any)?.swychrFee || "0").toFixed(2)}%`}
-                        disabled
-                        className="bg-muted"
-                      />
-                      <p className="text-xs text-muted-foreground">Fixé par Swychr — contactez Swychr pour modifier</p>
-                    </div>
-                  )}
-
+                {/* AfribaPay operator code (only when AfribaPay selected) */}
+                {localProvider === "afribapay" && (
                   <div className="space-y-2">
-                    <Label>Marge Ashtech Pay (%)</Label>
+                    <Label>Code opérateur AfribaPay</Label>
+                    <Input
+                      placeholder="ex: orange-ci, mtn-cm, wave-sn..."
+                      value={localAfribapayCode}
+                      onChange={(e) => setLocalAfribapayCode(e.target.value)}
+                      data-testid="input-afribapay-code"
+                    />
+                    <p className="text-xs text-muted-foreground">Code utilisé pour identifier l'opérateur chez AfribaPay</p>
+                  </div>
+                )}
+
+                {/* Fee fields */}
+                {localProvider === "afribapay" ? (
+                  <div className="space-y-2">
+                    <Label>Frais AfribaPay (%)</Label>
                     <Input
                       type="number"
                       step="0.01"
                       min="0"
                       max="20"
-                      value={ashtechMargin}
-                      onChange={(e) => setAshtechMargin(e.target.value)}
-                      placeholder="2.00"
-                      data-testid="input-ashtech-margin"
+                      value={afribapayFee}
+                      onChange={(e) => setAfribapayFee(e.target.value)}
+                      placeholder="3.00"
+                      data-testid="input-afribapay-fee"
                     />
-                    <p className="text-xs text-muted-foreground">Revenu Ashtech Pay sur chaque transaction</p>
+                    <p className="text-xs text-muted-foreground">Frais prélevés par AfribaPay sur la transaction</p>
                   </div>
-
+                ) : (
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">Total facturé au client</Label>
+                    <Label className="text-muted-foreground">Frais Swychr (non modifiable)</Label>
                     <Input
-                      value={`${computeTotal()}%`}
+                      value={`${parseFloat((editing.fee as any)?.swychrFee || "0").toFixed(2)}%`}
                       disabled
-                      className="bg-muted font-bold text-green-500"
+                      className="bg-muted"
                     />
+                    <p className="text-xs text-muted-foreground">Fixé par Swychr</p>
                   </div>
+                )}
 
-                  <div className="flex items-center gap-2">
-                    <Switch checked={isActive} onCheckedChange={setIsActive} data-testid="switch-fee-active" />
-                    <Label>Actif</Label>
-                  </div>
+                <div className="space-y-2">
+                  <Label>Marge Ashtech Pay (%)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="20"
+                    value={ashtechMargin}
+                    onChange={(e) => setAshtechMargin(e.target.value)}
+                    placeholder="2.00"
+                    data-testid="input-ashtech-margin"
+                  />
                 </div>
-              );
-            })()}
+
+                <div className="p-3 rounded-lg bg-muted/40 flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Total facturé au client</span>
+                  <span className="text-lg font-bold text-green-500">{computeTotal()}%</span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Switch checked={isActive} onCheckedChange={setIsActive} data-testid="switch-fee-active" />
+                  <Label>Actif</Label>
+                </div>
+              </div>
+            )}
             <DialogFooter>
               <Button variant="outline" onClick={closeEdit}>Annuler</Button>
               <Button onClick={handleSave} disabled={isPending} data-testid="button-save-fee">
