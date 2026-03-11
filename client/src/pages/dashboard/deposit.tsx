@@ -10,7 +10,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User, SupportedCurrency } from "@shared/schema";
-import { CreditCard, Loader2, Globe, AlertCircle, Phone, CheckCircle, XCircle, ArrowLeft, ArrowRight, Smartphone } from "lucide-react";
+import { CreditCard, Loader2, Globe, AlertCircle, Phone, CheckCircle, XCircle, ArrowLeft, ArrowRight, Smartphone, ExternalLink } from "lucide-react";
 import { z } from "zod";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { formatCurrency } from "@/lib/currency";
@@ -67,6 +67,7 @@ export default function DepositPage() {
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
   const [otpRequired, setOtpRequired] = useState(false);
   const [otpCode, setOtpCode] = useState("");
+  const [waveUrl, setWaveUrl] = useState<string | null>(null);
   
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   
@@ -212,10 +213,16 @@ export default function DepositPage() {
       setDepositReference(ref);
       setPaymentStatus("pending");
       setOtpCode("");
+      setWaveUrl(null);
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
 
-      if (data.otpRequired) {
+      if (data.waveUrl) {
+        // Wave flow: show Wave link, start polling in background
+        setWaveUrl(data.waveUrl);
+        setOtpRequired(false);
+        startDepositPolling(ref);
+      } else if (data.otpRequired) {
         // OTP flow: wait for user to enter OTP before polling
         setOtpRequired(true);
       } else {
@@ -308,6 +315,7 @@ export default function DepositPage() {
     setDepositReference("");
     setOtpRequired(false);
     setOtpCode("");
+    setWaveUrl(null);
     if (countdownRef.current) clearInterval(countdownRef.current);
     if (pollingRef.current) clearInterval(pollingRef.current);
     form.reset();
@@ -427,7 +435,42 @@ export default function DepositPage() {
                     </>
                   )}
 
-                  {paymentStatus === "pending" && !otpRequired && (
+                  {paymentStatus === "pending" && !otpRequired && waveUrl && (
+                    <>
+                      <div className="w-20 h-20 mx-auto rounded-full bg-blue-500/10 flex items-center justify-center">
+                        <img src="https://wave.com/favicon.ico" alt="Wave" className="w-10 h-10 rounded-full" onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }} />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-semibold text-foreground mb-2">Paiement Wave</h3>
+                        <p className="text-muted-foreground text-sm">
+                          Cliquez sur le bouton ci-dessous pour ouvrir l'interface Wave et confirmer votre paiement. Revenez ensuite sur cette page.
+                        </p>
+                      </div>
+                      <a
+                        href={waveUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        data-testid="button-open-wave"
+                      >
+                        <Button size="lg" className="bg-blue-600 hover:bg-blue-700 text-white gap-2 w-full max-w-xs">
+                          <ExternalLink className="w-5 h-5" />
+                          Payer avec Wave
+                        </Button>
+                      </a>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                        <span>Attente de confirmation Wave…</span>
+                      </div>
+                      {depositReference && (
+                        <div className="bg-muted/30 rounded-lg p-3">
+                          <p className="text-sm text-muted-foreground">Référence</p>
+                          <p className="font-mono font-bold text-foreground">{depositReference}</p>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {paymentStatus === "pending" && !otpRequired && !waveUrl && (
                     <>
                       <div className="w-16 h-16 mx-auto rounded-full bg-primary/10 flex items-center justify-center">
                         <Loader2 className="w-8 h-8 text-primary animate-spin" />

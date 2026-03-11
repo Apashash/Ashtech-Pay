@@ -114,6 +114,8 @@ export interface AfribaPayinParams {
   reference_id?: string;
   lang?: string;
   notify_url?: string;
+  return_url?: string;  // redirect URL after Wave/wallet payment
+  cancel_url?: string;
 }
 
 export interface AfribaPayinResult {
@@ -122,6 +124,7 @@ export interface AfribaPayinResult {
   order_id?: string;
   status?: string;
   message?: string;
+  provider_link?: string; // Wave/wallet redirect URL (e.g. https://pay.wave.com/c/...)
   raw?: any;
 }
 
@@ -139,8 +142,8 @@ export async function initiateAfribaPayin(params: AfribaPayinParams): Promise<Af
       reference_id: params.reference_id || params.order_id,
       lang: params.lang || "fr",
       notify_url: params.notify_url || "",
-      return_url: "",
-      cancel_url: "",
+      return_url: params.return_url || "",
+      cancel_url: params.cancel_url || "",
     };
 
     console.log(`[AfribaPay Payin] Initiating ${params.amount} ${params.currency} for ${params.phone_number} (${params.operator}/${params.country})`);
@@ -168,6 +171,7 @@ export async function initiateAfribaPayin(params: AfribaPayinParams): Promise<Af
       transaction_id: d?.transaction_id,
       order_id: d?.order_id,
       status: d?.status || "PENDING",
+      provider_link: d?.provider_link || undefined,
       raw: data,
     };
   } catch (err: any) {

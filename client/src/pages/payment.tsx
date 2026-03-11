@@ -72,6 +72,7 @@ export default function PaymentPage() {
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
   const [otpRequired, setOtpRequired] = useState(false);
   const [otpCode, setOtpCode] = useState("");
+  const [waveUrl, setWaveUrl] = useState<string | null>(null);
 
   const { data: paymentLink, isLoading, error } = useQuery<PaymentLink & { hasPdf?: boolean }>({
     queryKey: ["/api/payment-links/public", params?.slug],
@@ -207,9 +208,15 @@ export default function PaymentPage() {
       setPaymentComplete(true);
       setPaymentReference(ref);
       setOtpCode("");
+      setWaveUrl(null);
       toast({ title: "Paiement initié", description: data.message });
 
-      if (data.otpRequired) {
+      if (data.waveUrl) {
+        // Wave flow: show Wave link, poll in background
+        setWaveUrl(data.waveUrl);
+        setOtpRequired(false);
+        startPaymentPolling(ref);
+      } else if (data.otpRequired) {
         setOtpRequired(true);
       } else {
         setOtpRequired(false);
@@ -276,6 +283,7 @@ export default function PaymentPage() {
     setErrors({});
     setOtpRequired(false);
     setOtpCode("");
+    setWaveUrl(null);
   };
 
   if (isLoading) {
@@ -344,7 +352,33 @@ export default function PaymentPage() {
                   </div>
                 </>
               )}
-              {paymentStatus === "pending" && !otpRequired && (
+              {paymentStatus === "pending" && !otpRequired && waveUrl && (
+                <>
+                  <div className="w-20 h-20 mx-auto rounded-full bg-blue-500/10 flex items-center justify-center">
+                    <img src="https://wave.com/favicon.ico" alt="Wave" className="w-10 h-10 rounded-full" onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }} />
+                  </div>
+                  <h2 className="text-xl font-bold text-foreground">Paiement Wave</h2>
+                  <p className="text-muted-foreground text-sm">
+                    Cliquez sur le bouton ci-dessous pour ouvrir l'interface Wave et confirmer votre paiement. Revenez ensuite sur cette page.
+                  </p>
+                  <a
+                    href={waveUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    data-testid="button-open-wave"
+                  >
+                    <Button size="lg" className="bg-blue-600 hover:bg-blue-700 text-white gap-2 w-full max-w-xs">
+                      <ExternalLink className="w-5 h-5" />
+                      Payer avec Wave
+                    </Button>
+                  </a>
+                  <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                    <span>Attente de confirmation Wave…</span>
+                  </div>
+                </>
+              )}
+              {paymentStatus === "pending" && !otpRequired && !waveUrl && (
                 <>
                   <Loader2 className="w-16 h-16 text-primary mx-auto animate-spin" />
                   <h2 className="text-xl font-bold text-foreground">Validation en cours...</h2>

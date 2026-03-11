@@ -1419,6 +1419,8 @@ export async function registerRoutes(
               localPhone = localPhone.slice(prefix.length);
             }
 
+            // Build return/cancel URLs for Wave (redirect-based operators)
+            const appBaseUrl = `${req.protocol}://${req.get("host")}`;
             const afribaResponse = await initiateAfribaPayin({
               operator: afribapayOperatorCode,
               country: countryCode,
@@ -1428,6 +1430,8 @@ export async function registerRoutes(
               order_id: depositRef,
               reference_id: depositRef,
               notify_url: callbackUrl,
+              return_url: `${appBaseUrl}/dashboard/deposit?ref=${depositRef}&status=success`,
+              cancel_url: `${appBaseUrl}/dashboard/deposit?ref=${depositRef}&status=cancelled`,
             });
 
             if (afribaResponse.success) {
@@ -1444,6 +1448,27 @@ export async function registerRoutes(
                 amount: afribaFees.creditedAmount.toString(),
                 provider: "afribapay",
               });
+
+              // Wave/wallet: AfribaPay returns a provider_link the user must open
+              if (afribaResponse.provider_link) {
+                console.log(`[AfribaPay Payin] Wave link for ${depositRef}: ${afribaResponse.provider_link}`);
+                res.json({
+                  transaction,
+                  gateway: "afribapay",
+                  waveUrl: afribaResponse.provider_link,
+                  otpRequired: false,
+                  status: "pending_wave",
+                  message: "Cliquez sur le bouton pour finaliser votre paiement sur Wave.",
+                  feeDetails: {
+                    grossAmount: totalAmount,
+                    feeAmount: afribaFees.totalFeeAmount,
+                    creditedAmount: afribaFees.creditedAmount,
+                    afribapayFee: afribaFees.afribapayFeeAmount,
+                    ashtechFee: afribaFees.ashtechFeeAmount,
+                  }
+                });
+                return;
+              }
 
               // Check if this operator requires OTP
               const otpRequired = await isAfribaPayOtpRequired(countryCode, afribapayOperatorCode);
@@ -3109,6 +3134,8 @@ export async function registerRoutes(
             if (dialPrefix && localPhone.startsWith(dialPrefix)) {
               localPhone = localPhone.slice(dialPrefix.length);
             }
+            // Build return/cancel URLs for Wave
+            const linkAppBase = `${req.protocol}://${req.get("host")}`;
             const afribaResponse = await initiateAfribaPayin({
               operator: afribapayOperatorCode,
               country: paymentCountryCode,
@@ -3118,6 +3145,8 @@ export async function registerRoutes(
               order_id: reference,
               reference_id: reference,
               notify_url: callbackUrl,
+              return_url: `${linkAppBase}/pay/${paymentLink.slug}?ref=${reference}&status=success`,
+              cancel_url: `${linkAppBase}/pay/${paymentLink.slug}?ref=${reference}&status=cancelled`,
             });
             if (afribaResponse.success) {
               const linkTransaction = await storage.getTransactionByReference(reference);
@@ -3135,6 +3164,22 @@ export async function registerRoutes(
                   provider: "afribapay",
                   paymentIntentId: intent.id,
                   payerName: fullName,
+                });
+              }
+
+              // Wave/wallet: AfribaPay returns a provider_link the user must open
+              if (afribaResponse.provider_link) {
+                console.log(`[AfribaPay PaymentLink] Wave link for ${reference}: ${afribaResponse.provider_link}`);
+                return res.json({
+                  message: "Cliquez sur le bouton pour finaliser votre paiement sur Wave.",
+                  reference: intent.reference,
+                  gateway: "afribapay",
+                  waveUrl: afribaResponse.provider_link,
+                  otpRequired: false,
+                  redirectUrl: paymentLink.redirectUrl || null,
+                  amount: numAmount,
+                  feeAmount: afribaFees.totalFeeAmount,
+                  totalAmount: numAmount,
                 });
               }
 
