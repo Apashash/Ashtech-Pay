@@ -1,18 +1,25 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { AdminLayout } from "./layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Zap, Globe, Settings, RefreshCw, CheckCircle, XCircle, AlertCircle, ChevronDown, ChevronRight } from "lucide-react";
+import { Zap, Globe, Settings, RefreshCw, CheckCircle, XCircle, AlertCircle, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import type { Country, Operator, Fee } from "@shared/schema";
+
+interface AfribaOperator {
+  operator_code: string;
+  operator_name: string;
+  otp_required: number;
+  wallet: number;
+}
 
 interface AfribaCountryData {
   country_code: string;
@@ -22,12 +29,7 @@ interface AfribaCountryData {
   taxes: string;
   currencies: Record<string, {
     currency: string;
-    operators: Array<{
-      operator_code: string;
-      operator_name: string;
-      otp_required: number;
-      wallet: number;
-    }>;
+    operators: AfribaOperator[];
   }>;
 }
 
@@ -92,6 +94,33 @@ export default function AdminAfribaPay() {
       ashtechMargin: (fee as any).ashtechMargin ?? "2.00",
     });
   };
+
+  // Trouver les opérateurs AfribaPay disponibles pour le pays de l'opérateur sélectionné
+  const afribaOperatorsForCountry = useMemo((): AfribaOperator[] => {
+    if (!editingOperator || !afribaCountries?.data || !countries) return [];
+    const country = countries.find(c => c.id === (editingOperator as any).countryId);
+    if (!country) return [];
+    // Match by country code (e.g. "CM", "SN", "CI")
+    const afribaCountry = Object.values(afribaCountries.data).find(
+      ac => ac.country_code.toUpperCase() === country.code.toUpperCase()
+    );
+    if (!afribaCountry) return [];
+    // Flatten all operators from all currencies
+    return Object.values(afribaCountry.currencies).flatMap(c => c.operators);
+  }, [editingOperator, afribaCountries, countries]);
+
+  // Infos pays pour le dialog
+  const editingCountry = useMemo(() => {
+    if (!editingOperator || !countries) return null;
+    return countries.find(c => c.id === (editingOperator as any).countryId) || null;
+  }, [editingOperator, countries]);
+
+  const afribaCountryInfo = useMemo(() => {
+    if (!editingCountry || !afribaCountries?.data) return null;
+    return Object.values(afribaCountries.data).find(
+      ac => ac.country_code.toUpperCase() === editingCountry.code.toUpperCase()
+    ) || null;
+  }, [editingCountry, afribaCountries]);
 
   const afribaCountryList = afribaCountries?.data ? Object.values(afribaCountries.data) : [];
   const afribapayOperators = operators?.filter((op: any) => op.paymentProvider === "afribapay") || [];
@@ -159,7 +188,7 @@ export default function AdminAfribaPay() {
               <CardHeader>
                 <CardTitle>Configuration des opérateurs</CardTitle>
                 <CardDescription>
-                  Choisissez Swychr ou AfribaPay pour chaque opérateur. Vous pouvez aussi configurer le code opérateur AfribaPay (ex: mtn, orange).
+                  Choisissez Swychr ou AfribaPay pour chaque opérateur. Le code opérateur AfribaPay est sélectionné automatiquement selon les opérateurs disponibles dans le pays.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -185,13 +214,15 @@ export default function AdminAfribaPay() {
                               <td className="py-2 pr-4 font-medium">{op.name}</td>
                               <td className="py-2 pr-4">{country?.name || "—"} <span className="text-muted-foreground">({country?.code})</span></td>
                               <td className="py-2 pr-4">
-                                <Badge variant={op.paymentProvider === "afribapay" ? "default" : "secondary"}
-                                  className={op.paymentProvider === "afribapay" ? "bg-yellow-500 text-black" : ""}>
+                                <Badge
+                                  variant={op.paymentProvider === "afribapay" ? "default" : "secondary"}
+                                  className={op.paymentProvider === "afribapay" ? "bg-yellow-500 text-black" : ""}
+                                >
                                   {op.paymentProvider === "afribapay" ? "AfribaPay" : "Swychr"}
                                 </Badge>
                               </td>
                               <td className="py-2 pr-4 text-muted-foreground">
-                                {op.afribapayOperatorCode || <span className="italic">non défini</span>}
+                                {op.afribapayOperatorCode || <span className="italic text-xs">—</span>}
                               </td>
                               <td className="py-2">
                                 <Button size="sm" variant="outline" onClick={() => openEditOperator(op)}
@@ -280,7 +311,7 @@ export default function AdminAfribaPay() {
 
             {loadingAfriba && (
               <div className="flex items-center gap-2 text-muted-foreground py-8 justify-center">
-                <RefreshCw className="h-4 w-4 animate-spin" /> Chargement des pays AfribaPay...
+                <Loader2 className="h-4 w-4 animate-spin" /> Chargement des pays AfribaPay...
               </div>
             )}
 
@@ -353,13 +384,28 @@ export default function AdminAfribaPay() {
       <Dialog open={!!editingOperator} onOpenChange={(open) => !open && setEditingOperator(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Configurer le fournisseur — {editingOperator?.name}</DialogTitle>
+            <DialogTitle>
+              Configurer le fournisseur — {editingOperator?.name}
+              {editingCountry && (
+                <span className="ml-2 text-sm font-normal text-muted-foreground">
+                  ({editingCountry.flag} {editingCountry.name})
+                </span>
+              )}
+            </DialogTitle>
           </DialogHeader>
+
           <div className="space-y-4 py-2">
+            {/* Fournisseur */}
             <div className="space-y-2">
               <Label>Fournisseur de paiement</Label>
-              <Select value={operatorForm.paymentProvider}
-                onValueChange={(v) => setOperatorForm(f => ({ ...f, paymentProvider: v }))}>
+              <Select
+                value={operatorForm.paymentProvider}
+                onValueChange={(v) => setOperatorForm(f => ({
+                  ...f,
+                  paymentProvider: v,
+                  afribapayOperatorCode: v === "swychr" ? "" : f.afribapayOperatorCode,
+                }))}
+              >
                 <SelectTrigger data-testid="select-payment-provider">
                   <SelectValue />
                 </SelectTrigger>
@@ -368,32 +414,75 @@ export default function AdminAfribaPay() {
                   <SelectItem value="afribapay">AfribaPay</SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">
-                Tous les dépôts et retraits pour cet opérateur seront traités via le fournisseur sélectionné.
-              </p>
             </div>
 
+            {/* Opérateur AfribaPay — sélecteur dynamique par pays */}
             {operatorForm.paymentProvider === "afribapay" && (
               <div className="space-y-2">
-                <Label>Code opérateur AfribaPay</Label>
-                <Input
-                  placeholder="ex: mtn, orange, moov, wave..."
-                  value={operatorForm.afribapayOperatorCode}
-                  onChange={(e) => setOperatorForm(f => ({ ...f, afribapayOperatorCode: e.target.value }))}
-                  data-testid="input-afribapay-operator-code"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Code exact utilisé dans l'API AfribaPay (voir onglet "Pays supportés"). Laissez vide pour auto-détecter.
-                </p>
+                <Label>Opérateur AfribaPay</Label>
+
+                {loadingAfriba ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Chargement des opérateurs...
+                  </div>
+                ) : afribaOperatorsForCountry.length > 0 ? (
+                  <>
+                    <Select
+                      value={operatorForm.afribapayOperatorCode}
+                      onValueChange={(v) => setOperatorForm(f => ({ ...f, afribapayOperatorCode: v }))}
+                    >
+                      <SelectTrigger data-testid="select-afribapay-operator">
+                        <SelectValue placeholder="Sélectionner l'opérateur AfribaPay..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {afribaOperatorsForCountry.map(op => (
+                          <SelectItem key={op.operator_code} value={op.operator_code}>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{op.operator_name}</span>
+                              <span className="text-muted-foreground text-xs">({op.operator_code})</span>
+                              {op.otp_required === 1 && (
+                                <Badge variant="outline" className="text-xs px-1 py-0 ml-1">OTP</Badge>
+                              )}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {afribaCountryInfo && (
+                      <p className="text-xs text-muted-foreground">
+                        {afribaCountryInfo.country_flag} {afribaCountryInfo.country_name} · {afribaOperatorsForCountry.length} opérateur(s) disponible(s)
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <div className="p-3 rounded-lg bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 text-sm flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="font-medium">Pays non supporté par AfribaPay</p>
+                      <p className="text-xs mt-0.5">
+                        {editingCountry
+                          ? `Le pays "${editingCountry.name}" (${editingCountry.code}) n'est pas encore disponible sur AfribaPay.`
+                          : "Pays non trouvé."}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
-            <div className={`p-3 rounded-lg text-sm ${operatorForm.paymentProvider === "afribapay" ? "bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300" : "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300"}`}>
+            {/* Info box */}
+            <div className={`p-3 rounded-lg text-sm ${
+              operatorForm.paymentProvider === "afribapay"
+                ? "bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300"
+                : "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300"
+            }`}>
               {operatorForm.paymentProvider === "afribapay"
                 ? "✓ Le client confirmera le paiement directement sur son téléphone (USSD/OTP). Pas de redirection."
                 : "✓ Paiement via Swychr/AccountPE avec confirmation mobile."}
             </div>
           </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingOperator(null)}>Annuler</Button>
             <Button
@@ -402,10 +491,15 @@ export default function AdminAfribaPay() {
                 paymentProvider: operatorForm.paymentProvider,
                 afribapayOperatorCode: operatorForm.afribapayOperatorCode,
               })}
-              disabled={updateProviderMutation.isPending}
+              disabled={
+                updateProviderMutation.isPending ||
+                (operatorForm.paymentProvider === "afribapay" && !operatorForm.afribapayOperatorCode)
+              }
               data-testid="btn-save-provider"
             >
-              {updateProviderMutation.isPending ? "Enregistrement..." : "Enregistrer"}
+              {updateProviderMutation.isPending ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Enregistrement...</>
+              ) : "Enregistrer"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -461,7 +555,9 @@ export default function AdminAfribaPay() {
               disabled={updateFeeMutation.isPending}
               data-testid="btn-save-fee"
             >
-              {updateFeeMutation.isPending ? "Enregistrement..." : "Enregistrer"}
+              {updateFeeMutation.isPending ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Enregistrement...</>
+              ) : "Enregistrer"}
             </Button>
           </DialogFooter>
         </DialogContent>
