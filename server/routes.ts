@@ -5865,10 +5865,19 @@ export async function registerRoutes(
   app.patch("/api/admin/fees/:id/afribapay", requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
-      const { afribapayFee, ashtechMargin } = req.body;
+      const { afribapayFee, ashtechMargin, isActive, minFee } = req.body;
       const updates: any = {};
-      if (afribapayFee !== undefined) updates.afribapayFee = String(afribapayFee);
-      if (ashtechMargin !== undefined) updates.ashtechMargin = String(ashtechMargin);
+      if (afribapayFee !== undefined) {
+        const rate = parseFloat(afribapayFee);
+        const margin = parseFloat(ashtechMargin || "0");
+        updates.afribapayFee = String(rate);
+        updates.ashtechMargin = String(margin);
+        updates.feeValue = String((rate + margin).toFixed(4));
+      } else if (ashtechMargin !== undefined) {
+        updates.ashtechMargin = String(ashtechMargin);
+      }
+      if (isActive !== undefined) updates.isActive = Boolean(isActive);
+      if (minFee !== undefined) updates.minFee = minFee ? String(minFee) : null;
       const updated = await storage.updateFee(id, updates);
       if (!updated) return res.status(404).json({ message: "Frais non trouvé" });
       res.json({ success: true, fee: updated });

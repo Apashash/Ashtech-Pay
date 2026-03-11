@@ -1,20 +1,18 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { AdminLayout } from "./layout";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
-  Zap, Globe, Settings, RefreshCw, CheckCircle, XCircle,
+  Zap, Globe, RefreshCw, CheckCircle, XCircle,
   AlertCircle, ChevronDown, ChevronRight, Loader2, Save
 } from "lucide-react";
-import type { Country, Operator, Fee } from "@shared/schema";
+import type { Country, Operator } from "@shared/schema";
 
 interface AfribaOperator {
   operator_code: string;
@@ -218,9 +216,6 @@ export default function AdminAfribaPay() {
   const { toast } = useToast();
   const [savingId, setSavingId] = useState<string | null>(null);
   const [expandedAfriba, setExpandedAfriba] = useState<string | null>(null);
-  const [editingFee, setEditingFee] = useState<Fee | null>(null);
-  const [feeForm, setFeeForm] = useState({ afribapayFee: "", ashtechMargin: "" });
-
   const { data: afribaCountries, isLoading: loadingAfriba, refetch: refetchAfriba, error: afribaError } =
     useQuery<{ success: boolean; data: Record<string, AfribaCountryData> }>({
       queryKey: ["/api/admin/afribapay/countries"],
@@ -228,7 +223,6 @@ export default function AdminAfribaPay() {
 
   const { data: countries } = useQuery<Country[]>({ queryKey: ["/api/admin/countries"] });
   const { data: operators } = useQuery<Operator[]>({ queryKey: ["/api/admin/operators"] });
-  const { data: fees } = useQuery<Fee[]>({ queryKey: ["/api/admin/fees"] });
 
   const updateProviderMutation = useMutation({
     mutationFn: async ({ id, paymentProvider, afribapayOperatorCode }: { id: string; paymentProvider: string; afribapayOperatorCode: string }) =>
@@ -242,17 +236,6 @@ export default function AdminAfribaPay() {
       setSavingId(null);
       toast({ title: "Erreur", description: err.message, variant: "destructive" });
     },
-  });
-
-  const updateFeeMutation = useMutation({
-    mutationFn: async ({ id, ...data }: { id: string; afribapayFee: string; ashtechMargin: string }) =>
-      apiRequest("PATCH", `/api/admin/fees/${id}/afribapay`, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/fees"] });
-      setEditingFee(null);
-      toast({ title: "Frais mis à jour" });
-    },
-    onError: (err: any) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
   });
 
   const handleSaveOperator = (id: string, paymentProvider: string, afribapayOperatorCode: string) => {
@@ -307,7 +290,6 @@ export default function AdminAfribaPay() {
         <Tabs defaultValue="operators">
           <TabsList>
             <TabsTrigger value="operators">Opérateurs par pays</TabsTrigger>
-            <TabsTrigger value="fees">Frais AfribaPay</TabsTrigger>
             <TabsTrigger value="countries">Pays supportés</TabsTrigger>
           </TabsList>
 
@@ -342,57 +324,6 @@ export default function AdminAfribaPay() {
                 );
               })
             )}
-          </TabsContent>
-
-          {/* ─── Fees Tab ────────────────────────────────────────────── */}
-          <TabsContent value="fees" className="space-y-4 mt-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Frais AfribaPay</CardTitle>
-                <CardDescription>
-                  Frais prélevés par AfribaPay + marge Ashtech Pay.
-                  <span className="ml-1 text-yellow-600 font-medium">Total = AfribaPay + Marge</span>
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left py-2 pr-4">Nom</th>
-                        <th className="text-left py-2 pr-4">Type</th>
-                        <th className="text-left py-2 pr-4">Swychr</th>
-                        <th className="text-left py-2 pr-4">AfribaPay</th>
-                        <th className="text-left py-2 pr-4">Marge Ashtech</th>
-                        <th className="text-left py-2 pr-4">Total AFP</th>
-                        <th className="text-left py-2">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {fees?.map((fee: any) => (
-                        <tr key={fee.id} className="border-b hover:bg-muted/30">
-                          <td className="py-2 pr-4 font-medium">{fee.name}</td>
-                          <td className="py-2 pr-4"><Badge variant="outline">{fee.transactionType}</Badge></td>
-                          <td className="py-2 pr-4">{parseFloat(fee.swychrFee || "0").toFixed(2)}%</td>
-                          <td className="py-2 pr-4 text-yellow-600 font-semibold">{parseFloat(fee.afribapayFee || "0").toFixed(2)}%</td>
-                          <td className="py-2 pr-4">{parseFloat(fee.ashtechMargin || "0").toFixed(2)}%</td>
-                          <td className="py-2 pr-4 font-bold">
-                            {(parseFloat(fee.afribapayFee || "0") + parseFloat(fee.ashtechMargin || "0")).toFixed(2)}%
-                          </td>
-                          <td className="py-2">
-                            <Button size="sm" variant="outline"
-                              onClick={() => { setEditingFee(fee); setFeeForm({ afribapayFee: fee.afribapayFee ?? "3.00", ashtechMargin: fee.ashtechMargin ?? "2.00" }); }}
-                              data-testid={`btn-edit-fee-${fee.id}`}>
-                              <Settings className="h-3 w-3 mr-1" /> Modifier
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
           </TabsContent>
 
           {/* ─── Countries Tab ───────────────────────────────────────── */}
@@ -467,50 +398,6 @@ export default function AdminAfribaPay() {
         </Tabs>
       </div>
 
-      {/* ─── Fee Edit Dialog ─────────────────────────────────────────────── */}
-      {editingFee && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-          onClick={() => setEditingFee(null)}>
-          <div className="bg-background rounded-lg shadow-xl w-full max-w-md p-6 space-y-4"
-            onClick={e => e.stopPropagation()}>
-            <h2 className="text-lg font-semibold">Frais AfribaPay — {editingFee.name}</h2>
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <Label>Frais AfribaPay (%)</Label>
-                <Input type="number" step="0.01" min="0" max="20" placeholder="3.00"
-                  value={feeForm.afribapayFee}
-                  onChange={e => setFeeForm(f => ({ ...f, afribapayFee: e.target.value }))}
-                  data-testid="input-afribapay-fee" />
-                <p className="text-xs text-muted-foreground">Frais prélevés par AfribaPay.</p>
-              </div>
-              <div className="space-y-1">
-                <Label>Marge Ashtech Pay (%)</Label>
-                <Input type="number" step="0.01" min="0" max="20" placeholder="2.00"
-                  value={feeForm.ashtechMargin}
-                  onChange={e => setFeeForm(f => ({ ...f, ashtechMargin: e.target.value }))}
-                  data-testid="input-ashtech-margin" />
-              </div>
-              <div className="p-3 bg-muted rounded-lg">
-                <p className="text-sm font-medium">Total client :</p>
-                <p className="text-2xl font-bold text-yellow-500">
-                  {(parseFloat(feeForm.afribapayFee || "0") + parseFloat(feeForm.ashtechMargin || "0")).toFixed(2)}%
-                </p>
-                <p className="text-xs text-muted-foreground">{feeForm.afribapayFee || 0}% + {feeForm.ashtechMargin || 0}%</p>
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setEditingFee(null)}>Annuler</Button>
-              <Button
-                onClick={() => updateFeeMutation.mutate({ id: editingFee.id, ...feeForm })}
-                disabled={updateFeeMutation.isPending}
-                data-testid="btn-save-fee"
-              >
-                {updateFeeMutation.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Enregistrement...</> : "Enregistrer"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
     </AdminLayout>
   );
 }

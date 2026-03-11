@@ -7,103 +7,57 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table";
-import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Pencil, Send, Filter, Info } from "lucide-react";
+import {
+  Collapsible, CollapsibleContent, CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Pencil, Send, Info, ChevronDown, ChevronRight, Zap, Globe } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { Fee, Country } from "@shared/schema";
+import type { Fee, Country, Operator } from "@shared/schema";
+
+interface EditState {
+  fee: Fee;
+  operator: Operator;
+  country: Country;
+}
 
 export default function AdminFeesTransfers() {
   const { toast } = useToast();
-  const [showModal, setShowModal] = useState(false);
-  const [editingFee, setEditingFee] = useState<Fee | null>(null);
-  const [filterCountry, setFilterCountry] = useState<string>("all");
+  const [editing, setEditing] = useState<EditState | null>(null);
+  const [openCountries, setOpenCountries] = useState<Set<string>>(new Set());
+
+  const [afribapayFee, setAfribapayFee] = useState("");
   const [ashtechMargin, setAshtechMargin] = useState("");
   const [minFee, setMinFee] = useState("");
   const [isActive, setIsActive] = useState(true);
 
-  const { data: fees, isLoading } = useQuery<Fee[]>({
-    queryKey: ["/api/admin/fees"],
-  });
+  const { data: fees, isLoading: feesLoading } = useQuery<Fee[]>({ queryKey: ["/api/admin/fees"] });
+  const { data: countries } = useQuery<Country[]>({ queryKey: ["/api/admin/countries"] });
+  const { data: operators } = useQuery<Operator[]>({ queryKey: ["/api/admin/operators"] });
 
-  const { data: countries } = useQuery<Country[]>({
-    queryKey: ["/api/admin/countries"],
-  });
+  const grouped = useMemo(() => {
+    if (!countries || !operators || !fees) return [];
+    return countries
+      .map(country => {
+        const activeOps = operators.filter(
+          (op: any) => op.countryId === country.id && op.isActive
+        );
+        if (!activeOps.length) return null;
+        return { country, ops: activeOps };
+      })
+      .filter(Boolean) as { country: Country; ops: Operator[] }[];
+  }, [countries, operators, fees]);
 
-  const transferFees = useMemo(() => {
-    let filtered = fees?.filter(f => f.transactionType === "transfer") || [];
-    if (filterCountry !== "all") {
-      filtered = filtered.filter(f => f.countryId === filterCountry);
-    }
-    return filtered.sort((a, b) => {
-      const ca = countries?.find(c => c.id === a.countryId)?.name || "";
-      const cb = countries?.find(c => c.id === b.countryId)?.name || "";
-      return ca.localeCompare(cb);
-    });
-  }, [fees, filterCountry, countries]);
-
-  const updateMutation = useMutation({
-    mutationFn: async ({ id, margin, active, minFee }: { id: string; margin: string; active: boolean; minFee: string }) => {
-      const swychrFee = parseFloat((editingFee as any)?.swychrFee || "0");
-      const newMargin = parseFloat(margin);
-      const newTotal = (swychrFee + newMargin).toFixed(4);
-      return apiRequest("PATCH", `/api/admin/fees/${id}`, {
-        ashtechMargin: margin,
-        feeValue: newTotal,
-        isActive: active,
-        minFee: minFee,
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/fees"] });
-      toast({ title: "Frais mis à jour avec succès" });
-      resetForm();
-    },
-    onError: () => {
-      toast({ title: "Erreur lors de la mise à jour", variant: "destructive" });
-    },
-  });
-
-  const resetForm = () => {
-    setShowModal(false);
-    setEditingFee(null);
-    setAshtechMargin("");
-    setMinFee("");
-    setIsActive(true);
-  };
-
-  const openEdit = (fee: Fee) => {
-    setEditingFee(fee);
-    setAshtechMargin((fee as any).ashtechMargin || "2");
-    setMinFee(fee.minFee?.toString() || "");
-    setIsActive(fee.isActive ?? true);
-    setShowModal(true);
-  };
-
-  const getCountryName = (id: string | null) => {
-    if (!id) return "Global";
-    const c = countries?.find(c => c.id === id);
-    return c ? `${c.flag || ""} ${c.name}`.trim() : "Inconnu";
-  };
-
-  const getCountryCode = (id: string | null) => {
-    if (!id) return "";
-    return countries?.find(c => c.id === id)?.code || "";
-  };
-
-  const computedTotal = () => {
-    if (!editingFee) return "0";
-    const s = parseFloat((editingFee as any).swychrFee || "0");
-    const m = parseFloat(ashtechMargin || "0");
-    return (s + m).toFixed(2);
+  const findFee = (op: Operator): Fee | undefined => {
+    if (!fees) return undefined;
+    const tFees = fees.filter(f => f.transactionType === "transfer");
+    return (
+      tFees.find(f => f.operatorId === op.id) ||
+      tFees.find(f => f.countryId === (op as any).countryId && !f.operatorId)
+    );
   };
 
   const getCurrency = (countryId: string | null) => {
@@ -111,18 +65,101 @@ export default function AdminFeesTransfers() {
     return countries?.find(c => c.id === countryId)?.currency || "XAF";
   };
 
+  const toggleCountry = (id: string) => {
+    setOpenCountries(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const openEdit = (op: Operator, country: Country) => {
+    const fee = findFee(op);
+    if (!fee) {
+      toast({ title: "Aucun frais trouvé pour ce pays", variant: "destructive" });
+      return;
+    }
+    setEditing({ fee, operator: op, country });
+    setAfribapayFee((fee as any).afribapayFee ?? "3.00");
+    setAshtechMargin((fee as any).ashtechMargin ?? "2.00");
+    setMinFee(fee.minFee?.toString() || "");
+    setIsActive(fee.isActive ?? true);
+  };
+
+  const closeEdit = () => {
+    setEditing(null);
+    setAfribapayFee("");
+    setAshtechMargin("");
+    setMinFee("");
+    setIsActive(true);
+  };
+
+  const swychrMutation = useMutation({
+    mutationFn: async ({ id, margin, active, min }: { id: string; margin: string; active: boolean; min: string }) => {
+      const swychrFee = parseFloat((editing?.fee as any)?.swychrFee || "0");
+      const total = (swychrFee + parseFloat(margin || "0")).toFixed(4);
+      return apiRequest("PATCH", `/api/admin/fees/${id}`, {
+        ashtechMargin: margin,
+        feeValue: total,
+        isActive: active,
+        minFee: min,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/fees"] });
+      toast({ title: "Frais mis à jour" });
+      closeEdit();
+    },
+    onError: () => toast({ title: "Erreur", variant: "destructive" }),
+  });
+
+  const afribaMutation = useMutation({
+    mutationFn: async ({ id, afribaFee, margin, active, min }: { id: string; afribaFee: string; margin: string; active: boolean; min: string }) =>
+      apiRequest("PATCH", `/api/admin/fees/${id}/afribapay`, {
+        afribapayFee: afribaFee,
+        ashtechMargin: margin,
+        isActive: active,
+        minFee: min,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/fees"] });
+      toast({ title: "Frais AfribaPay mis à jour" });
+      closeEdit();
+    },
+    onError: () => toast({ title: "Erreur", variant: "destructive" }),
+  });
+
+  const handleSave = () => {
+    if (!editing) return;
+    const provider = (editing.operator as any).paymentProvider || "swychr";
+    if (provider === "afribapay") {
+      afribaMutation.mutate({ id: editing.fee.id, afribaFee: afribapayFee, margin: ashtechMargin, active: isActive, min: minFee });
+    } else {
+      swychrMutation.mutate({ id: editing.fee.id, margin: ashtechMargin, active: isActive, min: minFee });
+    }
+  };
+
+  const isPending = swychrMutation.isPending || afribaMutation.isPending;
+
+  const computeTotal = (): string => {
+    if (!editing) return "0";
+    const provider = (editing.operator as any).paymentProvider || "swychr";
+    const provFee = provider === "afribapay"
+      ? parseFloat(afribapayFee || "0")
+      : parseFloat((editing.fee as any)?.swychrFee || "0");
+    return (provFee + parseFloat(ashtechMargin || "0")).toFixed(2);
+  };
+
   return (
     <AdminLayout>
       <div className="p-6 space-y-6">
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-500/10 rounded-lg">
-              <Send className="w-6 h-6 text-blue-500" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold">Frais d'Envoi</h1>
-              <p className="text-muted-foreground">Configuration des frais et minimums par pays</p>
-            </div>
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-blue-500/10 rounded-lg">
+            <Send className="w-6 h-6 text-blue-500" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">Frais d'Envoi</h1>
+            <p className="text-muted-foreground">Par pays et opérateur actif — frais + minimum de charge</p>
           </div>
         </div>
 
@@ -131,175 +168,208 @@ export default function AdminFeesTransfers() {
             <div className="flex items-start gap-2 text-sm text-blue-400">
               <Info className="w-4 h-4 mt-0.5 shrink-0" />
               <div>
-                <span className="font-medium">Note :</span> Toute modification d'un frais de transfert sera <span className="font-bold">automatiquement appliquée</span> aux frais de retrait du même pays pour garantir la cohérence.
+                <span className="font-semibold">Note :</span> Seuls les opérateurs <span className="font-semibold">actifs</span> sont affichés.
+                Les frais d'envoi partagent la même structure que les frais de retrait par pays.
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4 mb-6 flex-wrap">
-              <div className="flex items-center gap-2">
-                <Filter className="w-4 h-4 text-muted-foreground" />
-                <span className="text-sm text-muted-foreground">Filtrer par pays:</span>
-              </div>
-              <Select value={filterCountry} onValueChange={setFilterCountry}>
-                <SelectTrigger className="w-[200px]">
-                  <SelectValue placeholder="Tous les pays" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tous les pays</SelectItem>
-                  {countries?.map((country) => (
-                    <SelectItem key={country.id} value={country.id}>
-                      {country.flag} {country.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <span className="text-sm text-muted-foreground ml-auto">
-                {transferFees.length} pays configuré{transferFees.length > 1 ? "s" : ""}
-              </span>
-            </div>
-
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Pays</TableHead>
-                  <TableHead>Frais Swychr</TableHead>
-                  <TableHead>Marge Ashtech</TableHead>
-                  <TableHead className="font-bold">Total client (%)</TableHead>
-                  <TableHead>Minimum (Charge)</TableHead>
-                  <TableHead>Statut</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8">Chargement...</TableCell>
-                  </TableRow>
-                ) : !transferFees.length ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                      Aucun frais d'envoi configuré
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  transferFees.map((fee) => {
-                    const swychr = parseFloat((fee as any).swychrFee || "0");
-                    const margin = parseFloat((fee as any).ashtechMargin || "0");
-                    const total = parseFloat(fee.feeValue);
-                    const cc = getCountryCode(fee.countryId);
-                    const currency = getCurrency(fee.countryId);
-                    return (
-                      <TableRow key={fee.id}>
-                        <TableCell className="font-medium">
-                          <div className="flex items-center gap-2">
-                            <span>{getCountryName(fee.countryId)}</span>
-                            {cc && <Badge variant="outline" className="text-xs">{cc}</Badge>}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-muted-foreground">{swychr.toFixed(2)}%</span>
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-orange-400 font-medium">{margin.toFixed(2)}%</span>
-                        </TableCell>
-                        <TableCell>
-                          <span className="font-bold text-green-400">{total.toFixed(2)}%</span>
-                        </TableCell>
-                        <TableCell>
-                          <span className="font-mono">{fee.minFee || 0} {currency}</span>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={fee.isActive ? "default" : "secondary"}>
-                            {fee.isActive ? "Actif" : "Inactif"}
+        {feesLoading ? (
+          <div className="text-center py-12 text-muted-foreground">Chargement...</div>
+        ) : grouped.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground">Aucun pays avec des opérateurs actifs</div>
+        ) : (
+          <div className="space-y-2">
+            {grouped.map(({ country, ops }) => {
+              const isOpen = openCountries.has(country.id);
+              const afribOps = ops.filter(op => (op as any).paymentProvider === "afribapay");
+              const swychrOps = ops.filter(op => (op as any).paymentProvider !== "afribapay");
+              const currency = getCurrency(country.id);
+              return (
+                <Collapsible key={country.id} open={isOpen} onOpenChange={() => toggleCountry(country.id)}>
+                  <CollapsibleTrigger asChild>
+                    <button
+                      className="w-full flex items-center justify-between p-4 bg-card border rounded-lg hover:bg-muted/40 transition-colors"
+                      data-testid={`country-fees-${country.code}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Globe className="w-4 h-4 text-muted-foreground" />
+                        <span className="font-semibold">{country.flag} {country.name}</span>
+                        <Badge variant="outline" className="text-xs">{country.code}</Badge>
+                        <Badge variant="outline" className="text-xs text-muted-foreground">{currency}</Badge>
+                        {afribOps.length > 0 && (
+                          <Badge className="text-xs bg-yellow-500/20 text-yellow-600 border-yellow-500/30">
+                            <Zap className="w-3 h-3 mr-1" />{afribOps.length} AfribaPay
                           </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => openEdit(fee)}
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+                        )}
+                        {swychrOps.length > 0 && (
+                          <Badge className="text-xs bg-blue-500/20 text-blue-600 border-blue-500/30">
+                            {swychrOps.length} Swychr
+                          </Badge>
+                        )}
+                      </div>
+                      {isOpen ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
+                    </button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <div className="border border-t-0 rounded-b-lg overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-muted/30 border-b">
+                            <th className="text-left px-4 py-2 font-medium text-muted-foreground">Opérateur</th>
+                            <th className="text-left px-4 py-2 font-medium text-muted-foreground">Fournisseur</th>
+                            <th className="text-left px-4 py-2 font-medium text-muted-foreground">Frais fournisseur</th>
+                            <th className="text-left px-4 py-2 font-medium text-muted-foreground">Marge Ashtech</th>
+                            <th className="text-left px-4 py-2 font-medium text-muted-foreground">Total client</th>
+                            <th className="text-left px-4 py-2 font-medium text-muted-foreground">Min charge ({currency})</th>
+                            <th className="text-right px-4 py-2 font-medium text-muted-foreground">Modifier</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {ops.map(op => {
+                            const fee = findFee(op);
+                            const provider = (op as any).paymentProvider || "swychr";
+                            const isAfribaPay = provider === "afribapay";
+                            const provFee = isAfribaPay
+                              ? parseFloat((fee as any)?.afribapayFee || "0")
+                              : parseFloat((fee as any)?.swychrFee || "0");
+                            const margin = parseFloat((fee as any)?.ashtechMargin || "0");
+                            const total = provFee + margin;
+                            return (
+                              <tr key={op.id} className="border-b last:border-0 hover:bg-muted/20" data-testid={`op-fee-${op.id}`}>
+                                <td className="px-4 py-3 font-medium">{op.name}</td>
+                                <td className="px-4 py-3">
+                                  {isAfribaPay ? (
+                                    <Badge className="bg-yellow-500/20 text-yellow-600 border-yellow-500/30 text-xs">
+                                      <Zap className="w-3 h-3 mr-1" />AfribaPay
+                                    </Badge>
+                                  ) : (
+                                    <Badge className="bg-blue-500/20 text-blue-600 border-blue-500/30 text-xs">Swychr</Badge>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 text-muted-foreground">
+                                  {fee ? `${provFee.toFixed(2)}%` : <span className="text-destructive text-xs">Non configuré</span>}
+                                </td>
+                                <td className="px-4 py-3 text-orange-400 font-medium">
+                                  {fee ? `${margin.toFixed(2)}%` : "—"}
+                                </td>
+                                <td className="px-4 py-3 font-bold text-green-400">
+                                  {fee ? `${total.toFixed(2)}%` : "—"}
+                                </td>
+                                <td className="px-4 py-3 font-mono text-muted-foreground">
+                                  {fee?.minFee ? `${fee.minFee} ${currency}` : "—"}
+                                </td>
+                                <td className="px-4 py-3 text-right">
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    onClick={() => openEdit(op, country)}
+                                    disabled={!fee}
+                                    data-testid={`btn-edit-fee-${op.id}`}
+                                  >
+                                    <Pencil className="w-4 h-4" />
+                                  </Button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              );
+            })}
+          </div>
+        )}
 
-        <Dialog open={showModal} onOpenChange={() => resetForm()}>
-          <DialogContent className="max-h-[90vh] overflow-y-auto">
+        {/* Edit Dialog */}
+        <Dialog open={!!editing} onOpenChange={(o) => !o && closeEdit()}>
+          <DialogContent>
             <DialogHeader>
-              <DialogTitle>Modifier les frais — {editingFee ? getCountryName(editingFee.countryId) : ""}</DialogTitle>
+              <DialogTitle>
+                Frais envoi — {editing?.operator.name} ({editing?.country.flag} {editing?.country.name})
+              </DialogTitle>
             </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label className="text-muted-foreground">Frais Swychr (non modifiable)</Label>
-                <Input
-                  value={`${parseFloat((editingFee as any)?.swychrFee || "0").toFixed(2)}%`}
-                  disabled
-                  className="bg-muted"
-                />
-              </div>
+            {editing && (() => {
+              const isAfribaPay = (editing.operator as any).paymentProvider === "afribapay";
+              const currency = getCurrency(editing.country.id);
+              return (
+                <div className="space-y-4 py-4">
+                  <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/40">
+                    {isAfribaPay ? (
+                      <Badge className="bg-yellow-500/20 text-yellow-600 border-yellow-500/30">
+                        <Zap className="w-3 h-3 mr-1" />AfribaPay
+                      </Badge>
+                    ) : (
+                      <Badge className="bg-blue-500/20 text-blue-600 border-blue-500/30">Swychr</Badge>
+                    )}
+                    <span className="text-sm text-muted-foreground">
+                      {isAfribaPay ? "Frais AfribaPay modifiables" : "Frais Swychr fixés par Swychr"}
+                    </span>
+                  </div>
 
-              <div className="space-y-2">
-                <Label>Marge Ashtech Pay (%)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  max="10"
-                  value={ashtechMargin}
-                  onChange={(e) => setAshtechMargin(e.target.value)}
-                  placeholder="2.00"
-                />
-              </div>
+                  {isAfribaPay ? (
+                    <div className="space-y-2">
+                      <Label>Frais AfribaPay (%)</Label>
+                      <Input
+                        type="number" step="0.01" min="0" max="20"
+                        value={afribapayFee}
+                        onChange={(e) => setAfribapayFee(e.target.value)}
+                        placeholder="3.00"
+                        data-testid="input-afribapay-fee"
+                      />
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <Label className="text-muted-foreground">Frais Swychr (non modifiable)</Label>
+                      <Input
+                        value={`${parseFloat((editing.fee as any)?.swychrFee || "0").toFixed(2)}%`}
+                        disabled className="bg-muted"
+                      />
+                    </div>
+                  )}
 
-              <div className="space-y-2">
-                <Label>Minimum Payout Charge ({editingFee ? getCurrency(editingFee.countryId) : "devise"})</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={minFee}
-                  onChange={(e) => setMinFee(e.target.value)}
-                  placeholder="550"
-                />
-                <p className="text-xs text-muted-foreground">Montant minimum prélevé si le % est inférieur</p>
-              </div>
+                  <div className="space-y-2">
+                    <Label>Marge Ashtech Pay (%)</Label>
+                    <Input
+                      type="number" step="0.01" min="0" max="20"
+                      value={ashtechMargin}
+                      onChange={(e) => setAshtechMargin(e.target.value)}
+                      placeholder="2.00"
+                      data-testid="input-ashtech-margin"
+                    />
+                  </div>
 
-              <div className="space-y-2">
-                <Label className="text-muted-foreground">Total facturé au client (%)</Label>
-                <Input
-                  value={`${computedTotal()}%`}
-                  disabled
-                  className="bg-muted font-bold text-green-500"
-                />
-              </div>
+                  <div className="space-y-2">
+                    <Label>Minimum de charge ({currency})</Label>
+                    <Input
+                      type="number" step="1" min="0"
+                      value={minFee}
+                      onChange={(e) => setMinFee(e.target.value)}
+                      placeholder="550"
+                      data-testid="input-min-fee"
+                    />
+                    <p className="text-xs text-muted-foreground">Montant minimum prélevé si le % calcul est inférieur</p>
+                  </div>
 
-              <div className="flex items-center gap-2">
-                <Switch
-                  checked={isActive}
-                  onCheckedChange={setIsActive}
-                />
-                <Label>Actif</Label>
-              </div>
-            </div>
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground">Total facturé au client</Label>
+                    <Input value={`${computeTotal()}%`} disabled className="bg-muted font-bold text-green-500" />
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Switch checked={isActive} onCheckedChange={setIsActive} data-testid="switch-fee-active" />
+                    <Label>Actif</Label>
+                  </div>
+                </div>
+              );
+            })()}
             <DialogFooter>
-              <Button variant="outline" onClick={resetForm}>Annuler</Button>
-              <Button
-                onClick={() => editingFee && updateMutation.mutate({ id: editingFee.id, margin: ashtechMargin, active: isActive, minFee: minFee })}
-                disabled={updateMutation.isPending}
-              >
-                {updateMutation.isPending ? "Enregistrement..." : "Enregistrer"}
+              <Button variant="outline" onClick={closeEdit}>Annuler</Button>
+              <Button onClick={handleSave} disabled={isPending} data-testid="button-save-fee">
+                {isPending ? "Enregistrement..." : "Enregistrer"}
               </Button>
             </DialogFooter>
           </DialogContent>
