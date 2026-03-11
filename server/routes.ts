@@ -28,7 +28,7 @@ import path from "path";
 import fs from "fs";
 import { uploadToSupabase, getSignedImageUrl, downloadFromSupabase } from "./supabase";
 import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, fetchPaymentLinkDetails, ASHTECH_MARGIN } from "./swychr";
-import { initiateAfribaPayin, initiateAfribaPayout, checkAfribaPayStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, confirmAfribaPayOtp } from "./afribapay";
+import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, confirmAfribaPayOtp } from "./afribapay";
 import { addPendingPayment } from "./paymentPoller";
 import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, cleanupEmptyWallets } from "./walletHelper";
 import { createSwychrPayout, formatInternationalPhone, detectMethodFromPhone, fiatToPusd, pusdToFiatRate, getConversionRate, convertFiatToPusd, getPayoutToken, COUNTRY_CURRENCY } from "./swychrPayout";
@@ -1453,6 +1453,59 @@ export async function registerRoutes(
 
             // Build return/cancel URLs for Wave (redirect-based operators)
             const appBaseUrl = `${req.protocol}://${req.get("host")}`;
+
+            // ── Check OTP requirement BEFORE calling payin ────────────────────
+            // For OTP operators (Orange CI/SN/BF/GN, LigdiCash BF), AfribaPay rejects
+            // /v1/pay/payin with "This operation requires an OTP code." so we must call
+            // /v1/pay/otp WITHOUT otp_code first to trigger the SMS, then confirm with code.
+            const otpRequired = await isAfribaPayOtpRequired(countryCode, afribapayOperatorCode);
+
+            if (otpRequired) {
+              // Send OTP SMS via /v1/pay/otp (no otp_code)
+              const otpInitResult = await initiateAfribaPayOtp({
+                operator: afribapayOperatorCode,
+                country: countryCode,
+                phone_number: localPhone,
+                amount: totalAmount,
+                currency: afribapayCurrency,
+                order_id: depositRef,
+                reference_id: depositRef,
+                notify_url: callbackUrl,
+              });
+
+              if (!otpInitResult.success) {
+                await storage.updateTransactionStatus(transaction.id, "failed");
+                return res.status(400).json({ message: otpInitResult.message || "Impossible d'envoyer le code OTP" });
+              }
+
+              // Store OTP context for the confirm-otp endpoint
+              otpContextCache.set(depositRef, {
+                operator: afribapayOperatorCode,
+                country: countryCode,
+                phone: localPhone,
+                amount: totalAmount,
+                currency: afribapayCurrency,
+                afribaTransactionId: depositRef,
+                expiresAt: Date.now() + 15 * 60 * 1000, // 15 min
+              });
+
+              return res.json({
+                transaction,
+                gateway: "afribapay",
+                otpRequired: true,
+                status: "otp_required",
+                message: "Entrez le code OTP que vous allez recevoir par SMS sur votre téléphone.",
+                feeDetails: {
+                  grossAmount: totalAmount,
+                  feeAmount: afribaFees.totalFeeAmount,
+                  creditedAmount: afribaFees.creditedAmount,
+                  afribapayFee: afribaFees.afribapayFeeAmount,
+                  ashtechFee: afribaFees.ashtechFeeAmount,
+                }
+              });
+            }
+
+            // ── Non-OTP: regular payin (USSD or Wave redirect) ────────────────
             const afribaResponse = await initiateAfribaPayin({
               operator: afribapayOperatorCode,
               country: countryCode,
@@ -1502,30 +1555,12 @@ export async function registerRoutes(
                 return;
               }
 
-              // Check if this operator requires OTP
-              const otpRequired = await isAfribaPayOtpRequired(countryCode, afribapayOperatorCode);
-
-              if (otpRequired) {
-                // Store OTP context in cache so confirm-otp endpoint can use it
-                otpContextCache.set(depositRef, {
-                  operator: afribapayOperatorCode,
-                  country: countryCode,
-                  phone: localPhone,
-                  amount: totalAmount,
-                  currency: afribapayCurrency,
-                  afribaTransactionId: extRef,
-                  expiresAt: Date.now() + 15 * 60 * 1000, // 15 min
-                });
-              }
-
               res.json({
                 transaction,
                 gateway: "afribapay",
-                otpRequired,
-                status: otpRequired ? "otp_required" : "pending_ussd",
-                message: otpRequired
-                  ? "Entrez le code OTP que vous allez recevoir par SMS sur votre téléphone."
-                  : "Appuyez sur votre téléphone pour valider le paiement USSD.",
+                otpRequired: false,
+                status: "pending_ussd",
+                message: "Appuyez sur votre téléphone pour valider le paiement USSD.",
                 feeDetails: {
                   grossAmount: totalAmount,
                   feeAmount: afribaFees.totalFeeAmount,
@@ -3169,6 +3204,52 @@ export async function registerRoutes(
             }
             // Build return/cancel URLs for Wave
             const linkAppBase = `${req.protocol}://${req.get("host")}`;
+
+            // ── Check OTP requirement BEFORE calling payin ────────────────────
+            const otpRequired = await isAfribaPayOtpRequired(paymentCountryCode, afribapayOperatorCode);
+
+            if (otpRequired) {
+              // Send OTP SMS via /v1/pay/otp (no otp_code)
+              const otpInitResult = await initiateAfribaPayOtp({
+                operator: afribapayOperatorCode,
+                country: paymentCountryCode,
+                phone_number: localPhone,
+                amount: numAmount,
+                currency: afribapayCurrency,
+                order_id: reference,
+                reference_id: reference,
+                notify_url: callbackUrl,
+              });
+
+              if (!otpInitResult.success) {
+                await storage.updatePaymentIntentStatus(intent.id, "failed");
+                return res.status(400).json({ message: otpInitResult.message || "Impossible d'envoyer le code OTP" });
+              }
+
+              // Store OTP context for confirm-otp endpoint
+              otpContextCache.set(reference, {
+                operator: afribapayOperatorCode,
+                country: paymentCountryCode,
+                phone: localPhone,
+                amount: numAmount,
+                currency: afribapayCurrency,
+                afribaTransactionId: reference,
+                expiresAt: Date.now() + 15 * 60 * 1000,
+              });
+
+              return res.json({
+                message: "Entrez le code OTP que vous allez recevoir par SMS sur votre téléphone.",
+                reference: intent.reference,
+                gateway: "afribapay",
+                otpRequired: true,
+                redirectUrl: paymentLink.redirectUrl || null,
+                amount: numAmount,
+                feeAmount: afribaFees.totalFeeAmount,
+                totalAmount: numAmount,
+              });
+            }
+
+            // ── Non-OTP: regular payin (USSD or Wave redirect) ────────────────
             const afribaResponse = await initiateAfribaPayin({
               operator: afribapayOperatorCode,
               country: paymentCountryCode,
@@ -3216,39 +3297,11 @@ export async function registerRoutes(
                 });
               }
 
-              // Check OTP requirement for this operator
-              const otpRequired = await isAfribaPayOtpRequired(paymentCountryCode, afribapayOperatorCode);
-
-              if (otpRequired) {
-                // Strip country prefix from phone for OTP confirmation
-                let localPhoneForOtp = phone.replace(/\s/g, "");
-                if (localPhoneForOtp.startsWith("+")) localPhoneForOtp = localPhoneForOtp.slice(1);
-                const phonePrefixMap: Record<string, string> = {
-                  CM: "237", SN: "221", CI: "225", BF: "226", ML: "223",
-                  GN: "224", BJ: "229", TG: "228", NE: "227", CD: "243",
-                  CG: "242", CF: "236", TD: "235", GA: "241", GQ: "240",
-                };
-                const pfx = phonePrefixMap[paymentCountryCode.toUpperCase()];
-                if (pfx && localPhoneForOtp.startsWith(pfx)) localPhoneForOtp = localPhoneForOtp.slice(pfx.length);
-
-                otpContextCache.set(reference, {
-                  operator: afribapayOperatorCode,
-                  country: paymentCountryCode,
-                  phone: localPhoneForOtp,
-                  amount: numAmount,
-                  currency: afribapayCurrency,
-                  afribaTransactionId: afribaResponse.transaction_id || reference,
-                  expiresAt: Date.now() + 15 * 60 * 1000,
-                });
-              }
-
               return res.json({
-                message: otpRequired
-                  ? "Entrez le code OTP que vous allez recevoir par SMS sur votre téléphone."
-                  : "Veuillez confirmer le paiement sur votre téléphone via USSD.",
+                message: "Veuillez confirmer le paiement sur votre téléphone via USSD.",
                 reference: intent.reference,
                 gateway: "afribapay",
-                otpRequired,
+                otpRequired: false,
                 redirectUrl: paymentLink.redirectUrl || null,
                 amount: numAmount,
                 feeAmount: afribaFees.totalFeeAmount,
@@ -5687,7 +5740,25 @@ export async function registerRoutes(
       }
 
       otpContextCache.delete(ref);
-      console.log(`[OTP Confirm] ✓ Deposit OTP confirmed for ref=${ref}`);
+      console.log(`[OTP Confirm] ✓ Deposit OTP confirmed for ref=${ref}, afriba_tx=${result.transaction_id}`);
+
+      // Update transaction external reference with AfribaPay's transaction_id and start polling
+      const tx = await storage.getTransactionByReference(ref);
+      if (tx) {
+        const extRef = result.transaction_id || ref;
+        await storage.updateTransactionExternalReference(tx.id, extRef);
+        addPendingPayment({
+          transactionId: tx.id,
+          reference: ref,
+          externalReference: extRef,
+          attempts: 0,
+          userId: user.id,
+          type: "deposit",
+          amount: ctx.amount.toString(),
+          provider: "afribapay",
+        });
+      }
+
       res.json({ success: true, message: "OTP validé. Votre paiement est en cours de traitement." });
     } catch (error) {
       console.error("[OTP Confirm Deposit] Error:", error);
@@ -5731,7 +5802,25 @@ export async function registerRoutes(
       }
 
       otpContextCache.delete(ref);
-      console.log(`[OTP Confirm] ✓ PaymentLink OTP confirmed for ref=${ref}`);
+      console.log(`[OTP Confirm] ✓ PaymentLink OTP confirmed for ref=${ref}, afriba_tx=${result.transaction_id}`);
+
+      // Update transaction external reference and start polling
+      const tx = await storage.getTransactionByReference(ref);
+      if (tx) {
+        const extRef = result.transaction_id || ref;
+        await storage.updateTransactionExternalReference(tx.id, extRef);
+        addPendingPayment({
+          transactionId: tx.id,
+          reference: ref,
+          externalReference: extRef,
+          attempts: 0,
+          userId: tx.userId,
+          type: "payment_link",
+          amount: ctx.amount.toString(),
+          provider: "afribapay",
+        });
+      }
+
       res.json({ success: true, message: "OTP validé. Le paiement est en cours de traitement." });
     } catch (error) {
       console.error("[OTP Confirm PaymentLink] Error:", error);

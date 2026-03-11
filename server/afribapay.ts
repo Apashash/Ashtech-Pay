@@ -352,6 +352,49 @@ export async function isAfribaPayOtpRequired(country: string, operatorCode: stri
   }
 }
 
+// ─── OTP initiation (POST /v1/pay/otp WITHOUT otp_code — sends SMS) ─────────
+export async function initiateAfribaPayOtp(params: Omit<AfribaPayinParams, "return_url" | "cancel_url">): Promise<{ success: boolean; message?: string; raw?: any }> {
+  try {
+    const headers = await authHeaders();
+    const body = {
+      operator: params.operator,
+      country: params.country,
+      phone_number: params.phone_number,
+      amount: params.amount,
+      currency: params.currency,
+      order_id: params.order_id,
+      merchant_key: AFRIBAPAY_MERCHANT_KEY,
+      reference_id: params.reference_id || params.order_id,
+      lang: params.lang || "fr",
+      notify_url: params.notify_url || "",
+    };
+
+    console.log(`[AfribaPay OTP Init] Sending OTP SMS: ${params.amount} ${params.currency} for ${params.phone_number} (${params.operator}/${params.country})`);
+
+    const res = await fetch(`${AFRIBAPAY_PAYIN_URL}/v1/pay/otp`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    });
+
+    let data: any = null;
+    const text = await res.text();
+    try { data = JSON.parse(text); } catch { data = text; }
+    console.log(`[AfribaPay OTP Init] Response status=${res.status} body=${JSON.stringify(data)}`);
+
+    // AfribaPay returns "" (empty string) or 2xx on success — treat non-5xx as success
+    if (res.status >= 500) {
+      const msg = (typeof data === "object" && data?.error?.message) || "Échec d'envoi du code OTP";
+      return { success: false, message: msg, raw: data };
+    }
+
+    return { success: true, raw: data };
+  } catch (err: any) {
+    console.error("[AfribaPay OTP Init] Error:", err);
+    return { success: false, message: err.message || "Erreur réseau OTP" };
+  }
+}
+
 // ─── OTP confirmation (POST /v1/pay/otp with otp_code) ────────────────────────
 export interface AfribaPayOtpParams {
   operator: string;
