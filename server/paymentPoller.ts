@@ -1,11 +1,12 @@
 import { storage } from "./storage";
 import { checkSwychrPaymentStatus } from "./swychr";
+import { checkAfribaPayStatus } from "./afribapay";
 import { creditUserWallet } from "./walletHelper";
 import { sendPayerConfirmationEmail } from "./email";
 
-const POLL_INTERVAL = 3000;            // 3 seconds
-const MAX_POLL_DURATION_MS = 10 * 60 * 1000; // 10 minutes in ms
-const MAX_POLL_ATTEMPTS = Math.ceil(MAX_POLL_DURATION_MS / POLL_INTERVAL); // 200 attempts
+const POLL_INTERVAL = 3000;
+const MAX_POLL_DURATION_MS = 10 * 60 * 1000;
+const MAX_POLL_ATTEMPTS = Math.ceil(MAX_POLL_DURATION_MS / POLL_INTERVAL);
 
 interface PendingPayment {
   transactionId: string;
@@ -15,6 +16,7 @@ interface PendingPayment {
   userId: string;
   type: string;
   amount: string;
+  provider?: string;
   paymentIntentId?: string | null;
   payerName?: string | null;
   startedAt: number;
@@ -23,22 +25,28 @@ interface PendingPayment {
 const pendingPayments = new Map<string, PendingPayment>();
 
 export function addPendingPayment(payment: Omit<PendingPayment, "attempts" | "startedAt">) {
-  console.log(`[PaymentPoller] Adding pending payment: ${payment.reference}`);
+  console.log(`[PaymentPoller] Adding pending payment: ${payment.reference} (provider: ${payment.provider || "swychr"})`);
   pendingPayments.set(payment.reference, { ...payment, attempts: 0, startedAt: Date.now() });
 }
 
 export function removePendingPayment(reference: string) {
-  console.log(`[PaymentPoller] Removing pending payment: ${reference}`);
   pendingPayments.delete(reference);
 }
 
 async function checkPaymentStatus(payment: PendingPayment): Promise<"pending" | "completed" | "failed"> {
   try {
-    const result = await checkSwychrPaymentStatus(payment.externalReference || payment.reference);
-    console.log(`[PaymentPoller] Swychr status for ${payment.reference}:`, result.status, result.rawStatus);
-    if (result.success && result.status === "completed") return "completed";
-    if (result.success && result.status === "failed") return "failed";
-    return "pending";
+    if (payment.provider === "afribapay") {
+      const extRef = payment.externalReference || payment.reference;
+      const result = await checkAfribaPayStatus(extRef, "order_id");
+      console.log(`[PaymentPoller] AfribaPay status for ${payment.reference}: ${result.status}`);
+      return result.status;
+    } else {
+      const result = await checkSwychrPaymentStatus(payment.externalReference || payment.reference);
+      console.log(`[PaymentPoller] Swychr status for ${payment.reference}:`, result.status, result.rawStatus);
+      if (result.success && result.status === "completed") return "completed";
+      if (result.success && result.status === "failed") return "failed";
+      return "pending";
+    }
   } catch (error) {
     console.error(`[PaymentPoller] Error checking payment ${payment.reference}:`, error);
     return "pending";
@@ -67,18 +75,17 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
       await creditUserWallet(payment.userId, parseFloat(payment.amount), paymentCurrency);
 
       const isPaymentLink = payment.type === "payment_link";
-      const currency = paymentCurrency;
       await storage.createUserNotification({
         userId: payment.userId,
         type: isPaymentLink ? "payment_link_received" : "deposit_confirmed",
         title: isPaymentLink ? "Paiement reçu" : "Dépôt confirmé",
         message: isPaymentLink
-          ? `Vous avez reçu un paiement de ${payment.amount} ${currency} via lien de paiement.`
-          : `Votre dépôt de ${payment.amount} ${currency} a été confirmé et crédité sur votre compte.`,
+          ? `Vous avez reçu un paiement de ${payment.amount} ${paymentCurrency} via lien de paiement.`
+          : `Votre dépôt de ${payment.amount} ${paymentCurrency} a été confirmé et crédité sur votre compte.`,
         transactionId: transaction.id,
         isRead: false,
       });
-      console.log(`[PaymentPoller] Payment completed for ${payment.reference}`);
+      console.log(`[PaymentPoller] ✓ Payment COMPLETED for ${payment.reference} (${payment.provider || "swychr"}) → credited ${payment.amount} ${paymentCurrency}`);
 
       if (payment.paymentIntentId) {
         await storage.updatePaymentIntentStatus(payment.paymentIntentId, "completed");
@@ -106,17 +113,17 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
       await storage.createUserNotification({
         userId: payment.userId,
         type: isPaymentLink ? "payment_link_failed" : "deposit_failed",
-        title: isPaymentLink ? "Paiement échoué" : "Dépôt échoué",
+        title: isPaymentLink ? "Paiement annulé" : "Dépôt annulé",
         message: isPaymentLink
-          ? "Un paiement a échoué ou expiré."
-          : "Votre dépôt a échoué ou expiré. Aucun montant n'a été débité.",
+          ? "Le paiement a été annulé ou a échoué."
+          : "Votre dépôt a été annulé ou a échoué. Aucun montant n'a été débité.",
         transactionId: transaction.id,
         isRead: false,
       });
       if (payment.paymentIntentId) {
         await storage.updatePaymentIntentStatus(payment.paymentIntentId, "failed");
       }
-      console.log(`[PaymentPoller] Payment failed for ${payment.reference}`);
+      console.log(`[PaymentPoller] ✗ Payment FAILED/CANCELLED for ${payment.reference} (${payment.provider || "swychr"})`);
     }
 
     removePendingPayment(payment.reference);
@@ -135,7 +142,7 @@ async function pollPendingPayments() {
     const timedOut = ageMs >= MAX_POLL_DURATION_MS || payment.attempts > MAX_POLL_ATTEMPTS;
 
     if (timedOut) {
-      console.log(`[PaymentPoller] Timeout (${Math.round(ageMs / 60000)}min) for ${reference}, marking as failed`);
+      console.log(`[PaymentPoller] Timeout for ${reference}, marking as failed`);
       await processPaymentResult(payment, "failed");
       continue;
     }
@@ -143,15 +150,10 @@ async function pollPendingPayments() {
     const status = await checkPaymentStatus(payment);
     if (status === "completed" || status === "failed") {
       await processPaymentResult(payment, status);
-    } else {
-      if (payment.attempts % 20 === 0) {
-        console.log(`[PaymentPoller] ${reference} still pending (${Math.round(ageMs / 1000)}s / 600s)`);
-      }
     }
   }
 }
 
-// Called on server startup: auto-fail transactions stuck > 10 min, recover recent ones
 export async function recoverPendingDeposits() {
   console.log("[PaymentPoller] Recovering pending deposit transactions from DB...");
   try {
@@ -167,8 +169,7 @@ export async function recoverPendingDeposits() {
       if (!tx.reference) continue;
 
       if (ageMs >= MAX_POLL_DURATION_MS) {
-        // Auto-fail transactions older than 10 minutes
-        console.log(`[PaymentPoller] Auto-failing stale transaction: ${tx.reference} (age: ${Math.round(ageMs / 60000)}min)`);
+        console.log(`[PaymentPoller] Auto-failing stale transaction: ${tx.reference}`);
         await storage.updateTransactionStatus(tx.id, "failed");
         if (tx.userId) {
           const isPaymentLink = tx.type === "payment_link";
@@ -185,7 +186,15 @@ export async function recoverPendingDeposits() {
         }
         autoFailed++;
       } else {
-        // Re-add recent pending transactions to in-memory poller
+        // Detect provider from the operator record
+        let provider = "swychr";
+        if (tx.operatorId) {
+          try {
+            const op = await storage.getOperator(tx.operatorId);
+            if ((op as any)?.paymentProvider === "afribapay") provider = "afribapay";
+          } catch {}
+        }
+
         const elapsedAttempts = Math.floor(ageMs / POLL_INTERVAL);
         pendingPayments.set(tx.reference, {
           transactionId: tx.id,
@@ -195,6 +204,7 @@ export async function recoverPendingDeposits() {
           userId: tx.userId,
           type: tx.type,
           amount: tx.amount,
+          provider,
           paymentIntentId: tx.paymentIntentId,
           startedAt: createdAt,
         });

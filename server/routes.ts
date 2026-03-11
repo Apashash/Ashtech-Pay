@@ -1423,6 +1423,7 @@ export async function registerRoutes(
                 userId: user.id,
                 type: "deposit",
                 amount: afribaFees.creditedAmount.toString(),
+                provider: "afribapay",
               });
 
               res.json({
@@ -3093,6 +3094,7 @@ export async function registerRoutes(
                   userId: paymentLink.userId,
                   type: "payment_link",
                   amount: afribaFees.creditedAmount.toFixed(2),
+                  provider: "afribapay",
                   paymentIntentId: intent.id,
                   payerName: fullName,
                 });
@@ -5456,40 +5458,41 @@ export async function registerRoutes(
         return res.json({ success: true });
       }
 
+      const isPaymentLink = transaction.type === "payment_link";
+
       if (status === "completed") {
         await storage.updateTransactionStatus(transaction.id, "completed");
-        const user = await storage.getUser(transaction.userId);
-        if (user) {
-          const newBalance = parseFloat(user.balance) + parseFloat(transaction.amount);
-          await storage.updateUserBalance(transaction.userId, newBalance);
-          const isPaymentLink = transaction.type === "payment_link";
-          await storage.createUserNotification({
-            userId: transaction.userId,
-            type: isPaymentLink ? "payment_link_received" : "deposit_confirmed",
-            title: isPaymentLink ? "Paiement reçu" : "Dépôt confirmé",
-            message: isPaymentLink
-              ? `Vous avez reçu un paiement de ${transaction.amount} de ${transaction.payerName || "un client"}.`
-              : `Votre dépôt de ${transaction.amount} a été crédité sur votre compte.`,
-            transactionId: transaction.id,
-          });
-          if (isPaymentLink && transaction.paymentIntentId) {
-            await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "completed");
-          }
+        const txCurrency = transaction.currency || "XAF";
+        // Credit wallet using multi-currency helper (same as the poller)
+        await creditUserWallet(transaction.userId, parseFloat(transaction.amount), txCurrency);
+        await storage.createUserNotification({
+          userId: transaction.userId,
+          type: isPaymentLink ? "payment_link_received" : "deposit_confirmed",
+          title: isPaymentLink ? "Paiement reçu" : "Dépôt confirmé",
+          message: isPaymentLink
+            ? `Vous avez reçu un paiement de ${transaction.amount} ${txCurrency} de ${transaction.payerName || "un client"}.`
+            : `Votre dépôt de ${transaction.amount} ${txCurrency} a été crédité sur votre compte.`,
+          transactionId: transaction.id,
+        });
+        if (transaction.paymentIntentId) {
+          await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "completed");
         }
-        console.log("[AfribaPay Webhook] Payment SUCCESS:", transaction.id);
+        console.log(`[AfribaPay Webhook] ✓ Payment SUCCESS: ${transaction.id} → credited ${transaction.amount} ${txCurrency}`);
       } else if (status === "failed") {
         await storage.updateTransactionStatus(transaction.id, "failed");
-        if (transaction.type === "payment_link" && transaction.paymentIntentId) {
+        if (transaction.paymentIntentId) {
           await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "failed");
         }
         await storage.createUserNotification({
           userId: transaction.userId,
-          type: "deposit_failed",
-          title: "Dépôt échoué",
-          message: `Votre dépôt de ${transaction.totalAmount || transaction.amount} a échoué.`,
+          type: isPaymentLink ? "payment_link_failed" : "deposit_failed",
+          title: isPaymentLink ? "Paiement annulé" : "Dépôt annulé",
+          message: isPaymentLink
+            ? "Le paiement a été annulé ou a échoué."
+            : "Votre dépôt a été annulé. Aucun montant n'a été débité.",
           transactionId: transaction.id,
         });
-        console.log("[AfribaPay Webhook] Payment FAILED:", transaction.id);
+        console.log(`[AfribaPay Webhook] ✗ Payment FAILED/CANCELLED: ${transaction.id}`);
       }
 
       res.json({ success: true });
