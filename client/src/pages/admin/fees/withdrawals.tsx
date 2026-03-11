@@ -20,9 +20,10 @@ import { useToast } from "@/hooks/use-toast";
 import type { Fee, Country, Operator } from "@shared/schema";
 
 interface EditState {
-  fee: Fee;
+  fee: Fee | null;
   operator: Operator;
   country: Country;
+  needsCreate: boolean;
 }
 
 const guessAfribaCode = (name: string): string => {
@@ -94,15 +95,12 @@ export default function AdminFeesWithdrawals() {
 
   const openEdit = (op: Operator, country: Country) => {
     const fee = findFee(op, country);
-    if (!fee) {
-      toast({ title: "Aucun frais trouvé pour ce pays", variant: "destructive" });
-      return;
-    }
-    setEditing({ fee, operator: op, country });
-    setAfribapayFee((fee as any).afribapayFee ?? "3.00");
-    setAshtechMargin((fee as any).ashtechMargin ?? "2.00");
-    setMinFee(fee.minFee?.toString() || "");
-    setIsActive(fee.isActive ?? true);
+    const needsCreate = !fee || (fee as any).operatorId !== op.id;
+    setEditing({ fee: fee ?? null, operator: op, country, needsCreate });
+    setAfribapayFee((fee as any)?.afribapayFee ?? "3.00");
+    setAshtechMargin((fee as any)?.ashtechMargin ?? "2.00");
+    setMinFee(fee?.minFee?.toString() || "");
+    setIsActive(fee?.isActive ?? true);
     setLocalProvider((op as any).paymentProvider || "swychr");
     setLocalAfribapayCode((op as any).afribapayOperatorCode || guessAfribaCode(op.name));
   };
@@ -116,6 +114,17 @@ export default function AdminFeesWithdrawals() {
     setLocalProvider("swychr");
     setLocalAfribapayCode("");
   };
+
+  const createFeeMutation = useMutation({
+    mutationFn: async (body: Record<string, unknown>) =>
+      apiRequest("POST", "/api/admin/fees", body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/fees"] });
+      toast({ title: "Frais créés pour cet opérateur" });
+      closeEdit();
+    },
+    onError: (err: any) => toast({ title: "Erreur création", description: err?.message || "Erreur serveur", variant: "destructive" }),
+  });
 
   const providerMutation = useMutation({
     mutationFn: async ({ opId, provider, code }: { opId: string; provider: string; code: string }) =>
@@ -170,14 +179,32 @@ export default function AdminFeesWithdrawals() {
     if (localProvider !== originalProvider || localAfribapayCode !== ((editing.operator as any).afribapayOperatorCode || "")) {
       await providerMutation.mutateAsync({ opId: editing.operator.id, provider: localProvider, code: localAfribapayCode });
     }
-    if (localProvider === "afribapay") {
-      afribaMutation.mutate({ id: editing.fee.id, afribaFee: afribapayFee, margin: ashtechMargin, active: isActive, min: minFee });
+    if (editing.needsCreate) {
+      const swychrFeeVal = parseFloat((editing.fee as any)?.swychrFee || "0");
+      const afribaFeeVal = parseFloat(afribapayFee || "0");
+      const marginVal = parseFloat(ashtechMargin || "0");
+      const totalFee = localProvider === "afribapay" ? afribaFeeVal + marginVal : swychrFeeVal + marginVal;
+      createFeeMutation.mutate({
+        name: `Retrait - ${editing.operator.name}`,
+        transactionType: "withdrawal",
+        feeType: (editing.fee as any)?.feeType || "percentage",
+        operatorId: editing.operator.id,
+        countryId: editing.country.id,
+        swychrFee: String(swychrFeeVal),
+        afribapayFee: String(afribaFeeVal),
+        ashtechMargin: String(marginVal),
+        feeValue: String(totalFee),
+        minFee: minFee ? Number(minFee) : null,
+        isActive,
+      });
+    } else if (localProvider === "afribapay") {
+      afribaMutation.mutate({ id: editing.fee!.id, afribaFee: afribapayFee, margin: ashtechMargin, active: isActive, min: minFee });
     } else {
-      swychrMutation.mutate({ id: editing.fee.id, margin: ashtechMargin, active: isActive, min: minFee });
+      swychrMutation.mutate({ id: editing.fee!.id, margin: ashtechMargin, active: isActive, min: minFee });
     }
   };
 
-  const isPending = swychrMutation.isPending || afribaMutation.isPending || providerMutation.isPending;
+  const isPending = swychrMutation.isPending || afribaMutation.isPending || providerMutation.isPending || createFeeMutation.isPending;
 
   const computeTotal = (): string => {
     if (!editing) return "0";
@@ -254,6 +281,7 @@ export default function AdminFeesWithdrawals() {
                     <div className="border border-t-0 rounded-b-lg divide-y">
                       {ops.map(op => {
                         const fee = findFee(op, country);
+                        const isShared = fee && (fee as any).operatorId !== op.id;
                         const provider = (op as any).paymentProvider || "swychr";
                         const isAfribaPay = provider === "afribapay";
                         const provFee = isAfribaPay
@@ -278,21 +306,23 @@ export default function AdminFeesWithdrawals() {
                                 ) : (
                                   <Badge className="bg-blue-500/20 text-blue-600 border-blue-500/30 text-xs shrink-0">Swychr</Badge>
                                 )}
+                                {isShared && (
+                                  <Badge variant="outline" className="text-xs text-orange-500 border-orange-400/50 shrink-0">Frais pays</Badge>
+                                )}
                               </div>
                               <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
                                 {fee ? (
                                   <>
-                                    <span>
-                                      Frais : <span className="text-foreground font-medium">{provFee.toFixed(2)}%</span>
-                                    </span>
+                                    <span>Frais : <span className="text-foreground font-medium">{provFee.toFixed(2)}%</span></span>
                                     <span>+</span>
                                     <span>Marge : <span className="text-orange-400 font-medium">{margin.toFixed(2)}%</span></span>
                                     <span>=</span>
                                     <span>Total : <span className="text-green-400 font-bold">{total.toFixed(2)}%</span></span>
                                     {fee.minFee && <span className="text-muted-foreground">· Min {fee.minFee} {currency}</span>}
+                                    {isShared && <span className="text-orange-400 italic">— partagé</span>}
                                   </>
                                 ) : (
-                                  <span className="text-destructive">Non configuré</span>
+                                  <span className="text-orange-400 italic">Aucun frais — cliquer pour configurer</span>
                                 )}
                               </div>
                             </div>
@@ -313,13 +343,18 @@ export default function AdminFeesWithdrawals() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>
-                Frais retrait — {editing?.operator.name} ({editing?.country.flag} {editing?.country.name})
+                {editing?.needsCreate ? "Configurer les frais" : "Modifier les frais"} retrait — {editing?.operator.name} ({editing?.country.flag} {editing?.country.name})
               </DialogTitle>
             </DialogHeader>
             {editing && (() => {
               const currency = getCurrency(editing.country.id);
               return (
                 <div className="space-y-4 py-4">
+                  {editing.needsCreate && (
+                    <div className="p-3 rounded-lg bg-orange-500/10 border border-orange-400/30 text-xs text-orange-500">
+                      Un frais spécifique sera créé pour <strong>{editing.operator.name}</strong> uniquement. Les autres opérateurs ne seront pas affectés.
+                    </div>
+                  )}
                   <div className="space-y-2">
                     <Label>Fournisseur de paiement</Label>
                     <Select value={localProvider} onValueChange={(v) => { setLocalProvider(v); if (v === "afribapay" && !localAfribapayCode) setLocalAfribapayCode(guessAfribaCode(editing?.operator.name || "")); }} data-testid="select-provider">
