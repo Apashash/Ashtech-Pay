@@ -25,6 +25,7 @@ import {
   UserCheck,
   ArrowLeftRight,
   RefreshCw,
+  Zap,
 } from "lucide-react";
 import { 
   Dialog, 
@@ -109,6 +110,7 @@ const menuItems: MenuItem[] = [
   },
   { icon: ArrowLeftRight, label: "Conversions", href: "/admin/conversions" },
   { icon: Globe, label: "Pays & Opérateurs", href: "/admin/countries" },
+  { icon: Zap, label: "AfribaPay", href: "/admin/afribapay" },
   { icon: Link2, label: "Liens de paiement", href: "/admin/links" },
   { icon: MessageSquare, label: "Message Global", href: "/admin/global-messages" },
   { icon: MessageSquare, label: "Support", href: "/admin/support" },

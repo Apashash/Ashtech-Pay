@@ -28,6 +28,7 @@ import path from "path";
 import fs from "fs";
 import { uploadToSupabase, getSignedImageUrl, downloadFromSupabase } from "./supabase";
 import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, fetchPaymentLinkDetails, ASHTECH_MARGIN } from "./swychr";
+import { initiateAfribaPayin, initiateAfribaPayout, checkAfribaPayStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN } from "./afribapay";
 import { addPendingPayment } from "./paymentPoller";
 import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, cleanupEmptyWallets } from "./walletHelper";
 import { createSwychrPayout, formatInternationalPhone, detectMethodFromPhone, fiatToPusd, pusdToFiatRate, getConversionRate, convertFiatToPusd, getPayoutToken, COUNTRY_CURRENCY } from "./swychrPayout";
@@ -1349,51 +1350,132 @@ export async function registerRoutes(
           totalAmount: totalAmount.toFixed(2),
         });
 
-      // Call Swychr API for mobile money deposits
+      // Call payment gateway for mobile money deposits
       if (data.paymentMethod === "mobile_money" && data.phoneNumber) {
         try {
-          console.log(`[Deposit] Using Swychr for ${operatorName} in ${countryCode}`);
-          const callbackUrl = `${process.env.APP_URL || ""}/api/swychr/webhook`;
-          const swychrResponse = await createSwychrPaymentLink({
-            country_code: countryCode,
-            name: user.fullName || user.username,
-            email: user.email || `${user.phone}@ashtech.pay`,
-            mobile: data.phoneNumber.replace(/\s/g, ""),
-            grossAmount: totalAmount,
-            currency: countryCurrency,
-            transaction_id: depositRef,
-            description: `Dépôt Ashtech Pay - ${depositRef}`,
-            callback_url: callbackUrl,
-          });
+          // Determine which provider to use (based on operator config)
+          const operatorRecord = data.operatorId ? await storage.getOperator(data.operatorId) : null;
+          const paymentProvider = operatorRecord?.paymentProvider || "swychr";
 
-          if (swychrResponse.success && swychrResponse.data?.payment_link) {
-            addPendingPayment({
-              transactionId: transaction.id,
-              reference: depositRef,
-              externalReference: depositRef,
-              attempts: 0,
-              userId: user.id,
-              type: "deposit",
-              amount: creditedAmount.toString(),
+          if (paymentProvider === "afribapay") {
+            // ─── AfribaPay Payin ──────────────────────────────────────────────
+            console.log(`[Deposit] Using AfribaPay for ${operatorName} in ${countryCode}`);
+            const afribapayOperatorCode = operatorRecord?.afribapayOperatorCode
+              || operatorName.toLowerCase().replace(/\s+money.*/i, "").trim();
+            const callbackUrl = `${process.env.APP_URL || ""}/api/afribapay/webhook`;
+
+            // Recalculate fees using AfribaPay rates if configured
+            const resolvedFeeRecord = await storage.resolveFee("deposit", data.countryId, data.operatorId);
+            const afribapayFeeRate = resolvedFeeRecord?.afribapayFee
+              ? parseFloat(resolvedFeeRecord.afribapayFee.toString())
+              : 3.0;
+            const afribaMarginPct = resolvedFeeRecord?.ashtechMargin
+              ? parseFloat(resolvedFeeRecord.ashtechMargin.toString())
+              : AFRIBAPAY_DEFAULT_MARGIN;
+            const afribaFees = computeAfribaPayFees(totalAmount, afribapayFeeRate, afribaMarginPct);
+
+            // Strip country prefix from phone number (AfribaPay wants local number)
+            let localPhone = data.phoneNumber.replace(/\s/g, "");
+            if (localPhone.startsWith("+")) localPhone = localPhone.slice(1);
+            const prefixes: Record<string, string> = {
+              CM: "237", SN: "221", CI: "225", BF: "226", ML: "223",
+              GN: "224", BJ: "229", TG: "228", NE: "227", CD: "243",
+              CG: "242", CF: "236", TD: "235", GA: "241", GQ: "240",
+              MG: "261", RW: "250", KE: "254", TZ: "255", UG: "256",
+              GH: "233", NG: "234",
+            };
+            const prefix = prefixes[countryCode.toUpperCase()];
+            if (prefix && localPhone.startsWith(prefix)) {
+              localPhone = localPhone.slice(prefix.length);
+            }
+
+            const afribaResponse = await initiateAfribaPayin({
+              operator: afribapayOperatorCode,
+              country: countryCode,
+              phone_number: localPhone,
+              amount: totalAmount,
+              currency: countryCurrency,
+              order_id: depositRef,
+              reference_id: depositRef,
+              notify_url: callbackUrl,
             });
 
-            res.json({ 
-              transaction,
-              checkoutUrl: swychrResponse.data.payment_link,
-              gateway: "swychr",
-              message: "Veuillez compléter le paiement sur la page sécurisée",
-              feeDetails: {
-                grossAmount: totalAmount,
-                feeAmount: (totalAmount - creditedAmount),
-                creditedAmount
-              }
-            });
+            if (afribaResponse.success) {
+              // Update transaction with AfribaPay reference
+              await storage.updateTransactionExternalReference(transaction.id, afribaResponse.transaction_id || depositRef);
+              addPendingPayment({
+                transactionId: transaction.id,
+                reference: depositRef,
+                externalReference: afribaResponse.transaction_id || depositRef,
+                attempts: 0,
+                userId: user.id,
+                type: "deposit",
+                amount: afribaFees.creditedAmount.toString(),
+              });
+
+              res.json({
+                transaction,
+                gateway: "afribapay",
+                status: "pending_otp",
+                message: "Paiement initié. Veuillez confirmer sur votre téléphone mobile.",
+                feeDetails: {
+                  grossAmount: totalAmount,
+                  feeAmount: afribaFees.totalFeeAmount,
+                  creditedAmount: afribaFees.creditedAmount,
+                  afribapayFee: afribaFees.afribapayFeeAmount,
+                  ashtechFee: afribaFees.ashtechFeeAmount,
+                }
+              });
+            } else {
+              await storage.updateTransactionStatus(transaction.id, "failed");
+              res.status(400).json({ message: afribaResponse.message || "Échec de l'initiation du paiement AfribaPay" });
+            }
+
           } else {
-            await storage.updateTransactionStatus(transaction.id, "failed");
-            res.status(400).json({ message: swychrResponse.message || "Échec de l'initiation du paiement" });
+            // ─── Swychr Payin (default) ───────────────────────────────────────
+            console.log(`[Deposit] Using Swychr for ${operatorName} in ${countryCode}`);
+            const callbackUrl = `${process.env.APP_URL || ""}/api/swychr/webhook`;
+            const swychrResponse = await createSwychrPaymentLink({
+              country_code: countryCode,
+              name: user.fullName || user.username,
+              email: user.email || `${user.phone}@ashtech.pay`,
+              mobile: data.phoneNumber.replace(/\s/g, ""),
+              grossAmount: totalAmount,
+              currency: countryCurrency,
+              transaction_id: depositRef,
+              description: `Dépôt Ashtech Pay - ${depositRef}`,
+              callback_url: callbackUrl,
+            });
+
+            if (swychrResponse.success && swychrResponse.data?.payment_link) {
+              addPendingPayment({
+                transactionId: transaction.id,
+                reference: depositRef,
+                externalReference: depositRef,
+                attempts: 0,
+                userId: user.id,
+                type: "deposit",
+                amount: creditedAmount.toString(),
+              });
+
+              res.json({
+                transaction,
+                checkoutUrl: swychrResponse.data.payment_link,
+                gateway: "swychr",
+                message: "Veuillez compléter le paiement sur la page sécurisée",
+                feeDetails: {
+                  grossAmount: totalAmount,
+                  feeAmount: (totalAmount - creditedAmount),
+                  creditedAmount
+                }
+              });
+            } else {
+              await storage.updateTransactionStatus(transaction.id, "failed");
+              res.status(400).json({ message: swychrResponse.message || "Échec de l'initiation du paiement" });
+            }
           }
         } catch (gatewayError) {
-          console.error("Swychr API error:", gatewayError);
+          console.error("Payment gateway API error:", gatewayError);
           res.json({ 
             transaction, 
             message: "Dépôt en attente de confirmation",
@@ -1526,24 +1608,64 @@ export async function registerRoutes(
         operatorId: data.operatorId ? String(data.operatorId) : undefined,
       });
 
-      console.log(`[Withdrawal] Created withdrawal ${withdrawalRef} for ${creditedAmount} — calling AccountPE immediately`);
+      console.log(`[Withdrawal] Created withdrawal ${withdrawalRef} for ${creditedAmount} — calling payout gateway`);
 
-      // Call AccountPE payout API immediately
+      // Call payout API immediately — choose provider based on operator config
       try {
         const operator = await storage.getOperator(data.operatorId);
         const operatorName = (operator?.name || "").toUpperCase();
         const countryCode = withdrawalCountryCode.toUpperCase();
-        const finalPaymentMethod = resolvePaymentMethod(operatorName, countryCode);
+        const paymentProvider = operator?.paymentProvider || "swychr";
 
-        const payoutResult = await createSwychrPayout({
-          country_code:     withdrawalCountryCode,
-          beneficiary_name: user.fullName || user.username || "Client",
-          mobile_no:        formatInternationalPhone(data.accountDetails, withdrawalCountryCode),
-          amount:           creditedAmount,
-          transaction_id:   withdrawalRef,
-          payment_method:   finalPaymentMethod as any,
-          remarks:          `Ashtech Pay - ${withdrawalRef}`,
-        });
+        let payoutResult: { success: boolean; transaction_id?: string; message?: string };
+
+        if (paymentProvider === "afribapay") {
+          // ─── AfribaPay Payout ────────────────────────────────────────────────
+          console.log(`[Withdrawal] Using AfribaPay for ${operatorName} in ${countryCode}`);
+          const afribapayOperatorCode = operator?.afribapayOperatorCode
+            || operatorName.toLowerCase().replace(/\s+money.*/i, "").trim();
+          const callbackUrl = `${process.env.APP_URL || ""}/api/afribapay/webhook`;
+
+          // Strip country prefix from phone
+          let localPhone = data.accountDetails.replace(/\s/g, "");
+          if (localPhone.startsWith("+")) localPhone = localPhone.slice(1);
+          const phonePrefixes: Record<string, string> = {
+            CM: "237", SN: "221", CI: "225", BF: "226", ML: "223",
+            GN: "224", BJ: "229", TG: "228", NE: "227", CD: "243",
+            CG: "242", CF: "236", TD: "235", GA: "241", GQ: "240",
+            MG: "261", RW: "250", KE: "254", TZ: "255", UG: "256",
+            GH: "233", NG: "234",
+          };
+          const pfx = phonePrefixes[countryCode];
+          if (pfx && localPhone.startsWith(pfx)) localPhone = localPhone.slice(pfx.length);
+
+          const afribaResult = await initiateAfribaPayout({
+            operator: afribapayOperatorCode,
+            country: countryCode,
+            phone_number: localPhone,
+            amount: creditedAmount,
+            currency: withdrawalCurrency,
+            order_id: withdrawalRef,
+            reference_id: withdrawalRef,
+            notify_url: callbackUrl,
+          });
+          payoutResult = afribaResult;
+
+        } else {
+          // ─── Swychr Payout (default) ─────────────────────────────────────────
+          console.log(`[Withdrawal] Using Swychr for ${operatorName} in ${countryCode}`);
+          const finalPaymentMethod = resolvePaymentMethod(operatorName, countryCode);
+          const swychrResult = await createSwychrPayout({
+            country_code:     withdrawalCountryCode,
+            beneficiary_name: user.fullName || user.username || "Client",
+            mobile_no:        formatInternationalPhone(data.accountDetails, withdrawalCountryCode),
+            amount:           creditedAmount,
+            transaction_id:   withdrawalRef,
+            payment_method:   finalPaymentMethod as any,
+            remarks:          `Ashtech Pay - ${withdrawalRef}`,
+          });
+          payoutResult = swychrResult;
+        }
 
         if (payoutResult.success) {
           console.log(`[Withdrawal] Payout submitted OK: ${withdrawalRef} (ext: ${payoutResult.transaction_id})`);
@@ -2894,17 +3016,83 @@ export async function registerRoutes(
         operatorId: resolvedOperatorId || null,
       });
 
-      // Get operator name for Swychr
+      // Get operator record (needed for paymentProvider routing)
       let operatorName = "Mobile Money";
+      let operatorRecord: any = null;
       if (operator && countryId) {
         const operators = await storage.getOperatorsByCountry(countryId);
-        const operatorData = operators.find((o: { name: string; id: string }) => o.name === operator || o.id === operator);
-        operatorName = operatorData?.name || operator;
+        operatorRecord = operators.find((o: any) => o.name === operator || o.id === operator);
+        operatorName = operatorRecord?.name || operator;
       }
 
-      // Call Swychr API for Mobile Money payments
+      const paymentProvider = operatorRecord?.paymentProvider || "swychr";
+
+      // Call payment gateway for Mobile Money payments
       if (paymentMethod === "mobile_money") {
         try {
+          // ─── AfribaPay branch ─────────────────────────────────────────────
+          if (paymentProvider === "afribapay") {
+            console.log(`[PaymentLink] Using AfribaPay for ${operatorName} in ${paymentCountryCode}`);
+            const resolvedFeeRecord = await storage.resolveFee("deposit", countryId, resolvedOperatorId);
+            const afribapayFeeRate = resolvedFeeRecord?.afribapayFee
+              ? parseFloat(resolvedFeeRecord.afribapayFee.toString()) : 3.0;
+            const afribaMarginPct = resolvedFeeRecord?.ashtechMargin
+              ? parseFloat(resolvedFeeRecord.ashtechMargin.toString()) : ASHTECH_MARGIN;
+            const afribaFees = computeAfribaPayFees(numAmount, afribapayFeeRate, afribaMarginPct);
+            const afribapayOperatorCode = operatorRecord?.afribapayOperatorCode
+              || operatorName.toLowerCase().replace(/\s+/g, "");
+            const callbackUrl = `${process.env.APP_URL || ""}/api/afribapay/webhook`;
+            // Strip country dialing prefix from phone (AfribaPay needs local number)
+            const countryPrefix = countryData?.dialCode || countryData?.prefix || "";
+            const localPhone = countryPrefix
+              ? phone.replace(/\s/g, "").replace(new RegExp(`^\\+?0*${countryPrefix.replace("+", "")}`), "")
+              : phone.replace(/\s/g, "");
+            const afribaResponse = await initiateAfribaPayin({
+              operator: afribapayOperatorCode,
+              phone: localPhone,
+              amount: numAmount,
+              currency: paymentCurrency,
+              country_code: paymentCountryCode,
+              reference,
+              description: `Paiement ${paymentLink.title} - ${reference}`,
+              callback_url: callbackUrl,
+            });
+            if (afribaResponse.success) {
+              const linkTransaction = await storage.getTransactionByReference(reference);
+              if (linkTransaction) {
+                if (afribaResponse.data?.transaction_id) {
+                  await storage.updateTransactionExternalReference(linkTransaction.id, afribaResponse.data.transaction_id);
+                }
+                addPendingPayment({
+                  transactionId: linkTransaction.id,
+                  reference,
+                  externalReference: afribaResponse.data?.transaction_id || reference,
+                  attempts: 0,
+                  userId: paymentLink.userId,
+                  type: "payment_link",
+                  amount: afribaFees.creditedAmount.toFixed(2),
+                  paymentIntentId: intent.id,
+                  payerName: fullName,
+                });
+              }
+              return res.json({
+                message: "Veuillez confirmer le paiement sur votre téléphone (USSD/OTP).",
+                reference: intent.reference,
+                gateway: "afribapay",
+                redirectUrl: paymentLink.redirectUrl || null,
+                amount: numAmount,
+                feeAmount: afribaFees.totalFeeAmount,
+                totalAmount: numAmount,
+              });
+            } else {
+              await storage.updatePaymentIntentStatus(intent.id, "failed");
+              const failedTx = await storage.getTransactionByReference(reference);
+              if (failedTx) await storage.updateTransactionStatus(failedTx.id, "failed");
+              return res.status(400).json({ message: afribaResponse.message || "Échec AfribaPay" });
+            }
+          }
+
+          // ─── Swychr branch ────────────────────────────────────────────────
           console.log(`[PaymentLink] Using Swychr for ${operatorName} in ${paymentCountryCode}`);
           const callbackUrl = `${process.env.APP_URL || ""}/api/swychr/webhook`;
           const swychrResponse = await createSwychrPaymentLink({
@@ -2954,7 +3142,7 @@ export async function registerRoutes(
             res.status(400).json({ message: swychrResponse.message || "Échec de l'initiation du paiement" });
           }
         } catch (gatewayError) {
-          console.error("Swychr API error:", gatewayError);
+          console.error("Gateway API error:", gatewayError);
           await storage.updatePaymentIntentStatus(intent.id, "failed");
           const failedTransaction = await storage.getTransactionByReference(reference);
           if (failedTransaction) {
@@ -5218,6 +5406,123 @@ export async function registerRoutes(
     } catch (error) {
       console.error("[Swychr Verify] Error:", error);
       res.status(500).json({ message: "Erreur de vérification" });
+    }
+  });
+
+  // ─── AfribaPay Webhook ────────────────────────────────────────────────────
+  app.post("/api/afribapay/webhook", async (req, res) => {
+    try {
+      const payload = req.body;
+      console.log("[AfribaPay Webhook] Received:", JSON.stringify(payload));
+
+      const parsed = parseAfribaPayWebhook(payload);
+      const { order_id, transaction_id, status } = parsed;
+
+      const ref = order_id || transaction_id;
+      if (!ref) {
+        console.error("[AfribaPay Webhook] Missing order_id/transaction_id");
+        return res.status(400).json({ message: "Missing identifier" });
+      }
+
+      const transaction = await storage.getTransactionByReference(ref);
+      if (!transaction) {
+        console.error("[AfribaPay Webhook] Transaction not found:", ref);
+        return res.status(404).json({ message: "Transaction not found" });
+      }
+
+      if (transaction.status !== "pending") {
+        return res.json({ success: true });
+      }
+
+      if (status === "completed") {
+        await storage.updateTransactionStatus(transaction.id, "completed");
+        const user = await storage.getUser(transaction.userId);
+        if (user) {
+          const newBalance = parseFloat(user.balance) + parseFloat(transaction.amount);
+          await storage.updateUserBalance(transaction.userId, newBalance);
+          const isPaymentLink = transaction.type === "payment_link";
+          await storage.createUserNotification({
+            userId: transaction.userId,
+            type: isPaymentLink ? "payment_link_received" : "deposit_confirmed",
+            title: isPaymentLink ? "Paiement reçu" : "Dépôt confirmé",
+            message: isPaymentLink
+              ? `Vous avez reçu un paiement de ${transaction.amount} de ${transaction.payerName || "un client"}.`
+              : `Votre dépôt de ${transaction.amount} a été crédité sur votre compte.`,
+            transactionId: transaction.id,
+          });
+          if (isPaymentLink && transaction.paymentIntentId) {
+            await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "completed");
+          }
+        }
+        console.log("[AfribaPay Webhook] Payment SUCCESS:", transaction.id);
+      } else if (status === "failed") {
+        await storage.updateTransactionStatus(transaction.id, "failed");
+        if (transaction.type === "payment_link" && transaction.paymentIntentId) {
+          await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "failed");
+        }
+        await storage.createUserNotification({
+          userId: transaction.userId,
+          type: "deposit_failed",
+          title: "Dépôt échoué",
+          message: `Votre dépôt de ${transaction.totalAmount || transaction.amount} a échoué.`,
+          transactionId: transaction.id,
+        });
+        console.log("[AfribaPay Webhook] Payment FAILED:", transaction.id);
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[AfribaPay Webhook] Error:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ─── AfribaPay Admin Routes ───────────────────────────────────────────────
+
+  // GET /api/admin/afribapay/countries — fetch live AfribaPay country list
+  app.get("/api/admin/afribapay/countries", requireAdmin, async (_req, res) => {
+    try {
+      const countries = await fetchAfribaPayCountries();
+      res.json({ success: true, data: countries });
+    } catch (err: any) {
+      console.error("[AfribaPay Countries] Error:", err);
+      res.status(500).json({ message: err.message || "Erreur AfribaPay" });
+    }
+  });
+
+  // PATCH /api/admin/operators/:id/provider — toggle provider swychr/afribapay
+  app.patch("/api/admin/operators/:id/provider", requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { paymentProvider, afribapayOperatorCode } = req.body;
+
+      if (!["swychr", "afribapay"].includes(paymentProvider)) {
+        return res.status(400).json({ message: "Fournisseur invalide. Choisir swychr ou afribapay." });
+      }
+
+      const updated = await storage.updateOperator(id, { paymentProvider, afribapayOperatorCode: afribapayOperatorCode || null });
+      if (!updated) return res.status(404).json({ message: "Opérateur non trouvé" });
+      res.json({ success: true, operator: updated });
+    } catch (err: any) {
+      console.error("[Admin Provider] Error:", err);
+      res.status(500).json({ message: err.message || "Erreur serveur" });
+    }
+  });
+
+  // PATCH /api/admin/fees/:id/afribapay — update AfribaPay fee rate for a fee entry
+  app.patch("/api/admin/fees/:id/afribapay", requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { afribapayFee, ashtechMargin } = req.body;
+      const updates: any = {};
+      if (afribapayFee !== undefined) updates.afribapayFee = String(afribapayFee);
+      if (ashtechMargin !== undefined) updates.ashtechMargin = String(ashtechMargin);
+      const updated = await storage.updateFee(id, updates);
+      if (!updated) return res.status(404).json({ message: "Frais non trouvé" });
+      res.json({ success: true, fee: updated });
+    } catch (err: any) {
+      console.error("[Admin AfribaPay Fee] Error:", err);
+      res.status(500).json({ message: err.message || "Erreur serveur" });
     }
   });
 

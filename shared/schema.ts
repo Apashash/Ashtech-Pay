@@ -256,6 +256,8 @@ export const operators = pgTable("operators", {
   type: text("type").notNull(), // 'mobile_money', 'bank', 'crypto'
   countryId: varchar("country_id").notNull().references(() => countries.id),
   gateway: text("gateway").default("soleapay").notNull(), // 'soleapay', 'winipay'
+  paymentProvider: text("payment_provider").default("swychr").notNull(), // 'swychr' | 'afribapay'
+  afribapayOperatorCode: text("afribapay_operator_code"), // operator code used in AfribaPay API (e.g. "mtn", "orange")
   isActive: boolean("is_active").default(true),
   isInMaintenance: boolean("is_in_maintenance").default(false),
   dailyLimit: decimal("daily_limit", { precision: 15, scale: 2 }).default("1000000").notNull(),
@@ -266,6 +268,10 @@ export const operators = pgTable("operators", {
 // Payment gateways
 export const PAYMENT_GATEWAYS = ["soleapay", "winipay"] as const;
 export type PaymentGateway = typeof PAYMENT_GATEWAYS[number];
+
+// Payment providers (per operator)
+export const PAYMENT_PROVIDERS = ["swychr", "afribapay"] as const;
+export type PaymentProvider = typeof PAYMENT_PROVIDERS[number];
 
 // Countries that use SoleaPay by default (Bénin, Cameroun, Côte d'Ivoire, Togo)
 export const SOLEAPAY_COUNTRIES = ["BJ", "CM", "CI", "TG"] as const;
@@ -278,6 +284,7 @@ export const fees = pgTable("fees", {
   feeType: text("fee_type").notNull(), // 'percentage', 'fixed'
   feeValue: decimal("fee_value", { precision: 10, scale: 4 }).notNull(),
   swychrFee: decimal("swychr_fee", { precision: 10, scale: 4 }).default("0"),
+  afribapayFee: decimal("afribapay_fee", { precision: 10, scale: 4 }).default("0"), // AfribaPay provider fee %
   ashtechMargin: decimal("ashtech_margin", { precision: 10, scale: 4 }).default("0"),
   minFee: decimal("min_fee", { precision: 15, scale: 2 }),
   maxFee: decimal("max_fee", { precision: 15, scale: 2 }),
