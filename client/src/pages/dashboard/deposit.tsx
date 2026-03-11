@@ -22,8 +22,12 @@ interface OperatorConfig {
   name: string;
   type: string;
   gateway: string;
+  paymentProvider: string;
   feePercentage: number;
+  feeFixed?: number;
   fixedFee: number;
+  afribapayFee?: number;
+  ashtechMargin?: number;
   minFee: number | null;
   maxFee: number | null;
 }
@@ -99,31 +103,41 @@ export default function DepositPage() {
       return null;
     }
 
-    const feePercentage = selectedOperator.feePercentage || 0;
-    const fixedFee = selectedOperator.fixedFee || 0;
-    
+    const isAfribaPay = (selectedOperator.paymentProvider || "swychr") === "afribapay";
+
+    let feePercentage = 0;
     let fee = 0;
-    if (feePercentage > 0) {
+
+    if (isAfribaPay) {
+      const afribapayFee = selectedOperator.afribapayFee || 3;
+      const ashtechMargin = selectedOperator.ashtechMargin || 2;
+      feePercentage = afribapayFee + ashtechMargin;
       fee = (amount * feePercentage) / 100;
-    } else if (fixedFee > 0) {
-      fee = fixedFee;
+    } else {
+      feePercentage = selectedOperator.feePercentage || 0;
+      const fixedFee = selectedOperator.fixedFee || 0;
+      if (feePercentage > 0) {
+        fee = (amount * feePercentage) / 100;
+      } else if (fixedFee > 0) {
+        fee = fixedFee;
+      }
+      if (selectedOperator.minFee !== null && fee < (selectedOperator.minFee ?? 0)) {
+        fee = selectedOperator.minFee ?? 0;
+      }
+      if (selectedOperator.maxFee !== null && fee > (selectedOperator.maxFee ?? Infinity)) {
+        fee = selectedOperator.maxFee ?? fee;
+      }
     }
-    
-    if (selectedOperator.minFee !== null && fee < selectedOperator.minFee) {
-      fee = selectedOperator.minFee;
-    }
-    if (selectedOperator.maxFee !== null && fee > selectedOperator.maxFee) {
-      fee = selectedOperator.maxFee;
-    }
-    
+
     const creditedAmount = amount - fee;
-    
+
     return {
       amount,
       fee,
       creditedAmount: creditedAmount > 0 ? creditedAmount : 0,
       feePercentage,
-      fixedFee,
+      fixedFee: selectedOperator.fixedFee || 0,
+      isAfribaPay,
     };
   }, [watchedAmount, selectedOperator]);
 
@@ -607,12 +621,13 @@ export default function DepositPage() {
                               <span className="font-medium">{formatCurrency(feeCalculation.amount.toString(), (selectedCountry?.currency || "XAF") as SupportedCurrency)}</span>
                             </div>
                             <div className="flex items-center justify-between text-sm">
-                              <span className="text-muted-foreground">
+                              <span className="text-muted-foreground flex items-center gap-1.5">
                                 Frais de dépôt {feeCalculation.feePercentage > 0 
-                                  ? (selectedOperator?.minFee && feeCalculation.fee === selectedOperator.minFee 
-                                    ? `(min. ${selectedOperator.minFee} ${selectedCountry?.currency || 'XAF'})` 
-                                    : `(${feeCalculation.feePercentage}%)`)
+                                  ? `(${feeCalculation.feePercentage}%)`
                                   : feeCalculation.fixedFee > 0 ? "(fixe)" : "(Gratuit)"}
+                                <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${feeCalculation.isAfribaPay ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"}`}>
+                                  {feeCalculation.isAfribaPay ? "AfribaPay" : "Swychr"}
+                                </span>
                               </span>
                               <span className={`font-medium ${feeCalculation.fee > 0 ? "text-red-500" : "text-green-500"}`}>
                                 {feeCalculation.fee > 0 ? `-${formatCurrency(feeCalculation.fee.toString(), (selectedCountry?.currency || "XAF") as SupportedCurrency)}` : "0 XAF"}

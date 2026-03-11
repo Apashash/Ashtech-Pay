@@ -30,7 +30,7 @@ interface CountryConfig {
   flag: string;
   currency: string;
   exchangeRate: number;
-  operators: { id: string; name: string; gateway: string; feePercentage: number; feeFixed: number; }[];
+  operators: { id: string; name: string; gateway: string; paymentProvider: string; feePercentage: number; feeFixed: number; afribapayFee?: number; ashtechMargin?: number; }[];
 }
 
 interface DepositConfigResponse {

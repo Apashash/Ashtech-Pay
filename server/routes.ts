@@ -909,8 +909,11 @@ export async function registerRoutes(
               name: op.name,
               type: op.type,
               gateway: (op as any).gateway || "soleapay",
+              paymentProvider: (op as any).paymentProvider || "swychr",
               feePercentage: operatorFee?.feeType === "percentage" ? parseFloat(operatorFee.feeValue) : 0,
               feeFixed: operatorFee?.feeType === "fixed" ? parseFloat(operatorFee.feeValue) : 0,
+              afribapayFee: operatorFee ? parseFloat((operatorFee as any).afribapayFee || "0") : 0,
+              ashtechMargin: operatorFee ? parseFloat((operatorFee as any).ashtechMargin || "0") : 0,
               minFee: operatorFee?.minFee ? parseFloat(operatorFee.minFee) : null,
               maxFee: operatorFee?.maxFee ? parseFloat(operatorFee.maxFee) : null,
             };
@@ -1302,13 +1305,14 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Utilisateur non trouvé" });
       }
 
-      // Get operator name and country code for fee resolution
+      // Get operator + country details (single fetch, used throughout)
       let operatorName = "Mobile Money";
       let countryCode = "CM";
       let countryCurrency = "XAF";
+      let operatorRecord: Awaited<ReturnType<typeof storage.getOperator>> | null = null;
       if (data.operatorId) {
-        const operator = await storage.getOperator(data.operatorId);
-        if (operator) operatorName = operator.name;
+        operatorRecord = await storage.getOperator(data.operatorId);
+        if (operatorRecord) operatorName = operatorRecord.name;
       }
       if (data.countryId) {
         const country = await storage.getCountry(data.countryId);
@@ -1318,45 +1322,56 @@ export async function registerRoutes(
         }
       }
 
-        // Resolve Ashtech margin from operator's fee in DB (fallback to default 2%)
-        let ashtechMarginPct = ASHTECH_MARGIN;
-        if (data.operatorId || data.countryId) {
-          const resolvedFee = await storage.resolveFee("deposit", data.countryId, data.operatorId);
-          if (resolvedFee && (resolvedFee as any).ashtechMargin != null) {
-            ashtechMarginPct = parseFloat((resolvedFee as any).ashtechMargin);
-          }
-        }
+      // Determine payment provider BEFORE fee calculation
+      const paymentProvider = (operatorRecord as any)?.paymentProvider || "swychr";
+      console.log(`[Deposit] operatorId=${data.operatorId} | name=${operatorName} | DB provider=${(operatorRecord as any)?.paymentProvider || "null"} | resolved=${paymentProvider} | afribapayCode=${(operatorRecord as any)?.afribapayOperatorCode || "null"}`);
 
-        // Calculate fee using Swychr fee structure (Swychr rate per country + Ashtech margin per operator)
-        const swychrFees = computeSwychrFees(amount, countryCode, ashtechMarginPct);
-        const totalAmount = amount;
-        const ashtechFeeAmount = swychrFees.ashtechFeeAmount; // This is the margin
-        const creditedAmount = swychrFees.creditedAmount;
+      // Resolve fees from DB (includes afribapayFee + ashtechMargin)
+      const resolvedFeeRecord = (data.operatorId || data.countryId)
+        ? await storage.resolveFee("deposit", data.countryId, data.operatorId)
+        : null;
+      const ashtechMarginPct = (resolvedFeeRecord as any)?.ashtechMargin != null
+        ? parseFloat((resolvedFeeRecord as any).ashtechMargin)
+        : ASHTECH_MARGIN;
 
-        const depositRef = generateTransactionReference("deposit");
-        
-        // Create pending transaction first
-        const transaction = await storage.createTransaction({
-          userId,
-          type: "deposit",
-          amount: creditedAmount.toString(),
-          currency: countryCurrency,
-          status: "pending",
-          description: `Recharge via ${data.paymentMethod === "mobile_money" ? "Mobile Money" : "Crypto"}`,
-          paymentMethod: data.paymentMethod,
-          reference: depositRef,
-          operatorId: data.operatorId,
-          feeAmount: ashtechFeeAmount.toFixed(2), // Save margin for admin stats
-          totalAmount: totalAmount.toFixed(2),
-        });
+      // Calculate fees using the CORRECT provider's rates
+      const totalAmount = amount;
+      let creditedAmount: number;
+      let ashtechFeeAmount: number;
+      if (paymentProvider === "afribapay") {
+        const afribapayFeeRate = (resolvedFeeRecord as any)?.afribapayFee
+          ? parseFloat((resolvedFeeRecord as any).afribapayFee)
+          : 3.0;
+        const af = computeAfribaPayFees(totalAmount, afribapayFeeRate, ashtechMarginPct);
+        creditedAmount = af.creditedAmount;
+        ashtechFeeAmount = af.ashtechFeeAmount;
+      } else {
+        const sf = computeSwychrFees(amount, countryCode, ashtechMarginPct);
+        creditedAmount = sf.creditedAmount;
+        ashtechFeeAmount = sf.ashtechFeeAmount;
+      }
+
+      const depositRef = generateTransactionReference("deposit");
+
+      // Create pending transaction with provider-correct amounts
+      const transaction = await storage.createTransaction({
+        userId,
+        type: "deposit",
+        amount: creditedAmount.toString(),
+        currency: countryCurrency,
+        status: "pending",
+        description: `Recharge via ${data.paymentMethod === "mobile_money" ? "Mobile Money" : "Crypto"}`,
+        paymentMethod: data.paymentMethod,
+        reference: depositRef,
+        operatorId: data.operatorId,
+        feeAmount: ashtechFeeAmount.toFixed(2),
+        totalAmount: totalAmount.toFixed(2),
+      });
 
       // Call payment gateway for mobile money deposits
       if (data.paymentMethod === "mobile_money" && data.phoneNumber) {
         try {
-          // Determine which provider to use (based on operator config)
-          const operatorRecord = data.operatorId ? await storage.getOperator(data.operatorId) : null;
-          const paymentProvider = operatorRecord?.paymentProvider || "swychr";
-          console.log(`[Deposit] operatorId=${data.operatorId} | name=${operatorRecord?.name || "?"} | DB provider=${operatorRecord?.paymentProvider || "null"} | resolved=${paymentProvider} | afribapayCode=${operatorRecord?.afribapayOperatorCode || "null"}`);
+          // paymentProvider already determined above
 
           if (paymentProvider === "afribapay") {
             // ─── AfribaPay Payin ──────────────────────────────────────────────
@@ -1365,15 +1380,11 @@ export async function registerRoutes(
               || operatorName.toLowerCase().replace(/\s+money.*/i, "").trim();
             const callbackUrl = `${process.env.APP_URL || ""}/api/afribapay/webhook`;
 
-            // Recalculate fees using AfribaPay rates if configured
-            const resolvedFeeRecord = await storage.resolveFee("deposit", data.countryId, data.operatorId);
-            const afribapayFeeRate = resolvedFeeRecord?.afribapayFee
-              ? parseFloat(resolvedFeeRecord.afribapayFee.toString())
+            // Use already-resolved fee record from outer scope
+            const afribapayFeeRate = (resolvedFeeRecord as any)?.afribapayFee
+              ? parseFloat((resolvedFeeRecord as any).afribapayFee.toString())
               : 3.0;
-            const afribaMarginPct = resolvedFeeRecord?.ashtechMargin
-              ? parseFloat(resolvedFeeRecord.ashtechMargin.toString())
-              : AFRIBAPAY_DEFAULT_MARGIN;
-            const afribaFees = computeAfribaPayFees(totalAmount, afribapayFeeRate, afribaMarginPct);
+            const afribaFees = computeAfribaPayFees(totalAmount, afribapayFeeRate, ashtechMarginPct);
 
             // Strip country prefix from phone number (AfribaPay wants local number)
             let localPhone = data.phoneNumber.replace(/\s/g, "");
@@ -2720,10 +2731,11 @@ export async function registerRoutes(
             return {
               id: op.id,
               name: op.name,
-              gateway: "swychr",
+              gateway: (op as any).paymentProvider || "swychr",
+              paymentProvider: (op as any).paymentProvider || "swychr",
               feePercentage: operatorFee?.feeType === "percentage" ? parseFloat(operatorFee.feeValue) : 0,
               feeFixed: operatorFee?.feeType === "fixed" ? parseFloat(operatorFee.feeValue) : 0,
-              swychrFee: operatorFee ? parseFloat((operatorFee as any).swychrFee || "0") : 0,
+              afribapayFee: operatorFee ? parseFloat((operatorFee as any).afribapayFee || "0") : 0,
               ashtechMargin: operatorFee ? parseFloat((operatorFee as any).ashtechMargin || "0") : 0,
             };
           });
@@ -2949,33 +2961,45 @@ export async function registerRoutes(
       const fxRates = await loadFxRates();
       const amountInLinkCurrency = convertCurrency(numAmount, paymentCurrency, paymentLink.currency, fxRates);
 
+      // Fetch operator early to determine payment provider before fee calculation
       let resolvedOperatorId: string | undefined = undefined;
+      let operatorName = "Mobile Money";
+      let operatorRecord: any = null;
       if (operator && countryId) {
-        const operators = await storage.getOperatorsByCountry(countryId);
-        const operatorData = operators.find((o: { name: string; id: string }) => o.name === operator || o.id === operator);
-        resolvedOperatorId = operatorData?.id || undefined;
+        const operatorsList = await storage.getOperatorsByCountry(countryId);
+        operatorRecord = operatorsList.find((o: any) => o.name === operator || o.id === operator);
+        resolvedOperatorId = operatorRecord?.id || undefined;
+        operatorName = operatorRecord?.name || operator;
       }
 
-      // Resolve Ashtech margin per operator from DB (fallback to default 2%)
+      // Determine provider BEFORE fee calculation
+      const paymentProvider = operatorRecord?.paymentProvider || "swychr";
+      console.log(`[PaymentLink] operatorId=${resolvedOperatorId} | name=${operatorName} | provider=${paymentProvider}`);
+
+      // Resolve fees from DB (includes afribapayFee + ashtechMargin)
       const fee = await storage.resolveFee("deposit", countryId, resolvedOperatorId);
-      let ashtechMarginPct = ASHTECH_MARGIN;
-      if (fee && (fee as any).ashtechMargin != null) {
-        ashtechMarginPct = parseFloat((fee as any).ashtechMargin);
-      }
+      const ashtechMarginPct = (fee as any)?.ashtechMargin != null
+        ? parseFloat((fee as any).ashtechMargin)
+        : ASHTECH_MARGIN;
 
-      // Compute fees in payer's currency — merchant is credited in paymentCurrency (KES, NGN, etc.)
-      const swychrFeesCalc = computeSwychrFees(numAmount, paymentCountryCode, ashtechMarginPct);
-      // netAmount = what merchant receives, in payer's currency
-      const netAmount = swychrFeesCalc.creditedAmount.toFixed(2);
-      const totalFeeAmount = swychrFeesCalc.totalFeeAmount.toFixed(2);
+      // Compute fees using the CORRECT provider's rates
+      let netAmount: string;
+      let totalFeeAmount: string;
       const totalAmount = numAmount.toFixed(2);
 
-      console.log("Payment link fee calculation:", {
-        countryId, resolvedOperatorId, ashtechMarginPct,
-        numAmount, paymentCurrency,
-        swychrFee: swychrFeesCalc.swychrFeeAmount, ashtechFee: swychrFeesCalc.ashtechFeeAmount,
-        totalFee: swychrFeesCalc.totalFeeAmount, merchantReceives: netAmount,
-      });
+      if (paymentProvider === "afribapay") {
+        const afribapayFeeRate = (fee as any)?.afribapayFee
+          ? parseFloat((fee as any).afribapayFee.toString()) : 3.0;
+        const af = computeAfribaPayFees(numAmount, afribapayFeeRate, ashtechMarginPct);
+        netAmount = af.creditedAmount.toFixed(2);
+        totalFeeAmount = af.totalFeeAmount.toFixed(2);
+        console.log(`[PaymentLink] AfribaPay fees: rate=${afribapayFeeRate}%+margin=${ashtechMarginPct}% → fee=${af.totalFeeAmount}, credited=${af.creditedAmount}`);
+      } else {
+        const sf = computeSwychrFees(numAmount, paymentCountryCode, ashtechMarginPct);
+        netAmount = sf.creditedAmount.toFixed(2);
+        totalFeeAmount = sf.totalFeeAmount.toFixed(2);
+        console.log(`[PaymentLink] Swychr fees: margin=${ashtechMarginPct}% → fee=${sf.totalFeeAmount}, credited=${sf.creditedAmount}`);
+      }
 
       // Generate unique ASHPAY reference
       const reference = generateTransactionReference("payment_link");
@@ -3017,16 +3041,7 @@ export async function registerRoutes(
         operatorId: resolvedOperatorId || null,
       });
 
-      // Get operator record (needed for paymentProvider routing)
-      let operatorName = "Mobile Money";
-      let operatorRecord: any = null;
-      if (operator && countryId) {
-        const operators = await storage.getOperatorsByCountry(countryId);
-        operatorRecord = operators.find((o: any) => o.name === operator || o.id === operator);
-        operatorName = operatorRecord?.name || operator;
-      }
-
-      const paymentProvider = operatorRecord?.paymentProvider || "swychr";
+      // paymentProvider, operatorRecord, operatorName already resolved above (before fee calc)
 
       // Call payment gateway for Mobile Money payments
       if (paymentMethod === "mobile_money") {
@@ -3034,11 +3049,9 @@ export async function registerRoutes(
           // ─── AfribaPay branch ─────────────────────────────────────────────
           if (paymentProvider === "afribapay") {
             console.log(`[PaymentLink] Using AfribaPay for ${operatorName} in ${paymentCountryCode}`);
-            const resolvedFeeRecord = await storage.resolveFee("deposit", countryId, resolvedOperatorId);
-            const afribapayFeeRate = resolvedFeeRecord?.afribapayFee
-              ? parseFloat(resolvedFeeRecord.afribapayFee.toString()) : 3.0;
-            const afribaMarginPct = resolvedFeeRecord?.ashtechMargin
-              ? parseFloat(resolvedFeeRecord.ashtechMargin.toString()) : ASHTECH_MARGIN;
+            const afribapayFeeRate = (fee as any)?.afribapayFee
+              ? parseFloat((fee as any).afribapayFee.toString()) : 3.0;
+            const afribaMarginPct = ashtechMarginPct;
             const afribaFees = computeAfribaPayFees(numAmount, afribapayFeeRate, afribaMarginPct);
             const afribapayOperatorCode = operatorRecord?.afribapayOperatorCode
               || operatorName.toLowerCase().replace(/\s+/g, "");
