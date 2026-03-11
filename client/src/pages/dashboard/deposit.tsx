@@ -621,13 +621,10 @@ export default function DepositPage() {
                               <span className="font-medium">{formatCurrency(feeCalculation.amount.toString(), (selectedCountry?.currency || "XAF") as SupportedCurrency)}</span>
                             </div>
                             <div className="flex items-center justify-between text-sm">
-                              <span className="text-muted-foreground flex items-center gap-1.5">
+                              <span className="text-muted-foreground">
                                 Frais de dépôt {feeCalculation.feePercentage > 0 
                                   ? `(${feeCalculation.feePercentage}%)`
                                   : feeCalculation.fixedFee > 0 ? "(fixe)" : "(Gratuit)"}
-                                <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${feeCalculation.isAfribaPay ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"}`}>
-                                  {feeCalculation.isAfribaPay ? "AfribaPay" : "Swychr"}
-                                </span>
                               </span>
                               <span className={`font-medium ${feeCalculation.fee > 0 ? "text-red-500" : "text-green-500"}`}>
                                 {feeCalculation.fee > 0 ? `-${formatCurrency(feeCalculation.fee.toString(), (selectedCountry?.currency || "XAF") as SupportedCurrency)}` : "0 XAF"}

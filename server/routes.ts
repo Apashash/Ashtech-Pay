@@ -3056,31 +3056,39 @@ export async function registerRoutes(
             const afribapayOperatorCode = operatorRecord?.afribapayOperatorCode
               || operatorName.toLowerCase().replace(/\s+/g, "");
             const callbackUrl = `${process.env.APP_URL || ""}/api/afribapay/webhook`;
-            // Strip country dialing prefix from phone (AfribaPay needs local number)
-            const countryPrefix = countryData?.dialCode || countryData?.prefix || "";
-            const localPhone = countryPrefix
-              ? phone.replace(/\s/g, "").replace(new RegExp(`^\\+?0*${countryPrefix.replace("+", "")}`), "")
-              : phone.replace(/\s/g, "");
+            // Strip country dialing prefix (AfribaPay needs local number without prefix)
+            const prefixMap: Record<string, string> = {
+              CM: "237", SN: "221", CI: "225", BF: "226", ML: "223",
+              GN: "224", BJ: "229", TG: "228", NE: "227", CD: "243",
+              CG: "242", CF: "236", TD: "235", GA: "241", GQ: "240",
+              MG: "261", RW: "250", KE: "254", TZ: "255", UG: "256",
+              GH: "233", NG: "234",
+            };
+            let localPhone = phone.replace(/\s/g, "");
+            if (localPhone.startsWith("+")) localPhone = localPhone.slice(1);
+            const dialPrefix = prefixMap[paymentCountryCode.toUpperCase()];
+            if (dialPrefix && localPhone.startsWith(dialPrefix)) {
+              localPhone = localPhone.slice(dialPrefix.length);
+            }
             const afribaResponse = await initiateAfribaPayin({
               operator: afribapayOperatorCode,
-              phone: localPhone,
+              country: paymentCountryCode,
+              phone_number: localPhone,
               amount: numAmount,
               currency: paymentCurrency,
-              country_code: paymentCountryCode,
-              reference,
-              description: `Paiement ${paymentLink.title} - ${reference}`,
-              callback_url: callbackUrl,
+              order_id: reference,
+              reference_id: reference,
+              notify_url: callbackUrl,
             });
             if (afribaResponse.success) {
               const linkTransaction = await storage.getTransactionByReference(reference);
               if (linkTransaction) {
-                if (afribaResponse.data?.transaction_id) {
-                  await storage.updateTransactionExternalReference(linkTransaction.id, afribaResponse.data.transaction_id);
-                }
+                const extRef = afribaResponse.transaction_id || reference;
+                await storage.updateTransactionExternalReference(linkTransaction.id, extRef);
                 addPendingPayment({
                   transactionId: linkTransaction.id,
                   reference,
-                  externalReference: afribaResponse.data?.transaction_id || reference,
+                  externalReference: extRef,
                   attempts: 0,
                   userId: paymentLink.userId,
                   type: "payment_link",
