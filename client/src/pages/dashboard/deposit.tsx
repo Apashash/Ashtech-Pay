@@ -199,7 +199,7 @@ export default function DepositPage() {
       } catch (e) {
         console.error("Error checking deposit status:", e);
       }
-    }, 5000);
+    }, 2000);
   };
 
   const handleCancelDeposit = async () => {
