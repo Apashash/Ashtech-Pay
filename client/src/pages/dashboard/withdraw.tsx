@@ -22,8 +22,12 @@ interface OperatorConfig {
   id: string;
   name: string;
   type: string;
+  paymentProvider: string;
   feePercentage: number;
   feeFixed: number;
+  afribapayFee: number;
+  pixpayFee: number;
+  ashtechMargin: number;
   minFee: number | null;
   maxFee: number | null;
 }
@@ -147,8 +151,9 @@ export default function WithdrawPage() {
   const minPayoutCharge = selectedOperatorData?.minFee || 0;
   
   const percentageFee = (amountValue * feePercent / 100);
+  const isSwychr = !selectedOperatorData?.paymentProvider || selectedOperatorData.paymentProvider === "swychr";
   const feeAmount = (amountValue > 0 && selectedOperatorData) 
-    ? Math.max(percentageFee + feeFixed, minPayoutCharge) 
+    ? (isSwychr ? Math.max(percentageFee + feeFixed, minPayoutCharge) : percentageFee + feeFixed)
     : 0;
   const totalAmount = amountValue + feeAmount;
 

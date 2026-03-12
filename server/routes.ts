@@ -954,16 +954,29 @@ export async function registerRoutes(
                 f => !f.operatorId && !f.countryId && f.transactionType === transactionType && f.isActive
               );
             }
+            const provider = (op as any).paymentProvider || "swychr";
+            const afribaRate = operatorFee ? parseFloat((operatorFee as any).afribapayFee || "0") : 0;
+            const pixpayRate = operatorFee ? parseFloat((operatorFee as any).pixpayFee || "0") : 0;
+            const marginRate = operatorFee ? parseFloat((operatorFee as any).ashtechMargin || "0") : 0;
+            let feePercentage = 0;
+            if (provider === "afribapay") {
+              feePercentage = afribaRate + marginRate;
+            } else if (provider === "pixpay") {
+              feePercentage = pixpayRate + marginRate;
+            } else {
+              feePercentage = operatorFee?.feeType === "percentage" ? parseFloat(operatorFee.feeValue) : 0;
+            }
             return {
               id: op.id,
               name: op.name,
               type: op.type,
               gateway: (op as any).gateway || "soleapay",
-              paymentProvider: (op as any).paymentProvider || "swychr",
-              feePercentage: operatorFee?.feeType === "percentage" ? parseFloat(operatorFee.feeValue) : 0,
+              paymentProvider: provider,
+              feePercentage,
               feeFixed: operatorFee?.feeType === "fixed" ? parseFloat(operatorFee.feeValue) : 0,
-              afribapayFee: operatorFee ? parseFloat((operatorFee as any).afribapayFee || "0") : 0,
-              ashtechMargin: operatorFee ? parseFloat((operatorFee as any).ashtechMargin || "0") : 0,
+              afribapayFee: afribaRate,
+              pixpayFee: pixpayRate,
+              ashtechMargin: marginRate,
               minFee: operatorFee?.minFee ? parseFloat(operatorFee.minFee) : null,
               maxFee: operatorFee?.maxFee ? parseFloat(operatorFee.maxFee) : null,
             };
@@ -3031,15 +3044,28 @@ export async function registerRoutes(
                 f => !f.operatorId && !f.countryId && f.transactionType === "deposit" && f.isActive
               );
             }
+            const provider = (op as any).paymentProvider || "swychr";
+            const afribaRate = operatorFee ? parseFloat((operatorFee as any).afribapayFee || "0") : 0;
+            const pixpayRate = operatorFee ? parseFloat((operatorFee as any).pixpayFee || "0") : 0;
+            const marginRate = operatorFee ? parseFloat((operatorFee as any).ashtechMargin || "0") : 0;
+            let feePercentage = 0;
+            if (provider === "afribapay") {
+              feePercentage = afribaRate + marginRate;
+            } else if (provider === "pixpay") {
+              feePercentage = pixpayRate + marginRate;
+            } else {
+              feePercentage = operatorFee?.feeType === "percentage" ? parseFloat(operatorFee.feeValue) : 0;
+            }
             return {
               id: op.id,
               name: op.name,
-              gateway: (op as any).paymentProvider || "swychr",
-              paymentProvider: (op as any).paymentProvider || "swychr",
-              feePercentage: operatorFee?.feeType === "percentage" ? parseFloat(operatorFee.feeValue) : 0,
+              gateway: provider,
+              paymentProvider: provider,
+              feePercentage,
               feeFixed: operatorFee?.feeType === "fixed" ? parseFloat(operatorFee.feeValue) : 0,
-              afribapayFee: operatorFee ? parseFloat((operatorFee as any).afribapayFee || "0") : 0,
-              ashtechMargin: operatorFee ? parseFloat((operatorFee as any).ashtechMargin || "0") : 0,
+              afribapayFee: afribaRate,
+              pixpayFee: pixpayRate,
+              ashtechMargin: marginRate,
             };
           });
         return {
