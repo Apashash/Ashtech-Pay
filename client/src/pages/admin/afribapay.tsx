@@ -1,16 +1,13 @@
-import { useState, useMemo } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { AdminLayout } from "./layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   Zap, Globe, RefreshCw, CheckCircle, XCircle,
-  AlertCircle, ChevronDown, ChevronRight, Loader2, Save
+  AlertCircle, ChevronDown, ChevronRight, Loader2, Lock, Info
 } from "lucide-react";
 import type { Country, Operator } from "@shared/schema";
 
@@ -30,123 +27,75 @@ interface AfribaCountryData {
   currencies: Record<string, { currency: string; operators: AfribaOperator[] }>;
 }
 
-// ─── Country Config Row ────────────────────────────────────────────────────────
-// Inline edit row for one local operator within a country group
-function OperatorConfigRow({
+// ─── Read-only Operator Row ───────────────────────────────────────────────────
+function OperatorReadRow({
   op,
   afribaOperators,
-  onSave,
-  isSaving,
 }: {
   op: any;
   afribaOperators: AfribaOperator[];
-  onSave: (id: string, paymentProvider: string, afribapayOperatorCode: string) => void;
-  isSaving: boolean;
 }) {
-  const [provider, setProvider] = useState<string>((op as any).paymentProvider || "swychr");
-  const [code, setCode] = useState<string>((op as any).afribapayOperatorCode || "");
-  const isDirty =
-    provider !== ((op as any).paymentProvider || "swychr") ||
-    code !== ((op as any).afribapayOperatorCode || "");
+  const provider = op.paymentProvider || "swychr";
+  const code = op.afribapayOperatorCode || "";
+  const afribaMatch = afribaOperators.find(a => a.operator_code === code);
 
   return (
-    <tr className="border-b hover:bg-muted/20">
-      <td className="py-3 pr-4">
+    <tr className="border-b hover:bg-muted/10">
+      <td className="py-2.5 pr-4">
         <div className="font-medium text-sm">{op.name}</div>
         <div className="text-xs text-muted-foreground">{op.type || "mobile_money"}</div>
       </td>
 
-      {/* Fournisseur */}
-      <td className="py-3 pr-3 w-44">
-        <Select value={provider} onValueChange={(v) => { setProvider(v); if (v === "swychr") setCode(""); }}>
-          <SelectTrigger className="h-8 text-xs" data-testid={`select-provider-${op.id}`}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="swychr">Swychr</SelectItem>
-            <SelectItem value="afribapay">AfribaPay</SelectItem>
-          </SelectContent>
-        </Select>
-      </td>
-
-      {/* Code opérateur AfribaPay */}
-      <td className="py-3 pr-3">
+      {/* Fournisseur actuel */}
+      <td className="py-2.5 pr-3 w-32">
         {provider === "afribapay" ? (
-          afribaOperators.length > 0 ? (
-            <Select value={code} onValueChange={setCode}>
-              <SelectTrigger className="h-8 text-xs" data-testid={`select-afribapay-op-${op.id}`}>
-                <SelectValue placeholder="Choisir..." />
-              </SelectTrigger>
-              <SelectContent>
-                {afribaOperators.map(ao => (
-                  <SelectItem key={ao.operator_code} value={ao.operator_code}>
-                    <span className="font-medium">{ao.operator_name}</span>
-                    <span className="ml-1 text-muted-foreground text-xs">({ao.operator_code})</span>
-                    {ao.otp_required === 1 && <Badge variant="outline" className="ml-1 text-xs px-1 py-0">OTP</Badge>}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : (
-            <span className="text-xs text-orange-500 italic">Pays non dispo sur AfribaPay</span>
-          )
+          <Badge className="bg-yellow-500 text-black text-xs">AfribaPay</Badge>
+        ) : provider === "pixpay" ? (
+          <Badge className="bg-blue-500 text-white text-xs">PixPay</Badge>
         ) : (
-          <span className="text-xs text-muted-foreground italic">—</span>
+          <Badge variant="secondary" className="text-xs">Swychr</Badge>
         )}
       </td>
 
-      {/* Status badge */}
-      <td className="py-3 pr-3 w-28">
-        <Badge
-          variant={provider === "afribapay" ? "default" : "secondary"}
-          className={provider === "afribapay" ? "bg-yellow-500 text-black text-xs" : "text-xs"}
-        >
-          {provider === "afribapay" ? (code ? `AFP · ${code}` : "AFP · ?") : "Swychr"}
-        </Badge>
-      </td>
-
-      {/* Bouton sauvegarder */}
-      <td className="py-3 w-24">
-        <Button
-          size="sm"
-          variant={isDirty ? "default" : "ghost"}
-          className={`h-7 text-xs ${isDirty ? "" : "opacity-40"}`}
-          disabled={!isDirty || isSaving || (provider === "afribapay" && !code)}
-          onClick={() => onSave(op.id, provider, code)}
-          data-testid={`btn-save-op-${op.id}`}
-        >
-          {isSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <><Save className="h-3 w-3 mr-1" />Sauv.</>}
-        </Button>
+      {/* Code AfribaPay */}
+      <td className="py-2.5 pr-3">
+        {provider === "afribapay" && code ? (
+          <div className="flex items-center gap-1.5">
+            <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded border">{code}</span>
+            {afribaMatch && (
+              <span className="text-xs text-muted-foreground">{afribaMatch.operator_name}</span>
+            )}
+            {afribaMatch?.otp_required === 1 && (
+              <Badge variant="outline" className="text-xs px-1 py-0">OTP</Badge>
+            )}
+          </div>
+        ) : (
+          <span className="text-xs text-muted-foreground italic">—</span>
+        )}
       </td>
     </tr>
   );
 }
 
 // ─── Country Group Card ────────────────────────────────────────────────────────
-function CountryGroupCard({
+function CountryCard({
   country,
   localOperators,
   afribaCountryData,
-  onSaveOperator,
-  savingId,
 }: {
   country: Country;
   localOperators: Operator[];
   afribaCountryData: AfribaCountryData | undefined;
-  onSaveOperator: (id: string, provider: string, code: string) => void;
-  savingId: string | null;
 }) {
   const [expanded, setExpanded] = useState(false);
   const afribaOps: AfribaOperator[] = afribaCountryData
     ? Object.values(afribaCountryData.currencies).flatMap(c => c.operators)
     : [];
-
   const afribapayCount = localOperators.filter((op: any) => op.paymentProvider === "afribapay").length;
 
   return (
     <Card className={`transition-colors ${expanded ? "border-yellow-400" : ""}`}>
       <CardContent className="p-0">
-        {/* Header */}
         <button
           className="w-full flex items-center justify-between p-4 text-left hover:bg-muted/30 rounded-lg"
           onClick={() => setExpanded(e => !e)}
@@ -154,14 +103,15 @@ function CountryGroupCard({
           <div className="flex items-center gap-3">
             <span className="text-2xl">{(country as any).flag || "🌍"}</span>
             <div>
-              <p className="font-semibold">{country.name}
+              <p className="font-semibold">
+                {country.name}
                 <span className="ml-2 text-sm font-normal text-muted-foreground">({country.code})</span>
               </p>
               <p className="text-xs text-muted-foreground">
-                {localOperators.length} opérateur(s) local ·{" "}
+                {localOperators.length} opérateur(s) ·{" "}
                 {afribaOps.length > 0
                   ? <span className="text-green-600">{afribaOps.length} dispo sur AfribaPay</span>
-                  : <span className="text-orange-500">non disponible sur AfribaPay</span>}
+                  : <span className="text-orange-500">non supporté AfribaPay</span>}
               </p>
             </div>
           </div>
@@ -173,33 +123,28 @@ function CountryGroupCard({
           </div>
         </button>
 
-        {/* Expanded operator table */}
         {expanded && (
           <div className="px-4 pb-4 border-t">
             {afribaOps.length === 0 && (
               <div className="flex items-center gap-2 text-orange-600 text-sm py-3">
                 <AlertCircle className="h-4 w-4" />
-                Ce pays n'est pas encore supporté par l'API AfribaPay. Seul Swychr est disponible.
+                Ce pays n'est pas encore supporté par l'API AfribaPay.
               </div>
             )}
             <table className="w-full text-sm mt-3">
               <thead>
                 <tr className="border-b">
-                  <th className="text-left py-1 pr-4 text-xs font-medium text-muted-foreground">Opérateur local</th>
+                  <th className="text-left py-1 pr-4 text-xs font-medium text-muted-foreground">Opérateur</th>
                   <th className="text-left py-1 pr-3 text-xs font-medium text-muted-foreground">Fournisseur</th>
-                  <th className="text-left py-1 pr-3 text-xs font-medium text-muted-foreground">Opérateur AfribaPay</th>
-                  <th className="text-left py-1 pr-3 text-xs font-medium text-muted-foreground">Statut</th>
-                  <th className="py-1 text-xs font-medium text-muted-foreground"></th>
+                  <th className="text-left py-1 text-xs font-medium text-muted-foreground">Code AfribaPay</th>
                 </tr>
               </thead>
               <tbody>
                 {localOperators.map(op => (
-                  <OperatorConfigRow
+                  <OperatorReadRow
                     key={op.id}
                     op={op}
                     afribaOperators={afribaOps}
-                    onSave={onSaveOperator}
-                    isSaving={savingId === op.id}
                   />
                 ))}
               </tbody>
@@ -213,9 +158,8 @@ function CountryGroupCard({
 
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 export default function AdminAfribaPay() {
-  const { toast } = useToast();
-  const [savingId, setSavingId] = useState<string | null>(null);
   const [expandedAfriba, setExpandedAfriba] = useState<string | null>(null);
+
   const { data: afribaCountries, isLoading: loadingAfriba, refetch: refetchAfriba, error: afribaError } =
     useQuery<{ success: boolean; data: Record<string, AfribaCountryData> }>({
       queryKey: ["/api/admin/afribapay/countries"],
@@ -224,26 +168,6 @@ export default function AdminAfribaPay() {
   const { data: countries } = useQuery<Country[]>({ queryKey: ["/api/admin/countries"] });
   const { data: operators } = useQuery<Operator[]>({ queryKey: ["/api/admin/operators"] });
 
-  const updateProviderMutation = useMutation({
-    mutationFn: async ({ id, paymentProvider, afribapayOperatorCode }: { id: string; paymentProvider: string; afribapayOperatorCode: string }) =>
-      apiRequest("PATCH", `/api/admin/operators/${id}/provider`, { paymentProvider, afribapayOperatorCode }),
-    onSuccess: (_, vars) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/operators"] });
-      setSavingId(null);
-      toast({ title: "Sauvegardé", description: `Opérateur configuré sur ${vars.paymentProvider === "afribapay" ? `AfribaPay (${vars.afribapayOperatorCode})` : "Swychr"}.` });
-    },
-    onError: (err: any) => {
-      setSavingId(null);
-      toast({ title: "Erreur", description: err.message, variant: "destructive" });
-    },
-  });
-
-  const handleSaveOperator = (id: string, paymentProvider: string, afribapayOperatorCode: string) => {
-    setSavingId(id);
-    updateProviderMutation.mutate({ id, paymentProvider, afribapayOperatorCode });
-  };
-
-  // Grouper les opérateurs locaux par pays
   const countriesWithOperators = useMemo(() => {
     if (!countries || !operators) return [];
     return countries
@@ -267,37 +191,74 @@ export default function AdminAfribaPay() {
           </div>
           <div>
             <h1 className="text-2xl font-bold">AfribaPay</h1>
-            <p className="text-muted-foreground text-sm">Configurer les fournisseurs de paiement par opérateur et par pays</p>
+            <p className="text-muted-foreground text-sm">
+              Vue de référence — configurez les fournisseurs dans les pages de frais
+            </p>
           </div>
         </div>
 
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card><CardContent className="pt-6 flex items-center gap-3">
-            <Globe className="h-5 w-5 text-blue-500" />
-            <div><p className="text-2xl font-bold">{afribaCountryList.length}</p><p className="text-sm text-muted-foreground">Pays AfribaPay</p></div>
-          </CardContent></Card>
-          <Card><CardContent className="pt-6 flex items-center gap-3">
-            <CheckCircle className="h-5 w-5 text-green-500" />
-            <div><p className="text-2xl font-bold">{afribapayOpsCount}</p><p className="text-sm text-muted-foreground">Opérateurs → AfribaPay</p></div>
-          </CardContent></Card>
-          <Card><CardContent className="pt-6 flex items-center gap-3">
-            <XCircle className="h-5 w-5 text-muted-foreground" />
-            <div><p className="text-2xl font-bold">{(operators?.length || 0) - afribapayOpsCount}</p><p className="text-sm text-muted-foreground">Opérateurs → Swychr</p></div>
-          </CardContent></Card>
+          <Card>
+            <CardContent className="pt-6 flex items-center gap-3">
+              <Globe className="h-5 w-5 text-blue-500" />
+              <div>
+                <p className="text-2xl font-bold">{afribaCountryList.length}</p>
+                <p className="text-sm text-muted-foreground">Pays AfribaPay</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6 flex items-center gap-3">
+              <CheckCircle className="h-5 w-5 text-green-500" />
+              <div>
+                <p className="text-2xl font-bold">{afribapayOpsCount}</p>
+                <p className="text-sm text-muted-foreground">Opérateurs sur AfribaPay</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6 flex items-center gap-3">
+              <XCircle className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <p className="text-2xl font-bold">{(operators?.length || 0) - afribapayOpsCount}</p>
+                <p className="text-sm text-muted-foreground">Opérateurs sur Swychr / PixPay</p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
+
+        {/* Read-only notice */}
+        <Card className="border-yellow-200 dark:border-yellow-800 bg-yellow-50/50 dark:bg-yellow-950/20">
+          <CardContent className="pt-4 pb-4 flex items-start gap-3">
+            <Lock className="h-4 w-4 text-yellow-600 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-yellow-700 dark:text-yellow-400">
+                Page lecture seule — aucune modification ici
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Pour changer le fournisseur d'un opérateur, rendez-vous dans
+                <span className="font-semibold"> Frais → Dépôts</span>,
+                <span className="font-semibold"> Retraits</span> ou
+                <span className="font-semibold"> Transferts</span>.
+                Cette page se met à jour automatiquement.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
 
         <Tabs defaultValue="operators">
           <TabsList>
             <TabsTrigger value="operators">Opérateurs par pays</TabsTrigger>
-            <TabsTrigger value="countries">Pays supportés</TabsTrigger>
+            <TabsTrigger value="countries">Pays supportés AfribaPay</TabsTrigger>
           </TabsList>
 
-          {/* ─── Operators Tab ──────────────────────────────────────── */}
+          {/* ─── Operators Tab (read-only) ─────────────────────────────── */}
           <TabsContent value="operators" className="space-y-3 mt-4">
-            <p className="text-sm text-muted-foreground">
-              Cliquez sur un pays pour configurer tous ses opérateurs en une seule fois.
-            </p>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Info className="h-4 w-4 shrink-0" />
+              Cliquez sur un pays pour voir la configuration actuelle de ses opérateurs.
+            </div>
 
             {(!countries || !operators) ? (
               <div className="flex items-center gap-2 py-8 justify-center text-muted-foreground">
@@ -313,20 +274,18 @@ export default function AdminAfribaPay() {
                     )
                   : undefined;
                 return (
-                  <CountryGroupCard
+                  <CountryCard
                     key={country.id}
                     country={country}
                     localOperators={ops}
                     afribaCountryData={afribaCountry}
-                    onSaveOperator={handleSaveOperator}
-                    savingId={savingId}
                   />
                 );
               })
             )}
           </TabsContent>
 
-          {/* ─── Countries Tab ───────────────────────────────────────── */}
+          {/* ─── Countries Tab (already read-only) ───────────────────────── */}
           <TabsContent value="countries" className="space-y-4 mt-4">
             <div className="flex items-center justify-between">
               <p className="text-sm text-muted-foreground">Pays et opérateurs disponibles sur AfribaPay (temps réel)</p>
@@ -353,8 +312,11 @@ export default function AdminAfribaPay() {
                   const allOps = Object.values(ac.currencies).flatMap(c => c.operators);
                   const isExp = expandedAfriba === ac.country_code;
                   return (
-                    <Card key={ac.country_code} className="cursor-pointer hover:border-yellow-400 transition-colors"
-                      onClick={() => setExpandedAfriba(isExp ? null : ac.country_code)}>
+                    <Card
+                      key={ac.country_code}
+                      className="cursor-pointer hover:border-yellow-400 transition-colors"
+                      onClick={() => setExpandedAfriba(isExp ? null : ac.country_code)}
+                    >
                       <CardContent className="pt-4 pb-3">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
@@ -397,7 +359,6 @@ export default function AdminAfribaPay() {
           </TabsContent>
         </Tabs>
       </div>
-
     </AdminLayout>
   );
 }
