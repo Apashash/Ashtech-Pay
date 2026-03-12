@@ -1806,14 +1806,26 @@ export async function registerRoutes(
       const withdrawalCurrency = withdrawalCountry?.currency || userCurrency;
       const withdrawalCountryCode = withdrawalCountry?.code || "CM";
 
-      // Calculate fee using fee resolution
+      // Fetch operator early to determine provider before fee calculation
+      const withdrawalOperator = await storage.getOperator(data.operatorId);
+      const withdrawalProvider = (withdrawalOperator?.paymentProvider || "swychr") as string;
+
+      // Calculate fee using fee resolution — provider-aware
       const fee = await storage.resolveFee("withdrawal", data.countryId, data.operatorId);
       let feeAmount = 0;
       let ashtechFeeAmount = 0;
       if (fee) {
-        const swychrRate = fee.swychrFee ? parseFloat(fee.swychrFee.toString()) : 0;
         const marginRate = fee.ashtechMargin ? parseFloat(fee.ashtechMargin.toString()) : 0;
-        const totalRate = swychrRate + marginRate;
+
+        let providerRate = 0;
+        if (withdrawalProvider === "afribapay") {
+          providerRate = (fee as any).afribapayFee ? parseFloat((fee as any).afribapayFee.toString()) : 0;
+        } else if (withdrawalProvider === "pixpay") {
+          providerRate = (fee as any).pixpayFee ? parseFloat((fee as any).pixpayFee.toString()) : 0;
+        } else {
+          providerRate = fee.swychrFee ? parseFloat(fee.swychrFee.toString()) : 0;
+        }
+        const totalRate = providerRate + marginRate;
         const minCharge = fee.minFee ? parseFloat(fee.minFee.toString()) : 0;
 
         let calculatedFee = 0;
@@ -1831,8 +1843,8 @@ export async function registerRoutes(
           ashtechFeeAmount = calculatedFee;
         }
 
-        // Rule: If calculated fee < minCharge, use minCharge
-        if (calculatedFee < minCharge) {
+        // Rule: minFee only applies to Swychr — AfribaPay/PixPay use exact configured rate
+        if (withdrawalProvider === "swychr" && calculatedFee < minCharge) {
           calculatedFee = minCharge;
           ashtechFeeAmount = 100;
         }
@@ -1878,10 +1890,10 @@ export async function registerRoutes(
 
       // Call payout API immediately — choose provider based on operator config
       try {
-        const operator = await storage.getOperator(data.operatorId);
+        const operator = withdrawalOperator;
         const operatorName = (operator?.name || "").toUpperCase();
         const countryCode = withdrawalCountryCode.toUpperCase();
-        const paymentProvider = operator?.paymentProvider || "swychr";
+        const paymentProvider = withdrawalProvider;
 
         let payoutResult: { success: boolean; transaction_id?: string; message?: string };
 
