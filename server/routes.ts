@@ -925,6 +925,29 @@ export async function registerRoutes(
     }
   });
 
+  // User-initiated cancel of a pending deposit
+  app.post("/api/transactions/cancel/:reference", requireAuth, async (req, res) => {
+    try {
+      const transaction = await storage.getTransactionByReference(req.params.reference);
+      if (!transaction) {
+        return res.status(404).json({ message: "Transaction non trouvée" });
+      }
+      if (transaction.userId !== req.userId) {
+        return res.status(403).json({ message: "Accès refusé" });
+      }
+      if (transaction.status !== "pending") {
+        return res.json({ success: true, status: transaction.status });
+      }
+      await storage.updateTransactionStatus(transaction.id, "failed");
+      removePendingPayment(req.params.reference);
+      console.log(`[Cancel] Transaction ${req.params.reference} cancelled by user ${req.userId}`);
+      res.json({ success: true, status: "failed" });
+    } catch (error) {
+      console.error("Cancel transaction error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   // Get transfer configuration (countries, operators, fees)
   app.get("/api/transfers/config", requireAuth, async (req, res) => {
     try {

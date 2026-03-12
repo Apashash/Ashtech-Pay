@@ -71,6 +71,7 @@ export default function DepositPage() {
   const [otpCode, setOtpCode] = useState("");
   const [waveUrl, setWaveUrl] = useState<string | null>(null);
   const [pixpayOtpCode, setPixpayOtpCode] = useState("");
+  const [isCancelling, setIsCancelling] = useState(false);
   
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   
@@ -199,6 +200,20 @@ export default function DepositPage() {
         console.error("Error checking deposit status:", e);
       }
     }, 5000);
+  };
+
+  const handleCancelDeposit = async () => {
+    if (isCancelling) return;
+    setIsCancelling(true);
+    if (countdownRef.current) clearInterval(countdownRef.current);
+    if (pollingRef.current) clearInterval(pollingRef.current);
+    setPaymentStatus("failed");
+    if (depositReference) {
+      try {
+        await apiRequest("POST", `/api/transactions/cancel/${depositReference}`, {});
+      } catch {}
+    }
+    setIsCancelling(false);
   };
 
   const isPixPayOtp = selectedOperator?.paymentProvider === "pixpay" &&
@@ -335,6 +350,7 @@ export default function DepositPage() {
     setOtpRequired(false);
     setOtpCode("");
     setWaveUrl(null);
+    setIsCancelling(false);
     if (countdownRef.current) clearInterval(countdownRef.current);
     if (pollingRef.current) clearInterval(pollingRef.current);
     form.reset();
@@ -486,6 +502,17 @@ export default function DepositPage() {
                           <p className="font-mono font-bold text-foreground">{depositReference}</p>
                         </div>
                       )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleCancelDeposit}
+                        disabled={isCancelling}
+                        data-testid="button-cancel-deposit-wave"
+                        className="border-red-500/30 text-red-500 hover:bg-red-500/10"
+                      >
+                        <XCircle className="w-4 h-4 mr-2" />
+                        Annuler le paiement
+                      </Button>
                     </>
                   )}
 
@@ -510,6 +537,17 @@ export default function DepositPage() {
                           <p className="font-mono font-bold text-foreground">{depositReference}</p>
                         </div>
                       )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleCancelDeposit}
+                        disabled={isCancelling}
+                        data-testid="button-cancel-deposit"
+                        className="border-red-500/30 text-red-500 hover:bg-red-500/10"
+                      >
+                        <XCircle className="w-4 h-4 mr-2" />
+                        Annuler le paiement
+                      </Button>
                     </>
                   )}
                   

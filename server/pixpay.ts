@@ -266,16 +266,21 @@ export async function checkPixPayStatus(
     const res = await fetch(PIXPAY_STATUS_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ api_key: apiKey, transaction_ids: transactionId }),
+      body: JSON.stringify({ api_key: apiKey, transaction_id: transactionId }),
     });
     const data = await res.json();
+    console.log(`[PixPay Status] raw response for ${transactionId}:`, JSON.stringify(data));
 
     if (data.statut_code !== 200 || !data.data) return { status: "pending", raw: data };
 
-    const state = (data.data.state || "").toUpperCase();
+    // PixPay may return data.data as a single object or an array
+    const d = Array.isArray(data.data) ? data.data[0] : data.data;
+    if (!d) return { status: "pending", raw: data };
+
+    const state = (d.state || d.status || "").toUpperCase();
     if (state === "SUCCESS" || state === "SUCCESSFUL" || state === "COMPLETED") {
       return { status: "completed", raw: data };
-    } else if (state === "FAILED" || state === "CANCELLED" || state === "FAILURE") {
+    } else if (state === "FAILED" || state === "CANCELLED" || state === "FAILURE" || state === "CANCEL") {
       return { status: "failed", raw: data };
     }
     return { status: "pending", raw: data };

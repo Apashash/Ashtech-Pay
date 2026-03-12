@@ -196,13 +196,20 @@ export async function recoverPendingDeposits() {
         }
         autoFailed++;
       } else {
-        // Detect provider from the operator record
+        // Detect provider and countryCode from the operator record
         let provider = "swychr";
+        let recoveredCountryCode: string | undefined;
         if (tx.operatorId) {
           try {
             const op = await storage.getOperator(tx.operatorId);
             const prov = (op as any)?.paymentProvider;
             if (prov === "afribapay" || prov === "pixpay") provider = prov;
+            if (prov === "pixpay" && op?.countryId) {
+              try {
+                const country = await storage.getCountry(op.countryId);
+                if (country?.code) recoveredCountryCode = country.code;
+              } catch {}
+            }
           } catch {}
         }
 
@@ -216,6 +223,7 @@ export async function recoverPendingDeposits() {
           type: tx.type,
           amount: tx.amount,
           provider,
+          countryCode: recoveredCountryCode,
           paymentIntentId: tx.paymentIntentId,
           startedAt: createdAt,
         });
