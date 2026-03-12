@@ -340,7 +340,7 @@ export default function AdminFeesWithdrawals() {
 
         {/* Edit Dialog */}
         <Dialog open={!!editing} onOpenChange={(o) => !o && closeEdit()}>
-          <DialogContent>
+          <DialogContent className="flex flex-col max-h-[92vh]">
             <DialogHeader>
               <DialogTitle>
                 {editing?.needsCreate ? "Configurer les frais" : "Modifier les frais"} retrait — {editing?.operator.name} ({editing?.country.flag} {editing?.country.name})
@@ -349,7 +349,7 @@ export default function AdminFeesWithdrawals() {
             {editing && (() => {
               const currency = getCurrency(editing.country.id);
               return (
-                <div className="space-y-4 py-4">
+                <div className="overflow-y-auto flex-1 space-y-4 py-4 pr-1">
                   {editing.needsCreate && (
                     <div className="p-3 rounded-lg bg-orange-500/10 border border-orange-400/30 text-xs text-orange-500">
                       Un frais spécifique sera créé pour <strong>{editing.operator.name}</strong> uniquement. Les autres opérateurs ne seront pas affectés.
