@@ -266,7 +266,7 @@ export async function checkPixPayStatus(
     const res = await fetch(PIXPAY_STATUS_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ api_key: apiKey, transaction_id: transactionId }),
+      body: JSON.stringify({ api_key: apiKey, transaction_ids: transactionId }),
     });
     const data = await res.json();
     console.log(`[PixPay Status] raw response for ${transactionId}:`, JSON.stringify(data));
