@@ -290,11 +290,11 @@ export default function AdminFeesTransfers() {
                 <Collapsible key={country.id} open={isOpen} onOpenChange={() => toggleCountry(country.id)}>
                   <CollapsibleTrigger asChild>
                     <button
-                      className="w-full flex items-center justify-between p-4 bg-card border rounded-lg hover:bg-muted/40 transition-colors"
+                      className="w-full flex items-start justify-between p-4 bg-card border rounded-lg hover:bg-muted/40 transition-colors"
                       data-testid={`country-fees-${country.code}`}
                     >
-                      <div className="flex items-center gap-3">
-                        <Globe className="w-4 h-4 text-muted-foreground" />
+                      <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
+                        <Globe className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                         <span className="font-semibold">{country.flag} {country.name}</span>
                         <Badge variant="outline" className="text-xs">{country.code}</Badge>
                         <Badge variant="outline" className="text-xs text-muted-foreground">{currency}</Badge>
@@ -314,7 +314,9 @@ export default function AdminFeesTransfers() {
                           </Badge>
                         )}
                       </div>
-                      {isOpen ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
+                      <div className="flex-shrink-0 mt-0.5 ml-2">
+                        {isOpen ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
+                      </div>
                     </button>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
