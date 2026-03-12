@@ -49,8 +49,9 @@ export function detectPixPayFlowType(operatorName: string, countryCode: string):
 
 // ─── Fixed service ID lookup table (from merchant integration dossier) ────────
 // Format: operator_keyword → { COUNTRY_CODE: { cash_in: id, cash_out: id } }
-// cash_in  = deposit  (platform collects from user)
-// cash_out = withdrawal (platform pays out to user)
+// PixPay naming (opposite of intuition):
+//   cash_out = payin  = deposit   (platform collects from user)
+//   cash_in  = payout = withdrawal (platform sends to user)
 const PIXPAY_SERVICE_ID_TABLE: Record<string, Partial<Record<string, { cash_in: number; cash_out: number }>>> = {
   // ── Orange / OM ───────────────────────────────────────────────────────────
   orange: {
@@ -104,11 +105,11 @@ const PIXPAY_SERVICE_ID_TABLE: Record<string, Partial<Record<string, { cash_in: 
 };
 
 // ─── Auto-resolve service ID from operator name + country + direction ─────────
-// direction: "cash_in" for deposits/collections, "cash_out" for withdrawals/payouts
+// direction: "cash_out" for deposits/collections (PixPay payin), "cash_in" for withdrawals/payouts (PixPay payout)
 export function getPixPayServiceId(
   operatorName: string,
   countryCode: string,
-  direction: "cash_in" | "cash_out" = "cash_in"
+  direction: "cash_in" | "cash_out" = "cash_out"
 ): number | null {
   const name = operatorName.toLowerCase();
   const cc   = countryCode.toUpperCase();
@@ -308,7 +309,7 @@ export function parsePixPayWebhook(payload: any): {
   };
 }
 
-// ─── Payout (cash_out — withdrawal to user) ─────────────────────────────────
+// ─── Payout (cash_in service_id — withdrawal to user, PixPay naming) ─────────
 export interface PixPayoutParams {
   serviceId: string;
   amount: number;
