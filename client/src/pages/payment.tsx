@@ -668,7 +668,7 @@ export default function PaymentPage() {
                 <Input
                   id="phone"
                   type="tel"
-                  placeholder="+237 6XX XXX XXX"
+                  placeholder="XXXX XXX XXX"
                   value={phone}
                   onChange={(e) => { setPhone(e.target.value); setErrors(p => ({...p, phone: undefined as any})); }}
                   className={`pl-10 ${errors.phone ? "border-red-500" : ""}`}
