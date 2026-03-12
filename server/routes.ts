@@ -29,7 +29,7 @@ import fs from "fs";
 import { uploadToSupabase, getSignedImageUrl, downloadFromSupabase } from "./supabase";
 import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, fetchPaymentLinkDetails, ASHTECH_MARGIN } from "./swychr";
 import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, confirmAfribaPayOtp } from "./afribapay";
-import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType } from "./pixpay";
+import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType, getPixPayServiceId } from "./pixpay";
 import { addPendingPayment, removePendingPayment } from "./paymentPoller";
 import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, cleanupEmptyWallets } from "./walletHelper";
 import { createSwychrPayout, formatInternationalPhone, detectMethodFromPhone, fiatToPusd, pusdToFiatRate, getConversionRate, convertFiatToPusd, getPayoutToken, COUNTRY_CURRENCY } from "./swychrPayout";
@@ -1584,23 +1584,23 @@ export async function registerRoutes(
 
           } else if (paymentProvider === "pixpay") {
             // ─── PixPay Payin (USSD / OTP / Wave) ────────────────────────────
-            const pixpayServiceId = (operatorRecord as any)?.pixpayServiceId;
-            if (!pixpayServiceId) {
+            const pixpayAutoServiceId = getPixPayServiceId((operatorRecord as any)?.name || "", countryCode, "cash_in");
+            if (!pixpayAutoServiceId) {
               await storage.updateTransactionStatus(transaction.id, "failed");
-              return res.status(400).json({ message: "Service PixPay non configuré pour cet opérateur. Contactez l'administrateur." });
+              return res.status(400).json({ message: "Opérateur non supporté par PixPay pour ce pays. Contactez l'administrateur." });
             }
 
-            const pixpayOpType: string = (operatorRecord as any)?.pixpayOperatorType || "ussd";
+            const pixpayOpType: string = detectPixPayFlowType((operatorRecord as any)?.name || "", countryCode);
             const ipnUrl = `${process.env.APP_URL || ""}/api/pixpay/webhook`;
             const pixpayFeeRate = (resolvedFeeRecord as any)?.pixpayFee
               ? parseFloat((resolvedFeeRecord as any).pixpayFee.toString()) : 3.0;
             const pxFees = computePixPayFees(totalAmount, pixpayFeeRate, ashtechMarginPct);
             const cleanPhone = data.phoneNumber.replace(/\s/g, "");
 
-            console.log(`[Deposit] PixPay type=${pixpayOpType} | country=${countryCode} | service_id=${pixpayServiceId}`);
+            console.log(`[Deposit] PixPay type=${pixpayOpType} | country=${countryCode} | service_id=${pixpayAutoServiceId} (auto)`);
 
             const baseParams = {
-              serviceId: pixpayServiceId,
+              serviceId: String(pixpayAutoServiceId),
               amount: totalAmount,
               phone: cleanPhone,
               countryCode,
@@ -3445,25 +3445,25 @@ export async function registerRoutes(
 
           // ─── PixPay branch (USSD / OTP / Wave) ────────────────────────────
           if (paymentProvider === "pixpay") {
-            const pixpayServiceId = operatorRecord?.pixpayServiceId;
-            if (!pixpayServiceId) {
+            const pxAutoServiceId = getPixPayServiceId((operatorRecord as any)?.name || "", paymentCountryCode, "cash_in");
+            if (!pxAutoServiceId) {
               await storage.updatePaymentIntentStatus(intent.id, "failed");
               const failedTxPx = await storage.getTransactionByReference(reference);
               if (failedTxPx) await storage.updateTransactionStatus(failedTxPx.id, "failed");
-              return res.status(400).json({ message: "Service PixPay non configuré pour cet opérateur." });
+              return res.status(400).json({ message: "Opérateur non supporté par PixPay pour ce pays." });
             }
 
-            const pxOpType: string = (operatorRecord as any)?.pixpayOperatorType || "ussd";
+            const pxOpType: string = detectPixPayFlowType((operatorRecord as any)?.name || "", paymentCountryCode);
             const pixpayFeeRate = (fee as any)?.pixpayFee
               ? parseFloat((fee as any).pixpayFee.toString()) : 3.0;
             const pxFees = computePixPayFees(numAmount, pixpayFeeRate, ashtechMarginPct);
             const pxIpnUrl = `${process.env.APP_URL || ""}/api/pixpay/webhook`;
             const cleanPxPhone = phone.replace(/\s/g, "");
 
-            console.log(`[PaymentLink] PixPay type=${pxOpType} | country=${paymentCountryCode} | service_id=${pixpayServiceId}`);
+            console.log(`[PaymentLink] PixPay type=${pxOpType} | country=${paymentCountryCode} | service_id=${pxAutoServiceId} (auto)`);
 
             const pxBaseParams = {
-              serviceId: pixpayServiceId,
+              serviceId: String(pxAutoServiceId),
               amount: numAmount,
               phone: cleanPxPhone,
               countryCode: paymentCountryCode,

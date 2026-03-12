@@ -47,6 +47,92 @@ export function detectPixPayFlowType(operatorName: string, countryCode: string):
   return "ussd";
 }
 
+// ─── Fixed service ID lookup table (from merchant integration dossier) ────────
+// Format: operator_keyword → { COUNTRY_CODE: { cash_in: id, cash_out: id } }
+// cash_in  = deposit  (platform collects from user)
+// cash_out = withdrawal (platform pays out to user)
+const PIXPAY_SERVICE_ID_TABLE: Record<string, Partial<Record<string, { cash_in: number; cash_out: number }>>> = {
+  // ── Orange / OM ───────────────────────────────────────────────────────────
+  orange: {
+    CI: { cash_in: 2,   cash_out: 1   },
+    SN: { cash_in: 214, cash_out: 213 },
+    BF: { cash_in: 240, cash_out: 241 },
+    CM: { cash_in: 336, cash_out: 337 },
+    CD: { cash_in: 346, cash_out: 347 },
+  },
+  // ── MTN ───────────────────────────────────────────────────────────────────
+  mtn: {
+    CI: { cash_in: 6,   cash_out: 5   },
+    CM: { cash_in: 338, cash_out: 339 },
+  },
+  // ── Moov / Flooz ──────────────────────────────────────────────────────────
+  moov: {
+    CI: { cash_in: 4,   cash_out: 3   },
+    BF: { cash_in: 238, cash_out: 239 },
+  },
+  flooz: {
+    CI: { cash_in: 4,   cash_out: 3   },
+    BF: { cash_in: 238, cash_out: 239 },
+  },
+  // ── Wave ──────────────────────────────────────────────────────────────────
+  wave: {
+    CI: { cash_in: 8,   cash_out: 7   },
+    SN: { cash_in: 210, cash_out: 211 },
+  },
+  // ── M-Pesa ────────────────────────────────────────────────────────────────
+  mpesa: {
+    CD: { cash_in: 342, cash_out: 343 },
+  },
+  // ── Airtel ────────────────────────────────────────────────────────────────
+  airtel: {
+    CD: { cash_in: 344, cash_out: 345 },
+  },
+  // ── Afrimoney ─────────────────────────────────────────────────────────────
+  afrimoney: {
+    CD: { cash_in: 348, cash_out: 349 },
+  },
+  // ── Mix / Free (Sénégal — autres opérateurs) ──────────────────────────────
+  mix: {
+    SN: { cash_in: 340, cash_out: 341 },
+  },
+  free: {
+    SN: { cash_in: 340, cash_out: 341 },
+  },
+  expresso: {
+    SN: { cash_in: 340, cash_out: 341 },
+  },
+};
+
+// ─── Auto-resolve service ID from operator name + country + direction ─────────
+// direction: "cash_in" for deposits/collections, "cash_out" for withdrawals/payouts
+export function getPixPayServiceId(
+  operatorName: string,
+  countryCode: string,
+  direction: "cash_in" | "cash_out" = "cash_in"
+): number | null {
+  const name = operatorName.toLowerCase();
+  const cc   = countryCode.toUpperCase();
+  for (const [keyword, countries] of Object.entries(PIXPAY_SERVICE_ID_TABLE)) {
+    if (name.includes(keyword)) {
+      const entry = countries[cc];
+      if (entry) return entry[direction];
+    }
+  }
+  return null;
+}
+
+// ─── Get full config for an operator (for admin display) ─────────────────────
+export function getPixPayOperatorConfig(
+  operatorName: string,
+  countryCode: string
+): { flowType: PixPayOperatorType; serviceIdCashIn: number | null; serviceIdCashOut: number | null } {
+  return {
+    flowType:        detectPixPayFlowType(operatorName, countryCode),
+    serviceIdCashIn:  getPixPayServiceId(operatorName, countryCode, "cash_in"),
+    serviceIdCashOut: getPixPayServiceId(operatorName, countryCode, "cash_out"),
+  };
+}
+
 // Wave business_name_id — set in PixPay merchant account
 const PIXPAY_WAVE_BUSINESS_ID = process.env.PIXPAY_WAVE_BUSINESS_ID || "";
 
