@@ -1,6 +1,7 @@
 import { storage } from "./storage";
 import { checkSwychrPaymentStatus } from "./swychr";
 import { checkAfribaPayStatus } from "./afribapay";
+import { checkPixPayStatus } from "./pixpay";
 import { creditUserWallet } from "./walletHelper";
 import { sendPayerConfirmationEmail } from "./email";
 
@@ -39,6 +40,11 @@ async function checkPaymentStatus(payment: PendingPayment): Promise<"pending" | 
       const extRef = payment.externalReference || payment.reference;
       const result = await checkAfribaPayStatus(extRef, "order_id");
       console.log(`[PaymentPoller] AfribaPay status for ${payment.reference}: ${result.status}`);
+      return result.status;
+    } else if (payment.provider === "pixpay") {
+      // PixPay relies on IPN webhooks — polling just returns pending until IPN fires
+      const result = await checkPixPayStatus(payment.externalReference || payment.reference);
+      console.log(`[PaymentPoller] PixPay status for ${payment.reference}: ${result.status}`);
       return result.status;
     } else {
       const result = await checkSwychrPaymentStatus(payment.externalReference || payment.reference);
@@ -191,7 +197,8 @@ export async function recoverPendingDeposits() {
         if (tx.operatorId) {
           try {
             const op = await storage.getOperator(tx.operatorId);
-            if ((op as any)?.paymentProvider === "afribapay") provider = "afribapay";
+            const prov = (op as any)?.paymentProvider;
+            if (prov === "afribapay" || prov === "pixpay") provider = prov;
           } catch {}
         }
 
