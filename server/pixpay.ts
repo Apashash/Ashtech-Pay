@@ -35,6 +35,18 @@ export function getPixPayApiKey(countryCode: string): string {
 // 'wave'  → Wave CI / Wave SN: redirect to Wave deeplink
 export type PixPayOperatorType = "ussd" | "otp" | "wave";
 
+// ─── Auto-detect flow type from operator name + country ───────────────────────
+// Rules from PixPay documentation:
+//   - Wave (any country)  → wave redirect
+//   - Orange + CI         → OTP (#144*82#)
+//   - Everything else     → USSD push
+export function detectPixPayFlowType(operatorName: string, countryCode: string): PixPayOperatorType {
+  const name = operatorName.toLowerCase();
+  if (name.includes("wave")) return "wave";
+  if (name.includes("orange") && countryCode.toUpperCase() === "CI") return "otp";
+  return "ussd";
+}
+
 // Wave business_name_id — set in PixPay merchant account
 const PIXPAY_WAVE_BUSINESS_ID = process.env.PIXPAY_WAVE_BUSINESS_ID || "";
 

@@ -53,8 +53,6 @@ export default function AdminFeesTransfers() {
   const [isActive, setIsActive] = useState(true);
   const [localProvider, setLocalProvider] = useState("swychr");
   const [localAfribapayCode, setLocalAfribapayCode] = useState("");
-  const [localPixpayServiceId, setLocalPixpayServiceId] = useState("");
-  const [localPixpayOpType, setLocalPixpayOpType] = useState("ussd");
 
   const { data: fees, isLoading: feesLoading } = useQuery<Fee[]>({ queryKey: ["/api/admin/fees"] });
   const { data: countries } = useQuery<Country[]>({ queryKey: ["/api/admin/countries"] });
@@ -107,8 +105,6 @@ export default function AdminFeesTransfers() {
     setIsActive(fee?.isActive ?? true);
     setLocalProvider((op as any).paymentProvider || "swychr");
     setLocalAfribapayCode((op as any).afribapayOperatorCode || guessAfribaCode(op.name));
-    setLocalPixpayServiceId((op as any).pixpayServiceId || "");
-    setLocalPixpayOpType((op as any).pixpayOperatorType || "ussd");
   };
 
   const closeEdit = () => {
@@ -120,8 +116,6 @@ export default function AdminFeesTransfers() {
     setIsActive(true);
     setLocalProvider("swychr");
     setLocalAfribapayCode("");
-    setLocalPixpayServiceId("");
-    setLocalPixpayOpType("ussd");
   };
 
   const createFeeMutation = useMutation({
@@ -136,15 +130,10 @@ export default function AdminFeesTransfers() {
   });
 
   const providerMutation = useMutation({
-    mutationFn: async ({ opId, provider, code, pixpayServiceId, pixpayOperatorType }: {
-      opId: string; provider: string; code: string;
-      pixpayServiceId?: string; pixpayOperatorType?: string;
-    }) =>
+    mutationFn: async ({ opId, provider, code }: { opId: string; provider: string; code: string }) =>
       apiRequest("PATCH", `/api/admin/operators/${opId}/provider`, {
         paymentProvider: provider,
         afribapayOperatorCode: code || null,
-        pixpayServiceId: pixpayServiceId || null,
-        pixpayOperatorType: pixpayOperatorType || "ussd",
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/operators"] });
@@ -207,16 +196,12 @@ export default function AdminFeesTransfers() {
     if (!editing) return;
     const originalProvider = (editing.operator as any).paymentProvider || "swychr";
     const providerChanged = localProvider !== originalProvider ||
-      localAfribapayCode !== ((editing.operator as any).afribapayOperatorCode || "") ||
-      localPixpayServiceId !== ((editing.operator as any).pixpayServiceId || "") ||
-      localPixpayOpType !== ((editing.operator as any).pixpayOperatorType || "ussd");
+      localAfribapayCode !== ((editing.operator as any).afribapayOperatorCode || "");
     if (providerChanged) {
       await providerMutation.mutateAsync({
         opId: editing.operator.id,
         provider: localProvider,
         code: localAfribapayCode,
-        pixpayServiceId: localPixpayServiceId,
-        pixpayOperatorType: localPixpayOpType,
       });
     }
     if (editing.needsCreate) {
@@ -440,28 +425,9 @@ export default function AdminFeesTransfers() {
                   )}
 
                   {localProvider === "pixpay" && (
-                    <>
-                      <div className="space-y-2">
-                        <Label>Service ID PixPay</Label>
-                        <Input
-                          placeholder="ex: orange-ci, mtn-cm..."
-                          value={localPixpayServiceId}
-                          onChange={(e) => setLocalPixpayServiceId(e.target.value)}
-                          data-testid="input-pixpay-service-id"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Type d'intégration PixPay</Label>
-                        <Select value={localPixpayOpType} onValueChange={setLocalPixpayOpType} data-testid="select-pixpay-op-type">
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="ussd">USSD push (MTN, Moov, Free, ...)</SelectItem>
-                            <SelectItem value="otp">OTP (Orange CI — #144*82#)</SelectItem>
-                            <SelectItem value="wave">Wave redirect (Wave CI/SN)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </>
+                    <p className="text-xs text-muted-foreground bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded p-2">
+                      Service ID et type de flux configurés dans la page PixPay. Seul le taux de frais est modifiable ici.
+                    </p>
                   )}
 
                   {localProvider === "afribapay" ? (

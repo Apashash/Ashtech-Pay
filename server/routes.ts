@@ -29,7 +29,7 @@ import fs from "fs";
 import { uploadToSupabase, getSignedImageUrl, downloadFromSupabase } from "./supabase";
 import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, fetchPaymentLinkDetails, ASHTECH_MARGIN } from "./swychr";
 import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, confirmAfribaPayOtp } from "./afribapay";
-import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES } from "./pixpay";
+import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType } from "./pixpay";
 import { addPendingPayment, removePendingPayment } from "./paymentPoller";
 import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, cleanupEmptyWallets } from "./walletHelper";
 import { createSwychrPayout, formatInternationalPhone, detectMethodFromPhone, fiatToPusd, pusdToFiatRate, getConversionRate, convertFiatToPusd, getPayoutToken, COUNTRY_CURRENCY } from "./swychrPayout";
@@ -6156,23 +6156,36 @@ export async function registerRoutes(
   app.patch("/api/admin/operators/:id/provider", requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
-      const { paymentProvider, afribapayOperatorCode, pixpayServiceId, pixpayOperatorType } = req.body;
+      const { paymentProvider, afribapayOperatorCode, pixpayServiceId } = req.body;
 
       if (!["swychr", "afribapay", "pixpay"].includes(paymentProvider)) {
         return res.status(400).json({ message: "Fournisseur invalide. Choisir swychr, afribapay ou pixpay." });
       }
 
+      // If switching to PixPay, auto-detect flow type from operator name + country
+      let autoFlowType = "ussd";
+      if (paymentProvider === "pixpay") {
+        const existingOp = await storage.getOperator(id);
+        if (existingOp) {
+          const country = await storage.getCountry(existingOp.countryId!);
+          const countryCode = (country as any)?.code || "";
+          autoFlowType = detectPixPayFlowType(existingOp.name, countryCode);
+        }
+      }
+
       const updateData: any = {
         paymentProvider,
         afribapayOperatorCode: afribapayOperatorCode || null,
-        pixpayServiceId: pixpayServiceId || null,
-        pixpayOperatorType: pixpayOperatorType || "ussd",
+        pixpayServiceId: pixpayServiceId !== undefined ? (pixpayServiceId || null) : undefined,
+        pixpayOperatorType: paymentProvider === "pixpay" ? autoFlowType : "ussd",
       };
+      // Remove undefined keys
+      Object.keys(updateData).forEach(k => updateData[k] === undefined && delete updateData[k]);
 
       const updated = await storage.updateOperator(id, updateData);
       if (!updated) return res.status(404).json({ message: "Opérateur non trouvé" });
-      console.log(`[Admin] ✓ Operator ${updated.name} (${id}) → provider=${paymentProvider} | pixpayServiceId=${pixpayServiceId || "null"} | type=${pixpayOperatorType || "ussd"}`);
-      res.json({ success: true, operator: updated });
+      console.log(`[Admin] ✓ Operator ${updated.name} (${id}) → provider=${paymentProvider} | pixpayServiceId=${pixpayServiceId || "null"} | type=${autoFlowType}`);
+      res.json({ success: true, operator: updated, autoFlowType });
     } catch (err: any) {
       console.error("[Admin Provider] Error:", err);
       res.status(500).json({ message: err.message || "Erreur serveur" });

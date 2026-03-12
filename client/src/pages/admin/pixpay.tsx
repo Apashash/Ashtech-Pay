@@ -10,18 +10,26 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   Zap, Globe, ChevronDown, ChevronRight, Loader2, Save,
-  Smartphone, ArrowLeftRight, Hash
+  Smartphone, ArrowLeftRight, Hash, Info
 } from "lucide-react";
 import type { Country, Operator } from "@shared/schema";
 
-// ─── Type labels ──────────────────────────────────────────────────────────────
-const OP_TYPE_LABELS: Record<string, { label: string; badge: string; color: string }> = {
-  ussd:  { label: "USSD Push",          badge: "USSD",  color: "bg-blue-500 text-white" },
-  otp:   { label: "OTP (#144*82#)",     badge: "OTP",   color: "bg-orange-500 text-white" },
-  wave:  { label: "Wave (redirection)", badge: "WAVE",  color: "bg-teal-500 text-white" },
+// ─── Auto-detect flow type (mirrors server logic) ─────────────────────────────
+function detectFlowType(operatorName: string, countryCode: string): "ussd" | "otp" | "wave" {
+  const name = operatorName.toLowerCase();
+  if (name.includes("wave")) return "wave";
+  if (name.includes("orange") && countryCode.toUpperCase() === "CI") return "otp";
+  return "ussd";
+}
+
+// ─── Flow type labels & badges ────────────────────────────────────────────────
+const FLOW_LABELS: Record<string, { label: string; badge: string; color: string; icon: React.ReactNode }> = {
+  ussd: { label: "USSD Push",          badge: "USSD",  color: "bg-blue-500 text-white",   icon: <Smartphone className="h-3 w-3" /> },
+  otp:  { label: "OTP (#144*82#)",     badge: "OTP",   color: "bg-orange-500 text-white", icon: <Hash className="h-3 w-3" /> },
+  wave: { label: "Wave (redirection)", badge: "WAVE",  color: "bg-teal-500 text-white",   icon: <ArrowLeftRight className="h-3 w-3" /> },
 };
 
-// ─── PixPay currency zones ─────────────────────────────────────────────────────
+// ─── Currency zones ───────────────────────────────────────────────────────────
 const CURRENCY_ZONE: Record<string, string> = {
   CM:"XAF",CF:"XAF",TD:"XAF",GQ:"XAF",CG:"XAF",GA:"XAF",
   BF:"XOF",BJ:"XOF",CI:"XOF",GW:"XOF",ML:"XOF",NE:"XOF",SN:"XOF",TG:"XOF",GN:"XOF",
@@ -31,26 +39,25 @@ const CURRENCY_ZONE: Record<string, string> = {
 // ─── Operator Row ─────────────────────────────────────────────────────────────
 function OperatorPixPayRow({
   op,
+  countryCode,
   onSave,
   isSaving,
 }: {
   op: any;
-  onSave: (id: string, provider: string, serviceId: string, opType: string) => void;
+  countryCode: string;
+  onSave: (id: string, provider: string, serviceId: string) => void;
   isSaving: boolean;
 }) {
   const [provider, setProvider] = useState<string>(op.paymentProvider || "swychr");
   const [serviceId, setServiceId] = useState<string>(op.pixpayServiceId || "");
-  const [opType, setOpType] = useState<string>(op.pixpayOperatorType || "ussd");
+
+  const autoFlow = detectFlowType(op.name, countryCode);
+  const flowInfo = FLOW_LABELS[autoFlow];
 
   const origProvider = op.paymentProvider || "swychr";
   const origServiceId = op.pixpayServiceId || "";
-  const origOpType = op.pixpayOperatorType || "ussd";
 
-  const isDirty =
-    provider !== origProvider ||
-    serviceId !== origServiceId ||
-    opType !== origOpType;
-
+  const isDirty = provider !== origProvider || serviceId !== origServiceId;
   const canSave = isDirty && (provider !== "pixpay" || serviceId.trim().length > 0);
 
   return (
@@ -64,7 +71,7 @@ function OperatorPixPayRow({
       <td className="py-3 pr-3 w-36">
         <Select value={provider} onValueChange={(v) => {
           setProvider(v);
-          if (v !== "pixpay") { setServiceId(""); setOpType("ussd"); }
+          if (v !== "pixpay") setServiceId("");
         }}>
           <SelectTrigger className="h-8 text-xs" data-testid={`select-pxprovider-${op.id}`}>
             <SelectValue />
@@ -84,7 +91,7 @@ function OperatorPixPayRow({
             className="h-8 text-xs"
             placeholder="ex: 42"
             value={serviceId}
-            onChange={e => setServiceId(e.target.value)}
+            onChange={e => setServiceId(e.target.value.replace(/\D/g, ""))}
             data-testid={`input-pxservice-${op.id}`}
           />
         ) : (
@@ -92,25 +99,15 @@ function OperatorPixPayRow({
         )}
       </td>
 
-      {/* Operator type */}
+      {/* Flow type — AUTO only */}
       <td className="py-3 pr-3 w-44">
         {provider === "pixpay" ? (
-          <Select value={opType} onValueChange={setOpType}>
-            <SelectTrigger className="h-8 text-xs" data-testid={`select-pxtype-${op.id}`}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ussd">
-                <span className="flex items-center gap-1"><Smartphone className="h-3 w-3" /> USSD Push</span>
-              </SelectItem>
-              <SelectItem value="otp">
-                <span className="flex items-center gap-1"><Hash className="h-3 w-3" /> OTP (#144*82#)</span>
-              </SelectItem>
-              <SelectItem value="wave">
-                <span className="flex items-center gap-1"><ArrowLeftRight className="h-3 w-3" /> Wave (redirection)</span>
-              </SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-1">
+            <Badge className={`text-xs ${flowInfo.color} flex items-center gap-1`}>
+              {flowInfo.icon}{flowInfo.badge}
+            </Badge>
+            <span className="text-xs text-muted-foreground">auto</span>
+          </div>
         ) : (
           <span className="text-xs text-muted-foreground italic">—</span>
         )}
@@ -119,8 +116,8 @@ function OperatorPixPayRow({
       {/* Status badge */}
       <td className="py-3 pr-3 w-24">
         {provider === "pixpay" && serviceId ? (
-          <Badge className={`text-xs ${OP_TYPE_LABELS[opType]?.color || "bg-blue-500 text-white"}`}>
-            {OP_TYPE_LABELS[opType]?.badge} #{serviceId}
+          <Badge className={`text-xs ${flowInfo.color}`}>
+            {flowInfo.badge} #{serviceId}
           </Badge>
         ) : provider === "afribapay" ? (
           <Badge variant="outline" className="text-xs text-yellow-600 border-yellow-400">AfribaPay</Badge>
@@ -136,7 +133,7 @@ function OperatorPixPayRow({
           variant={canSave ? "default" : "ghost"}
           className={`h-7 text-xs ${canSave ? "" : "opacity-40"}`}
           disabled={!canSave || isSaving}
-          onClick={() => onSave(op.id, provider, serviceId, opType)}
+          onClick={() => onSave(op.id, provider, serviceId)}
           data-testid={`btn-savepx-${op.id}`}
         >
           {isSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <><Save className="h-3 w-3 mr-1" />Sauv.</>}
@@ -155,7 +152,7 @@ function CountryGroupCard({
 }: {
   country: Country;
   localOperators: Operator[];
-  onSaveOperator: (id: string, provider: string, serviceId: string, opType: string) => void;
+  onSaveOperator: (id: string, provider: string, serviceId: string) => void;
   savingId: string | null;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -208,7 +205,11 @@ function CountryGroupCard({
                   <th className="text-left py-1 pr-4 text-xs font-medium text-muted-foreground">Opérateur</th>
                   <th className="text-left py-1 pr-3 text-xs font-medium text-muted-foreground">Fournisseur</th>
                   <th className="text-left py-1 pr-3 text-xs font-medium text-muted-foreground">Service ID</th>
-                  <th className="text-left py-1 pr-3 text-xs font-medium text-muted-foreground">Type flux</th>
+                  <th className="text-left py-1 pr-3 text-xs font-medium text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      Type flux <span className="text-blue-400">(auto)</span>
+                    </span>
+                  </th>
                   <th className="text-left py-1 pr-3 text-xs font-medium text-muted-foreground">Statut</th>
                   <th className="py-1 text-xs font-medium text-muted-foreground"></th>
                 </tr>
@@ -218,6 +219,7 @@ function CountryGroupCard({
                   <OperatorPixPayRow
                     key={op.id}
                     op={op}
+                    countryCode={countryCode}
                     onSave={onSaveOperator}
                     isSaving={savingId === op.id}
                   />
@@ -241,22 +243,19 @@ export default function AdminPixPay() {
   const { data: supportedCountries } = useQuery<any[]>({ queryKey: ["/api/admin/pixpay/supported-countries"] });
 
   const updateProviderMutation = useMutation({
-    mutationFn: async ({ id, paymentProvider, pixpayServiceId, pixpayOperatorType }: {
+    mutationFn: async ({ id, paymentProvider, pixpayServiceId }: {
       id: string;
       paymentProvider: string;
       pixpayServiceId: string;
-      pixpayOperatorType: string;
     }) => apiRequest("PATCH", `/api/admin/operators/${id}/provider`, {
       paymentProvider,
       pixpayServiceId: pixpayServiceId || null,
-      pixpayOperatorType: pixpayOperatorType || "ussd",
     }),
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/operators"] });
       setSavingId(null);
-      const typeLabel = OP_TYPE_LABELS[vars.pixpayOperatorType]?.label || vars.pixpayOperatorType;
       if (vars.paymentProvider === "pixpay") {
-        toast({ title: "Sauvegardé", description: `PixPay — Service ID ${vars.pixpayServiceId} · ${typeLabel}` });
+        toast({ title: "Sauvegardé", description: `PixPay — Service ID ${vars.pixpayServiceId} · flux auto-détecté` });
       } else {
         toast({ title: "Sauvegardé", description: `Opérateur basculé vers ${vars.paymentProvider}.` });
       }
@@ -267,9 +266,9 @@ export default function AdminPixPay() {
     },
   });
 
-  const handleSaveOperator = (id: string, provider: string, serviceId: string, opType: string) => {
+  const handleSaveOperator = (id: string, provider: string, serviceId: string) => {
     setSavingId(id);
-    updateProviderMutation.mutate({ id, paymentProvider: provider, pixpayServiceId: serviceId, pixpayOperatorType: opType });
+    updateProviderMutation.mutate({ id, paymentProvider: provider, pixpayServiceId: serviceId });
   };
 
   const countriesWithOperators = useMemo(() => {
@@ -296,7 +295,7 @@ export default function AdminPixPay() {
           <div>
             <h1 className="text-2xl font-bold">PixPay</h1>
             <p className="text-muted-foreground text-sm">
-              Assigner les service IDs PixPay par opérateur et configurer le type de flux (USSD, OTP, Wave)
+              Assigner le Service ID PixPay par opérateur — le type de flux est détecté automatiquement
             </p>
           </div>
         </div>
@@ -332,29 +331,35 @@ export default function AdminPixPay() {
           </Card>
         </div>
 
-        {/* Info OTP/Wave */}
+        {/* Auto-detection rules info */}
         <Card className="border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20">
           <CardContent className="pt-4 pb-4">
+            <div className="flex items-start gap-2 mb-3">
+              <Info className="h-4 w-4 text-blue-500 mt-0.5 shrink-0" />
+              <p className="text-sm font-semibold text-blue-700 dark:text-blue-300">
+                Détection automatique du type de flux — aucune configuration manuelle nécessaire
+              </p>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
               <div className="flex gap-2">
                 <Smartphone className="h-4 w-4 text-blue-500 mt-0.5 shrink-0" />
                 <div>
-                  <p className="font-semibold text-blue-700 dark:text-blue-300">USSD Push</p>
-                  <p className="text-muted-foreground text-xs">Plupart des opérateurs. L'utilisateur reçoit une notification USSD sur son téléphone.</p>
+                  <p className="font-semibold text-blue-700 dark:text-blue-300">USSD Push — par défaut</p>
+                  <p className="text-muted-foreground text-xs">MTN, Moov, Orange (hors CI), Free, Airtel, etc. L'utilisateur confirme sur son téléphone.</p>
                 </div>
               </div>
               <div className="flex gap-2">
                 <Hash className="h-4 w-4 text-orange-500 mt-0.5 shrink-0" />
                 <div>
                   <p className="font-semibold text-orange-700 dark:text-orange-300">OTP — Orange CI uniquement</p>
-                  <p className="text-muted-foreground text-xs">L'utilisateur compose <code className="font-mono bg-muted px-1 rounded">#144*82#</code> pour obtenir son code OTP, puis le saisit sur notre plateforme.</p>
+                  <p className="text-muted-foreground text-xs">L'utilisateur compose <code className="font-mono bg-muted px-1 rounded">#144*82#</code> pour son code OTP avant de valider.</p>
                 </div>
               </div>
               <div className="flex gap-2">
                 <ArrowLeftRight className="h-4 w-4 text-teal-500 mt-0.5 shrink-0" />
                 <div>
                   <p className="font-semibold text-teal-700 dark:text-teal-300">Wave — Wave CI / Wave SN</p>
-                  <p className="text-muted-foreground text-xs">PixPay retourne un lien Wave. L'utilisateur est redirigé vers l'app Wave pour valider.</p>
+                  <p className="text-muted-foreground text-xs">PixPay retourne un lien Wave. L'utilisateur est redirigé vers l'app Wave.</p>
                 </div>
               </div>
             </div>
