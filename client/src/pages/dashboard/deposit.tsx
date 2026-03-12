@@ -524,7 +524,10 @@ export default function DepositPage() {
                       <div>
                         <h3 className="text-xl font-semibold text-foreground mb-2">Validation en cours...</h3>
                         <p className="text-muted-foreground">
-                          Veuillez valider le paiement sur votre téléphone.
+                          Validez le paiement sur votre téléphone via USSD.
+                        </p>
+                        <p className="text-sm text-muted-foreground mt-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
+                          ⏱ Le traitement peut prendre <strong>1 à 5 minutes</strong>. La page se mettra à jour automatiquement dès que le paiement est confirmé.
                         </p>
                       </div>
                       <div className="bg-muted/30 rounded-lg p-4 inline-block">

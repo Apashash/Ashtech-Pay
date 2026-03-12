@@ -389,7 +389,10 @@ export default function PaymentPage() {
                 <>
                   <Loader2 className="w-16 h-16 text-primary mx-auto animate-spin" />
                   <h2 className="text-xl font-bold text-foreground">Validation en cours...</h2>
-                  <p className="text-muted-foreground">Veuillez valider le paiement sur votre téléphone.</p>
+                  <p className="text-muted-foreground">Validez le paiement sur votre téléphone via USSD.</p>
+                  <p className="text-sm text-muted-foreground bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
+                    ⏱ Le traitement peut prendre <strong>1 à 5 minutes</strong>. La page se mettra à jour automatiquement dès confirmation.
+                  </p>
                   <div className="bg-muted/30 rounded-lg p-4">
                     <p className="text-sm text-muted-foreground mb-1">Temps restant</p>
                     <p className="text-2xl font-mono font-bold text-red-500">{formatCountdown(countdown)}</p>
