@@ -38,9 +38,10 @@ export function removePendingPayment(reference: string) {
 async function checkPaymentStatus(payment: PendingPayment): Promise<"pending" | "completed" | "failed"> {
   try {
     if (payment.provider === "afribapay") {
-      const extRef = payment.externalReference || payment.reference;
-      const result = await checkAfribaPayStatus(extRef, "order_id");
-      console.log(`[PaymentPoller] AfribaPay status for ${payment.reference}: ${result.status}`);
+      // Always query by order_id = our ASHPAY-DEP-... reference (what we sent to AfribaPay as order_id).
+      // externalReference = AfribaPay's transaction_id (PIM...) — do NOT use it for status query.
+      const result = await checkAfribaPayStatus(payment.reference, "order_id");
+      console.log(`[PaymentPoller] AfribaPay status for ${payment.reference}: ${result.status}`, result.raw?.data?.status || "");
       return result.status;
     } else if (payment.provider === "pixpay") {
       const result = await checkPixPayStatus(

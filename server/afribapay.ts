@@ -266,15 +266,20 @@ export async function checkAfribaPayStatus(
   try {
     const headers = await authHeaders();
     const param = type === "transaction_id" ? `transaction_id=${identifier}` : `order_id=${identifier}`;
-    const res = await fetch(`${AFRIBAPAY_PAYIN_URL}/v1/status?${param}`, { headers });
+    const url = `${AFRIBAPAY_PAYIN_URL}/v1/status?${param}`;
+    const res = await fetch(url, { headers });
     const data = await res.json();
 
+    // Log full raw response every 10 calls to detect unexpected statuses
     const d = data.data;
-    const status = (d?.status || "").toUpperCase();
+    const rawStatus = (d?.status || d?.transaction_status || "").toUpperCase();
+    console.log(`[AfribaPay Status] ${param} → HTTP ${res.status} | raw_status="${rawStatus}" | data=${JSON.stringify(d)}`);
 
-    if (status === "SUCCESS" || status === "COMPLETED" || status === "SUCCESSFUL") {
+    if (rawStatus === "SUCCESS" || rawStatus === "COMPLETED" || rawStatus === "SUCCESSFUL"
+        || rawStatus === "PAID" || rawStatus === "APPROVED") {
       return { status: "completed", raw: data };
-    } else if (status === "FAILED" || status === "ERROR" || status === "CANCELLED") {
+    } else if (rawStatus === "FAILED" || rawStatus === "ERROR" || rawStatus === "CANCELLED"
+               || rawStatus === "REJECTED" || rawStatus === "EXPIRED") {
       return { status: "failed", raw: data };
     }
     return { status: "pending", raw: data };
