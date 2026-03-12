@@ -5,6 +5,7 @@ import { createServer } from "http";
 import { startPaymentPoller, recoverPendingDeposits } from "./paymentPoller";
 import { startPayoutPoller, recoverPendingPayouts } from "./payoutPoller";
 import { seedWithdrawalTransferFees } from "./seedWithdrawalTransferFees";
+import { startCleanupScheduler } from "./cleanup";
 
 const app = express();
 const httpServer = createServer(app);
@@ -107,6 +108,7 @@ app.use((req, res, next) => {
       seedWithdrawalTransferFees().catch(err =>
         console.error("[FeesSeed] Error during fee seeding:", err)
       );
+      startCleanupScheduler();
     },
   );
 })();
