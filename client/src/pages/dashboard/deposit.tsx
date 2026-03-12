@@ -855,7 +855,7 @@ export default function DepositPage() {
                             type="button"
                             variant="outline"
                             className="flex-1" 
-                            size="lg"
+                            size="md"
                             onClick={goToPreviousStep}
                           >
                             <ArrowLeft className="w-4 h-4 mr-2" />
@@ -864,7 +864,7 @@ export default function DepositPage() {
                           <Button 
                             type="submit" 
                             className="flex-1" 
-                            size="lg" 
+                            size="md" 
                             disabled={depositMutation.isPending || (isPixPayOtp && pixpayOtpCode.length < 4)} 
                             data-testid="button-deposit-confirm"
                           >
