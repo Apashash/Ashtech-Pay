@@ -42,24 +42,34 @@ export async function recoverPendingPayouts() {
     }
     console.log(`[PayoutPoller] Recovering ${pending.length} pending payout(s) from DB`);
     for (const t of pending) {
-      const ref = t.reference ?? "";
-      if (!ref) continue;
-      if (!pendingPayouts.has(ref)) {
-        const operator = t.operatorId ? await storage.getOperator(t.operatorId).catch(() => null) : null;
-        const provider = (operator as any)?.paymentProvider || "swychr";
-        const countryCode = (t as any).recipientCountry || "CM";
-        pendingPayouts.set(ref, {
-          transactionId: t.id,
-          reference:     ref,
-          userId:        t.userId,
-          amount:        t.amount ?? "0",
-          totalDebited:  t.totalAmount ?? t.amount ?? "0",
-          attempts:      0,
-          provider,
-          countryCode,
-        });
-        console.log(`[PayoutPoller] Recovered: ${ref} (${t.type}, provider=${provider})`);
+      const internalRef = t.reference ?? "";
+      if (!internalRef) continue;
+      const operator = t.operatorId ? await storage.getOperator(t.operatorId).catch(() => null) : null;
+      const provider = ((operator as any)?.paymentProvider || "swychr") as "swychr" | "afribapay" | "pixpay";
+      const countryCode = (t as any).recipientCountry || "CM";
+
+      let pollerRef: string;
+      if (provider === "afribapay") {
+        pollerRef = internalRef;
+      } else if (provider === "pixpay") {
+        pollerRef = (t as any).externalReference || internalRef;
+      } else {
+        pollerRef = (t as any).externalReference || internalRef;
       }
+
+      if (!pollerRef || pendingPayouts.has(pollerRef)) continue;
+
+      pendingPayouts.set(pollerRef, {
+        transactionId: t.id,
+        reference:     pollerRef,
+        userId:        t.userId,
+        amount:        t.amount ?? "0",
+        totalDebited:  t.totalAmount ?? t.amount ?? "0",
+        attempts:      0,
+        provider,
+        countryCode,
+      });
+      console.log(`[PayoutPoller] Recovered: ${pollerRef} (${t.type}, provider=${provider})`);
     }
   } catch (err: any) {
     console.error("[PayoutPoller] Recovery error:", err.message);

@@ -1915,6 +1915,9 @@ export async function registerRoutes(
             reference_id: withdrawalRef,
             notify_url: callbackUrl,
           });
+          if (afribaResult.success && afribaResult.transaction_id) {
+            await storage.updateTransactionExternalReference(transaction.id, afribaResult.transaction_id);
+          }
           payoutResult = afribaResult;
 
         } else if (paymentProvider === "pixpay") {
@@ -1936,6 +1939,9 @@ export async function registerRoutes(
             countryCode,
             orderId: withdrawalRef,
           });
+          if (pixpayResult.success && pixpayResult.transactionId) {
+            await storage.updateTransactionExternalReference(transaction.id, pixpayResult.transactionId);
+          }
           payoutResult = {
             success: pixpayResult.success,
             transaction_id: pixpayResult.transactionId,
