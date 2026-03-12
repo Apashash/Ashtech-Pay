@@ -987,7 +987,8 @@ export async function registerRoutes(
             } else if (provider === "pixpay") {
               feePercentage = pixpayRate + marginRate;
             } else {
-              feePercentage = operatorFee?.feeType === "percentage" ? parseFloat(operatorFee.feeValue) : 0;
+              const swychrRate = operatorFee ? parseFloat((operatorFee as any).swychrFee || "0") : 0;
+              feePercentage = (swychrRate + marginRate) > 0 ? (swychrRate + marginRate) : (operatorFee?.feeType === "percentage" ? parseFloat(operatorFee.feeValue) : 0);
             }
             return {
               id: op.id,
