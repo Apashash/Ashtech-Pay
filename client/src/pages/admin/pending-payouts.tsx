@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   Clock, RefreshCw, Loader2, User, Phone, Banknote,
-  ArrowUpRight, Send, AlertTriangle, CheckCircle2, XCircle,
+  ArrowUpRight, Send, AlertTriangle, CheckCircle2, XCircle, BadgeCheck,
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -43,7 +43,7 @@ const PROVIDER_LABELS: Record<string, { label: string; color: string }> = {
   pixpay:    { label: "PixPay",    color: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400" },
 };
 
-type Action = { txId: string; type: "execute" | "refund"; provider?: "swychr" | "afribapay" | "pixpay" };
+type Action = { txId: string; type: "execute" | "confirm" | "refund"; provider?: "swychr" | "afribapay" | "pixpay" };
 
 export default function AdminPendingPayoutsPage() {
   const { toast } = useToast();
@@ -79,6 +79,26 @@ export default function AdminPendingPayoutsPage() {
     },
   });
 
+  const confirmMutation = useMutation({
+    mutationFn: async (txId: string) => {
+      const res = await apiRequest("POST", `/api/admin/pending-payouts/${txId}/confirm`, {});
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Erreur lors de la confirmation");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/pending-payouts"] });
+      toast({ title: "Confirmé", description: data.message });
+      setLoadingId(null);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+      setLoadingId(null);
+    },
+  });
+
   const refundMutation = useMutation({
     mutationFn: async (txId: string) => {
       const res = await apiRequest("POST", `/api/admin/pending-payouts/${txId}/refund`, {});
@@ -104,15 +124,20 @@ export default function AdminPendingPayoutsPage() {
     setLoadingId(confirmAction.txId);
     if (confirmAction.type === "execute" && confirmAction.provider) {
       executeMutation.mutate({ txId: confirmAction.txId, provider: confirmAction.provider });
+    } else if (confirmAction.type === "confirm") {
+      confirmMutation.mutate(confirmAction.txId);
     } else if (confirmAction.type === "refund") {
       refundMutation.mutate(confirmAction.txId);
     }
     setConfirmAction(null);
   };
 
-  const confirmLabel = confirmAction?.type === "refund"
-    ? "Rembourser l'utilisateur et annuler cette transaction ?"
-    : `Soumettre via ${confirmAction?.provider ? PROVIDER_LABELS[confirmAction.provider]?.label : ""} ?`;
+  const confirmLabel =
+    confirmAction?.type === "refund"
+      ? "Rembourser l'utilisateur et annuler cette transaction ?"
+      : confirmAction?.type === "confirm"
+        ? "Marquer comme effectué sans passer par un fournisseur ? L'utilisateur sera notifié."
+        : `Soumettre via ${confirmAction?.provider ? PROVIDER_LABELS[confirmAction.provider]?.label : ""} ?`;
 
   return (
     <AdminLayout>
@@ -224,7 +249,18 @@ export default function AdminPendingPayoutsPage() {
                             {PROVIDER_LABELS[p].label}
                           </Button>
                         ))}
-                        <div className="pt-1 border-t">
+                        <div className="pt-1 border-t flex flex-col gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={isLoading}
+                            onClick={() => setConfirmAction({ txId: payout.id, type: "confirm" })}
+                            className="justify-start gap-2 text-green-700 border-green-300 hover:bg-green-50 dark:text-green-400 dark:border-green-800 dark:hover:bg-green-950/20 w-full"
+                            data-testid={`btn-confirm-${payout.id}`}
+                          >
+                            {isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <BadgeCheck className="w-3 h-3" />}
+                            Confirmer (sans provider)
+                          </Button>
                           <Button
                             size="sm"
                             variant="outline"

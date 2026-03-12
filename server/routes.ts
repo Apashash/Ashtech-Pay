@@ -5721,6 +5721,48 @@ export async function registerRoutes(
     }
   });
 
+  // POST /api/admin/pending-payouts/:id/confirm — mark as completed without calling any provider
+  app.post("/api/admin/pending-payouts/:id/confirm", requireAdmin, async (req, res) => {
+    try {
+      const tx = await storage.getTransactionById(req.params.id);
+      if (!tx || tx.status !== "pending_manual") {
+        return res.status(404).json({ message: "Transaction non trouvée ou statut incorrect" });
+      }
+      await storage.updateTransactionStatus(tx.id, "completed");
+      const txUser = await storage.getUser(tx.userId).catch(() => null);
+      if (txUser?.email) {
+        sendWithdrawalApprovedEmail(
+          txUser.email,
+          (txUser as any).fullName || (txUser as any).username,
+          tx.amount,
+          tx.currency || "XAF",
+          tx.reference || undefined
+        ).catch(() => {});
+      }
+      await storage.createUserNotification({
+        userId: tx.userId,
+        type: tx.type === "withdrawal" ? "withdrawal_confirmed" : "transfer_confirmed",
+        title: tx.type === "withdrawal" ? "Retrait confirmé" : "Transfert confirmé",
+        message: `Votre ${tx.type === "withdrawal" ? "retrait" : "transfert"} de ${parseFloat(tx.amount).toLocaleString("fr-FR")} ${tx.currency} a été traité avec succès.`,
+        transactionId: tx.id,
+        isRead: false,
+      });
+      await storage.createAdminLog({
+        adminId: req.userId!,
+        action: "confirm_pending_payout",
+        targetType: "transaction",
+        targetId: tx.id,
+        details: JSON.stringify({ amount: tx.amount, currency: tx.currency }),
+        ipAddress: req.ip || null,
+      });
+      console.log(`[Admin] Manually confirmed pending_manual ${tx.reference} as completed`);
+      res.json({ message: "Transaction confirmée comme effectuée" });
+    } catch (error: any) {
+      console.error("Admin confirm pending-payout error:", error.message);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   // POST /api/admin/pending-payouts/:id/refund — cancel and refund user
   app.post("/api/admin/pending-payouts/:id/refund", requireAdmin, async (req, res) => {
     try {
