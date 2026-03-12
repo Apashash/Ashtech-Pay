@@ -1980,12 +1980,15 @@ export async function registerRoutes(
             });
           }
           console.log(`[Withdrawal] PixPay | country=${countryCode} | service_id=${cashOutServiceId} | operator=${operator?.name}`);
+          const pixpayPayoutIpnUrl = `${process.env.APP_URL || ""}/api/pixpay/webhook`;
           const pixpayResult = await initiatePixPayPayout({
             serviceId: String(cashOutServiceId),
             amount: creditedAmount,
             phone: data.accountDetails.replace(/\s/g, ""),
             countryCode,
             orderId: withdrawalRef,
+            ipnUrl: pixpayPayoutIpnUrl,
+            customData: withdrawalRef,
           });
           if (pixpayResult.success && pixpayResult.transactionId) {
             await storage.updateTransactionExternalReference(transaction.id, pixpayResult.transactionId);
