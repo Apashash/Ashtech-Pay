@@ -393,6 +393,9 @@ export default function PaymentPage() {
                   <p className="text-sm text-muted-foreground bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
                     ⏱ Le traitement peut prendre <strong>1 à 5 minutes</strong>. La page se mettra à jour automatiquement dès confirmation.
                   </p>
+                  <p className="text-sm text-muted-foreground bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg px-3 py-2">
+                    ✅ Si vous avez déjà confirmé le paiement sur votre téléphone, vous pouvez quitter cette page. Le reste du traitement se fait en arrière-plan.
+                  </p>
                   <div className="bg-muted/30 rounded-lg p-4">
                     <p className="text-sm text-muted-foreground mb-1">Temps restant</p>
                     <p className="text-2xl font-mono font-bold text-red-500">{formatCountdown(countdown)}</p>
