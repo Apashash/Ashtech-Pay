@@ -1414,7 +1414,7 @@ export default function PaymentLinksPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList>
+          <TabsList className="flex flex-wrap gap-2 h-auto bg-transparent p-0">
             <TabsTrigger value="analytics" data-testid="tab-analytics">
               <BarChart3 className="w-4 h-4 mr-2" />
               Analytiques
