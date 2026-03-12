@@ -308,6 +308,63 @@ export function parsePixPayWebhook(payload: any): {
   };
 }
 
+// ─── Payout (cash_out — withdrawal to user) ─────────────────────────────────
+export interface PixPayoutParams {
+  serviceId: string;
+  amount: number;
+  phone: string;
+  countryCode: string;
+  orderId: string;
+  ipnUrl?: string;
+  customData?: string;
+}
+
+export interface PixPayoutResult {
+  success: boolean;
+  transactionId?: string;
+  status?: string;
+  message?: string;
+  raw?: any;
+}
+
+export async function initiatePixPayPayout(params: PixPayoutParams): Promise<PixPayoutResult> {
+  try {
+    const body = buildBaseBody(
+      { ...params, serviceId: params.serviceId },
+      params.countryCode
+    );
+    console.log(`[PixPay Payout] Body:`, JSON.stringify({ ...body, api_key: "***" }));
+    const res = await fetch(PIXPAY_AIRTIME_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    console.log(`[PixPay Payout] Response:`, JSON.stringify(data));
+
+    if (data.statut_code !== 200 || !data.data) {
+      return { success: false, message: data.message || "Échec payout PixPay", raw: data };
+    }
+
+    const d = data.data;
+    const state = (d.state || "").toUpperCase();
+    if (state === "FAILED" || state === "CANCELLED") {
+      return { success: false, message: d.response || data.message || "Payout rejeté", raw: data };
+    }
+
+    return {
+      success: true,
+      transactionId: d.transaction_id,
+      status: d.state || "PENDING1",
+      message: data.message,
+      raw: data,
+    };
+  } catch (err: any) {
+    console.error("[PixPay Payout] Error:", err);
+    return { success: false, message: err.message || "Erreur réseau PixPay payout" };
+  }
+}
+
 // ─── Fee computation ──────────────────────────────────────────────────────────
 export function computePixPayFees(
   grossAmount: number,

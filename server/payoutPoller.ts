@@ -1,5 +1,7 @@
 import { storage } from "./storage";
 import { checkSwychrPayoutStatus } from "./swychrPayout";
+import { checkAfribaPayStatus } from "./afribapay";
+import { checkPixPayStatus } from "./pixpay";
 import { sendWithdrawalApprovedEmail } from "./email";
 
 const POLL_INTERVAL  = 6_000; // 6 seconds
@@ -12,12 +14,14 @@ interface PendingPayout {
   amount:         string;
   totalDebited:   string;
   attempts:       number;
+  provider:       "swychr" | "afribapay" | "pixpay";
+  countryCode:    string;
 }
 
 const pendingPayouts = new Map<string, PendingPayout>();
 
 export function addPendingPayout(payout: Omit<PendingPayout, "attempts">) {
-  console.log(`[PayoutPoller] Tracking payout: ${payout.reference}`);
+  console.log(`[PayoutPoller] Tracking payout: ${payout.reference} (provider=${payout.provider}, country=${payout.countryCode})`);
   pendingPayouts.set(payout.reference, { ...payout, attempts: 0 });
 }
 
@@ -41,6 +45,9 @@ export async function recoverPendingPayouts() {
       const ref = t.reference ?? "";
       if (!ref) continue;
       if (!pendingPayouts.has(ref)) {
+        const operator = t.operatorId ? await storage.getOperator(t.operatorId).catch(() => null) : null;
+        const provider = (operator as any)?.paymentProvider || "swychr";
+        const countryCode = (t as any).recipientCountry || "CM";
         pendingPayouts.set(ref, {
           transactionId: t.id,
           reference:     ref,
@@ -48,8 +55,10 @@ export async function recoverPendingPayouts() {
           amount:        t.amount ?? "0",
           totalDebited:  t.totalAmount ?? t.amount ?? "0",
           attempts:      0,
+          provider,
+          countryCode,
         });
-        console.log(`[PayoutPoller] Recovered: ${ref} (${t.type})`);
+        console.log(`[PayoutPoller] Recovered: ${ref} (${t.type}, provider=${provider})`);
       }
     }
   } catch (err: any) {
@@ -65,20 +74,19 @@ async function processPayout(payout: PendingPayout, apiStatus: string) {
       return;
     }
 
+    const currency = transaction.currency || "XAF";
+
     if (apiStatus === "success") {
       await storage.updateTransactionStatus(payout.transactionId, "completed");
 
-      // Send email notification
       const txUser = await storage.getUser(payout.userId).catch(() => null);
-      const fullTx = await storage.getTransactionById(payout.transactionId).catch(() => null);
-      const currency = fullTx?.currency || "XAF";
       if (txUser?.email) {
         sendWithdrawalApprovedEmail(
           txUser.email,
           txUser.fullName || txUser.username,
           payout.amount,
           currency,
-          fullTx?.reference || undefined
+          transaction.reference || undefined
         ).catch((err: any) => console.error("[PayoutPoller] Email error:", err.message));
       }
 
@@ -90,7 +98,7 @@ async function processPayout(payout: PendingPayout, apiStatus: string) {
         transactionId: payout.transactionId,
         isRead:        false,
       });
-      console.log(`[PayoutPoller] ✅ Payout success: ${payout.reference}`);
+      console.log(`[PayoutPoller] ✅ Payout success: ${payout.reference} (${payout.provider})`);
 
     } else {
       await storage.updateTransactionStatus(payout.transactionId, "failed");
@@ -100,17 +108,39 @@ async function processPayout(payout: PendingPayout, apiStatus: string) {
         userId:        payout.userId,
         type:          "withdrawal_failed",
         title:         "Retrait échoué",
-        message:       `Votre retrait de ${payout.amount} XAF a échoué. Le montant a été recrédité sur votre compte.`,
+        message:       `Votre retrait de ${payout.amount} ${currency} a échoué. Le montant a été recrédité sur votre compte.`,
         transactionId: payout.transactionId,
         isRead:        false,
       });
-      console.log(`[PayoutPoller] ❌ Payout failed (${apiStatus}): ${payout.reference} — refunded ${refundAmount}`);
+      console.log(`[PayoutPoller] ❌ Payout failed (${apiStatus}): ${payout.reference} — refunded ${refundAmount} ${currency}`);
     }
 
     removePendingPayout(payout.reference);
   } catch (err: any) {
     console.error(`[PayoutPoller] Error processing payout ${payout.reference}:`, err.message);
   }
+}
+
+async function checkProviderStatus(payout: PendingPayout): Promise<{ status: string; shouldRemove?: boolean }> {
+  if (payout.provider === "afribapay") {
+    const result = await checkAfribaPayStatus(payout.reference, "order_id");
+    return { status: result.status };
+  }
+
+  if (payout.provider === "pixpay") {
+    const result = await checkPixPayStatus(payout.reference, payout.countryCode);
+    return { status: result.status };
+  }
+
+  const result = await checkSwychrPayoutStatus(payout.reference);
+  if (!result.success) {
+    console.log(`[PayoutPoller] Status check failed for ${payout.reference}: ${result.message}`);
+    if (result.status === "failed") {
+      return { status: "unknown", shouldRemove: true };
+    }
+    return { status: "pending" };
+  }
+  return { status: result.status || "pending" };
 }
 
 async function pollPendingPayouts() {
@@ -124,25 +154,21 @@ async function pollPendingPayouts() {
       continue;
     }
 
-    const result = await checkSwychrPayoutStatus(reference);
-    if (!result.success) {
-      console.log(`[PayoutPoller] Status check failed for ${reference}: ${result.message}`);
-      if (result.status === "failed") {
-        console.log(`[PayoutPoller] Transaction not found in Swychr for ${reference} — stopping poll (awaiting admin)`);
-        removePendingPayout(reference);
-      }
+    const { status, shouldRemove } = await checkProviderStatus(payout);
+
+    if (shouldRemove) {
+      console.log(`[PayoutPoller] Transaction not found for ${reference} — stopping poll (awaiting admin)`);
+      removePendingPayout(reference);
       continue;
     }
 
-    const status = result.status;
-    console.log(`[PayoutPoller] ${reference}: status=${status} (attempt ${payout.attempts}/${MAX_ATTEMPTS})`);
+    console.log(`[PayoutPoller] ${reference}: status=${status} provider=${payout.provider} (attempt ${payout.attempts}/${MAX_ATTEMPTS})`);
 
-    if (status === "success") {
+    if (status === "completed" || status === "success") {
       await processPayout(payout, "success");
     } else if (status === "failed" || status === "refunded" || status === "cancelled") {
       await processPayout(payout, status);
     }
-    // pending / processing / undefined → keep polling
   }
 }
 
@@ -150,7 +176,7 @@ let pollerInterval: NodeJS.Timeout | null = null;
 
 export function startPayoutPoller() {
   if (pollerInterval) { console.log("[PayoutPoller] Already running"); return; }
-  console.log("[PayoutPoller] Starting payout poller (every 30 seconds)");
+  console.log("[PayoutPoller] Starting payout poller (every 6 seconds)");
   pollerInterval = setInterval(pollPendingPayouts, POLL_INTERVAL);
 }
 

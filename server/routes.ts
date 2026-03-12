@@ -29,7 +29,7 @@ import fs from "fs";
 import { uploadToSupabase, getSignedImageUrl, downloadFromSupabase } from "./supabase";
 import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, fetchPaymentLinkDetails, ASHTECH_MARGIN } from "./swychr";
 import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, confirmAfribaPayOtp } from "./afribapay";
-import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType, getPixPayServiceId } from "./pixpay";
+import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, initiatePixPayPayout, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType, getPixPayServiceId } from "./pixpay";
 import { addPendingPayment, removePendingPayment } from "./paymentPoller";
 import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, cleanupEmptyWallets } from "./walletHelper";
 import { createSwychrPayout, formatInternationalPhone, detectMethodFromPhone, fiatToPusd, pusdToFiatRate, getConversionRate, convertFiatToPusd, getPayoutToken, COUNTRY_CURRENCY } from "./swychrPayout";
@@ -1191,6 +1191,8 @@ export async function registerRoutes(
             userId:        senderId,
             amount:        creditedAmount.toFixed(2),
             totalDebited:  totalAmount.toFixed(2),
+            provider:      "swychr",
+            countryCode:   transferCountryCode.toUpperCase(),
           });
         } else {
           const isInsufficientBalance = (payoutResult.message || "").toLowerCase().includes("insuffi") ||
@@ -1915,6 +1917,31 @@ export async function registerRoutes(
           });
           payoutResult = afribaResult;
 
+        } else if (paymentProvider === "pixpay") {
+          // ─── PixPay Payout ──────────────────────────────────────────────────
+          const cashOutServiceId = getPixPayServiceId(operator?.name || "", countryCode, "cash_out");
+          if (!cashOutServiceId) {
+            console.error(`[Withdrawal] PixPay: no cash_out service_id for ${operator?.name} in ${countryCode}`);
+            await storage.updateTransactionStatus(transaction.id, "failed");
+            await storage.updateUserBalance(userId, totalAmount);
+            return res.status(400).json({
+              message: `Retrait PixPay non supporté pour cet opérateur (${operator?.name}) dans ce pays`,
+            });
+          }
+          console.log(`[Withdrawal] PixPay | country=${countryCode} | service_id=${cashOutServiceId} | operator=${operator?.name}`);
+          const pixpayResult = await initiatePixPayPayout({
+            serviceId: String(cashOutServiceId),
+            amount: creditedAmount,
+            phone: data.accountDetails.replace(/\s/g, ""),
+            countryCode,
+            orderId: withdrawalRef,
+          });
+          payoutResult = {
+            success: pixpayResult.success,
+            transaction_id: pixpayResult.transactionId,
+            message: pixpayResult.message,
+          };
+
         } else {
           // ─── Swychr Payout (default) ─────────────────────────────────────────
           console.log(`[Withdrawal] Using Swychr for ${operatorName} in ${countryCode}`);
@@ -1933,13 +1960,19 @@ export async function registerRoutes(
 
         if (payoutResult.success) {
           console.log(`[Withdrawal] Payout submitted OK: ${withdrawalRef} (ext: ${payoutResult.transaction_id})`);
-          const extTxId = payoutResult.transaction_id || withdrawalRef;
+          const pollerRef = paymentProvider === "afribapay"
+            ? withdrawalRef
+            : paymentProvider === "pixpay"
+              ? (payoutResult.transaction_id || withdrawalRef)
+              : (payoutResult.transaction_id || withdrawalRef);
           addPendingPayout({
             transactionId: transaction.id,
-            reference:     extTxId,
+            reference:     pollerRef,
             userId,
             amount:        data.amount,
             totalDebited:  totalAmount.toFixed(2),
+            provider:      paymentProvider as "swychr" | "afribapay" | "pixpay",
+            countryCode,
           });
         } else {
           const isInsufficientBalance = (payoutResult.message || "").toLowerCase().includes("insuffi") ||
@@ -4322,6 +4355,8 @@ export async function registerRoutes(
               userId:        transaction.userId,
               amount:        transaction.amount,
               totalDebited:  transaction.totalAmount || transaction.amount,
+              provider:      ((operator as any)?.paymentProvider || "swychr") as "swychr" | "afribapay" | "pixpay",
+              countryCode:   countryCode,
             });
             // Send withdrawal approved email
             const txUser = await storage.getUser(transaction.userId).catch(() => null);
