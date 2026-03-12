@@ -1331,13 +1331,16 @@ export async function registerRoutes(
             countryCode:   transferCountryCode.toUpperCase(),
           });
         } else {
-          const isSwychrInsufficient = transferProvider === "swychr" && (
-            (payoutResult.message || "").toLowerCase().includes("insuffi") ||
-            (payoutResult.message || "").toLowerCase().includes("solde") ||
-            (payoutResult.message || "").toLowerCase().includes("balance")
-          );
-          if (isSwychrInsufficient) {
-            console.log(`[Transfer] Swychr wallet insufficient for ${reference} — awaiting admin`);
+          const errMsg = (payoutResult.message || "").toLowerCase();
+          const requiresManualReview =
+            errMsg.includes("forbidden") ||
+            errMsg.includes("whitelist") ||
+            errMsg.includes("insuffi") ||
+            errMsg.includes("solde") ||
+            errMsg.includes("balance");
+          if (requiresManualReview) {
+            console.log(`[Transfer] Pending manual review for ${reference} (${transferProvider}): ${payoutResult.message}`);
+            await storage.updateTransactionStatus(transaction.id, "pending_manual");
             await storage.createUserNotification({
               userId: senderId,
               type: "transfer_pending",
@@ -2133,13 +2136,16 @@ export async function registerRoutes(
             countryCode,
           });
         } else {
-          const isSwychrInsufficient = paymentProvider === "swychr" && (
-            (payoutResult.message || "").toLowerCase().includes("insuffi") ||
-            (payoutResult.message || "").toLowerCase().includes("solde") ||
-            (payoutResult.message || "").toLowerCase().includes("balance")
-          );
-          if (isSwychrInsufficient) {
-            console.log(`[Withdrawal] Swychr wallet insufficient for ${withdrawalRef} — awaiting admin`);
+          const errMsg = (payoutResult.message || "").toLowerCase();
+          const requiresManualReview =
+            errMsg.includes("forbidden") ||
+            errMsg.includes("whitelist") ||
+            errMsg.includes("insuffi") ||
+            errMsg.includes("solde") ||
+            errMsg.includes("balance");
+          if (requiresManualReview) {
+            console.log(`[Withdrawal] Pending manual review for ${withdrawalRef} (${paymentProvider}): ${payoutResult.message}`);
+            await storage.updateTransactionStatus(transaction.id, "pending_manual");
             await storage.createUserNotification({
               userId,
               type: "withdrawal_pending",
@@ -5555,6 +5561,196 @@ export async function registerRoutes(
       res.json({ change, message: "Changement rejeté" });
     } catch (error) {
       console.error("Admin reject change error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // ============= ADMIN: PENDING MANUAL PAYOUTS =============
+
+  // GET /api/admin/pending-payouts — list all pending_manual withdrawals & transfers
+  app.get("/api/admin/pending-payouts", requireAdmin, async (_req, res) => {
+    try {
+      const txs = await storage.getPendingManualPayouts();
+      const enriched = await Promise.all(txs.map(async (t) => {
+        const user = await storage.getUser(t.userId).catch(() => null);
+        const operator = t.operatorId ? await storage.getOperator(t.operatorId).catch(() => null) : null;
+        return {
+          ...t,
+          userFullName: (user as any)?.fullName || (user as any)?.username || "Inconnu",
+          userEmail: (user as any)?.email || "",
+          operatorName: (operator as any)?.name || null,
+          originalProvider: (operator as any)?.paymentProvider || "swychr",
+        };
+      }));
+      res.json(enriched);
+    } catch (error) {
+      console.error("Admin pending-payouts error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // POST /api/admin/pending-payouts/:id/execute — execute with chosen provider
+  app.post("/api/admin/pending-payouts/:id/execute", requireAdmin, async (req, res) => {
+    try {
+      const { provider } = req.body as { provider: "swychr" | "afribapay" | "pixpay" };
+      if (!provider || !["swychr","afribapay","pixpay"].includes(provider)) {
+        return res.status(400).json({ message: "provider invalide (swychr|afribapay|pixpay)" });
+      }
+
+      const tx = await storage.getTransactionById(req.params.id);
+      if (!tx || tx.status !== "pending_manual") {
+        return res.status(404).json({ message: "Transaction non trouvée ou statut incorrect" });
+      }
+      if (!["withdrawal","transfer_out"].includes(tx.type)) {
+        return res.status(400).json({ message: "Type de transaction non supporté" });
+      }
+
+      const txUser = await storage.getUser(tx.userId);
+      if (!txUser) return res.status(404).json({ message: "Utilisateur non trouvé" });
+
+      const operator = tx.operatorId ? await storage.getOperator(tx.operatorId).catch(() => null) : null;
+      // recipientCountry may be a code ("CM") for withdrawals or a name ("Cameroun") for transfers
+      // If longer than 2 chars, try to resolve the code from the operator's country
+      let countryCode = (tx.recipientCountry || "CM").toUpperCase();
+      if (countryCode.length > 2 && operator?.countryId) {
+        const opCountry = await storage.getCountry(operator.countryId).catch(() => null);
+        if (opCountry?.code) countryCode = opCountry.code.toUpperCase();
+      }
+      const phone = tx.recipientPhone || "";
+      const creditedAmount = parseFloat(tx.amount);
+      const totalAmount = parseFloat(tx.totalAmount || tx.amount);
+      const recipientName = tx.recipientName || txUser.fullName || txUser.username || "Client";
+      const txRef = tx.reference || "";
+
+      let payoutResult: { success: boolean; transaction_id?: string; transactionId?: string; message?: string };
+
+      if (provider === "afribapay") {
+        const operatorName = (operator?.name || "").toUpperCase();
+        const afribapayOperatorCode = resolveAfribaPayOperatorCode(operator, operatorName);
+        const afribapayCurrency = AFRIBAPAY_ISO_CURRENCY[countryCode] || tx.currency || "XAF";
+        let localPhone = phone.replace(/\s/g, "");
+        if (localPhone.startsWith("+")) localPhone = localPhone.slice(1);
+        const phonePrefixes: Record<string, string> = {
+          CM:"237",SN:"221",CI:"225",BF:"226",ML:"223",GN:"224",BJ:"229",TG:"228",NE:"227",
+          CD:"243",CG:"242",CF:"236",TD:"235",GA:"241",GQ:"240",MG:"261",RW:"250",KE:"254",TZ:"255",UG:"256",GH:"233",NG:"234",
+        };
+        const pfx = phonePrefixes[countryCode];
+        if (pfx && localPhone.startsWith(pfx)) localPhone = localPhone.slice(pfx.length);
+        const callbackUrl = `${process.env.APP_URL || ""}/api/afribapay/webhook`;
+        const result = await initiateAfribaPayout({
+          operator: afribapayOperatorCode,
+          country: countryCode,
+          phone_number: localPhone,
+          amount: creditedAmount,
+          currency: afribapayCurrency,
+          order_id: txRef,
+          reference_id: txRef,
+          notify_url: callbackUrl,
+        });
+        if (result.success && result.transaction_id) {
+          await storage.updateTransactionExternalReference(tx.id, result.transaction_id);
+        }
+        payoutResult = result;
+
+      } else if (provider === "pixpay") {
+        const serviceId = getPixPayServiceId(operator?.name || "", countryCode, "cash_in");
+        if (!serviceId) {
+          return res.status(400).json({ message: `PixPay non supporté pour cet opérateur (${operator?.name}) dans ${countryCode}` });
+        }
+        const pixpayIpnUrl = `${process.env.APP_URL || ""}/api/pixpay/webhook`;
+        const result = await initiatePixPayPayout({
+          serviceId: String(serviceId),
+          amount: creditedAmount,
+          phone: phone.replace(/\s/g, ""),
+          countryCode,
+          orderId: txRef,
+          ipnUrl: pixpayIpnUrl,
+          customData: txRef,
+        });
+        if (result.success && result.transactionId) {
+          await storage.updateTransactionExternalReference(tx.id, result.transactionId);
+        }
+        payoutResult = result;
+
+      } else {
+        const operatorName = (operator?.name || "").toUpperCase();
+        const finalPaymentMethod = resolvePaymentMethod(operatorName, countryCode);
+        const result = await createSwychrPayout({
+          country_code: countryCode,
+          beneficiary_name: recipientName,
+          mobile_no: formatInternationalPhone(phone, countryCode),
+          amount: creditedAmount,
+          transaction_id: txRef,
+          payment_method: finalPaymentMethod as any,
+          remarks: `Ashtech Pay - ${txRef}`,
+        });
+        payoutResult = result;
+      }
+
+      if (payoutResult.success) {
+        await storage.updateTransactionStatus(tx.id, "pending");
+        const pollerRef = provider === "afribapay"
+          ? txRef
+          : (payoutResult.transaction_id || payoutResult.transactionId || txRef);
+        addPendingPayout({
+          transactionId: tx.id,
+          reference:     pollerRef,
+          userId:        tx.userId,
+          amount:        tx.amount,
+          totalDebited:  totalAmount.toFixed(2),
+          provider,
+          countryCode,
+        });
+        await storage.createAdminLog({
+          adminId: req.userId!,
+          action: "execute_pending_payout",
+          targetType: "transaction",
+          targetId: tx.id,
+          details: JSON.stringify({ provider, reference: pollerRef }),
+          ipAddress: req.ip || null,
+        });
+        console.log(`[Admin] Executed pending_manual payout ${txRef} via ${provider} → poller ref: ${pollerRef}`);
+        res.json({ message: `Payout soumis via ${provider} avec succès`, reference: pollerRef });
+      } else {
+        console.error(`[Admin] Execute pending_manual failed (${provider}): ${payoutResult.message}`);
+        res.status(400).json({ message: `Échec via ${provider}: ${payoutResult.message}` });
+      }
+    } catch (error: any) {
+      console.error("Admin execute pending-payout error:", error.message);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // POST /api/admin/pending-payouts/:id/refund — cancel and refund user
+  app.post("/api/admin/pending-payouts/:id/refund", requireAdmin, async (req, res) => {
+    try {
+      const tx = await storage.getTransactionById(req.params.id);
+      if (!tx || tx.status !== "pending_manual") {
+        return res.status(404).json({ message: "Transaction non trouvée ou statut incorrect" });
+      }
+      const totalAmount = parseFloat(tx.totalAmount || tx.amount);
+      await storage.updateTransactionStatus(tx.id, "failed");
+      await storage.updateUserBalance(tx.userId, totalAmount);
+      await storage.createUserNotification({
+        userId: tx.userId,
+        type: tx.type === "withdrawal" ? "withdrawal_failed" : "transfer_failed",
+        title: tx.type === "withdrawal" ? "Retrait annulé" : "Transfert annulé",
+        message: `Votre ${tx.type === "withdrawal" ? "retrait" : "transfert"} de ${parseFloat(tx.amount).toLocaleString("fr-FR")} ${tx.currency} a été annulé et remboursé sur votre compte.`,
+        transactionId: tx.id,
+        isRead: false,
+      });
+      await storage.createAdminLog({
+        adminId: req.userId!,
+        action: "refund_pending_payout",
+        targetType: "transaction",
+        targetId: tx.id,
+        details: JSON.stringify({ totalAmount, currency: tx.currency }),
+        ipAddress: req.ip || null,
+      });
+      console.log(`[Admin] Refunded pending_manual ${tx.reference} — ${totalAmount} ${tx.currency} to user ${tx.userId}`);
+      res.json({ message: "Transaction annulée et remboursée" });
+    } catch (error: any) {
+      console.error("Admin refund pending-payout error:", error.message);
       res.status(500).json({ message: "Erreur serveur" });
     }
   });

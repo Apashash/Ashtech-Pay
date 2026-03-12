@@ -98,6 +98,7 @@ const menuItems: MenuItem[] = [
       { icon: Send, label: "Envois", href: "/admin/transactions/transfers" },
     ]
   },
+  { icon: Clock, label: "Paiements en attente", href: "/admin/pending-payouts" },
   { icon: Phone, label: "Numéros de retrait", href: "/admin/withdrawal-numbers" },
   { 
     icon: DollarSign, 
@@ -163,6 +164,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     pendingDeposits: number;
     pendingWithdrawals: number;
     pendingTransfers: number;
+    pendingManualPayouts: number;
     kycPending: number;
     ticketUnread: number;
     conversionCount: number;
@@ -186,6 +188,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     "/admin/transactions/deposits": layoutStats?.pendingDeposits || 0,
     "/admin/transactions/withdrawals": layoutStats?.pendingWithdrawals || 0,
     "/admin/transactions/transfers": layoutStats?.pendingTransfers || 0,
+    "/admin/pending-payouts": layoutStats?.pendingManualPayouts || 0,
     "/admin/kyc": layoutStats?.kycPending || 0,
     "/admin/support": layoutStats?.ticketUnread || 0,
     "/admin/conversions": hasNewConversion ? (layoutStats?.conversionCount || 0) : 0,

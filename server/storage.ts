@@ -84,6 +84,7 @@ export interface IStorage {
   updateTransactionStatus(id: string, status: string): Promise<Transaction | undefined>;
   updateTransactionExternalReference(id: string, externalReference: string): Promise<Transaction | undefined>;
   getPendingDepositTransactions(): Promise<Transaction[]>;
+  getPendingManualPayouts(): Promise<Transaction[]>;
   
   // Payment link operations
   getPaymentLinksByUserId(userId: string): Promise<PaymentLink[]>;
@@ -113,7 +114,7 @@ export interface IStorage {
   getAllTransactions(): Promise<Transaction[]>;
   getAdminTransactionsPaginated(params: { limit: number; offset: number; type?: string; status?: string; search?: string }): Promise<{ data: Transaction[]; total: number }>;
   getAdminUsersPaginated(params: { limit: number; offset: number; search?: string }): Promise<{ data: User[]; total: number }>;
-  getAdminLayoutStats(): Promise<{ pendingDeposits: number; pendingWithdrawals: number; pendingTransfers: number; kycPending: number; ticketUnread: number; conversionCount: number; withdrawalNumberCount: number; notifications: any[] }>;
+  getAdminLayoutStats(): Promise<{ pendingDeposits: number; pendingWithdrawals: number; pendingTransfers: number; pendingManualPayouts: number; kycPending: number; ticketUnread: number; conversionCount: number; withdrawalNumberCount: number; notifications: any[] }>;
   
   // Admin: Country operations
   getAllCountries(): Promise<Country[]>;
@@ -632,6 +633,15 @@ export class DatabaseStorage implements IStorage {
     ).orderBy(desc(transactions.createdAt));
   }
 
+  async getPendingManualPayouts(): Promise<Transaction[]> {
+    return await db.select().from(transactions).where(
+      and(
+        eq(transactions.status, "pending_manual"),
+        inArray(transactions.type, ["withdrawal", "transfer_out"])
+      )
+    ).orderBy(desc(transactions.createdAt));
+  }
+
   // Admin: Transaction management
   async getAllTransactions(): Promise<Transaction[]> {
     return await db.select().from(transactions).orderBy(desc(transactions.createdAt));
@@ -1064,11 +1074,12 @@ export class DatabaseStorage implements IStorage {
     return { data, total };
   }
 
-  async getAdminLayoutStats(): Promise<{ pendingDeposits: number; pendingWithdrawals: number; pendingTransfers: number; kycPending: number; ticketUnread: number; conversionCount: number; withdrawalNumberCount: number; notifications: any[]; latestConversionAt: string | null }> {
+  async getAdminLayoutStats(): Promise<{ pendingDeposits: number; pendingWithdrawals: number; pendingTransfers: number; pendingManualPayouts: number; kycPending: number; ticketUnread: number; conversionCount: number; withdrawalNumberCount: number; notifications: any[]; latestConversionAt: string | null }> {
     const [
       pendingDepositResult,
       pendingWithdrawalResult,
       pendingTransferResult,
+      pendingManualResult,
       kycPendingResult,
       ticketUnreadResult,
       conversionResult,
@@ -1078,6 +1089,7 @@ export class DatabaseStorage implements IStorage {
       db.select({ c: count() }).from(transactions).where(and(eq(transactions.status, "pending"), inArray(transactions.type, ["deposit", "payment_link"]))),
       db.select({ c: count() }).from(transactions).where(and(eq(transactions.status, "pending"), eq(transactions.type, "withdrawal"))),
       db.select({ c: count() }).from(transactions).where(and(eq(transactions.status, "pending"), inArray(transactions.type, ["transfer_out", "transfer_in"]))),
+      db.select({ c: count() }).from(transactions).where(and(eq(transactions.status, "pending_manual"), inArray(transactions.type, ["withdrawal", "transfer_out"]))),
       this.countKycByStatus("pending"),
       this.countUnreadUserMessagesForAdmin(),
       this.countPendingConversions(),
@@ -1113,6 +1125,7 @@ export class DatabaseStorage implements IStorage {
       pendingDeposits: pendingDepositResult[0].c,
       pendingWithdrawals: pendingWithdrawalResult[0].c,
       pendingTransfers: pendingTransferResult[0].c,
+      pendingManualPayouts: pendingManualResult[0].c,
       kycPending: kycPendingResult,
       ticketUnread: ticketUnreadResult,
       conversionCount: conversionResult,

@@ -48,6 +48,7 @@ import AdminFeesTransfers from "@/pages/admin/fees/transfers";
 import AdminGlobalMessages from "@/pages/admin/global-messages";
 import AdminKYC from "@/pages/admin/kyc";
 import AdminConversions from "@/pages/admin/conversions";
+import AdminPendingPayouts from "@/pages/admin/pending-payouts";
 import AdminAfribaPay from "@/pages/admin/afribapay";
 import AdminPixPay from "@/pages/admin/pixpay";
 import TermsPage from "@/pages/terms";
@@ -106,6 +107,7 @@ function Router() {
       <Route path="/admin/global-messages" component={AdminGlobalMessages} />
       <Route path="/admin/kyc" component={AdminKYC} />
       <Route path="/admin/conversions" component={AdminConversions} />
+      <Route path="/admin/pending-payouts" component={AdminPendingPayouts} />
       <Route path="/admin/afribapay" component={AdminAfribaPay} />
       <Route path="/admin/pixpay" component={AdminPixPay} />
       <Route path="/terms" component={TermsPage} />
