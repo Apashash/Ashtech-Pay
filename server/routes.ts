@@ -1291,7 +1291,7 @@ export async function registerRoutes(
           const pixpayResult = await initiatePixPayPayout({
             serviceId: String(cashInServiceId),
             amount: creditedAmount,
-            phone: formatInternationalPhone(recipientPhone, transferCountryCode),
+            phone: recipientPhone.replace(/\s/g, ""),
             countryCode,
             orderId: reference,
             ipnUrl: pixpayIpnUrl,
@@ -1331,11 +1331,13 @@ export async function registerRoutes(
             countryCode:   transferCountryCode.toUpperCase(),
           });
         } else {
-          const isInsufficientBalance = (payoutResult.message || "").toLowerCase().includes("insuffi") ||
-                                         (payoutResult.message || "").toLowerCase().includes("solde") ||
-                                         (payoutResult.message || "").toLowerCase().includes("balance");
-          if (isInsufficientBalance) {
-            console.log(`[Transfer] Provider wallet insufficient for ${reference} — awaiting admin`);
+          const isSwychrInsufficient = transferProvider === "swychr" && (
+            (payoutResult.message || "").toLowerCase().includes("insuffi") ||
+            (payoutResult.message || "").toLowerCase().includes("solde") ||
+            (payoutResult.message || "").toLowerCase().includes("balance")
+          );
+          if (isSwychrInsufficient) {
+            console.log(`[Transfer] Swychr wallet insufficient for ${reference} — awaiting admin`);
             await storage.createUserNotification({
               userId: senderId,
               type: "transfer_pending",
@@ -1345,7 +1347,7 @@ export async function registerRoutes(
               isRead: false,
             });
           } else {
-            console.error(`[Transfer] Payout failed for ${reference}: ${payoutResult.message}`);
+            console.error(`[Transfer] Payout failed for ${reference} (${transferProvider}): ${payoutResult.message}`);
             await storage.updateTransactionStatus(transaction.id, "failed");
             if (isPrimaryTransfer) {
               await storage.updateUserBalance(senderId, totalAmount);
@@ -2131,10 +2133,12 @@ export async function registerRoutes(
             countryCode,
           });
         } else {
-          const isInsufficientBalance = (payoutResult.message || "").toLowerCase().includes("insuffi") ||
-                                         (payoutResult.message || "").toLowerCase().includes("solde") ||
-                                         (payoutResult.message || "").toLowerCase().includes("balance");
-          if (isInsufficientBalance) {
+          const isSwychrInsufficient = paymentProvider === "swychr" && (
+            (payoutResult.message || "").toLowerCase().includes("insuffi") ||
+            (payoutResult.message || "").toLowerCase().includes("solde") ||
+            (payoutResult.message || "").toLowerCase().includes("balance")
+          );
+          if (isSwychrInsufficient) {
             console.log(`[Withdrawal] Swychr wallet insufficient for ${withdrawalRef} — awaiting admin`);
             await storage.createUserNotification({
               userId,
@@ -2145,7 +2149,7 @@ export async function registerRoutes(
               isRead: false,
             });
           } else {
-            console.error(`[Withdrawal] Payout failed for ${withdrawalRef}: ${payoutResult.message}`);
+            console.error(`[Withdrawal] Payout failed for ${withdrawalRef} (${paymentProvider}): ${payoutResult.message}`);
             await storage.updateTransactionStatus(transaction.id, "failed");
             await storage.updateUserBalance(userId, totalAmount);
             return res.status(400).json({
@@ -2155,7 +2159,6 @@ export async function registerRoutes(
         }
       } catch (payoutErr: any) {
         console.error(`[Withdrawal] Payout error for ${withdrawalRef}:`, payoutErr.message);
-        // Keep pending for admin retry on network errors
       }
 
       res.json({ 
