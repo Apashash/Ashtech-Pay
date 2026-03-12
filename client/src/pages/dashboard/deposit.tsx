@@ -738,7 +738,7 @@ export default function DepositPage() {
                             type="button"
                             variant="outline"
                             className="flex-1" 
-                            size="lg"
+                            size="md"
                             onClick={goToPreviousStep}
                           >
                             <ArrowLeft className="w-4 h-4 mr-2" />
@@ -747,7 +747,7 @@ export default function DepositPage() {
                           <Button 
                             type="button"
                             className="flex-1" 
-                            size="lg"
+                            size="md"
                             onClick={goToNextStep}
                             disabled={!canProceedToStep3}
                           >
