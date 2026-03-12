@@ -4084,12 +4084,8 @@ export async function registerRoutes(
         "Congo Kinshasa": "CDF",
         "Congo": "XAF",
         "Benin": "XOF",
-        "Bénin": "XOF",
         "Ivory Coast": "XOF",
-        "Côte d'Ivoire": "XOF",
-        "Burkina Faso": "XOF",
-        "Burkina": "XOF",
-        "Sénégal": "XOF"
+        "Burkina": "XOF"
       };
 
       const usersResult = await storage.getAllUsers();
