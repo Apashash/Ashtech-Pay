@@ -455,8 +455,8 @@ export const depositSchema = z.object({
 export const withdrawSchema = z.object({
   amount: z.string().refine((val) => {
     const n = parseFloat(val);
-    return !isNaN(n) && n >= 1000;
-  }, "Le montant minimum est de 1 000 XAF"),
+    return !isNaN(n) && n > 0;
+  }, "Le montant doit être supérieur à 0"),
   paymentMethod: z.enum(["mobile_money", "bank_transfer"]),
   accountDetails: z.string().min(1, "Les détails du compte sont requis"),
   countryId: z.string().min(1, "Le pays est requis"),
