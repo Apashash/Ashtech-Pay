@@ -29,8 +29,8 @@ import fs from "fs";
 import { uploadToSupabase, getSignedImageUrl, downloadFromSupabase } from "./supabase";
 import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, fetchPaymentLinkDetails, ASHTECH_MARGIN } from "./swychr";
 import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, confirmAfribaPayOtp } from "./afribapay";
-import { initiatePixPayin, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES } from "./pixpay";
-import { addPendingPayment } from "./paymentPoller";
+import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES } from "./pixpay";
+import { addPendingPayment, removePendingPayment } from "./paymentPoller";
 import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, cleanupEmptyWallets } from "./walletHelper";
 import { createSwychrPayout, formatInternationalPhone, detectMethodFromPhone, fiatToPusd, pusdToFiatRate, getConversionRate, convertFiatToPusd, getPayoutToken, COUNTRY_CURRENCY } from "./swychrPayout";
 import { addPendingPayout } from "./payoutPoller";
@@ -1583,30 +1583,61 @@ export async function registerRoutes(
             }
 
           } else if (paymentProvider === "pixpay") {
-            // ─── PixPay Payin ──────────────────────────────────────────────────
+            // ─── PixPay Payin (USSD / OTP / Wave) ────────────────────────────
             const pixpayServiceId = (operatorRecord as any)?.pixpayServiceId;
             if (!pixpayServiceId) {
               await storage.updateTransactionStatus(transaction.id, "failed");
               return res.status(400).json({ message: "Service PixPay non configuré pour cet opérateur. Contactez l'administrateur." });
             }
 
-            const callbackUrl = `${process.env.APP_URL || ""}/api/pixpay/webhook`;
+            const pixpayOpType: string = (operatorRecord as any)?.pixpayOperatorType || "ussd";
+            const ipnUrl = `${process.env.APP_URL || ""}/api/pixpay/webhook`;
             const pixpayFeeRate = (resolvedFeeRecord as any)?.pixpayFee
-              ? parseFloat((resolvedFeeRecord as any).pixpayFee.toString())
-              : 3.0;
+              ? parseFloat((resolvedFeeRecord as any).pixpayFee.toString()) : 3.0;
             const pxFees = computePixPayFees(totalAmount, pixpayFeeRate, ashtechMarginPct);
+            const cleanPhone = data.phoneNumber.replace(/\s/g, "");
 
-            console.log(`[Deposit] PixPay | country=${countryCode} | service_id=${pixpayServiceId} | phone=${data.phoneNumber}`);
+            console.log(`[Deposit] PixPay type=${pixpayOpType} | country=${countryCode} | service_id=${pixpayServiceId}`);
 
-            const pixpayResponse = await initiatePixPayin({
+            const baseParams = {
               serviceId: pixpayServiceId,
               amount: totalAmount,
-              phone: data.phoneNumber.replace(/\s/g, ""),
+              phone: cleanPhone,
               countryCode,
               orderId: depositRef,
-              ipnUrl: callbackUrl,
+              ipnUrl,
               customData: depositRef,
-            });
+            };
+
+            let pixpayResponse;
+
+            if (pixpayOpType === "otp") {
+              // Orange CI — user must provide OTP from #144*82# before calling
+              const omOtp = data.pixpayOtp as string | undefined;
+              if (!omOtp) {
+                // OTP not yet provided: signal frontend to show OTP input
+                await storage.updateTransactionStatus(transaction.id, "failed");
+                return res.status(400).json({
+                  otpRequired: true,
+                  gateway: "pixpay",
+                  message: "Composez #144*82# sur votre téléphone pour obtenir votre code OTP, puis saisissez-le.",
+                });
+              }
+              pixpayResponse = await initiatePixPayOtp({ ...baseParams, omOtp });
+
+            } else if (pixpayOpType === "wave") {
+              // Wave CI / Wave SN — returns Wave payment URL
+              const appBase = process.env.APP_URL || "";
+              pixpayResponse = await initiatePixPayWave({
+                ...baseParams,
+                redirectUrl: `${appBase}/depot/succes?ref=${depositRef}`,
+                redirectErrorUrl: `${appBase}/depot/echec?ref=${depositRef}`,
+              });
+
+            } else {
+              // USSD push (default, most operators)
+              pixpayResponse = await initiatePixPayUssd(baseParams);
+            }
 
             if (pixpayResponse.success) {
               const extRef = pixpayResponse.transactionId || depositRef;
@@ -1620,14 +1651,37 @@ export async function registerRoutes(
                 type: "deposit",
                 amount: pxFees.creditedAmount.toString(),
                 provider: "pixpay",
+                countryCode,
               });
+
+              // Wave → return redirect URL to frontend
+              if (pixpayOpType === "wave" && pixpayResponse.waveUrl) {
+                res.json({
+                  transaction,
+                  gateway: "pixpay",
+                  otpRequired: false,
+                  waveUrl: pixpayResponse.waveUrl,
+                  status: "pending_wave",
+                  message: "Cliquez sur le bouton pour finaliser votre paiement via Wave.",
+                  feeDetails: {
+                    grossAmount: totalAmount,
+                    feeAmount: pxFees.totalFeeAmount,
+                    creditedAmount: pxFees.creditedAmount,
+                    pixpayFee: pxFees.pixpayFeeAmount,
+                    ashtechFee: pxFees.ashtechFeeAmount,
+                  },
+                });
+                return;
+              }
 
               res.json({
                 transaction,
                 gateway: "pixpay",
                 otpRequired: false,
-                status: "pending_ussd",
-                message: "Validez le paiement sur votre téléphone (USSD ou notification mobile).",
+                status: pixpayOpType === "otp" ? "pending_otp_confirmed" : "pending_ussd",
+                message: pixpayOpType === "otp"
+                  ? "Code OTP validé. Votre paiement est en cours de traitement."
+                  : "Validez le paiement USSD sur votre téléphone.",
                 feeDetails: {
                   grossAmount: totalAmount,
                   feeAmount: pxFees.totalFeeAmount,
@@ -3389,39 +3443,72 @@ export async function registerRoutes(
             }
           }
 
-          // ─── PixPay branch ────────────────────────────────────────────────
+          // ─── PixPay branch (USSD / OTP / Wave) ────────────────────────────
           if (paymentProvider === "pixpay") {
             const pixpayServiceId = operatorRecord?.pixpayServiceId;
             if (!pixpayServiceId) {
               await storage.updatePaymentIntentStatus(intent.id, "failed");
-              const failedTx2 = await storage.getTransactionByReference(reference);
-              if (failedTx2) await storage.updateTransactionStatus(failedTx2.id, "failed");
+              const failedTxPx = await storage.getTransactionByReference(reference);
+              if (failedTxPx) await storage.updateTransactionStatus(failedTxPx.id, "failed");
               return res.status(400).json({ message: "Service PixPay non configuré pour cet opérateur." });
             }
+
+            const pxOpType: string = (operatorRecord as any)?.pixpayOperatorType || "ussd";
             const pixpayFeeRate = (fee as any)?.pixpayFee
               ? parseFloat((fee as any).pixpayFee.toString()) : 3.0;
             const pxFees = computePixPayFees(numAmount, pixpayFeeRate, ashtechMarginPct);
-            const callbackUrl2 = `${process.env.APP_URL || ""}/api/pixpay/webhook`;
-            console.log(`[PaymentLink] PixPay | country=${paymentCountryCode} | service_id=${pixpayServiceId}`);
+            const pxIpnUrl = `${process.env.APP_URL || ""}/api/pixpay/webhook`;
+            const cleanPxPhone = phone.replace(/\s/g, "");
 
-            const pixpayResponse = await initiatePixPayin({
+            console.log(`[PaymentLink] PixPay type=${pxOpType} | country=${paymentCountryCode} | service_id=${pixpayServiceId}`);
+
+            const pxBaseParams = {
               serviceId: pixpayServiceId,
               amount: numAmount,
-              phone: phone.replace(/\s/g, ""),
+              phone: cleanPxPhone,
               countryCode: paymentCountryCode,
               orderId: reference,
-              ipnUrl: callbackUrl2,
+              ipnUrl: pxIpnUrl,
               customData: reference,
-            });
-            if (pixpayResponse.success) {
-              const linkTx = await storage.getTransactionByReference(reference);
-              if (linkTx) {
-                const extRef2 = pixpayResponse.transactionId || reference;
-                await storage.updateTransactionExternalReference(linkTx.id, extRef2);
+            };
+
+            let pxResponse;
+
+            if (pxOpType === "otp") {
+              const omOtp = req.body?.pixpayOtp as string | undefined;
+              if (!omOtp) {
+                await storage.updatePaymentIntentStatus(intent.id, "failed");
+                const failedTxOtp = await storage.getTransactionByReference(reference);
+                if (failedTxOtp) await storage.updateTransactionStatus(failedTxOtp.id, "failed");
+                return res.status(400).json({
+                  otpRequired: true,
+                  gateway: "pixpay",
+                  message: "Composez #144*82# sur votre téléphone pour obtenir votre code OTP, puis saisissez-le.",
+                });
+              }
+              pxResponse = await initiatePixPayOtp({ ...pxBaseParams, omOtp });
+
+            } else if (pxOpType === "wave") {
+              const appBase = process.env.APP_URL || "";
+              pxResponse = await initiatePixPayWave({
+                ...pxBaseParams,
+                redirectUrl: paymentLink.redirectUrl || `${appBase}/paiement/succes?ref=${reference}`,
+                redirectErrorUrl: `${appBase}/paiement/echec?ref=${reference}`,
+              });
+
+            } else {
+              pxResponse = await initiatePixPayUssd(pxBaseParams);
+            }
+
+            if (pxResponse.success) {
+              const pxLinkTx = await storage.getTransactionByReference(reference);
+              if (pxLinkTx) {
+                const pxExtRef = pxResponse.transactionId || reference;
+                await storage.updateTransactionExternalReference(pxLinkTx.id, pxExtRef);
                 addPendingPayment({
-                  transactionId: linkTx.id,
+                  transactionId: pxLinkTx.id,
                   reference,
-                  externalReference: extRef2,
+                  externalReference: pxExtRef,
                   attempts: 0,
                   userId: paymentLink.userId,
                   type: "payment_link",
@@ -3429,23 +3516,42 @@ export async function registerRoutes(
                   provider: "pixpay",
                   paymentIntentId: intent.id,
                   payerName: fullName,
+                  countryCode: paymentCountryCode,
                 });
               }
+
+              if (pxOpType === "wave" && pxResponse.waveUrl) {
+                return res.json({
+                  message: "Cliquez sur le bouton pour finaliser votre paiement via Wave.",
+                  reference: intent.reference,
+                  gateway: "pixpay",
+                  waveUrl: pxResponse.waveUrl,
+                  status: "pending_wave",
+                  amount: numAmount,
+                  feeAmount: pxFees.totalFeeAmount,
+                  totalAmount: numAmount,
+                });
+              }
+
               return res.json({
-                message: "Validez le paiement sur votre téléphone.",
+                message: pxOpType === "otp"
+                  ? "Code OTP validé. Paiement en cours de traitement."
+                  : "Validez le paiement USSD sur votre téléphone.",
                 reference: intent.reference,
                 gateway: "pixpay",
                 otpRequired: false,
+                status: pxOpType === "otp" ? "pending_otp_confirmed" : "pending_ussd",
                 redirectUrl: paymentLink.redirectUrl || null,
                 amount: numAmount,
                 feeAmount: pxFees.totalFeeAmount,
                 totalAmount: numAmount,
               });
+
             } else {
               await storage.updatePaymentIntentStatus(intent.id, "failed");
-              const failedTx3 = await storage.getTransactionByReference(reference);
-              if (failedTx3) await storage.updateTransactionStatus(failedTx3.id, "failed");
-              return res.status(400).json({ message: pixpayResponse.message || "Échec PixPay" });
+              const failedTxPx2 = await storage.getTransactionByReference(reference);
+              if (failedTxPx2) await storage.updateTransactionStatus(failedTxPx2.id, "failed");
+              return res.status(400).json({ message: pxResponse.message || "Échec PixPay" });
             }
           }
 
@@ -5835,6 +5941,77 @@ export async function registerRoutes(
     }
   });
 
+  // ─── PixPay IPN Webhook ───────────────────────────────────────────────────────
+  app.post("/api/pixpay/webhook", async (req, res) => {
+    try {
+      const payload = req.body;
+      console.log("[PixPay Webhook] Received:", JSON.stringify(payload));
+
+      const parsed = parsePixPayWebhook(payload);
+      const { transactionId, orderId, status, providerMessage } = parsed;
+
+      const ref = orderId || transactionId;
+      if (!ref) {
+        console.error("[PixPay Webhook] Missing identifier (custom_data / transaction_id)");
+        return res.status(400).json({ message: "Missing identifier" });
+      }
+
+      // Prefer lookup by our order reference stored in custom_data
+      const transaction = await storage.getTransactionByReference(ref);
+      if (!transaction) {
+        console.error("[PixPay Webhook] Transaction not found:", ref);
+        return res.status(404).json({ message: "Transaction not found" });
+      }
+
+      if (transaction.status !== "pending") {
+        return res.json({ success: true });
+      }
+
+      const isPaymentLink = transaction.type === "payment_link";
+      const txCurrency = transaction.currency || "XAF";
+
+      if (status === "completed") {
+        await storage.updateTransactionStatus(transaction.id, "completed");
+        await creditUserWallet(transaction.userId, parseFloat(transaction.amount), txCurrency);
+        removePendingPayment(ref);
+        await storage.createUserNotification({
+          userId: transaction.userId,
+          type: isPaymentLink ? "payment_link_received" : "deposit_confirmed",
+          title: isPaymentLink ? "Paiement reçu" : "Dépôt confirmé",
+          message: isPaymentLink
+            ? `Vous avez reçu un paiement de ${transaction.amount} ${txCurrency} de ${transaction.payerName || "un client"}.`
+            : `Votre dépôt de ${transaction.amount} ${txCurrency} a été crédité sur votre compte.`,
+          transactionId: transaction.id,
+        });
+        if (transaction.paymentIntentId) {
+          await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "completed");
+        }
+        console.log(`[PixPay Webhook] ✓ SUCCESS: ${transaction.id} → ${transaction.amount} ${txCurrency}`);
+      } else if (status === "failed") {
+        await storage.updateTransactionStatus(transaction.id, "failed");
+        removePendingPayment(ref);
+        if (transaction.paymentIntentId) {
+          await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "failed");
+        }
+        await storage.createUserNotification({
+          userId: transaction.userId,
+          type: isPaymentLink ? "payment_link_failed" : "deposit_failed",
+          title: isPaymentLink ? "Paiement annulé" : "Dépôt annulé",
+          message: isPaymentLink
+            ? `Le paiement a été annulé ou a échoué.${providerMessage ? ` (${providerMessage})` : ""}`
+            : `Votre dépôt a été annulé.${providerMessage ? ` (${providerMessage})` : ""}`,
+          transactionId: transaction.id,
+        });
+        console.log(`[PixPay Webhook] ✗ FAILED: ${transaction.id} — ${providerMessage}`);
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[PixPay Webhook] Error:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   // ─── AfribaPay OTP Confirm Routes ────────────────────────────────────────────
 
   // POST /api/deposits/confirm-otp — validate OTP for an AfribaPay deposit
@@ -5975,19 +6152,26 @@ export async function registerRoutes(
     }
   });
 
-  // PATCH /api/admin/operators/:id/provider — toggle provider swychr/afribapay
+  // PATCH /api/admin/operators/:id/provider — set provider: swychr | afribapay | pixpay
   app.patch("/api/admin/operators/:id/provider", requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
-      const { paymentProvider, afribapayOperatorCode } = req.body;
+      const { paymentProvider, afribapayOperatorCode, pixpayServiceId, pixpayOperatorType } = req.body;
 
-      if (!["swychr", "afribapay"].includes(paymentProvider)) {
-        return res.status(400).json({ message: "Fournisseur invalide. Choisir swychr ou afribapay." });
+      if (!["swychr", "afribapay", "pixpay"].includes(paymentProvider)) {
+        return res.status(400).json({ message: "Fournisseur invalide. Choisir swychr, afribapay ou pixpay." });
       }
 
-      const updated = await storage.updateOperator(id, { paymentProvider, afribapayOperatorCode: afribapayOperatorCode || null });
+      const updateData: any = {
+        paymentProvider,
+        afribapayOperatorCode: afribapayOperatorCode || null,
+        pixpayServiceId: pixpayServiceId || null,
+        pixpayOperatorType: pixpayOperatorType || "ussd",
+      };
+
+      const updated = await storage.updateOperator(id, updateData);
       if (!updated) return res.status(404).json({ message: "Opérateur non trouvé" });
-      console.log(`[Admin] ✓ Operator ${updated.name} (${id}) → provider=${paymentProvider} | afribapayCode=${afribapayOperatorCode || "null"}`);
+      console.log(`[Admin] ✓ Operator ${updated.name} (${id}) → provider=${paymentProvider} | pixpayServiceId=${pixpayServiceId || "null"} | type=${pixpayOperatorType || "ussd"}`);
       res.json({ success: true, operator: updated });
     } catch (err: any) {
       console.error("[Admin Provider] Error:", err);
@@ -6019,6 +6203,49 @@ export async function registerRoutes(
       console.error("[Admin AfribaPay Fee] Error:", err);
       res.status(500).json({ message: err.message || "Erreur serveur" });
     }
+  });
+
+  // PATCH /api/admin/fees/:id/pixpay — update PixPay fee rate for a fee entry
+  app.patch("/api/admin/fees/:id/pixpay", requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { pixpayFee, ashtechMargin, isActive, minFee } = req.body;
+      const updates: any = {};
+      if (pixpayFee !== undefined) {
+        const rate = parseFloat(pixpayFee);
+        const margin = parseFloat(ashtechMargin || "0");
+        updates.pixpayFee = String(rate);
+        updates.ashtechMargin = String(margin);
+        updates.feeValue = String((rate + margin).toFixed(4));
+      } else if (ashtechMargin !== undefined) {
+        updates.ashtechMargin = String(ashtechMargin);
+      }
+      if (isActive !== undefined) updates.isActive = Boolean(isActive);
+      if (minFee !== undefined) updates.minFee = minFee ? String(minFee) : null;
+      const updated = await storage.updateFee(id, updates);
+      if (!updated) return res.status(404).json({ message: "Frais non trouvé" });
+      res.json({ success: true, fee: updated });
+    } catch (err: any) {
+      console.error("[Admin PixPay Fee] Error:", err);
+      res.status(500).json({ message: err.message || "Erreur serveur" });
+    }
+  });
+
+  // GET /api/admin/pixpay/operators — list operators that use PixPay
+  app.get("/api/admin/pixpay/operators", requireAdmin, async (req, res) => {
+    try {
+      const allOperators = await storage.getOperators();
+      const pixpayOperators = allOperators.filter((op: any) => op.paymentProvider === "pixpay");
+      res.json(pixpayOperators);
+    } catch (err: any) {
+      console.error("[Admin PixPay Operators] Error:", err);
+      res.status(500).json({ message: err.message || "Erreur serveur" });
+    }
+  });
+
+  // GET /api/admin/pixpay/supported-countries — list all PixPay supported countries
+  app.get("/api/admin/pixpay/supported-countries", requireAdmin, async (_req, res) => {
+    res.json(PIXPAY_SUPPORTED_COUNTRIES);
   });
 
   return httpServer;

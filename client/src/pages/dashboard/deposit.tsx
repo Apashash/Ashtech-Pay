@@ -10,7 +10,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User, SupportedCurrency } from "@shared/schema";
-import { CreditCard, Loader2, Globe, AlertCircle, Phone, CheckCircle, XCircle, ArrowLeft, ArrowRight, Smartphone, ExternalLink } from "lucide-react";
+import { CreditCard, Loader2, Globe, AlertCircle, Phone, CheckCircle, XCircle, ArrowLeft, ArrowRight, Smartphone, ExternalLink, Hash } from "lucide-react";
 import { z } from "zod";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { formatCurrency } from "@/lib/currency";
@@ -27,7 +27,9 @@ interface OperatorConfig {
   feeFixed?: number;
   fixedFee: number;
   afribapayFee?: number;
+  pixpayFee?: number;
   ashtechMargin?: number;
+  pixpayOperatorType?: string; // 'ussd' | 'otp' | 'wave'
   minFee: number | null;
   maxFee: number | null;
 }
@@ -68,6 +70,7 @@ export default function DepositPage() {
   const [otpRequired, setOtpRequired] = useState(false);
   const [otpCode, setOtpCode] = useState("");
   const [waveUrl, setWaveUrl] = useState<string | null>(null);
+  const [pixpayOtpCode, setPixpayOtpCode] = useState("");
   
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   
@@ -106,7 +109,9 @@ export default function DepositPage() {
       return null;
     }
 
-    const isAfribaPay = (selectedOperator.paymentProvider || "swychr") === "afribapay";
+    const provider = selectedOperator.paymentProvider || "swychr";
+    const isAfribaPay = provider === "afribapay";
+    const isPixPay = provider === "pixpay";
 
     let feePercentage = 0;
     let fee = 0;
@@ -115,6 +120,11 @@ export default function DepositPage() {
       const afribapayFee = selectedOperator.afribapayFee || 3;
       const ashtechMargin = selectedOperator.ashtechMargin || 2;
       feePercentage = afribapayFee + ashtechMargin;
+      fee = (amount * feePercentage) / 100;
+    } else if (isPixPay) {
+      const pixpayFee = selectedOperator.pixpayFee || 3;
+      const ashtechMargin = selectedOperator.ashtechMargin || 2;
+      feePercentage = pixpayFee + ashtechMargin;
       fee = (amount * feePercentage) / 100;
     } else {
       feePercentage = selectedOperator.feePercentage || 0;
@@ -141,6 +151,7 @@ export default function DepositPage() {
       feePercentage,
       fixedFee: selectedOperator.fixedFee || 0,
       isAfribaPay,
+      isPixPay,
     };
   }, [watchedAmount, selectedOperator]);
 
@@ -190,16 +201,24 @@ export default function DepositPage() {
     }, 5000);
   };
 
+  const isPixPayOtp = selectedOperator?.paymentProvider === "pixpay" &&
+    selectedOperator?.pixpayOperatorType === "otp";
+
   const depositMutation = useMutation({
     mutationFn: async (data: DepositFormData) => {
-      const res = await apiRequest("POST", "/api/deposits", {
+      const payload: any = {
         amount: data.amount,
         paymentMethod: "mobile_money",
         operatorId: data.operatorId,
         countryId: data.countryId,
         phoneNumber: data.phoneNumber,
         description: data.description,
-      });
+      };
+      // For PixPay OTP operators, include the OTP code in the initial call
+      if (isPixPayOtp && pixpayOtpCode) {
+        payload.pixpayOtp = pixpayOtpCode;
+      }
+      const res = await apiRequest("POST", "/api/deposits", payload);
       return res.json();
     },
     onSuccess: (data) => {
@@ -726,6 +745,30 @@ export default function DepositPage() {
                           )}
                         />
 
+                        {/* PixPay OTP — Orange CI */}
+                        {isPixPayOtp && (
+                          <div className="rounded-lg border-2 border-orange-400 bg-orange-50 dark:bg-orange-950/30 p-4 space-y-3">
+                            <div className="flex items-center gap-2 text-orange-700 dark:text-orange-300 font-semibold text-sm">
+                              <Hash className="h-4 w-4 shrink-0" />
+                              Code OTP requis — Orange CI
+                            </div>
+                            <p className="text-xs text-orange-600 dark:text-orange-400">
+                              Composez <code className="font-mono bg-orange-200 dark:bg-orange-900 px-1 rounded font-bold">#144*82#</code> sur votre téléphone pour obtenir votre code OTP, puis saisissez-le ci-dessous.
+                            </p>
+                            <Input
+                              type="text"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              maxLength={8}
+                              placeholder="Votre code OTP"
+                              value={pixpayOtpCode}
+                              onChange={e => setPixpayOtpCode(e.target.value.replace(/\D/g, ""))}
+                              className="text-center text-xl font-mono tracking-widest h-12 border-orange-300"
+                              data-testid="input-pixpay-otp"
+                            />
+                          </div>
+                        )}
+
                         <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
                           <div className="flex items-center justify-between text-sm">
                             <span className="text-muted-foreground">Pays</span>
@@ -777,7 +820,7 @@ export default function DepositPage() {
                             type="submit" 
                             className="flex-1" 
                             size="lg" 
-                            disabled={depositMutation.isPending} 
+                            disabled={depositMutation.isPending || (isPixPayOtp && pixpayOtpCode.length < 4)} 
                             data-testid="button-deposit-confirm"
                           >
                             {depositMutation.isPending ? (

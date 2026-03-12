@@ -259,6 +259,7 @@ export const operators = pgTable("operators", {
   paymentProvider: text("payment_provider").default("swychr").notNull(), // 'swychr' | 'afribapay' | 'pixpay'
   afribapayOperatorCode: text("afribapay_operator_code"), // operator code used in AfribaPay API (e.g. "mtn", "orange")
   pixpayServiceId: text("pixpay_service_id"), // numeric service_id used in PixPay API
+  pixpayOperatorType: text("pixpay_operator_type").default("ussd"), // 'ussd' | 'otp' | 'wave'
   isActive: boolean("is_active").default(true),
   isInMaintenance: boolean("is_in_maintenance").default(false),
   dailyLimit: decimal("daily_limit", { precision: 15, scale: 2 }).default("1000000").notNull(),

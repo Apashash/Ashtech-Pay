@@ -20,6 +20,7 @@ interface PendingPayment {
   provider?: string;
   paymentIntentId?: string | null;
   payerName?: string | null;
+  countryCode?: string; // used for PixPay API key selection
   startedAt: number;
 }
 
@@ -42,8 +43,10 @@ async function checkPaymentStatus(payment: PendingPayment): Promise<"pending" | 
       console.log(`[PaymentPoller] AfribaPay status for ${payment.reference}: ${result.status}`);
       return result.status;
     } else if (payment.provider === "pixpay") {
-      // PixPay relies on IPN webhooks — polling just returns pending until IPN fires
-      const result = await checkPixPayStatus(payment.externalReference || payment.reference);
+      const result = await checkPixPayStatus(
+        payment.externalReference || payment.reference,
+        payment.countryCode || "CM"
+      );
       console.log(`[PaymentPoller] PixPay status for ${payment.reference}: ${result.status}`);
       return result.status;
     } else {

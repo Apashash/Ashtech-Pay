@@ -48,11 +48,14 @@ export default function AdminFeesDeposits() {
 
   // Form fields — fees
   const [afribapayFee, setAfribapayFee] = useState("");
+  const [pixpayFee, setPixpayFee] = useState("");
   const [ashtechMargin, setAshtechMargin] = useState("");
   const [isActive, setIsActive] = useState(true);
   // Form fields — provider
   const [localProvider, setLocalProvider] = useState("swychr");
   const [localAfribapayCode, setLocalAfribapayCode] = useState("");
+  const [localPixpayServiceId, setLocalPixpayServiceId] = useState("");
+  const [localPixpayOpType, setLocalPixpayOpType] = useState("ussd");
 
   const { data: fees, isLoading: feesLoading } = useQuery<Fee[]>({ queryKey: ["/api/admin/fees"] });
   const { data: countries } = useQuery<Country[]>({ queryKey: ["/api/admin/countries"] });
@@ -96,19 +99,25 @@ export default function AdminFeesDeposits() {
     const needsCreate = !fee || (fee as any).operatorId !== op.id;
     setEditing({ fee: fee ?? null, operator: op, country, needsCreate });
     setAfribapayFee((fee as any)?.afribapayFee ?? "3.00");
+    setPixpayFee((fee as any)?.pixpayFee ?? "3.00");
     setAshtechMargin((fee as any)?.ashtechMargin ?? "2.00");
     setIsActive(fee?.isActive ?? true);
     setLocalProvider((op as any).paymentProvider || "swychr");
     setLocalAfribapayCode((op as any).afribapayOperatorCode || guessAfribaCode(op.name));
+    setLocalPixpayServiceId((op as any).pixpayServiceId || "");
+    setLocalPixpayOpType((op as any).pixpayOperatorType || "ussd");
   };
 
   const closeEdit = () => {
     setEditing(null);
     setAfribapayFee("");
+    setPixpayFee("");
     setAshtechMargin("");
     setIsActive(true);
     setLocalProvider("swychr");
     setLocalAfribapayCode("");
+    setLocalPixpayServiceId("");
+    setLocalPixpayOpType("ussd");
   };
 
   // Create a new operator-specific fee record
@@ -125,15 +134,36 @@ export default function AdminFeesDeposits() {
 
   // Provider: update operator's payment provider
   const providerMutation = useMutation({
-    mutationFn: async ({ opId, provider, code }: { opId: string; provider: string; code: string }) =>
+    mutationFn: async ({ opId, provider, code, pixpayServiceId, pixpayOperatorType }: {
+      opId: string; provider: string; code: string;
+      pixpayServiceId?: string; pixpayOperatorType?: string;
+    }) =>
       apiRequest("PATCH", `/api/admin/operators/${opId}/provider`, {
         paymentProvider: provider,
         afribapayOperatorCode: code || null,
+        pixpayServiceId: pixpayServiceId || null,
+        pixpayOperatorType: pixpayOperatorType || "ussd",
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/operators"] });
     },
     onError: (err: any) => toast({ title: "Erreur fournisseur", description: err?.message || "Erreur serveur", variant: "destructive" }),
+  });
+
+  // PixPay fee mutation
+  const pixpayMutation = useMutation({
+    mutationFn: async ({ id, pxFee, margin, active }: { id: string; pxFee: string; margin: string; active: boolean }) =>
+      apiRequest("PATCH", `/api/admin/fees/${id}/pixpay`, {
+        pixpayFee: pxFee,
+        ashtechMargin: margin,
+        isActive: active,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/fees"] });
+      toast({ title: "Frais PixPay mis à jour" });
+      closeEdit();
+    },
+    onError: (err: any) => toast({ title: "Erreur lors de la mise à jour", description: err?.message || "Erreur serveur", variant: "destructive" }),
   });
 
   // Swychr: update ashtechMargin only (swychrFee is fixed)
@@ -174,15 +204,29 @@ export default function AdminFeesDeposits() {
   const handleSave = async () => {
     if (!editing) return;
     const originalProvider = (editing.operator as any).paymentProvider || "swychr";
-    if (localProvider !== originalProvider || localAfribapayCode !== ((editing.operator as any).afribapayOperatorCode || "")) {
-      await providerMutation.mutateAsync({ opId: editing.operator.id, provider: localProvider, code: localAfribapayCode });
+    const providerChanged = localProvider !== originalProvider ||
+      localAfribapayCode !== ((editing.operator as any).afribapayOperatorCode || "") ||
+      localPixpayServiceId !== ((editing.operator as any).pixpayServiceId || "") ||
+      localPixpayOpType !== ((editing.operator as any).pixpayOperatorType || "ussd");
+    if (providerChanged) {
+      await providerMutation.mutateAsync({
+        opId: editing.operator.id,
+        provider: localProvider,
+        code: localAfribapayCode,
+        pixpayServiceId: localPixpayServiceId,
+        pixpayOperatorType: localPixpayOpType,
+      });
     }
     if (editing.needsCreate) {
-      // Create a new operator-specific fee instead of modifying the shared country-level one
       const swychrFeeVal = parseFloat((editing.fee as any)?.swychrFee || "0");
       const afribaFeeVal = parseFloat(afribapayFee || "0");
+      const pixpayFeeVal = parseFloat(pixpayFee || "0");
       const marginVal = parseFloat(ashtechMargin || "0");
-      const totalFee = localProvider === "afribapay" ? afribaFeeVal + marginVal : swychrFeeVal + marginVal;
+      const totalFee = localProvider === "afribapay"
+        ? afribaFeeVal + marginVal
+        : localProvider === "pixpay"
+          ? pixpayFeeVal + marginVal
+          : swychrFeeVal + marginVal;
       createFeeMutation.mutate({
         name: `Dépôt - ${editing.operator.name}`,
         transactionType: "deposit",
@@ -191,10 +235,13 @@ export default function AdminFeesDeposits() {
         countryId: editing.country.id,
         swychrFee: String(swychrFeeVal),
         afribapayFee: String(afribaFeeVal),
+        pixpayFee: String(pixpayFeeVal),
         ashtechMargin: String(marginVal),
         feeValue: String(totalFee),
         isActive,
       });
+    } else if (localProvider === "pixpay") {
+      pixpayMutation.mutate({ id: editing.fee!.id, pxFee: pixpayFee, margin: ashtechMargin, active: isActive });
     } else if (localProvider === "afribapay") {
       afribaMutation.mutate({ id: editing.fee!.id, afribaFee: afribapayFee, margin: ashtechMargin, active: isActive });
     } else {
@@ -202,13 +249,15 @@ export default function AdminFeesDeposits() {
     }
   };
 
-  const isPending = swychrMutation.isPending || afribaMutation.isPending || providerMutation.isPending || createFeeMutation.isPending;
+  const isPending = swychrMutation.isPending || afribaMutation.isPending || pixpayMutation.isPending || providerMutation.isPending || createFeeMutation.isPending;
 
   const computeTotal = (): string => {
     if (!editing) return "0";
     const provFee = localProvider === "afribapay"
       ? parseFloat(afribapayFee || "0")
-      : parseFloat((editing.fee as any)?.swychrFee || "0");
+      : localProvider === "pixpay"
+        ? parseFloat(pixpayFee || "0")
+        : parseFloat((editing.fee as any)?.swychrFee || "0");
     const margin = parseFloat(ashtechMargin || "0");
     return (provFee + margin).toFixed(2);
   };
@@ -251,7 +300,8 @@ export default function AdminFeesDeposits() {
             {grouped.map(({ country, ops }) => {
               const isOpen = openCountries.has(country.id);
               const afribOps = ops.filter(op => (op as any).paymentProvider === "afribapay");
-              const swychrOps = ops.filter(op => (op as any).paymentProvider !== "afribapay");
+              const pixpayOps = ops.filter(op => (op as any).paymentProvider === "pixpay");
+              const swychrOps = ops.filter(op => !["afribapay", "pixpay"].includes((op as any).paymentProvider));
               return (
                 <Collapsible key={country.id} open={isOpen} onOpenChange={() => toggleCountry(country.id)}>
                   <CollapsibleTrigger asChild>
@@ -267,6 +317,11 @@ export default function AdminFeesDeposits() {
                           <Badge className="text-xs bg-yellow-500/20 text-yellow-600 border-yellow-500/30">
                             <Zap className="w-3 h-3 mr-1" />
                             {afribOps.length} AfribaPay
+                          </Badge>
+                        )}
+                        {pixpayOps.length > 0 && (
+                          <Badge className="text-xs bg-indigo-500/20 text-indigo-600 border-indigo-500/30">
+                            🔷 {pixpayOps.length} PixPay
                           </Badge>
                         )}
                         {swychrOps.length > 0 && (
@@ -285,9 +340,12 @@ export default function AdminFeesDeposits() {
                         const isShared = fee && (fee as any).operatorId !== op.id;
                         const provider = (op as any).paymentProvider || "swychr";
                         const isAfribaPay = provider === "afribapay";
+                        const isPixPay = provider === "pixpay";
                         const provFee = isAfribaPay
                           ? parseFloat((fee as any)?.afribapayFee || "0")
-                          : parseFloat((fee as any)?.swychrFee || "0");
+                          : isPixPay
+                            ? parseFloat((fee as any)?.pixpayFee || "0")
+                            : parseFloat((fee as any)?.swychrFee || "0");
                         const margin = parseFloat((fee as any)?.ashtechMargin || "0");
                         const total = provFee + margin;
                         return (
@@ -304,6 +362,8 @@ export default function AdminFeesDeposits() {
                                   <Badge className="bg-yellow-500/20 text-yellow-600 border-yellow-500/30 text-xs shrink-0">
                                     <Zap className="w-3 h-3 mr-1" />AfribaPay
                                   </Badge>
+                                ) : isPixPay ? (
+                                  <Badge className="bg-indigo-500/20 text-indigo-600 border-indigo-500/30 text-xs shrink-0">🔷 PixPay</Badge>
                                 ) : (
                                   <Badge className="bg-blue-500/20 text-blue-600 border-blue-500/30 text-xs shrink-0">Swychr</Badge>
                                 )}
@@ -365,11 +425,12 @@ export default function AdminFeesDeposits() {
                     <SelectContent>
                       <SelectItem value="swychr">Swychr</SelectItem>
                       <SelectItem value="afribapay">⚡ AfribaPay</SelectItem>
+                      <SelectItem value="pixpay">🔷 PixPay</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
-                {/* AfribaPay operator code (only when AfribaPay selected) */}
+                {/* AfribaPay operator code */}
                 {localProvider === "afribapay" && (
                   <div className="space-y-2">
                     <Label>Code opérateur AfribaPay</Label>
@@ -381,6 +442,35 @@ export default function AdminFeesDeposits() {
                     />
                     <p className="text-xs text-muted-foreground">Code utilisé pour identifier l'opérateur chez AfribaPay</p>
                   </div>
+                )}
+
+                {/* PixPay config */}
+                {localProvider === "pixpay" && (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Service ID PixPay</Label>
+                      <Input
+                        placeholder="ex: orange-ci, mtn-cm..."
+                        value={localPixpayServiceId}
+                        onChange={(e) => setLocalPixpayServiceId(e.target.value)}
+                        data-testid="input-pixpay-service-id"
+                      />
+                      <p className="text-xs text-muted-foreground">Identifiant du service PixPay pour cet opérateur</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Type d'intégration PixPay</Label>
+                      <Select value={localPixpayOpType} onValueChange={setLocalPixpayOpType} data-testid="select-pixpay-op-type">
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ussd">USSD push (MTN, Moov, Free, ...)</SelectItem>
+                          <SelectItem value="otp">OTP (Orange CI — #144*82#)</SelectItem>
+                          <SelectItem value="wave">Wave redirect (Wave CI/SN)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
                 )}
 
                 {/* Fee fields */}
@@ -398,6 +488,21 @@ export default function AdminFeesDeposits() {
                       data-testid="input-afribapay-fee"
                     />
                     <p className="text-xs text-muted-foreground">Frais prélevés par AfribaPay sur la transaction</p>
+                  </div>
+                ) : localProvider === "pixpay" ? (
+                  <div className="space-y-2">
+                    <Label>Frais PixPay (%)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max="20"
+                      value={pixpayFee}
+                      onChange={(e) => setPixpayFee(e.target.value)}
+                      placeholder="3.00"
+                      data-testid="input-pixpay-fee"
+                    />
+                    <p className="text-xs text-muted-foreground">Frais prélevés par PixPay sur la transaction</p>
                   </div>
                 ) : (
                   <div className="space-y-2">
