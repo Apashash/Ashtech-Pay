@@ -14,6 +14,7 @@ import { CreditCard, Loader2, Globe, AlertCircle, Phone, CheckCircle, XCircle, A
 import { z } from "zod";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { formatCurrency } from "@/lib/currency";
+import { getCountryFlagEmoji } from "@/lib/country-flags";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 
@@ -686,7 +687,7 @@ export default function DepositPage() {
                                 <SelectContent>
                                   {countries.map((country) => (
                                     <SelectItem key={country.id} value={country.id}>
-                                      {country.name} ({country.code})
+                                      {getCountryFlagEmoji(country.code)} {country.name} ({country.code})
                                     </SelectItem>
                                   ))}
                                 </SelectContent>
