@@ -33,7 +33,7 @@ import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, initiatePixP
 import { addPendingPayment, removePendingPayment } from "./paymentPoller";
 import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, cleanupEmptyWallets } from "./walletHelper";
 import { createSwychrPayout, formatInternationalPhone, detectMethodFromPhone, fiatToPusd, pusdToFiatRate, getConversionRate, convertFiatToPusd, getPayoutToken, COUNTRY_CURRENCY } from "./swychrPayout";
-import { addPendingPayout } from "./payoutPoller";
+import { addPendingPayout, removePendingPayout } from "./payoutPoller";
 import { addSSEClient, removeSSEClient, setActiveTicket, isUserOnline, getOnlineUserIds, getAdminViewingTicket, getUserViewingTicket, notifyUser, notifyAdmins, broadcastOnlineStatus } from "./sse";
 import {
   sendWelcomeEmail,
@@ -6105,40 +6105,78 @@ export async function registerRoutes(
       }
 
       const isPaymentLink = transaction.type === "payment_link";
+      const isPayout = transaction.type === "withdrawal" || transaction.type === "transfer_out";
+      const txCurrency = transaction.currency || "XAF";
 
       if (status === "completed") {
         await storage.updateTransactionStatus(transaction.id, "completed");
-        const txCurrency = transaction.currency || "XAF";
-        // Credit wallet using multi-currency helper (same as the poller)
-        await creditUserWallet(transaction.userId, parseFloat(transaction.amount), txCurrency);
-        await storage.createUserNotification({
-          userId: transaction.userId,
-          type: isPaymentLink ? "payment_link_received" : "deposit_confirmed",
-          title: isPaymentLink ? "Paiement reçu" : "Dépôt confirmé",
-          message: isPaymentLink
-            ? `Vous avez reçu un paiement de ${transaction.amount} ${txCurrency} de ${transaction.payerName || "un client"}.`
-            : `Votre dépôt de ${transaction.amount} ${txCurrency} a été crédité sur votre compte.`,
-          transactionId: transaction.id,
-        });
-        if (transaction.paymentIntentId) {
-          await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "completed");
+
+        if (isPayout) {
+          // Payout success: money already left user's account, just notify
+          removePendingPayout(ref);
+          await storage.createUserNotification({
+            userId: transaction.userId,
+            type: "withdrawal_confirmed",
+            title: transaction.type === "transfer_out" ? "Transfert confirmé" : "Retrait confirmé",
+            message: transaction.type === "transfer_out"
+              ? `Votre transfert de ${transaction.amount} ${txCurrency} a été envoyé avec succès.`
+              : `Votre retrait de ${transaction.amount} ${txCurrency} a été envoyé avec succès.`,
+            transactionId: transaction.id,
+          });
+          console.log(`[AfribaPay Webhook] ✓ Payout SUCCESS: ${transaction.id} (${transaction.type})`);
+        } else {
+          // Payin / deposit success: credit user's wallet
+          await creditUserWallet(transaction.userId, parseFloat(transaction.amount), txCurrency);
+          removePendingPayment(ref);
+          await storage.createUserNotification({
+            userId: transaction.userId,
+            type: isPaymentLink ? "payment_link_received" : "deposit_confirmed",
+            title: isPaymentLink ? "Paiement reçu" : "Dépôt confirmé",
+            message: isPaymentLink
+              ? `Vous avez reçu un paiement de ${transaction.amount} ${txCurrency} de ${transaction.payerName || "un client"}.`
+              : `Votre dépôt de ${transaction.amount} ${txCurrency} a été crédité sur votre compte.`,
+            transactionId: transaction.id,
+          });
+          if (transaction.paymentIntentId) {
+            await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "completed");
+          }
+          console.log(`[AfribaPay Webhook] ✓ Deposit SUCCESS: ${transaction.id} → credited ${transaction.amount} ${txCurrency}`);
         }
-        console.log(`[AfribaPay Webhook] ✓ Payment SUCCESS: ${transaction.id} → credited ${transaction.amount} ${txCurrency}`);
+
       } else if (status === "failed") {
         await storage.updateTransactionStatus(transaction.id, "failed");
-        if (transaction.paymentIntentId) {
-          await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "failed");
+
+        if (isPayout) {
+          // Payout failed: refund the full debited amount to user
+          const refundAmount = parseFloat((transaction as any).totalAmount || transaction.amount);
+          await storage.updateUserBalance(transaction.userId, refundAmount);
+          removePendingPayout(ref);
+          await storage.createUserNotification({
+            userId: transaction.userId,
+            type: "withdrawal_failed",
+            title: transaction.type === "transfer_out" ? "Transfert échoué" : "Retrait échoué",
+            message: transaction.type === "transfer_out"
+              ? `Votre transfert de ${transaction.amount} ${txCurrency} a échoué. Le montant a été recrédité sur votre compte.`
+              : `Votre retrait de ${transaction.amount} ${txCurrency} a échoué. Le montant a été recrédité sur votre compte.`,
+            transactionId: transaction.id,
+          });
+          console.log(`[AfribaPay Webhook] ✗ Payout FAILED: ${transaction.id} — refunded ${refundAmount} ${txCurrency}`);
+        } else {
+          if (transaction.paymentIntentId) {
+            await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "failed");
+          }
+          removePendingPayment(ref);
+          await storage.createUserNotification({
+            userId: transaction.userId,
+            type: isPaymentLink ? "payment_link_failed" : "deposit_failed",
+            title: isPaymentLink ? "Paiement annulé" : "Dépôt annulé",
+            message: isPaymentLink
+              ? "Le paiement a été annulé ou a échoué."
+              : "Votre dépôt a été annulé. Aucun montant n'a été débité.",
+            transactionId: transaction.id,
+          });
+          console.log(`[AfribaPay Webhook] ✗ Deposit FAILED/CANCELLED: ${transaction.id}`);
         }
-        await storage.createUserNotification({
-          userId: transaction.userId,
-          type: isPaymentLink ? "payment_link_failed" : "deposit_failed",
-          title: isPaymentLink ? "Paiement annulé" : "Dépôt annulé",
-          message: isPaymentLink
-            ? "Le paiement a été annulé ou a échoué."
-            : "Votre dépôt a été annulé. Aucun montant n'a été débité.",
-          transactionId: transaction.id,
-        });
-        console.log(`[AfribaPay Webhook] ✗ Payment FAILED/CANCELLED: ${transaction.id}`);
       }
 
       res.json({ success: true });
@@ -6175,41 +6213,78 @@ export async function registerRoutes(
       }
 
       const isPaymentLink = transaction.type === "payment_link";
+      const isPayout = transaction.type === "withdrawal" || transaction.type === "transfer_out";
       const txCurrency = transaction.currency || "XAF";
 
       if (status === "completed") {
         await storage.updateTransactionStatus(transaction.id, "completed");
-        await creditUserWallet(transaction.userId, parseFloat(transaction.amount), txCurrency);
-        removePendingPayment(ref);
-        await storage.createUserNotification({
-          userId: transaction.userId,
-          type: isPaymentLink ? "payment_link_received" : "deposit_confirmed",
-          title: isPaymentLink ? "Paiement reçu" : "Dépôt confirmé",
-          message: isPaymentLink
-            ? `Vous avez reçu un paiement de ${transaction.amount} ${txCurrency} de ${transaction.payerName || "un client"}.`
-            : `Votre dépôt de ${transaction.amount} ${txCurrency} a été crédité sur votre compte.`,
-          transactionId: transaction.id,
-        });
-        if (transaction.paymentIntentId) {
-          await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "completed");
+
+        if (isPayout) {
+          // Payout success: money already left user's account, just notify
+          removePendingPayout(ref);
+          await storage.createUserNotification({
+            userId: transaction.userId,
+            type: "withdrawal_confirmed",
+            title: transaction.type === "transfer_out" ? "Transfert confirmé" : "Retrait confirmé",
+            message: transaction.type === "transfer_out"
+              ? `Votre transfert de ${transaction.amount} ${txCurrency} a été envoyé avec succès.`
+              : `Votre retrait de ${transaction.amount} ${txCurrency} a été envoyé avec succès.`,
+            transactionId: transaction.id,
+          });
+          console.log(`[PixPay Webhook] ✓ Payout SUCCESS: ${transaction.id} (${transaction.type})`);
+        } else {
+          // Payin / deposit success: credit user's wallet
+          await creditUserWallet(transaction.userId, parseFloat(transaction.amount), txCurrency);
+          removePendingPayment(ref);
+          await storage.createUserNotification({
+            userId: transaction.userId,
+            type: isPaymentLink ? "payment_link_received" : "deposit_confirmed",
+            title: isPaymentLink ? "Paiement reçu" : "Dépôt confirmé",
+            message: isPaymentLink
+              ? `Vous avez reçu un paiement de ${transaction.amount} ${txCurrency} de ${transaction.payerName || "un client"}.`
+              : `Votre dépôt de ${transaction.amount} ${txCurrency} a été crédité sur votre compte.`,
+            transactionId: transaction.id,
+          });
+          if (transaction.paymentIntentId) {
+            await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "completed");
+          }
+          console.log(`[PixPay Webhook] ✓ Deposit SUCCESS: ${transaction.id} → ${transaction.amount} ${txCurrency}`);
         }
-        console.log(`[PixPay Webhook] ✓ SUCCESS: ${transaction.id} → ${transaction.amount} ${txCurrency}`);
+
       } else if (status === "failed") {
         await storage.updateTransactionStatus(transaction.id, "failed");
-        removePendingPayment(ref);
-        if (transaction.paymentIntentId) {
-          await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "failed");
+
+        if (isPayout) {
+          // Payout failed: refund the full debited amount to user
+          const refundAmount = parseFloat((transaction as any).totalAmount || transaction.amount);
+          await storage.updateUserBalance(transaction.userId, refundAmount);
+          removePendingPayout(ref);
+          await storage.createUserNotification({
+            userId: transaction.userId,
+            type: "withdrawal_failed",
+            title: transaction.type === "transfer_out" ? "Transfert échoué" : "Retrait échoué",
+            message: transaction.type === "transfer_out"
+              ? `Votre transfert de ${transaction.amount} ${txCurrency} a échoué. Le montant a été recrédité sur votre compte.${providerMessage ? ` (${providerMessage})` : ""}`
+              : `Votre retrait de ${transaction.amount} ${txCurrency} a échoué. Le montant a été recrédité sur votre compte.${providerMessage ? ` (${providerMessage})` : ""}`,
+            transactionId: transaction.id,
+          });
+          console.log(`[PixPay Webhook] ✗ Payout FAILED: ${transaction.id} — refunded ${refundAmount} ${txCurrency}`);
+        } else {
+          removePendingPayment(ref);
+          if (transaction.paymentIntentId) {
+            await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "failed");
+          }
+          await storage.createUserNotification({
+            userId: transaction.userId,
+            type: isPaymentLink ? "payment_link_failed" : "deposit_failed",
+            title: isPaymentLink ? "Paiement annulé" : "Dépôt annulé",
+            message: isPaymentLink
+              ? `Le paiement a été annulé ou a échoué.${providerMessage ? ` (${providerMessage})` : ""}`
+              : `Votre dépôt a été annulé.${providerMessage ? ` (${providerMessage})` : ""}`,
+            transactionId: transaction.id,
+          });
+          console.log(`[PixPay Webhook] ✗ Deposit FAILED: ${transaction.id} — ${providerMessage}`);
         }
-        await storage.createUserNotification({
-          userId: transaction.userId,
-          type: isPaymentLink ? "payment_link_failed" : "deposit_failed",
-          title: isPaymentLink ? "Paiement annulé" : "Dépôt annulé",
-          message: isPaymentLink
-            ? `Le paiement a été annulé ou a échoué.${providerMessage ? ` (${providerMessage})` : ""}`
-            : `Votre dépôt a été annulé.${providerMessage ? ` (${providerMessage})` : ""}`,
-          transactionId: transaction.id,
-        });
-        console.log(`[PixPay Webhook] ✗ FAILED: ${transaction.id} — ${providerMessage}`);
       }
 
       res.json({ success: true });
