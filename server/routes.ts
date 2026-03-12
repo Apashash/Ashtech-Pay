@@ -1819,9 +1819,9 @@ export async function registerRoutes(
 
         let providerRate = 0;
         if (withdrawalProvider === "afribapay") {
-          providerRate = (fee as any).afribapayFee ? parseFloat((fee as any).afribapayFee.toString()) : 0;
+          providerRate = fee.afribapayFee ? parseFloat(fee.afribapayFee.toString()) : 0;
         } else if (withdrawalProvider === "pixpay") {
-          providerRate = (fee as any).pixpayFee ? parseFloat((fee as any).pixpayFee.toString()) : 0;
+          providerRate = fee.pixpayFee ? parseFloat(fee.pixpayFee.toString()) : 0;
         } else {
           providerRate = fee.swychrFee ? parseFloat(fee.swychrFee.toString()) : 0;
         }
