@@ -152,15 +152,23 @@ export default function WalletsPage() {
     },
   });
 
-  const { data: setting } = useQuery<{ value: string }>({
-    queryKey: ["/api/settings/conversion_fee_percent"],
+  const { data: feeSettings } = useQuery<{
+    conversionFeePercent: number;
+    conversionFeePercentSwychr: number;
+    conversionFeePercentPixpay: number;
+    conversionFeePercentAfribapay: number;
+  }>({
+    queryKey: ["/api/public/fee-settings"],
     queryFn: async () => {
-      const res = await apiRequest("GET", "/api/settings/conversion_fee_percent");
+      const res = await apiRequest("GET", "/api/public/fee-settings");
       return res.json();
     },
   });
 
-  const conversionFeePercent = setting?.value ? parseFloat(setting.value) : 6;
+  const conversionFeePercentSwychr = feeSettings?.conversionFeePercentSwychr ?? feeSettings?.conversionFeePercent ?? 6;
+  const conversionFeePercentPixpay = feeSettings?.conversionFeePercentPixpay ?? feeSettings?.conversionFeePercent ?? 6;
+  const conversionFeePercentAfribapay = feeSettings?.conversionFeePercentAfribapay ?? feeSettings?.conversionFeePercent ?? 6;
+  const conversionFeePercent = conversionFeePercentSwychr;
   const sourceBalance = walletList.find(w => w.currency === fromCurrency);
   const parsedAmount = parseFloat(convertAmount || "0");
   const sourceParsedBalance = parseFloat(sourceBalance?.balance || "0");
@@ -374,16 +382,18 @@ export default function WalletsPage() {
                       <span>{parsedAmount.toLocaleString("fr-FR")} {fromCurrency}</span>
                     </div>
                     <div className="flex justify-between text-xs text-amber-600 font-medium">
-                      <span>Frais de conversion ({conversionFeePercent}%)</span>
+                      <span>Frais de conversion (estimé)</span>
                       <span>-{feeAmount.toLocaleString("fr-FR")} {fromCurrency}</span>
                     </div>
                     <div className="flex justify-between text-sm font-bold border-t border-primary/10 pt-1 mt-1">
                       <span>Vous recevrez environ</span>
                       <span className="text-primary">{previewAmount.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {toCurrency}</span>
                     </div>
-                    <p className="text-[10px] text-muted-foreground mt-2 italic text-center">
-                      Le taux final peut varier légèrement.
-                    </p>
+                    <div className="mt-2 pt-2 border-t border-primary/5 text-[10px] text-muted-foreground space-y-0.5">
+                      <p className="font-medium text-muted-foreground/80">Frais selon fournisseur :</p>
+                      <p>Swychr: {conversionFeePercentSwychr}% · PixPay: {conversionFeePercentPixpay}% · AfribaPay: {conversionFeePercentAfribapay}%</p>
+                      <p className="italic">Le taux appliqué dépend du fournisseur ayant alimenté votre wallet.</p>
+                    </div>
                   </div>
                 )}
               </div>

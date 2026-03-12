@@ -2310,9 +2310,27 @@ export async function registerRoutes(
         return res.status(400).json({ message: `Solde insuffisant en ${fromCurrency} (disponible: ${sourceBalance.toFixed(2)})` });
       }
 
-      // Use a default conversion fee of 6% (admin can modify this via platform settings)
-      const conversionFeePercentSetting = await storage.getSetting("conversion_fee_percent");
-      const conversionFeePercent = conversionFeePercentSetting ? parseFloat(conversionFeePercentSetting.value) : 6;
+      // Determine which provider funded the source wallet (from last deposit/payment_link transaction)
+      let conversionProvider = "swychr";
+      const lastIncomingTx = await storage.getLastIncomingTransactionByCurrency(userId, fromCurrency);
+      if (lastIncomingTx?.operatorId) {
+        const txOperator = await storage.getOperator(lastIncomingTx.operatorId).catch(() => null);
+        if (txOperator) conversionProvider = (txOperator as any).paymentProvider || "swychr";
+      }
+
+      // Use provider-specific conversion fee configured by admin
+      const feeKey = conversionProvider === "pixpay"
+        ? "conversion_fee_percent_pixpay"
+        : conversionProvider === "afribapay"
+          ? "conversion_fee_percent_afribapay"
+          : "conversion_fee_percent_swychr";
+      const conversionFeePercentSetting = await storage.getSetting(feeKey);
+      // Fallback to legacy key if provider-specific not set
+      const fallbackSetting = await storage.getSetting("conversion_fee_percent");
+      const conversionFeePercent = conversionFeePercentSetting
+        ? parseFloat(conversionFeePercentSetting.value)
+        : fallbackSetting ? parseFloat(fallbackSetting.value) : 6;
+      console.log(`[Conversion] fromCurrency=${fromCurrency} provider=${conversionProvider} feeKey=${feeKey} fee=${conversionFeePercent}%`);
       const totalFeeAmount = (parsedAmount * conversionFeePercent) / 100;
 
       // Ashtech margin for conversion is strictly 2% as per user request
@@ -3141,7 +3159,17 @@ export async function registerRoutes(
       const conversionFeePercent = parseFloat(settings.find(s => s.key === "conversion_fee_percent")?.value || "6");
       const depositFeePercent = parseFloat(settings.find(s => s.key === "deposit_fee_percent")?.value || "0");
       const paymentLinkFeePercent = parseFloat(settings.find(s => s.key === "payment_link_fee_percent")?.value || "2");
-      res.json({ conversionFeePercent, depositFeePercent, paymentLinkFeePercent });
+      const conversionFeePercentSwychr = parseFloat(settings.find(s => s.key === "conversion_fee_percent_swychr")?.value || String(conversionFeePercent));
+      const conversionFeePercentPixpay = parseFloat(settings.find(s => s.key === "conversion_fee_percent_pixpay")?.value || String(conversionFeePercent));
+      const conversionFeePercentAfribapay = parseFloat(settings.find(s => s.key === "conversion_fee_percent_afribapay")?.value || String(conversionFeePercent));
+      res.json({
+        conversionFeePercent,
+        conversionFeePercentSwychr,
+        conversionFeePercentPixpay,
+        conversionFeePercentAfribapay,
+        depositFeePercent,
+        paymentLinkFeePercent,
+      });
     } catch (error) {
       console.error("Get fee settings error:", error);
       res.status(500).json({ message: "Erreur serveur" });
