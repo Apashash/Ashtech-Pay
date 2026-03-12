@@ -389,11 +389,9 @@ export default function WalletsPage() {
                       <span>Vous recevrez environ</span>
                       <span className="text-primary">{previewAmount.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {toCurrency}</span>
                     </div>
-                    <div className="mt-2 pt-2 border-t border-primary/5 text-[10px] text-muted-foreground space-y-0.5">
-                      <p className="font-medium text-muted-foreground/80">Frais selon fournisseur :</p>
-                      <p>Swychr: {conversionFeePercentSwychr}% · PixPay: {conversionFeePercentPixpay}% · AfribaPay: {conversionFeePercentAfribapay}%</p>
-                      <p className="italic">Le taux appliqué dépend du fournisseur ayant alimenté votre wallet.</p>
-                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-2 italic text-center">
+                      Le taux final peut varier légèrement.
+                    </p>
                   </div>
                 )}
               </div>
