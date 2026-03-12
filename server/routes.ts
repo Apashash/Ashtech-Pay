@@ -1039,18 +1039,39 @@ export async function registerRoutes(
       if (!operator) {
         return res.status(404).json({ message: "Opérateur non trouvé" });
       }
-      
-      const fee = await storage.getFeeForOperator(operatorId, "transfer");
+
+      const provider = ((operator as any).paymentProvider || "swychr") as string;
+      const fee = await storage.resolveFee("transfer", (operator as any).countryId, operatorId);
       let feeAmount = 0;
       let feePercentage = 0;
       
       if (fee) {
-        feePercentage = parseFloat(fee.feeValue);
-        const percentageFee = parsedAmount * (feePercentage / 100);
-        const minPayoutCharge = fee.minFee ? parseFloat(fee.minFee) : 0;
-        
-        // rule: higher of percentage fee or minimum payout charge
-        feeAmount = Math.max(percentageFee, minPayoutCharge);
+        const marginRate = fee.ashtechMargin ? parseFloat(fee.ashtechMargin.toString()) : 0;
+        let providerRate = 0;
+        if (provider === "afribapay") {
+          providerRate = fee.afribapayFee ? parseFloat((fee as any).afribapayFee.toString()) : 0;
+        } else if (provider === "pixpay") {
+          providerRate = fee.pixpayFee ? parseFloat((fee as any).pixpayFee.toString()) : 0;
+        } else {
+          providerRate = fee.swychrFee ? parseFloat(fee.swychrFee.toString()) : 0;
+        }
+        const totalRate = providerRate + marginRate;
+
+        if (fee.feeType === "percentage" || totalRate > 0) {
+          feePercentage = totalRate > 0 ? totalRate : parseFloat(fee.feeValue.toString());
+          feeAmount = (parsedAmount * feePercentage) / 100;
+        } else {
+          feeAmount = parseFloat(fee.feeValue.toString());
+        }
+
+        const minCharge = fee.minFee ? parseFloat(fee.minFee.toString()) : 0;
+        if (provider === "swychr" && feeAmount < minCharge) {
+          feeAmount = minCharge;
+        }
+
+        if (fee.maxFee && feeAmount > parseFloat(fee.maxFee.toString())) {
+          feeAmount = parseFloat(fee.maxFee.toString());
+        }
       }
       
       const totalAmount = parsedAmount + feeAmount;
@@ -1060,8 +1081,8 @@ export async function registerRoutes(
         feeAmount,
         feePercentage,
         totalAmount,
-        minFee: fee?.minFee ? parseFloat(fee.minFee) : null,
-        maxFee: fee?.maxFee ? parseFloat(fee.maxFee) : null,
+        minFee: (provider === "swychr" && fee?.minFee) ? parseFloat(fee.minFee.toString()) : null,
+        maxFee: fee?.maxFee ? parseFloat(fee.maxFee.toString()) : null,
       });
     } catch (error) {
       console.error("Calculate fee error:", error);
@@ -1113,15 +1134,24 @@ export async function registerRoutes(
         return res.status(403).json({ message: `Transaction non autorisée — Le compte sélectionné est en ${sourceCurrency} mais ${country.name} utilise ${country.currency}` });
       }
 
-      // Resolve fees using unified fee resolution (swychrFee + ashtechMargin)
+      const transferProvider = ((operator as any).paymentProvider || "swychr") as string;
+
       const fee = await storage.resolveFee("transfer", countryId, operatorId);
       let feeAmount = 0;
       let ashtechFeeAmount = 0;
 
       if (fee) {
-        const swychrRate = fee.swychrFee ? parseFloat(fee.swychrFee.toString()) : 0;
         const marginRate = fee.ashtechMargin ? parseFloat(fee.ashtechMargin.toString()) : 0;
-        const totalRate = swychrRate + marginRate;
+
+        let providerRate = 0;
+        if (transferProvider === "afribapay") {
+          providerRate = fee.afribapayFee ? parseFloat((fee as any).afribapayFee.toString()) : 0;
+        } else if (transferProvider === "pixpay") {
+          providerRate = fee.pixpayFee ? parseFloat((fee as any).pixpayFee.toString()) : 0;
+        } else {
+          providerRate = fee.swychrFee ? parseFloat(fee.swychrFee.toString()) : 0;
+        }
+        const totalRate = providerRate + marginRate;
         const minCharge = fee.minFee ? parseFloat(fee.minFee.toString()) : 0;
 
         let calculatedFee = 0;
@@ -1134,7 +1164,7 @@ export async function registerRoutes(
           ashtechFeeAmount = calculatedFee;
         }
 
-        if (calculatedFee < minCharge) {
+        if (transferProvider === "swychr" && calculatedFee < minCharge) {
           calculatedFee = minCharge;
           ashtechFeeAmount = 100;
         }
@@ -1207,17 +1237,86 @@ export async function registerRoutes(
       try {
         const operatorName = (operator.name || "").toUpperCase();
         const countryCode = transferCountryCode.toUpperCase();
-        const finalPaymentMethod = resolvePaymentMethod(operatorName, countryCode);
 
-        const payoutResult = await createSwychrPayout({
-          country_code:     transferCountryCode,
-          beneficiary_name: recipientName,
-          mobile_no:        formatInternationalPhone(recipientPhone, transferCountryCode),
-          amount:           creditedAmount,
-          transaction_id:   reference,
-          payment_method:   finalPaymentMethod as any,
-          remarks:          `Ashtech Pay - ${reference}`,
-        });
+        let payoutResult: { success: boolean; transaction_id?: string; message?: string };
+
+        if (transferProvider === "afribapay") {
+          const afribapayOperatorCode = resolveAfribaPayOperatorCode(operator, operatorName);
+          const afribapayCurrency = AFRIBAPAY_ISO_CURRENCY[countryCode] || txCurrency;
+          console.log(`[Transfer] AfribaPay | country=${countryCode} | currency=${afribapayCurrency} | operator=${afribapayOperatorCode}`);
+          const callbackUrl = `${process.env.APP_URL || ""}/api/afribapay/webhook`;
+
+          let localPhone = recipientPhone.replace(/\s/g, "");
+          if (localPhone.startsWith("+")) localPhone = localPhone.slice(1);
+          const phonePrefixes: Record<string, string> = {
+            CM: "237", SN: "221", CI: "225", BF: "226", ML: "223",
+            GN: "224", BJ: "229", TG: "228", NE: "227", CD: "243",
+            CG: "242", CF: "236", TD: "235", GA: "241", GQ: "240",
+          };
+          const pfx = phonePrefixes[countryCode];
+          if (pfx && localPhone.startsWith(pfx)) localPhone = localPhone.slice(pfx.length);
+
+          const afribaResult = await initiateAfribaPayout({
+            operator: afribapayOperatorCode,
+            country: countryCode,
+            phone_number: localPhone,
+            amount: creditedAmount,
+            currency: afribapayCurrency,
+            order_id: reference,
+            reference_id: reference,
+            notify_url: callbackUrl,
+          });
+          if (afribaResult.success && afribaResult.transaction_id) {
+            await storage.updateTransactionExternalReference(transaction.id, afribaResult.transaction_id);
+          }
+          payoutResult = afribaResult;
+
+        } else if (transferProvider === "pixpay") {
+          const cashInServiceId = getPixPayServiceId(operator?.name || "", countryCode, "cash_in");
+          if (!cashInServiceId) {
+            console.error(`[Transfer] PixPay: no cash_in service_id for ${operator?.name} in ${countryCode}`);
+            await storage.updateTransactionStatus(transaction.id, "failed");
+            if (isPrimaryTransfer) {
+              await storage.updateUserBalance(senderId, totalAmount);
+            } else {
+              await storage.upsertWallet(senderId, txCurrency, totalAmount);
+            }
+            return res.status(400).json({
+              message: `Envoi PixPay non supporté pour cet opérateur (${operator?.name}) dans ce pays`,
+            });
+          }
+          console.log(`[Transfer] PixPay | country=${countryCode} | service_id=${cashInServiceId} | operator=${operator?.name}`);
+          const pixpayIpnUrl = `${process.env.APP_URL || ""}/api/pixpay/webhook`;
+          const pixpayResult = await initiatePixPayPayout({
+            serviceId: String(cashInServiceId),
+            amount: creditedAmount,
+            phone: formatInternationalPhone(recipientPhone, transferCountryCode),
+            countryCode,
+            orderId: reference,
+            ipnUrl: pixpayIpnUrl,
+            customData: reference,
+          });
+          if (pixpayResult.success && pixpayResult.transactionId) {
+            await storage.updateTransactionExternalReference(transaction.id, pixpayResult.transactionId);
+          }
+          payoutResult = {
+            success: pixpayResult.success,
+            transaction_id: pixpayResult.transactionId,
+            message: pixpayResult.message,
+          };
+
+        } else {
+          const finalPaymentMethod = resolvePaymentMethod(operatorName, countryCode);
+          payoutResult = await createSwychrPayout({
+            country_code:     transferCountryCode,
+            beneficiary_name: recipientName,
+            mobile_no:        formatInternationalPhone(recipientPhone, transferCountryCode),
+            amount:           creditedAmount,
+            transaction_id:   reference,
+            payment_method:   finalPaymentMethod as any,
+            remarks:          `Ashtech Pay - ${reference}`,
+          });
+        }
 
         if (payoutResult.success) {
           console.log(`[Transfer] Payout submitted OK: ${reference} (ext: ${payoutResult.transaction_id})`);
@@ -1227,7 +1326,7 @@ export async function registerRoutes(
             userId:        senderId,
             amount:        creditedAmount.toFixed(2),
             totalDebited:  totalAmount.toFixed(2),
-            provider:      "swychr",
+            provider:      transferProvider as "swychr" | "afribapay" | "pixpay",
             countryCode:   transferCountryCode.toUpperCase(),
           });
         } else {
@@ -1235,7 +1334,7 @@ export async function registerRoutes(
                                          (payoutResult.message || "").toLowerCase().includes("solde") ||
                                          (payoutResult.message || "").toLowerCase().includes("balance");
           if (isInsufficientBalance) {
-            console.log(`[Transfer] Swychr wallet insufficient for ${reference} — awaiting admin`);
+            console.log(`[Transfer] Provider wallet insufficient for ${reference} — awaiting admin`);
             await storage.createUserNotification({
               userId: senderId,
               type: "transfer_pending",
@@ -1259,7 +1358,6 @@ export async function registerRoutes(
         }
       } catch (payoutErr: any) {
         console.error(`[Transfer] Payout error for ${reference}:`, payoutErr.message);
-        // Keep pending for admin retry on network errors
       }
 
       res.json({
