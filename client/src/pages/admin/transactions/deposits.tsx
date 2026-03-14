@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { AdminLayout } from "../layout";
@@ -38,7 +38,8 @@ import {
   Zap,
   CreditCard,
   FileText,
-  Link2
+  Link2,
+  Smartphone
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -101,6 +102,15 @@ export default function AdminDeposits() {
     queryKey: selectedTxId ? [`/api/admin/transactions/${selectedTxId}/details`] : ["__disabled__"],
     enabled: !!selectedTxId,
   });
+
+  const { data: depositConfig } = useQuery<any>({ queryKey: ["/api/public/deposit-config"] });
+  const operatorMap = useMemo<Record<string, string>>(() => {
+    const map: Record<string, string> = {};
+    for (const country of depositConfig?.countries || []) {
+      for (const op of country.operators || []) { map[op.id] = op.name; }
+    }
+    return map;
+  }, [depositConfig]);
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
@@ -235,7 +245,7 @@ export default function AdminDeposits() {
         </div>
 
         <Card>
-          <CardContent className="pt-6">
+          <CardContent className="pt-6 overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -243,6 +253,7 @@ export default function AdminDeposits() {
                   <TableHead>Réf. Interne</TableHead>
                   <TableHead>Réf. Externe</TableHead>
                   <TableHead>Utilisateur / Payeur</TableHead>
+                  <TableHead>Opérateur</TableHead>
                   <TableHead>Montant Net</TableHead>
                   <TableHead>Frais</TableHead>
                   <TableHead>Total Payé</TableHead>
@@ -254,11 +265,11 @@ export default function AdminDeposits() {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-8">Chargement...</TableCell>
+                    <TableCell colSpan={11} className="text-center py-8">Chargement...</TableCell>
                   </TableRow>
                 ) : filteredTransactions.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
                       Aucun dépôt trouvé
                     </TableCell>
                   </TableRow>
@@ -290,6 +301,16 @@ export default function AdminDeposits() {
                             <p className="font-medium">{tx.user?.fullName || "N/A"}</p>
                             <p className="text-xs text-muted-foreground">{tx.user?.email}</p>
                           </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {tx.operatorId && operatorMap[tx.operatorId] ? (
+                          <div className="flex items-center gap-1.5 text-primary font-medium text-sm">
+                            <Smartphone className="w-3.5 h-3.5 flex-shrink-0" />
+                            {operatorMap[tx.operatorId]}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">—</span>
                         )}
                       </TableCell>
                       <TableCell className="font-bold text-green-500">
