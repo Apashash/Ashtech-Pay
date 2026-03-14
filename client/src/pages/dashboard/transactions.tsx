@@ -7,10 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import type { Transaction, User, SupportedCurrency } from "@shared/schema";
-import { History, TrendingUp, TrendingDown, Clock, CheckCircle, XCircle, Loader2, Search, Link2, Copy, ArrowRight, ArrowLeftRight, User as UserIcon, Mail, Phone, MapPin, CreditCard, FileText } from "lucide-react";
+import { History, TrendingUp, TrendingDown, Clock, CheckCircle, XCircle, Loader2, Search, Link2, Copy, ArrowRight, ArrowLeftRight, User as UserIcon, Mail, Phone, MapPin, CreditCard, FileText, ChevronLeft, ChevronRight } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { formatCurrency } from "@/lib/currency";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -21,11 +21,14 @@ interface TransactionDetails extends Transaction {
   recipient?: { fullName: string; username: string } | null;
 }
 
+const PAGE_SIZE = 25;
+
 export default function TransactionsPage() {
   const { toast } = useToast();
   const [filter, setFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
   
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
@@ -57,6 +60,11 @@ export default function TransactionsPage() {
     }
     return true;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filteredTransactions.length / PAGE_SIZE));
+  const paginatedTransactions = filteredTransactions.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  useEffect(() => { setPage(1); }, [filter, statusFilter, search]);
 
   const typeLabels: Record<string, string> = {
     deposit: "Dépôt",
@@ -184,9 +192,10 @@ export default function TransactionsPage() {
                 <p className="text-muted-foreground">Aucune transaction trouvée</p>
               </div>
             ) : (
+              <>
               <div className="overflow-x-auto -mx-4 px-4">
                 <div className="space-y-2 min-w-[320px]">
-                  {filteredTransactions.map((tx) => {
+                  {paginatedTransactions.map((tx) => {
                     const isConversion = tx.type === "conversion";
                     const isIncoming = ["deposit", "transfer_in", "payment_link"].includes(tx.type);
                     const isPaymentLink = tx.type === "payment_link";
@@ -256,6 +265,38 @@ export default function TransactionsPage() {
                   })}
                 </div>
               </div>
+
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between pt-4 border-t">
+                  <p className="text-sm text-muted-foreground">
+                    {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, filteredTransactions.length)} sur {filteredTransactions.length}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage(p => Math.max(1, p - 1))}
+                      disabled={page === 1}
+                      data-testid="button-page-prev"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                      Précédent
+                    </Button>
+                    <span className="text-sm font-medium px-2">{page} / {totalPages}</span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                      disabled={page === totalPages}
+                      data-testid="button-page-next"
+                    >
+                      Suivant
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+              </>
             )}
           </CardContent>
         </Card>
