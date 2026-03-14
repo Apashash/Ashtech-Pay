@@ -106,7 +106,7 @@ export default function AdminDashboard() {
     refetchInterval: 30000,
   });
 
-  const { data: activityData = [] } = useQuery<{ date: string; total: number; completed: number; failed: number; volume: number }[]>({
+  const { data: activityData = [] } = useQuery<{ date: string; total: number; entrant: number; sortant: number; volume: number }[]>({
     queryKey: ["/api/admin/stats/activity"],
     refetchInterval: 30000,
   });
@@ -439,15 +439,19 @@ export default function AdminDashboard() {
         </Card>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Activité des 30 derniers jours */}
+          {/* Transactions entrantes vs sortantes — 30 derniers jours */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <CreditCard className="w-5 h-5 text-primary" />
-                Activité — 30 derniers jours
+                Flux transactions — 30 derniers jours
               </CardTitle>
             </CardHeader>
             <CardContent>
+              <div className="flex items-center gap-4 mb-3 text-xs">
+                <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-green-500 inline-block" />Entrantes (Dépôts + Liens)</span>
+                <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-orange-500 inline-block" />Sortantes (Retraits + Envois)</span>
+              </div>
               {activityData.length === 0 || activityData.every(d => d.total === 0) ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <CreditCard className="w-10 h-10 mx-auto mb-3 opacity-30" />
@@ -457,13 +461,13 @@ export default function AdminDashboard() {
                 <ResponsiveContainer width="100%" height={220}>
                   <AreaChart data={chartActivity} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
                     <defs>
-                      <linearGradient id="colorCompleted" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
+                      <linearGradient id="colorEntrant" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#22c55e" stopOpacity={0.35} />
                         <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
                       </linearGradient>
-                      <linearGradient id="colorFailed" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                      <linearGradient id="colorSortant" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#f97316" stopOpacity={0.35} />
+                        <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
@@ -472,23 +476,22 @@ export default function AdminDashboard() {
                     <Tooltip
                       contentStyle={{ background: "#1a1a1a", border: "1px solid #333", borderRadius: 8, fontSize: 12 }}
                       labelStyle={{ color: "#ccc" }}
-                      formatter={(value: number, name: string) => [value, name === "completed" ? "Réussies" : name === "failed" ? "Échouées" : "Total"]}
+                      formatter={(value: number, name: string) => [value, name === "entrant" ? "Entrantes" : "Sortantes"]}
                     />
-                    <Legend formatter={(v) => v === "completed" ? "Réussies" : v === "failed" ? "Échouées" : "Total"} wrapperStyle={{ fontSize: 11 }} />
-                    <Area type="monotone" dataKey="completed" stroke="#22c55e" fill="url(#colorCompleted)" strokeWidth={2} dot={false} />
-                    <Area type="monotone" dataKey="failed" stroke="#ef4444" fill="url(#colorFailed)" strokeWidth={2} dot={false} />
+                    <Area type="monotone" dataKey="entrant" stroke="#22c55e" fill="url(#colorEntrant)" strokeWidth={2} dot={false} name="entrant" />
+                    <Area type="monotone" dataKey="sortant" stroke="#f97316" fill="url(#colorSortant)" strokeWidth={2} dot={false} name="sortant" />
                   </AreaChart>
                 </ResponsiveContainer>
               )}
             </CardContent>
           </Card>
 
-          {/* Volume par pays */}
+          {/* Top 8 pays par nombre de transactions */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <TrendingUp className="w-5 h-5 text-primary" />
-                Volume par Pays (Top 10)
+                Top 8 pays — Nombre de transactions
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -499,15 +502,15 @@ export default function AdminDashboard() {
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={countryData} layout="vertical" margin={{ top: 0, right: 8, left: 8, bottom: 0 }}>
+                  <BarChart data={countryData} layout="vertical" margin={{ top: 0, right: 30, left: 8, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false} />
-                    <XAxis type="number" tick={{ fontSize: 10, fill: "#888" }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-                    <YAxis type="category" dataKey="country" tick={{ fontSize: 10, fill: "#ccc" }} width={80} />
+                    <XAxis type="number" tick={{ fontSize: 10, fill: "#888" }} allowDecimals={false} />
+                    <YAxis type="category" dataKey="country" tick={{ fontSize: 10, fill: "#ccc" }} width={90} />
                     <Tooltip
                       contentStyle={{ background: "#1a1a1a", border: "1px solid #333", borderRadius: 8, fontSize: 12 }}
-                      formatter={(value: number) => [formatCurrency(value, "XAF"), "Volume"]}
+                      formatter={(value: number) => [value, "Transactions"]}
                     />
-                    <Bar dataKey="volume" fill="#F0B90B" radius={[0, 4, 4, 0]} />
+                    <Bar dataKey="count" fill="#F0B90B" radius={[0, 4, 4, 0]} label={{ position: "right", fontSize: 10, fill: "#888" }} />
                   </BarChart>
                 </ResponsiveContainer>
               )}

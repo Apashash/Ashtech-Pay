@@ -908,11 +908,11 @@ export class DatabaseStorage implements IStorage {
 
     return Object.entries(byCountry)
       .map(([country, data]) => ({ country, volume: data.volume, count: data.count }))
-      .sort((a, b) => b.volume - a.volume)
-      .slice(0, 10);
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
   }
 
-  async getStatsActivity(): Promise<{ date: string; total: number; completed: number; failed: number; volume: number }[]> {
+  async getStatsActivity(): Promise<{ date: string; total: number; entrant: number; sortant: number; volume: number }[]> {
     const resetSetting = await this.getSetting("stats_reset_at");
     const resetAt: Date | null = resetSetting ? new Date(resetSetting.value) : null;
 
@@ -925,23 +925,27 @@ export class DatabaseStorage implements IStorage {
       const d = new Date(t.createdAt);
       if (d < thirtyDaysAgo) return false;
       if (resetAt && d <= resetAt) return false;
-      return true;
+      return t.status === "completed";
     });
 
-    const byDay: Record<string, { date: string; total: number; completed: number; failed: number; volume: number }> = {};
+    const byDay: Record<string, { date: string; total: number; entrant: number; sortant: number; volume: number }> = {};
     for (let i = 29; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
       const key = d.toISOString().slice(0, 10);
-      byDay[key] = { date: key, total: 0, completed: 0, failed: 0, volume: 0 };
+      byDay[key] = { date: key, total: 0, entrant: 0, sortant: 0, volume: 0 };
     }
 
     for (const tx of filtered) {
       const key = new Date(tx.createdAt!).toISOString().slice(0, 10);
       if (byDay[key]) {
         byDay[key].total += 1;
-        if (tx.status === "completed") { byDay[key].completed += 1; byDay[key].volume += parseFloat(tx.amount); }
-        if (tx.status === "failed") byDay[key].failed += 1;
+        byDay[key].volume += parseFloat(tx.amount);
+        if (tx.type === "deposit" || tx.type === "payment_link") {
+          byDay[key].entrant += 1;
+        } else if (tx.type === "withdrawal" || tx.type === "transfer_out") {
+          byDay[key].sortant += 1;
+        }
       }
     }
 
