@@ -54,7 +54,13 @@ export async function getAfribaPayToken(): Promise<string> {
 
   const data = await res.json();
   if (!res.ok || !data.data?.access_token) {
-    throw new Error(`AfribaPay auth failed: ${data.error?.message || JSON.stringify(data)}`);
+    const raw = data.error?.message || "";
+    let friendly = raw;
+    if (raw.toLowerCase().includes("subscription invalid") || raw.toLowerCase().includes("subscription inactive")) {
+      friendly = "Ce service de paiement est temporairement indisponible. Veuillez réessayer plus tard ou contacter le support.";
+    }
+    console.error(`[AfribaPay Auth] Failed: ${raw}`);
+    throw new Error(friendly || `AfribaPay auth failed: ${raw}`);
   }
 
   cachedToken = data.data.access_token;
