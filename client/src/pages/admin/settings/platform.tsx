@@ -1,4 +1,4 @@
-import { AdminLayout } from "./layout";
+import { AdminLayout } from "../layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
@@ -11,7 +11,7 @@ import {
   Zap
 } from "lucide-react";
 
-export default function AdminSettings() {
+export default function AdminSettingsPlatform() {
   const [, setLocation] = useLocation();
 
   const settingsSections = [
