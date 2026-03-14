@@ -1565,6 +1565,7 @@ export async function registerRoutes(
         operatorId: data.operatorId,
         feeAmount: ashtechFeeAmount.toFixed(2),
         totalAmount: totalAmount.toFixed(2),
+        recipientPhone: data.phoneNumber || null,
       });
 
       // Call payment gateway for mobile money deposits
@@ -4394,9 +4395,20 @@ export async function registerRoutes(
       const userIds = [...new Set(txList.map(tx => tx.userId))];
       const userMap = await (storage as any).getUsersByIds(userIds);
 
+      // Batch paymentIntent lookup for payment_link transactions to get payer phone
+      const intentIds = txList
+        .filter(tx => tx.paymentIntentId)
+        .map(tx => tx.paymentIntentId as string);
+      const intentMap = await (storage as any).getPaymentIntentsByIds(intentIds);
+
       const enriched = txList.map(tx => {
         const u = userMap.get(tx.userId);
-        return { ...tx, user: u ? { fullName: u.fullName, email: u.email, username: u.username } : null };
+        const intent = tx.paymentIntentId ? intentMap.get(tx.paymentIntentId) : null;
+        return {
+          ...tx,
+          user: u ? { fullName: u.fullName, email: u.email, username: u.username } : null,
+          payerPhone: intent?.payerPhone ?? null,
+        };
       });
 
       res.json({ data: enriched, total, page, limit, pages: Math.ceil(total / limit) });

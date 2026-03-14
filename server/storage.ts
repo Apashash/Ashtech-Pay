@@ -548,6 +548,17 @@ export class DatabaseStorage implements IStorage {
     return intent || undefined;
   }
 
+  async getPaymentIntentsByIds(ids: string[]): Promise<Map<string, { payerPhone: string | null; payerName?: string | null }>> {
+    if (ids.length === 0) return new Map();
+    const results = await db
+      .select({ id: paymentIntents.id, payerPhone: paymentIntents.payerPhone, payerName: paymentIntents.payerName })
+      .from(paymentIntents)
+      .where(inArray(paymentIntents.id, ids));
+    const map = new Map<string, { payerPhone: string | null; payerName?: string | null }>();
+    for (const r of results) map.set(r.id, { payerPhone: r.payerPhone ?? null, payerName: r.payerName ?? null });
+    return map;
+  }
+
   async updatePaymentIntentStatus(id: string, status: string): Promise<PaymentIntent | undefined> {
     const [intent] = await db
       .update(paymentIntents)

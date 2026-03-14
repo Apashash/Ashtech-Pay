@@ -50,6 +50,7 @@ import type { Transaction, SupportedCurrency } from "@shared/schema";
 
 interface EnrichedTransaction extends Transaction {
   user?: { fullName: string; email: string; username: string } | null;
+  payerPhone?: string | null;
 }
 
 interface TransactionDetails extends Transaction {
@@ -294,12 +295,22 @@ export default function AdminDeposits() {
                           <div>
                             <p className="font-medium">{tx.payerName || "N/A"}</p>
                             <p className="text-xs text-muted-foreground">{tx.payerEmail || "-"}</p>
+                            {(tx.payerPhone) && (
+                              <p className="text-xs font-mono text-foreground flex items-center gap-1">
+                                <Phone className="w-3 h-3" />{tx.payerPhone}
+                              </p>
+                            )}
                             <p className="text-xs text-primary">vers {tx.user?.fullName}</p>
                           </div>
                         ) : (
                           <div>
                             <p className="font-medium">{tx.user?.fullName || "N/A"}</p>
                             <p className="text-xs text-muted-foreground">{tx.user?.email}</p>
+                            {tx.recipientPhone && (
+                              <p className="text-xs font-mono text-foreground flex items-center gap-1">
+                                <Phone className="w-3 h-3" />{tx.recipientPhone}
+                              </p>
+                            )}
                           </div>
                         )}
                       </TableCell>
@@ -446,6 +457,16 @@ export default function AdminDeposits() {
                         <span className="text-sm">Méthode</span>
                       </div>
                       <span className="text-sm font-medium">{paymentMethodLabels[tx.paymentMethod] || tx.paymentMethod}</span>
+                    </div>
+                  )}
+
+                  {tx.recipientPhone && tx.type === "deposit" && (
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Phone className="w-4 h-4" />
+                        <span className="text-sm">Numéro utilisé</span>
+                      </div>
+                      <span className="text-sm font-medium font-mono">{tx.recipientPhone}</span>
                     </div>
                   )}
 
