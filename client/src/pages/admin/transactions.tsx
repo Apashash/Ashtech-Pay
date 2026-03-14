@@ -468,29 +468,33 @@ export default function AdminTransactions() {
                 </>
               )}
 
-              {(txDetails.payerName || txDetails.payerEmail) && (
+              {(txDetails.payerName || txDetails.payerEmail || txDetails.paymentIntent?.payerName || txDetails.paymentIntent?.payerPhone) && (
                 <>
                   <Separator />
                   <div className="space-y-3">
                     <p className="text-sm font-semibold text-muted-foreground">Informations du payeur</p>
                     
-                    {txDetails.payerName && (
+                    {(txDetails.payerName || txDetails.paymentIntent?.payerName) && (
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 text-muted-foreground">
                           <UserIcon className="w-4 h-4" />
                           <span className="text-sm">Nom</span>
                         </div>
-                        <span className="text-sm font-medium">{txDetails.payerName}</span>
+                        <span className="text-sm font-medium">
+                          {txDetails.payerName || txDetails.paymentIntent?.payerName}
+                        </span>
                       </div>
                     )}
 
-                    {txDetails.payerEmail && (
+                    {(txDetails.payerEmail || txDetails.paymentIntent?.payerEmail) && (
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 text-muted-foreground">
                           <Mail className="w-4 h-4" />
                           <span className="text-sm">Email</span>
                         </div>
-                        <span className="text-sm font-medium">{txDetails.payerEmail}</span>
+                        <span className="text-sm font-medium">
+                          {txDetails.payerEmail || txDetails.paymentIntent?.payerEmail}
+                        </span>
                       </div>
                     )}
 

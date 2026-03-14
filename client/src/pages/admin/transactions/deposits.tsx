@@ -34,6 +34,7 @@ import {
   User as UserIcon,
   Mail,
   Phone,
+  MapPin,
   CreditCard,
   FileText,
   Link2
@@ -51,6 +52,8 @@ interface EnrichedTransaction extends Transaction {
 
 interface TransactionDetails extends Transaction {
   user?: { fullName: string; email: string; username: string; country?: string; phone?: string } | null;
+  paymentIntent?: { payerName?: string; payerEmail?: string; payerPhone?: string; payerCountry?: string } | null;
+  paymentLink?: { title: string; slug: string } | null;
 }
 
 export default function AdminDeposits() {
@@ -440,7 +443,9 @@ export default function AdminDeposits() {
                   <>
                     <Separator />
                     <div className="space-y-3">
-                      <p className="text-sm font-semibold text-muted-foreground">Utilisateur</p>
+                      <p className="text-sm font-semibold text-muted-foreground">
+                        {tx?.type === "payment_link" ? "Bénéficiaire (compte crédité)" : "Utilisateur"}
+                      </p>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 text-muted-foreground">
                           <UserIcon className="w-4 h-4" />
@@ -462,6 +467,55 @@ export default function AdminDeposits() {
                             <span className="text-sm">Téléphone</span>
                           </div>
                           <span className="text-sm font-medium">{txDetails.user.phone}</span>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {(txDetails?.payerName || txDetails?.payerEmail || txDetails?.paymentIntent?.payerName || txDetails?.paymentIntent?.payerPhone) && (
+                  <>
+                    <Separator />
+                    <div className="space-y-3">
+                      <p className="text-sm font-semibold text-muted-foreground">Informations du payeur</p>
+                      {(txDetails.payerName || txDetails.paymentIntent?.payerName) && (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <UserIcon className="w-4 h-4" />
+                            <span className="text-sm">Nom</span>
+                          </div>
+                          <span className="text-sm font-medium">
+                            {txDetails.payerName || txDetails.paymentIntent?.payerName}
+                          </span>
+                        </div>
+                      )}
+                      {(txDetails.payerEmail || txDetails.paymentIntent?.payerEmail) && (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Mail className="w-4 h-4" />
+                            <span className="text-sm">Email</span>
+                          </div>
+                          <span className="text-sm font-medium">
+                            {txDetails.payerEmail || txDetails.paymentIntent?.payerEmail}
+                          </span>
+                        </div>
+                      )}
+                      {txDetails.paymentIntent?.payerPhone && (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Phone className="w-4 h-4" />
+                            <span className="text-sm">Téléphone</span>
+                          </div>
+                          <span className="text-sm font-medium">{txDetails.paymentIntent.payerPhone}</span>
+                        </div>
+                      )}
+                      {txDetails.paymentIntent?.payerCountry && (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <MapPin className="w-4 h-4" />
+                            <span className="text-sm">Pays</span>
+                          </div>
+                          <span className="text-sm font-medium">{txDetails.paymentIntent.payerCountry}</span>
                         </div>
                       )}
                     </div>
