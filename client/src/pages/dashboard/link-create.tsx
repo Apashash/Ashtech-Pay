@@ -2,10 +2,11 @@ import { useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/dashboard-layout";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
@@ -13,8 +14,19 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { createPaymentLinkSchema } from "@shared/schema";
 import type { User } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { ArrowLeft, Loader2, Upload, X, FileText, Link as LinkIcon, ExternalLink, Calendar, Image } from "lucide-react";
+import { ArrowLeft, Loader2, Upload, X, FileText, Link as LinkIcon, ExternalLink, Calendar, Image, Globe, CheckSquare, Square, Check } from "lucide-react";
 import { z } from "zod";
+
+interface CountryConfig {
+  id: string;
+  name: string;
+  flag: string;
+  currency: string;
+}
+
+interface DepositConfigResponse {
+  countries: CountryConfig[];
+}
 
 export default function LinkCreatePage() {
   const [, navigate] = useLocation();
@@ -23,6 +35,12 @@ export default function LinkCreatePage() {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [selectedCountries, setSelectedCountries] = useState<string[]>([]);
+
+  const { data: depositConfigData } = useQuery<DepositConfigResponse>({
+    queryKey: ["/api/public/deposit-config"],
+  });
+  const allCountries = depositConfigData?.countries || [];
 
   const form = useForm<z.infer<typeof createPaymentLinkSchema>>({
     resolver: zodResolver(createPaymentLinkSchema),
@@ -37,12 +55,31 @@ export default function LinkCreatePage() {
       hasPdfDelivery: false,
       redirectUrl: "",
       expiresAt: "",
+      allowedCountries: [],
     },
   });
 
   const isFixedAmount = form.watch("isFixedAmount");
-  const hasPdfDelivery = form.watch("hasPdfDelivery");
   const pdfPathValue = form.watch("pdfPath");
+
+  const toggleCountry = (id: string) => {
+    setSelectedCountries(prev => {
+      const next = prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id];
+      form.setValue("allowedCountries", next);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (selectedCountries.length === allCountries.length) {
+      setSelectedCountries([]);
+      form.setValue("allowedCountries", []);
+    } else {
+      const all = allCountries.map(c => c.id);
+      setSelectedCountries(all);
+      form.setValue("allowedCountries", all);
+    }
+  };
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -79,6 +116,7 @@ export default function LinkCreatePage() {
         const imageUrl = await uploadImage(imageFile);
         finalData.imagePath = imageUrl;
       }
+      finalData.allowedCountries = selectedCountries.length > 0 ? selectedCountries : [];
       const res = await apiRequest("POST", "/api/payment-links", finalData);
       return res.json();
     },
@@ -163,6 +201,82 @@ export default function LinkCreatePage() {
                     </FormItem>
                   )}
                 />
+
+                {/* Country selection */}
+                <FormItem>
+                  <FormLabel className="flex items-center gap-2">
+                    <Globe className="w-4 h-4" />
+                    Pays disponibles pour ce lien
+                  </FormLabel>
+                  <FormDescription className="text-xs">
+                    Sélectionnez les pays depuis lesquels les clients peuvent payer. Laissez vide pour autoriser tous les pays.
+                  </FormDescription>
+                  <div className="border rounded-lg overflow-hidden">
+                    <div className="flex items-center justify-between px-3 py-2 bg-muted/50 border-b">
+                      <span className="text-sm font-medium">
+                        {selectedCountries.length === 0
+                          ? "Tous les pays autorisés"
+                          : `${selectedCountries.length} pays sélectionné${selectedCountries.length > 1 ? "s" : ""}`}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={toggleAll}
+                        data-testid="button-toggle-all-countries"
+                      >
+                        {selectedCountries.length === allCountries.length && allCountries.length > 0
+                          ? "Tout désélectionner"
+                          : "Tout sélectionner"}
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-0 max-h-64 overflow-y-auto">
+                      {allCountries.map((c) => {
+                        const isSelected = selectedCountries.includes(c.id);
+                        return (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => toggleCountry(c.id)}
+                            className={`flex items-center gap-2 px-3 py-2.5 text-left text-sm transition-colors border-b border-r border-border/40 last:border-b-0 ${
+                              isSelected
+                                ? "bg-primary/10 text-primary font-medium"
+                                : "hover:bg-muted/50 text-foreground"
+                            }`}
+                            data-testid={`button-country-${c.id}`}
+                          >
+                            <span className="w-4 h-4 shrink-0 flex items-center justify-center">
+                              {isSelected
+                                ? <Check className="w-3.5 h-3.5 text-primary" />
+                                : <span className="w-3.5 h-3.5 rounded border border-border block" />}
+                            </span>
+                            <span className="mr-1">{c.flag}</span>
+                            <span className="truncate">{c.name}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  {selectedCountries.length > 0 && (
+                    <div className="flex flex-wrap gap-1 pt-2">
+                      {selectedCountries.map(id => {
+                        const country = allCountries.find(c => c.id === id);
+                        if (!country) return null;
+                        return (
+                          <Badge
+                            key={id}
+                            variant="secondary"
+                            className="gap-1 cursor-pointer"
+                            onClick={() => toggleCountry(id)}
+                          >
+                            {country.flag} {country.name}
+                            <X className="w-3 h-3" />
+                          </Badge>
+                        );
+                      })}
+                    </div>
+                  )}
+                </FormItem>
 
                 <FormItem>
                   <FormLabel className="flex items-center gap-2">

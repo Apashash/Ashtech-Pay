@@ -2955,6 +2955,7 @@ export async function registerRoutes(
         hasPdfDelivery: data.hasPdfDelivery || false,
         redirectUrl: data.redirectUrl || null,
         expiresAt: data.expiresAt ? new Date(data.expiresAt) : null,
+        allowedCountries: (data.allowedCountries && data.allowedCountries.length > 0) ? data.allowedCountries : null,
       });
 
       res.json(paymentLink);
@@ -3334,6 +3335,7 @@ export async function registerRoutes(
           isFixedAmount: link.isFixedAmount,
           imagePath: link.imagePath,
           hasPdfDelivery: link.hasPdfDelivery,
+          allowedCountries: link.allowedCountries || null,
         },
         merchant: {
           fullName: user?.fullName,

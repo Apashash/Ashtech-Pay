@@ -206,6 +206,7 @@ export const paymentLinks = pgTable("payment_links", {
   redirectUrl: text("redirect_url"),
   expiresAt: timestamp("expires_at"),
   clickCount: integer("click_count").default(0).notNull(),
+  allowedCountries: text("allowed_countries").array(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -489,6 +490,7 @@ export const createPaymentLinkSchema = z.object({
   hasPdfDelivery: z.boolean().default(false),
   redirectUrl: z.string().optional(),
   expiresAt: z.string().optional(),
+  allowedCountries: z.array(z.string()).optional(),
 }).refine((data) => {
   if (data.isFixedAmount) {
     return data.amount && parseFloat(data.amount) > 0;

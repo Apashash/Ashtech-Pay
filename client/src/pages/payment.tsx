@@ -90,8 +90,14 @@ export default function PaymentPage() {
     queryKey: ["/api/public/deposit-config"],
   });
   
-  const depositConfig = depositConfigData?.countries || [];
+  const allCountries = depositConfigData?.countries || [];
   const adminExchangeRates = depositConfigData?.exchangeRates || { XAF: 1, XOF: 1 };
+
+  const depositConfig = useMemo(() => {
+    const allowed = (paymentLink as any)?.allowedCountries;
+    if (!allowed || allowed.length === 0) return allCountries;
+    return allCountries.filter(c => allowed.includes(c.id));
+  }, [allCountries, paymentLink]);
 
   const linkCurrency = useMemo(() => (paymentLink?.currency as SupportedCurrency) || "XAF", [paymentLink]);
 
