@@ -1368,8 +1368,16 @@ export class DatabaseStorage implements IStorage {
     if (status) {
       // @ts-ignore
       query = query.where(eq(kycSubmissions.status, status));
+      return await query;
     }
-    return await query;
+    const results = await query;
+    // Pending toujours en premier, puis par date décroissante
+    const order: Record<string, number> = { pending: 0, approved: 1, rejected: 2 };
+    return results.sort((a, b) => {
+      const diff = (order[a.status] ?? 3) - (order[b.status] ?? 3);
+      if (diff !== 0) return diff;
+      return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+    });
   }
 
   async countKycByStatus(status: string): Promise<number> {
