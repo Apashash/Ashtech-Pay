@@ -3236,6 +3236,7 @@ export async function registerRoutes(
               name: op.name,
               gateway: provider,
               paymentProvider: provider,
+              pixpayOperatorType: (op as any).pixpayOperatorType || "ussd",
               feePercentage,
               feeFixed: operatorFee?.feeType === "fixed" ? parseFloat(operatorFee.feeValue) : 0,
               afribapayFee: afribaRate,
