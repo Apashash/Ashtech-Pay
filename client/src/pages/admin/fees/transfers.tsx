@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { AdminLayout } from "../layout";
 import { Card, CardContent } from "@/components/ui/card";
@@ -54,6 +54,10 @@ export default function AdminFeesTransfers() {
   const [localProvider, setLocalProvider] = useState("swychr");
   const [localAfribapayCode, setLocalAfribapayCode] = useState("");
 
+  const sticky = useRef<{ afribapayFee: string; pixpayFee: string; swychrMargin: string; afribaMargin: string; pixpayMargin: string }>({
+    afribapayFee: "3.00", pixpayFee: "3.00", swychrMargin: "2.00", afribaMargin: "2.00", pixpayMargin: "2.00",
+  });
+
   const { data: fees, isLoading: feesLoading } = useQuery<Fee[]>({ queryKey: ["/api/admin/fees"] });
   const { data: countries } = useQuery<Country[]>({ queryKey: ["/api/admin/countries"] });
   const { data: operators } = useQuery<Operator[]>({ queryKey: ["/api/admin/operators"] });
@@ -97,13 +101,29 @@ export default function AdminFeesTransfers() {
   const openEdit = (op: Operator, country: Country) => {
     const fee = findFee(op, country);
     const needsCreate = !fee || (fee as any).operatorId !== op.id;
+    const provider = (op as any).paymentProvider || "swychr";
     setEditing({ fee: fee ?? null, operator: op, country, needsCreate });
-    setAfribapayFee((fee as any)?.afribapayFee ?? "3.00");
-    setPixpayFee((fee as any)?.pixpayFee ?? "3.00");
-    setAshtechMargin((fee as any)?.ashtechMargin ?? "2.00");
+    if (!needsCreate && fee) {
+      const aFee = (fee as any)?.afribapayFee ?? sticky.current.afribapayFee;
+      const pFee = (fee as any)?.pixpayFee ?? sticky.current.pixpayFee;
+      const margin = (fee as any)?.ashtechMargin ?? sticky.current.swychrMargin;
+      setAfribapayFee(aFee); sticky.current.afribapayFee = aFee;
+      setPixpayFee(pFee); sticky.current.pixpayFee = pFee;
+      setAshtechMargin(margin);
+      if (provider === "afribapay") sticky.current.afribaMargin = margin;
+      else if (provider === "pixpay") sticky.current.pixpayMargin = margin;
+      else sticky.current.swychrMargin = margin;
+    } else {
+      setAfribapayFee(sticky.current.afribapayFee);
+      setPixpayFee(sticky.current.pixpayFee);
+      const margin = provider === "afribapay" ? sticky.current.afribaMargin
+        : provider === "pixpay" ? sticky.current.pixpayMargin
+        : sticky.current.swychrMargin;
+      setAshtechMargin(margin);
+    }
     setMinFee(fee?.minFee?.toString() || "");
     setIsActive(fee?.isActive ?? true);
-    setLocalProvider((op as any).paymentProvider || "swychr");
+    setLocalProvider(provider);
     setLocalAfribapayCode((op as any).afribapayOperatorCode || guessAfribaCode(op.name));
   };
 
@@ -404,7 +424,15 @@ export default function AdminFeesTransfers() {
                   )}
                   <div className="space-y-2">
                     <Label>Fournisseur de paiement</Label>
-                    <Select value={localProvider} onValueChange={(v) => { setLocalProvider(v); if (v === "afribapay" && !localAfribapayCode) setLocalAfribapayCode(guessAfribaCode(editing?.operator.name || "")); }} data-testid="select-provider">
+                    <Select value={localProvider} onValueChange={(v) => {
+                      if (localProvider === "afribapay") sticky.current.afribaMargin = ashtechMargin;
+                      else if (localProvider === "pixpay") sticky.current.pixpayMargin = ashtechMargin;
+                      else sticky.current.swychrMargin = ashtechMargin;
+                      setLocalProvider(v);
+                      if (v === "afribapay") { setAshtechMargin(sticky.current.afribaMargin); if (!localAfribapayCode) setLocalAfribapayCode(guessAfribaCode(editing?.operator.name || "")); }
+                      else if (v === "pixpay") setAshtechMargin(sticky.current.pixpayMargin);
+                      else setAshtechMargin(sticky.current.swychrMargin);
+                    }} data-testid="select-provider">
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="swychr">Swychr</SelectItem>
@@ -438,7 +466,7 @@ export default function AdminFeesTransfers() {
                       <Input
                         type="number" step="0.01" min="0" max="20"
                         value={afribapayFee}
-                        onChange={(e) => setAfribapayFee(e.target.value)}
+                        onChange={(e) => { setAfribapayFee(e.target.value); sticky.current.afribapayFee = e.target.value; }}
                         placeholder="3.00"
                         data-testid="input-afribapay-fee"
                       />
@@ -449,7 +477,7 @@ export default function AdminFeesTransfers() {
                       <Input
                         type="number" step="0.01" min="0" max="20"
                         value={pixpayFee}
-                        onChange={(e) => setPixpayFee(e.target.value)}
+                        onChange={(e) => { setPixpayFee(e.target.value); sticky.current.pixpayFee = e.target.value; }}
                         placeholder="3.00"
                         data-testid="input-pixpay-fee"
                       />
@@ -469,7 +497,12 @@ export default function AdminFeesTransfers() {
                     <Input
                       type="number" step="0.01" min="0" max="20"
                       value={ashtechMargin}
-                      onChange={(e) => setAshtechMargin(e.target.value)}
+                      onChange={(e) => {
+                        setAshtechMargin(e.target.value);
+                        if (localProvider === "afribapay") sticky.current.afribaMargin = e.target.value;
+                        else if (localProvider === "pixpay") sticky.current.pixpayMargin = e.target.value;
+                        else sticky.current.swychrMargin = e.target.value;
+                      }}
                       placeholder="2.00"
                       data-testid="input-ashtech-margin"
                     />
