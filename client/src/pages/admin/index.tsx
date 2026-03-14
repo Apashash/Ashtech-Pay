@@ -301,6 +301,8 @@ export default function AdminDashboard() {
                   <span className="font-semibold text-right">{todayLoading ? "…" : formatCurrency(parseFloat(todayStats?.transferFees || "0"), "XAF")}</span>
                   <span className="text-muted-foreground">Liens:</span>
                   <span className="font-semibold text-right">{todayLoading ? "…" : formatCurrency(parseFloat(todayStats?.paymentLinkFees || "0"), "XAF")}</span>
+                  <span className="text-muted-foreground">Conversions:</span>
+                  <span className="font-semibold text-right">{todayLoading ? "…" : formatCurrency(parseFloat(todayStats?.conversionFees || "0"), "XAF")}</span>
                 </div>
                 <div className="flex items-center gap-1 text-xs text-muted-foreground">
                   <Zap className="w-3 h-3" />
