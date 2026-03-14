@@ -23,7 +23,9 @@ import {
   Link2,
   RefreshCw,
   RotateCcw,
-  AlertTriangle
+  AlertTriangle,
+  Zap,
+  Sun
 } from "lucide-react";
 import { formatCurrency } from "@/lib/currency";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -97,6 +99,11 @@ export default function AdminDashboard() {
     onError: () => {
       toast({ title: "Erreur", description: "La réinitialisation a échoué.", variant: "destructive" });
     },
+  });
+
+  const { data: todayStats, isLoading: todayLoading } = useQuery<AdminStats>({
+    queryKey: ["/api/admin/stats?period=today"],
+    refetchInterval: 30000,
   });
 
   const { data: activityData = [] } = useQuery<{ date: string; total: number; completed: number; failed: number; volume: number }[]>({
@@ -260,6 +267,49 @@ export default function AdminDashboard() {
             </Select>
           </div>
         </div>
+
+        {/* Revenus du jour — toujours affiché indépendamment du filtre de période */}
+        <Card className="border-2 border-primary/40 bg-gradient-to-r from-primary/5 to-primary/10">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-xl bg-primary/20">
+                  <Sun className="w-6 h-6 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground font-medium">Revenus du jour (marge Ashtech Pay)</p>
+                  <p className="text-xs text-muted-foreground">{format(new Date(), "EEEE d MMMM yyyy", { locale: fr })}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-6 flex-wrap">
+                <div className="text-right">
+                  {todayLoading ? (
+                    <Skeleton className="h-9 w-32" />
+                  ) : (
+                    <p className="text-3xl font-bold text-primary">
+                      {formatCurrency(parseFloat(todayStats?.totalRevenue || "0"), "XAF")}
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-0.5">Total marges encaissées</p>
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                  <span className="text-muted-foreground">Dépôts:</span>
+                  <span className="font-semibold text-right">{todayLoading ? "…" : formatCurrency(parseFloat(todayStats?.depositFees || "0"), "XAF")}</span>
+                  <span className="text-muted-foreground">Retraits:</span>
+                  <span className="font-semibold text-right">{todayLoading ? "…" : formatCurrency(parseFloat(todayStats?.withdrawalFees || "0"), "XAF")}</span>
+                  <span className="text-muted-foreground">Envois:</span>
+                  <span className="font-semibold text-right">{todayLoading ? "…" : formatCurrency(parseFloat(todayStats?.transferFees || "0"), "XAF")}</span>
+                  <span className="text-muted-foreground">Liens:</span>
+                  <span className="font-semibold text-right">{todayLoading ? "…" : formatCurrency(parseFloat(todayStats?.paymentLinkFees || "0"), "XAF")}</span>
+                </div>
+                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Zap className="w-3 h-3" />
+                  <span>Mise à jour auto toutes les 30s</span>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         <div className={`grid ${gridCols} gap-4`}>
           {kpiCards.map((card, index) => {

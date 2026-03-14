@@ -955,9 +955,49 @@ export class DatabaseStorage implements IStorage {
     const [usersCount] = await db.select({ count: count() }).from(users);
     const [bannedCount] = await db.select({ count: count() }).from(users).where(eq(users.isBanned, true));
     
+    // Compute period date range
+    const now = new Date();
+    let periodStart: Date | null = null;
+    let periodEnd: Date | null = null;
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const dayOfWeek = now.getDay() === 0 ? 7 : now.getDay(); // Mon=1 ... Sun=7
+    switch (period) {
+      case "today":
+        periodStart = todayStart;
+        break;
+      case "yesterday":
+        periodStart = new Date(todayStart.getTime() - 86400000);
+        periodEnd = todayStart;
+        break;
+      case "this_week":
+        periodStart = new Date(todayStart.getTime() - (dayOfWeek - 1) * 86400000);
+        break;
+      case "last_week":
+        periodStart = new Date(todayStart.getTime() - dayOfWeek * 86400000 - 6 * 86400000);
+        periodEnd = new Date(todayStart.getTime() - (dayOfWeek - 1) * 86400000);
+        break;
+      case "this_month":
+        periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        break;
+      case "last_month":
+        periodStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        periodEnd = new Date(now.getFullYear(), now.getMonth(), 1);
+        break;
+      case "this_year":
+        periodStart = new Date(now.getFullYear(), 0, 1);
+        break;
+      case "last_year":
+        periodStart = new Date(now.getFullYear() - 1, 0, 1);
+        periodEnd = new Date(now.getFullYear(), 0, 1);
+        break;
+    }
+
     // Get all transactions — filter by resetAt in memory
     const rawAllTx = await db.select().from(transactions);
-    const allTx = resetAt ? rawAllTx.filter(t => t.createdAt && new Date(t.createdAt) > resetAt) : rawAllTx;
+    let allTx = resetAt ? rawAllTx.filter(t => t.createdAt && new Date(t.createdAt) > resetAt) : rawAllTx;
+    // Apply period filter
+    if (periodStart) allTx = allTx.filter(t => t.createdAt && new Date(t.createdAt) >= periodStart!);
+    if (periodEnd) allTx = allTx.filter(t => t.createdAt && new Date(t.createdAt) < periodEnd!);
     const completedTx = allTx.filter(t => t.status === "completed");
     
     const deposits = completedTx.filter(t => t.type === "deposit");
