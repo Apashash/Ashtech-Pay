@@ -68,6 +68,7 @@ interface User {
   country: string | null;
   preferredCurrency: string;
   balance: string;
+  totalBalanceXAF?: number;
   isVerified: boolean;
   kycStatus: string;
   isBanned: boolean;
@@ -514,7 +515,10 @@ export default function AdminUsers() {
                       </TableCell>
                       <TableCell className="text-sm">{user.country || "-"}</TableCell>
                       <TableCell className="font-medium text-sm whitespace-nowrap">
-                        {formatCurrency(parseFloat(user.balance), getDisplayCurrency(user) as any)}
+                        <div>
+                          <p>{(user.totalBalanceXAF ?? 0).toLocaleString("fr-FR")} XAF</p>
+                          <p className="text-xs text-muted-foreground">≈ tout wallets</p>
+                        </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center">

@@ -4142,7 +4142,27 @@ export async function registerRoutes(
       const offset = (page - 1) * limit;
 
       const { data, total } = await storage.getAdminUsersPaginated({ limit, offset, search: search || undefined });
-      const safeUsers = data.map(({ password, ...u }) => u);
+
+      // Batch-fetch all secondary wallets for these users in one query
+      const fxRates = await loadFxRates();
+      const userIds = data.map(u => u.id);
+      const allWallets = userIds.length > 0 ? await storage.getWalletsByUserIds(userIds) : [];
+
+      // Group wallets by userId
+      const walletsByUser = new Map<string, { currency: string; balance: string }[]>();
+      for (const w of allWallets) {
+        if (!walletsByUser.has(w.userId)) walletsByUser.set(w.userId, []);
+        walletsByUser.get(w.userId)!.push({ currency: w.currency, balance: w.balance });
+      }
+
+      const safeUsers = data.map(({ password, ...u }) => {
+        const primaryCurrency = u.preferredCurrency || "XAF";
+        const primaryXAF = convertToXAF(parseFloat(u.balance) || 0, primaryCurrency, fxRates);
+        const secondaryWallets = (walletsByUser.get(u.id) || []).filter(w => w.currency !== primaryCurrency);
+        const secondaryXAF = secondaryWallets.reduce((sum, w) => sum + convertToXAF(parseFloat(w.balance) || 0, w.currency, fxRates), 0);
+        return { ...u, totalBalanceXAF: Math.round(primaryXAF + secondaryXAF) };
+      });
+
       res.json({ data: safeUsers, total, page, limit, pages: Math.ceil(total / limit) });
     } catch (error) {
       console.error("Admin get users error:", error);

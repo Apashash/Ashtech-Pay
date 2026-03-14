@@ -254,6 +254,7 @@ export interface IStorage {
 
   // Multi-currency wallets
   getUserWallets(userId: string): Promise<Wallet[]>;
+  getWalletsByUserIds(userIds: string[]): Promise<Wallet[]>;
   getWallet(userId: string, currency: string): Promise<Wallet | undefined>;
   upsertWallet(userId: string, currency: string, balanceDelta: number): Promise<Wallet>;
   setWalletBalance(userId: string, currency: string, newBalance: number): Promise<Wallet>;
@@ -1414,6 +1415,11 @@ export class DatabaseStorage implements IStorage {
   // ── Multi-currency wallets ──────────────────────────────────────────────────
   async getUserWallets(userId: string): Promise<Wallet[]> {
     return db.select().from(wallets).where(eq(wallets.userId, userId));
+  }
+
+  async getWalletsByUserIds(userIds: string[]): Promise<Wallet[]> {
+    if (userIds.length === 0) return [];
+    return db.select().from(wallets).where(inArray(wallets.userId, userIds));
   }
 
   async getWallet(userId: string, currency: string): Promise<Wallet | undefined> {
