@@ -2922,6 +2922,18 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/payment-links/:id", requireAuth, async (req, res) => {
+    try {
+      const link = await storage.getPaymentLinkById(req.params.id);
+      if (!link) return res.status(404).json({ message: "Lien introuvable" });
+      if (link.userId !== req.userId!) return res.status(403).json({ message: "Non autorisé" });
+      res.json(link);
+    } catch (error) {
+      console.error("Get payment link by id error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   app.post("/api/payment-links", requireAuth, async (req, res) => {
     try {
       const data = createPaymentLinkSchema.parse(req.body);

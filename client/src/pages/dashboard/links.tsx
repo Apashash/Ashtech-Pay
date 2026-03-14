@@ -932,7 +932,6 @@ export default function PaymentLinksPage() {
   const [activeTab, setActiveTab] = useState("analytics");
   const [showAllRecentLinks, setShowAllRecentLinks] = useState(false);
   const [qrModalLink, setQrModalLink] = useState<PaymentLink | null>(null);
-  const [editModalLink, setEditModalLink] = useState<PaymentLink | null>(null);
   const { toast } = useToast();
   
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
@@ -1313,7 +1312,7 @@ export default function PaymentLinksPage() {
                             <Button 
                               variant="ghost" 
                               size="icon"
-                              onClick={(e) => { e.stopPropagation(); setEditModalLink(link); }}
+                              onClick={(e) => { e.stopPropagation(); navigate(`/dashboard/links/${link.id}/edit`); }}
                               title="Modifier"
                               data-testid={`button-edit-${link.id}`}
                             >
@@ -1738,7 +1737,7 @@ export default function PaymentLinksPage() {
                                 </Button>
                               </div>
                               <div className="flex items-center gap-1">
-                                <Button variant="ghost" size="icon" onClick={() => setEditModalLink(link)} title="Modifier" data-testid={`button-edit-all-${link.id}`}>
+                                <Button variant="ghost" size="icon" onClick={() => navigate(`/dashboard/links/${link.id}/edit`)} title="Modifier" data-testid={`button-edit-all-${link.id}`}>
                                   <Pencil className="w-4 h-4" />
                                 </Button>
                                 <Button 
@@ -1810,15 +1809,6 @@ export default function PaymentLinksPage() {
           )}
         </DialogContent>
       </Dialog>
-
-      {/* Edit Link Modal */}
-      {editModalLink && (
-        <EditLinkDialog 
-          link={editModalLink} 
-          onClose={() => setEditModalLink(null)} 
-          userCurrency={(user?.preferredCurrency || "XAF") as SupportedCurrency}
-        />
-      )}
 
     </DashboardLayout>
   );
