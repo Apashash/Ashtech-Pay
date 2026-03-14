@@ -122,7 +122,15 @@ const menuItems: MenuItem[] = [
 
 export function AdminLayout({ children }: AdminLayoutProps) {
   const [location, setLocation] = useLocation();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpenState] = useState(() => {
+    const stored = localStorage.getItem("admin_sidebar_open");
+    return stored === null ? true : stored === "true";
+  });
+
+  const setSidebarOpen = (open: boolean) => {
+    setSidebarOpenState(open);
+    localStorage.setItem("admin_sidebar_open", String(open));
+  };
   const [openSubmenu, setOpenSubmenu] = useState<string | null>(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
 
