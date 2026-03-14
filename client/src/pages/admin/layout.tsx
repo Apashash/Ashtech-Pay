@@ -314,6 +314,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                                 isSubActive && "bg-primary/10 text-primary"
                               )}
                               data-testid={`admin-nav-${subItem.label.toLowerCase().replace(/\s/g, "-")}`}
+                              onClick={() => setSidebarOpen(false)}
                             >
                               <span className="flex items-center gap-3">
                                 <subItem.icon className="w-4 h-4" />
@@ -345,6 +346,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                       isActive && "bg-primary/10 text-primary"
                     )}
                     data-testid={`admin-nav-${item.label.toLowerCase().replace(/\s/g, "-")}`}
+                    onClick={() => setSidebarOpen(false)}
                   >
                     <span className="flex items-center gap-3">
                       <item.icon className="w-4 h-4" />
@@ -372,7 +374,12 @@ export function AdminLayout({ children }: AdminLayoutProps) {
 
         <div className="p-4 border-t border-border">
           <Link href="/dashboard">
-            <Button variant="outline" className="w-full gap-2" data-testid="button-back-to-app">
+            <Button 
+              variant="outline" 
+              className="w-full gap-2" 
+              data-testid="button-back-to-app"
+              onClick={() => setSidebarOpen(false)}
+            >
               <ChevronLeft className="w-4 h-4" />
               Retour à l'app
             </Button>
@@ -415,7 +422,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                         Messages Support non lus
                       </h4>
                     </div>
-                    <Link href="/admin/support" onClick={() => setNotificationsOpen(false)}>
+                    <Link href="/admin/support" onClick={() => { setNotificationsOpen(false); setSidebarOpen(false); }}>
                       <div className="p-3 hover-elevate cursor-pointer flex items-center justify-between gap-2 border-b border-border">
                         <div>
                           <span className="text-sm font-medium text-blue-500">
