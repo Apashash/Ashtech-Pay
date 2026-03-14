@@ -74,6 +74,7 @@ export default function PaymentPage() {
   const [otpCode, setOtpCode] = useState("");
   const [waveUrl, setWaveUrl] = useState<string | null>(null);
   const [pixpayOtpCode, setPixpayOtpCode] = useState("");
+  const [pixpayOtpStep, setPixpayOtpStep] = useState(false);
 
   const { data: paymentLink, isLoading, error } = useQuery<PaymentLink & { hasPdf?: boolean }>({
     queryKey: ["/api/payment-links/public", params?.slug],
@@ -177,6 +178,34 @@ export default function PaymentPage() {
         }
       } catch (e) { console.error("Error checking payment status:", e); }
     }, 5000);
+  };
+
+  const validatePaymentForm = (): boolean => {
+    const newErrors: Record<string, string> = {};
+    if (!fullName.trim()) newErrors.fullName = "Le nom est requis";
+    if (!email.trim()) newErrors.email = "L'email est requis";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = "Email invalide";
+    if (!paymentLink?.isFixedAmount && (!customAmount || parseFloat(customAmount) <= 0)) newErrors.amount = "Le montant doit être supérieur à 0";
+    if (!country) newErrors.country = "Veuillez sélectionner votre pays";
+    if (!paymentMethod) newErrors.paymentMethod = "Veuillez choisir un mode de paiement";
+    if (paymentMethod === "mobile_money" && !operator) newErrors.operator = "Veuillez sélectionner un opérateur";
+    if (!phone.trim()) newErrors.phone = "Le numéro est requis";
+    else if (phone.replace(/\s/g, "").length < 8) newErrors.phone = "Numéro trop court";
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handlePayClick = () => {
+    const isPixpayOtp = selectedOperatorData?.paymentProvider === "pixpay" &&
+      selectedOperatorData?.pixpayOperatorType === "otp";
+    if (isPixpayOtp) {
+      if (validatePaymentForm()) {
+        setPixpayOtpStep(true);
+        setPixpayOtpCode("");
+      }
+    } else {
+      payMutation.mutate();
+    }
   };
 
   const payMutation = useMutation({
@@ -317,6 +346,71 @@ export default function PaymentPage() {
               <h2 className="text-xl font-bold text-foreground mb-2">Lien introuvable</h2>
               <p className="text-muted-foreground mb-6">Ce lien de paiement n'existe pas ou a expiré.</p>
               <Link href="/"><Button variant="outline">Retour à l'accueil</Button></Link>
+            </CardContent>
+          </Card>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
+
+  if (pixpayOtpStep && !paymentComplete) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <div className="flex-1 flex items-center justify-center p-4">
+          <Card className="w-full max-w-md">
+            <CardContent className="pt-8 pb-8 space-y-6 text-center">
+              <div className="w-16 h-16 mx-auto rounded-full bg-orange-500/10 flex items-center justify-center">
+                <Hash className="w-8 h-8 text-orange-500" />
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-xl font-bold text-foreground">Code OTP requis</h2>
+                <p className="text-muted-foreground text-sm leading-relaxed">
+                  Composez{" "}
+                  <span className="font-mono font-bold text-orange-500 bg-orange-100 dark:bg-orange-950/40 px-2 py-0.5 rounded">
+                    #144*82#
+                  </span>{" "}
+                  sur votre téléphone pour obtenir votre code OTP, puis saisissez-le ci-dessous.
+                </p>
+              </div>
+              <div className="space-y-4 max-w-xs mx-auto w-full">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={8}
+                  placeholder="Code OTP"
+                  value={pixpayOtpCode}
+                  onChange={e => setPixpayOtpCode(e.target.value.replace(/\D/g, ""))}
+                  className="w-full text-center text-2xl font-mono tracking-widest h-14 border-2 border-orange-400 rounded-md bg-background text-foreground px-3 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                  data-testid="input-pixpay-otp-step"
+                  autoFocus
+                />
+                <Button
+                  className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+                  size="lg"
+                  onClick={() => payMutation.mutate()}
+                  disabled={pixpayOtpCode.length < 4 || payMutation.isPending}
+                  data-testid="button-confirm-pixpay-otp"
+                >
+                  {payMutation.isPending
+                    ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Traitement...</>
+                    : <><Shield className="w-4 h-4 mr-2" />Confirmer le paiement</>}
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="w-full text-muted-foreground"
+                  onClick={() => { setPixpayOtpStep(false); setPixpayOtpCode(""); }}
+                  disabled={payMutation.isPending}
+                  data-testid="button-pixpay-otp-back"
+                >
+                  ← Retour au formulaire
+                </Button>
+              </div>
+              <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground pt-2">
+                <Shield className="w-4 h-4" />
+                <span>Paiement sécurisé — Vos données sont protégées</span>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -684,31 +778,6 @@ export default function PaymentPage() {
               {errors.phone && <p className="text-xs text-red-500">{errors.phone}</p>}
             </div>
 
-            {/* PixPay OTP — Orange CI */}
-            {selectedOperatorData?.paymentProvider === "pixpay" &&
-              selectedOperatorData?.pixpayOperatorType === "otp" && (
-              <div className="rounded-lg border-2 border-orange-400 bg-orange-50 dark:bg-orange-950/30 p-4 space-y-3">
-                <div className="flex items-center gap-2 text-orange-700 dark:text-orange-300 font-semibold text-sm">
-                  <Hash className="h-4 w-4 shrink-0" />
-                  Code OTP requis — Orange CI
-                </div>
-                <p className="text-xs text-orange-600 dark:text-orange-400">
-                  Composez <code className="font-mono bg-orange-200 dark:bg-orange-900 px-1 rounded font-bold">#144*82#</code> sur votre téléphone pour obtenir votre code OTP, puis saisissez-le ci-dessous avant de valider.
-                </p>
-                <Input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  maxLength={8}
-                  placeholder="Votre code OTP"
-                  value={pixpayOtpCode}
-                  onChange={e => setPixpayOtpCode(e.target.value.replace(/\D/g, ""))}
-                  className="text-center text-xl font-mono tracking-widest h-12 border-orange-300"
-                  data-testid="input-pixpay-otp"
-                />
-              </div>
-            )}
-
             {/* Summary */}
             <div className="rounded-lg border bg-primary/5 border-primary/20 p-4">
               <div className="flex items-center justify-between">
@@ -723,13 +792,8 @@ export default function PaymentPage() {
             <Button
               className="w-full"
               size="lg"
-              onClick={() => payMutation.mutate()}
-              disabled={
-                payMutation.isPending ||
-                (selectedOperatorData?.paymentProvider === "pixpay" &&
-                  selectedOperatorData?.pixpayOperatorType === "otp" &&
-                  pixpayOtpCode.length < 4)
-              }
+              onClick={handlePayClick}
+              disabled={payMutation.isPending}
               data-testid="button-pay"
             >
               {payMutation.isPending ? (
