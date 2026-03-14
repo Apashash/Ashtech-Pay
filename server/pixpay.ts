@@ -13,6 +13,41 @@ const PIXPAY_API_KEYS: Record<string, string> = {
   CDF: process.env.PIXPAY_API_KEY_CDF || "PIX_6295ed31-dc99-4d3c-b5f7-e3ebb1d43ef6",
 };
 
+// ─── Dial codes for phone normalisation (country code → ITU dial code) ───────
+const COUNTRY_DIAL_CODES: Record<string, string> = {
+  CI: "225", SN: "221", BJ: "229", BF: "226", CM: "237", CD: "243",
+  TG: "228", ML: "223", NE: "227", GN: "224", GA: "241", CG: "242",
+  CF: "236", TD: "235", GQ: "240", GW: "245",
+};
+
+// Normalise a phone number to local 10-digit format expected by PixPay.
+// Strips international prefix (+225, 00225, 225 …) then ensures a leading 0.
+// Examples for CI (+225):
+//   +2250708126834  → 0708126834
+//   002250708126834 → 0708126834
+//   2250708126834   → 0708126834
+//   0708126834      → 0708126834  (already good)
+//   708126834       → 0708126834  (missing leading 0 — prepend it)
+export function normalizePixPayPhone(raw: string, countryCode: string): string {
+  // strip everything but digits
+  let digits = raw.replace(/\D/g, "");
+  const dialCode = COUNTRY_DIAL_CODES[countryCode.toUpperCase()];
+  if (dialCode) {
+    // Remove leading 00 + dial code  (e.g. 00225…)
+    if (digits.startsWith("00" + dialCode)) {
+      digits = digits.slice(2 + dialCode.length);
+    // Remove leading dial code without 00  (e.g. 225…)
+    } else if (digits.startsWith(dialCode) && !digits.startsWith("0")) {
+      digits = digits.slice(dialCode.length);
+    }
+    // Now digits should be local — ensure leading 0
+    if (!digits.startsWith("0")) {
+      digits = "0" + digits;
+    }
+  }
+  return digits;
+}
+
 // ─── Country → currency zone mapping ─────────────────────────────────────────
 export const PIXPAY_CURRENCY_MAP: Record<string, string> = {
   CM: "XAF", CF: "XAF", TD: "XAF", GQ: "XAF", CG: "XAF", GA: "XAF",
@@ -168,10 +203,12 @@ export interface PixPayinResult {
 
 // ─── Build common request body ────────────────────────────────────────────────
 function buildBaseBody(params: PixPayBaseParams, countryCode: string): Record<string, any> {
+  const normalizedPhone = normalizePixPayPhone(params.phone, countryCode);
+  console.log(`[PixPay] Phone normalisation: "${params.phone}" → "${normalizedPhone}" (${countryCode})`);
   return {
     amount: params.amount,
     api_key: getPixPayApiKey(countryCode),
-    destination: params.phone,
+    destination: normalizedPhone,
     ipn_url: params.ipnUrl || "",
     service_id: parseInt(params.serviceId, 10),
     custom_data: params.customData || params.orderId,
