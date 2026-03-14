@@ -221,6 +221,7 @@ export default function AdminKYC() {
               </div>
               <Tabs value={statusFilter} onValueChange={setStatusFilter} className="w-full sm:w-auto">
                 <TabsList className="w-full sm:w-auto">
+                  <TabsTrigger value="" className="flex-1 sm:flex-none text-xs sm:text-sm">Tous</TabsTrigger>
                   <TabsTrigger value="pending" className="gap-1 flex-1 sm:flex-none text-xs sm:text-sm">
                     <Clock className="w-3 h-3" />
                     Attente
@@ -228,7 +229,6 @@ export default function AdminKYC() {
                   </TabsTrigger>
                   <TabsTrigger value="approved" className="flex-1 sm:flex-none text-xs sm:text-sm">Approuvés</TabsTrigger>
                   <TabsTrigger value="rejected" className="flex-1 sm:flex-none text-xs sm:text-sm">Rejetés</TabsTrigger>
-                  <TabsTrigger value="" className="flex-1 sm:flex-none text-xs sm:text-sm">Tous</TabsTrigger>
                 </TabsList>
               </Tabs>
             </div>
