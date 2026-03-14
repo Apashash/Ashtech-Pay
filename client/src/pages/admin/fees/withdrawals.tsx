@@ -14,7 +14,7 @@ import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Pencil, ArrowUpCircle, Info, ChevronDown, ChevronRight, Zap, Globe } from "lucide-react";
+import { Pencil, ArrowUpCircle, Info, ChevronDown, ChevronRight, Zap, Globe, Copy, Loader2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Fee, Country, Operator } from "@shared/schema";
@@ -259,6 +259,21 @@ export default function AdminFeesWithdrawals() {
 
   const isPending = swychrMutation.isPending || afribaMutation.isPending || pixpayMutation.isPending || providerMutation.isPending || createFeeMutation.isPending;
 
+  const syncMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/fees/sync-withdrawals-to-transfers", {});
+      return res.json();
+    },
+    onSuccess: (data: { synced: number; created: number }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/fees"] });
+      toast({
+        title: "Synchronisation réussie",
+        description: `${data.synced} frais mis à jour, ${data.created} créé(s) pour l'envoi`,
+      });
+    },
+    onError: () => toast({ title: "Erreur de synchronisation", variant: "destructive" }),
+  });
+
   const computeTotal = (): string => {
     if (!editing) return "0";
     const provFee = localProvider === "afribapay"
@@ -272,14 +287,28 @@ export default function AdminFeesWithdrawals() {
   return (
     <AdminLayout>
       <div className="p-6 space-y-6">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-red-500/10 rounded-lg">
-            <ArrowUpCircle className="w-6 h-6 text-red-500" />
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-red-500/10 rounded-lg">
+              <ArrowUpCircle className="w-6 h-6 text-red-500" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold">Frais de Retrait</h1>
+              <p className="text-muted-foreground">Par pays et opérateur actif — frais + minimum de charge</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold">Frais de Retrait</h1>
-            <p className="text-muted-foreground">Par pays et opérateur actif — frais + minimum de charge</p>
-          </div>
+          <Button
+            variant="outline"
+            onClick={() => syncMutation.mutate()}
+            disabled={syncMutation.isPending}
+            className="flex items-center gap-2 border-orange-500/50 text-orange-500 hover:bg-orange-500/10"
+            data-testid="button-sync-withdrawals-to-transfers"
+          >
+            {syncMutation.isPending
+              ? <Loader2 className="w-4 h-4 animate-spin" />
+              : <Copy className="w-4 h-4" />}
+            Copier vers Envoi
+          </Button>
         </div>
 
         <Card className="border-blue-500/20 bg-blue-500/5">

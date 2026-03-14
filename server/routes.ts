@@ -4880,6 +4880,67 @@ export async function registerRoutes(
     }
   });
 
+  // Admin: Copier tous les frais retrait → envoi (transfer)
+  app.post("/api/admin/fees/sync-withdrawals-to-transfers", requireAdmin, async (req, res) => {
+    try {
+      const allFees = await storage.getAllFees();
+      const withdrawalFees = allFees.filter(f => f.transactionType === 'withdrawal');
+      let synced = 0;
+      let created = 0;
+
+      for (const wFee of withdrawalFees) {
+        let tFee: typeof allFees[number] | undefined;
+        if (wFee.operatorId) {
+          tFee = allFees.find(f => f.operatorId === wFee.operatorId && f.transactionType === 'transfer');
+        } else if (wFee.countryId) {
+          tFee = allFees.find(f => f.countryId === wFee.countryId && !f.operatorId && f.transactionType === 'transfer');
+        } else {
+          tFee = allFees.find(f => !f.operatorId && !f.countryId && f.transactionType === 'transfer');
+        }
+
+        const syncValues = {
+          feeValue: wFee.feeValue,
+          ashtechMargin: wFee.ashtechMargin,
+          afribapayFee: wFee.afribapayFee,
+          pixpayFee: wFee.pixpayFee,
+          swychrFee: wFee.swychrFee,
+          minFee: wFee.minFee,
+          isActive: wFee.isActive,
+        };
+
+        if (tFee) {
+          await storage.updateFee(tFee.id, syncValues);
+          synced++;
+        } else {
+          const newName = wFee.name.replace(/retrait/gi, 'Envoi').replace(/withdrawal/gi, 'Transfer');
+          await storage.createFee({
+            ...syncValues,
+            name: newName !== wFee.name ? newName : `Envoi - ${wFee.name}`,
+            feeType: wFee.feeType,
+            transactionType: 'transfer',
+            operatorId: wFee.operatorId || null,
+            countryId: wFee.countryId || null,
+          } as any);
+          created++;
+        }
+      }
+
+      await storage.createAdminLog({
+        adminId: req.userId!,
+        action: "sync_fees_withdrawal_to_transfer",
+        targetType: "fee",
+        targetId: null,
+        details: JSON.stringify({ synced, created }),
+        ipAddress: req.ip || null,
+      });
+
+      res.json({ success: true, synced, created });
+    } catch (error) {
+      console.error("Sync withdrawal to transfer fees error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   // Admin: Fees CRUD
   app.get("/api/admin/fees", requireAdmin, async (req, res) => {
     try {
@@ -4928,12 +4989,16 @@ export async function registerRoutes(
 
       const updatedFee = await storage.updateFee(req.params.id, updates);
 
-      // Si c'est un frais de transfert ou retrait, on synchronise l'autre type pour le même pays
-      if (fee.countryId && (fee.transactionType === 'transfer' || fee.transactionType === 'withdrawal')) {
+      // Synchroniser l'autre type (transfer <-> withdrawal) pour le même opérateur ou pays
+      if (fee.transactionType === 'transfer' || fee.transactionType === 'withdrawal') {
         const otherType = fee.transactionType === 'transfer' ? 'withdrawal' : 'transfer';
         const allFees = await storage.getAllFees();
-        const otherFee = allFees.find(f => f.countryId === fee.countryId && f.transactionType === otherType);
-        
+        let otherFee: typeof allFees[number] | undefined;
+        if (fee.operatorId) {
+          otherFee = allFees.find(f => f.operatorId === fee.operatorId && f.transactionType === otherType);
+        } else if (fee.countryId) {
+          otherFee = allFees.find(f => f.countryId === fee.countryId && !f.operatorId && f.transactionType === otherType);
+        }
         if (otherFee) {
           await storage.updateFee(otherFee.id, {
             ashtechMargin: updates.ashtechMargin,
