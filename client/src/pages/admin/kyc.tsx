@@ -21,16 +21,8 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   Search, 
   CheckCircle, 
@@ -43,7 +35,6 @@ import {
   Image as ImageIcon,
   Shield,
   Loader2,
-  AlertCircle,
   MapPin
 } from "lucide-react";
 import { format } from "date-fns";
@@ -89,6 +80,15 @@ interface KycStats {
   rejected: number;
 }
 
+function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-2 py-1">
+      <span className="text-muted-foreground text-sm shrink-0 w-32">{label}</span>
+      <span className="text-sm font-medium break-all min-w-0 flex-1">{value}</span>
+    </div>
+  );
+}
+
 export default function AdminKYC() {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
@@ -126,9 +126,7 @@ export default function AdminKYC() {
       setViewSubmission(null);
       setApproveNote("");
     },
-    onError: () => {
-      toast({ title: "Erreur", variant: "destructive" });
-    },
+    onError: () => toast({ title: "Erreur", variant: "destructive" }),
   });
 
   const rejectMutation = useMutation({
@@ -143,29 +141,25 @@ export default function AdminKYC() {
       setRejectNote("");
       setViewSubmission(null);
     },
-    onError: () => {
-      toast({ title: "Erreur", variant: "destructive" });
-    },
+    onError: () => toast({ title: "Erreur", variant: "destructive" }),
   });
 
-  const getDocumentTypeName = (typeId: string) => {
-    return KYC_DOCUMENT_TYPES.find(d => d.id === typeId)?.name || typeId;
-  };
+  const getDocumentTypeName = (typeId: string) =>
+    KYC_DOCUMENT_TYPES.find(d => d.id === typeId)?.name || typeId;
 
-  const getBusinessCategoryName = (categoryId: string) => {
-    return BUSINESS_CATEGORIES.find(c => c.id === categoryId)?.name || categoryId;
-  };
+  const getBusinessCategoryName = (categoryId: string) =>
+    BUSINESS_CATEGORIES.find(c => c.id === categoryId)?.name || categoryId;
 
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "pending":
-        return <Badge className="bg-yellow-500/20 text-yellow-500 border-yellow-500/30">En attente</Badge>;
+        return <Badge className="bg-yellow-500/20 text-yellow-500 border-yellow-500/30 shrink-0">En attente</Badge>;
       case "approved":
-        return <Badge className="bg-green-500/20 text-green-500 border-green-500/30">Approuvé</Badge>;
+        return <Badge className="bg-green-500/20 text-green-500 border-green-500/30 shrink-0">Approuvé</Badge>;
       case "rejected":
-        return <Badge className="bg-red-500/20 text-red-500 border-red-500/30">Rejeté</Badge>;
+        return <Badge className="bg-red-500/20 text-red-500 border-red-500/30 shrink-0">Rejeté</Badge>;
       default:
-        return <Badge>{status}</Badge>;
+        return <Badge className="shrink-0">{status}</Badge>;
     }
   };
 
@@ -173,37 +167,37 @@ export default function AdminKYC() {
 
   const filteredSubmissions = submissions?.filter(sub => {
     if (!search) return true;
-    const searchLower = search.toLowerCase();
+    const s = search.toLowerCase();
     return (
-      sub.user?.fullName?.toLowerCase().includes(searchLower) ||
-      sub.user?.email?.toLowerCase().includes(searchLower) ||
-      sub.user?.phone?.toLowerCase().includes(searchLower) ||
-      sub.documentNumber?.toLowerCase().includes(searchLower)
+      sub.user?.fullName?.toLowerCase().includes(s) ||
+      sub.user?.email?.toLowerCase().includes(s) ||
+      sub.user?.phone?.toLowerCase().includes(s) ||
+      sub.documentNumber?.toLowerCase().includes(s)
     );
   });
 
   return (
     <AdminLayout>
-      <div className="p-6 space-y-6">
+      <div className="p-4 md:p-6 space-y-6">
+        {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
             <h1 className="text-2xl font-bold">Vérifications KYC</h1>
-            <p className="text-muted-foreground">Gérez les demandes de vérification d'identité</p>
+            <p className="text-muted-foreground text-sm">Gérez les demandes de vérification d'identité</p>
           </div>
-          
-          <div className="flex items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-4 shrink-0">
             <Card className="px-4 py-2">
-              <div className="flex items-center gap-6">
+              <div className="flex items-center gap-4">
                 <div className="text-center">
-                  <p className="text-2xl font-bold text-yellow-500">{stats?.pending || 0}</p>
+                  <p className="text-xl font-bold text-yellow-500">{stats?.pending || 0}</p>
                   <p className="text-xs text-muted-foreground">En attente</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-2xl font-bold text-green-500">{stats?.approved || 0}</p>
+                  <p className="text-xl font-bold text-green-500">{stats?.approved || 0}</p>
                   <p className="text-xs text-muted-foreground">Approuvés</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-2xl font-bold text-red-500">{stats?.rejected || 0}</p>
+                  <p className="text-xl font-bold text-red-500">{stats?.rejected || 0}</p>
                   <p className="text-xs text-muted-foreground">Rejetés</p>
                 </div>
               </div>
@@ -211,284 +205,265 @@ export default function AdminKYC() {
           </div>
         </div>
 
+        {/* Filters */}
         <Card>
-          <CardHeader>
-            <div className="flex items-center gap-4 flex-wrap">
-              <div className="relative flex-1 min-w-[200px]">
+          <CardHeader className="pb-3">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+              <div className="relative w-full sm:flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
-                  placeholder="Rechercher par nom, email, téléphone..."
+                  placeholder="Rechercher nom, email, téléphone..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="pl-10"
                   data-testid="input-search-kyc"
                 />
               </div>
-              <Tabs value={statusFilter} onValueChange={setStatusFilter}>
-                <TabsList>
-                  <TabsTrigger value="pending" className="gap-2">
-                    <Clock className="w-4 h-4" />
-                    En attente
-                    {stats?.pending ? <Badge className="bg-yellow-500/20 text-yellow-500 text-xs ml-1">{stats.pending}</Badge> : null}
+              <Tabs value={statusFilter} onValueChange={setStatusFilter} className="w-full sm:w-auto">
+                <TabsList className="w-full sm:w-auto">
+                  <TabsTrigger value="pending" className="gap-1 flex-1 sm:flex-none text-xs sm:text-sm">
+                    <Clock className="w-3 h-3" />
+                    Attente
+                    {stats?.pending ? <Badge className="bg-yellow-500/20 text-yellow-500 text-xs ml-0.5 px-1">{stats.pending}</Badge> : null}
                   </TabsTrigger>
-                  <TabsTrigger value="approved">Approuvés</TabsTrigger>
-                  <TabsTrigger value="rejected">Rejetés</TabsTrigger>
-                  <TabsTrigger value="">Tous</TabsTrigger>
+                  <TabsTrigger value="approved" className="flex-1 sm:flex-none text-xs sm:text-sm">Approuvés</TabsTrigger>
+                  <TabsTrigger value="rejected" className="flex-1 sm:flex-none text-xs sm:text-sm">Rejetés</TabsTrigger>
+                  <TabsTrigger value="" className="flex-1 sm:flex-none text-xs sm:text-sm">Tous</TabsTrigger>
                 </TabsList>
               </Tabs>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-0">
             {isLoading ? (
-              <div className="flex items-center justify-center py-8">
+              <div className="flex items-center justify-center py-12">
                 <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
               </div>
             ) : !filteredSubmissions?.length ? (
-              <div className="text-center py-8 text-muted-foreground">
+              <div className="text-center py-12 text-muted-foreground">
                 Aucune soumission KYC trouvée
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Utilisateur</TableHead>
-                    <TableHead>Document</TableHead>
-                    <TableHead>Activité</TableHead>
-                    <TableHead>Statut</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredSubmissions.map((sub) => (
-                    <TableRow key={sub.id} data-testid={`row-kyc-${sub.id}`}>
-                      <TableCell>
-                        <div>
-                          <p className="font-medium">{sub.user?.fullName || "N/A"}</p>
-                          <p className="text-sm text-muted-foreground">{sub.user?.email}</p>
-                          {sub.user?.phone && (
-                            <p className="text-xs text-muted-foreground">{sub.user.phone}</p>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <p className="text-sm">{getDocumentTypeName(sub.documentType)}</p>
-                          <p className="text-xs text-muted-foreground">{sub.documentNumber}</p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <Badge variant="outline" className="text-xs mb-1">
-                            {sub.businessType === "physical" ? "Physique" : "En ligne"}
-                          </Badge>
-                          <p className="text-xs text-muted-foreground">
-                            {getBusinessCategoryName(sub.businessCategory)}
-                          </p>
-                        </div>
-                      </TableCell>
-                      <TableCell>{getStatusBadge(sub.status)}</TableCell>
-                      <TableCell>
-                        {sub.createdAt && (
-                          <span className="text-sm text-muted-foreground">
-                            {format(new Date(sub.createdAt), "dd/MM/yyyy HH:mm", { locale: fr })}
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setViewSubmission(sub)}
-                            data-testid={`button-view-kyc-${sub.id}`}
-                          >
-                            <Eye className="w-4 h-4" />
-                          </Button>
-                          {sub.status === "pending" && (
-                            <>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="text-green-500 hover:text-green-600"
-                                onClick={() => approveMutation.mutate({ id: sub.id })}
-                                disabled={approveMutation.isPending}
-                                data-testid={`button-quick-approve-${sub.id}`}
-                              >
-                                <CheckCircle className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="text-red-500 hover:text-red-600"
-                                onClick={() => setRejectModal(sub)}
-                                data-testid={`button-quick-reject-${sub.id}`}
-                              >
-                                <XCircle className="w-4 h-4" />
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      </TableCell>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="min-w-[140px]">Utilisateur</TableHead>
+                      <TableHead className="min-w-[120px]">Document</TableHead>
+                      <TableHead className="min-w-[110px]">Activité</TableHead>
+                      <TableHead className="w-[100px]">Statut</TableHead>
+                      <TableHead className="w-[110px]">Date</TableHead>
+                      <TableHead className="w-[100px]">Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredSubmissions.map((sub) => (
+                      <TableRow key={sub.id} data-testid={`row-kyc-${sub.id}`}>
+                        <TableCell className="max-w-[160px]">
+                          <div className="space-y-0.5">
+                            <p className="font-medium text-sm truncate">{sub.user?.fullName || "N/A"}</p>
+                            <p className="text-xs text-muted-foreground truncate">{sub.user?.email}</p>
+                            {sub.user?.phone && (
+                              <p className="text-xs text-muted-foreground truncate">{sub.user.phone}</p>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="max-w-[130px]">
+                          <div className="space-y-0.5">
+                            <p className="text-sm truncate">{getDocumentTypeName(sub.documentType)}</p>
+                            <p className="text-xs text-muted-foreground font-mono truncate">{sub.documentNumber}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell className="max-w-[120px]">
+                          <div className="space-y-1">
+                            <Badge variant="outline" className="text-xs whitespace-nowrap">
+                              {sub.businessType === "physical" ? "Physique" : "En ligne"}
+                            </Badge>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {getBusinessCategoryName(sub.businessCategory)}
+                            </p>
+                          </div>
+                        </TableCell>
+                        <TableCell>{getStatusBadge(sub.status)}</TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          {sub.createdAt && (
+                            <span className="text-xs text-muted-foreground">
+                              {format(new Date(sub.createdAt), "dd/MM/yy HH:mm", { locale: fr })}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => setViewSubmission(sub)}
+                              data-testid={`button-view-kyc-${sub.id}`}
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                            {sub.status === "pending" && (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-green-500 hover:text-green-600"
+                                  onClick={() => approveMutation.mutate({ id: sub.id })}
+                                  disabled={approveMutation.isPending}
+                                  data-testid={`button-quick-approve-${sub.id}`}
+                                >
+                                  <CheckCircle className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-red-500 hover:text-red-600"
+                                  onClick={() => setRejectModal(sub)}
+                                  data-testid={`button-quick-reject-${sub.id}`}
+                                >
+                                  <XCircle className="w-4 h-4" />
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </CardContent>
         </Card>
 
+        {/* View modal */}
         <Dialog open={!!viewSubmission} onOpenChange={() => setViewSubmission(null)}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <Shield className="w-5 h-5" />
+                <Shield className="w-5 h-5 shrink-0" />
                 Détails de la vérification KYC
               </DialogTitle>
               <DialogDescription>
-                Vérifiez les informations et documents soumis par l'utilisateur
+                Informations et documents soumis par l'utilisateur
               </DialogDescription>
             </DialogHeader>
 
             {viewSubmission && (
-              <div className="space-y-6">
-                <div className="flex items-center justify-between">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
                   {getStatusBadge(viewSubmission.status)}
                   {viewSubmission.reviewedAt && (
-                    <span className="text-sm text-muted-foreground">
+                    <span className="text-xs text-muted-foreground">
                       Examiné le {format(new Date(viewSubmission.reviewedAt), "dd/MM/yyyy HH:mm", { locale: fr })}
                     </span>
                   )}
                 </div>
 
                 {viewSubmission.reviewNote && viewSubmission.status === "rejected" && (
-                  <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
-                    <p className="text-sm text-red-400">
+                  <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+                    <p className="text-sm text-red-400 break-words">
                       <strong>Note de rejet :</strong> {viewSubmission.reviewNote}
                     </p>
                   </div>
                 )}
 
-                <div className="grid md:grid-cols-2 gap-6">
+                {/* Utilisateur + Document côte à côte */}
+                <div className="grid sm:grid-cols-2 gap-4">
                   <Card>
-                    <CardHeader>
-                      <CardTitle className="text-base flex items-center gap-2">
-                        <UserIcon className="w-4 h-4" />
-                        Informations utilisateur
+                    <CardHeader className="pb-2 pt-4 px-4">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <UserIcon className="w-4 h-4 shrink-0" />
+                        Utilisateur
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-3">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Nom complet</span>
-                        <span className="font-medium">{viewSubmission.user?.fullName}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Email</span>
-                        <span>{viewSubmission.user?.email}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Téléphone</span>
-                        <span>{viewSubmission.user?.phone || "N/A"}</span>
-                      </div>
+                    <CardContent className="px-4 pb-4 space-y-1">
+                      <InfoRow label="Nom" value={viewSubmission.user?.fullName || "N/A"} />
+                      <InfoRow label="Email" value={viewSubmission.user?.email || "N/A"} />
+                      <InfoRow label="Téléphone" value={viewSubmission.user?.phone || "N/A"} />
                       {viewSubmission.user?.createdAt && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Inscrit le</span>
-                          <span>{format(new Date(viewSubmission.user.createdAt), "dd/MM/yyyy", { locale: fr })}</span>
-                        </div>
+                        <InfoRow label="Inscrit le" value={format(new Date(viewSubmission.user.createdAt), "dd/MM/yyyy", { locale: fr })} />
                       )}
                     </CardContent>
                   </Card>
 
                   <Card>
-                    <CardHeader>
-                      <CardTitle className="text-base flex items-center gap-2">
-                        <CreditCard className="w-4 h-4" />
+                    <CardHeader className="pb-2 pt-4 px-4">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <CreditCard className="w-4 h-4 shrink-0" />
                         Document d'identité
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-3">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Type</span>
-                        <span className="font-medium">{getDocumentTypeName(viewSubmission.documentType)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Numéro</span>
-                        <span className="font-mono">{viewSubmission.documentNumber}</span>
-                      </div>
+                    <CardContent className="px-4 pb-4 space-y-1">
+                      <InfoRow label="Type" value={getDocumentTypeName(viewSubmission.documentType)} />
+                      <InfoRow label="Numéro" value={<span className="font-mono">{viewSubmission.documentNumber}</span>} />
                     </CardContent>
                   </Card>
                 </div>
 
+                {/* Adresse */}
                 {(viewSubmission.country || viewSubmission.city) && (
                   <Card>
-                    <CardHeader>
-                      <CardTitle className="text-base flex items-center gap-2">
-                        <MapPin className="w-4 h-4" />
+                    <CardHeader className="pb-2 pt-4 px-4">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <MapPin className="w-4 h-4 shrink-0" />
                         Adresse
                       </CardTitle>
                     </CardHeader>
-                    <CardContent>
-                      <div className="grid md:grid-cols-3 gap-4">
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Pays</span>
-                          <span className="font-medium">{viewSubmission.country || "N/A"}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Ville</span>
-                          <span className="font-medium">{viewSubmission.city || "N/A"}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Code postal</span>
-                          <span className="font-medium">{viewSubmission.postalCode || "N/A"}</span>
-                        </div>
+                    <CardContent className="px-4 pb-4">
+                      <div className="grid sm:grid-cols-3 gap-2">
+                        <InfoRow label="Pays" value={viewSubmission.country || "N/A"} />
+                        <InfoRow label="Ville" value={viewSubmission.city || "N/A"} />
+                        <InfoRow label="Code postal" value={viewSubmission.postalCode || "N/A"} />
                       </div>
                     </CardContent>
                   </Card>
                 )}
 
+                {/* Activité */}
                 <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <Building2 className="w-4 h-4" />
-                      Informations sur l'activité
+                  <CardHeader className="pb-2 pt-4 px-4">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <Building2 className="w-4 h-4 shrink-0" />
+                      Activité commerciale
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Type d'activité</span>
-                      <Badge variant="outline">
-                        {viewSubmission.businessType === "physical" ? "Commerce physique" : "Commerce en ligne"}
-                      </Badge>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Catégorie</span>
-                      <span className="font-medium">{getBusinessCategoryName(viewSubmission.businessCategory)}</span>
-                    </div>
+                  <CardContent className="px-4 pb-4 space-y-2">
+                    <InfoRow
+                      label="Type"
+                      value={
+                        <Badge variant="outline" className="text-xs">
+                          {viewSubmission.businessType === "physical" ? "Commerce physique" : "Commerce en ligne"}
+                        </Badge>
+                      }
+                    />
+                    <InfoRow label="Catégorie" value={getBusinessCategoryName(viewSubmission.businessCategory)} />
                     <div>
-                      <span className="text-muted-foreground block mb-2">Description</span>
-                      <p className="bg-muted/50 rounded-lg p-3 text-sm">
+                      <p className="text-muted-foreground text-sm mb-1">Description</p>
+                      <p className="bg-muted/50 rounded-lg p-3 text-sm break-words">
                         {viewSubmission.businessDescription}
                       </p>
                     </div>
                   </CardContent>
                 </Card>
 
+                {/* Documents */}
                 <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <ImageIcon className="w-4 h-4" />
+                  <CardHeader className="pb-2 pt-4 px-4">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <ImageIcon className="w-4 h-4 shrink-0" />
                       Documents soumis
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-3 gap-4">
+                  <CardContent className="px-4 pb-4">
+                    <div className="grid grid-cols-3 gap-3">
                       {[
-                        { path: viewSubmission.documentFrontPath, label: "Recto du document", testId: "button-view-front", alt: "Document recto" },
-                        { path: viewSubmission.documentBackPath, label: "Verso du document", testId: "button-view-back", alt: "Document verso" },
-                        { path: viewSubmission.selfiePath, label: "Selfie avec document", testId: "button-view-selfie", alt: "Selfie" },
+                        { path: viewSubmission.documentFrontPath, label: "Recto", testId: "button-view-front", alt: "Document recto" },
+                        { path: viewSubmission.documentBackPath, label: "Verso", testId: "button-view-back", alt: "Document verso" },
+                        { path: viewSubmission.selfiePath, label: "Selfie", testId: "button-view-selfie", alt: "Selfie" },
                       ].map(({ path, label, testId, alt }) => (
                         <div key={testId}>
-                          <p className="text-sm text-muted-foreground mb-2">{label}</p>
+                          <p className="text-xs text-muted-foreground mb-1 text-center">{label}</p>
                           <button
                             onClick={() => setImageModal({ url: getImageUrl(path), title: label })}
                             className="w-full aspect-video bg-muted rounded-lg overflow-hidden hover:opacity-80 transition-opacity relative"
@@ -505,7 +480,7 @@ export default function AdminKYC() {
                                 if (parent && !parent.querySelector(".img-error-msg")) {
                                   const msg = document.createElement("div");
                                   msg.className = "img-error-msg flex flex-col items-center justify-center h-full text-muted-foreground text-xs p-2 text-center";
-                                  msg.innerHTML = `<svg xmlns='http://www.w3.org/2000/svg' class='w-6 h-6 mb-1 opacity-40' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z'/></svg>Document non disponible`;
+                                  msg.innerHTML = `<svg xmlns='http://www.w3.org/2000/svg' class='w-5 h-5 mb-1 opacity-40' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z'/></svg>Non disponible`;
                                   parent.appendChild(msg);
                                 }
                               }}
@@ -517,10 +492,11 @@ export default function AdminKYC() {
                   </CardContent>
                 </Card>
 
+                {/* Actions pour pending */}
                 {viewSubmission.status === "pending" && (
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>Note d'approbation (optionnel)</Label>
+                  <div className="space-y-3 border-t pt-4">
+                    <div className="space-y-1.5">
+                      <Label className="text-sm">Note d'approbation (optionnel)</Label>
                       <Textarea
                         value={approveNote}
                         onChange={(e) => setApproveNote(e.target.value)}
@@ -529,26 +505,24 @@ export default function AdminKYC() {
                         data-testid="textarea-approve-note"
                       />
                     </div>
-                    <div className="flex justify-end gap-3">
+                    <div className="flex flex-col sm:flex-row justify-end gap-2">
                       <Button
                         variant="outline"
                         onClick={() => setRejectModal(viewSubmission)}
+                        className="gap-2 text-red-500 border-red-500/30 hover:bg-red-500/10 w-full sm:w-auto"
                         data-testid="button-reject-kyc"
                       >
-                        <XCircle className="w-4 h-4 mr-2" />
+                        <XCircle className="w-4 h-4" />
                         Rejeter
                       </Button>
                       <Button
                         onClick={() => approveMutation.mutate({ id: viewSubmission.id, note: approveNote })}
                         disabled={approveMutation.isPending}
+                        className="gap-2 w-full sm:w-auto"
                         data-testid="button-approve-kyc"
                       >
-                        {approveMutation.isPending ? (
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        ) : (
-                          <CheckCircle className="w-4 h-4 mr-2" />
-                        )}
-                        Approuver
+                        <CheckCircle className="w-4 h-4" />
+                        {approveMutation.isPending ? "Approbation..." : "Approuver"}
                       </Button>
                     </div>
                   </div>
@@ -558,70 +532,58 @@ export default function AdminKYC() {
           </DialogContent>
         </Dialog>
 
+        {/* Reject modal */}
         <Dialog open={!!rejectModal} onOpenChange={() => setRejectModal(null)}>
-          <DialogContent>
+          <DialogContent className="w-[95vw] max-w-md">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-red-500">
-                <AlertCircle className="w-5 h-5" />
+                <XCircle className="w-5 h-5 shrink-0" />
                 Rejeter la vérification
               </DialogTitle>
               <DialogDescription>
-                Indiquez la raison du rejet. L'utilisateur sera notifié et pourra soumettre de nouveaux documents.
+                Expliquez la raison du rejet. L'utilisateur recevra cette note.
               </DialogDescription>
             </DialogHeader>
-            
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Raison du rejet *</Label>
-                <Textarea
-                  value={rejectNote}
-                  onChange={(e) => setRejectNote(e.target.value)}
-                  placeholder="Ex: Document illisible, photo floue, informations incohérentes..."
-                  rows={4}
-                  data-testid="textarea-reject-note"
-                />
+            <div className="space-y-3 pt-2">
+              <Textarea
+                value={rejectNote}
+                onChange={(e) => setRejectNote(e.target.value)}
+                placeholder="Raison du rejet (obligatoire)..."
+                rows={3}
+                data-testid="textarea-reject-note"
+              />
+              <div className="flex flex-col sm:flex-row gap-2 justify-end">
+                <Button variant="outline" onClick={() => setRejectModal(null)} className="w-full sm:w-auto">
+                  Annuler
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => rejectModal && rejectMutation.mutate({ id: rejectModal.id, note: rejectNote })}
+                  disabled={!rejectNote.trim() || rejectMutation.isPending}
+                  className="gap-2 w-full sm:w-auto"
+                  data-testid="button-confirm-reject"
+                >
+                  <XCircle className="w-4 h-4" />
+                  {rejectMutation.isPending ? "Rejet..." : "Confirmer le rejet"}
+                </Button>
               </div>
             </div>
-
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setRejectModal(null)}>
-                Annuler
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={() => {
-                  if (rejectModal && rejectNote.trim()) {
-                    rejectMutation.mutate({ id: rejectModal.id, note: rejectNote });
-                  }
-                }}
-                disabled={!rejectNote.trim() || rejectMutation.isPending}
-                data-testid="button-confirm-reject"
-              >
-                {rejectMutation.isPending ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <XCircle className="w-4 h-4 mr-2" />
-                )}
-                Confirmer le rejet
-              </Button>
-            </DialogFooter>
           </DialogContent>
         </Dialog>
 
+        {/* Image fullscreen modal */}
         <Dialog open={!!imageModal} onOpenChange={() => setImageModal(null)}>
-          <DialogContent className="max-w-4xl">
-            <DialogHeader>
-              <DialogTitle>{imageModal?.title}</DialogTitle>
+          <DialogContent className="w-[95vw] max-w-3xl p-2">
+            <DialogHeader className="p-2">
+              <DialogTitle className="text-sm">{imageModal?.title}</DialogTitle>
             </DialogHeader>
-            {imageModal && (
-              <div className="flex items-center justify-center">
-                <img
-                  src={imageModal.url}
-                  alt={imageModal.title}
-                  className="max-w-full max-h-[70vh] object-contain rounded-lg"
-                />
-              </div>
-            )}
+            <div className="flex items-center justify-center">
+              <img
+                src={imageModal?.url}
+                alt={imageModal?.title}
+                className="max-w-full max-h-[80vh] object-contain rounded-lg"
+              />
+            </div>
           </DialogContent>
         </Dialog>
       </div>
