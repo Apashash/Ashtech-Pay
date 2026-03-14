@@ -1,0 +1,359 @@
+import { useState, useRef } from "react";
+import { useLocation } from "wouter";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { DashboardLayout } from "@/components/dashboard-layout";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
+import { useToast } from "@/hooks/use-toast";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { createPaymentLinkSchema } from "@shared/schema";
+import type { User } from "@shared/schema";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { ArrowLeft, Loader2, Upload, X, FileText, Link as LinkIcon, ExternalLink, Calendar, Image } from "lucide-react";
+import { z } from "zod";
+
+export default function LinkCreatePage() {
+  const [, navigate] = useLocation();
+  const { toast } = useToast();
+  const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+
+  const form = useForm<z.infer<typeof createPaymentLinkSchema>>({
+    resolver: zodResolver(createPaymentLinkSchema),
+    defaultValues: {
+      title: "",
+      description: "",
+      amount: "",
+      customSlug: "",
+      isFixedAmount: true,
+      imagePath: "",
+      pdfPath: "",
+      hasPdfDelivery: false,
+      redirectUrl: "",
+      expiresAt: "",
+    },
+  });
+
+  const isFixedAmount = form.watch("isFixedAmount");
+  const hasPdfDelivery = form.watch("hasPdfDelivery");
+  const pdfPathValue = form.watch("pdfPath");
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setImageFile(file);
+      setImagePreview(URL.createObjectURL(file));
+    }
+  };
+
+  const clearImage = () => {
+    setImageFile(null);
+    setImagePreview(null);
+    form.setValue("imagePath", "");
+    if (imageInputRef.current) imageInputRef.current.value = "";
+  };
+
+  const uploadImage = async (file: File): Promise<string> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await fetch("/api/uploads/file", {
+      method: "POST",
+      credentials: "include",
+      body: formData,
+    });
+    if (!response.ok) throw new Error("Échec de l'upload");
+    const result = await response.json();
+    return result.url || result.objectPath;
+  };
+
+  const createMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof createPaymentLinkSchema>) => {
+      let finalData = { ...data };
+      if (imageFile) {
+        const imageUrl = await uploadImage(imageFile);
+        finalData.imagePath = imageUrl;
+      }
+      const res = await apiRequest("POST", "/api/payment-links", finalData);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/payment-links"] });
+      toast({ title: "Lien créé", description: "Votre lien de paiement a été créé avec succès" });
+      navigate("/dashboard/links");
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+    },
+  });
+
+  return (
+    <DashboardLayout>
+      <div className="space-y-6 max-w-2xl mx-auto">
+        <div className="flex items-center gap-4">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate("/dashboard/links")}
+            data-testid="button-back-links"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Créer un lien de paiement</h1>
+            <p className="text-muted-foreground text-sm">Créez un lien partageable pour recevoir des paiements</p>
+          </div>
+        </div>
+
+        <Card>
+          <CardContent className="pt-6">
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit((d) => createMutation.mutate(d))} className="space-y-6">
+
+                <FormField
+                  control={form.control}
+                  name="title"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Titre *</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Ex: Paiement commande #123" {...field} data-testid="input-link-title" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Description (optionnel)</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Description du paiement..." {...field} data-testid="input-link-description" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="customSlug"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-2">
+                        <LinkIcon className="w-4 h-4" />
+                        URL personnalisée (optionnel)
+                      </FormLabel>
+                      <FormControl>
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground text-sm whitespace-nowrap">/pay/</span>
+                          <Input placeholder="mon-lien-unique" {...field} data-testid="input-link-slug" />
+                        </div>
+                      </FormControl>
+                      <FormDescription className="text-xs">Laissez vide pour générer automatiquement</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormItem>
+                  <FormLabel className="flex items-center gap-2">
+                    <Image className="w-4 h-4" />
+                    Image (optionnel)
+                  </FormLabel>
+                  <FormDescription className="text-xs">
+                    Cette image s'affichera sur la page de paiement
+                  </FormDescription>
+                  <input
+                    ref={imageInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageSelect}
+                    className="hidden"
+                    data-testid="input-link-image"
+                  />
+                  {imagePreview ? (
+                    <div className="relative">
+                      <img src={imagePreview} alt="Preview" className="w-full h-48 object-cover rounded-lg" />
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="icon"
+                        className="absolute top-2 right-2 h-7 w-7"
+                        onClick={clearImage}
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => imageInputRef.current?.click()}
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      Choisir une image
+                    </Button>
+                  )}
+                </FormItem>
+
+                <FormField
+                  control={form.control}
+                  name="pdfPath"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-2">
+                        <FileText className="w-4 h-4" />
+                        Lien PDF (optionnel)
+                      </FormLabel>
+                      <FormDescription className="text-xs text-amber-500">
+                        Ce PDF sera envoyé au client uniquement après paiement réussi
+                      </FormDescription>
+                      <FormControl>
+                        <div className="flex items-center gap-2">
+                          <LinkIcon className="w-4 h-4 text-muted-foreground shrink-0" />
+                          <Input
+                            placeholder="https://drive.google.com/file/d/..."
+                            {...field}
+                            data-testid="input-link-pdf-url"
+                          />
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {pdfPathValue && (
+                  <FormField
+                    control={form.control}
+                    name="hasPdfDelivery"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center justify-between rounded-lg border border-amber-500/50 bg-amber-500/10 p-4">
+                        <div className="space-y-0.5">
+                          <FormLabel className="text-amber-500">Livraison PDF après paiement</FormLabel>
+                          <FormDescription className="text-xs">
+                            Le client recevra ce lien PDF après avoir payé avec succès
+                          </FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            data-testid="switch-pdf-delivery"
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                )}
+
+                <FormField
+                  control={form.control}
+                  name="isFixedAmount"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center justify-between rounded-lg border p-4">
+                      <div className="space-y-0.5">
+                        <FormLabel>Type de montant</FormLabel>
+                        <FormDescription className="text-xs">
+                          {field.value ? "Montant fixe défini par vous" : "Montant libre choisi par le payeur"}
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          data-testid="switch-fixed-amount"
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                {isFixedAmount && (
+                  <FormField
+                    control={form.control}
+                    name="amount"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Montant ({user?.preferredCurrency || "XAF"}) *</FormLabel>
+                        <FormControl>
+                          <Input type="number" placeholder="10000" {...field} data-testid="input-link-amount" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
+                <FormField
+                  control={form.control}
+                  name="expiresAt"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-2">
+                        <Calendar className="w-4 h-4" />
+                        Date d'expiration (optionnel)
+                      </FormLabel>
+                      <FormControl>
+                        <Input type="datetime-local" {...field} data-testid="input-link-expiry" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="redirectUrl"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-2">
+                        <ExternalLink className="w-4 h-4" />
+                        URL de redirection après paiement (optionnel)
+                      </FormLabel>
+                      <FormControl>
+                        <Input placeholder="https://monsite.com/merci" {...field} data-testid="input-link-redirect" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="flex gap-3 pt-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => navigate("/dashboard/links")}
+                    data-testid="button-create-link-cancel"
+                  >
+                    Annuler
+                  </Button>
+                  <Button
+                    type="submit"
+                    className="flex-1"
+                    disabled={createMutation.isPending}
+                    data-testid="button-create-link-confirm"
+                  >
+                    {createMutation.isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+                    Créer le lien
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          </CardContent>
+        </Card>
+      </div>
+    </DashboardLayout>
+  );
+}
