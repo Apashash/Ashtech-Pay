@@ -968,6 +968,34 @@ export class DatabaseStorage implements IStorage {
     const resetSetting = await this.getSetting("stats_reset_at");
     const resetAt: Date | null = resetSetting ? new Date(resetSetting.value) : null;
 
+    // Load FX rates from platform settings (same source as walletHelper.loadFxRates)
+    // Avoids circular import since walletHelper imports storage
+    const allSettings = await this.getAllSettings();
+    const fxRates: Record<string, number> = {};
+    allSettings.forEach((s: { key: string; value: string }) => {
+      if (s.key.startsWith("fx_rate_")) {
+        const code = s.key.replace("fx_rate_", "");
+        const val = parseFloat(s.value);
+        if (!isNaN(val) && val > 0) fxRates[code] = val;
+      }
+    });
+    if (!fxRates["XAF"]) fxRates["XAF"] = 585;
+
+    // All CFA franc variants (XAF/XOF and country-specific codes) are 1:1 with XAF
+    const CFA = new Set([
+      "XAF", "XAFC", "XAFG",
+      "XOF", "XOFC", "XOFF", "XOFN", "XOFB", "XOFT", "XOFS", "XOFM",
+    ]);
+
+    // Convert any amount to XAF via USD pivot (mirrors walletHelper.convertToXAF)
+    const toXAF = (amount: number, currency: string): number => {
+      if (!currency || CFA.has(currency)) return amount;
+      const fromRate = fxRates[currency];
+      if (!fromRate) return amount; // unknown currency — treat as XAF
+      const amountUSD = amount / fromRate;
+      return amountUSD * (fxRates["XAF"] || 585);
+    };
+
     const [usersCount] = await db.select({ count: count() }).from(users);
     const [bannedCount] = await db.select({ count: count() }).from(users).where(eq(users.isBanned, true));
     
@@ -1022,23 +1050,18 @@ export class DatabaseStorage implements IStorage {
     const links = completedTx.filter(t => t.type === "payment_link");
     const conversions = completedTx.filter(t => t.type === "conversion");
     
-    const depositVol = deposits.reduce((sum, t) => sum + parseFloat(t.amount), 0);
-    const withdrawalVol = withdrawals.reduce((sum, t) => sum + parseFloat(t.amount), 0);
-    const transferVol = transfers.reduce((sum, t) => sum + parseFloat(t.amount), 0);
-    const linkVol = links.reduce((sum, t) => sum + parseFloat(t.amount), 0);
+    // All volumes and fees converted to XAF for consistent totals
+    const depositVol = deposits.reduce((sum, t) => sum + toXAF(parseFloat(t.amount), t.currency || "XAF"), 0);
+    const withdrawalVol = withdrawals.reduce((sum, t) => sum + toXAF(parseFloat(t.amount), t.currency || "XAF"), 0);
+    const transferVol = transfers.reduce((sum, t) => sum + toXAF(parseFloat(t.amount), t.currency || "XAF"), 0);
+    const linkVol = links.reduce((sum, t) => sum + toXAF(parseFloat(t.amount), t.currency || "XAF"), 0);
     
-    // For deposits: feeAmount = Ashtech margin (ashtechFeeAmount, ~2% of gross)
-    const depositFees = deposits.reduce((sum, t) => sum + parseFloat(t.feeAmount || "0"), 0);
-    
-    // For withdrawals/transfers: feeAmount = max(percentage%, minPayoutCharge) = Ashtech revenue
-    const withdrawalFees = withdrawals.reduce((sum, t) => sum + parseFloat(t.feeAmount || "0"), 0);
-    const transferFees = transfers.reduce((sum, t) => sum + parseFloat(t.feeAmount || "0"), 0);
-    
-    // For payment links: feeAmount = Ashtech margin (ashtechFeeAmount, ~2% of gross)
-    const paymentLinkFees = links.reduce((sum, t) => sum + parseFloat(t.feeAmount || "0"), 0);
-    
-    // For conversions: feeAmount = conversion fee (default 6% of amount)
-    const conversionFees = conversions.reduce((sum, t) => sum + parseFloat(t.feeAmount || "0"), 0);
+    // Fees: feeAmount = Ashtech margin only (in transaction's own currency) → convert to XAF
+    const depositFees = deposits.reduce((sum, t) => sum + toXAF(parseFloat(t.feeAmount || "0"), t.currency || "XAF"), 0);
+    const withdrawalFees = withdrawals.reduce((sum, t) => sum + toXAF(parseFloat(t.feeAmount || "0"), t.currency || "XAF"), 0);
+    const transferFees = transfers.reduce((sum, t) => sum + toXAF(parseFloat(t.feeAmount || "0"), t.currency || "XAF"), 0);
+    const paymentLinkFees = links.reduce((sum, t) => sum + toXAF(parseFloat(t.feeAmount || "0"), t.currency || "XAF"), 0);
+    const conversionFees = conversions.reduce((sum, t) => sum + toXAF(parseFloat(t.feeAmount || "0"), t.currency || "XAF"), 0);
 
     const totalRevenue = depositFees + withdrawalFees + transferFees + paymentLinkFees + conversionFees;
     
