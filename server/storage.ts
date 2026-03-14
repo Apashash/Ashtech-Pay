@@ -47,6 +47,7 @@ import {
   type InsertUserNotification,
   type GlobalMessage,
   type InsertGlobalMessage,
+  ALL_FX_CURRENCIES,
   type KycSubmission,
   type InsertKycSubmission,
   wallets,
@@ -979,7 +980,12 @@ export class DatabaseStorage implements IStorage {
         if (!isNaN(val) && val > 0) fxRates[code] = val;
       }
     });
-    if (!fxRates["XAF"]) fxRates["XAF"] = 585;
+    // Apply default rates for currencies not yet configured in admin settings
+    ALL_FX_CURRENCIES.forEach(c => {
+      if (!fxRates[c.code]) fxRates[c.code] = c.defaultRate;
+    });
+    // USDT treated as USD (1:1 peg)
+    if (!fxRates["USDT"]) fxRates["USDT"] = fxRates["USD"] || 1.0;
 
     // All CFA franc variants (XAF/XOF and country-specific codes) are 1:1 with XAF
     const CFA = new Set([
