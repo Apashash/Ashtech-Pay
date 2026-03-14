@@ -51,6 +51,7 @@ interface EnrichedTransaction extends Transaction {
 interface TransactionDetails extends Transaction {
   user?: { fullName: string; email: string; username: string; country?: string; phone?: string } | null;
   recipient?: { fullName: string; email: string; username: string; country?: string } | null;
+  operator?: { id: string; name: string; type: string; paymentProvider: string } | null;
 }
 
 export default function AdminTransfers() {
@@ -394,6 +395,29 @@ export default function AdminTransfers() {
                           <span className="text-sm">Email</span>
                         </div>
                         <span className="text-sm font-medium">{txDetails.user.email}</span>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {txDetails?.operator && (
+                  <>
+                    <Separator />
+                    <div className="space-y-3">
+                      <p className="text-sm font-semibold text-muted-foreground">Fournisseur</p>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <CreditCard className="w-4 h-4" />
+                          <span className="text-sm">Opérateur</span>
+                        </div>
+                        <span className="text-sm font-medium">{txDetails.operator.name}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <FileText className="w-4 h-4" />
+                          <span className="text-sm">Fournisseur</span>
+                        </div>
+                        <span className="text-sm font-medium capitalize">{txDetails.operator.paymentProvider}</span>
                       </div>
                     </div>
                   </>

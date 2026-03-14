@@ -4386,6 +4386,7 @@ export async function registerRoutes(
       let paymentLink = null;
       let paymentIntent = null;
       let recipient = null;
+      let operator = null;
       
       if (transaction.paymentLinkId) {
         paymentLink = await storage.getPaymentLinkById(transaction.paymentLinkId);
@@ -4404,6 +4405,16 @@ export async function registerRoutes(
           country: recipientUser.country
         } : null;
       }
+
+      if (transaction.operatorId) {
+        const operatorData = await storage.getOperator(transaction.operatorId);
+        operator = operatorData ? { 
+          id: operatorData.id,
+          name: operatorData.name,
+          type: operatorData.type,
+          paymentProvider: operatorData.paymentProvider
+        } : null;
+      }
       
       res.json({
         ...transaction,
@@ -4417,6 +4428,7 @@ export async function registerRoutes(
         paymentLink: paymentLink ? { title: paymentLink.title, slug: paymentLink.slug } : null,
         paymentIntent,
         recipient,
+        operator,
       });
     } catch (error) {
       console.error("Admin get transaction details error:", error);
