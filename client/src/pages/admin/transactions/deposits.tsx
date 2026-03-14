@@ -364,7 +364,7 @@ export default function AdminDeposits() {
               <DialogTitle>Détails du dépôt</DialogTitle>
             </DialogHeader>
             {tx && (
-              <div className="space-y-4">
+              <div className="space-y-4 max-h-[70vh] overflow-y-auto">
                 <div className="text-center p-4 bg-muted/50 rounded-lg">
                   <p className="text-sm text-muted-foreground mb-1">Montant Net Crédité</p>
                   <p className="text-3xl font-bold text-green-500">
