@@ -3492,6 +3492,7 @@ export async function registerRoutes(
       // Compute fees using the CORRECT provider's rates
       let netAmount: string;
       let totalFeeAmount: string;
+      let ashtechFeeAmountStr: string;
       const totalAmount = numAmount.toFixed(2);
 
       if (paymentProvider === "afribapay") {
@@ -3500,19 +3501,22 @@ export async function registerRoutes(
         const af = computeAfribaPayFees(numAmount, afribapayFeeRate, ashtechMarginPct);
         netAmount = af.creditedAmount.toFixed(2);
         totalFeeAmount = af.totalFeeAmount.toFixed(2);
-        console.log(`[PaymentLink] AfribaPay fees: rate=${afribapayFeeRate}%+margin=${ashtechMarginPct}% → fee=${af.totalFeeAmount}, credited=${af.creditedAmount}`);
+        ashtechFeeAmountStr = af.ashtechFeeAmount.toFixed(2);
+        console.log(`[PaymentLink] AfribaPay fees: rate=${afribapayFeeRate}%+margin=${ashtechMarginPct}% → totalFee=${af.totalFeeAmount}, ashtechFee=${af.ashtechFeeAmount}, credited=${af.creditedAmount}`);
       } else if (paymentProvider === "pixpay") {
         const pixpayFeeRate = (fee as any)?.pixpayFee
           ? parseFloat((fee as any).pixpayFee.toString()) : 3.0;
         const pf = computePixPayFees(numAmount, pixpayFeeRate, ashtechMarginPct);
         netAmount = pf.creditedAmount.toFixed(2);
         totalFeeAmount = pf.totalFeeAmount.toFixed(2);
-        console.log(`[PaymentLink] PixPay fees: rate=${pixpayFeeRate}%+margin=${ashtechMarginPct}% → fee=${pf.totalFeeAmount}, credited=${pf.creditedAmount}`);
+        ashtechFeeAmountStr = pf.ashtechFeeAmount.toFixed(2);
+        console.log(`[PaymentLink] PixPay fees: rate=${pixpayFeeRate}%+margin=${ashtechMarginPct}% → totalFee=${pf.totalFeeAmount}, ashtechFee=${pf.ashtechFeeAmount}, credited=${pf.creditedAmount}`);
       } else {
         const sf = computeSwychrFees(numAmount, paymentCountryCode, ashtechMarginPct);
         netAmount = sf.creditedAmount.toFixed(2);
         totalFeeAmount = sf.totalFeeAmount.toFixed(2);
-        console.log(`[PaymentLink] Swychr fees: margin=${ashtechMarginPct}% → fee=${sf.totalFeeAmount}, credited=${sf.creditedAmount}`);
+        ashtechFeeAmountStr = sf.ashtechFeeAmount.toFixed(2);
+        console.log(`[PaymentLink] Swychr fees: margin=${ashtechMarginPct}% → totalFee=${sf.totalFeeAmount}, ashtechFee=${sf.ashtechFeeAmount}, credited=${sf.creditedAmount}`);
       }
 
       // Generate unique ASHPAY reference
@@ -3536,12 +3540,13 @@ export async function registerRoutes(
       });
 
       // Create pending transaction for the merchant to track in history
+      // feeAmount = Ashtech margin only (consistent with deposit/withdrawal/transfer)
       await storage.createTransaction({
         userId: paymentLink.userId,
         type: "payment_link",
         amount: netAmount,
         totalAmount: totalAmount,
-        feeAmount: totalFeeAmount,
+        feeAmount: ashtechFeeAmountStr,
         currency: paymentCurrency,
         status: "pending",
         description: `Paiement en attente de ${fullName} (${email}) via ${paymentLink.title}`,
