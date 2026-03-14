@@ -2,9 +2,9 @@ import path from "path";
 import fs from "fs";
 
 // ─── AfribaPay Production Credentials ────────────────────────────────────────
-const AFRIBAPAY_PUBLIC_KEY  = process.env.AFRIBAPAY_PUBLIC_KEY  || "pk_live_2603110746342dls1P3";
-const AFRIBAPAY_SECRET_KEY  = process.env.AFRIBAPAY_SECRET_KEY  || "sk_live_AFP110326PG00HSfXSeCPb9bxX4zOhw";
-const AFRIBAPAY_MERCHANT_KEY = process.env.AFRIBAPAY_MERCHANT_KEY || "mk_live_260311074634zkO";
+const AFRIBAPAY_PUBLIC_KEY  = process.env.AFRIBAPAY_PUBLIC_KEY  || "pk_live_260313041106iUpOs5L";
+const AFRIBAPAY_SECRET_KEY  = process.env.AFRIBAPAY_SECRET_KEY  || "sk_live_AFP130326eUAk2T3SsWUwM4evfA0qg";
+const AFRIBAPAY_MERCHANT_KEY = process.env.AFRIBAPAY_MERCHANT_KEY || "mk_live_260313041106aYo";
 const AFRIBAPAY_AGENT_ID    = process.env.AFRIBAPAY_AGENT_ID    || "APM6232659";
 
 const AFRIBAPAY_PAYIN_URL   = "https://api.afribapay.com";
