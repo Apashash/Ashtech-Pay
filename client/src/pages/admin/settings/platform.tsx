@@ -1,104 +1,165 @@
-import { AdminLayout } from "../layout";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { useState, useEffect } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { 
-  Settings,
-  Globe,
-  Smartphone,
-  AlertTriangle,
-  Lock,
-  Zap
-} from "lucide-react";
+import { AdminLayout } from "../layout";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ArrowLeft, Save, Settings } from "lucide-react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import type { PlatformSetting } from "@shared/schema";
 
 export default function AdminSettingsPlatform() {
+  const { toast } = useToast();
   const [, setLocation] = useLocation();
+  const [settings, setSettings] = useState<Record<string, string>>({
+    platform_name: "Ashtech Pay",
+    default_currency: "XAF",
+    support_email: "support@ashtechpay.com",
+    support_phone: "+237 6XX XXX XXX",
+  });
 
-  const settingsSections = [
-    {
-      id: "platform",
-      title: "Info de la plateforme",
-      description: "Nom, devise, contact support",
-      icon: Settings,
-      color: "bg-blue-500/10 text-blue-600",
-      borderColor: "border-blue-500/30"
+  const { data: savedSettings, isLoading } = useQuery<PlatformSetting[]>({
+    queryKey: ["/api/admin/settings"],
+  });
+
+  useEffect(() => {
+    if (savedSettings) {
+      const newSettings = { ...settings };
+      savedSettings.forEach(s => {
+        if (!s.key.startsWith("fx_rate_") && (s.key === "platform_name" || s.key === "default_currency" || s.key === "support_email" || s.key === "support_phone")) {
+          newSettings[s.key] = s.value;
+        }
+      });
+      setSettings(newSettings);
+    }
+  }, [savedSettings]);
+
+  const saveMutation = useMutation({
+    mutationFn: async ({ key, value }: { key: string; value: string }) => {
+      return apiRequest("POST", "/api/admin/settings", { key, value });
     },
-    {
-      id: "public-info",
-      title: "Info page public",
-      description: "Email, téléphone, réseaux sociaux",
-      icon: Globe,
-      color: "bg-green-500/10 text-green-600",
-      borderColor: "border-green-500/30"
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/settings"] });
+      toast({ title: "Paramètre enregistré" });
     },
-    {
-      id: "rates",
-      title: "Device et taux",
-      description: "Taux de change par devise",
-      icon: Smartphone,
-      color: "bg-purple-500/10 text-purple-600",
-      borderColor: "border-purple-500/30"
-    },
-    {
-      id: "maintenance",
-      title: "Mode maintenance",
-      description: "Activer/désactiver le mode maintenance",
-      icon: AlertTriangle,
-      color: "bg-orange-500/10 text-orange-600",
-      borderColor: "border-orange-500/30"
-    },
-    {
-      id: "limits",
-      title: "Limit globale",
-      description: "Limites min/max des transferts et retraits",
-      icon: Lock,
-      color: "bg-red-500/10 text-red-600",
-      borderColor: "border-red-500/30"
-    },
-  ];
+    onError: () => toast({ title: "Erreur", variant: "destructive" }),
+  });
+
+  const handleSave = (key: string) => {
+    saveMutation.mutate({ key, value: settings[key] });
+  };
+
+  if (isLoading) {
+    return (
+      <AdminLayout>
+        <div className="p-6">Chargement...</div>
+      </AdminLayout>
+    );
+  }
 
   return (
     <AdminLayout>
       <div className="p-6 space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold">Paramètres</h1>
-          <p className="text-muted-foreground">Configuration générale de la plateforme</p>
+        <div className="flex items-center gap-4">
+          <Button 
+            variant="ghost" 
+            onClick={() => setLocation("/admin/settings")}
+            className="gap-2"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Retour
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold">Info de la plateforme</h1>
+            <p className="text-muted-foreground">Configuration de base</p>
+          </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {settingsSections.map((section) => {
-            const Icon = section.icon;
-            return (
-              <Card 
-                key={section.id}
-                className={`cursor-pointer hover:shadow-lg transition-all border-2 ${section.borderColor}`}
-                onClick={() => setLocation(`/admin/settings/${section.id}`)}
-              >
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className={`p-3 rounded-lg ${section.color}`}>
-                      <Icon className="w-6 h-6" />
-                    </div>
-                  </div>
-                  <CardTitle className="mt-4">{section.title}</CardTitle>
-                  <CardDescription>{section.description}</CardDescription>
-                </CardHeader>
-                <CardContent>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Settings className="w-5 h-5" />
+              Informations générales
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Nom de la plateforme</Label>
+                <Input
+                  value={settings.platform_name}
+                  onChange={(e) => setSettings({ ...settings, platform_name: e.target.value })}
+                  data-testid="input-platform-name"
+                />
+                <Button 
+                  size="sm"
+                  onClick={() => handleSave("platform_name")}
+                  disabled={saveMutation.isPending}
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  Enregistrer
+                </Button>
+              </div>
+              <div className="space-y-2">
+                <Label>Devise par défaut</Label>
+                <Input
+                  value={settings.default_currency}
+                  onChange={(e) => setSettings({ ...settings, default_currency: e.target.value })}
+                  data-testid="input-default-currency"
+                />
+                <Button 
+                  size="sm"
+                  onClick={() => handleSave("default_currency")}
+                  disabled={saveMutation.isPending}
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  Enregistrer
+                </Button>
+              </div>
+            </div>
+
+            <div className="border-t pt-4">
+              <h3 className="font-semibold mb-3">Support client</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Email support</Label>
+                  <Input
+                    value={settings.support_email}
+                    onChange={(e) => setSettings({ ...settings, support_email: e.target.value })}
+                    data-testid="input-support-email"
+                  />
                   <Button 
-                    variant="outline" 
-                    className="w-full"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setLocation(`/admin/settings/${section.id}`);
-                    }}
+                    size="sm"
+                    onClick={() => handleSave("support_email")}
+                    disabled={saveMutation.isPending}
                   >
-                    Configurer →
+                    <Save className="w-4 h-4 mr-2" />
+                    Enregistrer
                   </Button>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Téléphone support</Label>
+                  <Input
+                    value={settings.support_phone}
+                    onChange={(e) => setSettings({ ...settings, support_phone: e.target.value })}
+                    data-testid="input-support-phone"
+                  />
+                  <Button 
+                    size="sm"
+                    onClick={() => handleSave("support_phone")}
+                    disabled={saveMutation.isPending}
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    Enregistrer
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </AdminLayout>
   );
