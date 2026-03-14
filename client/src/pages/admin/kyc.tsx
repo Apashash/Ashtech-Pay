@@ -23,6 +23,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useLocation } from "wouter";
 import { 
   Search, 
   CheckCircle, 
@@ -35,7 +36,9 @@ import {
   Image as ImageIcon,
   Shield,
   Loader2,
-  MapPin
+  MapPin,
+  AlertTriangle,
+  ExternalLink
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -72,6 +75,14 @@ interface KycSubmission {
     username: string;
     createdAt?: string;
   } | null;
+  duplicateAccounts: {
+    submissionId: string;
+    userId: string;
+    status: string;
+    fullName: string;
+    email: string;
+    username: string;
+  }[];
 }
 
 interface KycStats {
@@ -91,6 +102,7 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
 
 export default function AdminKYC() {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("pending");
   const [viewSubmission, setViewSubmission] = useState<KycSubmission | null>(null);
@@ -260,7 +272,19 @@ export default function AdminKYC() {
                       <TableRow key={sub.id} data-testid={`row-kyc-${sub.id}`}>
                         <TableCell className="max-w-[160px]">
                           <div className="space-y-0.5">
-                            <p className="font-medium text-sm truncate">{sub.user?.fullName || "N/A"}</p>
+                            <div className="flex items-center gap-1">
+                              {sub.duplicateAccounts?.length > 0 && (
+                                <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                              )}
+                              <p className={`font-medium text-sm truncate ${sub.duplicateAccounts?.length > 0 ? "text-red-500" : ""}`}>
+                                {sub.user?.fullName || "N/A"}
+                              </p>
+                            </div>
+                            {sub.duplicateAccounts?.length > 0 && (
+                              <p className="text-xs text-red-400 font-medium">
+                                {sub.duplicateAccounts.length + 1} compte(s) même ID
+                              </p>
+                            )}
                             <p className="text-xs text-muted-foreground truncate">{sub.user?.email}</p>
                             {sub.user?.phone && (
                               <p className="text-xs text-muted-foreground truncate">{sub.user.phone}</p>
@@ -365,6 +389,44 @@ export default function AdminKYC() {
                     <p className="text-sm text-red-400 break-words">
                       <strong>Note de rejet :</strong> {viewSubmission.reviewNote}
                     </p>
+                  </div>
+                )}
+
+                {/* Alerte doublons de document */}
+                {viewSubmission.duplicateAccounts?.length > 0 && (
+                  <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+                      <p className="text-sm font-semibold text-red-500">
+                        Numéro de document utilisé par {viewSubmission.duplicateAccounts.length + 1} compte(s)
+                      </p>
+                    </div>
+                    <p className="text-xs text-red-400">
+                      Ce document <span className="font-mono font-bold">{viewSubmission.documentNumber}</span> est aussi utilisé par :
+                    </p>
+                    <div className="space-y-2">
+                      {viewSubmission.duplicateAccounts.map((acc) => (
+                        <div key={acc.submissionId} className="flex items-center justify-between gap-2 bg-red-500/10 rounded-md px-3 py-2">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-red-300 truncate">{acc.fullName}</p>
+                            <p className="text-xs text-red-400 truncate">{acc.email}</p>
+                            <p className="text-xs text-muted-foreground">@{acc.username} — {acc.status === "pending" ? "En attente" : acc.status === "approved" ? "Approuvé" : "Rejeté"}</p>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="shrink-0 border-red-500/30 text-red-400 hover:bg-red-500/10 text-xs gap-1"
+                            onClick={() => {
+                              setViewSubmission(null);
+                              navigate(`/admin/users?search=${encodeURIComponent(acc.email)}`);
+                            }}
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            Voir
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 

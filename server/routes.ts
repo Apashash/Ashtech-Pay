@@ -6082,24 +6082,60 @@ export async function registerRoutes(
     try {
       const status = req.query.status as string | undefined;
       const submissions = await storage.getAllKycSubmissions(status);
-      
-      // Enrich with user info
+
+      // Build a map: documentNumber -> list of submissions with that document
+      const docMap = new Map<string, typeof submissions>();
+      for (const sub of submissions) {
+        if (!sub.documentNumber) continue;
+        const key = sub.documentNumber.trim().toLowerCase();
+        if (!docMap.has(key)) docMap.set(key, []);
+        docMap.get(key)!.push(sub);
+      }
+      // Also get ALL submissions (not just filtered) to detect cross-status duplicates
+      const allSubmissions = status ? await storage.getAllKycSubmissions() : submissions;
+      const allDocMap = new Map<string, typeof allSubmissions>();
+      for (const sub of allSubmissions) {
+        if (!sub.documentNumber) continue;
+        const key = sub.documentNumber.trim().toLowerCase();
+        if (!allDocMap.has(key)) allDocMap.set(key, []);
+        allDocMap.get(key)!.push(sub);
+      }
+
+      // Enrich with user info + duplicate detection
       const enrichedSubmissions = await Promise.all(
         submissions.map(async (sub) => {
           const user = await storage.getUser(sub.userId);
+          // Find other submissions with same document number (different submission id)
+          const key = sub.documentNumber?.trim().toLowerCase() || "";
+          const duplicates = (allDocMap.get(key) || []).filter(d => d.id !== sub.id);
+          const duplicateAccounts = await Promise.all(
+            duplicates.map(async (dup) => {
+              const dupUser = await storage.getUser(dup.userId);
+              return {
+                submissionId: dup.id,
+                userId: dup.userId,
+                status: dup.status,
+                fullName: dupUser?.fullName || "N/A",
+                email: dupUser?.email || "N/A",
+                username: dupUser?.username || "N/A",
+              };
+            })
+          );
           return {
             ...sub,
-            user: user ? { 
+            user: user ? {
               id: user.id,
-              fullName: user.fullName, 
-              email: user.email, 
+              fullName: user.fullName,
+              email: user.email,
               phone: user.phone,
-              username: user.username 
+              username: user.username,
+              createdAt: (user as any).createdAt,
             } : null,
+            duplicateAccounts,
           };
         })
       );
-      
+
       res.json(enrichedSubmissions);
     } catch (error) {
       console.error("Get admin KYC error:", error);
