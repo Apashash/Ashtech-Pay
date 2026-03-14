@@ -468,18 +468,19 @@ export default function AdminUsers() {
               </div>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Utilisateur</TableHead>
-                  <TableHead>Contact</TableHead>
-                  <TableHead>Pays</TableHead>
-                  <TableHead>Solde</TableHead>
-                  <TableHead>Statut</TableHead>
-                  <TableHead>Rôle</TableHead>
-                  <TableHead>Inscrit le</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead className="min-w-[140px]">Utilisateur</TableHead>
+                  <TableHead className="min-w-[160px]">Contact</TableHead>
+                  <TableHead className="min-w-[70px]">Pays</TableHead>
+                  <TableHead className="min-w-[100px]">Solde</TableHead>
+                  <TableHead className="min-w-[110px]">Statut</TableHead>
+                  <TableHead className="min-w-[80px]">Rôle</TableHead>
+                  <TableHead className="min-w-[100px]">Inscrit le</TableHead>
+                  <TableHead className="text-right min-w-[60px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -498,50 +499,50 @@ export default function AdminUsers() {
                 ) : (
                   filteredUsers.map((user) => (
                     <TableRow key={user.id} data-testid={`user-row-${user.id}`}>
-                      <TableCell>
-                        <div>
-                          <p className="font-medium">{user.fullName}</p>
-                          <p className="text-xs text-muted-foreground">@{user.username}</p>
+                      <TableCell className="max-w-[160px]">
+                        <div className="space-y-0.5">
+                          <p className="font-medium text-sm truncate">{user.fullName}</p>
+                          <p className="text-xs text-muted-foreground truncate">@{user.username}</p>
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <div className="text-sm">
-                          <p>{user.email}</p>
-                          <p className="text-muted-foreground">{user.phone || "-"}</p>
+                      <TableCell className="max-w-[180px]">
+                        <div className="text-sm space-y-0.5">
+                          <p className="truncate">{user.email}</p>
+                          <p className="text-muted-foreground text-xs truncate">{user.phone || "-"}</p>
                         </div>
                       </TableCell>
-                      <TableCell>{user.country || "-"}</TableCell>
-                      <TableCell className="font-medium">
+                      <TableCell className="text-sm">{user.country || "-"}</TableCell>
+                      <TableCell className="font-medium text-sm whitespace-nowrap">
                         {formatCurrency(parseFloat(user.balance), getDisplayCurrency(user) as any)}
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center">
                           {user.isBanned ? (
-                            <Badge variant="destructive" className="gap-1">
+                            <Badge variant="destructive" className="gap-1 text-xs whitespace-nowrap">
                               <Ban className="w-3 h-3" /> Banni
                             </Badge>
                           ) : user.kycStatus === "verified" ? (
-                            <Badge className="bg-green-500 gap-1">
+                            <Badge className="bg-green-500 gap-1 text-xs whitespace-nowrap">
                               <CheckCircle className="w-3 h-3" /> Vérifié
                             </Badge>
                           ) : user.kycStatus === "rejected" ? (
-                            <Badge variant="destructive" className="gap-1">
+                            <Badge variant="destructive" className="gap-1 text-xs whitespace-nowrap">
                               <XCircle className="w-3 h-3" /> Rejeté
                             </Badge>
                           ) : user.kycStatus === "pending" ? (
-                            <Badge variant="secondary" className="gap-1">
+                            <Badge variant="secondary" className="gap-1 text-xs whitespace-nowrap">
                               <Shield className="w-3 h-3" /> En attente
                             </Badge>
                           ) : (
-                            <Badge variant="outline" className="gap-1">
-                              <XCircle className="w-3 h-3" /> Pas encore vérifié
+                            <Badge variant="outline" className="gap-1 text-xs whitespace-nowrap">
+                              <XCircle className="w-3 h-3" /> Non vérifié
                             </Badge>
                           )}
                         </div>
                       </TableCell>
                       <TableCell>{getRoleBadge(user.role)}</TableCell>
-                      <TableCell>
-                        {user.createdAt ? format(new Date(user.createdAt), "d MMM yyyy", { locale: fr }) : "-"}
+                      <TableCell className="text-sm whitespace-nowrap">
+                        {user.createdAt ? format(new Date(user.createdAt), "dd/MM/yy", { locale: fr }) : "-"}
                       </TableCell>
                       <TableCell className="text-right">
                         <DropdownMenu>
@@ -615,6 +616,7 @@ export default function AdminUsers() {
                 )}
               </TableBody>
             </Table>
+            </div>
             {(usersData?.pages || 1) > 1 && (
               <div className="flex items-center justify-between px-4 py-3 border-t border-border">
                 <span className="text-sm text-muted-foreground">
