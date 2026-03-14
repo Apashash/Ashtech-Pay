@@ -1188,7 +1188,7 @@ export default function PaymentLinksPage() {
             <h1 className="text-2xl font-bold text-foreground">Mes liens de paiement</h1>
             <p className="text-muted-foreground">Gérez vos liens et analysez vos performances</p>
           </div>
-          <Button onClick={() => setShowCreate(true)} data-testid="button-new-link">
+          <Button onClick={() => navigate("/dashboard/links/new")} data-testid="button-new-link">
             <Plus className="w-4 h-4 mr-2" />
             Nouveau lien
           </Button>
@@ -1663,7 +1663,7 @@ export default function PaymentLinksPage() {
                   <div className="text-center py-12">
                     <Link2 className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
                     <p className="text-muted-foreground mb-4">Aucun lien de paiement créé</p>
-                    <Button onClick={() => setShowCreate(true)} data-testid="button-create-first-link">
+                    <Button onClick={() => navigate("/dashboard/links/new")} data-testid="button-create-first-link">
                       <Plus className="w-4 h-4 mr-2" />
                       Créer votre premier lien
                     </Button>
