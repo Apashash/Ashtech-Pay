@@ -225,12 +225,11 @@ export async function initiatePixPayUssd(params: PixPayBaseParams): Promise<PixP
 
 // ─── OTP (Orange CI only) ─────────────────────────────────────────────────────
 // User dials #144*82# to get OTP, enters it on our platform.
-// Per PixPay docs: destination must be "" (empty) for OTP flow — phone is identified via OTP.
+// destination = phone number (required), om_otp = code from #144*82#
 export async function initiatePixPayOtp(params: PixPayOtpParams): Promise<PixPayinResult> {
   try {
     const body = {
       ...buildBaseBody(params, params.countryCode),
-      destination: "",   // MUST be empty for OTP — doc says destination: ""
       om_otp: params.omOtp,
     };
     return await callPixPay(body, "OTP");
