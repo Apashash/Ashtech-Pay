@@ -12,6 +12,7 @@ import ResetPasswordPage from "@/pages/reset-password";
 import DashboardHome from "@/pages/dashboard/index";
 import TransactionsPage from "@/pages/dashboard/transactions";
 import PaymentLinksPage from "@/pages/dashboard/links";
+import LinkDetailPage from "@/pages/dashboard/link-detail";
 import DepositPage from "@/pages/dashboard/deposit";
 import WithdrawPage from "@/pages/dashboard/withdraw";
 import WithdrawalNumbersPage from "@/pages/dashboard/withdrawal-numbers";
@@ -77,6 +78,7 @@ function Router() {
       <Route path="/dashboard" component={DashboardHome} />
       <Route path="/dashboard/transactions" component={TransactionsPage} />
       <Route path="/dashboard/links" component={PaymentLinksPage} />
+      <Route path="/dashboard/links/:id" component={LinkDetailPage} />
       <Route path="/dashboard/deposit" component={DepositPage} />
       <Route path="/dashboard/withdraw" component={WithdrawPage} />
       <Route path="/dashboard/withdrawal-numbers" component={WithdrawalNumbersPage} />

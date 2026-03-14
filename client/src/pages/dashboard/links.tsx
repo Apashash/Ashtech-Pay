@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef } from "react";
+import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -924,6 +925,7 @@ function LinkAnalyticsDialog({
 }
 
 export default function PaymentLinksPage() {
+  const [, navigate] = useLocation();
   const [showCreate, setShowCreate] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState("month");
   const [selectedLink, setSelectedLink] = useState("all");
@@ -931,7 +933,6 @@ export default function PaymentLinksPage() {
   const [showAllRecentLinks, setShowAllRecentLinks] = useState(false);
   const [qrModalLink, setQrModalLink] = useState<PaymentLink | null>(null);
   const [editModalLink, setEditModalLink] = useState<PaymentLink | null>(null);
-  const [analyticsLinkId, setAnalyticsLinkId] = useState<string | null>(null);
   const { toast } = useToast();
   
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
@@ -1232,7 +1233,7 @@ export default function PaymentLinksPage() {
                       key={link.id} 
                       className={`p-4 rounded-lg border ${link.isActive ? 'bg-muted/30 border-border' : 'bg-muted/10 border-border/50 opacity-60'} cursor-pointer hover-elevate transition-all`}
                       data-testid={`recent-link-${link.id}`}
-                      onClick={() => setAnalyticsLinkId(link.id)}
+                      onClick={() => navigate(`/dashboard/links/${link.id}`)}
                     >
                       <div className="space-y-3">
                         <div className="flex items-start gap-3">
@@ -1819,12 +1820,6 @@ export default function PaymentLinksPage() {
         />
       )}
 
-      {/* Link Analytics Modal */}
-      <LinkAnalyticsDialog 
-        linkId={analyticsLinkId}
-        onClose={() => setAnalyticsLinkId(null)}
-        userCurrency={(user?.preferredCurrency || "XAF") as SupportedCurrency}
-      />
     </DashboardLayout>
   );
 }
