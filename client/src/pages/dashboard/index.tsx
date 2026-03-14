@@ -33,6 +33,7 @@ import {
   Filter,
   AlertTriangle,
   Shield,
+  Smartphone,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { z } from "zod";
@@ -533,6 +534,18 @@ export default function DashboardHome() {
   const [selectedLink, setSelectedLink] = useState("all");
   const { rates } = useExchangeRates();
 
+  const { data: depositConfig } = useQuery<any>({ queryKey: ["/api/public/deposit-config"] });
+
+  const operatorMap = useMemo<Record<string, string>>(() => {
+    const map: Record<string, string> = {};
+    for (const country of depositConfig?.countries || []) {
+      for (const op of country.operators || []) {
+        map[op.id] = op.name;
+      }
+    }
+    return map;
+  }, [depositConfig]);
+
   const { data: dashboardData, isLoading: isDashboardLoading } = useQuery<{
     user: User;
     transactions: Transaction[];
@@ -831,13 +844,14 @@ export default function DashboardHome() {
             {recentTransactions.length === 0 ? (
               <p className="text-center py-8 text-muted-foreground">Aucune transaction</p>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto overflow-y-auto max-h-[320px]">
                 <div className="min-w-[420px] px-6">
                   {recentTransactions.map((tx) => {
                     const isIncoming = ["deposit", "transfer_in", "payment_link"].includes(tx.type);
                     const typeLabels: Record<string, string> = {
                       deposit: "Dépôt", withdrawal: "Retrait", transfer_in: "Reçu", transfer_out: "Envoyé", payment_link: "Lien de paiement", conversion: "Conversion"
                     };
+                    const operatorName = tx.operatorId ? operatorMap[tx.operatorId] : null;
                     return (
                       <div key={tx.id} className="flex items-center justify-between py-3 border-b border-border last:border-0">
                         <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -846,6 +860,12 @@ export default function DashboardHome() {
                           </div>
                           <div className="min-w-0">
                             <p className="font-medium text-foreground truncate">{typeLabels[tx.type] || tx.type}</p>
+                            {operatorName && (
+                              <p className="text-xs text-primary font-medium flex items-center gap-1">
+                                <Smartphone className="w-3 h-3" />
+                                {operatorName}
+                              </p>
+                            )}
                             <p className="text-xs text-muted-foreground">
                               {tx.createdAt ? format(new Date(tx.createdAt), "d MMM, HH:mm", { locale: fr }) : ""}
                             </p>

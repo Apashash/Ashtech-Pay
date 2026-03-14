@@ -7,10 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import type { Transaction, User, SupportedCurrency } from "@shared/schema";
-import { History, TrendingUp, TrendingDown, Clock, CheckCircle, XCircle, Loader2, Search, Link2, Copy, ArrowRight, ArrowLeftRight, User as UserIcon, Mail, Phone, MapPin, CreditCard, FileText, ChevronLeft, ChevronRight } from "lucide-react";
+import { History, TrendingUp, TrendingDown, Clock, CheckCircle, XCircle, Loader2, Search, Link2, Copy, ArrowRight, ArrowLeftRight, User as UserIcon, Mail, Phone, MapPin, CreditCard, FileText, ChevronLeft, ChevronRight, Smartphone } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { formatCurrency } from "@/lib/currency";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -36,6 +36,17 @@ export default function TransactionsPage() {
     queryKey: ["/api/transactions"],
   });
   const { data: wallets = [] } = useQuery<any[]>({ queryKey: ["/api/wallets"] });
+  const { data: depositConfig } = useQuery<any>({ queryKey: ["/api/public/deposit-config"] });
+
+  const operatorMap = useMemo<Record<string, string>>(() => {
+    const map: Record<string, string> = {};
+    for (const country of depositConfig?.countries || []) {
+      for (const op of country.operators || []) {
+        map[op.id] = op.name;
+      }
+    }
+    return map;
+  }, [depositConfig]);
 
   const localCurrency = user?.preferredCurrency || "XAF";
   const localBalance = localCurrency === "XAF" 
@@ -193,7 +204,7 @@ export default function TransactionsPage() {
               </div>
             ) : (
               <>
-              <div className="overflow-x-auto -mx-4 px-4">
+              <div className="overflow-x-auto overflow-y-auto max-h-[520px] -mx-4 px-4">
                 <div className="space-y-2 min-w-[320px]">
                   {paginatedTransactions.map((tx) => {
                     const isConversion = tx.type === "conversion";
@@ -237,6 +248,12 @@ export default function TransactionsPage() {
                               </p>
                             )}
                             <p className="text-xs sm:text-sm text-muted-foreground truncate max-w-[150px] sm:max-w-[250px]">{tx.description || "-"}</p>
+                            {tx.operatorId && operatorMap[tx.operatorId] && (
+                              <p className="text-xs text-primary font-medium flex items-center gap-1">
+                                <Smartphone className="w-3 h-3" />
+                                {operatorMap[tx.operatorId]}
+                              </p>
+                            )}
                             <p className="text-xs text-muted-foreground">
                               {tx.createdAt ? format(new Date(tx.createdAt), "dd/MM/yy", { locale: fr }) : ""}
                               <span className="hidden sm:inline">
@@ -373,6 +390,16 @@ export default function TransactionsPage() {
                       <span className="text-sm">Méthode de paiement</span>
                     </div>
                     <span className="text-sm font-medium">{paymentMethodLabels[tx.paymentMethod] || tx.paymentMethod}</span>
+                  </div>
+                )}
+
+                {tx.operatorId && operatorMap[tx.operatorId] && (
+                  <div className="flex items-center justify-between" data-testid="detail-operator">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Smartphone className="w-4 h-4" />
+                      <span className="text-sm">Opérateur</span>
+                    </div>
+                    <span className="text-sm font-medium">{operatorMap[tx.operatorId]}</span>
                   </div>
                 )}
 
