@@ -8,9 +8,9 @@ const PIXPAY_STATUS_URL  = "https://proxy-coreapi.pixelinnov.net/api_v1/transact
 
 // ─── API keys by currency zone ────────────────────────────────────────────────
 const PIXPAY_API_KEYS: Record<string, string> = {
-  XAF: process.env.PIXPAY_API_KEY_XAF || "PIX_c2724339-716f-4034-b5e5-2a17c1c35d0e",
-  XOF: process.env.PIXPAY_API_KEY_XOF || "PIX_40771cae-bd73-4a08-988f-52e4c6ad3ce7",
-  CDF: process.env.PIXPAY_API_KEY_CDF || "PIX_6295ed31-dc99-4d3c-b5f7-e3ebb1d43ef6",
+  XAF: process.env.PIXPAY_API_KEY_XAF!,
+  XOF: process.env.PIXPAY_API_KEY_XOF!,
+  CDF: process.env.PIXPAY_API_KEY_CDF!,
 };
 
 // ─── Dial codes for phone normalisation (country code → ITU dial code) ───────

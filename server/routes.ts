@@ -318,7 +318,7 @@ export async function registerRoutes(
   // Always use secure cookies with sameSite: none for Replit's HTTPS proxy environment
   app.use(
     session({
-      secret: process.env.SESSION_SECRET || "ashtech-pay-secret-key",
+      secret: process.env.SESSION_SECRET!,
       resave: false,
       saveUninitialized: false,
       store: new SessionStore({
