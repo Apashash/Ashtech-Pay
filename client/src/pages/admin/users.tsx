@@ -433,8 +433,8 @@ export default function AdminUsers() {
   return (
     <AdminLayout>
       <div className="p-6 space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
             <h1 className="text-2xl font-bold">Gestion des Utilisateurs</h1>
             <p className="text-muted-foreground">{usersData?.total || 0} utilisateurs</p>
           </div>
@@ -446,10 +446,11 @@ export default function AdminUsers() {
             }} 
             disabled={fixCurrenciesMutation.isPending}
             variant="outline"
-            className="gap-2"
+            className="gap-2 shrink-0"
+            title="Actualiser les devises locales"
           >
             <RefreshCw className={fixCurrenciesMutation.isPending ? "animate-spin w-4 h-4" : "w-4 h-4"} />
-            Actualiser les devises locales
+            <span className="hidden sm:inline">Sync devises</span>
           </Button>
         </div>
 
