@@ -1,15 +1,15 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import type { Transaction, User, SupportedCurrency } from "@shared/schema";
 import type { PaymentLink } from "@shared/schema";
 import {
-  ArrowLeft, MousePointer, ArrowDownUp, Clock, TrendingUp, 
-  CheckCircle, XCircle, Loader2, BarChart3
+  ArrowLeft, MousePointer, ArrowDownUp, Clock, TrendingUp,
+  CheckCircle, XCircle, Loader2, BarChart3, ChevronLeft, ChevronRight
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -31,9 +31,12 @@ interface LinkAnalytics {
   transactions: Transaction[];
 }
 
+const PAGE_SIZE = 40;
+
 export default function LinkDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
+  const [page, setPage] = useState(1);
 
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const userCurrency = (user?.preferredCurrency || "XAF") as SupportedCurrency;
@@ -47,6 +50,10 @@ export default function LinkDetailPage() {
     },
     enabled: !!id,
   });
+
+  const transactions = data?.transactions || [];
+  const totalPages = Math.max(1, Math.ceil(transactions.length / PAGE_SIZE));
+  const paginatedTransactions = transactions.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -157,43 +164,76 @@ export default function LinkDetailPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <BarChart3 className="w-5 h-5" />
-                  Historique des transactions ({data.transactions.length})
+                  Historique des transactions ({transactions.length})
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {data.transactions.length === 0 ? (
+                {transactions.length === 0 ? (
                   <div className="text-center py-12">
                     <BarChart3 className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
                     <p className="text-muted-foreground">Aucune transaction pour ce lien</p>
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {data.transactions.map((tx) => (
-                      <div
-                        key={tx.id}
-                        className="flex items-center justify-between p-4 rounded-lg border bg-muted/30"
-                        data-testid={`link-tx-${tx.id}`}
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="font-medium">{tx.payerName || "Client"}</p>
-                            {getStatusBadge(tx.status)}
+                  <>
+                    <div className="space-y-3">
+                      {paginatedTransactions.map((tx) => (
+                        <div
+                          key={tx.id}
+                          className="flex items-center justify-between p-4 rounded-lg border bg-muted/30"
+                          data-testid={`link-tx-${tx.id}`}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-medium">{tx.payerName || "Client"}</p>
+                              {getStatusBadge(tx.status)}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {tx.payerEmail}
+                              {tx.createdAt && ` • ${format(new Date(tx.createdAt), "dd/MM/yyyy HH:mm", { locale: fr })}`}
+                            </p>
                           </div>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            {tx.payerEmail}
-                            {tx.createdAt && ` • ${format(new Date(tx.createdAt), "dd/MM/yyyy HH:mm", { locale: fr })}`}
+                          <p className={`font-bold text-lg whitespace-nowrap ml-4 ${
+                            tx.status === "completed" ? "text-green-500"
+                            : tx.status === "pending" ? "text-amber-500"
+                            : "text-red-500"
+                          }`}>
+                            {formatCurrency(parseFloat(tx.amount), tx.currency as SupportedCurrency)}
                           </p>
                         </div>
-                        <p className={`font-bold text-lg whitespace-nowrap ml-4 ${
-                          tx.status === "completed" ? "text-green-500" 
-                          : tx.status === "pending" ? "text-amber-500" 
-                          : "text-red-500"
-                        }`}>
-                          {formatCurrency(parseFloat(tx.amount), tx.currency as SupportedCurrency)}
+                      ))}
+                    </div>
+
+                    {totalPages > 1 && (
+                      <div className="flex items-center justify-between pt-4 mt-4 border-t">
+                        <p className="text-sm text-muted-foreground">
+                          {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, transactions.length)} sur {transactions.length}
                         </p>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setPage(p => Math.max(1, p - 1))}
+                            disabled={page === 1}
+                            data-testid="button-page-prev"
+                          >
+                            <ChevronLeft className="w-4 h-4" />
+                            Précédent
+                          </Button>
+                          <span className="text-sm font-medium px-2">{page} / {totalPages}</span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                            disabled={page === totalPages}
+                            data-testid="button-page-next"
+                          >
+                            Suivant
+                            <ChevronRight className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </div>
-                    ))}
-                  </div>
+                    )}
+                  </>
                 )}
               </CardContent>
             </Card>
