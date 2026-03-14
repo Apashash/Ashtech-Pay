@@ -298,6 +298,10 @@ export async function initiatePixPayOtp(params: PixPayOtpParams): Promise<PixPay
 // ─── Wave (Wave CI / Wave SN) ────────────────────────────────────────────────
 // Returns a Wave payment URL in `waveUrl` that the user must open.
 export async function initiatePixPayWave(params: PixPayWaveParams): Promise<PixPayinResult> {
+  if (!PIXPAY_WAVE_BUSINESS_ID) {
+    console.error("[PixPay Wave] business_name_id non configuré — Wave désactivé.");
+    return { success: false, message: "Le paiement Wave n'est pas encore disponible. Veuillez choisir un autre opérateur." };
+  }
   try {
     const body = {
       ...buildBaseBody(params, params.countryCode),
