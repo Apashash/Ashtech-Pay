@@ -215,6 +215,25 @@ function buildBaseBody(params: PixPayBaseParams, countryCode: string): Record<st
   };
 }
 
+// ─── Translate PixPay technical errors into user-friendly French messages ──────
+function humanizePixPayError(raw: string | undefined): string {
+  if (!raw) return "Échec du paiement. Veuillez réessayer.";
+  const msg = raw.toLowerCase();
+  if (msg.includes("destination") && msg.includes("no applicable"))
+    return "Le numéro de téléphone ne correspond pas à l'opérateur sélectionné. Vérifiez que vous avez choisi le bon opérateur pour ce numéro.";
+  if (msg.includes("om_otp") && msg.includes("required"))
+    return "Le code OTP Orange Money est requis. Composez #144*82# sur votre téléphone pour l'obtenir.";
+  if (msg.includes("amount") && msg.includes("no applicable"))
+    return "Montant trop faible pour cet opérateur. Veuillez entrer un montant plus élevé.";
+  if (msg.includes("insuffisance") || msg.includes("insufficient"))
+    return "Solde insuffisant dans votre portefeuille mobile. Veuillez recharger votre compte.";
+  if (msg.includes("not authorize") || msg.includes("unauthorized"))
+    return "Service non disponible pour ce pays ou opérateur.";
+  if (msg.includes("invalid") && msg.includes("key"))
+    return "Erreur de configuration du service de paiement. Contactez le support.";
+  return raw; // fallback: return original if no match
+}
+
 // ─── Generic call helper ──────────────────────────────────────────────────────
 async function callPixPay(body: Record<string, any>, logLabel: string): Promise<PixPayinResult> {
   console.log(`[PixPay ${logLabel}] Body:`, JSON.stringify({ ...body, api_key: "***" }));
@@ -227,13 +246,13 @@ async function callPixPay(body: Record<string, any>, logLabel: string): Promise<
   console.log(`[PixPay ${logLabel}] Response:`, JSON.stringify(data));
 
   if (data.statut_code !== 200 || !data.data) {
-    return { success: false, message: data.message || "Échec PixPay", raw: data };
+    return { success: false, message: humanizePixPayError(data.message), raw: data };
   }
 
   const d = data.data;
   const state = (d.state || "").toUpperCase();
   if (state === "FAILED" || state === "CANCELLED") {
-    return { success: false, message: d.response || data.message || "Transaction rejetée", raw: data };
+    return { success: false, message: humanizePixPayError(d.response || data.message) || "Transaction rejetée", raw: data };
   }
 
   // Wave operators return sms_link (payment URL)
