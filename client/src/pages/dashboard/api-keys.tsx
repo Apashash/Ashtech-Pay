@@ -1,15 +1,15 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import {
-  Code2, Globe, Eye, EyeOff, Copy, RefreshCw, BookOpen, CheckCircle2,
-  Terminal, Webhook, ArrowRight, Shield, Zap, CheckCheck, ChevronRight,
+  Code2, Globe, Eye, EyeOff, Copy, RefreshCw, BookOpen,
+  CheckCircle2, Terminal, Shield, CheckCheck, ChevronRight,
 } from "lucide-react";
 
 type Mode = "hosted" | "sdk";
@@ -18,7 +18,6 @@ export default function ApiKeysPage() {
   const [mode, setMode] = useState<Mode>("hosted");
   const [showKey, setShowKey] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [showDocs, setShowDocs] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -209,16 +208,17 @@ export default function ApiKeysPage() {
                   </Button>
                 </div>
 
-                {/* Documentation button */}
-                <Button
-                  className="w-full mt-2"
-                  onClick={() => setShowDocs(true)}
-                  data-testid="button-open-docs"
-                >
-                  <BookOpen className="w-4 h-4 mr-2" />
-                  Documentation d'intégration
-                  <ChevronRight className="w-4 h-4 ml-auto" />
-                </Button>
+                {/* Documentation link */}
+                <Link href="/dashboard/developer">
+                  <Button
+                    className="w-full mt-2"
+                    data-testid="link-open-docs"
+                  >
+                    <BookOpen className="w-4 h-4 mr-2" />
+                    Documentation d'intégration
+                    <ChevronRight className="w-4 h-4 ml-auto" />
+                  </Button>
+                </Link>
               </CardContent>
             </Card>
 
@@ -252,252 +252,6 @@ export default function ApiKeysPage() {
           </div>
         )}
       </div>
-
-      {/* Documentation dialog */}
-      <Dialog open={showDocs} onOpenChange={setShowDocs}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-lg">
-              <BookOpen className="w-5 h-5 text-primary" />
-              Documentation d'intégration — Ashtech Pay API
-            </DialogTitle>
-          </DialogHeader>
-          <DocsContent apiKey={showKey && apiKey ? apiKey : "<VOTRE_CLÉ_API>"} />
-        </DialogContent>
-      </Dialog>
     </DashboardLayout>
-  );
-}
-
-function DocsContent({ apiKey }: { apiKey: string }) {
-  const sections = [
-    {
-      id: "intro",
-      icon: <Zap className="w-4 h-4" />,
-      title: "Introduction",
-      content: (
-        <div className="space-y-3 text-sm text-muted-foreground">
-          <p>
-            L'API Ashtech Pay permet à vos clients de payer directement sur votre site ou application mobile, sans quitter votre interface. Elle agit comme passerelle entre votre système et les opérateurs Mobile Money africains.
-          </p>
-          <ul className="space-y-1 pl-4">
-            {["Collecte de paiements Mobile Money en temps réel", "Support multi-pays (CM, CI, SN, ML, BF, GN…)", "Routage intelligent entre opérateurs", "Webhooks pour confirmation en temps réel"].map((item) => (
-              <li key={item} className="flex items-start gap-2"><ArrowRight className="w-3 h-3 mt-0.5 shrink-0 text-primary" />{item}</li>
-            ))}
-          </ul>
-          <div className="rounded-lg bg-primary/5 border border-primary/20 px-4 py-3">
-            <p className="text-xs font-medium text-foreground">URL de base</p>
-            <code className="text-xs font-mono text-primary">https://api.ashtechpay.top</code>
-          </div>
-        </div>
-      ),
-    },
-    {
-      id: "auth",
-      icon: <Shield className="w-4 h-4" />,
-      title: "Authentification",
-      content: (
-        <div className="space-y-3 text-sm text-muted-foreground">
-          <p>Toutes les requêtes doivent inclure votre clé API dans l'en-tête <code className="text-xs bg-muted px-1 rounded">Authorization</code>.</p>
-          <pre className="text-xs bg-muted/60 rounded-lg p-3 overflow-x-auto text-foreground/90">
-{`Authorization: Bearer ${apiKey}`}
-          </pre>
-          <p className="text-xs text-orange-600 dark:text-orange-400 font-medium">⚠ Ne partagez jamais votre clé API dans le code côté client (navigateur). Utilisez-la uniquement depuis votre serveur.</p>
-        </div>
-      ),
-    },
-    {
-      id: "collect",
-      icon: <Terminal className="w-4 h-4" />,
-      title: "POST /v1/collect — Initier un paiement",
-      content: (
-        <div className="space-y-4 text-sm text-muted-foreground">
-          <p>Initie un paiement Mobile Money. Le client reçoit une demande de validation sur son téléphone.</p>
-
-          <div>
-            <p className="text-xs font-semibold text-foreground uppercase tracking-wide mb-2">Corps de la requête</p>
-            <div className="rounded-lg border overflow-hidden text-xs">
-              <table className="w-full">
-                <thead className="bg-muted/60">
-                  <tr>
-                    {["Paramètre", "Type", "Requis", "Description"].map((h) => (
-                      <th key={h} className="text-left px-3 py-2 font-medium text-foreground">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {[
-                    ["amount", "number", "Oui", "Montant en unité de la devise"],
-                    ["currency", "string", "Oui", "XAF, XOF, GNF, CDF"],
-                    ["phone", "string", "Oui", "Numéro de téléphone du payeur"],
-                    ["operator", "string", "Oui", "MTN, Orange, Wave, Moov…"],
-                    ["reference", "string", "Non", "Référence unique de votre commande"],
-                    ["notify_url", "string", "Non", "URL webhook de notification"],
-                  ].map(([p, t, r, d]) => (
-                    <tr key={p} className="hover:bg-muted/30">
-                      <td className="px-3 py-2 font-mono text-primary">{p}</td>
-                      <td className="px-3 py-2 text-foreground">{t}</td>
-                      <td className="px-3 py-2">{r === "Oui" ? <span className="text-green-600 font-medium">Oui</span> : <span className="text-muted-foreground">Non</span>}</td>
-                      <td className="px-3 py-2">{d}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div>
-            <p className="text-xs font-semibold text-foreground uppercase tracking-wide mb-2">Exemple de requête</p>
-            <pre className="text-xs bg-muted/60 rounded-lg p-3 overflow-x-auto text-foreground/90 leading-relaxed">
-{`fetch("https://api.ashtechpay.top/v1/collect", {
-  method: "POST",
-  headers: {
-    "Authorization": "Bearer ${apiKey}",
-    "Content-Type": "application/json"
-  },
-  body: JSON.stringify({
-    amount: 5000,
-    currency: "XAF",
-    phone: "670000000",
-    operator: "MTN",
-    reference: "ORDER-123",
-    notify_url: "https://monsite.com/webhook"
-  })
-})`}
-            </pre>
-          </div>
-
-          <div>
-            <p className="text-xs font-semibold text-foreground uppercase tracking-wide mb-2">Réponse</p>
-            <pre className="text-xs bg-muted/60 rounded-lg p-3 overflow-x-auto text-foreground/90 leading-relaxed">
-{`{
-  "status": "pending",
-  "transaction_id": "txn_abc123",
-  "amount": 5000,
-  "currency": "XAF",
-  "operator": "MTN",
-  "reference": "ORDER-123"
-}`}
-            </pre>
-          </div>
-        </div>
-      ),
-    },
-    {
-      id: "status",
-      icon: <CheckCircle2 className="w-4 h-4" />,
-      title: "GET /v1/transaction/:id — Statut",
-      content: (
-        <div className="space-y-3 text-sm text-muted-foreground">
-          <p>Consultez le statut d'une transaction à tout moment.</p>
-          <pre className="text-xs bg-muted/60 rounded-lg p-3 overflow-x-auto text-foreground/90">
-{`fetch("https://api.ashtechpay.top/v1/transaction/txn_abc123", {
-  headers: { "Authorization": "Bearer ${apiKey}" }
-})`}
-          </pre>
-          <div className="rounded-lg border overflow-hidden text-xs">
-            <table className="w-full">
-              <thead className="bg-muted/60">
-                <tr>
-                  {["Statut", "Description"].map((h) => (
-                    <th key={h} className="text-left px-3 py-2 font-medium text-foreground">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {[
-                  ["pending", "En attente de confirmation"],
-                  ["success", "Paiement confirmé"],
-                  ["failed", "Paiement échoué ou annulé"],
-                ].map(([s, d]) => (
-                  <tr key={s} className="hover:bg-muted/30">
-                    <td className="px-3 py-2 font-mono">{s}</td>
-                    <td className="px-3 py-2">{d}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ),
-    },
-    {
-      id: "webhook",
-      icon: <Webhook className="w-4 h-4" />,
-      title: "Webhooks",
-      content: (
-        <div className="space-y-3 text-sm text-muted-foreground">
-          <p>Lorsqu'une transaction atteint un état final (<code className="text-xs bg-muted px-1 rounded">success</code> ou <code className="text-xs bg-muted px-1 rounded">failed</code>), Ashtech Pay envoie une notification POST à votre <code className="text-xs bg-muted px-1 rounded">notify_url</code>.</p>
-          <div>
-            <p className="text-xs font-semibold text-foreground uppercase tracking-wide mb-2">Corps de la notification</p>
-            <pre className="text-xs bg-muted/60 rounded-lg p-3 overflow-x-auto text-foreground/90 leading-relaxed">
-{`{
-  "event": "payment.success",
-  "transaction_id": "txn_abc123",
-  "reference": "ORDER-123",
-  "amount": 5000,
-  "currency": "XAF",
-  "operator": "MTN",
-  "status": "success"
-}`}
-            </pre>
-          </div>
-          <p className="text-xs">Votre serveur doit répondre avec un code HTTP <code className="bg-muted px-1 rounded">200</code>. En cas d'échec de livraison, Ashtech Pay retentera jusqu'à 3 fois.</p>
-        </div>
-      ),
-    },
-    {
-      id: "errors",
-      icon: <Shield className="w-4 h-4" />,
-      title: "Codes d'erreur",
-      content: (
-        <div className="text-sm text-muted-foreground">
-          <div className="rounded-lg border overflow-hidden text-xs">
-            <table className="w-full">
-              <thead className="bg-muted/60">
-                <tr>
-                  {["Code HTTP", "Message", "Signification"].map((h) => (
-                    <th key={h} className="text-left px-3 py-2 font-medium text-foreground">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {[
-                  ["400", "Bad Request", "Paramètre manquant ou invalide"],
-                  ["401", "Unauthorized", "Clé API manquante ou invalide"],
-                  ["404", "Not Found", "Transaction introuvable"],
-                  ["422", "Unprocessable", "Opérateur non supporté pour ce pays"],
-                  ["500", "Server Error", "Erreur interne — réessayez"],
-                ].map(([code, msg, desc]) => (
-                  <tr key={code} className="hover:bg-muted/30">
-                    <td className="px-3 py-2 font-mono text-orange-600 dark:text-orange-400">{code}</td>
-                    <td className="px-3 py-2 font-medium text-foreground">{msg}</td>
-                    <td className="px-3 py-2">{desc}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ),
-    },
-  ];
-
-  return (
-    <div className="space-y-6 pt-2">
-      {sections.map((section) => (
-        <div key={section.id} className="space-y-3">
-          <div className="flex items-center gap-2 border-b pb-2">
-            <span className="text-primary">{section.icon}</span>
-            <h3 className="font-semibold text-foreground text-sm">{section.title}</h3>
-          </div>
-          {section.content}
-        </div>
-      ))}
-
-      <div className="rounded-lg bg-muted/40 border px-4 py-3 text-xs text-muted-foreground">
-        Pour toute question technique, contactez notre support via <span className="font-medium text-foreground">Tableau de bord → Support</span>.
-      </div>
-    </div>
   );
 }
