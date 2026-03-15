@@ -1621,7 +1621,7 @@ export async function registerRoutes(
             }
 
             // Build return/cancel URLs for Wave (redirect-based operators)
-            const appBaseUrl = `${req.protocol}://${req.get("host")}`;
+            const appBaseUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
 
             // ── Check OTP requirement BEFORE calling payin ────────────────────
             // For OTP operators (Orange CI/SN/BF/GN, LigdiCash BF), AfribaPay rejects
@@ -1801,11 +1801,11 @@ export async function registerRoutes(
 
             } else if (pixpayOpType === "wave") {
               // Wave CI / Wave SN — returns Wave payment URL
-              const appBase = process.env.APP_URL || "";
+              const appBase = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
               pixpayResponse = await initiatePixPayWave({
                 ...baseParams,
-                redirectUrl: `${appBase}/depot/succes?ref=${depositRef}`,
-                redirectErrorUrl: `${appBase}/depot/echec?ref=${depositRef}`,
+                redirectUrl: `${appBase}/dashboard/deposit?ref=${depositRef}&status=success`,
+                redirectErrorUrl: `${appBase}/dashboard/deposit?ref=${depositRef}&status=cancelled`,
               });
 
             } else {
@@ -3645,7 +3645,7 @@ export async function registerRoutes(
               localPhone = localPhone.slice(dialPrefix.length);
             }
             // Build return/cancel URLs for Wave
-            const linkAppBase = `${req.protocol}://${req.get("host")}`;
+            const linkAppBase = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
 
             // ── Check OTP requirement BEFORE calling payin ────────────────────
             const otpInfo = await getAfribaPayOtpInfo(paymentCountryCode, afribapayOperatorCode);
@@ -3815,11 +3815,11 @@ export async function registerRoutes(
               pxResponse = await initiatePixPayOtp({ ...pxBaseParams, omOtp });
 
             } else if (pxOpType === "wave") {
-              const appBase = process.env.APP_URL || "";
+              const appBase = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
               pxResponse = await initiatePixPayWave({
                 ...pxBaseParams,
-                redirectUrl: paymentLink.redirectUrl || `${appBase}/paiement/succes?ref=${reference}`,
-                redirectErrorUrl: `${appBase}/paiement/echec?ref=${reference}`,
+                redirectUrl: paymentLink.redirectUrl || `${appBase}/pay/${paymentLink.slug}?ref=${reference}&status=success`,
+                redirectErrorUrl: `${appBase}/pay/${paymentLink.slug}?ref=${reference}&status=cancelled`,
               });
 
             } else {
