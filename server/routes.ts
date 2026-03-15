@@ -7439,7 +7439,7 @@ export async function registerRoutes(
     }
   });
 
-  // POST /api/v1/hosted-payment/create — create a hosted payment session
+  // POST /api/v1/hosted-payment/create — create a hosted payment link (uses existing /pay/:slug page)
   app.post("/api/v1/hosted-payment/create", async (req: Request, res: Response) => {
     try {
       const authHeader = req.headers.authorization || "";
@@ -7463,28 +7463,40 @@ export async function registerRoutes(
         return res.status(400).json({ error: "invalid_currency", message: `currency must be one of: ${validCurrencies.join(", ")}` });
       }
 
-      const sessionId = "pay_" + crypto.randomBytes(12).toString("hex");
+      // Generate a unique slug for this payment link
+      let slug = "hp-" + generateSlug();
+      while (await storage.getPaymentLinkBySlug(slug)) {
+        slug = "hp-" + generateSlug();
+      }
+
       const expiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 min
 
-      const session = await storage.createHostedPaymentSession({
-        id: sessionId,
-        merchantId: merchant.id,
+      // Create a real payment link in the existing system → uses the existing /pay/:slug page
+      const paymentLink = await storage.createPaymentLink({
+        userId: merchant.id,
+        title: description || "Paiement Ashtech Pay",
+        description: description || null,
         amount: String(numAmount),
         currency,
-        description: description || null,
-        status: "pending",
-        transactionId: null,
+        slug,
+        isFixedAmount: true,
+        imagePath: null,
+        pdfPath: null,
+        hasPdfDelivery: false,
+        redirectUrl: null,
         expiresAt,
+        allowedCountries: null,
       });
 
       const host = req.headers.host || "pay.ashtechpay.top";
       const protocol = req.headers["x-forwarded-proto"] || "https";
-      const paymentLink = `${protocol}://${host}/hpay/${sessionId}`;
+      const payUrl = `${protocol}://${host}/pay/${slug}`;
 
       res.json({
         status: "success",
-        payment_link: paymentLink,
-        payment_id: sessionId,
+        payment_link: payUrl,
+        payment_id: paymentLink.id,
+        slug,
         expires_at: expiresAt,
       });
     } catch (e: any) {
@@ -7493,7 +7505,7 @@ export async function registerRoutes(
     }
   });
 
-  // GET /api/v1/hosted-payment/:id — check session status
+  // GET /api/v1/hosted-payment/:id — check payment link status
   app.get("/api/v1/hosted-payment/:id", async (req: Request, res: Response) => {
     try {
       const authHeader = req.headers.authorization || "";
@@ -7504,18 +7516,33 @@ export async function registerRoutes(
       const merchant = await storage.getUserByHpKey(hpKey);
       if (!merchant) return res.status(401).json({ error: "unauthorized" });
 
-      const session = await storage.getHostedPaymentSession(req.params.id);
-      if (!session) return res.status(404).json({ error: "not_found" });
-      if (session.merchantId !== merchant.id) return res.status(403).json({ error: "forbidden" });
+      const link = await storage.getPaymentLinkById(req.params.id);
+      if (!link) return res.status(404).json({ error: "not_found" });
+      if (link.userId !== merchant.id) return res.status(403).json({ error: "forbidden" });
+
+      // Determine status from transactions linked to this payment link
+      const txns = await storage.getTransactionsByPaymentLinkId(link.id);
+      let status = "pending";
+      const now = new Date();
+      if (txns.some((t: any) => t.status === "completed")) {
+        status = "success";
+      } else if (txns.some((t: any) => t.status === "processing")) {
+        status = "processing";
+      } else if (txns.some((t: any) => t.status === "failed")) {
+        status = "failed";
+      } else if (link.expiresAt && link.expiresAt < now) {
+        status = "expired";
+      }
 
       res.json({
-        payment_id: session.id,
-        amount: parseFloat(session.amount),
-        currency: session.currency,
-        description: session.description,
-        status: session.status,
-        created_at: session.createdAt,
-        expires_at: session.expiresAt,
+        payment_id: link.id,
+        slug: link.slug,
+        amount: parseFloat(link.amount),
+        currency: link.currency,
+        description: link.description,
+        status,
+        created_at: link.createdAt,
+        expires_at: link.expiresAt,
       });
     } catch (e: any) {
       res.status(500).json({ error: "server_error" });
