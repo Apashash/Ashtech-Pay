@@ -183,7 +183,7 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
             ) : (
               <span className="hidden md:flex items-center gap-1.5 text-xs text-zinc-500">
                 <Globe className="w-3.5 h-3.5" />
-                api.ashtechpay.top
+                ashtechpay.top
               </span>
             )}
             <button
@@ -264,7 +264,7 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
             <div className="rounded-xl border border-white/10 bg-[#161b22] p-5 space-y-3 overflow-x-hidden">
               <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">URL de base</p>
               <div className="flex items-center gap-3 flex-wrap">
-                <code className="text-base font-mono font-semibold text-[#79c0ff] break-all">https://api.ashtechpay.top</code>
+                <code className="text-base font-mono font-semibold text-[#79c0ff] break-all">https://ashtechpay.top</code>
                 <Badge variant="outline" className="border-green-500/30 text-green-400 text-[10px] shrink-0">v1</Badge>
               </div>
               <p className="text-xs text-zinc-500">Toutes les requêtes doivent être envoyées en HTTPS. Réponses JSON uniquement.</p>
@@ -291,7 +291,7 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
             </div>
             <div className="space-y-3">
               <p className="text-sm font-medium text-zinc-300">Exemple d'appel authentifié (Node.js)</p>
-              <CodeBlock language="javascript" code={`const response = await fetch("https://api.ashtechpay.top/v1/collect", {
+              <CodeBlock language="javascript" code={`const response = await fetch("https://ashtechpay.top/v1/collect", {
   method: "POST",
   headers: {
     "Authorization": "Bearer ${apiKey}",
@@ -324,7 +324,7 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
             <div className="grid lg:grid-cols-2 gap-5">
               <div className="space-y-2 min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Requête</p>
-                <CodeBlock language="javascript" code={`fetch("https://api.ashtechpay.top/v1/countries", {
+                <CodeBlock language="javascript" code={`fetch("https://ashtechpay.top/v1/countries", {
   headers: {
     "Authorization": "Bearer ${apiKey}"
   }
@@ -431,7 +431,7 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
             <div className="grid lg:grid-cols-2 gap-5">
               <div className="space-y-2 min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Requête</p>
-                <CodeBlock language="javascript" code={`fetch("https://api.ashtechpay.top/v1/collect", {
+                <CodeBlock language="javascript" code={`fetch("https://ashtechpay.top/v1/collect", {
   method: "POST",
   headers: {
     "Authorization": "Bearer ${apiKey}",
@@ -768,7 +768,7 @@ if (data.flow === "wave") {
             <div className="space-y-2">
               <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Comment détecter le bon flux dans votre code</p>
               <CodeBlock language="javascript" code={`async function collectPayment(params) {
-  const res = await fetch("https://api.ashtechpay.top/v1/collect", {
+  const res = await fetch("https://ashtechpay.top/v1/collect", {
     method: "POST",
     headers: {
       "Authorization": "Bearer YOUR_API_KEY",
@@ -828,7 +828,7 @@ if (data.flow === "wave") {
               <div className="space-y-2 min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Requête</p>
                 <CodeBlock language="javascript" code={`fetch(
-  "https://api.ashtechpay.top/v1/transaction/8f3e1c2d-...",
+  "https://ashtechpay.top/v1/transaction/8f3e1c2d-...",
   {
     headers: {
       "Authorization": "Bearer ${apiKey}"
