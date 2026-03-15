@@ -7252,31 +7252,73 @@ export async function registerRoutes(
       const pixpayIpnUrl = `${process.env.APP_URL || ""}/api/pixpay/webhook`;
 
       if (paymentProvider === "afribapay") {
-        const afribaOpCode = (operatorRecord as any).afribapayOperatorCode || operatorName.toLowerCase();
+        const afribaOpCode = resolveAfribaPayOperatorCode(operatorRecord, operatorName);
+        const afribapayCurrency = AFRIBAPAY_ISO_CURRENCY[country.code.toUpperCase()] || country.currency;
+
+        // Normalize phone: strip spaces, leading +, then country prefix
+        const COUNTRY_PREFIXES: Record<string, string> = {
+          CM: "237", SN: "221", CI: "225", BF: "226", ML: "223",
+          GN: "224", BJ: "229", TG: "228", NE: "227", CD: "243",
+          CG: "242", CF: "236", TD: "235", GA: "241", GQ: "240",
+          MG: "261", RW: "250", KE: "254", TZ: "255", UG: "256",
+          GH: "233", NG: "234",
+        };
+        let localPhone = phone.replace(/\s/g, "");
+        if (localPhone.startsWith("+")) localPhone = localPhone.slice(1);
+        const countryPrefix = COUNTRY_PREFIXES[country.code.toUpperCase()];
+        if (countryPrefix && localPhone.startsWith(countryPrefix)) {
+          localPhone = localPhone.slice(countryPrefix.length);
+        }
+
         const otpInfo = await getAfribaPayOtpInfo(country.code, afribaOpCode);
         let afribaResponse: any;
         if (otpInfo.required && req.body.otp) {
-          const otpInitResult = await initiateAfribaPayOtp(
-            amountNum, phone, afribaOpCode, country.code, depositRef, callbackUrl
-          );
+          const otpInitResult = await initiateAfribaPayOtp({
+            operator: afribaOpCode,
+            country: country.code,
+            phone_number: localPhone,
+            amount: amountNum,
+            currency: afribapayCurrency,
+            order_id: depositRef,
+            reference_id: depositRef,
+            notify_url: callbackUrl,
+          });
           if (!otpInitResult.success) {
             await storage.updateTransactionStatus(transaction.id, "failed");
             return res.status(502).json({ error: "gateway_error", message: otpInitResult.message || "Échec de l'initiation OTP." });
           }
-          afribaResponse = await confirmAfribaPayOtp(otpInitResult.transactionId!, req.body.otp, country.code);
+          afribaResponse = await confirmAfribaPayOtp({
+            operator: afribaOpCode,
+            country: country.code,
+            phone_number: localPhone,
+            amount: amountNum,
+            currency: afribapayCurrency,
+            order_id: depositRef,
+            reference_id: depositRef,
+            otp_code: req.body.otp,
+            notify_url: callbackUrl,
+          });
         } else {
-          afribaResponse = await initiateAfribaPayin(
-            amountNum, phone, afribaOpCode, country.code, depositRef,
-            callbackUrl, `${process.env.APP_URL}/dashboard/deposit?status=success`,
-            `${process.env.APP_URL}/dashboard/deposit?status=cancelled`
-          );
+          afribaResponse = await initiateAfribaPayin({
+            operator: afribaOpCode,
+            country: country.code,
+            phone_number: localPhone,
+            amount: amountNum,
+            currency: afribapayCurrency,
+            order_id: depositRef,
+            reference_id: depositRef,
+            notify_url: callbackUrl,
+            return_url: `${process.env.APP_URL}/dashboard/deposit?status=success`,
+            cancel_url: `${process.env.APP_URL}/dashboard/deposit?status=cancelled`,
+          });
         }
         if (afribaResponse.success) {
-          await storage.updateTransactionExternalReference(transaction.id, afribaResponse.transactionId || depositRef);
+          const extRef = afribaResponse.transaction_id || depositRef;
+          await storage.updateTransactionExternalReference(transaction.id, extRef);
           addPendingPayment({
             transactionId: transaction.id,
             reference: depositRef,
-            externalReference: afribaResponse.transactionId || depositRef,
+            externalReference: extRef,
             attempts: 0,
             userId: merchant.id,
             type: "deposit",
