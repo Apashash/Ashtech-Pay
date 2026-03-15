@@ -6,7 +6,7 @@ import { creditUserWallet } from "./walletHelper";
 import { sendPayerConfirmationEmail } from "./email";
 
 const POLL_INTERVAL = 3000;
-const MAX_POLL_DURATION_MS = 10 * 60 * 1000;
+const MAX_POLL_DURATION_MS = 7 * 60 * 1000; // 7 minutes — auto-reject if no success/failure received
 const MAX_POLL_ATTEMPTS = Math.ceil(MAX_POLL_DURATION_MS / POLL_INTERVAL);
 
 interface PendingPayment {
@@ -123,10 +123,10 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
       await storage.createUserNotification({
         userId: payment.userId,
         type: isPaymentLink ? "payment_link_failed" : "deposit_failed",
-        title: isPaymentLink ? "Paiement annulé" : "Dépôt annulé",
+        title: isPaymentLink ? "Paiement rejeté" : "Dépôt rejeté",
         message: isPaymentLink
-          ? "Le paiement a été annulé ou a échoué."
-          : "Votre dépôt a été annulé ou a échoué. Aucun montant n'a été débité.",
+          ? "Le paiement a été rejeté ou a échoué."
+          : "Votre dépôt a été rejeté ou a échoué. Aucun montant n'a été débité.",
         transactionId: transaction.id,
         isRead: false,
       });
@@ -188,8 +188,8 @@ export async function recoverPendingDeposits() {
             type: isPaymentLink ? "payment_link_failed" : "deposit_failed",
             title: isPaymentLink ? "Paiement expiré" : "Dépôt expiré",
             message: isPaymentLink
-              ? "Un paiement a expiré (délai dépassé)."
-              : "Votre dépôt a expiré (délai de 10 minutes dépassé). Aucun montant n'a été débité.",
+              ? "Un paiement a expiré : aucune confirmation reçue de l'opérateur dans les 7 minutes."
+              : "Votre dépôt a expiré : aucune confirmation reçue de l'opérateur dans les 7 minutes. Aucun montant n'a été débité.",
             transactionId: tx.id,
             isRead: false,
           });
@@ -241,7 +241,7 @@ let pollerInterval: NodeJS.Timeout | null = null;
 
 export function startPaymentPoller() {
   if (pollerInterval) { console.log("[PaymentPoller] Already running"); return; }
-  console.log(`[PaymentPoller] Starting payment poller (every ${POLL_INTERVAL / 1000}s, timeout: 10min)`);
+  console.log(`[PaymentPoller] Starting payment poller (every ${POLL_INTERVAL / 1000}s, timeout: 7min)`);
   pollerInterval = setInterval(pollPendingPayments, POLL_INTERVAL);
 }
 
