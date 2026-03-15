@@ -14,6 +14,7 @@ const SECTIONS = [
   { id: "authentication", label: "Authentification",     icon: Shield },
   { id: "countries",      label: "GET /v1/countries",    icon: List },
   { id: "collect",        label: "POST /v1/collect",     icon: Terminal },
+  { id: "flows",          label: "Flux de paiement",     icon: Zap },
   { id: "transaction",    label: "GET /v1/transaction",  icon: CheckCircle2 },
   { id: "webhooks",       label: "Webhooks",             icon: Webhook },
   { id: "errors",         label: "Codes d'erreur",       icon: ArrowRight },
@@ -453,6 +454,319 @@ export default function DeveloperPage() {
   "operator": "Orange Money", "country_code": "CI",
   "otp": "123456",
   "notify_url": "https://monsite.com/webhook"
+}`} />
+            </div>
+          </section>
+
+          {/* Payment flows */}
+          <section id="flows" ref={el => sectionRefs.current.flows = el} className="scroll-mt-20 space-y-8">
+            <div className="flex items-center gap-2 border-b border-white/10 pb-4">
+              <Zap className="w-5 h-5 text-primary shrink-0" />
+              <h2 className="text-xl font-bold text-white">Flux de paiement</h2>
+            </div>
+
+            <p className="text-zinc-400 leading-relaxed">
+              Selon le pays et l'opérateur, l'API utilise automatiquement l'un des 4 flux ci-dessous.
+              Votre code doit gérer chacun différemment car la réponse et les étapes varient.
+            </p>
+
+            {/* Flow overview table */}
+            <TableWrapper>
+              <TableHead cols={["Flux", "Opérateurs concernés", "Réponse initiale", "Action requise"]} />
+              <tbody>
+                <tr className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                  <td className="px-3 py-3 whitespace-nowrap"><span className="text-blue-400 font-semibold text-sm">USSD Push</span></td>
+                  <td className="px-3 py-3 text-zinc-300 text-sm">MTN, Moov, Airtel, Orange CM, Free SN, T-Money, Flooz, M-Pesa, Afrimoney…</td>
+                  <td className="px-3 py-3 font-mono text-green-400 text-xs whitespace-nowrap">202 pending</td>
+                  <td className="px-3 py-3 text-zinc-300 text-sm">Attendre le webhook. Le client valide directement sur son téléphone.</td>
+                </tr>
+                <tr className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                  <td className="px-3 py-3 whitespace-nowrap"><span className="text-yellow-400 font-semibold text-sm">OTP SMS</span></td>
+                  <td className="px-3 py-3 text-zinc-300 text-sm">Orange Money (CI, SN, ML, GN, CF, CG, GA, GW, GQ, CD, TD, TG) — reçoit SMS</td>
+                  <td className="px-3 py-3 font-mono text-orange-400 text-xs whitespace-nowrap">400 otp_required<br/><span className="text-zinc-500">ussd_code: null</span></td>
+                  <td className="px-3 py-3 text-zinc-300 text-sm">Le client reçoit un SMS avec son OTP. Relancer la requête avec le champ <code className="text-[#79c0ff] bg-white/10 px-1 py-0.5 rounded">otp</code>.</td>
+                </tr>
+                <tr className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                  <td className="px-3 py-3 whitespace-nowrap"><span className="text-orange-400 font-semibold text-sm">OTP USSD</span></td>
+                  <td className="px-3 py-3 text-zinc-300 text-sm">Orange Money (BF) — compose un code USSD pour obtenir l'OTP</td>
+                  <td className="px-3 py-3 font-mono text-orange-400 text-xs whitespace-nowrap">400 otp_required<br/><span className="text-zinc-500">ussd_code: "*144*4*6*5000#"</span></td>
+                  <td className="px-3 py-3 text-zinc-300 text-sm">Le client compose le code USSD fourni, saisit l'OTP reçu. Relancer avec <code className="text-[#79c0ff] bg-white/10 px-1 py-0.5 rounded">otp</code>.</td>
+                </tr>
+                <tr className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                  <td className="px-3 py-3 whitespace-nowrap"><span className="text-purple-400 font-semibold text-sm">Wave</span></td>
+                  <td className="px-3 py-3 text-zinc-300 text-sm">Wave (CI), Wave (SN)</td>
+                  <td className="px-3 py-3 font-mono text-purple-400 text-xs whitespace-nowrap">202 pending<br/><span className="text-zinc-500">flow: "wave", wave_url: "..."</span></td>
+                  <td className="px-3 py-3 text-zinc-300 text-sm">Afficher le <code className="text-[#79c0ff] bg-white/10 px-1 py-0.5 rounded">wave_url</code> en bouton ou QR code. Le client ouvre Wave pour confirmer.</td>
+                </tr>
+              </tbody>
+            </TableWrapper>
+
+            {/* Flow 1: USSD Push */}
+            <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-5 space-y-4">
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-xs font-bold text-white shrink-0">1</span>
+                <h3 className="font-semibold text-blue-300">Flux USSD Push — La majorité des opérateurs</h3>
+              </div>
+              <p className="text-sm text-zinc-400">
+                Flux le plus simple. Le client reçoit une demande USSD sur son téléphone et valide en composant son PIN.
+                Vous recevez la confirmation par webhook.{" "}
+                <strong className="text-zinc-200">Pas d'OTP à gérer côté merchant.</strong>
+              </p>
+              <div className="text-xs text-zinc-500">
+                <strong className="text-zinc-400">Exemples d'opérateurs :</strong>{" "}
+                MTN (CM, BJ, CG, GN, CD), Moov (BJ, CI, BF, GA, ML, TG), Airtel (CG, GA, NE, CD, TD),
+                Orange (CM), Free Money (SN), T-Money (TG), Flooz (TG), Vodacom M-Pesa (CD), Afrimoney (CD)
+              </div>
+              <div className="grid lg:grid-cols-2 gap-4">
+                <div className="space-y-1 min-w-0">
+                  <p className="text-xs text-zinc-500 font-medium">Requête</p>
+                  <CodeBlock language="javascript" code={`// Orange Money Cameroun — flux USSD push
+const res = await fetch("/v1/collect", {
+  method: "POST",
+  headers: { "Authorization": "Bearer ${apiKey}" },
+  body: JSON.stringify({
+    amount: 5000,
+    currency: "XAF",
+    phone: "699000000",
+    operator: "Orange Money",
+    country_code: "CM",
+    notify_url: "https://monsite.com/webhook"
+  })
+});
+
+const data = await res.json();
+// data.status === "pending"
+// → Attendre le webhook payment.success / payment.failed`} />
+                </div>
+                <div className="space-y-1 min-w-0">
+                  <p className="text-xs text-zinc-500 font-medium">Réponse 202</p>
+                  <CodeBlock language="json" code={`{
+  "transaction_id": "abc-123",
+  "status": "pending",
+  "amount": 5000,
+  "credited_amount": 4750,
+  "fee_amount": 250,
+  "currency": "XAF"
+}
+
+// Le client reçoit la demande USSD
+// sur son téléphone → valide avec PIN
+// Webhook envoyé à notify_url`} />
+                </div>
+              </div>
+            </div>
+
+            {/* Flow 2: OTP SMS (AfribaPay) */}
+            <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-5 space-y-4">
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-yellow-500 flex items-center justify-center text-xs font-bold text-white shrink-0">2</span>
+                <h3 className="font-semibold text-yellow-300">Flux OTP SMS — Orange Money (la plupart des pays)</h3>
+              </div>
+              <p className="text-sm text-zinc-400">
+                Pour Orange Money dans la majorité des pays. Le réseau Orange envoie automatiquement un SMS
+                contenant l'OTP au numéro du client. Votre interface doit demander au client de saisir cet OTP.
+                <strong className="text-zinc-200"> Le champ <code className="text-[#79c0ff] bg-white/10 px-1 py-0.5 rounded">ussd_code</code> est <code className="text-red-400">null</code></strong> — aucun code à composer.
+              </p>
+              <div className="text-xs text-zinc-500">
+                <strong className="text-zinc-400">Opérateurs concernés :</strong>{" "}
+                Orange Money CI, Orange Money SN, Orange Money ML, Orange Money GN, Orange Money CF,
+                Orange Money CG, Orange Money GA, Orange Money GW, Orange Money GQ, Orange Money CD, Orange Money TD
+              </div>
+              <div className="grid lg:grid-cols-2 gap-4">
+                <div className="space-y-1 min-w-0">
+                  <p className="text-xs text-zinc-500 font-medium">Étape 1 — Requête initiale (sans OTP)</p>
+                  <CodeBlock language="javascript" code={`// Orange Money CI — étape 1 : sans OTP
+const res = await fetch("/v1/collect", {
+  method: "POST",
+  headers: { "Authorization": "Bearer ${apiKey}" },
+  body: JSON.stringify({
+    amount: 1000,
+    currency: "XOF",
+    phone: "0700000000",
+    operator: "Orange Money",
+    country_code: "CI",
+    notify_url: "https://monsite.com/webhook"
+  })
+});
+// → 400 otp_required
+// ussd_code est null
+// Le client reçoit l'OTP par SMS`} />
+                </div>
+                <div className="space-y-1 min-w-0">
+                  <p className="text-xs text-zinc-500 font-medium">Réponse 400 + Étape 2 — Avec OTP</p>
+                  <CodeBlock language="json" code={`// Réponse 400 :
+{
+  "error": "otp_required",
+  "message": "OTP requis pour cet opérateur.",
+  "ussd_code": null
+}
+
+// Le client reçoit son OTP par SMS
+// Étape 2 : relancer avec otp`} />
+                  <CodeBlock language="javascript" code={`// Étape 2 : même requête + otp
+body: JSON.stringify({
+  amount: 1000, currency: "XOF",
+  phone: "0700000000",
+  operator: "Orange Money",
+  country_code: "CI",
+  otp: "123456",  // ← OTP reçu par SMS
+  notify_url: "https://monsite.com/webhook"
+})
+// → 202 pending → webhook`} />
+                </div>
+              </div>
+            </div>
+
+            {/* Flow 3: OTP USSD (PixPay) */}
+            <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 p-5 space-y-4">
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-orange-500 flex items-center justify-center text-xs font-bold text-white shrink-0">3</span>
+                <h3 className="font-semibold text-orange-300">Flux OTP USSD — Orange Money Burkina Faso uniquement</h3>
+              </div>
+              <p className="text-sm text-zinc-400">
+                Spécifique au Burkina Faso. L'API retourne un <code className="text-[#79c0ff] bg-white/10 px-1 py-0.5 rounded">ussd_code</code>{" "}
+                incluant le montant (ex : <code className="text-orange-300 bg-white/10 px-1 py-0.5 rounded">*144*4*6*5000#</code>).
+                Le client doit composer ce code depuis son téléphone — Orange répond par SMS avec l'OTP.
+              </p>
+              <div className="grid lg:grid-cols-2 gap-4">
+                <div className="space-y-1 min-w-0">
+                  <p className="text-xs text-zinc-500 font-medium">Étape 1 — Requête initiale (sans OTP)</p>
+                  <CodeBlock language="javascript" code={`// Orange Money Burkina Faso — étape 1
+const res = await fetch("/v1/collect", {
+  method: "POST",
+  headers: { "Authorization": "Bearer ${apiKey}" },
+  body: JSON.stringify({
+    amount: 5000,
+    currency: "XOF",
+    phone: "70000000",
+    operator: "Orange Money",
+    country_code: "BF",
+    notify_url: "https://monsite.com/webhook"
+  })
+});
+// → 400 otp_required
+// ussd_code contient le code USSD à composer`} />
+                </div>
+                <div className="space-y-1 min-w-0">
+                  <p className="text-xs text-zinc-500 font-medium">Réponse 400 + Étape 2</p>
+                  <CodeBlock language="json" code={`// Réponse 400 :
+{
+  "error": "otp_required",
+  "message": "OTP requis. Composez *144*4*6*5000# pour obtenir votre code OTP.",
+  "ussd_code": "*144*4*6*5000#"
+}
+
+// Afficher à l'utilisateur :
+// "Composez *144*4*6*5000# sur votre téléphone,
+//  puis saisissez l'OTP reçu"`} />
+                  <CodeBlock language="javascript" code={`// Étape 2 : même requête + otp
+body: JSON.stringify({
+  amount: 5000, currency: "XOF",
+  phone: "70000000",
+  operator: "Orange Money",
+  country_code: "BF",
+  otp: "456789",  // ← OTP reçu après le USSD
+  notify_url: "https://monsite.com/webhook"
+})
+// → 202 pending → webhook`} />
+                </div>
+              </div>
+            </div>
+
+            {/* Flow 4: Wave */}
+            <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 p-5 space-y-4">
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-purple-500 flex items-center justify-center text-xs font-bold text-white shrink-0">4</span>
+                <h3 className="font-semibold text-purple-300">Flux Wave — Côte d'Ivoire et Sénégal</h3>
+              </div>
+              <p className="text-sm text-zinc-400">
+                Pour Wave CI et Wave SN. L'API retourne directement un <code className="text-[#79c0ff] bg-white/10 px-1 py-0.5 rounded">wave_url</code> dans la réponse 202.
+                Votre interface doit afficher ce lien (bouton ou QR code) pour que le client l'ouvre dans son
+                application Wave. <strong className="text-zinc-200">Pas d'OTP.</strong>{" "}
+                Le numéro de téléphone n'est pas requis pour Wave.
+              </p>
+              <div className="grid lg:grid-cols-2 gap-4">
+                <div className="space-y-1 min-w-0">
+                  <p className="text-xs text-zinc-500 font-medium">Requête</p>
+                  <CodeBlock language="javascript" code={`// Wave Côte d'Ivoire
+const res = await fetch("/v1/collect", {
+  method: "POST",
+  headers: { "Authorization": "Bearer ${apiKey}" },
+  body: JSON.stringify({
+    amount: 2000,
+    currency: "XOF",
+    phone: "0700000000",  // facultatif pour Wave
+    operator: "Wave",
+    country_code: "CI",
+    notify_url: "https://monsite.com/webhook"
+  })
+});
+
+const data = await res.json();
+if (data.flow === "wave") {
+  // Afficher data.wave_url au client
+  window.open(data.wave_url, "_blank");
+}`} />
+                </div>
+                <div className="space-y-1 min-w-0">
+                  <p className="text-xs text-zinc-500 font-medium">Réponse 202</p>
+                  <CodeBlock language="json" code={`{
+  "transaction_id": "xyz-789",
+  "status": "pending",
+  "amount": 2000,
+  "credited_amount": 1910,
+  "fee_amount": 90,
+  "currency": "XOF",
+  "operator": "Wave",
+  "country_code": "CI",
+  "flow": "wave",
+  "wave_url": "https://pay.wave.com/m/..."
+}
+
+// → Afficher wave_url comme bouton
+// "Payer avec Wave"
+// → Le client ouvre l'app Wave et confirme
+// → Webhook payment.success envoyé`} />
+                </div>
+              </div>
+            </div>
+
+            {/* Summary: how to detect flow in code */}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Comment détecter le bon flux dans votre code</p>
+              <CodeBlock language="javascript" code={`async function collectPayment(params) {
+  const res = await fetch("https://api.ashtechpay.top/v1/collect", {
+    method: "POST",
+    headers: {
+      "Authorization": "Bearer YOUR_API_KEY",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(params)
+  });
+
+  const data = await res.json();
+
+  if (res.status === 202 && data.flow === "wave") {
+    // ─── Flux Wave : afficher le lien de paiement ─────────────
+    return { type: "wave", waveUrl: data.wave_url, transactionId: data.transaction_id };
+  }
+
+  if (res.status === 202) {
+    // ─── Flux USSD Push : attendre le webhook ──────────────────
+    return { type: "ussd_push", transactionId: data.transaction_id };
+  }
+
+  if (res.status === 400 && data.error === "otp_required") {
+    if (data.ussd_code) {
+      // ─── Flux OTP USSD (BF Orange) : code à composer ─────────
+      return { type: "otp_ussd", ussdCode: data.ussd_code };
+    } else {
+      // ─── Flux OTP SMS (Orange CI, SN, ML…) : SMS automatique ─
+      return { type: "otp_sms" };
+    }
+  }
+
+  throw new Error(data.message);
 }`} />
             </div>
           </section>

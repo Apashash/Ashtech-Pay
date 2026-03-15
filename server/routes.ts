@@ -7189,10 +7189,11 @@ export async function registerRoutes(
         const pxFlowType = detectPixPayFlowType(operatorName, country.code);
         if (pxFlowType === "otp" && !req.body.otp) {
           const ussdCode = PIXPAY_OTP_USSD_CODES[country.code.toUpperCase()] || "#144*82#";
+          const amountForCode = ussdCode.includes("montant") ? ussdCode.replace("montant", String(Math.round(amountNum))) : ussdCode;
           return res.status(400).json({
             error: "otp_required",
-            message: `OTP requis. Composez ${ussdCode} pour obtenir votre code OTP, puis relancez la requête avec le champ 'otp'.`,
-            ussd_code: ussdCode,
+            message: `OTP requis. Composez ${amountForCode} pour obtenir votre code OTP, puis relancez la requête avec le champ 'otp'.`,
+            ussd_code: amountForCode,
           });
         }
       }
@@ -7272,11 +7273,28 @@ export async function registerRoutes(
       } else {
         // PixPay
         const pxFlowType = detectPixPayFlowType(operatorName, country.code);
+        const pxServiceId = getPixPayServiceId(operatorName, country.code, "cash_in");
+        const pxBaseParams = {
+          serviceId: String(pxServiceId ?? 0),
+          amount: amountNum,
+          phone,
+          countryCode: country.code,
+          orderId: depositRef,
+          ipnUrl: pixpayIpnUrl,
+          customData: depositRef,
+        };
         let pixpayResponse: any;
         if (pxFlowType === "otp") {
-          pixpayResponse = await initiatePixPayOtp(amountNum, phone, country.code, depositRef, pixpayIpnUrl, req.body.otp!);
+          pixpayResponse = await initiatePixPayOtp({ ...pxBaseParams, omOtp: req.body.otp! });
+        } else if (pxFlowType === "wave") {
+          const appBase = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
+          pixpayResponse = await initiatePixPayWave({
+            ...pxBaseParams,
+            redirectUrl: `${appBase}/dashboard/deposit?ref=${depositRef}&status=success`,
+            redirectErrorUrl: `${appBase}/dashboard/deposit?ref=${depositRef}&status=cancelled`,
+          });
         } else {
-          pixpayResponse = await initiatePixPayUssd(amountNum, phone, country.code, depositRef, pixpayIpnUrl);
+          pixpayResponse = await initiatePixPayUssd(pxBaseParams);
         }
         if (pixpayResponse.success) {
           const extRef = pixpayResponse.transactionId || depositRef;
@@ -7292,13 +7310,19 @@ export async function registerRoutes(
             provider: "pixpay",
             countryCode: country.code,
           });
+          if (pixpayResponse.waveUrl) {
+            (transaction as any)._waveUrl = pixpayResponse.waveUrl;
+          }
         } else {
           await storage.updateTransactionStatus(transaction.id, "failed");
           return res.status(502).json({ error: "gateway_error", message: pixpayResponse.message || "Échec du paiement PixPay." });
         }
       }
 
-      res.status(202).json({
+      // Detect if Wave to include wave_url in response
+      const isWave = detectPixPayFlowType(operatorName, country.code) === "wave";
+
+      const responseBody: Record<string, any> = {
         transaction_id: transaction.id,
         reference: depositRef,
         status: "pending",
@@ -7310,7 +7334,13 @@ export async function registerRoutes(
         phone,
         country_code: country.code,
         created_at: (transaction as any).createdAt,
-      });
+      };
+      if (isWave && (transaction as any)._waveUrl) {
+        responseBody.wave_url = (transaction as any)._waveUrl;
+        responseBody.flow = "wave";
+      }
+
+      res.status(202).json(responseBody);
     } catch (e: any) {
       console.error("[API v1 /collect]", e);
       res.status(500).json({ error: "server_error", message: "Erreur interne." });
