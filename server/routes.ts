@@ -270,6 +270,7 @@ const otpContextCache = new Map<string, {
   currency: string;
   afribaTransactionId: string;
   expiresAt: number;
+  otpType?: "api" | "ussd";
 }>();
 
 setInterval(() => {
@@ -1612,24 +1613,26 @@ export async function registerRoutes(
             const otpInfo = await getAfribaPayOtpInfo(countryCode, afribapayOperatorCode);
 
             if (otpInfo.required) {
-              // Initiate OTP via /v1/pay/otp (no otp_code)
-              // For API-type OTP: AfribaPay sends the code by SMS
-              // For USSD-type OTP: user will dial the USSD code on their phone to receive it
-              const otpInitResult = await initiateAfribaPayOtp({
-                operator: afribapayOperatorCode,
-                country: countryCode,
-                phone_number: localPhone,
-                amount: totalAmount,
-                currency: afribapayCurrency,
-                order_id: depositRef,
-                reference_id: depositRef,
-                notify_url: callbackUrl,
-              });
+              if (otpInfo.type === "api") {
+                // ── API OTP: AfribaPay sends the code by SMS via /v1/pay/otp ──
+                const otpInitResult = await initiateAfribaPayOtp({
+                  operator: afribapayOperatorCode,
+                  country: countryCode,
+                  phone_number: localPhone,
+                  amount: totalAmount,
+                  currency: afribapayCurrency,
+                  order_id: depositRef,
+                  reference_id: depositRef,
+                  notify_url: callbackUrl,
+                });
 
-              if (!otpInitResult.success) {
-                await storage.updateTransactionStatus(transaction.id, "failed");
-                return res.status(400).json({ message: otpInitResult.message || "Impossible d'envoyer le code OTP" });
+                if (!otpInitResult.success) {
+                  await storage.updateTransactionStatus(transaction.id, "failed");
+                  return res.status(400).json({ message: otpInitResult.message || "Impossible d'envoyer le code OTP" });
+                }
               }
+              // ── USSD OTP: user dials the code themselves — no initiation call needed ──
+              // Just store context so confirm-otp can process it later
 
               // Store OTP context for the confirm-otp endpoint
               otpContextCache.set(depositRef, {
@@ -1640,6 +1643,7 @@ export async function registerRoutes(
                 currency: afribapayCurrency,
                 afribaTransactionId: depositRef,
                 expiresAt: Date.now() + 15 * 60 * 1000, // 15 min
+                otpType: otpInfo.type,
               });
 
               const otpMessage = otpInfo.type === "ussd"
@@ -3605,24 +3609,25 @@ export async function registerRoutes(
             const otpInfo = await getAfribaPayOtpInfo(paymentCountryCode, afribapayOperatorCode);
 
             if (otpInfo.required) {
-              // Initiate OTP via /v1/pay/otp (no otp_code)
-              // For API-type OTP: AfribaPay sends the code by SMS
-              // For USSD-type OTP: user will dial the USSD code on their phone to receive it
-              const otpInitResult = await initiateAfribaPayOtp({
-                operator: afribapayOperatorCode,
-                country: paymentCountryCode,
-                phone_number: localPhone,
-                amount: numAmount,
-                currency: afribapayCurrency,
-                order_id: reference,
-                reference_id: reference,
-                notify_url: callbackUrl,
-              });
+              if (otpInfo.type === "api") {
+                // ── API OTP: AfribaPay sends the code by SMS via /v1/pay/otp ──
+                const otpInitResult = await initiateAfribaPayOtp({
+                  operator: afribapayOperatorCode,
+                  country: paymentCountryCode,
+                  phone_number: localPhone,
+                  amount: numAmount,
+                  currency: afribapayCurrency,
+                  order_id: reference,
+                  reference_id: reference,
+                  notify_url: callbackUrl,
+                });
 
-              if (!otpInitResult.success) {
-                await storage.updatePaymentIntentStatus(intent.id, "failed");
-                return res.status(400).json({ message: otpInitResult.message || "Impossible d'envoyer le code OTP" });
+                if (!otpInitResult.success) {
+                  await storage.updatePaymentIntentStatus(intent.id, "failed");
+                  return res.status(400).json({ message: otpInitResult.message || "Impossible d'envoyer le code OTP" });
+                }
               }
+              // ── USSD OTP: user dials the code themselves — no initiation call needed ──
 
               // Store OTP context for confirm-otp endpoint
               otpContextCache.set(reference, {
@@ -3633,6 +3638,7 @@ export async function registerRoutes(
                 currency: afribapayCurrency,
                 afribaTransactionId: reference,
                 expiresAt: Date.now() + 15 * 60 * 1000,
+                otpType: otpInfo.type,
               });
 
               const otpMessage = otpInfo.type === "ussd"
