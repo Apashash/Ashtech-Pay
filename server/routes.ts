@@ -7450,18 +7450,40 @@ export async function registerRoutes(
       const merchant = await storage.getUserByHpKey(hpKey);
       if (!merchant) return res.status(401).json({ error: "unauthorized", message: "Key not found." });
 
-      const { amount, currency, description } = req.body;
-      if (!amount || !currency) {
-        return res.status(400).json({ error: "missing_fields", message: "amount and currency are required." });
-      }
-      const numAmount = parseFloat(amount);
-      if (isNaN(numAmount) || numAmount <= 0) {
-        return res.status(400).json({ error: "invalid_amount", message: "amount must be a positive number." });
+      const {
+        amount,
+        currency,
+        description,
+        is_fixed_amount,
+        allowed_countries,
+      } = req.body;
+
+      const isFixedAmount = is_fixed_amount !== false; // default: true (fixed price)
+
+      if (!currency) {
+        return res.status(400).json({ error: "missing_fields", message: "currency is required." });
       }
       const validCurrencies = ["XOF", "XAF", "GNF", "CDF"];
       if (!validCurrencies.includes(currency)) {
         return res.status(400).json({ error: "invalid_currency", message: `currency must be one of: ${validCurrencies.join(", ")}` });
       }
+
+      let numAmount = 0;
+      if (isFixedAmount) {
+        if (!amount) {
+          return res.status(400).json({ error: "missing_fields", message: "amount is required when is_fixed_amount is true." });
+        }
+        numAmount = parseFloat(amount);
+        if (isNaN(numAmount) || numAmount <= 0) {
+          return res.status(400).json({ error: "invalid_amount", message: "amount must be a positive number." });
+        }
+      }
+
+      // Validate allowed_countries if provided
+      const countriesFilter: string[] | null =
+        Array.isArray(allowed_countries) && allowed_countries.length > 0
+          ? allowed_countries.map((c: string) => c.toUpperCase())
+          : null;
 
       // Generate a unique slug for this payment link
       let slug = "hp-" + generateSlug();
@@ -7479,13 +7501,13 @@ export async function registerRoutes(
         amount: String(numAmount),
         currency,
         slug,
-        isFixedAmount: true,
+        isFixedAmount,
         imagePath: null,
         pdfPath: null,
         hasPdfDelivery: false,
         redirectUrl: null,
         expiresAt,
-        allowedCountries: null,
+        allowedCountries: countriesFilter,
       });
 
       const host = req.headers.host || "pay.ashtechpay.top";
@@ -7497,6 +7519,10 @@ export async function registerRoutes(
         payment_link: payUrl,
         payment_id: paymentLink.id,
         slug,
+        is_fixed_amount: isFixedAmount,
+        amount: isFixedAmount ? numAmount : null,
+        currency,
+        allowed_countries: countriesFilter,
         expires_at: expiresAt,
       });
     } catch (e: any) {
@@ -7534,13 +7560,19 @@ export async function registerRoutes(
         status = "expired";
       }
 
+      // Find the successful transaction for amount paid (in case of free amount)
+      const successTxn = txns.find((t: any) => t.status === "completed");
+
       res.json({
         payment_id: link.id,
         slug: link.slug,
-        amount: parseFloat(link.amount),
+        is_fixed_amount: link.isFixedAmount,
+        amount: link.isFixedAmount ? parseFloat(link.amount) : (successTxn ? parseFloat(successTxn.amount) : null),
         currency: link.currency,
         description: link.description,
+        allowed_countries: link.allowedCountries,
         status,
+        paid_at: successTxn?.createdAt ?? null,
         created_at: link.createdAt,
         expires_at: link.expiresAt,
       });

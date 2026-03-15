@@ -6,38 +6,27 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import {
   ArrowLeft, Copy, CheckCheck, Globe, Key, Shield,
-  Terminal, Lock, Zap, CheckCircle2,
+  Terminal, Lock, Zap, CheckCircle2, Wallet, MapPin, Tag,
 } from "lucide-react";
 
 function CodeBlock({ code, language = "json" }: { code: string; language?: string }) {
   const [copied, setCopied] = useState(false);
   const { toast } = useToast();
-
   function copy() {
     navigator.clipboard.writeText(code.trim());
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-    toast({ title: "Copié !", description: "Code copié dans le presse-papiers." });
+    toast({ title: "Copié !" });
   }
-
   const langLabel: Record<string, string> = {
-    json: "JSON",
-    javascript: "Node.js",
-    http: "HTTP",
-    bash: "cURL",
-    php: "PHP",
-    python: "Python",
+    json: "JSON", javascript: "Node.js", http: "HTTP",
+    bash: "cURL", php: "PHP", python: "Python",
   };
-
   return (
     <div className="relative rounded-xl overflow-hidden border border-zinc-700/60 text-sm">
       <div className="flex items-center justify-between px-4 py-2 bg-zinc-800 border-b border-zinc-700/60">
         <span className="text-xs text-zinc-400 font-mono tracking-wide">{langLabel[language] ?? language}</span>
-        <button
-          onClick={copy}
-          className="flex items-center gap-1.5 text-zinc-400 hover:text-zinc-200 transition-colors text-xs"
-          data-testid={`copy-code-${language}`}
-        >
+        <button onClick={copy} className="flex items-center gap-1.5 text-zinc-400 hover:text-zinc-200 transition-colors text-xs">
           {copied
             ? <><CheckCheck className="h-3.5 w-3.5 text-green-400" /><span className="text-green-400">Copié</span></>
             : <><Copy className="h-3.5 w-3.5" /><span>Copier</span></>}
@@ -53,7 +42,7 @@ function CodeBlock({ code, language = "json" }: { code: string; language?: strin
 function Section({ id, title, badge, children }: { id: string; title: string; badge?: string; children: React.ReactNode }) {
   return (
     <section id={id} className="space-y-5 scroll-mt-8">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 border-b border-border pb-3">
         <h2 className="text-lg font-bold text-foreground">{title}</h2>
         {badge && <Badge variant="outline" className="text-xs font-mono">{badge}</Badge>}
       </div>
@@ -65,19 +54,13 @@ function Section({ id, title, badge, children }: { id: string; title: string; ba
 function MethodBadge({ method }: { method: "GET" | "POST" }) {
   return (
     <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-mono font-bold border ${
-      method === "POST"
-        ? "bg-green-500/15 text-green-400 border-green-500/30"
-        : "bg-blue-500/15 text-blue-400 border-blue-500/30"
-    }`}>
-      {method}
-    </span>
+      method === "POST" ? "bg-green-500/15 text-green-400 border-green-500/30" : "bg-blue-500/15 text-blue-400 border-blue-500/30"
+    }`}>{method}</span>
   );
 }
 
-function InlineCode({ children }: { children: React.ReactNode }) {
-  return (
-    <code className="text-violet-400 bg-violet-500/10 px-1.5 py-0.5 rounded text-xs font-mono">{children}</code>
-  );
+function IC({ children }: { children: React.ReactNode }) {
+  return <code className="text-violet-400 bg-violet-500/10 px-1.5 py-0.5 rounded text-xs font-mono">{children}</code>;
 }
 
 function ApiEndpoint({ method, path, children }: { method: "GET" | "POST"; path: string; children: React.ReactNode }) {
@@ -92,25 +75,44 @@ function ApiEndpoint({ method, path, children }: { method: "GET" | "POST"; path:
   );
 }
 
-function ParamRow({ name, type, required, desc }: { name: string; type: string; required?: boolean; desc: string }) {
+function ParamTable({ rows }: { rows: { name: string; type: string; required?: boolean; desc: string }[] }) {
   return (
-    <tr className="border-b border-zinc-800 last:border-0">
-      <td className="px-3 py-2.5">
-        <span className="font-mono text-xs text-violet-400">{name}</span>
-        {required && <span className="ml-1.5 text-[10px] text-red-400 font-semibold">*</span>}
-      </td>
-      <td className="px-3 py-2.5 text-xs text-blue-400 font-mono">{type}</td>
-      <td className="px-3 py-2.5 text-xs text-zinc-400">{desc}</td>
-    </tr>
+    <div className="rounded-lg border border-zinc-700/50 overflow-hidden text-sm">
+      <table className="w-full">
+        <thead className="bg-zinc-800/60">
+          <tr>
+            <th className="text-left px-3 py-2 text-xs font-semibold text-zinc-400">Champ</th>
+            <th className="text-left px-3 py-2 text-xs font-semibold text-zinc-400">Type</th>
+            <th className="text-left px-3 py-2 text-xs font-semibold text-zinc-400">Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.name} className="border-t border-zinc-800">
+              <td className="px-3 py-2.5">
+                <span className="font-mono text-xs text-violet-400">{r.name}</span>
+                {r.required && <span className="ml-1 text-[10px] text-red-400 font-bold">*</span>}
+              </td>
+              <td className="px-3 py-2.5 text-xs text-blue-400 font-mono">{r.type}</td>
+              <td className="px-3 py-2.5 text-xs text-zinc-400">{r.desc}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
 const sections = [
   { id: "keys", label: "Les 3 clés API" },
   { id: "create", label: "Créer un lien" },
+  { id: "prix-fixe", label: "Prix fixe" },
+  { id: "prix-libre", label: "Prix libre" },
+  { id: "pays", label: "Filtrer les pays" },
   { id: "status", label: "Vérifier le statut" },
+  { id: "credit", label: "Créditement wallet" },
   { id: "flow", label: "Flux complet" },
-  { id: "examples", label: "Exemples" },
+  { id: "examples", label: "Exemples de code" },
 ];
 
 export default function HostedPageDocs() {
@@ -122,24 +124,20 @@ export default function HostedPageDocs() {
         <div className="mb-8 space-y-4">
           <Link href="/dashboard/api-keys">
             <Button variant="ghost" size="sm" className="gap-2 -ml-2 text-muted-foreground" data-testid="back-to-config">
-              <ArrowLeft className="h-4 w-4" />
-              Retour aux clés API
+              <ArrowLeft className="h-4 w-4" /> Retour aux clés API
             </Button>
           </Link>
-
           <div className="flex items-start gap-4">
             <div className="w-12 h-12 rounded-xl bg-violet-500/15 flex items-center justify-center shrink-0">
               <Terminal className="h-6 w-6 text-violet-400" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">Hosted Payment Page</h1>
-              <p className="text-muted-foreground text-sm mt-1">
-                Intégrez le checkout Ashtech Pay dans votre application via API
-              </p>
+              <h1 className="text-2xl font-bold text-foreground">Hosted Payment Page — Documentation</h1>
+              <p className="text-muted-foreground text-sm mt-1">Intègre le checkout Ashtech Pay dans ton app via API REST</p>
               <div className="flex flex-wrap gap-2 mt-3">
                 <Badge variant="secondary" className="bg-green-500/10 text-green-600 border-green-500/20 text-xs">v1.0</Badge>
                 <Badge variant="secondary" className="bg-blue-500/10 text-blue-600 border-blue-500/20 text-xs">REST API</Badge>
-                <Badge variant="secondary" className="bg-violet-500/10 text-violet-600 border-violet-500/20 text-xs">HTTPS</Badge>
+                <Badge variant="secondary" className="bg-violet-500/10 text-violet-600 border-violet-500/20 text-xs">16+ pays</Badge>
               </div>
             </div>
           </div>
@@ -151,11 +149,8 @@ export default function HostedPageDocs() {
             <div className="sticky top-6 space-y-0.5">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Navigation</p>
               {sections.map((s) => (
-                <a
-                  key={s.id}
-                  href={`#${s.id}`}
-                  className="block text-sm text-muted-foreground hover:text-foreground transition-colors py-1.5 px-3 rounded-md hover:bg-muted/50"
-                >
+                <a key={s.id} href={`#${s.id}`}
+                  className="block text-sm text-muted-foreground hover:text-foreground transition-colors py-1.5 px-3 rounded-md hover:bg-muted/50">
                   {s.label}
                 </a>
               ))}
@@ -168,73 +163,56 @@ export default function HostedPageDocs() {
             {/* ── 1. Les 3 clés API ── */}
             <Section id="keys" title="Les 3 clés API">
               <p className="text-sm text-muted-foreground">
-                Quand tu génères tes clés dans la section Hosted Page, tu reçois <strong>3 clés distinctes</strong>, chacune avec un rôle précis.
+                Quand tu génères tes clés dans l'onglet <strong>Hosted Page</strong>, tu reçois 3 clés distinctes, chacune avec un rôle précis.
               </p>
 
               <div className="space-y-3">
-                {/* pk_live_ */}
                 <div className="rounded-xl border bg-card p-4 space-y-2">
                   <div className="flex items-center gap-2.5">
                     <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
                       <Globe className="h-4 w-4 text-blue-400" />
                     </div>
-                    <div>
-                      <code className="text-sm font-mono font-bold text-blue-400">pk_live_</code>
-                      <span className="ml-2 text-xs text-muted-foreground font-medium">Public Key</span>
-                    </div>
+                    <code className="text-sm font-mono font-bold text-blue-400">pk_live_</code>
+                    <span className="text-xs text-muted-foreground">— Public Key</span>
                   </div>
                   <p className="text-sm text-muted-foreground pl-10">
-                    Clé <strong>publique</strong> — peut être exposée dans ton frontend. Utilisée pour initialiser
-                    le widget de paiement Ashtech Pay sur ta page (vérification d'identité marchand côté client).
+                    Clé <strong>publique</strong>. Peut être exposée dans ton frontend JavaScript. Identifie ton compte marchand côté client (future initialisation de widget).
                   </p>
                   <div className="pl-10 flex items-center gap-1.5 text-xs text-blue-400">
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    <span>Sûr à exposer côté client (JavaScript frontend)</span>
+                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> Sûr à exposer côté client
                   </div>
                 </div>
 
-                {/* sk_live_ */}
                 <div className="rounded-xl border bg-card p-4 space-y-2">
                   <div className="flex items-center gap-2.5">
                     <div className="w-8 h-8 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0">
                       <Lock className="h-4 w-4 text-orange-400" />
                     </div>
-                    <div>
-                      <code className="text-sm font-mono font-bold text-orange-400">sk_live_</code>
-                      <span className="ml-2 text-xs text-muted-foreground font-medium">Secret Key</span>
-                    </div>
+                    <code className="text-sm font-mono font-bold text-orange-400">sk_live_</code>
+                    <span className="text-xs text-muted-foreground">— Secret Key</span>
                   </div>
                   <p className="text-sm text-muted-foreground pl-10">
-                    Clé <strong>secrète</strong> — ne jamais exposer côté client. Utilisée pour les appels
-                    serveur-à-serveur : vérification de signature des webhooks, remboursements, etc.
+                    Clé <strong>secrète</strong>. Réservée aux appels serveur-à-serveur : vérification de signature webhook, remboursements, etc.
                   </p>
                   <div className="pl-10 flex items-center gap-1.5 text-xs text-orange-400">
-                    <Shield className="h-3.5 w-3.5" />
-                    <span>Backend uniquement — ne jamais mettre dans le code frontend</span>
+                    <Shield className="h-3.5 w-3.5 shrink-0" /> Backend uniquement — ne jamais mettre côté client
                   </div>
                 </div>
 
-                {/* hp_live_ */}
                 <div className="rounded-xl border-2 border-violet-500/30 bg-violet-500/5 p-4 space-y-2">
                   <div className="flex items-center gap-2.5">
                     <div className="w-8 h-8 rounded-lg bg-violet-500/15 flex items-center justify-center shrink-0">
                       <Zap className="h-4 w-4 text-violet-400" />
                     </div>
-                    <div>
-                      <code className="text-sm font-mono font-bold text-violet-400">hp_live_</code>
-                      <span className="ml-2 text-xs text-muted-foreground font-medium">Hosted Page Key</span>
-                      <Badge className="ml-2 text-[10px] px-1.5 py-0 bg-violet-500 text-white">Clé principale</Badge>
-                    </div>
+                    <code className="text-sm font-mono font-bold text-violet-400">hp_live_</code>
+                    <span className="text-xs text-muted-foreground">— Hosted Page Key</span>
+                    <Badge className="text-[10px] px-1.5 py-0 bg-violet-500 text-white">Clé principale</Badge>
                   </div>
                   <p className="text-sm text-muted-foreground pl-10">
-                    Clé utilisée pour <strong>créer des liens de paiement via l'API</strong>. C'est cette clé
-                    que tu passes dans le header <InlineCode>Authorization</InlineCode> lors de l'appel à{" "}
-                    <InlineCode>POST /api/v1/hosted-payment/create</InlineCode>. Elle génère un lien vers
-                    la page de paiement Ashtech Pay.
+                    La clé utilisée pour <strong>créer des liens de paiement via l'API</strong>. Tu la passes dans le header <IC>Authorization: Bearer hp_live_xxx</IC> de chaque requête à <IC>POST /api/v1/hosted-payment/create</IC>.
                   </p>
                   <div className="pl-10 flex items-center gap-1.5 text-xs text-violet-400">
-                    <Key className="h-3.5 w-3.5" />
-                    <span>Backend uniquement — c'est la clé que tu utilises pour créer des liens de paiement</span>
+                    <Key className="h-3.5 w-3.5 shrink-0" /> Backend uniquement — c'est la clé pour créer des liens de paiement
                   </div>
                 </div>
               </div>
@@ -243,55 +221,35 @@ export default function HostedPageDocs() {
                 <div className="flex gap-3">
                   <Shield className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
                   <p className="text-sm text-amber-200">
-                    <strong>Règle d'or</strong> — La <InlineCode>sk_live_</InlineCode> et la{" "}
-                    <InlineCode>hp_live_</InlineCode> ne doivent jamais apparaître dans ton code frontend,
-                    dans un dépôt Git public, ou être partagées. Utilise des variables d'environnement.
+                    <strong>Règle d'or</strong> — <IC>sk_live_</IC> et <IC>hp_live_</IC> doivent rester dans des variables d'environnement côté serveur. Ne les publie jamais sur GitHub ou dans du code frontend.
                   </p>
                 </div>
               </div>
             </Section>
 
-            {/* ── 2. Créer un lien de paiement ── */}
+            {/* ── 2. Créer un lien ── */}
             <Section id="create" title="Créer un lien de paiement" badge="POST">
               <p className="text-sm text-muted-foreground">
-                Crée un lien de paiement unique. Le client est redirigé vers la page de paiement
-                Ashtech Pay où il peut payer via Mobile Money (MTN, Orange, Wave, Airtel, etc.).
+                Un seul endpoint pour créer tous tes liens de paiement. Il supporte le prix fixe, le prix libre, et le filtrage par pays.
+                Le lien généré pointe vers la page de paiement Ashtech Pay déjà opérationnelle.
               </p>
 
               <ApiEndpoint method="POST" path="/api/v1/hosted-payment/create">
                 <div className="space-y-1.5">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Headers requis</p>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Headers</p>
                   <CodeBlock language="http" code={`Authorization: Bearer hp_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 Content-Type: application/json`} />
                 </div>
 
                 <div className="space-y-1.5">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Corps de la requête</p>
-                  <CodeBlock language="json" code={`{
-  "amount": 5000,
-  "currency": "XAF",
-  "description": "Paiement commande #123"
-}`} />
-                </div>
-
-                <div className="space-y-1.5">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Paramètres</p>
-                  <div className="rounded-lg border border-zinc-700/50 overflow-hidden text-sm">
-                    <table className="w-full">
-                      <thead className="bg-zinc-800/60">
-                        <tr>
-                          <th className="text-left px-3 py-2 text-xs font-semibold text-zinc-400">Champ</th>
-                          <th className="text-left px-3 py-2 text-xs font-semibold text-zinc-400">Type</th>
-                          <th className="text-left px-3 py-2 text-xs font-semibold text-zinc-400">Description</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <ParamRow name="amount" type="number" required desc="Montant à collecter, ex: 5000" />
-                        <ParamRow name="currency" type="string" required desc="XOF · XAF · GNF · CDF" />
-                        <ParamRow name="description" type="string?" desc="Description affichée sur la page de paiement" />
-                      </tbody>
-                    </table>
-                  </div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Tous les paramètres</p>
+                  <ParamTable rows={[
+                    { name: "currency", type: "string", required: true, desc: "Devise : XOF · XAF · GNF · CDF" },
+                    { name: "amount", type: "number", desc: "Montant fixe (ex: 5000). Obligatoire si is_fixed_amount = true" },
+                    { name: "description", type: "string?", desc: "Titre/description affiché sur la page de paiement" },
+                    { name: "is_fixed_amount", type: "boolean?", desc: "true = prix fixe (défaut), false = le client saisit le montant" },
+                    { name: "allowed_countries", type: "string[]?", desc: "Codes pays ISO à afficher (ex: [\"CM\", \"SN\"]). Vide = tous les pays actifs" },
+                  ]} />
                   <p className="text-xs text-zinc-500">* champ obligatoire</p>
                 </div>
 
@@ -300,63 +258,187 @@ Content-Type: application/json`} />
                   <CodeBlock language="json" code={`{
   "status": "success",
   "payment_link": "https://pay.ashtechpay.top/pay/hp-ab12cd34",
-  "payment_id": "uuid-du-lien-de-paiement",
+  "payment_id": "uuid-du-lien",
   "slug": "hp-ab12cd34",
+  "is_fixed_amount": true,
+  "amount": 5000,
+  "currency": "XAF",
+  "allowed_countries": null,
   "expires_at": "2026-03-15T15:30:00.000Z"
 }`} />
-                </div>
-
-                <div className="space-y-1.5">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Champs de la réponse</p>
-                  <div className="rounded-lg border border-zinc-700/50 overflow-hidden text-sm">
-                    <table className="w-full">
-                      <thead className="bg-zinc-800/60">
-                        <tr>
-                          <th className="text-left px-3 py-2 text-xs font-semibold text-zinc-400">Champ</th>
-                          <th className="text-left px-3 py-2 text-xs font-semibold text-zinc-400">Description</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr className="border-b border-zinc-800">
-                          <td className="px-3 py-2.5 font-mono text-xs text-violet-400">payment_link</td>
-                          <td className="px-3 py-2.5 text-xs text-zinc-400">URL complète à partager avec ton client → page de paiement Ashtech Pay</td>
-                        </tr>
-                        <tr className="border-b border-zinc-800">
-                          <td className="px-3 py-2.5 font-mono text-xs text-violet-400">payment_id</td>
-                          <td className="px-3 py-2.5 text-xs text-zinc-400">ID à conserver pour vérifier le statut du paiement</td>
-                        </tr>
-                        <tr className="border-b border-zinc-800">
-                          <td className="px-3 py-2.5 font-mono text-xs text-violet-400">slug</td>
-                          <td className="px-3 py-2.5 text-xs text-zinc-400">Identifiant court du lien (préfixe hp-)</td>
-                        </tr>
-                        <tr>
-                          <td className="px-3 py-2.5 font-mono text-xs text-violet-400">expires_at</td>
-                          <td className="px-3 py-2.5 text-xs text-zinc-400">Date d'expiration du lien (30 minutes après création)</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
                 </div>
               </ApiEndpoint>
             </Section>
 
-            {/* ── 3. Vérifier le statut ── */}
+            {/* ── 3. Prix fixe ── */}
+            <Section id="prix-fixe" title="Mode Prix Fixe">
+              <div className="flex items-start gap-3 p-4 rounded-xl border bg-card">
+                <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0 mt-0.5">
+                  <Tag className="h-4 w-4 text-green-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold">Le montant est défini par toi</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Le client voit le montant affiché sur la page de paiement et ne peut pas le modifier.
+                    Idéal pour les produits avec prix fixe, abonnements, factures.
+                  </p>
+                </div>
+              </div>
+
+              <CodeBlock language="javascript" code={`// Prix fixe : 5 000 XAF — le client ne peut pas changer le montant
+const res = await fetch("https://pay.ashtechpay.top/api/v1/hosted-payment/create", {
+  method: "POST",
+  headers: {
+    "Authorization": \`Bearer \${process.env.HP_LIVE_KEY}\`,
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    currency: "XAF",
+    amount: 5000,               // montant en unité locale (FCFA, GNF, CDF…)
+    description: "Abonnement mensuel Premium",
+    is_fixed_amount: true,      // c'est la valeur par défaut, tu peux l'omettre
+  }),
+});
+
+const { payment_link, payment_id } = await res.json();
+// → Redirige le client vers payment_link`} />
+            </Section>
+
+            {/* ── 4. Prix libre ── */}
+            <Section id="prix-libre" title="Mode Prix Libre (le client choisit)">
+              <div className="flex items-start gap-3 p-4 rounded-xl border bg-card">
+                <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0 mt-0.5">
+                  <Wallet className="h-4 w-4 text-blue-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold">Le client saisit lui-même le montant</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    La page de paiement affiche un champ où le client entre le montant qu'il souhaite payer.
+                    Idéal pour les dons, pourboires, paiements à montant variable.
+                  </p>
+                </div>
+              </div>
+
+              <CodeBlock language="javascript" code={`// Prix libre : le client saisit lui-même le montant sur la page
+const res = await fetch("https://pay.ashtechpay.top/api/v1/hosted-payment/create", {
+  method: "POST",
+  headers: {
+    "Authorization": \`Bearer \${process.env.HP_LIVE_KEY}\`,
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    currency: "XOF",
+    description: "Don à l'association",
+    is_fixed_amount: false,   // ← le client entre son montant
+    // pas besoin de "amount"
+  }),
+});
+
+const { payment_link, payment_id } = await res.json();
+// → Le client arrive sur la page, voit un champ montant et saisit ce qu'il veut payer`} />
+
+              <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4">
+                <div className="flex gap-3">
+                  <CheckCircle2 className="h-4 w-4 text-blue-400 mt-0.5 shrink-0" />
+                  <p className="text-sm text-blue-200">
+                    En mode prix libre, le vrai montant payé sera disponible dans la réponse de{" "}
+                    <IC>GET /api/v1/hosted-payment/:payment_id</IC> une fois le statut <IC>success</IC>.
+                  </p>
+                </div>
+              </div>
+            </Section>
+
+            {/* ── 5. Filtrer les pays ── */}
+            <Section id="pays" title="Filtrer les pays affichés">
+              <div className="flex items-start gap-3 p-4 rounded-xl border bg-card">
+                <div className="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0 mt-0.5">
+                  <MapPin className="h-4 w-4 text-violet-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold">Restreindre les pays disponibles</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Par défaut, tous les pays actifs sur Ashtech Pay sont disponibles sur ta page de paiement.
+                    Tu peux restreindre à certains pays en passant leurs codes ISO dans <IC>allowed_countries</IC>.
+                  </p>
+                </div>
+              </div>
+
+              <CodeBlock language="javascript" code={`// Afficher uniquement le Cameroun et le Sénégal
+const res = await fetch("https://pay.ashtechpay.top/api/v1/hosted-payment/create", {
+  method: "POST",
+  headers: {
+    "Authorization": \`Bearer \${process.env.HP_LIVE_KEY}\`,
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    currency: "XAF",
+    amount: 10000,
+    description: "Achat produit",
+    allowed_countries: ["CM", "SN"],   // codes ISO 2 lettres
+  }),
+});`} />
+
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Codes pays disponibles</p>
+                <div className="rounded-lg border border-zinc-700/50 overflow-hidden text-sm">
+                  <table className="w-full">
+                    <thead className="bg-zinc-800/60">
+                      <tr>
+                        <th className="text-left px-3 py-2 text-xs font-semibold text-zinc-400">Code</th>
+                        <th className="text-left px-3 py-2 text-xs font-semibold text-zinc-400">Pays</th>
+                        <th className="text-left px-3 py-2 text-xs font-semibold text-zinc-400">Devise</th>
+                        <th className="text-left px-3 py-2 text-xs font-semibold text-zinc-400">Opérateurs</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[
+                        { code: "CM", pays: "🇨🇲 Cameroun", devise: "XAF", ops: "MTN, Orange" },
+                        { code: "SN", pays: "🇸🇳 Sénégal", devise: "XOF", ops: "Orange, Wave, Free" },
+                        { code: "CI", pays: "🇨🇮 Côte d'Ivoire", devise: "XOF", ops: "Orange, MTN, Wave" },
+                        { code: "GN", pays: "🇬🇳 Guinée", devise: "GNF", ops: "Orange, MTN" },
+                        { code: "CD", pays: "🇨🇩 Congo RDC", devise: "CDF", ops: "Airtel, Orange" },
+                        { code: "BF", pays: "🇧🇫 Burkina Faso", devise: "XOF", ops: "Orange, Moov" },
+                        { code: "ML", pays: "🇲🇱 Mali", devise: "XOF", ops: "Orange, Moov" },
+                        { code: "TG", pays: "🇹🇬 Togo", devise: "XOF", ops: "Flooz, Tmoney" },
+                        { code: "BJ", pays: "🇧🇯 Bénin", devise: "XOF", ops: "MTN, Moov" },
+                      ].map(({ code, pays, devise, ops }) => (
+                        <tr key={code} className="border-t border-zinc-800">
+                          <td className="px-3 py-2 font-mono text-xs text-violet-400">{code}</td>
+                          <td className="px-3 py-2 text-xs text-zinc-300">{pays}</td>
+                          <td className="px-3 py-2 text-xs text-blue-400 font-mono">{devise}</td>
+                          <td className="px-3 py-2 text-xs text-zinc-400">{ops}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-xs text-zinc-500">
+                  Si <IC>allowed_countries</IC> est vide ou absent, tous les pays actifs sur Ashtech Pay sont affichés.
+                  Tu peux aussi appeler <IC>GET /api/public/countries</IC> pour la liste complète en temps réel.
+                </p>
+              </div>
+            </Section>
+
+            {/* ── 6. Vérifier le statut ── */}
             <Section id="status" title="Vérifier le statut d'un paiement" badge="GET">
               <p className="text-sm text-muted-foreground">
-                Vérifie le statut d'un paiement à partir du <InlineCode>payment_id</InlineCode> reçu lors de la création.
-                À appeler depuis ton backend pour confirmer le paiement.
+                Vérifie le statut d'un paiement à partir du <IC>payment_id</IC> reçu lors de la création.
+                Le statut est calculé en temps réel à partir des vraies transactions.
               </p>
 
               <ApiEndpoint method="GET" path="/api/v1/hosted-payment/:payment_id">
                 <div className="space-y-1.5">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Réponse (200)</p>
                   <CodeBlock language="json" code={`{
-  "payment_id": "uuid-du-lien-de-paiement",
+  "payment_id": "uuid-du-lien",
   "slug": "hp-ab12cd34",
+  "is_fixed_amount": true,
   "amount": 5000,
   "currency": "XAF",
-  "description": "Paiement commande #123",
+  "description": "Abonnement Premium",
+  "allowed_countries": ["CM", "SN"],
   "status": "success",
+  "paid_at": "2026-03-15T15:12:34.000Z",
   "created_at": "2026-03-15T15:00:00.000Z",
   "expires_at": "2026-03-15T15:30:00.000Z"
 }`} />
@@ -370,19 +452,21 @@ Content-Type: application/json`} />
                         <tr>
                           <th className="text-left px-3 py-2 text-xs font-semibold text-zinc-400">Statut</th>
                           <th className="text-left px-3 py-2 text-xs font-semibold text-zinc-400">Signification</th>
+                          <th className="text-left px-3 py-2 text-xs font-semibold text-zinc-400">Action recommandée</th>
                         </tr>
                       </thead>
                       <tbody>
                         {[
-                          { s: "pending", color: "text-yellow-400", desc: "Lien créé, le client n'a pas encore payé." },
-                          { s: "processing", color: "text-blue-400", desc: "Le client a initié le paiement, en cours de confirmation." },
-                          { s: "success", color: "text-green-400", desc: "Paiement confirmé — ton wallet est crédité." },
-                          { s: "failed", color: "text-red-400", desc: "Paiement échoué ou annulé par le client." },
-                          { s: "expired", color: "text-zinc-500", desc: "Le lien a expiré (30 min dépassées sans paiement)." },
-                        ].map(({ s, color, desc }) => (
-                          <tr key={s} className="border-b border-zinc-800 last:border-0">
+                          { s: "pending", color: "text-yellow-400", desc: "Lien créé, client pas encore arrivé", action: "Continuer à poller (toutes les 5s)" },
+                          { s: "processing", color: "text-blue-400", desc: "Client a initié le paiement", action: "Continuer à poller" },
+                          { s: "success", color: "text-green-400", desc: "Paiement confirmé et wallet crédité", action: "✅ Livrer le produit/service" },
+                          { s: "failed", color: "text-red-400", desc: "Paiement échoué ou refusé", action: "Notifier le client" },
+                          { s: "expired", color: "text-zinc-500", desc: "Lien expiré (30 min sans paiement)", action: "Créer un nouveau lien" },
+                        ].map(({ s, color, desc, action }) => (
+                          <tr key={s} className="border-t border-zinc-800">
                             <td className={`px-3 py-2.5 font-mono text-xs ${color}`}>{s}</td>
                             <td className="px-3 py-2.5 text-xs text-zinc-400">{desc}</td>
+                            <td className="px-3 py-2.5 text-xs text-zinc-300">{action}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -392,18 +476,60 @@ Content-Type: application/json`} />
               </ApiEndpoint>
             </Section>
 
-            {/* ── 4. Flux complet ── */}
+            {/* ── 7. Créditement wallet ── */}
+            <Section id="credit" title="Créditement automatique du wallet">
+              <div className="flex items-start gap-3 p-5 rounded-xl border-2 border-green-500/30 bg-green-500/5">
+                <div className="w-9 h-9 rounded-xl bg-green-500/15 flex items-center justify-center shrink-0 mt-0.5">
+                  <Wallet className="h-5 w-5 text-green-400" />
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-green-300">100% automatique — zéro action requise de ta part</p>
+                  <p className="text-sm text-muted-foreground">
+                    Dès que le client confirme son paiement (USSD, OTP, Wave…), le système Ashtech Pay traite
+                    la transaction et crédite automatiquement ton wallet marchand. Tu n'as rien à faire.
+                  </p>
+                  <div className="space-y-1.5 pt-1">
+                    {[
+                      "Le client confirme le paiement sur son téléphone",
+                      "Ashtech Pay reçoit la confirmation de l'opérateur Mobile Money",
+                      "La transaction est enregistrée comme completed",
+                      "Ton wallet est crédité du montant (après déduction des frais)",
+                      "Le statut passe à success dans l'API",
+                    ].map((item, i) => (
+                      <div key={i} className="flex items-start gap-2 text-xs text-zinc-300">
+                        <span className="w-4 h-4 rounded-full bg-green-500/20 text-green-400 flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">{i + 1}</span>
+                        {item}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4">
+                <div className="flex gap-3">
+                  <CheckCircle2 className="h-4 w-4 text-blue-400 mt-0.5 shrink-0" />
+                  <p className="text-sm text-blue-200">
+                    <strong>Bonne pratique</strong> — Ne livre jamais un produit/service avant d'avoir vérifié
+                    que le statut est <IC>success</IC> via <IC>GET /api/v1/hosted-payment/:payment_id</IC>.
+                    Le statut <IC>processing</IC> signifie que la transaction est en cours mais pas encore confirmée.
+                  </p>
+                </div>
+              </div>
+            </Section>
+
+            {/* ── 8. Flux complet ── */}
             <Section id="flow" title="Flux de paiement complet">
               <div className="rounded-xl border bg-card overflow-hidden">
                 {[
-                  { step: "1", label: "Ton backend → API", desc: "POST /api/v1/hosted-payment/create avec amount, currency, description", color: "bg-blue-500" },
-                  { step: "2", label: "API → Ton backend", desc: "Retourne payment_link (/pay/hp-xxx) et payment_id", color: "bg-violet-500" },
+                  { step: "1", label: "Ton backend → API", desc: "POST /api/v1/hosted-payment/create avec currency, amount (ou is_fixed_amount: false), allowed_countries", color: "bg-blue-500" },
+                  { step: "2", label: "API → Ton backend", desc: "Retourne payment_link (/pay/hp-xxx) et payment_id à conserver en base", color: "bg-violet-500" },
                   { step: "3", label: "Ton app → Client", desc: "Tu rediriges ton client vers le payment_link", color: "bg-amber-500" },
-                  { step: "4", label: "Client → Page de paiement", desc: "Ashtech Pay affiche la page de paiement (déjà opérationnelle)", color: "bg-orange-500" },
-                  { step: "5", label: "Client paie", desc: "Il choisit son pays, opérateur, saisit son numéro et confirme via USSD/OTP/Wave", color: "bg-green-500" },
-                  { step: "6", label: "Paiement confirmé", desc: "La page redirige le client vers ton site (success_url ou cancel_url)", color: "bg-teal-500" },
-                  { step: "7", label: "Ton backend → Vérification", desc: "GET /api/v1/hosted-payment/:payment_id → status = success", color: "bg-emerald-600" },
-                  { step: "8", label: "Wallet crédité", desc: "Ton wallet Ashtech Pay est automatiquement crédité du montant", color: "bg-emerald-500" },
+                  { step: "4", label: "Client → Page de paiement", desc: "Ashtech Pay affiche la page : sélection pays/opérateur, saisie du téléphone", color: "bg-orange-500" },
+                  { step: "5", label: "Client paie", desc: "USSD (Orange/MTN) ou OTP ou redirection Wave — le client confirme", color: "bg-green-500" },
+                  { step: "6", label: "Opérateur → Ashtech Pay", desc: "L'opérateur Mobile Money confirme le débit du client", color: "bg-teal-500" },
+                  { step: "7", label: "Wallet crédité", desc: "Ton wallet marchand Ashtech Pay est crédité automatiquement", color: "bg-emerald-600" },
+                  { step: "8", label: "Ton backend → Vérification", desc: "GET /api/v1/hosted-payment/:payment_id → status = \"success\"", color: "bg-emerald-500" },
+                  { step: "9", label: "Tu livres", desc: "Statut confirmed → tu livres le produit ou service", color: "bg-green-400" },
                 ].map(({ step, label, desc, color }) => (
                   <div key={step} className="flex items-start gap-4 px-5 py-3.5 border-b last:border-b-0 hover:bg-muted/20 transition-colors">
                     <div className={`w-6 h-6 rounded-full ${color} flex items-center justify-center shrink-0 mt-0.5`}>
@@ -418,68 +544,86 @@ Content-Type: application/json`} />
               </div>
             </Section>
 
-            {/* ── 5. Exemples de code ── */}
+            {/* ── 9. Exemples de code ── */}
             <Section id="examples" title="Exemples de code">
-
               <div className="space-y-2">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Node.js / Express</p>
-                <CodeBlock language="javascript" code={`const express = require("express");
-const router = express.Router();
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Node.js — Prix fixe + filtre pays</p>
+                <CodeBlock language="javascript" code={`const HP_KEY = process.env.HP_LIVE_KEY;
 
-const HP_KEY = process.env.HP_LIVE_KEY; // hp_live_xxx
-
-// Route sur ton backend : le client clique "Payer"
-router.post("/checkout", async (req, res) => {
-  const { amount, currency, orderId } = req.body;
-
-  const response = await fetch("https://pay.ashtechpay.top/api/v1/hosted-payment/create", {
+async function createPaymentLink(orderId, amount) {
+  const res = await fetch("https://pay.ashtechpay.top/api/v1/hosted-payment/create", {
     method: "POST",
     headers: {
       "Authorization": \`Bearer \${HP_KEY}\`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      amount,
-      currency,         // "XAF", "XOF", "GNF", ou "CDF"
+      currency: "XAF",
+      amount: amount,
       description: \`Commande #\${orderId}\`,
+      is_fixed_amount: true,
+      allowed_countries: ["CM"],   // uniquement le Cameroun
     }),
   });
 
-  const data = await response.json();
+  const data = await res.json();
+  if (data.status !== "success") throw new Error("Création du lien échouée");
 
-  if (data.status !== "success") {
-    return res.status(500).json({ error: "Impossible de créer le lien" });
-  }
-
-  // Sauvegarde payment_id en base pour vérifier plus tard
+  // Sauvegarde payment_id en base pour vérifier le statut plus tard
   await db.orders.update({ orderId, paymentId: data.payment_id });
 
-  // Redirige le client vers la page de paiement Ashtech Pay
-  res.json({ redirect: data.payment_link });
-});
+  return data.payment_link;  // URL à envoyer au client
+}
 
-// Webhook / vérification du paiement
-router.get("/payment-status/:orderId", async (req, res) => {
-  const order = await db.orders.findOne({ orderId: req.params.orderId });
-
-  const response = await fetch(
-    \`https://pay.ashtechpay.top/api/v1/hosted-payment/\${order.paymentId}\`,
+// Vérification du statut (depuis ton backend, toutes les 5 secondes)
+async function checkPaymentStatus(paymentId) {
+  const res = await fetch(
+    \`https://pay.ashtechpay.top/api/v1/hosted-payment/\${paymentId}\`,
     { headers: { "Authorization": \`Bearer \${HP_KEY}\` } }
   );
-
-  const data = await response.json();
+  const data = await res.json();
+  return data;
   // data.status = "pending" | "processing" | "success" | "failed" | "expired"
+  // data.paid_at = timestamp si success
+  // data.amount  = montant réel payé (utile pour is_fixed_amount: false)
+}`} />
+              </div>
 
-  res.json({ status: data.status, amount: data.amount });
-});`} />
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Node.js — Prix libre (le client choisit)</p>
+                <CodeBlock language="javascript" code={`const res = await fetch("https://pay.ashtechpay.top/api/v1/hosted-payment/create", {
+  method: "POST",
+  headers: {
+    "Authorization": \`Bearer \${process.env.HP_LIVE_KEY}\`,
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    currency: "XOF",
+    description: "Don à l'association",
+    is_fixed_amount: false,   // le client entre son montant
+  }),
+});
+
+const { payment_link, payment_id } = await res.json();
+
+// Plus tard, vérifier combien le client a payé :
+const status = await fetch(
+  \`https://pay.ashtechpay.top/api/v1/hosted-payment/\${payment_id}\`,
+  { headers: { "Authorization": \`Bearer \${process.env.HP_LIVE_KEY}\` } }
+).then(r => r.json());
+
+if (status.status === "success") {
+  console.log(\`Le client a payé \${status.amount} \${status.currency}\`);
+  // → "Le client a payé 2500 XOF"
+}`} />
               </div>
 
               <div className="space-y-2">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">PHP</p>
                 <CodeBlock language="php" code={`<?php
-$hpKey = getenv("HP_LIVE_KEY"); // hp_live_xxx
+$hpKey = getenv("HP_LIVE_KEY");
 
-// Créer un lien de paiement
+// Créer un lien — prix fixe, Côte d'Ivoire uniquement
 $ch = curl_init("https://pay.ashtechpay.top/api/v1/hosted-payment/create");
 curl_setopt_array($ch, [
   CURLOPT_POST => true,
@@ -489,70 +633,50 @@ curl_setopt_array($ch, [
     "Content-Type: application/json",
   ],
   CURLOPT_POSTFIELDS => json_encode([
-    "amount"      => 5000,
-    "currency"    => "XAF",
-    "description" => "Paiement commande #123",
+    "currency"         => "XOF",
+    "amount"           => 10000,
+    "description"      => "Facture #456",
+    "is_fixed_amount"  => true,
+    "allowed_countries" => ["CI"],
   ]),
 ]);
-
-$response = json_decode(curl_exec($ch), true);
+$data = json_decode(curl_exec($ch), true);
 curl_close($ch);
 
-if ($response["status"] === "success") {
-  // Redirige le client
-  header("Location: " . $response["payment_link"]);
+if ($data["status"] === "success") {
+  header("Location: " . $data["payment_link"]);
   exit;
+}
+
+// Vérifier le statut
+$ch = curl_init("https://pay.ashtechpay.top/api/v1/hosted-payment/" . $data["payment_id"]);
+curl_setopt_array($ch, [
+  CURLOPT_RETURNTRANSFER => true,
+  CURLOPT_HTTPHEADER => ["Authorization: Bearer $hpKey"],
+]);
+$status = json_decode(curl_exec($ch), true);
+if ($status["status"] === "success") {
+    // Livrer le produit
 }`} />
               </div>
 
               <div className="space-y-2">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Python</p>
-                <CodeBlock language="python" code={`import requests
-import os
-
-HP_KEY = os.environ["HP_LIVE_KEY"]  # hp_live_xxx
-
-def create_payment_link(amount: int, currency: str, description: str = "") -> dict:
-    response = requests.post(
-        "https://pay.ashtechpay.top/api/v1/hosted-payment/create",
-        headers={
-            "Authorization": f"Bearer {HP_KEY}",
-            "Content-Type": "application/json",
-        },
-        json={
-            "amount": amount,
-            "currency": currency,      # "XAF", "XOF", "GNF", ou "CDF"
-            "description": description,
-        },
-    )
-    data = response.json()
-    if data["status"] != "success":
-        raise Exception(f"Erreur: {data}")
-    return data
-
-def check_payment_status(payment_id: str) -> str:
-    response = requests.get(
-        f"https://pay.ashtechpay.top/api/v1/hosted-payment/{payment_id}",
-        headers={"Authorization": f"Bearer {HP_KEY}"},
-    )
-    return response.json()["status"]
-
-# Utilisation
-link = create_payment_link(5000, "XAF", "Commande #123")
-print(link["payment_link"])   # → https://pay.ashtechpay.top/pay/hp-ab12cd34
-print(link["payment_id"])     # → uuid à stocker en base
-
-# Plus tard, vérifier le statut
-status = check_payment_status(link["payment_id"])
-# "pending" | "processing" | "success" | "failed" | "expired"`} />
-              </div>
-
-              <div className="space-y-2">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">cURL (test rapide)</p>
-                <CodeBlock language="bash" code={`curl -X POST https://pay.ashtechpay.top/api/v1/hosted-payment/create \\
-  -H "Authorization: Bearer hp_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \\
+                <CodeBlock language="bash" code={`# Prix fixe — Cameroun seulement
+curl -X POST https://pay.ashtechpay.top/api/v1/hosted-payment/create \\
+  -H "Authorization: Bearer hp_live_xxxxxxxxxxxxxxxxxxxxxxxx" \\
   -H "Content-Type: application/json" \\
-  -d '{"amount": 5000, "currency": "XAF", "description": "Test paiement"}'`} />
+  -d '{"currency":"XAF","amount":5000,"description":"Test","allowed_countries":["CM"]}'
+
+# Prix libre — tous les pays
+curl -X POST https://pay.ashtechpay.top/api/v1/hosted-payment/create \\
+  -H "Authorization: Bearer hp_live_xxxxxxxxxxxxxxxxxxxxxxxx" \\
+  -H "Content-Type: application/json" \\
+  -d '{"currency":"XOF","description":"Don","is_fixed_amount":false}'
+
+# Vérifier le statut
+curl https://pay.ashtechpay.top/api/v1/hosted-payment/UUID_DU_LIEN \\
+  -H "Authorization: Bearer hp_live_xxxxxxxxxxxxxxxxxxxxxxxx"`} />
               </div>
             </Section>
 
@@ -560,8 +684,7 @@ status = check_payment_status(link["payment_id"])
             <div className="pt-6 border-t">
               <Link href="/dashboard/api-keys">
                 <Button variant="outline" className="gap-2" data-testid="button-back-bottom">
-                  <ArrowLeft className="h-4 w-4" />
-                  Retour aux clés API
+                  <ArrowLeft className="h-4 w-4" /> Retour aux clés API
                 </Button>
               </Link>
             </div>
