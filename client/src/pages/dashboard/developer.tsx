@@ -116,7 +116,7 @@ function MethodBadge({ method }: { method: string }) {
   );
 }
 
-export default function DeveloperPage() {
+export default function DeveloperPage({ publicMode = false }: { publicMode?: boolean }) {
   const [active, setActive] = useState("introduction");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
@@ -151,10 +151,10 @@ export default function DeveloperPage() {
       <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0a0c10]/90 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
-            <Link href="/dashboard/api-keys">
+            <Link href={publicMode ? "/" : "/dashboard/api-keys"}>
               <Button variant="ghost" size="sm" className="text-zinc-400 hover:text-white -ml-2 gap-1.5 shrink-0" data-testid="link-back-api">
                 <ArrowLeft className="w-4 h-4" />
-                <span className="hidden sm:inline">Retour</span>
+                <span className="hidden sm:inline">{publicMode ? "Accueil" : "Retour"}</span>
               </Button>
             </Link>
             <div className="h-5 w-px bg-white/10 shrink-0" />
@@ -167,10 +167,25 @@ export default function DeveloperPage() {
             </div>
           </div>
           <div className="flex items-center gap-3 shrink-0">
-            <span className="hidden md:flex items-center gap-1.5 text-xs text-zinc-500">
-              <Globe className="w-3.5 h-3.5" />
-              api.ashtechpay.top
-            </span>
+            {publicMode ? (
+              <div className="hidden sm:flex items-center gap-2">
+                <Link href="/login">
+                  <Button variant="ghost" size="sm" className="text-zinc-400 hover:text-white text-xs" data-testid="link-login">
+                    Connexion
+                  </Button>
+                </Link>
+                <Link href="/register">
+                  <Button size="sm" className="text-xs" data-testid="link-register">
+                    S'inscrire
+                  </Button>
+                </Link>
+              </div>
+            ) : (
+              <span className="hidden md:flex items-center gap-1.5 text-xs text-zinc-500">
+                <Globe className="w-3.5 h-3.5" />
+                api.ashtechpay.top
+              </span>
+            )}
             <button
               className="lg:hidden text-zinc-400 hover:text-white"
               onClick={() => setSidebarOpen(v => !v)}

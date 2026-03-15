@@ -79,6 +79,8 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={LandingPage} />
+      <Route path="/docs/api" component={() => <DeveloperPage publicMode />} />
+      <Route path="/docs/hosted-page" component={() => <HostedPageDocs publicMode />} />
       <Route path="/login" component={LoginPage} />
       <Route path="/register" component={RegisterPage} />
       <Route path="/forgot-password" component={ForgotPasswordPage} />

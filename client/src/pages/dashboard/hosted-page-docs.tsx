@@ -148,16 +148,18 @@ const sections = [
   { id: "examples", label: "Exemples de code" },
 ];
 
-export default function HostedPageDocs() {
-  return (
-    <DashboardLayout>
+export default function HostedPageDocs({ publicMode = false }: { publicMode?: boolean }) {
+  const backHref = publicMode ? "/" : "/dashboard/api-keys";
+  const backLabel = publicMode ? "Accueil" : "Retour aux clés API";
+
+  const content = (
       <div className="w-full max-w-5xl min-w-0">
 
         {/* Header */}
         <div className="mb-8">
-          <Link href="/dashboard/api-keys">
+          <Link href={backHref}>
             <Button variant="ghost" size="sm" className="gap-2 -ml-2 text-zinc-500 hover:text-zinc-300 mb-4" data-testid="back-to-config">
-              <ArrowLeft className="h-4 w-4" /> Retour aux clés API
+              <ArrowLeft className="h-4 w-4" /> {backLabel}
             </Button>
           </Link>
           <div className="flex items-center gap-3">
@@ -573,9 +575,9 @@ curl https://pay.ashtechpay.top/api/v1/hosted-payment/UUID_DU_LIEN \
 
             {/* Back */}
             <div className="pt-6 border-t border-zinc-800">
-              <Link href="/dashboard/api-keys">
+              <Link href={backHref}>
                 <Button variant="outline" size="sm" className="gap-2 border-zinc-700 text-zinc-400 hover:text-zinc-200" data-testid="button-back-bottom">
-                  <ArrowLeft className="h-4 w-4" /> Retour aux clés API
+                  <ArrowLeft className="h-4 w-4" /> {backLabel}
                 </Button>
               </Link>
             </div>
@@ -583,6 +585,45 @@ curl https://pay.ashtechpay.top/api/v1/hosted-payment/UUID_DU_LIEN \
           </div>
         </div>
       </div>
-    </DashboardLayout>
   );
+
+  if (publicMode) {
+    return (
+      <div className="min-h-screen bg-[#0d0f14] text-zinc-100">
+        {/* Public top bar */}
+        <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0d0f14]/90 backdrop-blur-sm">
+          <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <Link href="/">
+                <Button variant="ghost" size="sm" className="text-zinc-400 hover:text-white -ml-2 gap-1.5" data-testid="link-back-home">
+                  <ArrowLeft className="w-4 h-4" />
+                  <span className="hidden sm:inline">Accueil</span>
+                </Button>
+              </Link>
+              <div className="h-5 w-px bg-white/10" />
+              <span className="font-semibold text-sm text-white">Ashtech Pay</span>
+              <span className="text-[10px] border border-white/20 text-zinc-400 px-1.5 py-0.5 rounded font-mono hidden sm:inline">Hosted Page v1</span>
+            </div>
+            <div className="hidden sm:flex items-center gap-2">
+              <Link href="/login">
+                <Button variant="ghost" size="sm" className="text-zinc-400 hover:text-white text-xs" data-testid="link-login">
+                  Connexion
+                </Button>
+              </Link>
+              <Link href="/register">
+                <Button size="sm" className="text-xs" data-testid="link-register">
+                  S'inscrire
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </header>
+        <div className="max-w-5xl mx-auto px-4 py-8">
+          {content}
+        </div>
+      </div>
+    );
+  }
+
+  return <DashboardLayout>{content}</DashboardLayout>;
 }

@@ -1047,13 +1047,13 @@ function ApiDeveloperSection() {
               ))}
             </ul>
             <div className="flex flex-col sm:flex-row gap-3">
-              <Link href="/dashboard/developer">
+              <Link href="/docs/api">
                 <Button size="lg" className="gap-2" data-testid="button-api-docs">
                   <BookOpen className="w-4 h-4" />
                   Documentation SDK
                 </Button>
               </Link>
-              <Link href="/dashboard/api-keys">
+              <Link href="/docs/hosted-page">
                 <Button size="lg" variant="outline" className="gap-2" data-testid="button-api-hosted-docs">
                   <Globe className="w-4 h-4" />
                   Hosted Payment Page
