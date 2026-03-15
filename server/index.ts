@@ -69,11 +69,12 @@ app.use((req, res, next) => {
   // ── Startup migration: ensure new columns exist in production DB ──────────
   try {
     await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS api_key TEXT UNIQUE`);
-    console.log("[Migration] users.api_key column ready");
+    await db.execute(sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS notify_url TEXT`);
+    await db.execute(sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS source TEXT`);
+    console.log("[Migration] Schema columns ready (api_key, notify_url, source)");
   } catch (err: any) {
-    // Column already exists or minor error — safe to continue
     if (!err?.message?.includes("already exists")) {
-      console.warn("[Migration] users.api_key warning:", err?.message);
+      console.warn("[Migration] warning:", err?.message);
     }
   }
 

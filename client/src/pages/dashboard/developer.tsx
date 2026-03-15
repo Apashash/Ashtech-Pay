@@ -6,16 +6,37 @@ import { Button } from "@/components/ui/button";
 import {
   ArrowLeft, Copy, CheckCheck, Terminal, Shield, Webhook,
   CheckCircle2, ArrowRight, Code2, Globe, Zap, BookOpen,
-  ChevronRight, Menu, X,
+  ChevronRight, Menu, X, List,
 } from "lucide-react";
 
 const SECTIONS = [
-  { id: "introduction",   label: "Introduction",        icon: BookOpen },
-  { id: "authentication", label: "Authentification",    icon: Shield },
-  { id: "collect",        label: "POST /v1/collect",    icon: Terminal },
-  { id: "transaction",    label: "GET /v1/transaction", icon: CheckCircle2 },
-  { id: "webhooks",       label: "Webhooks",            icon: Webhook },
-  { id: "errors",         label: "Codes d'erreur",      icon: ArrowRight },
+  { id: "introduction",   label: "Introduction",         icon: BookOpen },
+  { id: "authentication", label: "Authentification",     icon: Shield },
+  { id: "countries",      label: "GET /v1/countries",    icon: List },
+  { id: "collect",        label: "POST /v1/collect",     icon: Terminal },
+  { id: "transaction",    label: "GET /v1/transaction",  icon: CheckCircle2 },
+  { id: "webhooks",       label: "Webhooks",             icon: Webhook },
+  { id: "errors",         label: "Codes d'erreur",       icon: ArrowRight },
+];
+
+// All active countries from the platform (PixPay + AfribaPay)
+const ALL_COUNTRIES = [
+  { code: "BJ", name: "Bénin",             currency: "XOF", operators: ["Moov Money", "MTN Mobile Money"] },
+  { code: "BF", name: "Burkina Faso",      currency: "XOF", operators: ["Moov Money", "Orange Money"] },
+  { code: "CM", name: "Cameroun",          currency: "XAF", operators: ["MTN Mobile Money", "Orange Money"] },
+  { code: "CF", name: "Centrafrique",      currency: "XAF", operators: ["Orange Money"] },
+  { code: "CG", name: "Congo",             currency: "XAF", operators: ["Airtel Money", "MTN Mobile Money"] },
+  { code: "CI", name: "Côte d'Ivoire",     currency: "XOF", operators: ["Moov Money", "MTN Mobile Money", "Orange Money", "Wave"] },
+  { code: "GA", name: "Gabon",             currency: "XAF", operators: ["Airtel Money", "Moov Money"] },
+  { code: "GN", name: "Guinée Conakry",    currency: "GNF", operators: ["MTN Mobile Money", "Orange Money"] },
+  { code: "GQ", name: "Guinée équatoriale",currency: "XAF", operators: ["Orange Money"] },
+  { code: "GW", name: "Guinée-Bissau",     currency: "XOF", operators: ["Orange Money"] },
+  { code: "ML", name: "Mali",              currency: "XOF", operators: ["Moov Money", "Orange Money"] },
+  { code: "NE", name: "Niger",             currency: "XOF", operators: ["Airtel Money"] },
+  { code: "CD", name: "RD Congo",          currency: "CDF", operators: ["Afrimoney", "Airtel Money", "Orange Money", "Vodacom M-Pesa"] },
+  { code: "SN", name: "Sénégal",           currency: "XOF", operators: ["Free Money", "Orange Money", "Wave"] },
+  { code: "TD", name: "Tchad",             currency: "XAF", operators: ["Airtel Money", "Moov Money"] },
+  { code: "TG", name: "Togo",             currency: "XOF", operators: ["Flooz (Moov)", "T-Money"] },
 ];
 
 function CodeBlock({ code, language = "json" }: { code: string; language?: string }) {
@@ -67,6 +88,18 @@ function TableWrapper({ children }: { children: React.ReactNode }) {
     <div className="rounded-xl border border-white/10 overflow-x-auto w-full">
       <table className="w-full text-sm min-w-[500px]">{children}</table>
     </div>
+  );
+}
+
+function TableHead({ cols }: { cols: string[] }) {
+  return (
+    <thead>
+      <tr className="bg-white/5 border-b border-white/10">
+        {cols.map(h => (
+          <th key={h} className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 whitespace-nowrap">{h}</th>
+        ))}
+      </tr>
+    </thead>
   );
 }
 
@@ -191,17 +224,18 @@ export default function DeveloperPage() {
                 <h1 className="text-2xl font-bold text-white">Introduction</h1>
               </div>
               <p className="text-zinc-400 leading-relaxed">
-                L'API Ashtech Pay permet à vos clients de payer directement sur votre site ou application mobile,
-                sans aucune redirection. Elle agit comme passerelle intelligente entre votre système et les
-                opérateurs Mobile Money africains.
+                L'API Ashtech Pay permet à vos applications d'initier des paiements Mobile Money dans{" "}
+                <strong className="text-white">{ALL_COUNTRIES.length} pays africains</strong>,
+                sans redirection. Elle gère automatiquement le routage entre les opérateurs et vous notifie
+                du résultat via webhook.
               </p>
             </div>
 
             <div className="grid sm:grid-cols-3 gap-4">
               {[
-                { icon: Shield, title: "Sécurisé",   desc: "Chaque requête est authentifiée par clé API" },
-                { icon: Zap,   title: "Temps réel",  desc: "Confirmation instantanée via webhooks" },
-                { icon: Globe, title: "Multi-pays",  desc: "CM, CI, SN, ML, BF, GN et plus encore" },
+                { icon: Shield, title: "Sécurisé",   desc: "Chaque requête est authentifiée par clé API Bearer" },
+                { icon: Zap,    title: "Temps réel",  desc: "Résultat envoyé instantanément sur votre webhook" },
+                { icon: Globe,  title: `${ALL_COUNTRIES.length} pays`, desc: "Toute l'Afrique francophone couverte" },
               ].map(({ icon: Icon, title, desc }) => (
                 <div key={title} className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-2">
                   <Icon className="w-5 h-5 text-primary" />
@@ -217,7 +251,7 @@ export default function DeveloperPage() {
                 <code className="text-base font-mono font-semibold text-[#79c0ff] break-all">https://api.ashtechpay.top</code>
                 <Badge variant="outline" className="border-green-500/30 text-green-400 text-[10px] shrink-0">v1</Badge>
               </div>
-              <p className="text-xs text-zinc-500">Toutes les requêtes doivent être envoyées en HTTPS. HTTP n'est pas supporté.</p>
+              <p className="text-xs text-zinc-500">Toutes les requêtes doivent être envoyées en HTTPS. Réponses JSON uniquement.</p>
             </div>
           </section>
 
@@ -230,18 +264,17 @@ export default function DeveloperPage() {
             <p className="text-zinc-400 leading-relaxed">
               Toutes les requêtes doivent inclure votre clé API dans l'en-tête HTTP{" "}
               <code className="text-[#79c0ff] bg-white/10 px-1.5 py-0.5 rounded text-xs">Authorization</code>.
-              Ne l'exposez jamais côté client.
             </p>
             <CodeBlock language="http" code={`Authorization: Bearer ${apiKey}`} />
             <div className="flex gap-3 items-start rounded-xl border border-orange-500/20 bg-orange-500/5 p-4">
               <span className="text-orange-400 mt-0.5 shrink-0">⚠</span>
               <p className="text-sm text-orange-300">
                 Utilisez votre clé API <strong>uniquement depuis votre serveur</strong> (Node.js, Python, PHP…).
-                Ne l'incluez jamais dans du code JavaScript côté navigateur ou dans une application mobile.
+                Ne l'incluez jamais dans du code côté navigateur ou application mobile.
               </p>
             </div>
             <div className="space-y-3">
-              <p className="text-sm font-medium text-zinc-300">Exemple avec fetch (Node.js)</p>
+              <p className="text-sm font-medium text-zinc-300">Exemple d'appel authentifié (Node.js)</p>
               <CodeBlock language="javascript" code={`const response = await fetch("https://api.ashtechpay.top/v1/collect", {
   method: "POST",
   headers: {
@@ -250,6 +283,76 @@ export default function DeveloperPage() {
   },
   body: JSON.stringify({ /* ... */ })
 });`} />
+            </div>
+          </section>
+
+          {/* Countries */}
+          <section id="countries" ref={el => sectionRefs.current.countries = el} className="scroll-mt-20 space-y-6">
+            <div className="flex items-center gap-2 border-b border-white/10 pb-4">
+              <List className="w-5 h-5 text-primary shrink-0" />
+              <h2 className="text-xl font-bold text-white">Pays et opérateurs</h2>
+            </div>
+
+            <div className="flex items-center gap-3 flex-wrap">
+              <MethodBadge method="GET" />
+              <code className="text-sm font-mono text-zinc-300 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5">
+                /v1/countries
+              </code>
+            </div>
+
+            <p className="text-zinc-400 leading-relaxed">
+              Retourne la liste complète des pays actifs et leurs opérateurs Mobile Money disponibles.
+              Utilisez cet endpoint pour peupler dynamiquement votre interface de paiement.
+            </p>
+
+            <div className="grid lg:grid-cols-2 gap-5">
+              <div className="space-y-2 min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Requête</p>
+                <CodeBlock language="javascript" code={`fetch("https://api.ashtechpay.top/v1/countries", {
+  headers: {
+    "Authorization": "Bearer ${apiKey}"
+  }
+})`} />
+              </div>
+              <div className="space-y-2 min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Réponse</p>
+                <CodeBlock language="json" code={`[
+  {
+    "code": "CM",
+    "name": "Cameroun",
+    "currency": "XAF",
+    "operators": ["MTN Mobile Money", "Orange Money"]
+  },
+  {
+    "code": "SN",
+    "name": "Sénégal",
+    "currency": "XOF",
+    "operators": ["Free Money", "Orange Money", "Wave"]
+  }
+  // ...
+]`} />
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-3">
+                Pays disponibles ({ALL_COUNTRIES.length})
+              </p>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {ALL_COUNTRIES.map(({ code, name, currency, operators }) => (
+                  <div key={code} className="rounded-lg border border-white/10 bg-white/5 p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold text-zinc-200">{name}</p>
+                      <span className="text-[10px] font-mono text-zinc-500 bg-white/10 px-1.5 py-0.5 rounded shrink-0">{code} · {currency}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {operators.map(op => (
+                        <span key={op} className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-zinc-400">{op}</span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </section>
 
@@ -269,26 +372,24 @@ export default function DeveloperPage() {
 
             <p className="text-zinc-400 leading-relaxed">
               Initie un paiement Mobile Money. Le client reçoit une demande de validation sur son téléphone
-              via USSD ou notification push selon l'opérateur.
+              (USSD ou notification push selon l'opérateur). Les frais de la plateforme sont automatiquement
+              déduits — le <code className="text-[#79c0ff] bg-white/10 px-1.5 py-0.5 rounded text-xs">credited_amount</code> correspond
+              au montant net crédité sur votre compte.
             </p>
 
             <div>
-              <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-3">Paramètres du corps (JSON)</p>
+              <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-3">Corps de la requête (JSON)</p>
               <TableWrapper>
-                <thead>
-                  <tr className="bg-white/5 border-b border-white/10">
-                    {["Paramètre", "Type", "Statut", "Description"].map(h => (
-                      <th key={h} className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 whitespace-nowrap">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
+                <TableHead cols={["Paramètre", "Type", "Statut", "Description"]} />
                 <tbody>
-                  <ParamRow name="amount"     type="number" required desc="Montant à collecter en unité de devise" />
-                  <ParamRow name="currency"   type="string" required desc="XAF, XOF, GNF, CDF" />
-                  <ParamRow name="phone"      type="string" required desc="Numéro de téléphone du payeur" />
-                  <ParamRow name="operator"   type="string" required desc="MTN, Orange, Wave, Moov, Free…" />
-                  <ParamRow name="reference"  type="string" required={false} desc="Référence unique de votre commande" />
-                  <ParamRow name="notify_url" type="string" required={false} desc="URL de webhook pour la notification de statut" />
+                  <ParamRow name="amount"       type="number" required desc="Montant brut à collecter" />
+                  <ParamRow name="currency"     type="string" required desc="Devise du pays (XAF, XOF, GNF, CDF…)" />
+                  <ParamRow name="phone"        type="string" required desc="Numéro de téléphone du payeur" />
+                  <ParamRow name="operator"     type="string" required desc="Nom exact de l'opérateur (depuis /v1/countries)" />
+                  <ParamRow name="country_code" type="string" required desc="Code ISO du pays (CM, SN, CI…)" />
+                  <ParamRow name="reference"    type="string" required={false} desc="Référence unique de votre commande" />
+                  <ParamRow name="otp"          type="string" required={false} desc="Code OTP si requis (voir réponse 400 otp_required)" />
+                  <ParamRow name="notify_url"   type="string" required={false} desc="URL webhook pour recevoir le résultat du paiement" />
                 </tbody>
               </TableWrapper>
             </div>
@@ -306,48 +407,53 @@ export default function DeveloperPage() {
     amount: 5000,
     currency: "XAF",
     phone: "670000000",
-    operator: "MTN",
+    operator: "MTN Mobile Money",
+    country_code: "CM",
     reference: "ORDER-001",
     notify_url: "https://monsite.com/webhook"
   })
 })`} />
               </div>
               <div className="space-y-2 min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Réponse</p>
+                <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Réponse (202)</p>
                 <CodeBlock language="json" code={`{
-  "status": "pending",
-  "transaction_id": "txn_a3f5c8d1",
-  "amount": 5000,
-  "currency": "XAF",
-  "operator": "MTN",
-  "phone": "670000000",
+  "transaction_id": "8f3e1c2d-...",
   "reference": "ORDER-001",
+  "status": "pending",
+  "amount": 5000,
+  "credited_amount": 4750,
+  "fee_amount": 250,
+  "currency": "XAF",
+  "operator": "MTN Mobile Money",
+  "phone": "670000000",
+  "country_code": "CM",
   "created_at": "2026-03-15T14:00:00Z"
 }`} />
               </div>
             </div>
 
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-3">Opérateurs supportés</p>
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {[
-                  { country: "Cameroun",       operators: ["MTN", "Orange"] },
-                  { country: "Côte d'Ivoire",  operators: ["MTN", "Orange", "Moov", "Wave"] },
-                  { country: "Sénégal",        operators: ["Orange", "Free", "Wave"] },
-                  { country: "Mali",           operators: ["Orange", "Moov"] },
-                  { country: "Burkina Faso",   operators: ["Orange", "Moov", "Wave"] },
-                  { country: "Guinée",         operators: ["Orange", "MTN"] },
-                ].map(({ country, operators }) => (
-                  <div key={country} className="rounded-lg border border-white/10 bg-white/5 p-3 space-y-1.5">
-                    <p className="text-xs font-medium text-zinc-300">{country}</p>
-                    <div className="flex flex-wrap gap-1">
-                      {operators.map(op => (
-                        <span key={op} className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-zinc-400 font-mono">{op}</span>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
+            <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-5 space-y-3">
+              <p className="text-sm font-semibold text-yellow-300">OTP requis (Orange Money CI, SN, ML, BF…)</p>
+              <p className="text-sm text-zinc-400">
+                Certains opérateurs nécessitent un code OTP. Si c'est le cas, l'API retourne une erreur{" "}
+                <code className="text-[#79c0ff] bg-white/10 px-1.5 py-0.5 rounded text-xs">400 otp_required</code>{" "}
+                avec le code USSD à composer. Relancez ensuite la requête en ajoutant le champ{" "}
+                <code className="text-[#79c0ff] bg-white/10 px-1.5 py-0.5 rounded text-xs">otp</code>.
+              </p>
+              <CodeBlock language="json" code={`// Réponse 400 initiale
+{
+  "error": "otp_required",
+  "message": "OTP requis. Composez #144*82# pour obtenir votre code OTP.",
+  "ussd_code": "#144*82#"
+}
+
+// Relancer avec l'OTP
+{
+  "amount": 5000, "currency": "XOF", "phone": "07XXXXXXXX",
+  "operator": "Orange Money", "country_code": "CI",
+  "otp": "123456",
+  "notify_url": "https://monsite.com/webhook"
+}`} />
             </div>
           </section>
 
@@ -366,16 +472,16 @@ export default function DeveloperPage() {
             </div>
 
             <p className="text-zinc-400 leading-relaxed">
-              Consultez le statut d'une transaction à tout moment en utilisant le{" "}
+              Consultez le statut d'une transaction à tout moment via le{" "}
               <code className="text-[#79c0ff] bg-white/10 px-1.5 py-0.5 rounded text-xs">transaction_id</code>{" "}
-              retourné lors de l'initiation.
+              retourné lors de l'initiation. Vous pouvez également utiliser ce endpoint en complément du webhook.
             </p>
 
             <div className="grid lg:grid-cols-2 gap-5">
               <div className="space-y-2 min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Requête</p>
                 <CodeBlock language="javascript" code={`fetch(
-  "https://api.ashtechpay.top/v1/transaction/txn_a3f5c8d1",
+  "https://api.ashtechpay.top/v1/transaction/8f3e1c2d-...",
   {
     headers: {
       "Authorization": "Bearer ${apiKey}"
@@ -386,12 +492,15 @@ export default function DeveloperPage() {
               <div className="space-y-2 min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Réponse</p>
                 <CodeBlock language="json" code={`{
-  "transaction_id": "txn_a3f5c8d1",
+  "transaction_id": "8f3e1c2d-...",
+  "reference": "ORDER-001",
   "status": "success",
   "amount": 5000,
+  "credited_amount": 4750,
+  "fee_amount": 250,
   "currency": "XAF",
-  "operator": "MTN",
-  "reference": "ORDER-001",
+  "phone": "670000000",
+  "created_at": "2026-03-15T14:00:00Z",
   "confirmed_at": "2026-03-15T14:02:17Z"
 }`} />
               </div>
@@ -400,18 +509,12 @@ export default function DeveloperPage() {
             <div>
               <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-3">Statuts possibles</p>
               <TableWrapper>
-                <thead>
-                  <tr className="bg-white/5 border-b border-white/10">
-                    {["Statut", "Description", "Final ?"].map(h => (
-                      <th key={h} className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 whitespace-nowrap">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
+                <TableHead cols={["Statut", "Description", "Final ?"]} />
                 <tbody>
                   {[
                     { status: "pending", color: "text-yellow-400", desc: "En attente de confirmation de l'opérateur", final: false },
-                    { status: "success", color: "text-green-400",  desc: "Paiement confirmé et fonds crédités",       final: true  },
-                    { status: "failed",  color: "text-red-400",    desc: "Paiement refusé, expiré ou annulé",         final: true  },
+                    { status: "success", color: "text-green-400",  desc: "Paiement confirmé — compte marchand crédité", final: true  },
+                    { status: "failed",  color: "text-red-400",    desc: "Paiement refusé, expiré ou annulé",           final: true  },
                   ].map(({ status, color, desc, final }) => (
                     <tr key={status} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                       <td className="px-3 py-3 whitespace-nowrap"><span className={`font-mono font-medium text-sm ${color}`}>{status}</span></td>
@@ -432,39 +535,50 @@ export default function DeveloperPage() {
             </div>
 
             <p className="text-zinc-400 leading-relaxed">
-              Quand une transaction atteint un état final (
-              <span className="text-green-400 font-mono">success</span> ou{" "}
-              <span className="text-red-400 font-mono">failed</span>),
-              Ashtech Pay envoie une requête{" "}
+              Quand un paiement atteint un état final, Ashtech Pay envoie automatiquement une requête{" "}
               <code className="text-[#79c0ff] bg-white/10 px-1.5 py-0.5 rounded text-xs">POST</code>{" "}
               à votre <code className="text-[#79c0ff] bg-white/10 px-1.5 py-0.5 rounded text-xs">notify_url</code>.
+              Le compte marchand est crédité du <code className="text-[#79c0ff] bg-white/10 px-1.5 py-0.5 rounded text-xs">credited_amount</code> dès
+              la confirmation.
             </p>
 
             <div className="grid lg:grid-cols-2 gap-5">
               <div className="space-y-2 min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Payload reçu</p>
+                <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Payload — Succès</p>
                 <CodeBlock language="json" code={`{
   "event": "payment.success",
-  "transaction_id": "txn_a3f5c8d1",
+  "transaction_id": "8f3e1c2d-...",
   "reference": "ORDER-001",
-  "amount": 5000,
-  "currency": "XAF",
-  "operator": "MTN",
-  "phone": "670000000",
   "status": "success",
+  "amount": 5000,
+  "credited_amount": 4750,
+  "fee_amount": 250,
+  "currency": "XAF",
+  "phone": "670000000",
   "confirmed_at": "2026-03-15T14:02:17Z"
 }`} />
               </div>
               <div className="space-y-2 min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Handler (Node.js)</p>
                 <CodeBlock language="javascript" code={`app.post("/webhook", async (req, res) => {
-  const { event, reference, status } = req.body;
+  const {
+    event, reference,
+    credited_amount, currency
+  } = req.body;
 
   if (event === "payment.success") {
-    await markOrderAsPaid(reference);
+    // Créditer le client dans votre base
+    await markOrderAsPaid(reference, {
+      amount: credited_amount,
+      currency
+    });
   }
 
-  // Répondre 200 pour confirmer la réception
+  if (event === "payment.failed") {
+    await cancelOrder(reference);
+  }
+
+  // Toujours répondre 200
   res.status(200).json({ received: true });
 });`} />
               </div>
@@ -474,10 +588,11 @@ export default function DeveloperPage() {
               <p className="text-sm font-semibold text-blue-300">Bonnes pratiques</p>
               <ul className="space-y-1.5 text-sm text-zinc-400">
                 {[
-                  "Répondez toujours avec HTTP 200 pour accuser réception",
+                  "Répondez toujours HTTP 200 pour accuser réception, même en cas d'erreur de votre côté",
                   "En cas d'échec de livraison, Ashtech Pay retentera jusqu'à 3 fois",
                   "Vérifiez le transaction_id dans votre base pour éviter les doublons",
                   "Traitez le webhook de manière asynchrone pour répondre rapidement",
+                  "Le webhook est complémentaire à GET /v1/transaction/:id — utilisez les deux",
                 ].map(item => (
                   <li key={item} className="flex items-start gap-2">
                     <ChevronRight className="w-3.5 h-3.5 mt-0.5 text-blue-400 shrink-0" />
@@ -496,34 +611,31 @@ export default function DeveloperPage() {
             </div>
 
             <p className="text-zinc-400 leading-relaxed">
-              En cas d'erreur, l'API retourne un objet JSON avec un champ{" "}
-              <code className="text-[#79c0ff] bg-white/10 px-1.5 py-0.5 rounded text-xs">message</code>{" "}
-              décrivant le problème.
+              En cas d'erreur, l'API retourne un objet JSON avec les champs{" "}
+              <code className="text-[#79c0ff] bg-white/10 px-1.5 py-0.5 rounded text-xs">error</code> et{" "}
+              <code className="text-[#79c0ff] bg-white/10 px-1.5 py-0.5 rounded text-xs">message</code>.
             </p>
 
             <CodeBlock language="json" code={`{
-  "error": "invalid_request",
-  "message": "Le champ 'amount' est requis."
+  "error": "bad_request",
+  "message": "Champs requis : amount, currency, phone, operator, country_code"
 }`} />
 
             <TableWrapper>
-              <thead>
-                <tr className="bg-white/5 border-b border-white/10">
-                  {["Code HTTP", "Erreur", "Signification"].map(h => (
-                    <th key={h} className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
+              <TableHead cols={["Code HTTP", "Erreur", "Signification"]} />
               <tbody>
                 {[
-                  { code: "400", error: "bad_request",  msg: "Paramètre manquant ou format invalide" },
-                  { code: "401", error: "unauthorized",  msg: "Clé API manquante, invalide ou expirée" },
+                  { code: "400", error: "bad_request",   msg: "Paramètre manquant ou format invalide" },
+                  { code: "400", error: "otp_required",  msg: "OTP nécessaire — vérifiez ussd_code dans la réponse" },
+                  { code: "401", error: "unauthorized",  msg: "Clé API manquante, invalide ou révoquée" },
+                  { code: "403", error: "forbidden",     msg: "Cette transaction n'appartient pas à votre compte" },
                   { code: "404", error: "not_found",     msg: "Transaction introuvable" },
-                  { code: "422", error: "unprocessable", msg: "Opérateur non supporté pour ce pays/devise" },
+                  { code: "422", error: "unprocessable", msg: "Pays ou opérateur non supporté / devise incorrecte" },
                   { code: "429", error: "rate_limited",  msg: "Trop de requêtes — ralentissez" },
-                  { code: "500", error: "server_error",  msg: "Erreur interne Ashtech Pay — réessayez" },
+                  { code: "502", error: "gateway_error", msg: "Le réseau de l'opérateur a rejeté le paiement" },
+                  { code: "500", error: "server_error",  msg: "Erreur interne — réessayez" },
                 ].map(({ code, error, msg }) => (
-                  <tr key={code} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                  <tr key={`${code}-${error}`} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                     <td className="px-3 py-3 font-mono font-bold text-orange-400 whitespace-nowrap">{code}</td>
                     <td className="px-3 py-3 font-mono text-zinc-400 text-xs whitespace-nowrap">{error}</td>
                     <td className="px-3 py-3 text-zinc-300 text-sm">{msg}</td>

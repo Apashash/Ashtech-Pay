@@ -188,6 +188,8 @@ export const transactions = pgTable("transactions", {
   payerName: text("payer_name"),
   payerEmail: text("payer_email"),
   externalReference: text("external_reference"),
+  notifyUrl: text("notify_url"),   // Webhook URL for API-originated transactions
+  source: text("source"),          // null | "api" — marks API-originated transactions
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -437,6 +439,8 @@ export const insertTransactionSchema = createInsertSchema(transactions).pick({
   payerEmail: true,
   feeAmount: true,
   totalAmount: true,
+  notifyUrl: true,
+  source: true,
 });
 
 export const transferSchema = z.object({

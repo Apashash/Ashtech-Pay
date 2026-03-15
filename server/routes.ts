@@ -7071,5 +7071,279 @@ export async function registerRoutes(
     res.json(PIXPAY_SUPPORTED_COUNTRIES);
   });
 
+  // ════════════════════════════════════════════════════════════════════════════
+  //  API v1  —  External merchant API (authenticated by Bearer API key)
+  // ════════════════════════════════════════════════════════════════════════════
+
+  /** Middleware: authenticate via Bearer API key */
+  async function requireApiKey(req: any, res: any, next: any) {
+    const authHeader = req.headers["authorization"] as string | undefined;
+    if (!authHeader?.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "unauthorized", message: "En-tête Authorization manquant. Format : Bearer <clé>" });
+    }
+    const key = authHeader.slice(7).trim();
+    if (!key.startsWith("ak_")) {
+      return res.status(401).json({ error: "unauthorized", message: "Clé API invalide." });
+    }
+    const user = await storage.getUserByApiKey(key);
+    if (!user) return res.status(401).json({ error: "unauthorized", message: "Clé API introuvable ou révoquée." });
+    req.apiUser = user;
+    next();
+  }
+
+  /** GET /v1/countries — list all active countries with their operators */
+  app.get("/v1/countries", requireApiKey, async (_req, res) => {
+    try {
+      const countries = await storage.getActiveCountries();
+      const result = await Promise.all(
+        countries.map(async (c: any) => {
+          const ops = await storage.getOperatorsByCountry(c.id);
+          return {
+            code: c.code,
+            name: c.name,
+            currency: c.currency,
+            operators: ops
+              .filter((o: any) => o.paymentProvider !== "swychr")
+              .map((o: any) => o.name),
+          };
+        })
+      );
+      res.json(result.filter((c: any) => c.operators.length > 0));
+    } catch (e: any) {
+      console.error("[API v1 /countries]", e);
+      res.status(500).json({ error: "server_error", message: "Erreur serveur" });
+    }
+  });
+
+  /** POST /v1/collect — initiate a Mobile Money collection */
+  app.post("/v1/collect", requireApiKey, async (req: any, res) => {
+    try {
+      const merchant = req.apiUser;
+      const { amount, currency, phone, operator: operatorName, country_code, reference, notify_url } = req.body;
+
+      // ── Validation ────────────────────────────────────────────────────────
+      if (!amount || !currency || !phone || !operatorName || !country_code) {
+        return res.status(400).json({ error: "bad_request", message: "Champs requis : amount, currency, phone, operator, country_code" });
+      }
+      const amountNum = parseFloat(amount);
+      if (isNaN(amountNum) || amountNum <= 0) {
+        return res.status(400).json({ error: "bad_request", message: "Le montant doit être un nombre positif." });
+      }
+
+      // ── Find country ──────────────────────────────────────────────────────
+      const allCountries = await storage.getActiveCountries();
+      const country = allCountries.find(
+        (c: any) => c.code.toUpperCase() === country_code.toUpperCase()
+      );
+      if (!country) return res.status(422).json({ error: "unprocessable", message: `Pays non supporté : ${country_code}` });
+
+      // ── Find operator ──────────────────────────────────────────────────────
+      const countryOps = await storage.getOperatorsByCountry(country.id);
+      const operatorRecord = countryOps.find(
+        (o: any) => o.name.toLowerCase() === operatorName.toLowerCase()
+      );
+      if (!operatorRecord) {
+        const available = countryOps.map((o: any) => o.name).join(", ");
+        return res.status(422).json({
+          error: "unprocessable",
+          message: `Opérateur non supporté pour ce pays. Disponibles : ${available}`,
+        });
+      }
+      if ((operatorRecord as any).paymentProvider === "swychr") {
+        return res.status(422).json({ error: "unprocessable", message: "Cet opérateur n'est pas disponible via l'API directe." });
+      }
+
+      // ── Validate currency matches country ─────────────────────────────────
+      if (currency.toUpperCase() !== country.currency.toUpperCase()) {
+        return res.status(422).json({
+          error: "unprocessable",
+          message: `Devise incorrecte pour ce pays. Attendu : ${country.currency}`,
+        });
+      }
+
+      // ── Resolve fees from DB ─────────────────────────────────────────────
+      const paymentProvider = (operatorRecord as any).paymentProvider as string;
+      const resolvedFeeRecord = await storage.resolveFee("deposit", country.id, (operatorRecord as any).id);
+      const ashtechMarginPct = (resolvedFeeRecord as any)?.ashtechMargin != null
+        ? parseFloat((resolvedFeeRecord as any).ashtechMargin)
+        : ASHTECH_MARGIN;
+
+      let creditedAmount: number;
+      let ashtechFeeAmount: number;
+      if (paymentProvider === "afribapay") {
+        const rate = (resolvedFeeRecord as any)?.afribapayFee ? parseFloat((resolvedFeeRecord as any).afribapayFee) : 3.0;
+        const af = computeAfribaPayFees(amountNum, rate, ashtechMarginPct);
+        creditedAmount = af.creditedAmount;
+        ashtechFeeAmount = af.ashtechFeeAmount;
+      } else {
+        const rate = (resolvedFeeRecord as any)?.pixpayFee ? parseFloat((resolvedFeeRecord as any).pixpayFee) : 3.0;
+        const pf = computePixPayFees(amountNum, rate, ashtechMarginPct);
+        creditedAmount = pf.creditedAmount;
+        ashtechFeeAmount = pf.ashtechFeeAmount;
+      }
+
+      const depositRef = reference || generateTransactionReference("deposit");
+
+      // ── PixPay OTP pre-check ──────────────────────────────────────────────
+      if (paymentProvider === "pixpay") {
+        const pxFlowType = detectPixPayFlowType(operatorName, country.code);
+        if (pxFlowType === "otp" && !req.body.otp) {
+          const ussdCode = PIXPAY_OTP_USSD_CODES[country.code.toUpperCase()] || "#144*82#";
+          return res.status(400).json({
+            error: "otp_required",
+            message: `OTP requis. Composez ${ussdCode} pour obtenir votre code OTP, puis relancez la requête avec le champ 'otp'.`,
+            ussd_code: ussdCode,
+          });
+        }
+      }
+
+      // ── AfribaPay OTP pre-check ──────────────────────────────────────────
+      if (paymentProvider === "afribapay") {
+        const afribaOpCode = (operatorRecord as any).afribapayOperatorCode || operatorName.toLowerCase();
+        const otpInfo = await getAfribaPayOtpInfo(country.code, afribaOpCode);
+        if (otpInfo.required && !req.body.otp) {
+          return res.status(400).json({
+            error: "otp_required",
+            message: `OTP requis pour cet opérateur. ${otpInfo.instructions || ""}`,
+            ussd_code: otpInfo.ussdCode || null,
+          });
+        }
+      }
+
+      // ── Create transaction ────────────────────────────────────────────────
+      const transaction = await storage.createTransaction({
+        userId: merchant.id,
+        type: "deposit",
+        amount: creditedAmount.toString(),
+        currency: country.currency,
+        status: "pending",
+        description: `Paiement API — ${operatorName} — ${phone}`,
+        paymentMethod: "mobile_money",
+        reference: depositRef,
+        operatorId: (operatorRecord as any).id,
+        feeAmount: ashtechFeeAmount.toFixed(2),
+        totalAmount: amountNum.toFixed(2),
+        recipientPhone: phone,
+        notifyUrl: notify_url || null,
+        source: "api",
+      });
+
+      // ── Call payment provider ──────────────────────────────────────────────
+      const callbackUrl = `${process.env.APP_URL || ""}/api/afribapay/webhook`;
+      const pixpayIpnUrl = `${process.env.APP_URL || ""}/api/pixpay/webhook`;
+
+      if (paymentProvider === "afribapay") {
+        const afribaOpCode = (operatorRecord as any).afribapayOperatorCode || operatorName.toLowerCase();
+        const otpInfo = await getAfribaPayOtpInfo(country.code, afribaOpCode);
+        let afribaResponse: any;
+        if (otpInfo.required && req.body.otp) {
+          const otpInitResult = await initiateAfribaPayOtp(
+            amountNum, phone, afribaOpCode, country.code, depositRef, callbackUrl
+          );
+          if (!otpInitResult.success) {
+            await storage.updateTransactionStatus(transaction.id, "failed");
+            return res.status(502).json({ error: "gateway_error", message: otpInitResult.message || "Échec de l'initiation OTP." });
+          }
+          afribaResponse = await confirmAfribaPayOtp(otpInitResult.transactionId!, req.body.otp, country.code);
+        } else {
+          afribaResponse = await initiateAfribaPayin(
+            amountNum, phone, afribaOpCode, country.code, depositRef,
+            callbackUrl, `${process.env.APP_URL}/dashboard/deposit?status=success`,
+            `${process.env.APP_URL}/dashboard/deposit?status=cancelled`
+          );
+        }
+        if (afribaResponse.success) {
+          await storage.updateTransactionExternalReference(transaction.id, afribaResponse.transactionId || depositRef);
+          addPendingPayment({
+            transactionId: transaction.id,
+            reference: depositRef,
+            externalReference: afribaResponse.transactionId || depositRef,
+            attempts: 0,
+            userId: merchant.id,
+            type: "deposit",
+            amount: creditedAmount.toString(),
+            provider: "afribapay",
+            countryCode: country.code,
+          });
+        } else {
+          await storage.updateTransactionStatus(transaction.id, "failed");
+          return res.status(502).json({ error: "gateway_error", message: afribaResponse.message || "Échec du paiement AfribaPay." });
+        }
+      } else {
+        // PixPay
+        const pxFlowType = detectPixPayFlowType(operatorName, country.code);
+        let pixpayResponse: any;
+        if (pxFlowType === "otp") {
+          pixpayResponse = await initiatePixPayOtp(amountNum, phone, country.code, depositRef, pixpayIpnUrl, req.body.otp!);
+        } else {
+          pixpayResponse = await initiatePixPayUssd(amountNum, phone, country.code, depositRef, pixpayIpnUrl);
+        }
+        if (pixpayResponse.success) {
+          const extRef = pixpayResponse.transactionId || depositRef;
+          await storage.updateTransactionExternalReference(transaction.id, extRef);
+          addPendingPayment({
+            transactionId: transaction.id,
+            reference: depositRef,
+            externalReference: extRef,
+            attempts: 0,
+            userId: merchant.id,
+            type: "deposit",
+            amount: creditedAmount.toString(),
+            provider: "pixpay",
+            countryCode: country.code,
+          });
+        } else {
+          await storage.updateTransactionStatus(transaction.id, "failed");
+          return res.status(502).json({ error: "gateway_error", message: pixpayResponse.message || "Échec du paiement PixPay." });
+        }
+      }
+
+      res.status(202).json({
+        transaction_id: transaction.id,
+        reference: depositRef,
+        status: "pending",
+        amount: amountNum,
+        credited_amount: creditedAmount,
+        fee_amount: ashtechFeeAmount,
+        currency: country.currency,
+        operator: operatorName,
+        phone,
+        country_code: country.code,
+        created_at: (transaction as any).createdAt,
+      });
+    } catch (e: any) {
+      console.error("[API v1 /collect]", e);
+      res.status(500).json({ error: "server_error", message: "Erreur interne." });
+    }
+  });
+
+  /** GET /v1/transaction/:id — get status of an API transaction */
+  app.get("/v1/transaction/:id", requireApiKey, async (req: any, res) => {
+    try {
+      const merchant = req.apiUser;
+      const tx = await storage.getTransactionById(req.params.id);
+      if (!tx) return res.status(404).json({ error: "not_found", message: "Transaction introuvable." });
+      if (tx.userId !== merchant.id) return res.status(403).json({ error: "forbidden", message: "Accès refusé." });
+
+      res.json({
+        transaction_id: tx.id,
+        reference: tx.reference,
+        status: tx.status === "completed" ? "success" : tx.status,
+        amount: parseFloat(tx.totalAmount || tx.amount),
+        credited_amount: parseFloat(tx.amount),
+        fee_amount: parseFloat(tx.feeAmount || "0"),
+        currency: tx.currency,
+        phone: tx.recipientPhone,
+        operator: (tx as any).operatorId || null,
+        source: (tx as any).source,
+        created_at: tx.createdAt,
+        confirmed_at: tx.status === "completed" ? tx.createdAt : null,
+      });
+    } catch (e: any) {
+      console.error("[API v1 /transaction/:id]", e);
+      res.status(500).json({ error: "server_error", message: "Erreur interne." });
+    }
+  });
+
   return httpServer;
 }

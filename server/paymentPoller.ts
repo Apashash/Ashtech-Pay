@@ -136,6 +136,35 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
       console.log(`[PaymentPoller] ✗ Payment FAILED/CANCELLED for ${payment.reference} (${payment.provider || "swychr"})`);
     }
 
+    // ── API webhook notification ──────────────────────────────────────────────
+    const notifyUrl = (transaction as any).notifyUrl;
+    const txSource  = (transaction as any).source;
+    if (txSource === "api" && notifyUrl) {
+      try {
+        const payload = {
+          event: status === "completed" ? "payment.success" : "payment.failed",
+          transaction_id: transaction.id,
+          reference: transaction.reference,
+          status: status === "completed" ? "success" : "failed",
+          amount: parseFloat(transaction.totalAmount || transaction.amount),
+          credited_amount: parseFloat(transaction.amount),
+          fee_amount: parseFloat(transaction.feeAmount || "0"),
+          currency: transaction.currency,
+          phone: transaction.recipientPhone,
+          confirmed_at: status === "completed" ? new Date().toISOString() : null,
+        };
+        const wRes = await fetch(notifyUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(10000),
+        });
+        console.log(`[PaymentPoller] Webhook → ${notifyUrl} : HTTP ${wRes.status}`);
+      } catch (whErr: any) {
+        console.error(`[PaymentPoller] Webhook failed for ${payment.reference}:`, whErr.message);
+      }
+    }
+
     removePendingPayment(payment.reference);
   } catch (error) {
     console.error(`[PaymentPoller] Error processing payment result ${payment.reference}:`, error);
