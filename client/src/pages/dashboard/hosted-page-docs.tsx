@@ -323,39 +323,39 @@ Content-Type: application/json`} />
                     <tr className="bg-zinc-900 border-b border-zinc-800">
                       <th className="text-left px-3 py-2 text-zinc-500 font-medium">Code ISO</th>
                       <th className="text-left px-3 py-2 text-zinc-500 font-medium">Pays</th>
-                      <th className="text-left px-3 py-2 text-zinc-500 font-medium">Devise wallet</th>
+                      <th className="text-left px-3 py-2 text-zinc-500 font-medium">Wallet crédité</th>
                       <th className="text-left px-3 py-2 text-zinc-500 font-medium">Opérateurs</th>
                     </tr>
                   </thead>
                   <tbody>
                     {[
-                      { code: "CM", flag: "🇨🇲", pays: "Cameroun",        devise: "XAF", ops: "MTN, Orange" },
-                      { code: "SN", flag: "🇸🇳", pays: "Sénégal",         devise: "XOF", ops: "Orange, Wave, Free" },
-                      { code: "CI", flag: "🇨🇮", pays: "Côte d'Ivoire",   devise: "XOF", ops: "Orange, MTN, Wave" },
-                      { code: "BJ", flag: "🇧🇯", pays: "Bénin",           devise: "XOF", ops: "MTN, Moov" },
-                      { code: "BF", flag: "🇧🇫", pays: "Burkina Faso",    devise: "XOF", ops: "Orange, Moov, Coris" },
-                      { code: "ML", flag: "🇲🇱", pays: "Mali",            devise: "XOF", ops: "Orange, Moov" },
-                      { code: "TG", flag: "🇹🇬", pays: "Togo",            devise: "XOF", ops: "Flooz, Tmoney" },
-                      { code: "NE", flag: "🇳🇪", pays: "Niger",           devise: "XOF", ops: "Orange, Airtel" },
-                      { code: "GW", flag: "🇬🇼", pays: "Guinée-Bissau",   devise: "XOF", ops: "MTN" },
-                      { code: "GN", flag: "🇬🇳", pays: "Guinée",          devise: "GNF", ops: "Orange, MTN" },
-                      { code: "CD", flag: "🇨🇩", pays: "Congo RDC",       devise: "CDF", ops: "Airtel, Orange" },
-                      { code: "GA", flag: "🇬🇦", pays: "Gabon",           devise: "XAF", ops: "Airtel, Moov" },
-                      { code: "CG", flag: "🇨🇬", pays: "Congo",           devise: "XAF", ops: "Airtel, MTN" },
-                      { code: "CF", flag: "🇨🇫", pays: "Centrafrique",    devise: "XAF", ops: "Orange" },
-                      { code: "TD", flag: "🇹🇩", pays: "Tchad",           devise: "XAF", ops: "Airtel, Moov" },
-                      { code: "RW", flag: "🇷🇼", pays: "Rwanda",          devise: "RWF", ops: "MTN, Airtel" },
-                      { code: "GH", flag: "🇬🇭", pays: "Ghana",           devise: "GHS", ops: "MTN, Vodafone, Airtel" },
-                      { code: "NG", flag: "🇳🇬", pays: "Nigeria",         devise: "NGN", ops: "MTN, Airtel" },
-                      { code: "KE", flag: "🇰🇪", pays: "Kenya",           devise: "KES", ops: "M-Pesa" },
-                      { code: "TZ", flag: "🇹🇿", pays: "Tanzanie",        devise: "TZS", ops: "Vodacom, Airtel, Tigo" },
-                      { code: "UG", flag: "🇺🇬", pays: "Ouganda",         devise: "UGX", ops: "MTN, Airtel" },
-                      { code: "GM", flag: "🇬🇲", pays: "Gambie",          devise: "GMD", ops: "Afrimoney, QMoney" },
-                    ].map(({ code, flag, pays, devise, ops }) => (
+                      { code: "CM", flag: "🇨🇲", pays: "Cameroun",        wallet: "XAF",  ops: "MTN, Orange" },
+                      { code: "SN", flag: "🇸🇳", pays: "Sénégal",         wallet: "XOFS", ops: "Orange, Wave, Free" },
+                      { code: "CI", flag: "🇨🇮", pays: "Côte d'Ivoire",   wallet: "XOFC", ops: "Orange, MTN, Wave" },
+                      { code: "BJ", flag: "🇧🇯", pays: "Bénin",           wallet: "XOFB", ops: "MTN, Moov" },
+                      { code: "BF", flag: "🇧🇫", pays: "Burkina Faso",    wallet: "XOFF", ops: "Orange, Moov, Coris" },
+                      { code: "ML", flag: "🇲🇱", pays: "Mali",            wallet: "XOFM", ops: "Orange, Moov" },
+                      { code: "TG", flag: "🇹🇬", pays: "Togo",            wallet: "XOFT", ops: "Flooz, Tmoney" },
+                      { code: "NE", flag: "🇳🇪", pays: "Niger",           wallet: "XOFN", ops: "Orange, Airtel" },
+                      { code: "GW", flag: "🇬🇼", pays: "Guinée-Bissau",   wallet: "XOF",  ops: "MTN" },
+                      { code: "GN", flag: "🇬🇳", pays: "Guinée",          wallet: "GNF",  ops: "Orange, MTN" },
+                      { code: "CD", flag: "🇨🇩", pays: "Congo RDC",       wallet: "CDF",  ops: "Airtel, Orange" },
+                      { code: "GA", flag: "🇬🇦", pays: "Gabon",           wallet: "XAFG", ops: "Airtel, Moov" },
+                      { code: "CG", flag: "🇨🇬", pays: "Congo",           wallet: "XAFC", ops: "Airtel, MTN" },
+                      { code: "CF", flag: "🇨🇫", pays: "Centrafrique",    wallet: "XAF",  ops: "Orange" },
+                      { code: "TD", flag: "🇹🇩", pays: "Tchad",           wallet: "XAF",  ops: "Airtel, Moov" },
+                      { code: "RW", flag: "🇷🇼", pays: "Rwanda",          wallet: "RWF",  ops: "MTN, Airtel" },
+                      { code: "GH", flag: "🇬🇭", pays: "Ghana",           wallet: "GHS",  ops: "MTN, Vodafone, Airtel" },
+                      { code: "NG", flag: "🇳🇬", pays: "Nigeria",         wallet: "NGN",  ops: "MTN, Airtel" },
+                      { code: "KE", flag: "🇰🇪", pays: "Kenya",           wallet: "KES",  ops: "M-Pesa" },
+                      { code: "TZ", flag: "🇹🇿", pays: "Tanzanie",        wallet: "TZS",  ops: "Vodacom, Airtel, Tigo" },
+                      { code: "UG", flag: "🇺🇬", pays: "Ouganda",         wallet: "UGX",  ops: "MTN, Airtel" },
+                      { code: "GM", flag: "🇬🇲", pays: "Gambie",          wallet: "GMD",  ops: "Afrimoney, QMoney" },
+                    ].map(({ code, flag, pays, wallet, ops }) => (
                       <tr key={code} className="border-t border-zinc-800/60">
                         <td className="px-3 py-2 font-mono text-sky-400">{code}</td>
                         <td className="px-3 py-2 text-zinc-300">{flag} {pays}</td>
-                        <td className="px-3 py-2 font-mono text-zinc-400">{devise}</td>
+                        <td className="px-3 py-2 font-mono text-sky-400 font-semibold">{wallet}</td>
                         <td className="px-3 py-2 text-zinc-500">{ops}</td>
                       </tr>
                     ))}
@@ -419,32 +419,42 @@ Content-Type: application/json`} />
                 ))}
               </div>
 
-              <p className="text-xs text-zinc-500 font-medium uppercase tracking-wide">Devise du wallet selon le pays du client</p>
+              <p className="text-xs text-zinc-500 font-medium uppercase tracking-wide">Wallet crédité par pays</p>
               <div className="rounded-lg border border-zinc-800 overflow-hidden text-xs bg-zinc-950">
                 <table className="w-full">
                   <thead>
                     <tr className="bg-zinc-900 border-b border-zinc-800">
                       <th className="text-left px-3 py-2 text-zinc-500 font-medium">Pays du client</th>
-                      <th className="text-left px-3 py-2 text-zinc-500 font-medium">Devise interne</th>
-                      <th className="text-left px-3 py-2 text-zinc-500 font-medium">Wallet crédité en</th>
+                      <th className="text-left px-3 py-2 text-zinc-500 font-medium">Wallet marchand crédité</th>
                     </tr>
                   </thead>
                   <tbody>
                     {[
-                      { pays: "🇨🇲 Cameroun, 🇬🇦 Gabon, 🇨🇬 Congo, 🇨🇫 Centrafrique, 🇹🇩 Tchad", interne: "XAFC / XAFG…", wallet: "XAF" },
-                      { pays: "🇸🇳 Sénégal, 🇧🇯 Bénin, 🇨🇮 Côte d'Ivoire, 🇧🇫 Burkina, 🇲🇱 Mali, 🇹🇬 Togo, 🇳🇪 Niger, 🇬🇼 Guinée-Bissau", interne: "XOFS / XOFB / XOFC…", wallet: "XOF" },
-                      { pays: "🇬🇳 Guinée", interne: "GNF", wallet: "GNF" },
-                      { pays: "🇨🇩 Congo RDC", interne: "CDF", wallet: "CDF" },
-                      { pays: "🇷🇼 Rwanda", interne: "RWF", wallet: "RWF" },
-                      { pays: "🇬🇭 Ghana", interne: "GHS", wallet: "GHS" },
-                      { pays: "🇳🇬 Nigeria", interne: "NGN", wallet: "NGN" },
-                      { pays: "🇰🇪 Kenya", interne: "KES", wallet: "KES" },
-                      { pays: "🇹🇿 Tanzanie", interne: "TZS", wallet: "TZS" },
-                      { pays: "🇺🇬 Ouganda", interne: "UGX", wallet: "UGX" },
-                    ].map(({ pays, interne, wallet }) => (
-                      <tr key={wallet} className="border-t border-zinc-800/60">
-                        <td className="px-3 py-2.5 text-zinc-400 leading-relaxed">{pays}</td>
-                        <td className="px-3 py-2.5 font-mono text-zinc-600">{interne}</td>
+                      { pays: "🇧🇯 Bénin",           wallet: "XOFB" },
+                      { pays: "🇸🇳 Sénégal",         wallet: "XOFS" },
+                      { pays: "🇨🇮 Côte d'Ivoire",   wallet: "XOFC" },
+                      { pays: "🇧🇫 Burkina Faso",    wallet: "XOFF" },
+                      { pays: "🇲🇱 Mali",            wallet: "XOFM" },
+                      { pays: "🇹🇬 Togo",            wallet: "XOFT" },
+                      { pays: "🇳🇪 Niger",           wallet: "XOFN" },
+                      { pays: "🇬🇼 Guinée-Bissau",   wallet: "XOF" },
+                      { pays: "🇨🇲 Cameroun",        wallet: "XAF" },
+                      { pays: "🇬🇦 Gabon",           wallet: "XAFG" },
+                      { pays: "🇨🇬 Congo",           wallet: "XAFC" },
+                      { pays: "🇨🇫 Centrafrique",    wallet: "XAF" },
+                      { pays: "🇹🇩 Tchad",           wallet: "XAF" },
+                      { pays: "🇬🇳 Guinée",          wallet: "GNF" },
+                      { pays: "🇨🇩 Congo RDC",       wallet: "CDF" },
+                      { pays: "🇷🇼 Rwanda",          wallet: "RWF" },
+                      { pays: "🇬🇭 Ghana",           wallet: "GHS" },
+                      { pays: "🇳🇬 Nigeria",         wallet: "NGN" },
+                      { pays: "🇰🇪 Kenya",           wallet: "KES" },
+                      { pays: "🇹🇿 Tanzanie",        wallet: "TZS" },
+                      { pays: "🇺🇬 Ouganda",         wallet: "UGX" },
+                      { pays: "🇬🇲 Gambie",          wallet: "GMD" },
+                    ].map(({ pays, wallet }) => (
+                      <tr key={pays} className="border-t border-zinc-800/60">
+                        <td className="px-3 py-2.5 text-zinc-300">{pays}</td>
                         <td className="px-3 py-2.5 font-mono text-sky-400 font-semibold">{wallet}</td>
                       </tr>
                     ))}
@@ -453,7 +463,7 @@ Content-Type: application/json`} />
               </div>
 
               <Note type="info">
-                Les codes internes comme <IC>XOFS</IC> (Sénégal), <IC>XOFB</IC> (Bénin), <IC>XAFC</IC> (Cameroun) sont automatiquement normalisés. Ton wallet voit toujours <IC>XOF</IC> ou <IC>XAF</IC> — pas besoin de t'en préoccuper dans ton intégration.
+                Chaque pays crédite un wallet séparé dans ta balance. Un client béninois → wallet <IC>XOFB</IC>. Un client sénégalais → wallet <IC>XOFS</IC>. Tu peux ensuite convertir ces wallets en <IC>XOF</IC>, <IC>XAF</IC> ou toute autre devise depuis ton tableau de bord.
               </Note>
             </Section>
 

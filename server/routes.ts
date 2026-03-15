@@ -6549,25 +6549,23 @@ export async function registerRoutes(
 
       if (status === "completed") {
         await storage.updateTransactionStatus(transaction.id, "completed");
-        const user = await storage.getUser(transaction.userId);
-        if (user) {
-          const newBalance = parseFloat(user.balance) + parseFloat(transaction.amount);
-          await storage.updateUserBalance(transaction.userId, newBalance);
-          const isPaymentLink = transaction.type === "payment_link";
-          await storage.createUserNotification({
-            userId: transaction.userId,
-            type: isPaymentLink ? "payment_link_received" : "deposit_confirmed",
-            title: isPaymentLink ? "Paiement reçu" : "Dépôt confirmé",
-            message: isPaymentLink
-              ? `Vous avez reçu un paiement de ${transaction.amount} de ${transaction.payerName || "un client"}.`
-              : `Votre dépôt de ${transaction.amount} a été crédité sur votre compte.`,
-            transactionId: transaction.id,
-          });
-          if (isPaymentLink && transaction.paymentIntentId) {
-            await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "completed");
-          }
+        const isPaymentLink = transaction.type === "payment_link";
+        const txCurrency = transaction.currency || "XAF";
+        // Credit the correct wallet (XOFB for Benin, XOFS for Senegal, XAF for Cameroon, etc.)
+        await creditUserWallet(transaction.userId, parseFloat(transaction.amount), txCurrency);
+        await storage.createUserNotification({
+          userId: transaction.userId,
+          type: isPaymentLink ? "payment_link_received" : "deposit_confirmed",
+          title: isPaymentLink ? "Paiement reçu" : "Dépôt confirmé",
+          message: isPaymentLink
+            ? `Vous avez reçu un paiement de ${transaction.amount} ${txCurrency} de ${transaction.payerName || "un client"}.`
+            : `Votre dépôt de ${transaction.amount} ${txCurrency} a été crédité sur votre compte.`,
+          transactionId: transaction.id,
+        });
+        if (isPaymentLink && transaction.paymentIntentId) {
+          await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "completed");
         }
-        console.log("[Swychr Webhook] Payment SUCCESS for:", transaction.id);
+        console.log(`[Swychr Webhook] ✓ Payment SUCCESS: ${transaction.id} → credited ${transaction.amount} ${txCurrency}`);
       } else if (status === "failed") {
         await storage.updateTransactionStatus(transaction.id, "failed");
         if (transaction.type === "payment_link" && transaction.paymentIntentId) {
