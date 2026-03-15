@@ -7091,6 +7091,18 @@ export async function registerRoutes(
     next();
   }
 
+  /**
+   * Normalize internal DB currency codes to standard ISO codes.
+   * The DB uses suffixed codes (XOFB, XOFF, XAFC…) to distinguish sub-zones internally,
+   * but merchants must use standard codes (XOF, XAF…).
+   */
+  function normalizeApiCurrency(dbCurrency: string): string {
+    const c = (dbCurrency || "").toUpperCase();
+    if (c.startsWith("XOF")) return "XOF";
+    if (c.startsWith("XAF")) return "XAF";
+    return c; // GNF, CDF stay unchanged
+  }
+
   /** GET /v1/countries — list all active countries with their operators */
   app.get("/v1/countries", requireApiKey, async (_req, res) => {
     try {
@@ -7101,7 +7113,7 @@ export async function registerRoutes(
           return {
             code: c.code,
             name: c.name,
-            currency: c.currency,
+            currency: normalizeApiCurrency(c.currency),
             operators: ops
               .filter((o: any) => o.paymentProvider !== "swychr")
               .map((o: any) => o.name),
@@ -7153,11 +7165,13 @@ export async function registerRoutes(
         return res.status(422).json({ error: "unprocessable", message: "Cet opérateur n'est pas disponible via l'API directe." });
       }
 
-      // ── Validate currency matches country ─────────────────────────────────
-      if (currency.toUpperCase() !== country.currency.toUpperCase()) {
+      // ── Validate currency matches country (accept both normalized and internal codes) ────
+      const expectedIso = normalizeApiCurrency(country.currency);
+      const receivedIso = normalizeApiCurrency(currency);
+      if (receivedIso !== expectedIso) {
         return res.status(422).json({
           error: "unprocessable",
-          message: `Devise incorrecte pour ce pays. Attendu : ${country.currency}`,
+          message: `Devise incorrecte pour ce pays. Attendu : ${expectedIso}`,
         });
       }
 
@@ -7329,7 +7343,7 @@ export async function registerRoutes(
         amount: amountNum,
         credited_amount: creditedAmount,
         fee_amount: ashtechFeeAmount,
-        currency: country.currency,
+        currency: normalizeApiCurrency(country.currency),
         operator: operatorName,
         phone,
         country_code: country.code,
@@ -7355,19 +7369,29 @@ export async function registerRoutes(
       if (!tx) return res.status(404).json({ error: "not_found", message: "Transaction introuvable." });
       if (tx.userId !== merchant.id) return res.status(403).json({ error: "forbidden", message: "Accès refusé." });
 
+      // Resolve operator name from operatorId
+      let operatorName: string | null = null;
+      if ((tx as any).operatorId) {
+        try {
+          const op = await storage.getOperator((tx as any).operatorId);
+          if (op) operatorName = op.name;
+        } catch (_) { /* non-blocking */ }
+      }
+
+      const isoStatus = tx.status === "completed" ? "success" : tx.status;
+
       res.json({
         transaction_id: tx.id,
         reference: tx.reference,
-        status: tx.status === "completed" ? "success" : tx.status,
-        amount: parseFloat(tx.totalAmount || tx.amount),
+        status: isoStatus,
+        amount: parseFloat((tx as any).totalAmount || tx.amount),
         credited_amount: parseFloat(tx.amount),
-        fee_amount: parseFloat(tx.feeAmount || "0"),
-        currency: tx.currency,
+        fee_amount: parseFloat((tx as any).feeAmount || "0"),
+        currency: normalizeApiCurrency(tx.currency),
         phone: tx.recipientPhone,
-        operator: (tx as any).operatorId || null,
-        source: (tx as any).source,
+        operator: operatorName,
         created_at: tx.createdAt,
-        confirmed_at: tx.status === "completed" ? tx.createdAt : null,
+        confirmed_at: (tx as any).confirmedAt || null,
       });
     } catch (e: any) {
       console.error("[API v1 /transaction/:id]", e);

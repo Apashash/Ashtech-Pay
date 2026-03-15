@@ -20,24 +20,24 @@ const SECTIONS = [
   { id: "errors",         label: "Codes d'erreur",       icon: ArrowRight },
 ];
 
-// All active countries from the platform (PixPay + AfribaPay)
+// All active countries — currencies are standard ISO codes (XOF/XAF/GNF/CDF)
 const ALL_COUNTRIES = [
-  { code: "BJ", name: "Bénin",             currency: "XOF", operators: ["Moov Money", "MTN Mobile Money"] },
-  { code: "BF", name: "Burkina Faso",      currency: "XOF", operators: ["Moov Money", "Orange Money"] },
-  { code: "CM", name: "Cameroun",          currency: "XAF", operators: ["MTN Mobile Money", "Orange Money"] },
-  { code: "CF", name: "Centrafrique",      currency: "XAF", operators: ["Orange Money"] },
-  { code: "CG", name: "Congo",             currency: "XAF", operators: ["Airtel Money", "MTN Mobile Money"] },
-  { code: "CI", name: "Côte d'Ivoire",     currency: "XOF", operators: ["Moov Money", "MTN Mobile Money", "Orange Money", "Wave"] },
-  { code: "GA", name: "Gabon",             currency: "XAF", operators: ["Airtel Money", "Moov Money"] },
-  { code: "GN", name: "Guinée Conakry",    currency: "GNF", operators: ["MTN Mobile Money", "Orange Money"] },
-  { code: "GQ", name: "Guinée équatoriale",currency: "XAF", operators: ["Orange Money"] },
-  { code: "GW", name: "Guinée-Bissau",     currency: "XOF", operators: ["Orange Money"] },
-  { code: "ML", name: "Mali",              currency: "XOF", operators: ["Moov Money", "Orange Money"] },
-  { code: "NE", name: "Niger",             currency: "XOF", operators: ["Airtel Money"] },
-  { code: "CD", name: "RD Congo",          currency: "CDF", operators: ["Afrimoney", "Airtel Money", "Orange Money", "Vodacom M-Pesa"] },
-  { code: "SN", name: "Sénégal",           currency: "XOF", operators: ["Free Money", "Orange Money", "Wave"] },
-  { code: "TD", name: "Tchad",             currency: "XAF", operators: ["Airtel Money", "Moov Money"] },
-  { code: "TG", name: "Togo",             currency: "XOF", operators: ["Flooz (Moov)", "T-Money"] },
+  { code: "BJ", name: "Bénin",              currency: "XOF", operators: ["Moov Money", "MTN Mobile Money"],                                otpOps: ["Orange Money"] },
+  { code: "BF", name: "Burkina Faso",       currency: "XOF", operators: ["Moov Money", "Orange Money"],                                    otpOps: ["Orange Money"] },
+  { code: "CM", name: "Cameroun",           currency: "XAF", operators: ["MTN Mobile Money", "Orange Money"],                              otpOps: [] },
+  { code: "CF", name: "Centrafrique",       currency: "XAF", operators: ["Orange Money"],                                                   otpOps: ["Orange Money"] },
+  { code: "CG", name: "Congo",              currency: "XAF", operators: ["Airtel Money", "MTN Mobile Money"],                              otpOps: [] },
+  { code: "CI", name: "Côte d'Ivoire",      currency: "XOF", operators: ["Moov Money", "MTN Mobile Money", "Orange Money", "Wave"],        otpOps: ["Orange Money"] },
+  { code: "GA", name: "Gabon",              currency: "XAF", operators: ["Airtel Money", "Moov Money"],                                    otpOps: [] },
+  { code: "GN", name: "Guinée Conakry",     currency: "GNF", operators: ["MTN Mobile Money", "Orange Money"],                             otpOps: ["Orange Money"] },
+  { code: "GQ", name: "Guinée équatoriale", currency: "XAF", operators: ["Orange Money"],                                                   otpOps: ["Orange Money"] },
+  { code: "GW", name: "Guinée-Bissau",      currency: "XOF", operators: ["Orange Money"],                                                   otpOps: ["Orange Money"] },
+  { code: "ML", name: "Mali",               currency: "XOF", operators: ["Moov Money", "Orange Money"],                                    otpOps: ["Orange Money"] },
+  { code: "NE", name: "Niger",              currency: "XOF", operators: ["Airtel Money"],                                                   otpOps: [] },
+  { code: "CD", name: "RD Congo",           currency: "CDF", operators: ["Afrimoney", "Airtel Money", "Orange Money", "Vodacom M-Pesa"],   otpOps: ["Orange Money"] },
+  { code: "SN", name: "Sénégal",            currency: "XOF", operators: ["Free Money", "Orange Money", "Wave"],                            otpOps: ["Orange Money"] },
+  { code: "TD", name: "Tchad",              currency: "XAF", operators: ["Airtel Money", "Moov Money"],                                    otpOps: [] },
+  { code: "TG", name: "Togo",               currency: "XOF", operators: ["Flooz (Moov)", "T-Money"],                                       otpOps: [] },
 ];
 
 function CodeBlock({ code, language = "json" }: { code: string; language?: string }) {
@@ -340,19 +340,37 @@ export default function DeveloperPage() {
                 Pays disponibles ({ALL_COUNTRIES.length})
               </p>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {ALL_COUNTRIES.map(({ code, name, currency, operators }) => (
+                {ALL_COUNTRIES.map(({ code, name, currency, operators, otpOps }) => (
                   <div key={code} className="rounded-lg border border-white/10 bg-white/5 p-3 space-y-2">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-xs font-semibold text-zinc-200">{name}</p>
                       <span className="text-[10px] font-mono text-zinc-500 bg-white/10 px-1.5 py-0.5 rounded shrink-0">{code} · {currency}</span>
                     </div>
                     <div className="flex flex-wrap gap-1">
-                      {operators.map(op => (
-                        <span key={op} className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-zinc-400">{op}</span>
-                      ))}
+                      {operators.map(op => {
+                        const needsOtp = otpOps.includes(op);
+                        const isWave = op === "Wave";
+                        return (
+                          <span
+                            key={op}
+                            className={`text-[10px] px-2 py-0.5 rounded-full ${
+                              isWave ? "bg-purple-500/20 text-purple-300 border border-purple-500/30" :
+                              needsOtp ? "bg-yellow-500/15 text-yellow-300 border border-yellow-500/25" :
+                              "bg-white/10 text-zinc-400"
+                            }`}
+                          >
+                            {op}{needsOtp && !isWave ? " ⚡" : ""}{isWave ? " 🔗" : ""}
+                          </span>
+                        );
+                      })}
                     </div>
                   </div>
                 ))}
+              </div>
+              <div className="flex flex-wrap gap-4 text-xs text-zinc-500 pt-1">
+                <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-white/10 inline-block" /> USSD Push — pas d'OTP</span>
+                <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-yellow-500/30 inline-block" /> ⚡ OTP requis (SMS reçu)</span>
+                <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-purple-500/30 inline-block" /> 🔗 Wave — lien de paiement</span>
               </div>
             </div>
           </section>

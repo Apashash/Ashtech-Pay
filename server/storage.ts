@@ -447,9 +447,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateTransactionStatus(id: string, status: string): Promise<Transaction | undefined> {
+    const updateData: Record<string, any> = { status };
+    if (status === "completed") updateData.confirmedAt = new Date();
     const [transaction] = await db
       .update(transactions)
-      .set({ status })
+      .set(updateData)
       .where(eq(transactions.id, id))
       .returning();
     return transaction || undefined;

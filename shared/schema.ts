@@ -191,6 +191,7 @@ export const transactions = pgTable("transactions", {
   notifyUrl: text("notify_url"),   // Webhook URL for API-originated transactions
   source: text("source"),          // null | "api" — marks API-originated transactions
   createdAt: timestamp("created_at").defaultNow(),
+  confirmedAt: timestamp("confirmed_at"),
 });
 
 export const paymentLinks = pgTable("payment_links", {

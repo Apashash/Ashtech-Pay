@@ -71,7 +71,8 @@ app.use((req, res, next) => {
     await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS api_key TEXT UNIQUE`);
     await db.execute(sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS notify_url TEXT`);
     await db.execute(sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS source TEXT`);
-    console.log("[Migration] Schema columns ready (api_key, notify_url, source)");
+    await db.execute(sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMP`);
+    console.log("[Migration] Schema columns ready (api_key, notify_url, source, confirmed_at)");
   } catch (err: any) {
     if (!err?.message?.includes("already exists")) {
       console.warn("[Migration] warning:", err?.message);
