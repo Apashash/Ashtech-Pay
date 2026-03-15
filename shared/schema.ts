@@ -964,6 +964,34 @@ export const CURRENCY_ZONE: Record<string, SupportedCurrency> = {
   CD: "CDF", GN: "GNF",
 };
 
+// Hosted Payment Page
+export const hostedPageConfigs = pgTable("hosted_page_configs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().unique(),
+  successUrl: text("success_url"),
+  cancelUrl: text("cancel_url"),
+  pkLive: text("pk_live").unique(),
+  skLive: text("sk_live").unique(),
+  hpLive: text("hp_live").unique(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const hostedPaymentSessions = pgTable("hosted_payment_sessions", {
+  id: text("id").primaryKey(),
+  merchantId: varchar("merchant_id").notNull(),
+  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  currency: text("currency").notNull(),
+  description: text("description"),
+  status: text("status").default("pending").notNull(),
+  transactionId: varchar("transaction_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+  expiresAt: timestamp("expires_at"),
+});
+
+export type HostedPageConfig = typeof hostedPageConfigs.$inferSelect;
+export type HostedPaymentSession = typeof hostedPaymentSessions.$inferSelect;
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;

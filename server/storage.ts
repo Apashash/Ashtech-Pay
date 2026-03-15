@@ -55,6 +55,10 @@ import {
   conversionRequests,
   type ConversionRequest,
   type InsertConversionRequest,
+  hostedPageConfigs,
+  type HostedPageConfig,
+  hostedPaymentSessions,
+  type HostedPaymentSession,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, sql, and, or, like, count, inArray } from "drizzle-orm";
@@ -269,6 +273,14 @@ export interface IStorage {
   getAllConversionRequests(): Promise<(ConversionRequest & { userFullName: string; userEmail: string })[]>;
   updateConversionRequest(id: string, data: Partial<ConversionRequest>): Promise<ConversionRequest>;
   countPendingConversions(): Promise<number>;
+
+  // Hosted Page
+  getHostedPageConfig(userId: string): Promise<HostedPageConfig | undefined>;
+  saveHostedPageConfig(userId: string, data: Partial<HostedPageConfig>): Promise<HostedPageConfig>;
+  getUserByHpKey(hpLive: string): Promise<User | undefined>;
+  createHostedPaymentSession(data: Omit<HostedPaymentSession, "createdAt">): Promise<HostedPaymentSession>;
+  getHostedPaymentSession(id: string): Promise<HostedPaymentSession | undefined>;
+  updateHostedPaymentSession(id: string, updates: Partial<HostedPaymentSession>): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1578,6 +1590,50 @@ export class DatabaseStorage implements IStorage {
       .from(conversionRequests)
       .where(eq(conversionRequests.status, "pending"));
     return Number(cnt);
+  }
+
+  // Hosted Page
+  async getHostedPageConfig(userId: string): Promise<HostedPageConfig | undefined> {
+    const [config] = await db.select().from(hostedPageConfigs).where(eq(hostedPageConfigs.userId, userId));
+    return config || undefined;
+  }
+
+  async saveHostedPageConfig(userId: string, data: Partial<HostedPageConfig>): Promise<HostedPageConfig> {
+    const existing = await this.getHostedPageConfig(userId);
+    if (existing) {
+      const [updated] = await db
+        .update(hostedPageConfigs)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(hostedPageConfigs.userId, userId))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(hostedPageConfigs)
+        .values({ userId, ...data })
+        .returning();
+      return created;
+    }
+  }
+
+  async getUserByHpKey(hpLive: string): Promise<User | undefined> {
+    const [config] = await db.select().from(hostedPageConfigs).where(eq(hostedPageConfigs.hpLive, hpLive));
+    if (!config) return undefined;
+    return this.getUser(config.userId);
+  }
+
+  async createHostedPaymentSession(data: Omit<HostedPaymentSession, "createdAt">): Promise<HostedPaymentSession> {
+    const [session] = await db.insert(hostedPaymentSessions).values(data).returning();
+    return session;
+  }
+
+  async getHostedPaymentSession(id: string): Promise<HostedPaymentSession | undefined> {
+    const [session] = await db.select().from(hostedPaymentSessions).where(eq(hostedPaymentSessions.id, id));
+    return session || undefined;
+  }
+
+  async updateHostedPaymentSession(id: string, updates: Partial<HostedPaymentSession>): Promise<void> {
+    await db.update(hostedPaymentSessions).set(updates).where(eq(hostedPaymentSessions.id, id));
   }
 }
 

@@ -15,6 +15,7 @@ Key features include:
 - Mobile Money and crypto payment methods
 - WhatsApp-style chat support system with tickets
 - KYC verification with document uploads and address fields
+- **Hosted Payment Page**: Full API for merchant-hosted checkouts with pk_live/sk_live/hp_live keys, `/hpay/:id` public checkout page, `POST /api/v1/hosted-payment/create` endpoint
 
 ## User Preferences
 

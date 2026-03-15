@@ -29,6 +29,9 @@ import KYCVerifiedPage from "@/pages/dashboard/kyc-verified";
 import SupportPage from "@/pages/dashboard/support";
 import ApiKeysPage from "@/pages/dashboard/api-keys";
 import DeveloperPage from "@/pages/dashboard/developer";
+import HostedPageDashboard from "@/pages/dashboard/hosted-page";
+import HostedPageDocs from "@/pages/dashboard/hosted-page-docs";
+import HPayPage from "@/pages/hpay";
 import SettingsPage from "@/pages/dashboard/settings";
 import PaymentPage from "@/pages/payment";
 import CheckoutPage from "@/pages/checkout";
@@ -98,6 +101,9 @@ function Router() {
       <Route path="/dashboard/support" component={SupportPage} />
       <Route path="/dashboard/api-keys" component={ApiKeysPage} />
       <Route path="/dashboard/developer" component={DeveloperPage} />
+      <Route path="/dashboard/hosted-page/docs" component={HostedPageDocs} />
+      <Route path="/dashboard/hosted-page" component={HostedPageDashboard} />
+      <Route path="/hpay/:id" component={HPayPage} />
       <Route path="/dashboard/settings" component={SettingsPage} />
       <Route path="/pay/:slug" component={PaymentPage} />
       <Route path="/checkout/:transactionId" component={CheckoutPage} />

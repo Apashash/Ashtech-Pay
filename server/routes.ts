@@ -7399,5 +7399,356 @@ export async function registerRoutes(
     }
   });
 
+  // ── Hosted Page ──────────────────────────────────────────────────────────
+
+  function generateHpKey(prefix: string): string {
+    return prefix + crypto.randomBytes(20).toString("hex");
+  }
+
+  // GET /api/hosted-page/config — get merchant config
+  app.get("/api/hosted-page/config", async (req: Request, res: Response) => {
+    if (!req.session?.userId) return res.status(401).json({ error: "Unauthorized" });
+    try {
+      const config = await storage.getHostedPageConfig(req.session.userId);
+      res.json(config || null);
+    } catch (e: any) {
+      res.status(500).json({ error: "server_error" });
+    }
+  });
+
+  // POST /api/hosted-page/config — save URLs + generate keys
+  app.post("/api/hosted-page/config", async (req: Request, res: Response) => {
+    if (!req.session?.userId) return res.status(401).json({ error: "Unauthorized" });
+    try {
+      const { successUrl, cancelUrl, regenerate } = req.body;
+      const existing = await storage.getHostedPageConfig(req.session.userId);
+      const hasKeys = existing?.pkLive && existing?.skLive && existing?.hpLive;
+      const data: any = {};
+      if (successUrl !== undefined) data.successUrl = successUrl;
+      if (cancelUrl !== undefined) data.cancelUrl = cancelUrl;
+      if (!hasKeys || regenerate) {
+        data.pkLive = generateHpKey("pk_live_");
+        data.skLive = generateHpKey("sk_live_");
+        data.hpLive = generateHpKey("hp_live_");
+      }
+      const config = await storage.saveHostedPageConfig(req.session.userId, data);
+      res.json(config);
+    } catch (e: any) {
+      console.error("[hosted-page/config]", e);
+      res.status(500).json({ error: "server_error" });
+    }
+  });
+
+  // POST /api/v1/hosted-payment/create — create a hosted payment session
+  app.post("/api/v1/hosted-payment/create", async (req: Request, res: Response) => {
+    try {
+      const authHeader = req.headers.authorization || "";
+      const hpKey = authHeader.replace("Bearer ", "").trim();
+      if (!hpKey.startsWith("hp_live_")) {
+        return res.status(401).json({ error: "unauthorized", message: "Invalid hp_live key." });
+      }
+      const merchant = await storage.getUserByHpKey(hpKey);
+      if (!merchant) return res.status(401).json({ error: "unauthorized", message: "Key not found." });
+
+      const { amount, currency, description } = req.body;
+      if (!amount || !currency) {
+        return res.status(400).json({ error: "missing_fields", message: "amount and currency are required." });
+      }
+      const numAmount = parseFloat(amount);
+      if (isNaN(numAmount) || numAmount <= 0) {
+        return res.status(400).json({ error: "invalid_amount", message: "amount must be a positive number." });
+      }
+      const validCurrencies = ["XOF", "XAF", "GNF", "CDF"];
+      if (!validCurrencies.includes(currency)) {
+        return res.status(400).json({ error: "invalid_currency", message: `currency must be one of: ${validCurrencies.join(", ")}` });
+      }
+
+      const sessionId = "pay_" + crypto.randomBytes(12).toString("hex");
+      const expiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 min
+
+      const session = await storage.createHostedPaymentSession({
+        id: sessionId,
+        merchantId: merchant.id,
+        amount: String(numAmount),
+        currency,
+        description: description || null,
+        status: "pending",
+        transactionId: null,
+        expiresAt,
+      });
+
+      const host = req.headers.host || "pay.ashtechpay.top";
+      const protocol = req.headers["x-forwarded-proto"] || "https";
+      const paymentLink = `${protocol}://${host}/hpay/${sessionId}`;
+
+      res.json({
+        status: "success",
+        payment_link: paymentLink,
+        payment_id: sessionId,
+        expires_at: expiresAt,
+      });
+    } catch (e: any) {
+      console.error("[v1/hosted-payment/create]", e);
+      res.status(500).json({ error: "server_error" });
+    }
+  });
+
+  // GET /api/v1/hosted-payment/:id — check session status
+  app.get("/api/v1/hosted-payment/:id", async (req: Request, res: Response) => {
+    try {
+      const authHeader = req.headers.authorization || "";
+      const hpKey = authHeader.replace("Bearer ", "").trim();
+      if (!hpKey.startsWith("hp_live_")) {
+        return res.status(401).json({ error: "unauthorized", message: "Invalid hp_live key." });
+      }
+      const merchant = await storage.getUserByHpKey(hpKey);
+      if (!merchant) return res.status(401).json({ error: "unauthorized" });
+
+      const session = await storage.getHostedPaymentSession(req.params.id);
+      if (!session) return res.status(404).json({ error: "not_found" });
+      if (session.merchantId !== merchant.id) return res.status(403).json({ error: "forbidden" });
+
+      res.json({
+        payment_id: session.id,
+        amount: parseFloat(session.amount),
+        currency: session.currency,
+        description: session.description,
+        status: session.status,
+        created_at: session.createdAt,
+        expires_at: session.expiresAt,
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: "server_error" });
+    }
+  });
+
+  // GET /api/public/countries — list active countries with operators (no auth)
+  app.get("/api/public/countries", async (_req: Request, res: Response) => {
+    try {
+      const countries = await storage.getActiveCountries();
+      const result = await Promise.all(
+        countries.map(async (c) => {
+          const ops = await storage.getOperatorsByCountry(c.id);
+          return {
+            id: c.id,
+            name: c.name,
+            code: c.code,
+            currency: normalizeApiCurrency(c.currency),
+            flag: c.flag,
+            operators: ops.map((o) => ({ id: o.id, name: o.name })),
+          };
+        })
+      );
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ error: "server_error" });
+    }
+  });
+
+  // GET /api/public/hosted-session/:id — get session for public checkout
+  app.get("/api/public/hosted-session/:id", async (req: Request, res: Response) => {
+    try {
+      const session = await storage.getHostedPaymentSession(req.params.id);
+      if (!session) return res.status(404).json({ error: "not_found", message: "Session introuvable." });
+      if (session.expiresAt && new Date() > session.expiresAt) {
+        return res.status(410).json({ error: "expired", message: "Ce lien de paiement a expiré." });
+      }
+      const merchant = await storage.getUser(session.merchantId);
+      res.json({
+        payment_id: session.id,
+        amount: parseFloat(session.amount),
+        currency: session.currency,
+        description: session.description,
+        status: session.status,
+        merchant_name: merchant?.fullName || "Marchand",
+        expires_at: session.expiresAt,
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: "server_error" });
+    }
+  });
+
+  // POST /api/public/hosted-session/:id/pay — initiate payment for checkout
+  app.post("/api/public/hosted-session/:id/pay", async (req: Request, res: Response) => {
+    try {
+      const hpSession = await storage.getHostedPaymentSession(req.params.id);
+      if (!hpSession) return res.status(404).json({ error: "not_found" });
+      if (hpSession.status !== "pending") {
+        return res.status(400).json({ error: "already_processed", message: "Ce paiement a déjà été traité." });
+      }
+      if (hpSession.expiresAt && new Date() > hpSession.expiresAt) {
+        return res.status(410).json({ error: "expired", message: "Ce lien de paiement a expiré." });
+      }
+
+      const { phone, countryId, operatorId } = req.body;
+      if (!phone || !countryId || !operatorId) {
+        return res.status(400).json({ error: "missing_fields", message: "phone, countryId et operatorId sont requis." });
+      }
+
+      const country = await storage.getCountry(countryId);
+      if (!country) return res.status(400).json({ error: "invalid_country" });
+      const operator = await storage.getOperator(operatorId);
+      if (!operator) return res.status(400).json({ error: "invalid_operator" });
+
+      const merchant = await storage.getUser(hpSession.merchantId);
+      if (!merchant) return res.status(500).json({ error: "merchant_not_found" });
+
+      // Resolve fee
+      const fee = await storage.resolveFee("deposit", country.id, operator.id);
+      const feePercent = fee?.percentage ? parseFloat(fee.percentage) : 0;
+      const amount = parseFloat(hpSession.amount);
+      const feeAmount = (amount * feePercent) / 100;
+      const totalAmount = amount + feeAmount;
+
+      // Create transaction
+      const txRef = "HP-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8).toUpperCase();
+      const tx = await storage.createTransaction({
+        userId: merchant.id,
+        type: "deposit",
+        amount: String(amount),
+        currency: country.currency,
+        status: "pending",
+        reference: txRef,
+        recipientPhone: phone,
+        recipientName: null,
+        description: hpSession.description || `Paiement ${hpSession.id}`,
+        countryId: country.id,
+        operatorId: operator.id,
+        feeAmount: String(feeAmount),
+        totalAmount: String(totalAmount),
+        notifyUrl: null,
+        source: "hosted_page",
+        confirmedAt: null,
+      } as any);
+
+      // Update hosted session to processing
+      await storage.updateHostedPaymentSession(hpSession.id, {
+        status: "processing",
+        transactionId: tx.id,
+      });
+
+      // Initiate payment (AfribaPay or PixPay)
+      let payResult: any = null;
+      const countryCode = country.code;
+      const afribaPayCodes = ["CM", "CI", "SN", "ML", "GN", "CF", "CG", "GA", "GW", "GQ", "CD", "TD", "NE", "BJ", "RW", "BF", "TG", "GQ"];
+
+      try {
+        if (PIXPAY_SUPPORTED_COUNTRIES.includes(countryCode)) {
+          const pixpayServiceId = getPixPayServiceId(operator.name, countryCode, "cash_in");
+          const pixBaseParams = {
+            serviceId: String(pixpayServiceId || "1"),
+            amount: totalAmount,
+            phone,
+            countryCode,
+            orderId: txRef,
+            customData: txRef,
+          };
+          const flowType = detectPixPayFlowType(operator.name, countryCode);
+          if (flowType === "wave") {
+            const appBase = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
+            const waveRes = await initiatePixPayWave({
+              ...pixBaseParams,
+              redirectUrl: `${appBase}/hpay/${hpSession.id}?status=success`,
+              redirectErrorUrl: `${appBase}/hpay/${hpSession.id}?status=cancelled`,
+            });
+            if (!waveRes.success) throw new Error(waveRes.message || "Erreur PixPay Wave");
+            const extRef = waveRes.transactionId || txRef;
+            await storage.updateTransactionExternalReference(tx.id, extRef);
+            payResult = { flow: "wave", wave_url: waveRes.waveUrl || null, ussd_code: null, extRef };
+          } else if (flowType === "otp") {
+            const ussdCode = PIXPAY_OTP_USSD_CODES[countryCode.toUpperCase()] || "*144#";
+            payResult = { flow: "otp_ussd", ussd_code: ussdCode, extRef: txRef };
+          } else {
+            const ussdRes = await initiatePixPayUssd(pixBaseParams);
+            if (!ussdRes.success) throw new Error(ussdRes.message || "Erreur PixPay USSD");
+            const extRef = ussdRes.transactionId || txRef;
+            await storage.updateTransactionExternalReference(tx.id, extRef);
+            payResult = { flow: "ussd_push", ussd_code: null, extRef };
+          }
+        } else if (afribaPayCodes.includes(countryCode)) {
+          const afribapayOperatorCode = resolveAfribaPayOperatorCode(operator, operator.name);
+          const afribapayCurrency = AFRIBAPAY_ISO_CURRENCY[countryCode.toUpperCase()] || country.currency;
+          let localPhone = phone.replace(/\s/g, "");
+          if (localPhone.startsWith("+")) localPhone = localPhone.slice(1);
+          const afribaResponse = await initiateAfribaPayin({
+            operator: afribapayOperatorCode,
+            country: countryCode,
+            phone_number: localPhone,
+            amount: totalAmount,
+            currency: afribapayCurrency,
+            order_id: txRef,
+            reference_id: txRef,
+          });
+          if (!afribaResponse.success) throw new Error(afribaResponse.message || "Erreur AfribaPay");
+          const extRef = afribaResponse.transaction_id || txRef;
+          await storage.updateTransactionExternalReference(tx.id, extRef);
+          payResult = { flow: "ussd_push", ussd_code: null, extRef };
+        } else {
+          return res.status(400).json({ error: "unsupported_country", message: "Pays non supporté pour le paiement." });
+        }
+      } catch (payErr: any) {
+        await storage.updateHostedPaymentSession(hpSession.id, { status: "failed" });
+        await storage.updateTransactionStatus(tx.id, "failed");
+        return res.status(502).json({ error: "payment_initiation_failed", message: payErr?.message || "Échec de l'initiation du paiement." });
+      }
+
+      // Register in poller
+      const provider = PIXPAY_SUPPORTED_COUNTRIES.includes(countryCode) ? "pixpay" : "afribapay";
+      addPendingPayment({
+        transactionId: tx.id,
+        reference: txRef,
+        externalReference: payResult.extRef || txRef,
+        userId: merchant.id,
+        type: "deposit",
+        amount: String(amount),
+        provider,
+        countryCode,
+      });
+
+      res.json({
+        status: "initiated",
+        transaction_id: tx.id,
+        flow: payResult.flow,
+        ussd_code: payResult.ussd_code || null,
+        wave_url: payResult.wave_url || null,
+        otp_info: payResult.otp_info || null,
+      });
+    } catch (e: any) {
+      console.error("[public/hosted-session/:id/pay]", e);
+      res.status(500).json({ error: "server_error" });
+    }
+  });
+
+  // GET /api/public/hosted-session/:id/status — poll transaction status
+  app.get("/api/public/hosted-session/:id/status", async (req: Request, res: Response) => {
+    try {
+      const session = await storage.getHostedPaymentSession(req.params.id);
+      if (!session) return res.status(404).json({ error: "not_found" });
+
+      let status = session.status;
+
+      // If processing, check underlying transaction
+      if (session.transactionId && session.status === "processing") {
+        const tx = await storage.getTransactionById(session.transactionId);
+        if (tx?.status === "completed") {
+          status = "success";
+          await storage.updateHostedPaymentSession(session.id, { status: "success" });
+        } else if (tx?.status === "failed") {
+          status = "failed";
+          await storage.updateHostedPaymentSession(session.id, { status: "failed" });
+        }
+      }
+
+      const config = await storage.getHostedPageConfig(session.merchantId);
+      res.json({
+        status,
+        success_url: config?.successUrl || null,
+        cancel_url: config?.cancelUrl || null,
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: "server_error" });
+    }
+  });
+
   return httpServer;
 }

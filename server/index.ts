@@ -72,7 +72,33 @@ app.use((req, res, next) => {
     await db.execute(sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS notify_url TEXT`);
     await db.execute(sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS source TEXT`);
     await db.execute(sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMP`);
-    console.log("[Migration] Schema columns ready (api_key, notify_url, source, confirmed_at)");
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS hosted_page_configs (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id VARCHAR NOT NULL UNIQUE,
+        success_url TEXT,
+        cancel_url TEXT,
+        pk_live TEXT UNIQUE,
+        sk_live TEXT UNIQUE,
+        hp_live TEXT UNIQUE,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS hosted_payment_sessions (
+        id TEXT PRIMARY KEY,
+        merchant_id VARCHAR NOT NULL,
+        amount DECIMAL(15,2) NOT NULL,
+        currency TEXT NOT NULL,
+        description TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        transaction_id VARCHAR,
+        created_at TIMESTAMP DEFAULT NOW(),
+        expires_at TIMESTAMP
+      )
+    `);
+    console.log("[Migration] Schema columns ready (api_key, notify_url, source, confirmed_at, hosted_page_configs, hosted_payment_sessions)");
   } catch (err: any) {
     if (!err?.message?.includes("already exists")) {
       console.warn("[Migration] warning:", err?.message);
