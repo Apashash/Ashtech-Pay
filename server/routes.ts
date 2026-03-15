@@ -7181,6 +7181,7 @@ export async function registerRoutes(
 
       // ── Resolve fees from DB ─────────────────────────────────────────────
       const paymentProvider = (operatorRecord as any).paymentProvider as string;
+      console.log(`[API /v1/collect] merchant=${merchant.id} | country=${country.code} | operator=${operatorName} | provider=${paymentProvider} | amount=${amountNum} ${currency}`);
       const resolvedFeeRecord = await storage.resolveFee("deposit", country.id, (operatorRecord as any).id);
       const ashtechMarginPct = (resolvedFeeRecord as any)?.ashtechMargin != null
         ? parseFloat((resolvedFeeRecord as any).ashtechMargin)
