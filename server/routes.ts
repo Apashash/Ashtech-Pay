@@ -28,7 +28,7 @@ import path from "path";
 import fs from "fs";
 import { uploadToSupabase, getSignedImageUrl, downloadFromSupabase } from "./supabase";
 import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, fetchPaymentLinkDetails, ASHTECH_MARGIN } from "./swychr";
-import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, confirmAfribaPayOtp } from "./afribapay";
+import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, getAfribaPayOtpInfo, confirmAfribaPayOtp } from "./afribapay";
 import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, initiatePixPayPayout, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType, getPixPayServiceId } from "./pixpay";
 import { addPendingPayment, removePendingPayment } from "./paymentPoller";
 import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, cleanupEmptyWallets } from "./walletHelper";
@@ -1608,11 +1608,13 @@ export async function registerRoutes(
             // ── Check OTP requirement BEFORE calling payin ────────────────────
             // For OTP operators (Orange CI/SN/BF/GN, LigdiCash BF), AfribaPay rejects
             // /v1/pay/payin with "This operation requires an OTP code." so we must call
-            // /v1/pay/otp WITHOUT otp_code first to trigger the SMS, then confirm with code.
-            const otpRequired = await isAfribaPayOtpRequired(countryCode, afribapayOperatorCode);
+            // /v1/pay/otp WITHOUT otp_code first to initiate, then confirm with code.
+            const otpInfo = await getAfribaPayOtpInfo(countryCode, afribapayOperatorCode);
 
-            if (otpRequired) {
-              // Send OTP SMS via /v1/pay/otp (no otp_code)
+            if (otpInfo.required) {
+              // Initiate OTP via /v1/pay/otp (no otp_code)
+              // For API-type OTP: AfribaPay sends the code by SMS
+              // For USSD-type OTP: user will dial the USSD code on their phone to receive it
               const otpInitResult = await initiateAfribaPayOtp({
                 operator: afribapayOperatorCode,
                 country: countryCode,
@@ -1640,12 +1642,18 @@ export async function registerRoutes(
                 expiresAt: Date.now() + 15 * 60 * 1000, // 15 min
               });
 
+              const otpMessage = otpInfo.type === "ussd"
+                ? `Composez ${otpInfo.ussdCode} sur votre téléphone pour obtenir votre code OTP, puis saisissez-le ci-dessous.`
+                : "Entrez le code OTP que vous allez recevoir par SMS sur votre téléphone.";
+
               return res.json({
                 transaction,
                 gateway: "afribapay",
                 otpRequired: true,
+                otpType: otpInfo.type,
+                ussdCode: otpInfo.ussdCode,
                 status: "otp_required",
-                message: "Entrez le code OTP que vous allez recevoir par SMS sur votre téléphone.",
+                message: otpMessage,
                 feeDetails: {
                   grossAmount: totalAmount,
                   feeAmount: afribaFees.totalFeeAmount,
@@ -3594,10 +3602,12 @@ export async function registerRoutes(
             const linkAppBase = `${req.protocol}://${req.get("host")}`;
 
             // ── Check OTP requirement BEFORE calling payin ────────────────────
-            const otpRequired = await isAfribaPayOtpRequired(paymentCountryCode, afribapayOperatorCode);
+            const otpInfo = await getAfribaPayOtpInfo(paymentCountryCode, afribapayOperatorCode);
 
-            if (otpRequired) {
-              // Send OTP SMS via /v1/pay/otp (no otp_code)
+            if (otpInfo.required) {
+              // Initiate OTP via /v1/pay/otp (no otp_code)
+              // For API-type OTP: AfribaPay sends the code by SMS
+              // For USSD-type OTP: user will dial the USSD code on their phone to receive it
               const otpInitResult = await initiateAfribaPayOtp({
                 operator: afribapayOperatorCode,
                 country: paymentCountryCode,
@@ -3625,11 +3635,17 @@ export async function registerRoutes(
                 expiresAt: Date.now() + 15 * 60 * 1000,
               });
 
+              const otpMessage = otpInfo.type === "ussd"
+                ? `Composez ${otpInfo.ussdCode} sur votre téléphone pour obtenir votre code OTP, puis saisissez-le ci-dessous.`
+                : "Entrez le code OTP que vous allez recevoir par SMS sur votre téléphone.";
+
               return res.json({
-                message: "Entrez le code OTP que vous allez recevoir par SMS sur votre téléphone.",
+                message: otpMessage,
                 reference: intent.reference,
                 gateway: "afribapay",
                 otpRequired: true,
+                otpType: otpInfo.type,
+                ussdCode: otpInfo.ussdCode,
                 redirectUrl: paymentLink.redirectUrl || null,
                 amount: numAmount,
                 feeAmount: afribaFees.totalFeeAmount,

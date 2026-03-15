@@ -71,6 +71,8 @@ export default function PaymentPage() {
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
   const [otpRequired, setOtpRequired] = useState(false);
+  const [otpType, setOtpType] = useState<"api" | "ussd">("api");
+  const [otpUssdCode, setOtpUssdCode] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [waveUrl, setWaveUrl] = useState<string | null>(null);
   const [pixpayOtpCode, setPixpayOtpCode] = useState("");
@@ -260,6 +262,8 @@ export default function PaymentPage() {
         startPaymentPolling(ref);
       } else if (data.otpRequired) {
         setOtpRequired(true);
+        setOtpType(data.otpType || "api");
+        setOtpUssdCode(data.ussdCode || "");
       } else {
         setOtpRequired(false);
         startPaymentPolling(ref);
@@ -431,9 +435,25 @@ export default function PaymentPage() {
                     <Loader2 className="w-8 h-8 text-amber-500" />
                   </div>
                   <h2 className="text-xl font-bold text-foreground">Code OTP requis</h2>
-                  <p className="text-muted-foreground text-sm">
-                    Un code OTP a été envoyé par SMS sur votre téléphone. Entrez-le ci-dessous pour confirmer le paiement.
-                  </p>
+                  {otpType === "ussd" && otpUssdCode ? (
+                    <div className="space-y-2">
+                      <p className="text-muted-foreground text-sm">
+                        Pour obtenir votre code OTP, composez le code USSD suivant sur votre téléphone :
+                      </p>
+                      <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded-xl px-5 py-4 inline-block mx-auto">
+                        <p className="text-2xl font-mono font-bold tracking-widest text-amber-700 dark:text-amber-300" data-testid="text-ussd-code">
+                          {otpUssdCode}
+                        </p>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        Après avoir composé ce code, entrez ci-dessous le code OTP reçu.
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground text-sm">
+                      Un code OTP a été envoyé par SMS sur votre téléphone. Entrez-le ci-dessous pour confirmer le paiement.
+                    </p>
+                  )}
                   <div className="space-y-3 w-full max-w-xs mx-auto">
                     <input
                       type="text"

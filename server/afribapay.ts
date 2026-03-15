@@ -349,17 +349,36 @@ async function getCachedCountries(): Promise<Record<string, AfribaPayCountry>> {
 }
 
 export async function isAfribaPayOtpRequired(country: string, operatorCode: string): Promise<boolean> {
+  const info = await getAfribaPayOtpInfo(country, operatorCode);
+  return info.required;
+}
+
+export async function getAfribaPayOtpInfo(country: string, operatorCode: string): Promise<{
+  required: boolean;
+  type: "api" | "ussd" | "none";
+  ussdCode: string;
+}> {
   try {
     const countries = await getCachedCountries();
     const countryData = countries[country.toUpperCase()];
-    if (!countryData) return false;
+    if (!countryData) return { required: false, type: "none", ussdCode: "" };
     for (const [, curData] of Object.entries(countryData.currencies)) {
       const op = curData.operators.find(o => o.operator_code === operatorCode.toLowerCase());
-      if (op) return op.otp_required === 1;
+      if (op) {
+        if (op.otp_required !== 1) return { required: false, type: "none", ussdCode: "" };
+        // Detect type: if ussd_code references AfribaPay endpoint → API OTP (AfribaPay sends SMS)
+        // Otherwise → USSD OTP (user dials the code themselves to get OTP)
+        const isApiOtp = !op.ussd_code || op.ussd_code.toLowerCase().includes("endpoint") || op.ussd_code.toLowerCase().includes("/pay/otp");
+        return {
+          required: true,
+          type: isApiOtp ? "api" : "ussd",
+          ussdCode: isApiOtp ? "" : op.ussd_code,
+        };
+      }
     }
-    return false;
+    return { required: false, type: "none", ussdCode: "" };
   } catch {
-    return false;
+    return { required: false, type: "none", ussdCode: "" };
   }
 }
 
