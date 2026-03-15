@@ -321,37 +321,50 @@ Content-Type: application/json`} />
                 <table className="w-full">
                   <thead>
                     <tr className="bg-zinc-900 border-b border-zinc-800">
-                      <th className="text-left px-3 py-2 text-zinc-500 font-medium">Code</th>
+                      <th className="text-left px-3 py-2 text-zinc-500 font-medium">Code ISO</th>
                       <th className="text-left px-3 py-2 text-zinc-500 font-medium">Pays</th>
-                      <th className="text-left px-3 py-2 text-zinc-500 font-medium">Devise</th>
+                      <th className="text-left px-3 py-2 text-zinc-500 font-medium">Devise wallet</th>
                       <th className="text-left px-3 py-2 text-zinc-500 font-medium">Opérateurs</th>
                     </tr>
                   </thead>
                   <tbody>
                     {[
-                      { code: "CM", pays: "Cameroun", flag: "🇨🇲", devise: "XAF", ops: "MTN, Orange" },
-                      { code: "SN", pays: "Sénégal", flag: "🇸🇳", devise: "XOF", ops: "Orange, Wave, Free" },
-                      { code: "CI", pays: "Côte d'Ivoire", flag: "🇨🇮", devise: "XOF", ops: "Orange, MTN, Wave" },
-                      { code: "GN", pays: "Guinée", flag: "🇬🇳", devise: "GNF", ops: "Orange, MTN" },
-                      { code: "CD", pays: "Congo RDC", flag: "🇨🇩", devise: "CDF", ops: "Airtel, Orange" },
-                      { code: "BF", pays: "Burkina Faso", flag: "🇧🇫", devise: "XOF", ops: "Orange, Moov" },
-                      { code: "ML", pays: "Mali", flag: "🇲🇱", devise: "XOF", ops: "Orange, Moov" },
-                      { code: "TG", pays: "Togo", flag: "🇹🇬", devise: "XOF", ops: "Flooz, Tmoney" },
-                      { code: "BJ", pays: "Bénin", flag: "🇧🇯", devise: "XOF", ops: "MTN, Moov" },
-                    ].map(({ code, pays, flag, devise, ops }) => (
+                      { code: "CM", flag: "🇨🇲", pays: "Cameroun",        devise: "XAF", ops: "MTN, Orange" },
+                      { code: "SN", flag: "🇸🇳", pays: "Sénégal",         devise: "XOF", ops: "Orange, Wave, Free" },
+                      { code: "CI", flag: "🇨🇮", pays: "Côte d'Ivoire",   devise: "XOF", ops: "Orange, MTN, Wave" },
+                      { code: "BJ", flag: "🇧🇯", pays: "Bénin",           devise: "XOF", ops: "MTN, Moov" },
+                      { code: "BF", flag: "🇧🇫", pays: "Burkina Faso",    devise: "XOF", ops: "Orange, Moov, Coris" },
+                      { code: "ML", flag: "🇲🇱", pays: "Mali",            devise: "XOF", ops: "Orange, Moov" },
+                      { code: "TG", flag: "🇹🇬", pays: "Togo",            devise: "XOF", ops: "Flooz, Tmoney" },
+                      { code: "NE", flag: "🇳🇪", pays: "Niger",           devise: "XOF", ops: "Orange, Airtel" },
+                      { code: "GW", flag: "🇬🇼", pays: "Guinée-Bissau",   devise: "XOF", ops: "MTN" },
+                      { code: "GN", flag: "🇬🇳", pays: "Guinée",          devise: "GNF", ops: "Orange, MTN" },
+                      { code: "CD", flag: "🇨🇩", pays: "Congo RDC",       devise: "CDF", ops: "Airtel, Orange" },
+                      { code: "GA", flag: "🇬🇦", pays: "Gabon",           devise: "XAF", ops: "Airtel, Moov" },
+                      { code: "CG", flag: "🇨🇬", pays: "Congo",           devise: "XAF", ops: "Airtel, MTN" },
+                      { code: "CF", flag: "🇨🇫", pays: "Centrafrique",    devise: "XAF", ops: "Orange" },
+                      { code: "TD", flag: "🇹🇩", pays: "Tchad",           devise: "XAF", ops: "Airtel, Moov" },
+                      { code: "RW", flag: "🇷🇼", pays: "Rwanda",          devise: "RWF", ops: "MTN, Airtel" },
+                      { code: "GH", flag: "🇬🇭", pays: "Ghana",           devise: "GHS", ops: "MTN, Vodafone, Airtel" },
+                      { code: "NG", flag: "🇳🇬", pays: "Nigeria",         devise: "NGN", ops: "MTN, Airtel" },
+                      { code: "KE", flag: "🇰🇪", pays: "Kenya",           devise: "KES", ops: "M-Pesa" },
+                      { code: "TZ", flag: "🇹🇿", pays: "Tanzanie",        devise: "TZS", ops: "Vodacom, Airtel, Tigo" },
+                      { code: "UG", flag: "🇺🇬", pays: "Ouganda",         devise: "UGX", ops: "MTN, Airtel" },
+                      { code: "GM", flag: "🇬🇲", pays: "Gambie",          devise: "GMD", ops: "Afrimoney, QMoney" },
+                    ].map(({ code, flag, pays, devise, ops }) => (
                       <tr key={code} className="border-t border-zinc-800/60">
                         <td className="px-3 py-2 font-mono text-sky-400">{code}</td>
-                        <td className="px-3 py-2 text-zinc-400">{flag} {pays}</td>
-                        <td className="px-3 py-2 font-mono text-zinc-500">{devise}</td>
+                        <td className="px-3 py-2 text-zinc-300">{flag} {pays}</td>
+                        <td className="px-3 py-2 font-mono text-zinc-400">{devise}</td>
                         <td className="px-3 py-2 text-zinc-500">{ops}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              <p className="text-xs text-zinc-600">
-                Appelle <IC>GET /api/public/countries</IC> pour la liste complète en temps réel.
-              </p>
+              <Note type="info">
+                Si <IC>allowed_countries</IC> est absent ou vide, <strong className="text-sky-300">tous les pays du tableau ci-dessus</strong> sont disponibles sur ta page de paiement. Appelle <IC>GET /api/public/countries</IC> pour la liste en temps réel.
+              </Note>
             </Section>
 
             {/* ── 6. Vérifier le statut ── */}
@@ -388,15 +401,15 @@ Content-Type: application/json`} />
             {/* ── 7. Créditement wallet ── */}
             <Section id="credit" title="Créditement automatique du wallet">
               <p className="text-sm text-zinc-400">
-                Dès que l'opérateur Mobile Money confirme le paiement, Ashtech Pay crédite automatiquement ton wallet marchand.
-                Aucune action requise de ta part.
+                Dès que l'opérateur Mobile Money confirme le paiement, Ashtech Pay crédite automatiquement ton wallet marchand dans la devise du pays du client. Aucune action requise de ta part.
               </p>
+
               <div className="rounded-lg border border-zinc-800 bg-zinc-950 divide-y divide-zinc-800/60 text-xs">
                 {[
                   "Le client confirme le paiement sur son téléphone (USSD / OTP / Wave)",
                   "L'opérateur Mobile Money notifie Ashtech Pay",
                   "La transaction est enregistrée comme completed",
-                  "Ton wallet marchand est crédité du montant (frais déduits)",
+                  "Ton wallet marchand est crédité dans la devise du pays (frais déduits)",
                   "Le statut passe à success — tu peux livrer",
                 ].map((step, i) => (
                   <div key={i} className="flex items-start gap-3 px-4 py-3">
@@ -405,6 +418,43 @@ Content-Type: application/json`} />
                   </div>
                 ))}
               </div>
+
+              <p className="text-xs text-zinc-500 font-medium uppercase tracking-wide">Devise du wallet selon le pays du client</p>
+              <div className="rounded-lg border border-zinc-800 overflow-hidden text-xs bg-zinc-950">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-zinc-900 border-b border-zinc-800">
+                      <th className="text-left px-3 py-2 text-zinc-500 font-medium">Pays du client</th>
+                      <th className="text-left px-3 py-2 text-zinc-500 font-medium">Devise interne</th>
+                      <th className="text-left px-3 py-2 text-zinc-500 font-medium">Wallet crédité en</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      { pays: "🇨🇲 Cameroun, 🇬🇦 Gabon, 🇨🇬 Congo, 🇨🇫 Centrafrique, 🇹🇩 Tchad", interne: "XAFC / XAFG…", wallet: "XAF" },
+                      { pays: "🇸🇳 Sénégal, 🇧🇯 Bénin, 🇨🇮 Côte d'Ivoire, 🇧🇫 Burkina, 🇲🇱 Mali, 🇹🇬 Togo, 🇳🇪 Niger, 🇬🇼 Guinée-Bissau", interne: "XOFS / XOFB / XOFC…", wallet: "XOF" },
+                      { pays: "🇬🇳 Guinée", interne: "GNF", wallet: "GNF" },
+                      { pays: "🇨🇩 Congo RDC", interne: "CDF", wallet: "CDF" },
+                      { pays: "🇷🇼 Rwanda", interne: "RWF", wallet: "RWF" },
+                      { pays: "🇬🇭 Ghana", interne: "GHS", wallet: "GHS" },
+                      { pays: "🇳🇬 Nigeria", interne: "NGN", wallet: "NGN" },
+                      { pays: "🇰🇪 Kenya", interne: "KES", wallet: "KES" },
+                      { pays: "🇹🇿 Tanzanie", interne: "TZS", wallet: "TZS" },
+                      { pays: "🇺🇬 Ouganda", interne: "UGX", wallet: "UGX" },
+                    ].map(({ pays, interne, wallet }) => (
+                      <tr key={wallet} className="border-t border-zinc-800/60">
+                        <td className="px-3 py-2.5 text-zinc-400 leading-relaxed">{pays}</td>
+                        <td className="px-3 py-2.5 font-mono text-zinc-600">{interne}</td>
+                        <td className="px-3 py-2.5 font-mono text-sky-400 font-semibold">{wallet}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <Note type="info">
+                Les codes internes comme <IC>XOFS</IC> (Sénégal), <IC>XOFB</IC> (Bénin), <IC>XAFC</IC> (Cameroun) sont automatiquement normalisés. Ton wallet voit toujours <IC>XOF</IC> ou <IC>XAF</IC> — pas besoin de t'en préoccuper dans ton intégration.
+              </Note>
             </Section>
 
             {/* ── 8. Exemples ── */}
