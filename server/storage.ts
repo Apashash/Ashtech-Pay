@@ -110,6 +110,8 @@ export interface IStorage {
   banUser(id: string, reason: string): Promise<User | undefined>;
   unbanUser(id: string): Promise<User | undefined>;
   deleteUser(id: string): Promise<void>;
+  getUserByApiKey(apiKey: string): Promise<User | undefined>;
+  setUserApiKey(userId: string, apiKey: string): Promise<User | undefined>;
   
   // Admin: Transaction management
   getAllTransactions(): Promise<Transaction[]>;
@@ -635,6 +637,16 @@ export class DatabaseStorage implements IStorage {
     await db.delete(conversionRequests).where(eq(conversionRequests.userId, id));
     await db.delete(wallets).where(eq(wallets.userId, id));
     await db.delete(users).where(eq(users.id, id));
+  }
+
+  async getUserByApiKey(apiKey: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.apiKey, apiKey));
+    return user || undefined;
+  }
+
+  async setUserApiKey(userId: string, apiKey: string): Promise<User | undefined> {
+    const [user] = await db.update(users).set({ apiKey }).where(eq(users.id, userId)).returning();
+    return user || undefined;
   }
 
   async getPendingDepositTransactions(): Promise<Transaction[]> {

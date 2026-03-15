@@ -843,6 +843,41 @@ export async function registerRoutes(
     }
   });
 
+  // ─── API Key routes ─────────────────────────────────────────────────────────
+  app.get("/api/user/api-key", requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId!;
+      let user = await storage.getUser(userId);
+      if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
+
+      // Auto-generate key on first access
+      if (!user.apiKey) {
+        const { randomBytes } = await import("crypto");
+        const key = `ak_${randomBytes(24).toString("hex")}`;
+        user = (await storage.setUserApiKey(userId, key)) || user;
+      }
+
+      res.json({ apiKey: user.apiKey });
+    } catch (error) {
+      console.error("Get API key error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  app.post("/api/user/api-key/regenerate", requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId!;
+      const { randomBytes } = await import("crypto");
+      const key = `ak_${randomBytes(24).toString("hex")}`;
+      const user = await storage.setUserApiKey(userId, key);
+      if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
+      res.json({ apiKey: user.apiKey });
+    } catch (error) {
+      console.error("Regenerate API key error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   // Transaction routes
   app.get("/api/transactions", requireAuth, async (req, res) => {
     try {
