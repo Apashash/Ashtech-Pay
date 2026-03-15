@@ -6,6 +6,8 @@ import { startPaymentPoller, recoverPendingDeposits } from "./paymentPoller";
 import { startPayoutPoller, recoverPendingPayouts } from "./payoutPoller";
 import { seedWithdrawalTransferFees } from "./seedWithdrawalTransferFees";
 import { startCleanupScheduler } from "./cleanup";
+import { db } from "./db";
+import { sql } from "drizzle-orm";
 
 const app = express();
 const httpServer = createServer(app);
@@ -64,6 +66,17 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // ── Startup migration: ensure new columns exist in production DB ──────────
+  try {
+    await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS api_key TEXT UNIQUE`);
+    console.log("[Migration] users.api_key column ready");
+  } catch (err: any) {
+    // Column already exists or minor error — safe to continue
+    if (!err?.message?.includes("already exists")) {
+      console.warn("[Migration] users.api_key warning:", err?.message);
+    }
+  }
+
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
