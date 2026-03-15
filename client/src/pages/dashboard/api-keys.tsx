@@ -43,10 +43,10 @@ function CopyableKey({ label, value, icon }: { label: string; value: string; ico
   return (
     <div className="space-y-1.5">
       <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{label}</Label>
-      <div className="flex items-center gap-2">
-        <div className="flex-1 flex items-center gap-2 bg-muted/50 rounded-lg border px-3 py-2">
+      <div className="flex items-center gap-2 min-w-0">
+        <div className="flex-1 min-w-0 flex items-center gap-2 bg-muted/50 rounded-lg border px-3 py-2">
           {icon && <span className="text-muted-foreground shrink-0">{icon}</span>}
-          <code className="text-sm font-mono flex-1 truncate text-foreground">
+          <code className="text-sm font-mono flex-1 min-w-0 truncate text-foreground">
             {visible ? value : masked}
           </code>
         </div>
@@ -144,7 +144,7 @@ export default function ApiKeysPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6 max-w-3xl">
+      <div className="space-y-6 w-full max-w-3xl min-w-0">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Clé API</h1>
           <p className="text-muted-foreground text-sm mt-1">Intégrez Ashtech Pay directement dans votre application</p>
@@ -161,12 +161,12 @@ export default function ApiKeysPage() {
                 : "border-border hover:border-primary/40 hover:bg-muted/40"
             }`}
           >
-            <div className="flex items-start gap-3">
+            <div className="flex items-start gap-3 min-w-0">
               <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${mode === "hosted" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
                 <Globe className="w-5 h-5" />
               </div>
-              <div>
-                <div className="flex items-center gap-2">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-semibold text-foreground text-sm">Hosted Page</span>
                   {mode === "hosted" && <Badge className="text-[10px] px-1.5 py-0">Actif</Badge>}
                 </div>
@@ -184,12 +184,12 @@ export default function ApiKeysPage() {
                 : "border-border hover:border-primary/40 hover:bg-muted/40"
             }`}
           >
-            <div className="flex items-start gap-3">
+            <div className="flex items-start gap-3 min-w-0">
               <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${mode === "sdk" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
                 <Code2 className="w-5 h-5" />
               </div>
-              <div>
-                <div className="flex items-center gap-2">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-semibold text-foreground text-sm">SDK Direct API</span>
                   {mode === "sdk" && <Badge className="text-[10px] px-1.5 py-0">Actif</Badge>}
                 </div>
@@ -204,7 +204,7 @@ export default function ApiKeysPage() {
           <div className="space-y-4">
 
             {/* How it works */}
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {[
                 { icon: Key, label: "1. Configurez", desc: "Entrez vos URLs de redirection et générez vos clés." },
                 { icon: Zap, label: "2. Créez un lien", desc: "Appelez l'API pour créer un lien de paiement unique." },
@@ -374,9 +374,9 @@ export default function ApiKeysPage() {
                 </p>
 
                 <div className="rounded-lg border bg-muted/30 p-4">
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center justify-between gap-3 min-w-0">
                     <code
-                      className="text-sm font-mono text-foreground flex-1 break-all select-all"
+                      className="text-sm font-mono text-foreground flex-1 min-w-0 break-all select-all"
                       data-testid="text-api-key"
                     >
                       {sdkLoading ? "Chargement…" : showKey ? apiKey : maskedKey}
@@ -435,7 +435,7 @@ export default function ApiKeysPage() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="overflow-hidden">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm flex items-center gap-2">
                   <Terminal className="w-4 h-4 text-primary" />
@@ -443,7 +443,7 @@ export default function ApiKeysPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <pre className="text-xs bg-muted/60 rounded-lg p-4 overflow-x-auto text-foreground/90 leading-relaxed">
+                <pre className="text-xs bg-muted/60 rounded-lg p-4 overflow-x-auto max-w-full text-foreground/90 leading-relaxed">
 {`fetch("https://api.ashtechpay.top/v1/collect", {
   method: "POST",
   headers: {
