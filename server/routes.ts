@@ -7827,20 +7827,20 @@ export async function registerRoutes(
       const allUsers = await storage.getAllUsers();
       const allTransactions = await storage.getAllTransactions();
 
-      const apiTxns = allTransactions.filter((t: any) =>
-        t.type === "payment_link" || t.type === "deposit"
-      );
-
       const result = allUsers
         .filter((u: any) => u.role !== "admin" && u.role !== "support")
         .map((u: any) => {
-          const userTxns = apiTxns.filter((t: any) => t.userId === u.id && t.status === "completed");
-          const sdkTxns = userTxns.filter((t: any) => t.source === "sdk" || (t.type === "deposit" && t.reference?.startsWith("sdk-")));
+          const userTxns = allTransactions.filter((t: any) => t.userId === u.id && t.status === "completed");
+
+          // HP: transaction type payment_link with a paymentLinkId (created via Hosted Page API)
           const hpTxns = userTxns.filter((t: any) => t.type === "payment_link" && t.paymentLinkId);
+
+          // SDK: transactions where source === "api" (set by /v1/collect endpoint)
+          const sdkTxns = userTxns.filter((t: any) => t.source === "api" && t.type !== "payment_link");
 
           const totalSdk = sdkTxns.reduce((s: number, t: any) => s + parseFloat(t.amount || "0"), 0);
           const totalHp = hpTxns.reduce((s: number, t: any) => s + parseFloat(t.amount || "0"), 0);
-          const totalAll = userTxns.reduce((s: number, t: any) => s + parseFloat(t.amount || "0"), 0);
+          const totalAll = totalSdk + totalHp;
 
           return {
             id: u.id,
@@ -7852,7 +7852,7 @@ export async function registerRoutes(
             hasApiKey: !!u.apiKey,
             createdAt: u.createdAt,
             stats: {
-              totalTransactions: userTxns.length,
+              totalTransactions: sdkTxns.length + hpTxns.length,
               sdkTransactions: sdkTxns.length,
               hpTransactions: hpTxns.length,
               totalCollected: totalAll,

@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import type { Transaction, User, SupportedCurrency } from "@shared/schema";
-import { History, TrendingUp, TrendingDown, Clock, CheckCircle, XCircle, Loader2, Search, Link2, Copy, ArrowRight, ArrowLeftRight, User as UserIcon, Mail, Phone, MapPin, CreditCard, FileText, ChevronLeft, ChevronRight, Smartphone } from "lucide-react";
+import { History, TrendingUp, TrendingDown, Clock, CheckCircle, XCircle, Loader2, Search, Link2, Copy, ArrowRight, ArrowLeftRight, User as UserIcon, Mail, Phone, MapPin, CreditCard, FileText, ChevronLeft, ChevronRight, Smartphone, Code2, Globe } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { useState, useEffect, useMemo } from "react";
@@ -92,6 +92,25 @@ export default function TransactionsPage() {
     bank_transfer: "Virement bancaire",
     card: "Carte bancaire",
     paypal: "PayPal",
+  };
+
+  const getApiBadge = (tx: Transaction) => {
+    const t = tx as any;
+    if (t.type === "payment_link" && t.paymentLinkId) {
+      return (
+        <Badge className="text-[10px] px-1.5 py-0 gap-1 bg-amber-500/10 text-amber-600 border-amber-500/30 font-medium">
+          <Globe className="w-2.5 h-2.5" />Hosted Page
+        </Badge>
+      );
+    }
+    if (t.source === "api") {
+      return (
+        <Badge className="text-[10px] px-1.5 py-0 gap-1 bg-sky-500/10 text-sky-600 border-sky-500/30 font-medium">
+          <Code2 className="w-2.5 h-2.5" />SDK API
+        </Badge>
+      );
+    }
+    return null;
   };
 
   const getStatusBadge = (status: string) => {
@@ -237,6 +256,7 @@ export default function TransactionsPage() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
                               <p className="font-medium text-foreground text-sm sm:text-base">{typeLabels[tx.type] || tx.type}</p>
+                              {getApiBadge(tx)}
                               <div className="hidden sm:block">{getStatusBadge(tx.status)}</div>
                             </div>
                             {tx.reference && (
@@ -330,7 +350,10 @@ export default function TransactionsPage() {
           {tx && (
             <div className="space-y-4">
               <div className="text-center p-4 bg-muted/50 rounded-lg">
-                <p className="text-sm text-muted-foreground mb-1">{typeLabels[tx.type] || tx.type}</p>
+                <div className="flex items-center justify-center gap-2 mb-1 flex-wrap">
+                  <p className="text-sm text-muted-foreground">{typeLabels[tx.type] || tx.type}</p>
+                  {getApiBadge(tx)}
+                </div>
                 <p className={`text-3xl font-bold ${
                   tx.type === "conversion"
                     ? 'text-blue-500'

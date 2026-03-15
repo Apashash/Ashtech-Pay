@@ -1,29 +1,19 @@
-import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { AdminLayout } from "./layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table";
-import { Switch } from "@/components/ui/switch";
-import { Search, Code2, Globe, TrendingUp, Users, CheckCircle, XCircle, AlertCircle } from "lucide-react";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
-import { format } from "date-fns";
-import { fr } from "date-fns/locale";
+  Users, TrendingUp, Globe, Code2, CheckCircle, AlertCircle,
+  ChevronRight, Zap, Lock
+} from "lucide-react";
+import { Link } from "wouter";
 
 interface ApiUser {
   id: string;
-  fullName: string;
-  email: string;
-  username: string;
   isVerified: boolean;
   apiEnabled: boolean;
   hasApiKey: boolean;
-  createdAt: string | null;
   stats: {
     totalTransactions: number;
     sdkTransactions: number;
@@ -34,23 +24,36 @@ interface ApiUser {
   };
 }
 
-function StatCard({ icon: Icon, label, value, sub }: {
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  sub,
+  color = "primary",
+}: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: string | number;
   sub?: string;
+  color?: "primary" | "green" | "sky" | "amber";
 }) {
+  const colorMap: Record<string, string> = {
+    primary: "bg-primary/10 text-primary",
+    green: "bg-green-500/10 text-green-600",
+    sky: "bg-sky-500/10 text-sky-600",
+    amber: "bg-amber-500/10 text-amber-600",
+  };
   return (
     <Card>
-      <CardContent className="pt-6">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-primary/10 rounded-lg">
-            <Icon className="h-5 w-5 text-primary" />
+      <CardContent className="pt-6 pb-5">
+        <div className="flex items-center gap-4">
+          <div className={`p-3 rounded-xl ${colorMap[color]}`}>
+            <Icon className="h-5 w-5" />
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="text-sm text-muted-foreground">{label}</p>
-            <p className="text-xl font-bold text-foreground">{value}</p>
-            {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
+            <p className="text-2xl font-bold text-foreground leading-tight">{value}</p>
+            {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
           </div>
         </div>
       </CardContent>
@@ -59,182 +62,122 @@ function StatCard({ icon: Icon, label, value, sub }: {
 }
 
 export default function AdminApiManagement() {
-  const [search, setSearch] = useState("");
-  const { toast } = useToast();
-
   const { data: users = [], isLoading } = useQuery<ApiUser[]>({
     queryKey: ["/api/admin/api-management"],
   });
 
-  const toggleMutation = useMutation({
-    mutationFn: async ({ userId, enabled }: { userId: string; enabled: boolean }) => {
-      await apiRequest("POST", `/api/admin/api-management/${userId}/toggle`, { enabled });
-    },
-    onSuccess: (_, { enabled, userId }) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/api-management"] });
-      const u = users.find(u => u.id === userId);
-      toast({
-        title: enabled ? "API activée" : "API désactivée",
-        description: `L'accès API de ${u?.fullName || "l'utilisateur"} a été ${enabled ? "activé" : "désactivé"}.`,
-      });
-    },
-    onError: () => {
-      toast({ title: "Erreur", description: "La mise à jour a échoué.", variant: "destructive" });
-    },
-  });
-
-  const filtered = users.filter(u =>
-    u.fullName.toLowerCase().includes(search.toLowerCase()) ||
-    u.email.toLowerCase().includes(search.toLowerCase()) ||
-    u.username.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const totalCollected = users.reduce((s, u) => s + u.stats.totalCollected, 0);
-  const totalHp = users.reduce((s, u) => s + u.stats.hpCollected, 0);
+  const totalMerchants = users.length;
   const activeApis = users.filter(u => u.apiEnabled).length;
-  const verifiedUsers = users.filter(u => u.isVerified).length;
+  const verifiedCount = users.filter(u => u.isVerified).length;
+  const withKeys = users.filter(u => u.hasApiKey).length;
+
+  const totalHp = users.reduce((s, u) => s + u.stats.hpCollected, 0);
+  const totalSdk = users.reduce((s, u) => s + u.stats.sdkCollected, 0);
+  const totalApi = totalHp + totalSdk;
+
+  const totalHpTxns = users.reduce((s, u) => s + u.stats.hpTransactions, 0);
+  const totalSdkTxns = users.reduce((s, u) => s + u.stats.sdkTransactions, 0);
 
   return (
     <AdminLayout>
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Gestion des API</h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Activez ou désactivez l'accès API SDK et Hosted Page par marchand. Consultez les volumes collectés.
-          </p>
+      <div className="space-y-8">
+
+        {/* Header */}
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Gestion des API</h1>
+            <p className="text-muted-foreground text-sm mt-1">
+              Vue d'ensemble de l'accès API marchand. Activez ou désactivez les accès depuis la page Marchands.
+            </p>
+          </div>
+          <Link href="/admin/merchants">
+            <Button className="gap-2 shrink-0" data-testid="button-go-merchants">
+              <Users className="h-4 w-4" />
+              Marchands
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </Link>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard icon={Users} label="Marchands total" value={users.length} />
-          <StatCard icon={CheckCircle} label="API activées" value={activeApis} sub={`sur ${verifiedUsers} vérifiés`} />
-          <StatCard icon={TrendingUp} label="Volume total collecté" value={`${totalCollected.toLocaleString("fr-FR", { maximumFractionDigits: 0 })} XAF`} />
-          <StatCard icon={Globe} label="Via Hosted Page" value={`${totalHp.toLocaleString("fr-FR", { maximumFractionDigits: 0 })} XAF`} />
-        </div>
+        {/* Stats grid */}
+        {isLoading ? (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => (
+              <Card key={i}><CardContent className="pt-6 pb-5"><div className="h-16 animate-pulse bg-muted rounded-lg" /></CardContent></Card>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard icon={Users} label="Marchands total" value={totalMerchants} color="primary" />
+            <StatCard icon={CheckCircle} label="API activées" value={activeApis} sub={`${verifiedCount} vérifiés · ${withKeys} clés générées`} color="green" />
+            <StatCard icon={Code2} label="Txn SDK" value={totalSdkTxns} sub={`${totalSdk.toLocaleString("fr-FR", { maximumFractionDigits: 0 })} XAF collectés`} color="sky" />
+            <StatCard icon={Globe} label="Txn Hosted Page" value={totalHpTxns} sub={`${totalHp.toLocaleString("fr-FR", { maximumFractionDigits: 0 })} XAF collectés`} color="amber" />
+          </div>
+        )}
 
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-3">
-              <CardTitle className="text-base">Marchands</CardTitle>
-              <div className="relative flex-1 max-w-xs ml-auto">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Rechercher un marchand…"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-9 h-9 text-sm"
-                  data-testid="input-search-user"
-                />
+        {/* Volume total */}
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="pt-6 pb-5">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div className="flex items-center gap-4">
+                <div className="p-3 rounded-xl bg-primary/10">
+                  <TrendingUp className="h-6 w-6 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Volume API total collecté</p>
+                  <p className="text-3xl font-bold text-foreground">
+                    {isLoading ? "…" : totalApi.toLocaleString("fr-FR", { maximumFractionDigits: 0 }) + " XAF"}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    SDK : {totalSdk.toLocaleString("fr-FR", { maximumFractionDigits: 0 })} XAF · Hosted Page : {totalHp.toLocaleString("fr-FR", { maximumFractionDigits: 0 })} XAF
+                  </p>
+                </div>
               </div>
-            </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Marchand</TableHead>
-                    <TableHead>Statut</TableHead>
-                    <TableHead className="text-center">Clé API</TableHead>
-                    <TableHead className="text-right">Transactions HP</TableHead>
-                    <TableHead className="text-right">Volume collecté</TableHead>
-                    <TableHead className="text-right">HP collecté</TableHead>
-                    <TableHead className="text-center">API activée</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {isLoading ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                        Chargement…
-                      </TableCell>
-                    </TableRow>
-                  ) : filtered.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                        Aucun résultat
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filtered.map((user) => (
-                      <TableRow key={user.id} data-testid={`row-user-${user.id}`}>
-                        <TableCell>
-                          <div>
-                            <p className="font-medium text-sm text-foreground">{user.fullName}</p>
-                            <p className="text-xs text-muted-foreground">{user.email}</p>
-                            <p className="text-xs text-muted-foreground">@{user.username}</p>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-col gap-1">
-                            {user.isVerified ? (
-                              <Badge variant="outline" className="text-green-600 border-green-600 text-xs w-fit">
-                                <CheckCircle className="h-3 w-3 mr-1" /> Vérifié
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="text-amber-600 border-amber-600 text-xs w-fit">
-                                <AlertCircle className="h-3 w-3 mr-1" /> Non vérifié
-                              </Badge>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {user.hasApiKey ? (
-                            <Badge variant="outline" className="text-sky-600 border-sky-600 text-xs">
-                              <Code2 className="h-3 w-3 mr-1" /> Générée
-                            </Badge>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right text-sm">
-                          <span className="font-medium">{user.stats.hpTransactions}</span>
-                          <span className="text-muted-foreground text-xs ml-1">txn</span>
-                        </TableCell>
-                        <TableCell className="text-right text-sm">
-                          <span className="font-mono font-medium">
-                            {user.stats.totalCollected.toLocaleString("fr-FR", { maximumFractionDigits: 0 })}
-                          </span>
-                          <span className="text-muted-foreground text-xs ml-1">XAF</span>
-                        </TableCell>
-                        <TableCell className="text-right text-sm">
-                          <span className="font-mono font-medium text-sky-600">
-                            {user.stats.hpCollected.toLocaleString("fr-FR", { maximumFractionDigits: 0 })}
-                          </span>
-                          <span className="text-muted-foreground text-xs ml-1">XAF</span>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <div className="flex flex-col items-center gap-1">
-                            <Switch
-                              checked={user.apiEnabled}
-                              disabled={!user.isVerified || toggleMutation.isPending}
-                              onCheckedChange={(enabled) =>
-                                toggleMutation.mutate({ userId: user.id, enabled })
-                              }
-                              data-testid={`switch-api-${user.id}`}
-                            />
-                            {!user.isVerified && (
-                              <span className="text-[10px] text-muted-foreground">KYC requis</span>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+              <Badge variant="secondary" className="text-sm px-3 py-1">
+                {totalSdkTxns + totalHpTxns} transactions API au total
+              </Badge>
             </div>
           </CardContent>
         </Card>
 
+        {/* Access rules */}
+        <div className="grid sm:grid-cols-2 gap-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Code2 className="h-4 w-4 text-sky-500" />
+                SDK API <span className="font-mono text-xs text-muted-foreground">ak_live_…</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm text-muted-foreground space-y-1.5">
+              <p>Le marchand utilise sa clé <code className="text-xs bg-muted px-1 rounded">ak_live_</code> côté serveur pour appeler <code className="text-xs bg-muted px-1 rounded">/v1/collect</code>.</p>
+              <p>Chaque transaction est marquée <code className="text-xs bg-muted px-1 rounded">source: "api"</code>.</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Globe className="h-4 w-4 text-amber-500" />
+                Hosted Page <span className="font-mono text-xs text-muted-foreground">hp_live_…</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm text-muted-foreground space-y-1.5">
+              <p>Le marchand crée un lien via <code className="text-xs bg-muted px-1 rounded">/v1/hosted-payment/create</code>.</p>
+              <p>Le client paie sur la page Ashtech Pay hébergée, sans code frontend.</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Rule reminder */}
         <Card className="bg-muted/30">
           <CardContent className="pt-4 pb-4">
             <div className="flex items-start gap-3">
-              <AlertCircle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
-              <div className="text-sm text-muted-foreground">
-                <strong className="text-foreground">Règles d'accès</strong> — Un marchand ne peut activer son API que si son compte est vérifié (KYC approuvé).
-                Même vérifié, l'API reste désactivée jusqu'à votre activation manuelle ici.
-                Les deux API (SDK <code className="text-xs bg-muted px-1 rounded">ak_</code> et Hosted Page <code className="text-xs bg-muted px-1 rounded">hp_live_</code>) sont contrôlées par le même interrupteur.
-              </div>
+              <Lock className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+              <p className="text-sm text-muted-foreground">
+                <strong className="text-foreground">Règle d'accès</strong> — Un marchand doit d'abord être KYC-vérifié avant que vous puissiez lui activer l'API. Rendez-vous sur la page{" "}
+                <Link href="/admin/merchants" className="text-primary hover:underline font-medium">Marchands</Link>{" "}
+                pour gérer les accès individuels.
+              </p>
             </div>
           </CardContent>
         </Card>
