@@ -90,11 +90,12 @@ export default function ApiKeysPage() {
   const queryClient = useQueryClient();
 
   // Current user profile (for verification + API access status)
-  const { data: currentUser } = useQuery<{ isVerified: boolean; apiEnabled: boolean }>({
+  const { data: currentUser, isLoading: userLoading } = useQuery<{ isVerified: boolean; apiEnabled: boolean }>({
     queryKey: ["/api/user"],
   });
   const isVerified = currentUser?.isVerified ?? false;
   const apiEnabled = (currentUser as any)?.apiEnabled ?? false;
+  const apiAccess = isVerified && apiEnabled;
 
   // SDK: API key query
   const { data: sdkData, isLoading: sdkLoading } = useQuery<{ apiKey: string }>({
@@ -150,10 +151,20 @@ export default function ApiKeysPage() {
 
   const hasHpKeys = hpConfig?.pkLive && hpConfig?.skLive && hpConfig?.hpLive;
 
-  // ── Blocked states: show only when loading is done ──
-  const userLoaded = currentUser !== undefined;
+  // ── Guard: show blocked state whenever API is not accessible ──
+  // Show spinner while user data loads to avoid any flash of the full UI
+  if (userLoading || !currentUser) {
+    return (
+      <DashboardLayout>
+        <div className="w-full max-w-3xl min-w-0 flex items-center justify-center py-24">
+          <div className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
-  if (userLoaded && !isVerified) {
+  // Non-verified: KYC required first
+  if (!isVerified) {
     return (
       <DashboardLayout>
         <div className="w-full max-w-3xl min-w-0 space-y-6">
@@ -168,7 +179,7 @@ export default function ApiKeysPage() {
             <div className="space-y-2">
               <h2 className="text-lg font-bold text-amber-900 dark:text-amber-200">Compte non vérifié</h2>
               <p className="text-sm text-amber-700 dark:text-amber-300 max-w-md">
-                Votre compte doit être <strong>vérifié (KYC)</strong> avant de pouvoir accéder à l'API. Complétez la vérification d'identité pour débloquer vos clés.
+                Votre compte doit être <strong>vérifié (KYC)</strong> avant de pouvoir accéder à l'API. Complétez la vérification d'identité, puis contactez l'administrateur pour activer vos clés.
               </p>
             </div>
             <Link href="/dashboard/kyc">
@@ -178,7 +189,7 @@ export default function ApiKeysPage() {
               </Button>
             </Link>
             <p className="text-xs text-amber-600 dark:text-amber-500">
-              Après validation, contactez l'administrateur pour activer l'accès API.
+              Étape 1 : vérification KYC · Étape 2 : activation API par l'administrateur
             </p>
           </div>
         </div>
@@ -186,7 +197,8 @@ export default function ApiKeysPage() {
     );
   }
 
-  if (userLoaded && isVerified && !apiEnabled) {
+  // Verified but API not enabled by admin
+  if (!apiEnabled) {
     return (
       <DashboardLayout>
         <div className="w-full max-w-3xl min-w-0 space-y-6">
@@ -199,22 +211,21 @@ export default function ApiKeysPage() {
               <LockKeyhole className="h-8 w-8 text-sky-600 dark:text-sky-400" />
             </div>
             <div className="space-y-2">
-              <h2 className="text-lg font-bold text-sky-900 dark:text-sky-200">Accès API en attente d'activation</h2>
+              <h2 className="text-lg font-bold text-sky-900 dark:text-sky-200">Accès API non activé</h2>
               <p className="text-sm text-sky-700 dark:text-sky-300 max-w-md">
-                Votre compte est <strong>vérifié</strong>, mais l'accès API n'a pas encore été activé par l'administrateur. Contactez-nous pour l'activer.
+                Votre compte est <strong>vérifié</strong>, mais l'accès API n'a pas encore été activé par l'administrateur.
+                Contactez-nous pour demander l'activation de vos clés.
               </p>
             </div>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <a href="mailto:support@ashtechpay.top">
-                <Button variant="outline" className="gap-2" data-testid="button-contact-admin">
-                  <CheckCircle className="h-4 w-4" />
-                  Contacter le support
-                </Button>
-              </a>
-            </div>
+            <a href="mailto:support@ashtechpay.top">
+              <Button className="gap-2" data-testid="button-contact-admin">
+                <LockKeyhole className="h-4 w-4" />
+                Contacter l'administrateur
+              </Button>
+            </a>
             <div className="flex items-center gap-2 text-xs text-sky-600 dark:text-sky-500">
               <CheckCircle className="h-3.5 w-3.5 text-green-500" />
-              Compte KYC vérifié — en attente d'activation API
+              KYC validé · En attente d'activation API par l'administrateur
             </div>
           </div>
         </div>
