@@ -26,21 +26,23 @@ function CodeBlock({ code, language = "json" }: { code: string; language?: strin
     setTimeout(() => setCopied(false), 2000);
   }
   return (
-    <div className="relative group rounded-xl overflow-hidden border border-white/10 bg-[#0d1117]">
+    <div className="rounded-xl overflow-hidden border border-white/10 bg-[#0d1117] w-full min-w-0">
       <div className="flex items-center justify-between px-4 py-2 border-b border-white/10 bg-[#161b22]">
         <span className="text-xs font-mono text-zinc-400">{language}</span>
         <button
           onClick={copy}
-          className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-200 transition-colors"
+          className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-200 transition-colors shrink-0"
           data-testid="button-copy-code"
         >
           {copied ? <CheckCheck className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
           {copied ? "Copié" : "Copier"}
         </button>
       </div>
-      <pre className="p-4 overflow-x-auto text-sm leading-relaxed">
-        <code className="text-zinc-300 font-mono">{code.trim()}</code>
-      </pre>
+      <div className="overflow-x-auto w-full">
+        <pre className="p-4 text-sm leading-relaxed w-max min-w-full">
+          <code className="text-zinc-300 font-mono whitespace-pre">{code.trim()}</code>
+        </pre>
+      </div>
     </div>
   );
 }
@@ -48,15 +50,23 @@ function CodeBlock({ code, language = "json" }: { code: string; language?: strin
 function ParamRow({ name, type, required, desc }: { name: string; type: string; required: boolean; desc: string }) {
   return (
     <tr className="border-b border-white/5 hover:bg-white/5 transition-colors">
-      <td className="px-4 py-3 font-mono text-[#79c0ff] text-sm">{name}</td>
-      <td className="px-4 py-3 text-sm text-zinc-400 font-mono">{type}</td>
-      <td className="px-4 py-3 text-sm">
+      <td className="px-3 py-3 font-mono text-[#79c0ff] text-xs whitespace-nowrap">{name}</td>
+      <td className="px-3 py-3 text-xs text-zinc-400 font-mono whitespace-nowrap">{type}</td>
+      <td className="px-3 py-3 text-xs whitespace-nowrap">
         {required
           ? <span className="text-green-400 font-medium">Requis</span>
           : <span className="text-zinc-500">Optionnel</span>}
       </td>
-      <td className="px-4 py-3 text-sm text-zinc-300">{desc}</td>
+      <td className="px-3 py-3 text-xs text-zinc-300">{desc}</td>
     </tr>
+  );
+}
+
+function TableWrapper({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border border-white/10 overflow-x-auto w-full">
+      <table className="w-full text-sm min-w-[500px]">{children}</table>
+    </div>
   );
 }
 
@@ -80,7 +90,6 @@ export default function DeveloperPage() {
   const { data } = useQuery<{ apiKey: string }>({ queryKey: ["/api/user/api-key"] });
   const apiKey = data?.apiKey ?? "<VOTRE_CLÉ_API>";
 
-  // Intersection observer to update active section
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
@@ -103,27 +112,27 @@ export default function DeveloperPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0c10] text-zinc-100 flex flex-col">
+    <div className="min-h-screen bg-[#0a0c10] text-zinc-100 flex flex-col overflow-x-hidden">
       {/* Top nav */}
       <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0a0c10]/90 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             <Link href="/dashboard/api-keys">
-              <Button variant="ghost" size="sm" className="text-zinc-400 hover:text-white -ml-2 gap-1.5" data-testid="link-back-api">
+              <Button variant="ghost" size="sm" className="text-zinc-400 hover:text-white -ml-2 gap-1.5 shrink-0" data-testid="link-back-api">
                 <ArrowLeft className="w-4 h-4" />
                 <span className="hidden sm:inline">Retour</span>
               </Button>
             </Link>
-            <div className="h-5 w-px bg-white/10" />
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center">
+            <div className="h-5 w-px bg-white/10 shrink-0" />
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center shrink-0">
                 <Code2 className="w-4 h-4 text-primary-foreground" />
               </div>
-              <span className="font-semibold text-sm text-white">Ashtech Pay</span>
-              <Badge variant="outline" className="text-[10px] border-white/20 text-zinc-400 hidden sm:flex">API v1</Badge>
+              <span className="font-semibold text-sm text-white truncate">Ashtech Pay</span>
+              <Badge variant="outline" className="text-[10px] border-white/20 text-zinc-400 hidden sm:flex shrink-0">API v1</Badge>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 shrink-0">
             <span className="hidden md:flex items-center gap-1.5 text-xs text-zinc-500">
               <Globe className="w-3.5 h-3.5" />
               api.ashtechpay.top
@@ -139,7 +148,7 @@ export default function DeveloperPage() {
         </div>
       </header>
 
-      <div className="flex flex-1 max-w-7xl mx-auto w-full">
+      <div className="flex flex-1 max-w-7xl mx-auto w-full min-w-0">
         {/* Sidebar */}
         <aside className={`
           ${sidebarOpen ? "fixed inset-0 z-30 bg-[#0a0c10] pt-14 px-4" : "hidden"}
@@ -160,7 +169,7 @@ export default function DeveloperPage() {
                 }`}
               >
                 <Icon className="w-3.5 h-3.5 shrink-0" />
-                {label}
+                <span className="truncate">{label}</span>
               </button>
             ))}
             <div className="my-4 h-px bg-white/10" />
@@ -172,16 +181,16 @@ export default function DeveloperPage() {
         </aside>
 
         {/* Main content */}
-        <main className="flex-1 min-w-0 px-4 py-10 lg:px-10 xl:px-16 space-y-20">
+        <main className="flex-1 min-w-0 w-full px-4 py-10 lg:px-10 xl:px-14 space-y-20 overflow-x-hidden">
 
           {/* Introduction */}
           <section id="introduction" ref={el => sectionRefs.current.introduction = el} className="scroll-mt-20 space-y-6">
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <Zap className="w-5 h-5 text-primary" />
+                <Zap className="w-5 h-5 text-primary shrink-0" />
                 <h1 className="text-2xl font-bold text-white">Introduction</h1>
               </div>
-              <p className="text-zinc-400 leading-relaxed max-w-2xl">
+              <p className="text-zinc-400 leading-relaxed">
                 L'API Ashtech Pay permet à vos clients de payer directement sur votre site ou application mobile,
                 sans aucune redirection. Elle agit comme passerelle intelligente entre votre système et les
                 opérateurs Mobile Money africains.
@@ -190,9 +199,9 @@ export default function DeveloperPage() {
 
             <div className="grid sm:grid-cols-3 gap-4">
               {[
-                { icon: Shield,       title: "Sécurisé",       desc: "Chaque requête est authentifiée par clé API" },
-                { icon: Zap,          title: "Temps réel",     desc: "Confirmation instantanée via webhooks" },
-                { icon: Globe,        title: "Multi-pays",     desc: "CM, CI, SN, ML, BF, GN et plus encore" },
+                { icon: Shield, title: "Sécurisé",   desc: "Chaque requête est authentifiée par clé API" },
+                { icon: Zap,   title: "Temps réel",  desc: "Confirmation instantanée via webhooks" },
+                { icon: Globe, title: "Multi-pays",  desc: "CM, CI, SN, ML, BF, GN et plus encore" },
               ].map(({ icon: Icon, title, desc }) => (
                 <div key={title} className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-2">
                   <Icon className="w-5 h-5 text-primary" />
@@ -202,11 +211,11 @@ export default function DeveloperPage() {
               ))}
             </div>
 
-            <div className="rounded-xl border border-white/10 bg-[#161b22] p-5 space-y-3">
+            <div className="rounded-xl border border-white/10 bg-[#161b22] p-5 space-y-3 overflow-x-hidden">
               <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">URL de base</p>
-              <div className="flex items-center gap-3">
-                <code className="text-lg font-mono font-semibold text-[#79c0ff]">https://api.ashtechpay.top</code>
-                <Badge variant="outline" className="border-green-500/30 text-green-400 text-[10px]">v1</Badge>
+              <div className="flex items-center gap-3 flex-wrap">
+                <code className="text-base font-mono font-semibold text-[#79c0ff] break-all">https://api.ashtechpay.top</code>
+                <Badge variant="outline" className="border-green-500/30 text-green-400 text-[10px] shrink-0">v1</Badge>
               </div>
               <p className="text-xs text-zinc-500">Toutes les requêtes doivent être envoyées en HTTPS. HTTP n'est pas supporté.</p>
             </div>
@@ -215,16 +224,17 @@ export default function DeveloperPage() {
           {/* Authentication */}
           <section id="authentication" ref={el => sectionRefs.current.authentication = el} className="scroll-mt-20 space-y-6">
             <div className="flex items-center gap-2 border-b border-white/10 pb-4">
-              <Shield className="w-5 h-5 text-primary" />
+              <Shield className="w-5 h-5 text-primary shrink-0" />
               <h2 className="text-xl font-bold text-white">Authentification</h2>
             </div>
-            <p className="text-zinc-400 leading-relaxed max-w-2xl">
-              Toutes les requêtes doivent inclure votre clé API dans l'en-tête HTTP <code className="text-[#79c0ff] bg-white/10 px-1.5 py-0.5 rounded text-xs">Authorization</code>.
+            <p className="text-zinc-400 leading-relaxed">
+              Toutes les requêtes doivent inclure votre clé API dans l'en-tête HTTP{" "}
+              <code className="text-[#79c0ff] bg-white/10 px-1.5 py-0.5 rounded text-xs">Authorization</code>.
               Ne l'exposez jamais côté client.
             </p>
             <CodeBlock language="http" code={`Authorization: Bearer ${apiKey}`} />
             <div className="flex gap-3 items-start rounded-xl border border-orange-500/20 bg-orange-500/5 p-4">
-              <span className="text-orange-400 mt-0.5">⚠</span>
+              <span className="text-orange-400 mt-0.5 shrink-0">⚠</span>
               <p className="text-sm text-orange-300">
                 Utilisez votre clé API <strong>uniquement depuis votre serveur</strong> (Node.js, Python, PHP…).
                 Ne l'incluez jamais dans du code JavaScript côté navigateur ou dans une application mobile.
@@ -246,47 +256,45 @@ export default function DeveloperPage() {
           {/* Collect */}
           <section id="collect" ref={el => sectionRefs.current.collect = el} className="scroll-mt-20 space-y-6">
             <div className="flex items-center gap-2 border-b border-white/10 pb-4">
-              <Terminal className="w-5 h-5 text-primary" />
+              <Terminal className="w-5 h-5 text-primary shrink-0" />
               <h2 className="text-xl font-bold text-white">Initier un paiement</h2>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <MethodBadge method="POST" />
               <code className="text-sm font-mono text-zinc-300 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5">
                 /v1/collect
               </code>
             </div>
 
-            <p className="text-zinc-400 max-w-2xl leading-relaxed">
+            <p className="text-zinc-400 leading-relaxed">
               Initie un paiement Mobile Money. Le client reçoit une demande de validation sur son téléphone
               via USSD ou notification push selon l'opérateur.
             </p>
 
             <div>
               <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-3">Paramètres du corps (JSON)</p>
-              <div className="rounded-xl border border-white/10 overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-white/5 border-b border-white/10">
-                      {["Paramètre", "Type", "Statut", "Description"].map(h => (
-                        <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <ParamRow name="amount"     type="number" required desc="Montant à collecter en unité de devise" />
-                    <ParamRow name="currency"   type="string" required desc="XAF, XOF, GNF, CDF" />
-                    <ParamRow name="phone"      type="string" required desc="Numéro de téléphone du payeur" />
-                    <ParamRow name="operator"   type="string" required desc="MTN, Orange, Wave, Moov, Free…" />
-                    <ParamRow name="reference"  type="string" required={false} desc="Référence unique de votre commande" />
-                    <ParamRow name="notify_url" type="string" required={false} desc="URL de webhook pour la notification de statut" />
-                  </tbody>
-                </table>
-              </div>
+              <TableWrapper>
+                <thead>
+                  <tr className="bg-white/5 border-b border-white/10">
+                    {["Paramètre", "Type", "Statut", "Description"].map(h => (
+                      <th key={h} className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  <ParamRow name="amount"     type="number" required desc="Montant à collecter en unité de devise" />
+                  <ParamRow name="currency"   type="string" required desc="XAF, XOF, GNF, CDF" />
+                  <ParamRow name="phone"      type="string" required desc="Numéro de téléphone du payeur" />
+                  <ParamRow name="operator"   type="string" required desc="MTN, Orange, Wave, Moov, Free…" />
+                  <ParamRow name="reference"  type="string" required={false} desc="Référence unique de votre commande" />
+                  <ParamRow name="notify_url" type="string" required={false} desc="URL de webhook pour la notification de statut" />
+                </tbody>
+              </TableWrapper>
             </div>
 
             <div className="grid lg:grid-cols-2 gap-5">
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Requête</p>
                 <CodeBlock language="javascript" code={`fetch("https://api.ashtechpay.top/v1/collect", {
   method: "POST",
@@ -304,7 +312,7 @@ export default function DeveloperPage() {
   })
 })`} />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Réponse</p>
                 <CodeBlock language="json" code={`{
   "status": "pending",
@@ -323,12 +331,12 @@ export default function DeveloperPage() {
               <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-3">Opérateurs supportés</p>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {[
-                  { country: "Cameroun",      operators: ["MTN", "Orange"] },
-                  { country: "Côte d'Ivoire", operators: ["MTN", "Orange", "Moov", "Wave"] },
-                  { country: "Sénégal",       operators: ["Orange", "Free", "Wave"] },
-                  { country: "Mali",          operators: ["Orange", "Moov"] },
-                  { country: "Burkina Faso",  operators: ["Orange", "Moov", "Wave"] },
-                  { country: "Guinée",        operators: ["Orange", "MTN"] },
+                  { country: "Cameroun",       operators: ["MTN", "Orange"] },
+                  { country: "Côte d'Ivoire",  operators: ["MTN", "Orange", "Moov", "Wave"] },
+                  { country: "Sénégal",        operators: ["Orange", "Free", "Wave"] },
+                  { country: "Mali",           operators: ["Orange", "Moov"] },
+                  { country: "Burkina Faso",   operators: ["Orange", "Moov", "Wave"] },
+                  { country: "Guinée",         operators: ["Orange", "MTN"] },
                 ].map(({ country, operators }) => (
                   <div key={country} className="rounded-lg border border-white/10 bg-white/5 p-3 space-y-1.5">
                     <p className="text-xs font-medium text-zinc-300">{country}</p>
@@ -346,31 +354,36 @@ export default function DeveloperPage() {
           {/* Transaction status */}
           <section id="transaction" ref={el => sectionRefs.current.transaction = el} className="scroll-mt-20 space-y-6">
             <div className="flex items-center gap-2 border-b border-white/10 pb-4">
-              <CheckCircle2 className="w-5 h-5 text-primary" />
+              <CheckCircle2 className="w-5 h-5 text-primary shrink-0" />
               <h2 className="text-xl font-bold text-white">Statut d'une transaction</h2>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <MethodBadge method="GET" />
               <code className="text-sm font-mono text-zinc-300 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5">
                 /v1/transaction/:id
               </code>
             </div>
 
-            <p className="text-zinc-400 max-w-2xl leading-relaxed">
-              Consultez le statut d'une transaction à tout moment en utilisant le <code className="text-[#79c0ff] bg-white/10 px-1.5 py-0.5 rounded text-xs">transaction_id</code> retourné lors de l'initiation.
+            <p className="text-zinc-400 leading-relaxed">
+              Consultez le statut d'une transaction à tout moment en utilisant le{" "}
+              <code className="text-[#79c0ff] bg-white/10 px-1.5 py-0.5 rounded text-xs">transaction_id</code>{" "}
+              retourné lors de l'initiation.
             </p>
 
             <div className="grid lg:grid-cols-2 gap-5">
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Requête</p>
-                <CodeBlock language="javascript" code={`fetch("https://api.ashtechpay.top/v1/transaction/txn_a3f5c8d1", {
-  headers: {
-    "Authorization": "Bearer ${apiKey}"
+                <CodeBlock language="javascript" code={`fetch(
+  "https://api.ashtechpay.top/v1/transaction/txn_a3f5c8d1",
+  {
+    headers: {
+      "Authorization": "Bearer ${apiKey}"
+    }
   }
-})`} />
+)`} />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Réponse</p>
                 <CodeBlock language="json" code={`{
   "transaction_id": "txn_a3f5c8d1",
@@ -386,48 +399,50 @@ export default function DeveloperPage() {
 
             <div>
               <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-3">Statuts possibles</p>
-              <div className="rounded-xl border border-white/10 overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-white/5 border-b border-white/10">
-                      {["Statut", "Description", "Final ?"].map(h => (
-                        <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[
-                      { status: "pending", color: "text-yellow-400", desc: "En attente de confirmation de l'opérateur",       final: false },
-                      { status: "success", color: "text-green-400",  desc: "Paiement confirmé et fonds crédités",             final: true  },
-                      { status: "failed",  color: "text-red-400",    desc: "Paiement refusé, expiré ou annulé",               final: true  },
-                    ].map(({ status, color, desc, final }) => (
-                      <tr key={status} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                        <td className="px-4 py-3"><span className={`font-mono font-medium ${color}`}>{status}</span></td>
-                        <td className="px-4 py-3 text-zinc-300">{desc}</td>
-                        <td className="px-4 py-3">{final ? <span className="text-green-400">Oui</span> : <span className="text-zinc-500">Non</span>}</td>
-                      </tr>
+              <TableWrapper>
+                <thead>
+                  <tr className="bg-white/5 border-b border-white/10">
+                    {["Statut", "Description", "Final ?"].map(h => (
+                      <th key={h} className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 whitespace-nowrap">{h}</th>
                     ))}
-                  </tbody>
-                </table>
-              </div>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    { status: "pending", color: "text-yellow-400", desc: "En attente de confirmation de l'opérateur", final: false },
+                    { status: "success", color: "text-green-400",  desc: "Paiement confirmé et fonds crédités",       final: true  },
+                    { status: "failed",  color: "text-red-400",    desc: "Paiement refusé, expiré ou annulé",         final: true  },
+                  ].map(({ status, color, desc, final }) => (
+                    <tr key={status} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                      <td className="px-3 py-3 whitespace-nowrap"><span className={`font-mono font-medium text-sm ${color}`}>{status}</span></td>
+                      <td className="px-3 py-3 text-zinc-300 text-sm">{desc}</td>
+                      <td className="px-3 py-3 whitespace-nowrap text-sm">{final ? <span className="text-green-400">Oui</span> : <span className="text-zinc-500">Non</span>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </TableWrapper>
             </div>
           </section>
 
           {/* Webhooks */}
           <section id="webhooks" ref={el => sectionRefs.current.webhooks = el} className="scroll-mt-20 space-y-6">
             <div className="flex items-center gap-2 border-b border-white/10 pb-4">
-              <Webhook className="w-5 h-5 text-primary" />
+              <Webhook className="w-5 h-5 text-primary shrink-0" />
               <h2 className="text-xl font-bold text-white">Webhooks</h2>
             </div>
 
-            <p className="text-zinc-400 max-w-2xl leading-relaxed">
-              Quand une transaction atteint un état final (<span className="text-green-400 font-mono">success</span> ou <span className="text-red-400 font-mono">failed</span>),
-              Ashtech Pay envoie une requête <code className="text-[#79c0ff] bg-white/10 px-1.5 py-0.5 rounded text-xs">POST</code> à votre <code className="text-[#79c0ff] bg-white/10 px-1.5 py-0.5 rounded text-xs">notify_url</code>.
+            <p className="text-zinc-400 leading-relaxed">
+              Quand une transaction atteint un état final (
+              <span className="text-green-400 font-mono">success</span> ou{" "}
+              <span className="text-red-400 font-mono">failed</span>),
+              Ashtech Pay envoie une requête{" "}
+              <code className="text-[#79c0ff] bg-white/10 px-1.5 py-0.5 rounded text-xs">POST</code>{" "}
+              à votre <code className="text-[#79c0ff] bg-white/10 px-1.5 py-0.5 rounded text-xs">notify_url</code>.
             </p>
 
             <div className="grid lg:grid-cols-2 gap-5">
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Payload reçu (succès)</p>
+              <div className="space-y-2 min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Payload reçu</p>
                 <CodeBlock language="json" code={`{
   "event": "payment.success",
   "transaction_id": "txn_a3f5c8d1",
@@ -440,13 +455,12 @@ export default function DeveloperPage() {
   "confirmed_at": "2026-03-15T14:02:17Z"
 }`} />
               </div>
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Exemple de handler (Node.js)</p>
-                <CodeBlock language="javascript" code={`app.post("/webhook", (req, res) => {
-  const { event, transaction_id, reference, status } = req.body;
+              <div className="space-y-2 min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Handler (Node.js)</p>
+                <CodeBlock language="javascript" code={`app.post("/webhook", async (req, res) => {
+  const { event, reference, status } = req.body;
 
   if (event === "payment.success") {
-    // Mettre à jour votre base de données
     await markOrderAsPaid(reference);
   }
 
@@ -462,7 +476,7 @@ export default function DeveloperPage() {
                 {[
                   "Répondez toujours avec HTTP 200 pour accuser réception",
                   "En cas d'échec de livraison, Ashtech Pay retentera jusqu'à 3 fois",
-                  "Vérifiez le transaction_id dans votre base de données pour éviter les doublons",
+                  "Vérifiez le transaction_id dans votre base pour éviter les doublons",
                   "Traitez le webhook de manière asynchrone pour répondre rapidement",
                 ].map(item => (
                   <li key={item} className="flex items-start gap-2">
@@ -477,12 +491,14 @@ export default function DeveloperPage() {
           {/* Errors */}
           <section id="errors" ref={el => sectionRefs.current.errors = el} className="scroll-mt-20 space-y-6">
             <div className="flex items-center gap-2 border-b border-white/10 pb-4">
-              <ArrowRight className="w-5 h-5 text-primary" />
+              <ArrowRight className="w-5 h-5 text-primary shrink-0" />
               <h2 className="text-xl font-bold text-white">Codes d'erreur</h2>
             </div>
 
-            <p className="text-zinc-400 max-w-2xl leading-relaxed">
-              En cas d'erreur, l'API retourne un objet JSON avec un champ <code className="text-[#79c0ff] bg-white/10 px-1.5 py-0.5 rounded text-xs">message</code> décrivant le problème.
+            <p className="text-zinc-400 leading-relaxed">
+              En cas d'erreur, l'API retourne un objet JSON avec un champ{" "}
+              <code className="text-[#79c0ff] bg-white/10 px-1.5 py-0.5 rounded text-xs">message</code>{" "}
+              décrivant le problème.
             </p>
 
             <CodeBlock language="json" code={`{
@@ -490,41 +506,38 @@ export default function DeveloperPage() {
   "message": "Le champ 'amount' est requis."
 }`} />
 
-            <div className="rounded-xl border border-white/10 overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-white/5 border-b border-white/10">
-                    {["Code HTTP", "Erreur", "Signification"].map(h => (
-                      <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {[
-                    { code: "400", error: "bad_request",       msg: "Paramètre manquant ou format invalide" },
-                    { code: "401", error: "unauthorized",      msg: "Clé API manquante, invalide ou expirée" },
-                    { code: "404", error: "not_found",         msg: "Transaction introuvable" },
-                    { code: "422", error: "unprocessable",     msg: "Opérateur non supporté pour ce pays/devise" },
-                    { code: "429", error: "rate_limited",      msg: "Trop de requêtes — ralentissez" },
-                    { code: "500", error: "server_error",      msg: "Erreur interne Ashtech Pay — réessayez" },
-                  ].map(({ code, error, msg }) => (
-                    <tr key={code} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                      <td className="px-4 py-3 font-mono font-bold text-orange-400">{code}</td>
-                      <td className="px-4 py-3 font-mono text-zinc-400 text-xs">{error}</td>
-                      <td className="px-4 py-3 text-zinc-300">{msg}</td>
-                    </tr>
+            <TableWrapper>
+              <thead>
+                <tr className="bg-white/5 border-b border-white/10">
+                  {["Code HTTP", "Erreur", "Signification"].map(h => (
+                    <th key={h} className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 whitespace-nowrap">{h}</th>
                   ))}
-                </tbody>
-              </table>
-            </div>
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  { code: "400", error: "bad_request",  msg: "Paramètre manquant ou format invalide" },
+                  { code: "401", error: "unauthorized",  msg: "Clé API manquante, invalide ou expirée" },
+                  { code: "404", error: "not_found",     msg: "Transaction introuvable" },
+                  { code: "422", error: "unprocessable", msg: "Opérateur non supporté pour ce pays/devise" },
+                  { code: "429", error: "rate_limited",  msg: "Trop de requêtes — ralentissez" },
+                  { code: "500", error: "server_error",  msg: "Erreur interne Ashtech Pay — réessayez" },
+                ].map(({ code, error, msg }) => (
+                  <tr key={code} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                    <td className="px-3 py-3 font-mono font-bold text-orange-400 whitespace-nowrap">{code}</td>
+                    <td className="px-3 py-3 font-mono text-zinc-400 text-xs whitespace-nowrap">{error}</td>
+                    <td className="px-3 py-3 text-zinc-300 text-sm">{msg}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </TableWrapper>
 
             <div className="rounded-xl border border-white/10 bg-white/5 p-5 text-sm text-zinc-400">
-              Pour toute question technique non résolue par cette documentation, contactez notre équipe via
-              <Link href="/dashboard/support" className="text-primary hover:underline ml-1">le support</Link>.
+              Pour toute question technique non résolue par cette documentation, contactez notre équipe via{" "}
+              <Link href="/dashboard/support" className="text-primary hover:underline">le support</Link>.
             </div>
           </section>
 
-          {/* Bottom spacer */}
           <div className="h-20" />
         </main>
       </div>
