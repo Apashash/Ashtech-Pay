@@ -4,24 +4,92 @@ import { Link } from "wouter";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import {
   Code2, Globe, Eye, EyeOff, Copy, RefreshCw, BookOpen,
-  CheckCircle2, Terminal, Shield, CheckCheck, ChevronRight,
+  CheckCircle2, Terminal, Shield, CheckCheck, ChevronRight, Key, Zap,
 } from "lucide-react";
 
 type Mode = "hosted" | "sdk";
 
+interface HostedPageConfig {
+  id: string;
+  userId: string;
+  successUrl: string | null;
+  cancelUrl: string | null;
+  pkLive: string | null;
+  skLive: string | null;
+  hpLive: string | null;
+}
+
+function CopyableKey({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
+  const [copied, setCopied] = useState(false);
+  const [visible, setVisible] = useState(false);
+  const { toast } = useToast();
+
+  function copy() {
+    navigator.clipboard.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+    toast({ title: "Clé copiée", description: `${label} copiée dans le presse-papiers.` });
+  }
+
+  const masked = value.slice(0, 12) + "•".repeat(20) + value.slice(-4);
+
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{label}</Label>
+      <div className="flex items-center gap-2">
+        <div className="flex-1 flex items-center gap-2 bg-muted/50 rounded-lg border px-3 py-2">
+          {icon && <span className="text-muted-foreground shrink-0">{icon}</span>}
+          <code className="text-sm font-mono flex-1 truncate text-foreground">
+            {visible ? value : masked}
+          </code>
+        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setVisible(!visible)}
+          data-testid={`toggle-${label.toLowerCase().replace(/\s/g, "-")}`}
+          className="h-9 w-9 shrink-0"
+        >
+          {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={copy}
+          data-testid={`copy-${label.toLowerCase().replace(/\s/g, "-")}`}
+          className="h-9 w-9 shrink-0"
+        >
+          {copied ? <CheckCheck className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function ApiKeysPage() {
   const [mode, setMode] = useState<Mode>("hosted");
+
+  // SDK panel state
   const [showKey, setShowKey] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // Hosted page state
+  const [successUrl, setSuccessUrl] = useState("");
+  const [cancelUrl, setCancelUrl] = useState("");
+  const [initialized, setInitialized] = useState(false);
+
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data, isLoading } = useQuery<{ apiKey: string }>({
+  // SDK: API key query
+  const { data: sdkData, isLoading: sdkLoading } = useQuery<{ apiKey: string }>({
     queryKey: ["/api/user/api-key"],
   });
 
@@ -37,7 +105,7 @@ export default function ApiKeysPage() {
     },
   });
 
-  const apiKey = data?.apiKey ?? "";
+  const apiKey = sdkData?.apiKey ?? "";
   const maskedKey = apiKey ? `${apiKey.slice(0, 8)}${"•".repeat(24)}${apiKey.slice(-4)}` : "";
 
   function copyKey() {
@@ -47,6 +115,32 @@ export default function ApiKeysPage() {
     setTimeout(() => setCopied(false), 2000);
     toast({ title: "Clé copiée", description: "La clé API a été copiée dans le presse-papiers." });
   }
+
+  // Hosted page: config query
+  const { data: hpConfig, isLoading: hpLoading } = useQuery<HostedPageConfig | null>({
+    queryKey: ["/api/hosted-page/config"],
+    refetchOnWindowFocus: false,
+  });
+
+  if (hpConfig && !initialized) {
+    setSuccessUrl(hpConfig.successUrl || "");
+    setCancelUrl(hpConfig.cancelUrl || "");
+    setInitialized(true);
+  }
+
+  const hpMutation = useMutation({
+    mutationFn: (data: { successUrl: string; cancelUrl: string; regenerate?: boolean }) =>
+      apiRequest("POST", "/api/hosted-page/config", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hosted-page/config"] });
+      toast({ title: "Configuration sauvegardée", description: "Vos clés API Hosted Page sont prêtes." });
+    },
+    onError: () => {
+      toast({ title: "Erreur", description: "Impossible de sauvegarder.", variant: "destructive" });
+    },
+  });
+
+  const hasHpKeys = hpConfig?.pkLive && hpConfig?.skLive && hpConfig?.hpLive;
 
   return (
     <DashboardLayout>
@@ -105,41 +199,166 @@ export default function ApiKeysPage() {
           </button>
         </div>
 
-        {/* Hosted Page panel */}
+        {/* ── Hosted Page panel ── */}
         {mode === "hosted" && (
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Globe className="w-4 h-4 text-primary" />
-                Hosted Page
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Avec la Hosted Page, Ashtech Pay héberge l'interface de paiement. Vous créez simplement un lien de paiement et redirigez vos clients vers cette page. Aucune intégration technique requise.
-              </p>
-              <div className="space-y-2">
-                {[
-                  "Aucune configuration serveur requise",
-                  "Interface de paiement optimisée et sécurisée",
-                  "Compatible avec tous les appareils",
-                  "Mise à jour automatique des opérateurs disponibles",
-                ].map((item) => (
-                  <div key={item} className="flex items-center gap-2 text-sm text-foreground">
-                    <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
-                    {item}
+          <div className="space-y-4">
+
+            {/* How it works */}
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { icon: Key, label: "1. Configurez", desc: "Entrez vos URLs de redirection et générez vos clés." },
+                { icon: Zap, label: "2. Créez un lien", desc: "Appelez l'API pour créer un lien de paiement unique." },
+                { icon: Shield, label: "3. Le client paie", desc: "Le client paie sur la page Ashtech Pay hébergée." },
+              ].map(({ icon: Icon, label, desc }) => (
+                <div key={label} className="rounded-xl border bg-card p-4 space-y-2">
+                  <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <Icon className="h-3.5 w-3.5 text-primary" />
                   </div>
-                ))}
+                  <p className="text-sm font-semibold">{label}</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Configuration URLs */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Globe className="w-4 h-4 text-primary" />
+                  Configuration
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="success-url">Success Redirect URL</Label>
+                  <Input
+                    id="success-url"
+                    data-testid="input-success-url"
+                    placeholder="https://monsite.com/payment/success"
+                    value={successUrl}
+                    onChange={(e) => setSuccessUrl(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    URL vers laquelle le client sera redirigé après un paiement réussi.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="cancel-url">Cancel Redirect URL</Label>
+                  <Input
+                    id="cancel-url"
+                    data-testid="input-cancel-url"
+                    placeholder="https://monsite.com/payment/cancel"
+                    value={cancelUrl}
+                    onChange={(e) => setCancelUrl(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    URL vers laquelle le client sera redirigé si le paiement échoue ou est annulé.
+                  </p>
+                </div>
+
+                {hasHpKeys ? (
+                  <Button
+                    variant="outline"
+                    onClick={() => hpMutation.mutate({ successUrl, cancelUrl })}
+                    disabled={hpMutation.isPending}
+                    data-testid="button-save-urls"
+                  >
+                    {hpMutation.isPending ? "Sauvegarde..." : "Sauvegarder les URLs"}
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => hpMutation.mutate({ successUrl, cancelUrl })}
+                    disabled={hpMutation.isPending}
+                    data-testid="button-generate-keys"
+                    className="w-full sm:w-auto"
+                  >
+                    {hpMutation.isPending ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        Génération...
+                      </>
+                    ) : (
+                      <>
+                        <Key className="h-4 w-4 mr-2" />
+                        Generate API Keys
+                      </>
+                    )}
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* API Keys display */}
+            {hasHpKeys && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Key className="w-4 h-4 text-primary" />
+                      API Keys
+                    </CardTitle>
+                    <Badge variant="secondary" className="bg-green-500/10 text-green-600 border-green-500/20">
+                      Actives
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <CopyableKey
+                    label="Public Key"
+                    value={hpConfig!.pkLive!}
+                    icon={<Key className="h-3.5 w-3.5" />}
+                  />
+                  <CopyableKey
+                    label="Secret Key"
+                    value={hpConfig!.skLive!}
+                    icon={<Shield className="h-3.5 w-3.5" />}
+                  />
+                  <CopyableKey
+                    label="Hosted Page Key"
+                    value={hpConfig!.hpLive!}
+                    icon={<Globe className="h-3.5 w-3.5" />}
+                  />
+
+                  <div className="pt-2 border-t">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => hpMutation.mutate({ successUrl, cancelUrl, regenerate: true })}
+                      disabled={hpMutation.isPending}
+                      data-testid="button-regenerate-keys"
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5 mr-2" />
+                      Regénérer toutes les clés
+                    </Button>
+                    <p className="text-xs text-muted-foreground mt-1.5">
+                      Attention — regénérer les clés invalidera les clés actuelles.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Documentation button */}
+            {hasHpKeys && (
+              <Link href="/dashboard/hosted-page/docs">
+                <Button className="w-full" data-testid="button-documentation">
+                  <BookOpen className="h-4 w-4 mr-2" />
+                  Documentation
+                  <ChevronRight className="h-4 w-4 ml-auto" />
+                </Button>
+              </Link>
+            )}
+
+            {hpLoading && (
+              <div className="flex items-center justify-center py-4">
+                <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
               </div>
-              <div className="rounded-lg bg-muted/50 border px-4 py-3 text-sm text-muted-foreground">
-                <span className="font-medium text-foreground">Comment utiliser :</span> Rendez-vous dans{" "}
-                <span className="font-mono text-primary">Mes liens</span> pour créer un lien de paiement et le partager avec vos clients.
-              </div>
-            </CardContent>
-          </Card>
+            )}
+          </div>
         )}
 
-        {/* SDK Direct API panel */}
+        {/* ── SDK Direct API panel ── */}
         {mode === "sdk" && (
           <div className="space-y-4">
             <Card>
@@ -154,14 +373,13 @@ export default function ApiKeysPage() {
                   Utilisez cette clé pour authentifier toutes vos requêtes à l'API Ashtech Pay. Ne la partagez jamais publiquement.
                 </p>
 
-                {/* Key display */}
                 <div className="rounded-lg border bg-muted/30 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <code
                       className="text-sm font-mono text-foreground flex-1 break-all select-all"
                       data-testid="text-api-key"
                     >
-                      {isLoading ? "Chargement…" : showKey ? apiKey : maskedKey}
+                      {sdkLoading ? "Chargement…" : showKey ? apiKey : maskedKey}
                     </code>
                     <div className="flex items-center gap-2 shrink-0">
                       <Button
@@ -169,7 +387,7 @@ export default function ApiKeysPage() {
                         size="icon"
                         className="h-8 w-8"
                         onClick={() => setShowKey((v) => !v)}
-                        disabled={isLoading || !apiKey}
+                        disabled={sdkLoading || !apiKey}
                         data-testid="button-toggle-key-visibility"
                         title={showKey ? "Masquer" : "Afficher"}
                       >
@@ -180,7 +398,7 @@ export default function ApiKeysPage() {
                         size="icon"
                         className="h-8 w-8"
                         onClick={copyKey}
-                        disabled={isLoading || !apiKey}
+                        disabled={sdkLoading || !apiKey}
                         data-testid="button-copy-key"
                         title="Copier"
                       >
@@ -190,7 +408,6 @@ export default function ApiKeysPage() {
                   </div>
                 </div>
 
-                {/* Regenerate button */}
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-muted-foreground">
                     Si vous regénérez la clé, l'ancienne sera immédiatement invalidée.
@@ -208,12 +425,8 @@ export default function ApiKeysPage() {
                   </Button>
                 </div>
 
-                {/* Documentation link */}
                 <Link href="/dashboard/developer">
-                  <Button
-                    className="w-full mt-2"
-                    data-testid="link-open-docs"
-                  >
+                  <Button className="w-full mt-2" data-testid="link-open-docs">
                     <BookOpen className="w-4 h-4 mr-2" />
                     Documentation d'intégration
                     <ChevronRight className="w-4 h-4 ml-auto" />
@@ -222,7 +435,6 @@ export default function ApiKeysPage() {
               </CardContent>
             </Card>
 
-            {/* Quick start snippet */}
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm flex items-center gap-2">

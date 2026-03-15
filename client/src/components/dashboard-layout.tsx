@@ -56,7 +56,6 @@ import {
   ChevronDown,
   ChevronUp,
   Receipt,
-  Globe,
 } from "lucide-react";
 import { 
   Dialog, 
@@ -96,7 +95,6 @@ const settingsItems = [
   { title: "KYC", url: "/dashboard/kyc", icon: Shield },
   { title: "Support", url: "/dashboard/support", icon: Headphones },
   { title: "Clés API", url: "/dashboard/api-keys", icon: Key },
-  { title: "Hosted Page", url: "/dashboard/hosted-page", icon: Globe },
   { title: "Paramètres", url: "/dashboard/settings", icon: Settings },
   { title: "Frais", url: "/dashboard/fee-details", icon: Receipt },
 ];
