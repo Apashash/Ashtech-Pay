@@ -23,6 +23,7 @@ export const users = pgTable("users", {
   resetToken: text("reset_token"),
   resetTokenExpiry: timestamp("reset_token_expiry"),
   apiKey: text("api_key").unique(),
+  apiEnabled: boolean("api_enabled").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

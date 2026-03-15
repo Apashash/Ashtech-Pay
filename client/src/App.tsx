@@ -63,6 +63,7 @@ import AdminConversions from "@/pages/admin/conversions";
 import AdminPendingPayouts from "@/pages/admin/pending-payouts";
 import AdminAfribaPay from "@/pages/admin/afribapay";
 import AdminPixPay from "@/pages/admin/pixpay";
+import AdminApiManagement from "@/pages/admin/api-management";
 import TermsPage from "@/pages/terms";
 import PrivacyPage from "@/pages/privacy";
 import LegalPage from "@/pages/legal";
@@ -134,6 +135,7 @@ function Router() {
       <Route path="/admin/pending-payouts" component={AdminPendingPayouts} />
       <Route path="/admin/afribapay" component={AdminAfribaPay} />
       <Route path="/admin/pixpay" component={AdminPixPay} />
+      <Route path="/admin/api-management" component={AdminApiManagement} />
       <Route path="/terms" component={TermsPage} />
       <Route path="/privacy" component={PrivacyPage} />
       <Route path="/legal" component={LegalPage} />

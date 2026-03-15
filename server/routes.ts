@@ -7085,6 +7085,12 @@ export async function registerRoutes(
     }
     const user = await storage.getUserByApiKey(key);
     if (!user) return res.status(401).json({ error: "unauthorized", message: "Clé API introuvable ou révoquée." });
+    if (!user.isVerified) {
+      return res.status(403).json({ error: "account_not_verified", message: "Votre compte n'est pas vérifié. Complétez la vérification KYC pour accéder à l'API." });
+    }
+    if (!(user as any).apiEnabled) {
+      return res.status(403).json({ error: "api_not_enabled", message: "L'accès API n'est pas activé sur votre compte. Contactez l'administrateur pour l'activer." });
+    }
     req.apiUser = user;
     next();
   }
@@ -7447,6 +7453,12 @@ export async function registerRoutes(
       }
       const merchant = await storage.getUserByHpKey(hpKey);
       if (!merchant) return res.status(401).json({ error: "unauthorized", message: "Key not found." });
+      if (!merchant.isVerified) {
+        return res.status(403).json({ error: "account_not_verified", message: "Votre compte n'est pas vérifié. Complétez la vérification KYC pour accéder à l'API." });
+      }
+      if (!(merchant as any).apiEnabled) {
+        return res.status(403).json({ error: "api_not_enabled", message: "L'accès API n'est pas activé sur votre compte. Contactez l'administrateur pour l'activer." });
+      }
 
       const {
         amount,
@@ -7804,6 +7816,75 @@ export async function registerRoutes(
       });
     } catch (e: any) {
       res.status(500).json({ error: "server_error" });
+    }
+  });
+
+  // ── Admin API Management ─────────────────────────────────────────────────────
+
+  // GET /api/admin/api-management — list users with API stats
+  app.get("/api/admin/api-management", requireAuth, requireAdmin, async (_req, res) => {
+    try {
+      const allUsers = await storage.getAllUsers();
+      const allTransactions = await storage.getAllTransactions();
+
+      const apiTxns = allTransactions.filter((t: any) =>
+        t.type === "payment_link" || t.type === "deposit"
+      );
+
+      const result = allUsers
+        .filter((u: any) => u.role !== "admin" && u.role !== "support")
+        .map((u: any) => {
+          const userTxns = apiTxns.filter((t: any) => t.userId === u.id && t.status === "completed");
+          const sdkTxns = userTxns.filter((t: any) => t.source === "sdk" || (t.type === "deposit" && t.reference?.startsWith("sdk-")));
+          const hpTxns = userTxns.filter((t: any) => t.type === "payment_link" && t.paymentLinkId);
+
+          const totalSdk = sdkTxns.reduce((s: number, t: any) => s + parseFloat(t.amount || "0"), 0);
+          const totalHp = hpTxns.reduce((s: number, t: any) => s + parseFloat(t.amount || "0"), 0);
+          const totalAll = userTxns.reduce((s: number, t: any) => s + parseFloat(t.amount || "0"), 0);
+
+          return {
+            id: u.id,
+            fullName: u.fullName,
+            email: u.email,
+            username: u.username,
+            isVerified: u.isVerified,
+            apiEnabled: u.apiEnabled || false,
+            hasApiKey: !!u.apiKey,
+            createdAt: u.createdAt,
+            stats: {
+              totalTransactions: userTxns.length,
+              sdkTransactions: sdkTxns.length,
+              hpTransactions: hpTxns.length,
+              totalCollected: totalAll,
+              sdkCollected: totalSdk,
+              hpCollected: totalHp,
+            },
+          };
+        });
+
+      res.json(result);
+    } catch (e: any) {
+      console.error("[Admin API Management]", e);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // POST /api/admin/api-management/:userId/toggle — enable or disable API access
+  app.post("/api/admin/api-management/:userId/toggle", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { enabled } = req.body;
+      if (typeof enabled !== "boolean") {
+        return res.status(400).json({ message: "'enabled' doit être un booléen" });
+      }
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
+
+      await storage.updateUser(userId, { apiEnabled: enabled } as any);
+      res.json({ success: true, userId, apiEnabled: enabled });
+    } catch (e: any) {
+      console.error("[Admin API Toggle]", e);
+      res.status(500).json({ message: "Erreur serveur" });
     }
   });
 

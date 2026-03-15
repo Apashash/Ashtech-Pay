@@ -12,6 +12,7 @@ import { apiRequest } from "@/lib/queryClient";
 import {
   Code2, Globe, Eye, EyeOff, Copy, RefreshCw, BookOpen,
   CheckCircle2, Terminal, Shield, CheckCheck, ChevronRight, Key, Zap,
+  AlertCircle, LockKeyhole, CheckCircle,
 } from "lucide-react";
 
 type Mode = "hosted" | "sdk";
@@ -88,6 +89,13 @@ export default function ApiKeysPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // Current user profile (for verification + API access status)
+  const { data: currentUser } = useQuery<{ isVerified: boolean; apiEnabled: boolean }>({
+    queryKey: ["/api/user"],
+  });
+  const isVerified = currentUser?.isVerified ?? false;
+  const apiEnabled = (currentUser as any)?.apiEnabled ?? false;
+
   // SDK: API key query
   const { data: sdkData, isLoading: sdkLoading } = useQuery<{ apiKey: string }>({
     queryKey: ["/api/user/api-key"],
@@ -149,6 +157,43 @@ export default function ApiKeysPage() {
           <h1 className="text-2xl font-bold text-foreground">Clé API</h1>
           <p className="text-muted-foreground text-sm mt-1">Intégrez Ashtech Pay directement dans votre application</p>
         </div>
+
+        {/* ── API Access State Banner ── */}
+        {!isVerified && (
+          <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-800/40 dark:bg-amber-900/10 px-4 py-3.5" data-testid="banner-not-verified">
+            <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">Compte non vérifié</p>
+              <p className="text-sm text-amber-700 dark:text-amber-400 mt-0.5">
+                Votre compte doit être vérifié (KYC) avant de pouvoir accéder à l'API. Complétez la vérification d'identité dans votre profil.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {isVerified && !apiEnabled && (
+          <div className="flex items-start gap-3 rounded-xl border border-sky-200 bg-sky-50 dark:border-sky-800/40 dark:bg-sky-900/10 px-4 py-3.5" data-testid="banner-api-not-enabled">
+            <LockKeyhole className="h-5 w-5 text-sky-600 dark:text-sky-400 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-sky-800 dark:text-sky-300">Accès API non activé</p>
+              <p className="text-sm text-sky-700 dark:text-sky-400 mt-0.5">
+                Votre compte est vérifié, mais l'accès API n'est pas encore activé. Contactez l'administrateur Ashtech Pay pour l'activation.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {isVerified && apiEnabled && (
+          <div className="flex items-start gap-3 rounded-xl border border-green-200 bg-green-50 dark:border-green-800/40 dark:bg-green-900/10 px-4 py-3.5" data-testid="banner-api-active">
+            <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-green-800 dark:text-green-300">API activée</p>
+              <p className="text-sm text-green-700 dark:text-green-400 mt-0.5">
+                Votre accès API est actif. Utilisez vos clés ci-dessous pour intégrer Ashtech Pay dans votre application.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Mode selector */}
         <div className="grid grid-cols-2 gap-4">

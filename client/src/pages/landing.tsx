@@ -31,6 +31,8 @@ import {
   Info,
   Briefcase,
   BookOpen,
+  Code2,
+  Terminal,
   FileText as Terms,
   ShieldCheck,
   Scale,
@@ -1012,6 +1014,124 @@ function OperatorLogosSection() {
   );
 }
 
+function ApiDeveloperSection() {
+  return (
+    <section className="py-20 lg:py-32 bg-card/50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+          {/* Left: text */}
+          <div className="animate-on-scroll">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20 mb-6">
+              <Code2 className="w-4 h-4 text-primary" />
+              <span className="text-sm text-primary font-medium">Intégration développeur</span>
+            </div>
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-foreground mb-6 leading-tight">
+              <span className="text-cyan-600">API REST</span> pensée pour les développeurs africains
+            </h2>
+            <p className="text-lg text-muted-foreground mb-8 leading-relaxed">
+              Intégrez les paiements Mobile Money dans votre application en quelques lignes de code. Notre API couvre <strong className="text-foreground">22 pays africains</strong>, supporte <strong className="text-foreground">MTN, Orange, Wave, Moov</strong> et bien d'autres opérateurs.
+            </p>
+            <ul className="space-y-3 mb-8">
+              {[
+                "SDK API direct — collectez des paiements depuis votre backend",
+                "Hosted Payment Page — lien de paiement sans code frontend",
+                "Webhooks temps réel pour chaque événement de paiement",
+                "Dashboard marchand avec statistiques et historique",
+              ].map((item) => (
+                <li key={item} className="flex items-start gap-2.5 text-sm text-muted-foreground">
+                  <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                    <ChevronRight className="w-3 h-3 text-primary" />
+                  </div>
+                  {item}
+                </li>
+              ))}
+            </ul>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Link href="/dashboard/developer">
+                <Button size="lg" className="gap-2" data-testid="button-api-docs">
+                  <BookOpen className="w-4 h-4" />
+                  Documentation SDK
+                </Button>
+              </Link>
+              <Link href="/dashboard/api-keys">
+                <Button size="lg" variant="outline" className="gap-2" data-testid="button-api-hosted-docs">
+                  <Globe className="w-4 h-4" />
+                  Hosted Payment Page
+                </Button>
+              </Link>
+            </div>
+          </div>
+
+          {/* Right: code preview */}
+          <div className="animate-on-scroll-right">
+            <div className="rounded-2xl overflow-hidden border border-border shadow-xl">
+              <div className="flex items-center gap-2 px-4 py-3 bg-zinc-900 border-b border-zinc-800">
+                <div className="flex gap-1.5">
+                  <div className="w-3 h-3 rounded-full bg-rose-500" />
+                  <div className="w-3 h-3 rounded-full bg-amber-500" />
+                  <div className="w-3 h-3 rounded-full bg-green-500" />
+                </div>
+                <span className="text-xs text-zinc-400 ml-2 flex items-center gap-1.5">
+                  <Terminal className="w-3 h-3" />
+                  collect.js
+                </span>
+              </div>
+              <pre className="text-sm leading-relaxed p-6 bg-zinc-950 overflow-x-auto text-left font-mono">
+                <span className="text-sky-400">const</span>
+                <span className="text-zinc-300"> response = </span>
+                <span className="text-amber-300">await</span>
+                <span className="text-zinc-300"> fetch({"\n"}  </span>
+                <span className="text-green-400">"https://api.ashtechpay.top/v1/collect"</span>
+                <span className="text-zinc-300">,{"\n"}  {"{"}{"\n"}    method: </span>
+                <span className="text-green-400">"POST"</span>
+                <span className="text-zinc-300">,{"\n"}    headers: {"{"}{"\n"}      </span>
+                <span className="text-green-400">"Authorization"</span>
+                <span className="text-zinc-300">: </span>
+                <span className="text-green-400">"Bearer ak_live_…"</span>
+                <span className="text-zinc-300">,{"\n"}      </span>
+                <span className="text-green-400">"Content-Type"</span>
+                <span className="text-zinc-300">: </span>
+                <span className="text-green-400">"application/json"</span>
+                <span className="text-zinc-300">{"\n"}    {"}"},{"\n"}    body: JSON.stringify({"{"}{"\n"}      amount:    </span>
+                <span className="text-violet-400">5000</span>
+                <span className="text-zinc-300">,{"\n"}      currency:  </span>
+                <span className="text-green-400">"XAF"</span>
+                <span className="text-zinc-300">,{"\n"}      phone:     </span>
+                <span className="text-green-400">"670000000"</span>
+                <span className="text-zinc-300">,{"\n"}      operator:  </span>
+                <span className="text-green-400">"MTN"</span>
+                <span className="text-zinc-300">,{"\n"}      reference: </span>
+                <span className="text-green-400">"ORDER-123"</span>
+                <span className="text-zinc-300">{"\n"}    {"}"}){"\n"}  {"}"}{"\n"});</span>
+              </pre>
+              <div className="px-6 py-4 bg-zinc-900 border-t border-zinc-800">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                  <span className="text-xs text-green-400 font-mono">200 OK — paiement initié</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              {[
+                { label: "22 pays", sub: "supportés" },
+                { label: "< 500ms", sub: "latence API" },
+                { label: "99.9%", sub: "disponibilité" },
+                { label: "Webhooks", sub: "temps réel" },
+              ].map(({ label, sub }) => (
+                <div key={label} className="rounded-xl border bg-card px-4 py-3 text-center">
+                  <p className="text-lg font-bold text-foreground">{label}</p>
+                  <p className="text-xs text-muted-foreground">{sub}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function CTASection() {
   return (
     <section className="py-20 lg:py-32 relative overflow-hidden">
@@ -1185,6 +1305,7 @@ export default function LandingPage() {
       <WhyAshtechSection />
       <HowItWorksSection />
       <SecuritySection />
+      <ApiDeveloperSection />
       <TestimonialsSection />
       <CTASection />
       <Footer />
