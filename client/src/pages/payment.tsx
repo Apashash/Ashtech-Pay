@@ -99,7 +99,8 @@ export default function PaymentPage() {
   const depositConfig = useMemo(() => {
     const allowed = (paymentLink as any)?.allowedCountries;
     if (!allowed || allowed.length === 0) return allCountries;
-    return allCountries.filter(c => allowed.includes(c.id));
+    // allowedCountries contains ISO codes (e.g. "CM", "SN") — compare against c.code, not c.id
+    return allCountries.filter(c => allowed.includes(c.code));
   }, [allCountries, paymentLink]);
 
   const linkCurrency = useMemo(() => (paymentLink?.currency as SupportedCurrency) || "XAF", [paymentLink]);
