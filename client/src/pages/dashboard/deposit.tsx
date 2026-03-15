@@ -31,6 +31,7 @@ interface OperatorConfig {
   pixpayFee?: number;
   ashtechMargin?: number;
   pixpayOperatorType?: string; // 'ussd' | 'otp' | 'wave'
+  otpUssdCode?: string | null; // USSD code to dial to get OTP (PixPay Orange CI/SN/ML/BF)
   minFee: number | null;
   maxFee: number | null;
 }
@@ -810,15 +811,15 @@ export default function DepositPage() {
                           )}
                         />
 
-                        {/* PixPay OTP — Orange CI */}
+                        {/* PixPay OTP — Orange CI / SN / ML / BF */}
                         {isPixPayOtp && (
                           <div className="rounded-lg border-2 border-orange-400 bg-orange-50 dark:bg-orange-950/30 p-4 space-y-3">
                             <div className="flex items-center gap-2 text-orange-700 dark:text-orange-300 font-semibold text-sm">
                               <Hash className="h-4 w-4 shrink-0" />
-                              Code OTP requis — Orange CI
+                              Code OTP requis — Orange Money
                             </div>
                             <p className="text-xs text-orange-600 dark:text-orange-400">
-                              Composez <code className="font-mono bg-orange-200 dark:bg-orange-900 px-1 rounded font-bold">#144*82#</code> sur votre téléphone pour obtenir votre code OTP, puis saisissez-le ci-dessous.
+                              Composez <code className="font-mono bg-orange-200 dark:bg-orange-900 px-1 rounded font-bold">{selectedOperator?.otpUssdCode || "#144*82#"}</code> sur votre téléphone pour obtenir votre code OTP, puis saisissez-le ci-dessous.
                             </p>
                             <Input
                               type="text"

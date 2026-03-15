@@ -30,7 +30,7 @@ interface CountryConfig {
   flag: string;
   currency: string;
   exchangeRate: number;
-  operators: { id: string; name: string; gateway: string; paymentProvider: string; feePercentage: number; feeFixed: number; afribapayFee?: number; pixpayFee?: number; ashtechMargin?: number; pixpayOperatorType?: string; }[];
+  operators: { id: string; name: string; gateway: string; paymentProvider: string; feePercentage: number; feeFixed: number; afribapayFee?: number; pixpayFee?: number; ashtechMargin?: number; pixpayOperatorType?: string; otpUssdCode?: string | null; }[];
 }
 
 interface DepositConfigResponse {
@@ -372,7 +372,7 @@ export default function PaymentPage() {
                 <p className="text-muted-foreground text-sm leading-relaxed">
                   Composez{" "}
                   <span className="font-mono font-bold text-orange-500 bg-orange-100 dark:bg-orange-950/40 px-2 py-0.5 rounded">
-                    #144*82#
+                    {selectedOperatorData?.otpUssdCode || "#144*82#"}
                   </span>{" "}
                   sur votre téléphone pour obtenir votre code OTP, puis saisissez-le ci-dessous.
                 </p>

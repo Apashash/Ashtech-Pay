@@ -451,6 +451,7 @@ export const depositSchema = z.object({
   operatorId: z.string().optional(),
   phoneNumber: z.string().optional(),
   description: z.string().optional(),
+  pixpayOtp: z.string().optional(), // OTP code for PixPay Orange Money operators (CI/SN/ML/BF)
 });
 
 export const withdrawSchema = z.object({

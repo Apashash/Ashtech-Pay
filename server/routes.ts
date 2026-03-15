@@ -29,7 +29,7 @@ import fs from "fs";
 import { uploadToSupabase, getSignedImageUrl, downloadFromSupabase } from "./supabase";
 import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, fetchPaymentLinkDetails, ASHTECH_MARGIN } from "./swychr";
 import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, getAfribaPayOtpInfo, confirmAfribaPayOtp } from "./afribapay";
-import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, initiatePixPayPayout, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType, getPixPayServiceId } from "./pixpay";
+import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, initiatePixPayPayout, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType, getPixPayServiceId, PIXPAY_OTP_USSD_CODES } from "./pixpay";
 import { addPendingPayment, removePendingPayment } from "./paymentPoller";
 import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, cleanupEmptyWallets } from "./walletHelper";
 import { createSwychrPayout, formatInternationalPhone, detectMethodFromPhone, fiatToPusd, pusdToFiatRate, getConversionRate, convertFiatToPusd, getPayoutToken, COUNTRY_CURRENCY } from "./swychrPayout";
@@ -1553,6 +1553,23 @@ export async function registerRoutes(
 
       const depositRef = generateTransactionReference("deposit");
 
+      // ─── PixPay OTP pre-check — must happen BEFORE creating the transaction ──
+      // Orange CI/SN/ML/BF require the user to dial a USSD code to get an OTP
+      // that must be included in the API call. If it's missing, return 400 early
+      // so no failed transaction is created unnecessarily.
+      if (paymentProvider === "pixpay" && data.paymentMethod === "mobile_money") {
+        const earlyPxOpType = detectPixPayFlowType(operatorName, countryCode);
+        if (earlyPxOpType === "otp" && !(data as any).pixpayOtp) {
+          const ussdCode = PIXPAY_OTP_USSD_CODES[countryCode.toUpperCase()] || "#144*82#";
+          return res.status(400).json({
+            otpRequired: true,
+            gateway: "pixpay",
+            ussdCode,
+            message: `Composez ${ussdCode} sur votre téléphone pour obtenir votre code OTP, puis saisissez-le.`,
+          });
+        }
+      }
+
       // Create pending transaction with provider-correct amounts
       const transaction = await storage.createTransaction({
         userId,
@@ -1767,15 +1784,17 @@ export async function registerRoutes(
             let pixpayResponse;
 
             if (pixpayOpType === "otp") {
-              // Orange CI — user must provide OTP from #144*82# before calling
+              // Orange CI/SN/ML/BF — user must provide OTP obtained by dialing USSD code
+              // The OTP pre-check above should have caught missing OTP before transaction creation.
+              // This is a safety net only — we do NOT fail the transaction here.
               const omOtp = data.pixpayOtp as string | undefined;
               if (!omOtp) {
-                // OTP not yet provided: signal frontend to show OTP input
-                await storage.updateTransactionStatus(transaction.id, "failed");
+                const ussdCode = PIXPAY_OTP_USSD_CODES[countryCode.toUpperCase()] || "#144*82#";
                 return res.status(400).json({
                   otpRequired: true,
                   gateway: "pixpay",
-                  message: "Composez #144*82# sur votre téléphone pour obtenir votre code OTP, puis saisissez-le.",
+                  ussdCode,
+                  message: `Composez ${ussdCode} sur votre téléphone pour obtenir votre code OTP, puis saisissez-le.`,
                 });
               }
               pixpayResponse = await initiatePixPayOtp({ ...baseParams, omOtp });
@@ -3244,12 +3263,19 @@ export async function registerRoutes(
             } else {
               feePercentage = operatorFee?.feeType === "percentage" ? parseFloat(operatorFee.feeValue) : 0;
             }
+            const pxFlowType = provider === "pixpay"
+              ? detectPixPayFlowType((op as any).name || "", country.code)
+              : "ussd";
+            const otpUssdCode = pxFlowType === "otp"
+              ? (PIXPAY_OTP_USSD_CODES[country.code?.toUpperCase()] || "#144*82#")
+              : null;
             return {
               id: op.id,
               name: op.name,
               gateway: provider,
               paymentProvider: provider,
-              pixpayOperatorType: (op as any).pixpayOperatorType || "ussd",
+              pixpayOperatorType: pxFlowType,
+              otpUssdCode,
               feePercentage,
               feeFixed: operatorFee?.feeType === "fixed" ? parseFloat(operatorFee.feeValue) : 0,
               afribapayFee: afribaRate,
@@ -3534,6 +3560,22 @@ export async function registerRoutes(
       // Generate unique ASHPAY reference
       const reference = generateTransactionReference("payment_link");
 
+      // ─── PixPay OTP pre-check — must happen BEFORE creating the payment intent ─
+      // Orange CI/SN/ML/BF require the user to provide an OTP obtained via USSD.
+      // Return 400 early so no orphaned payment intent/transaction is created.
+      if (paymentProvider === "pixpay" && paymentMethod === "mobile_money") {
+        const earlyPxOpType = detectPixPayFlowType(operatorName, paymentCountryCode);
+        if (earlyPxOpType === "otp" && !req.body?.pixpayOtp) {
+          const ussdCode = PIXPAY_OTP_USSD_CODES[paymentCountryCode.toUpperCase()] || "#144*82#";
+          return res.status(400).json({
+            otpRequired: true,
+            gateway: "pixpay",
+            ussdCode,
+            message: `Composez ${ussdCode} sur votre téléphone pour obtenir votre code OTP, puis saisissez-le.`,
+          });
+        }
+      }
+
       // Create payment intent — amount & currency in payer's currency so wallet crediting is correct
       const countryDisplay = countryData ? `${countryData.flag || ''} ${countryData.name}`.trim() : country;
       const intent = await storage.createPaymentIntent({
@@ -3757,15 +3799,17 @@ export async function registerRoutes(
             let pxResponse;
 
             if (pxOpType === "otp") {
+              // Orange CI/SN/ML/BF — user must provide OTP obtained by dialing USSD code
+              // The OTP pre-check above should have caught missing OTP before payment intent creation.
+              // This is a safety net only — we do NOT fail the payment intent/transaction here.
               const omOtp = req.body?.pixpayOtp as string | undefined;
               if (!omOtp) {
-                await storage.updatePaymentIntentStatus(intent.id, "failed");
-                const failedTxOtp = await storage.getTransactionByReference(reference);
-                if (failedTxOtp) await storage.updateTransactionStatus(failedTxOtp.id, "failed");
+                const ussdCode = PIXPAY_OTP_USSD_CODES[paymentCountryCode.toUpperCase()] || "#144*82#";
                 return res.status(400).json({
                   otpRequired: true,
                   gateway: "pixpay",
-                  message: "Composez #144*82# sur votre téléphone pour obtenir votre code OTP, puis saisissez-le.",
+                  ussdCode,
+                  message: `Composez ${ussdCode} sur votre téléphone pour obtenir votre code OTP, puis saisissez-le.`,
                 });
               }
               pxResponse = await initiatePixPayOtp({ ...pxBaseParams, omOtp });

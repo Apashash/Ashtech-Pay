@@ -66,19 +66,29 @@ export function getPixPayApiKey(countryCode: string): string {
 
 // ─── Operator types ────────────────────────────────────────────────────────────
 // 'ussd'  → USSD push, user validates on phone (most operators)
-// 'otp'   → Orange CI only: user dials #144*82# to get code, enters it on platform
+// 'otp'   → Orange CI/SN/ML/BF: user dials USSD to get code, enters it on platform
 // 'wave'  → Wave CI / Wave SN: redirect to Wave deeplink
 export type PixPayOperatorType = "ussd" | "otp" | "wave";
 
+// ─── USSD codes to obtain OTP by country (PixPay Orange Money operators) ──────
+// Source: PixPay docs — "Codes USSD par pays/opérateur"
+export const PIXPAY_OTP_USSD_CODES: Record<string, string> = {
+  CI: "#144*82#",
+  SN: "#144#391#",
+  ML: "#144#77#",
+  BF: "*144*4*6*montant#",
+};
+
 // ─── Auto-detect flow type from operator name + country ───────────────────────
 // Rules from PixPay documentation:
-//   - Wave (any country)  → wave redirect
-//   - Orange + CI         → OTP (#144*82#)
-//   - Everything else     → USSD push
+//   - Wave (any country)                    → wave redirect
+//   - Orange + CI / SN / ML / BF           → OTP (user dials USSD to get code)
+//   - Everything else                       → USSD push
 export function detectPixPayFlowType(operatorName: string, countryCode: string): PixPayOperatorType {
   const name = operatorName.toLowerCase();
+  const cc = countryCode.toUpperCase();
   if (name.includes("wave")) return "wave";
-  if (name.includes("orange") && countryCode.toUpperCase() === "CI") return "otp";
+  if (name.includes("orange") && ["CI", "SN", "ML", "BF"].includes(cc)) return "otp";
   return "ussd";
 }
 
