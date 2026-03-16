@@ -212,6 +212,7 @@ export const paymentLinks = pgTable("payment_links", {
   expiresAt: timestamp("expires_at"),
   clickCount: integer("click_count").default(0).notNull(),
   allowedCountries: text("allowed_countries").array(),
+  notifyUrl: text("notify_url"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -485,6 +486,7 @@ export const insertPaymentLinkSchema = createInsertSchema(paymentLinks).pick({
   hasPdfDelivery: true,
   redirectUrl: true,
   expiresAt: true,
+  notifyUrl: true,
 });
 
 export const createPaymentLinkSchema = z.object({
@@ -986,6 +988,7 @@ export const hostedPaymentSessions = pgTable("hosted_payment_sessions", {
   description: text("description"),
   status: text("status").default("pending").notNull(),
   transactionId: varchar("transaction_id"),
+  notifyUrl: text("notify_url"),
   createdAt: timestamp("created_at").defaultNow(),
   expiresAt: timestamp("expires_at"),
 });

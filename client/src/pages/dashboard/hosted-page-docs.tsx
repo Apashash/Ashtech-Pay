@@ -145,6 +145,7 @@ const sections = [
   { id: "pays", label: "Filtrer les pays" },
   { id: "status", label: "Vérifier le statut" },
   { id: "credit", label: "Créditement wallet" },
+  { id: "webhook", label: "Webhook (notify_url)" },
   { id: "examples", label: "Exemples de code" },
 ];
 
@@ -244,6 +245,7 @@ Content-Type: application/json`} />
                 { name: "description", type: "string?", desc: "Titre affiché sur la page de paiement" },
                 { name: "is_fixed_amount", type: "boolean?", desc: "true (défaut) = prix fixe. false = le client saisit le montant" },
                 { name: "allowed_countries", type: "string[]?", desc: 'Codes ISO des pays à afficher. Ex: ["CM","SN"]. Vide = tous les pays' },
+                { name: "notify_url", type: "string?", desc: "URL de votre serveur qui recevra le webhook de confirmation de paiement" },
               ]} />
               <p className="text-xs text-zinc-600">* champ obligatoire</p>
 
@@ -278,6 +280,7 @@ Content-Type: application/json`} />
     amount: 5000,             // montant en unité locale (FCFA, GNF, CDF…)
     description: "Abonnement mensuel",
     is_fixed_amount: true,    // défaut — peut être omis
+    notify_url: "https://monsite.com/webhooks/ashtechpay", // ← votre endpoint webhook
   }),
 })`} />
             </Section>
@@ -469,7 +472,54 @@ Content-Type: application/json`} />
               </Note>
             </Section>
 
-            {/* ── 8. Exemples ── */}
+            {/* ── 8. Webhook ── */}
+            <Section id="webhook" title="Webhook — notify_url">
+              <p className="text-sm text-zinc-400">
+                Lorsque tu passes un <IC>notify_url</IC> lors de la création du lien, Ashtech Pay envoie automatiquement
+                une requête <IC>POST</IC> vers cette URL dès que le paiement est confirmé ou échoue.
+                C'est la méthode recommandée pour créditer ton client côté serveur sans polling.
+              </p>
+
+              <Note type="info">
+                Le webhook est envoyé <strong className="text-zinc-200">depuis nos serveurs</strong> vers ton serveur backend — assure-toi que l'URL est accessible publiquement (pas localhost).
+              </Note>
+
+              <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide">Payload reçu</p>
+              <CodeBlock language="json" code={`{
+  "event": "payment.success",          // ou "payment.failed"
+  "transaction_id": "uuid-de-la-txn",
+  "reference": "ASHPAY-DEP-XXXXXXXXXXXX",
+  "status": "success",                 // ou "failed"
+  "source": "payment_link",
+  "amount": 5000,                      // montant brut payé par le client
+  "credited_amount": 4750,             // montant crédité sur ton wallet (frais déduits)
+  "fee_amount": 250,
+  "currency": "XAF",
+  "phone": "656123456",
+  "payment_link_id": "uuid-du-lien",
+  "confirmed_at": "2026-03-16T03:00:00.000Z"  // null si echec
+}`} />
+
+              <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide">Exemple de récepteur webhook (Node.js / Express)</p>
+              <CodeBlock language="javascript" code={`app.post("/webhooks/ashtechpay", express.json(), (req, res) => {
+  const { event, status, transaction_id, amount, currency, payment_link_id } = req.body;
+
+  if (event === "payment.success" && status === "success") {
+    // ✅ Paiement confirmé — créditer le compte client, livrer la commande, etc.
+    console.log(\`Paiement reçu : \${amount} \${currency} | txn: \${transaction_id}\`);
+    // ... votre logique métier ici
+  }
+
+  // Répondre 200 pour confirmer la réception
+  res.sendStatus(200);
+});`} />
+
+              <Note type="warn">
+                Toujours répondre <IC>HTTP 200</IC> à Ashtech Pay pour éviter les retentatives. Si ton serveur retourne une erreur, le webhook n'est pas renvoyé automatiquement.
+              </Note>
+            </Section>
+
+            {/* ── 9. Exemples ── */}
             <Section id="examples" title="Exemples de code">
               <p className="text-xs text-zinc-600 uppercase tracking-wide font-medium">Node.js</p>
               <CodeBlock language="javascript" code={`const HP_KEY = process.env.HP_LIVE_KEY;
@@ -488,6 +538,7 @@ async function createLink({ amount, currency, description, countries }) {
       description,
       is_fixed_amount: !!amount,           // false si pas de montant
       allowed_countries: countries ?? null, // null = tous les pays
+      notify_url: "https://monsite.com/webhooks/ashtechpay", // URL webhook
     }),
   });
   return res.json();

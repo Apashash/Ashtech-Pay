@@ -98,7 +98,9 @@ app.use((req, res, next) => {
         expires_at TIMESTAMP
       )
     `);
-    console.log("[Migration] Schema columns ready (api_key, notify_url, source, confirmed_at, hosted_page_configs, hosted_payment_sessions)");
+    await db.execute(sql`ALTER TABLE hosted_payment_sessions ADD COLUMN IF NOT EXISTS notify_url TEXT`);
+    await db.execute(sql`ALTER TABLE payment_links ADD COLUMN IF NOT EXISTS notify_url TEXT`);
+    console.log("[Migration] Schema columns ready (api_key, notify_url, source, confirmed_at, hosted_page_configs, hosted_payment_sessions, payment_links.notify_url)");
   } catch (err: any) {
     if (!err?.message?.includes("already exists")) {
       console.warn("[Migration] warning:", err?.message);

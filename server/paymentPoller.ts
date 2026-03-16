@@ -136,21 +136,32 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
       console.log(`[PaymentPoller] ✗ Payment FAILED/CANCELLED for ${payment.reference} (${payment.provider || "swychr"})`);
     }
 
-    // ── API webhook notification ──────────────────────────────────────────────
-    const notifyUrl = (transaction as any).notifyUrl;
-    const txSource  = (transaction as any).source;
-    if (txSource === "api" && notifyUrl) {
+    // ── Merchant webhook notification (SDK + Hosted Page) ────────────────────
+    let notifyUrl: string | null = (transaction as any).notifyUrl || null;
+    const txSource = (transaction as any).source;
+
+    // For Hosted Page (payment_link type), look up notify_url from the payment link
+    if (!notifyUrl && transaction.paymentLinkId) {
+      try {
+        const link = await storage.getPaymentLinkById(transaction.paymentLinkId);
+        notifyUrl = (link as any)?.notifyUrl || null;
+      } catch (_) {}
+    }
+
+    if (notifyUrl && (txSource === "api" || txSource === "hosted_page" || transaction.paymentLinkId)) {
       try {
         const payload = {
           event: status === "completed" ? "payment.success" : "payment.failed",
           transaction_id: transaction.id,
           reference: transaction.reference,
           status: status === "completed" ? "success" : "failed",
+          source: txSource || "payment_link",
           amount: parseFloat(transaction.totalAmount || transaction.amount),
           credited_amount: parseFloat(transaction.amount),
           fee_amount: parseFloat(transaction.feeAmount || "0"),
           currency: transaction.currency,
           phone: transaction.recipientPhone,
+          payment_link_id: transaction.paymentLinkId || null,
           confirmed_at: status === "completed" ? new Date().toISOString() : null,
         };
         const wRes = await fetch(notifyUrl, {
@@ -159,7 +170,7 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
           body: JSON.stringify(payload),
           signal: AbortSignal.timeout(10000),
         });
-        console.log(`[PaymentPoller] Webhook → ${notifyUrl} : HTTP ${wRes.status}`);
+        console.log(`[PaymentPoller] Webhook [${txSource}] → ${notifyUrl} : HTTP ${wRes.status}`);
       } catch (whErr: any) {
         console.error(`[PaymentPoller] Webhook failed for ${payment.reference}:`, whErr.message);
       }

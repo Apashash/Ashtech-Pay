@@ -7509,6 +7509,7 @@ export async function registerRoutes(
         description,
         is_fixed_amount,
         allowed_countries,
+        notify_url,
       } = req.body;
 
       const isFixedAmount = is_fixed_amount !== false; // default: true (fixed price)
@@ -7561,6 +7562,7 @@ export async function registerRoutes(
         redirectUrl: null,
         expiresAt,
         allowedCountries: countriesFilter,
+        notifyUrl: notify_url || null,
       });
 
       const host = req.headers.host || "pay.ashtechpay.top";
