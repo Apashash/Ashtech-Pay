@@ -52,6 +52,7 @@ const periodLabels: Record<StatsPeriod, string> = {
 
 interface AdminStats {
   totalUsers: number;
+  apiEnabledUsers: number;
   totalTransactions: number;
   totalVolume: string;
   monthlyTransactions: number;
@@ -128,6 +129,14 @@ export default function AdminDashboard() {
       icon: Users,
       color: "text-blue-500",
       bgColor: "bg-blue-500/10",
+    },
+    {
+      title: "Utilisateurs API activée",
+      value: stats?.apiEnabledUsers || 0,
+      icon: Zap,
+      color: "text-amber-500",
+      bgColor: "bg-amber-500/10",
+      href: "/admin/api-management",
     },
     {
       title: "Total Transactions",

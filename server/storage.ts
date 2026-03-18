@@ -1030,6 +1030,7 @@ export class DatabaseStorage implements IStorage {
 
     const [usersCount] = await db.select({ count: count() }).from(users);
     const [bannedCount] = await db.select({ count: count() }).from(users).where(eq(users.isBanned, true));
+    const [apiEnabledCount] = await db.select({ count: count() }).from(users).where(eq(users.apiEnabled, true));
     
     // Compute period date range
     const now = new Date();
@@ -1099,6 +1100,7 @@ export class DatabaseStorage implements IStorage {
     
     return {
       totalUsers: usersCount.count,
+      apiEnabledUsers: apiEnabledCount.count,
       totalTransactions: allTx.length,
       totalVolume: (depositVol + withdrawalVol + transferVol + linkVol).toFixed(2),
       monthlyTransactions: 0,
