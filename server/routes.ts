@@ -6506,6 +6506,43 @@ export async function registerRoutes(
     }
   });
 
+  // ─── Merchant webhook forwarding ─────────────────────────────────────────────
+  // Fire-and-forget: sends a POST to the merchant's notify_url (if set) after
+  // a payment status change. Never throws — errors are logged only.
+  async function forwardMerchantWebhook(
+    transaction: any,
+    finalStatus: "completed" | "failed"
+  ): Promise<void> {
+    const notifyUrl = transaction.notifyUrl as string | null | undefined;
+    if (!notifyUrl) return;
+    const payload = {
+      event: finalStatus === "completed" ? "payment.completed" : "payment.failed",
+      transaction_id: transaction.id,
+      reference: transaction.reference,
+      status: finalStatus,
+      amount: transaction.amount,
+      total_amount: transaction.totalAmount || transaction.amount,
+      currency: transaction.currency,
+      type: transaction.type,
+      phone: transaction.recipientPhone || null,
+      timestamp: new Date().toISOString(),
+    };
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 10_000);
+      const resp = await fetch(notifyUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      console.log(`[MerchantWebhook] → ${notifyUrl} | status=${resp.status}`);
+    } catch (err: any) {
+      console.warn(`[MerchantWebhook] Failed to reach ${notifyUrl}:`, err?.message);
+    }
+  }
+
   app.get("/api/swychr/webhook", (req, res) => {
     const proto = (req.headers["x-forwarded-proto"] as string) || (req.secure ? "https" : "http");
     const host  = req.headers["x-forwarded-host"] as string || req.headers.host || "";
@@ -6566,6 +6603,7 @@ export async function registerRoutes(
           await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "completed");
         }
         console.log(`[Swychr Webhook] ✓ Payment SUCCESS: ${transaction.id} → credited ${transaction.amount} ${txCurrency}`);
+        forwardMerchantWebhook(transaction, "completed").catch(() => {});
       } else if (status === "failed") {
         await storage.updateTransactionStatus(transaction.id, "failed");
         if (transaction.type === "payment_link" && transaction.paymentIntentId) {
@@ -6582,6 +6620,7 @@ export async function registerRoutes(
           transactionId: transaction.id,
         });
         console.log("[Swychr Webhook] Payment FAILED for:", transaction.id);
+        forwardMerchantWebhook(transaction, "failed").catch(() => {});
       } else {
         console.log("[Swychr Webhook] Unrecognized status:", rawStatus, "for:", transactionId);
       }
@@ -6650,6 +6689,7 @@ export async function registerRoutes(
             transactionId: transaction.id,
           });
           console.log(`[AfribaPay Webhook] ✓ Payout SUCCESS: ${transaction.id} (${transaction.type})`);
+          forwardMerchantWebhook(transaction, "completed").catch(() => {});
         } else {
           // Payin / deposit success: credit user's wallet
           await creditUserWallet(transaction.userId, parseFloat(transaction.amount), txCurrency);
@@ -6667,6 +6707,7 @@ export async function registerRoutes(
             await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "completed");
           }
           console.log(`[AfribaPay Webhook] ✓ Deposit SUCCESS: ${transaction.id} → credited ${transaction.amount} ${txCurrency}`);
+          forwardMerchantWebhook(transaction, "completed").catch(() => {});
         }
 
       } else if (status === "failed") {
@@ -6687,6 +6728,7 @@ export async function registerRoutes(
             transactionId: transaction.id,
           });
           console.log(`[AfribaPay Webhook] ✗ Payout FAILED: ${transaction.id} — refunded ${refundAmount} ${txCurrency}`);
+          forwardMerchantWebhook(transaction, "failed").catch(() => {});
         } else {
           if (transaction.paymentIntentId) {
             await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "failed");
@@ -6702,6 +6744,7 @@ export async function registerRoutes(
             transactionId: transaction.id,
           });
           console.log(`[AfribaPay Webhook] ✗ Deposit FAILED/CANCELLED: ${transaction.id}`);
+          forwardMerchantWebhook(transaction, "failed").catch(() => {});
         }
       }
 
@@ -6758,6 +6801,7 @@ export async function registerRoutes(
             transactionId: transaction.id,
           });
           console.log(`[PixPay Webhook] ✓ Payout SUCCESS: ${transaction.id} (${transaction.type})`);
+          forwardMerchantWebhook(transaction, "completed").catch(() => {});
         } else {
           // Payin / deposit success: credit user's wallet
           await creditUserWallet(transaction.userId, parseFloat(transaction.amount), txCurrency);
@@ -6775,6 +6819,7 @@ export async function registerRoutes(
             await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "completed");
           }
           console.log(`[PixPay Webhook] ✓ Deposit SUCCESS: ${transaction.id} → ${transaction.amount} ${txCurrency}`);
+          forwardMerchantWebhook(transaction, "completed").catch(() => {});
         }
 
       } else if (status === "failed") {
@@ -6795,6 +6840,7 @@ export async function registerRoutes(
             transactionId: transaction.id,
           });
           console.log(`[PixPay Webhook] ✗ Payout FAILED: ${transaction.id} — refunded ${refundAmount} ${txCurrency}`);
+          forwardMerchantWebhook(transaction, "failed").catch(() => {});
         } else {
           removePendingPayment(ref);
           if (transaction.paymentIntentId) {
@@ -6810,6 +6856,7 @@ export async function registerRoutes(
             transactionId: transaction.id,
           });
           console.log(`[PixPay Webhook] ✗ Deposit FAILED: ${transaction.id} — ${providerMessage}`);
+          forwardMerchantWebhook(transaction, "failed").catch(() => {});
         }
       }
 
