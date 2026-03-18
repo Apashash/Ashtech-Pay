@@ -22,6 +22,7 @@ interface HostedPageConfig {
   userId: string;
   successUrl: string | null;
   cancelUrl: string | null;
+  notifyUrl: string | null;
   pkLive: string | null;
   skLive: string | null;
   hpLive: string | null;
@@ -84,6 +85,7 @@ export default function ApiKeysPage() {
   // Hosted page state
   const [successUrl, setSuccessUrl] = useState("");
   const [cancelUrl, setCancelUrl] = useState("");
+  const [notifyUrl, setNotifyUrl] = useState("");
   const [initialized, setInitialized] = useState(false);
 
   const { toast } = useToast();
@@ -134,11 +136,12 @@ export default function ApiKeysPage() {
   if (hpConfig && !initialized) {
     setSuccessUrl(hpConfig.successUrl || "");
     setCancelUrl(hpConfig.cancelUrl || "");
+    setNotifyUrl(hpConfig.notifyUrl || "");
     setInitialized(true);
   }
 
   const hpMutation = useMutation({
-    mutationFn: (data: { successUrl: string; cancelUrl: string; regenerate?: boolean }) =>
+    mutationFn: (data: { successUrl: string; cancelUrl: string; notifyUrl: string; regenerate?: boolean }) =>
       apiRequest("POST", "/api/hosted-page/config", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/hosted-page/config"] });
@@ -358,10 +361,27 @@ export default function ApiKeysPage() {
                   </p>
                 </div>
 
+                <div className="space-y-2 pt-2 border-t">
+                  <Label htmlFor="notify-url" className="flex items-center gap-2">
+                    Webhook URL (notify_url)
+                    <span className="text-[10px] bg-violet-500/10 text-violet-500 border border-violet-500/20 px-1.5 py-0.5 rounded font-mono">Automatique</span>
+                  </Label>
+                  <Input
+                    id="notify-url"
+                    data-testid="input-notify-url"
+                    placeholder="https://monsite.com/webhooks/ashtechpay"
+                    value={notifyUrl}
+                    onChange={(e) => setNotifyUrl(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Votre serveur recevra automatiquement une notification POST à chaque paiement Hosted Page confirmé ou échoué — sans que vous ayez à le spécifier dans chaque lien.
+                  </p>
+                </div>
+
                 {hasHpKeys ? (
                   <Button
                     variant="outline"
-                    onClick={() => hpMutation.mutate({ successUrl, cancelUrl })}
+                    onClick={() => hpMutation.mutate({ successUrl, cancelUrl, notifyUrl })}
                     disabled={hpMutation.isPending}
                     data-testid="button-save-urls"
                   >
@@ -369,7 +389,7 @@ export default function ApiKeysPage() {
                   </Button>
                 ) : (
                   <Button
-                    onClick={() => hpMutation.mutate({ successUrl, cancelUrl })}
+                    onClick={() => hpMutation.mutate({ successUrl, cancelUrl, notifyUrl })}
                     disabled={hpMutation.isPending}
                     data-testid="button-generate-keys"
                     className="w-full sm:w-auto"
@@ -425,7 +445,7 @@ export default function ApiKeysPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => hpMutation.mutate({ successUrl, cancelUrl, regenerate: true })}
+                      onClick={() => hpMutation.mutate({ successUrl, cancelUrl, notifyUrl, regenerate: true })}
                       disabled={hpMutation.isPending}
                       data-testid="button-regenerate-keys"
                       className="text-destructive hover:text-destructive"
