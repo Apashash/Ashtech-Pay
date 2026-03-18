@@ -7005,6 +7005,8 @@ export async function registerRoutes(
     try {
       const { id } = req.params;
       const { afribapayFee, ashtechMargin, isActive, minFee } = req.body;
+      const fee = await storage.getFee(id);
+      if (!fee) return res.status(404).json({ message: "Frais non trouvé" });
       const updates: any = {};
       if (afribapayFee !== undefined) {
         const rate = parseFloat(afribapayFee);
@@ -7018,7 +7020,20 @@ export async function registerRoutes(
       if (isActive !== undefined) updates.isActive = Boolean(isActive);
       if (minFee !== undefined) updates.minFee = minFee ? String(minFee) : null;
       const updated = await storage.updateFee(id, updates);
-      if (!updated) return res.status(404).json({ message: "Frais non trouvé" });
+      // Sync retrait <-> envoi
+      if (fee.transactionType === 'transfer' || fee.transactionType === 'withdrawal') {
+        const otherType = fee.transactionType === 'transfer' ? 'withdrawal' : 'transfer';
+        const allFees = await storage.getAllFees();
+        let otherFee: typeof allFees[number] | undefined;
+        if (fee.operatorId) {
+          otherFee = allFees.find(f => f.operatorId === fee.operatorId && f.transactionType === otherType);
+        } else if (fee.countryId) {
+          otherFee = allFees.find(f => f.countryId === fee.countryId && !f.operatorId && f.transactionType === otherType);
+        }
+        if (otherFee) {
+          await storage.updateFee(otherFee.id, updates);
+        }
+      }
       res.json({ success: true, fee: updated });
     } catch (err: any) {
       console.error("[Admin AfribaPay Fee] Error:", err);
@@ -7031,6 +7046,8 @@ export async function registerRoutes(
     try {
       const { id } = req.params;
       const { pixpayFee, ashtechMargin, isActive, minFee } = req.body;
+      const fee = await storage.getFee(id);
+      if (!fee) return res.status(404).json({ message: "Frais non trouvé" });
       const updates: any = {};
       if (pixpayFee !== undefined) {
         const rate = parseFloat(pixpayFee);
@@ -7044,7 +7061,20 @@ export async function registerRoutes(
       if (isActive !== undefined) updates.isActive = Boolean(isActive);
       if (minFee !== undefined) updates.minFee = minFee ? String(minFee) : null;
       const updated = await storage.updateFee(id, updates);
-      if (!updated) return res.status(404).json({ message: "Frais non trouvé" });
+      // Sync retrait <-> envoi
+      if (fee.transactionType === 'transfer' || fee.transactionType === 'withdrawal') {
+        const otherType = fee.transactionType === 'transfer' ? 'withdrawal' : 'transfer';
+        const allFees = await storage.getAllFees();
+        let otherFee: typeof allFees[number] | undefined;
+        if (fee.operatorId) {
+          otherFee = allFees.find(f => f.operatorId === fee.operatorId && f.transactionType === otherType);
+        } else if (fee.countryId) {
+          otherFee = allFees.find(f => f.countryId === fee.countryId && !f.operatorId && f.transactionType === otherType);
+        }
+        if (otherFee) {
+          await storage.updateFee(otherFee.id, updates);
+        }
+      }
       res.json({ success: true, fee: updated });
     } catch (err: any) {
       console.error("[Admin PixPay Fee] Error:", err);
