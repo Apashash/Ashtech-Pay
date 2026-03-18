@@ -7982,11 +7982,11 @@ export async function registerRoutes(
         .map((u: any) => {
           const userTxns = allTransactions.filter((t: any) => t.userId === u.id && t.status === "completed");
 
-          // HP: transaction type payment_link with a paymentLinkId (created via Hosted Page API)
-          const hpTxns = userTxns.filter((t: any) => t.type === "payment_link" && t.paymentLinkId);
+          // Hosted Page API: transactions created via /v1/hosted-payment (source = "hosted_page")
+          const hpTxns = userTxns.filter((t: any) => t.source === "hosted_page");
 
-          // SDK: transactions where source === "api" (set by /v1/collect endpoint)
-          const sdkTxns = userTxns.filter((t: any) => t.source === "api" && t.type !== "payment_link");
+          // SDK: transactions created via /v1/collect (source = "api")
+          const sdkTxns = userTxns.filter((t: any) => t.source === "api");
 
           const totalSdk = sdkTxns.reduce((s: number, t: any) => s + parseFloat(t.amount || "0"), 0);
           const totalHp = hpTxns.reduce((s: number, t: any) => s + parseFloat(t.amount || "0"), 0);

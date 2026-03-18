@@ -96,10 +96,17 @@ export default function TransactionsPage() {
 
   const getApiBadge = (tx: Transaction) => {
     const t = tx as any;
-    if (t.type === "payment_link" && t.paymentLinkId) {
+    if (t.type === "payment_link") {
+      return (
+        <Badge className="text-[10px] px-1.5 py-0 gap-1 bg-violet-500/10 text-violet-600 border-violet-500/30 font-medium">
+          <Link2 className="w-2.5 h-2.5" />Lien de paiement
+        </Badge>
+      );
+    }
+    if (t.source === "hosted_page") {
       return (
         <Badge className="text-[10px] px-1.5 py-0 gap-1 bg-amber-500/10 text-amber-600 border-amber-500/30 font-medium">
-          <Globe className="w-2.5 h-2.5" />Hosted Page
+          <Globe className="w-2.5 h-2.5" />Hosted Page API
         </Badge>
       );
     }

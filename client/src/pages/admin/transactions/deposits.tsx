@@ -39,7 +39,9 @@ import {
   CreditCard,
   FileText,
   Link2,
-  Smartphone
+  Smartphone,
+  Globe,
+  Code2
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -146,6 +148,31 @@ export default function AdminDeposits() {
   const typeLabels: Record<string, string> = {
     deposit: "Dépôt",
     payment_link: "Lien de paiement",
+  };
+
+  const getSourceBadge = (tx: any) => {
+    if (tx.type === "payment_link") {
+      return (
+        <Badge variant="default" className="gap-1 text-[10px] px-1.5 py-0 bg-violet-500/15 text-violet-600 border-violet-500/30">
+          <Link2 className="w-2.5 h-2.5" />Lien
+        </Badge>
+      );
+    }
+    if (tx.source === "hosted_page") {
+      return (
+        <Badge variant="outline" className="gap-1 text-[10px] px-1.5 py-0 bg-amber-500/10 text-amber-600 border-amber-500/30">
+          <Globe className="w-2.5 h-2.5" />Hosted Page
+        </Badge>
+      );
+    }
+    if (tx.source === "api") {
+      return (
+        <Badge variant="outline" className="gap-1 text-[10px] px-1.5 py-0 bg-sky-500/10 text-sky-600 border-sky-500/30">
+          <Code2 className="w-2.5 h-2.5" />SDK API
+        </Badge>
+      );
+    }
+    return null;
   };
 
   const paymentMethodLabels: Record<string, string> = {
@@ -283,10 +310,13 @@ export default function AdminDeposits() {
                       className={tx.id === highlightedId ? "bg-yellow-500/20 animate-pulse" : ""}
                     >
                       <TableCell>
-                        <Badge variant={tx.type === "payment_link" ? "default" : "secondary"} className="gap-1">
-                          {tx.type === "payment_link" ? <Link2 className="w-3 h-3" /> : <ArrowDownCircle className="w-3 h-3" />}
-                          {typeLabels[tx.type] || tx.type}
-                        </Badge>
+                        <div className="flex flex-col gap-1">
+                          <Badge variant={tx.type === "payment_link" ? "default" : "secondary"} className="gap-1 w-fit">
+                            {tx.type === "payment_link" ? <Link2 className="w-3 h-3" /> : <ArrowDownCircle className="w-3 h-3" />}
+                            {typeLabels[tx.type] || tx.type}
+                          </Badge>
+                          {getSourceBadge(tx)}
+                        </div>
                       </TableCell>
                       <TableCell className="font-mono text-xs">{tx.reference || "-"}</TableCell>
                       <TableCell className="font-mono text-xs">{tx.externalReference || "-"}</TableCell>
@@ -459,6 +489,14 @@ export default function AdminDeposits() {
                       <span className="text-sm font-medium">{paymentMethodLabels[tx.paymentMethod] || tx.paymentMethod}</span>
                     </div>
                   )}
+
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Zap className="w-4 h-4" />
+                      <span className="text-sm">Source</span>
+                    </div>
+                    <div>{getSourceBadge(tx) || <span className="text-sm text-muted-foreground">Interne</span>}</div>
+                  </div>
 
                   {tx.recipientPhone && tx.type === "deposit" && (
                     <div className="flex items-center justify-between">
