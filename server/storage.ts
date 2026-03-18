@@ -1314,11 +1314,12 @@ export class DatabaseStorage implements IStorage {
       });
     } else if (change.action === "delete") {
       const numberToDelete = change.withdrawalNumberId;
-      // Nullify the FK reference first to avoid constraint violation on deletion
-      await db.update(withdrawalNumberChanges)
-        .set({ withdrawalNumberId: null })
-        .where(eq(withdrawalNumberChanges.id, id));
+      // Nullify the FK reference in ALL change records pointing to this number
+      // (not just this one) to avoid FK constraint violation on deletion
       if (numberToDelete) {
+        await db.update(withdrawalNumberChanges)
+          .set({ withdrawalNumberId: null })
+          .where(eq(withdrawalNumberChanges.withdrawalNumberId, numberToDelete));
         await this.deleteWithdrawalNumber(numberToDelete);
       }
     }
