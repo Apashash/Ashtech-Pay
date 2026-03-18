@@ -186,10 +186,20 @@ function Navbar() {
                 <button
                   onClick={() => setMenuOpen(false)}
                   className="w-full flex items-center gap-2 px-4 py-2.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-left font-semibold"
-                  data-testid="button-sidebar-documentation"
+                  data-testid="button-sidebar-documentation-api"
                 >
                   <Terminal className="w-4 h-4" />
                   <span>Documentation API</span>
+                </button>
+              </Link>
+              <Link href="/docs/hosted-page">
+                <button
+                  onClick={() => setMenuOpen(false)}
+                  className="w-full flex items-center gap-2 px-4 py-2.5 rounded-lg bg-primary/10 border border-primary/30 text-primary hover:bg-primary/20 transition-colors text-left font-semibold"
+                  data-testid="button-sidebar-documentation-hosted"
+                >
+                  <Code2 className="w-4 h-4" />
+                  <span>Documentation Hosted Page</span>
                 </button>
               </Link>
 
