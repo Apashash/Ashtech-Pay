@@ -6542,8 +6542,10 @@ export async function registerRoutes(
       console.warn(`[MerchantWebhook] Blocked unsafe notify_url: ${notifyUrl}`);
       return;
     }
+    const isPayout = transaction.type === "withdrawal" || transaction.type === "transfer_out";
+    const eventPrefix = isPayout ? "payout" : "payment";
     const payload = {
-      event: finalStatus === "completed" ? "payment.completed" : "payment.failed",
+      event: finalStatus === "completed" ? `${eventPrefix}.completed` : `${eventPrefix}.failed`,
       transaction_id: transaction.id,
       reference: transaction.reference,
       status: finalStatus,
