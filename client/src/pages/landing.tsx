@@ -88,19 +88,40 @@ const countries = [
 function Navbar() {
   const { theme, toggleTheme } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
-  
-  const menuItems = [
-    { label: "Se connecter", href: "/login", icon: LogIn },
-    { label: "Créer un compte", href: "/register", icon: UserPlus },
-    { label: "À propos", href: "/about", icon: Info },
-    { label: "Carrières", href: "/careers", icon: Briefcase },
-    { label: "Blog", href: "/blog", icon: BookOpen },
-    { label: "Conditions d'utilisation", href: "/terms", icon: Terms },
-    { label: "Politique de confidentialité", href: "/privacy", icon: ShieldCheck },
-    { label: "Mentions légales", href: "/legal", icon: Scale },
-    { label: "Centre d'aide", href: "/help", icon: HelpCircle },
-    { label: "Contact", href: "/contact", icon: Mail },
-    { label: "FAQ", href: "/faq", icon: MessageCircleQuestion },
+
+  const menuGroups = [
+    {
+      title: "Compte",
+      items: [
+        { label: "Se connecter", href: "/login", icon: LogIn },
+        { label: "Créer un compte", href: "/register", icon: UserPlus },
+      ],
+    },
+    {
+      title: "Ressources",
+      items: [
+        { label: "Documentation", href: "/docs/api", icon: Code2 },
+        { label: "Centre d'aide", href: "/help", icon: HelpCircle },
+        { label: "FAQ", href: "/faq", icon: MessageCircleQuestion },
+        { label: "Blog", href: "/blog", icon: BookOpen },
+        { label: "Contact", href: "/contact", icon: Mail },
+      ],
+    },
+    {
+      title: "À propos",
+      items: [
+        { label: "À propos", href: "/about", icon: Info },
+        { label: "Carrières", href: "/careers", icon: Briefcase },
+      ],
+    },
+    {
+      title: "Légal",
+      items: [
+        { label: "Conditions d'utilisation", href: "/terms", icon: Terms },
+        { label: "Politique de confidentialité", href: "/privacy", icon: ShieldCheck },
+        { label: "Mentions légales", href: "/legal", icon: Scale },
+      ],
+    },
   ];
   
   return (
@@ -146,30 +167,49 @@ function Navbar() {
         <div className="fixed inset-0 z-[60] animate-in fade-in duration-300" onClick={() => setMenuOpen(false)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-in fade-in duration-300" />
           <div 
-            className="absolute right-0 top-0 h-full w-80 max-w-[85vw] bg-background shadow-2xl overflow-y-auto animate-in slide-in-from-right duration-300"
+            className="absolute right-0 top-0 h-full w-72 max-w-[85vw] bg-background shadow-2xl overflow-y-auto animate-in slide-in-from-right duration-300"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between p-4 border-b border-border">
-              <span className="font-semibold text-lg text-foreground">Menu</span>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+              <span className="font-semibold text-base text-foreground">Menu</span>
               <button
                 onClick={() => setMenuOpen(false)}
-                className="p-2 rounded-lg hover:bg-accent transition-colors"
+                className="p-1.5 rounded-lg hover:bg-accent transition-colors"
                 aria-label="Fermer le menu"
               >
-                <X className="w-5 h-5 text-foreground" />
+                <X className="w-4 h-4 text-foreground" />
               </button>
             </div>
-            <div className="p-4 space-y-1">
-              {menuItems.map((item) => (
-                <Link key={item.href} href={item.href}>
-                  <button
-                    onClick={() => setMenuOpen(false)}
-                    className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-accent transition-colors text-left"
-                  >
-                    <item.icon className="w-5 h-5 text-primary" />
-                    <span className="text-foreground">{item.label}</span>
-                  </button>
-                </Link>
+
+            <div className="p-3 space-y-3">
+              <Link href="/docs/api">
+                <button
+                  onClick={() => setMenuOpen(false)}
+                  className="w-full flex items-center gap-2 px-4 py-2.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-left font-semibold"
+                  data-testid="button-sidebar-documentation"
+                >
+                  <Terminal className="w-4 h-4" />
+                  <span>Documentation API</span>
+                </button>
+              </Link>
+
+              {menuGroups.map((group) => (
+                <div key={group.title}>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-1">{group.title}</p>
+                  <div className="space-y-0.5">
+                    {group.items.map((item) => (
+                      <Link key={item.href} href={item.href}>
+                        <button
+                          onClick={() => setMenuOpen(false)}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-accent transition-colors text-left"
+                        >
+                          <item.icon className="w-4 h-4 text-primary flex-shrink-0" />
+                          <span className="text-sm text-foreground">{item.label}</span>
+                        </button>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           </div>
