@@ -569,7 +569,7 @@ const res = await fetch("/v1/collect", {
 
 const data = await res.json();
 // data.status === "pending"
-// → Attendre le webhook payment.success / payment.failed`} />
+// → Attendre le webhook payment.completed / payment.failed`} />
                 </div>
                 <div className="space-y-1 min-w-0">
                   <p className="text-xs text-zinc-500 font-medium">Réponse 202</p>
@@ -759,7 +759,7 @@ if (data.flow === "wave") {
 // → Afficher wave_url comme bouton
 // "Payer avec Wave"
 // → Le client ouvre l'app Wave et confirme
-// → Webhook payment.success envoyé`} />
+// → Webhook payment.completed envoyé`} />
                 </div>
               </div>
             </div>

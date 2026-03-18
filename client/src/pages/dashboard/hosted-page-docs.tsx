@@ -245,7 +245,7 @@ Content-Type: application/json`} />
                 { name: "description", type: "string?", desc: "Titre affiché sur la page de paiement" },
                 { name: "is_fixed_amount", type: "boolean?", desc: "true (défaut) = prix fixe. false = le client saisit le montant" },
                 { name: "allowed_countries", type: "string[]?", desc: 'Codes ISO des pays à afficher. Ex: ["CM","SN"]. Vide = tous les pays' },
-                { name: "notify_url", type: "string?", desc: "URL de votre serveur qui recevra le webhook de confirmation de paiement" },
+                { name: "notify_url", type: "string?", desc: "Optionnel — surcharge la Webhook URL configurée dans vos paramètres pour ce lien spécifique" },
               ]} />
               <p className="text-xs text-zinc-600">* champ obligatoire</p>
 
@@ -280,7 +280,7 @@ Content-Type: application/json`} />
     amount: 5000,             // montant en unité locale (FCFA, GNF, CDF…)
     description: "Abonnement mensuel",
     is_fixed_amount: true,    // défaut — peut être omis
-    notify_url: "https://monsite.com/webhooks/ashtechpay", // ← votre endpoint webhook
+    // notify_url est définie dans vos paramètres — Ashtech Pay la récupère automatiquement
   }),
 })`} />
             </Section>
@@ -473,49 +473,56 @@ Content-Type: application/json`} />
             </Section>
 
             {/* ── 8. Webhook ── */}
-            <Section id="webhook" title="Webhook — notify_url">
+            <Section id="webhook" title="Webhook — notification automatique">
               <p className="text-sm text-zinc-400">
-                Lorsque tu passes un <IC>notify_url</IC> lors de la création du lien, Ashtech Pay envoie automatiquement
-                une requête <IC>POST</IC> vers cette URL dès que le paiement est confirmé ou échoue.
-                C'est la méthode recommandée pour créditer ton client côté serveur sans polling.
+                Configure ta <IC>Webhook URL</IC> une seule fois dans tes{" "}
+                <strong className="text-zinc-200">paramètres API Keys</strong>. Ashtech Pay la récupère
+                automatiquement à chaque paiement Hosted Page — tu n'as pas besoin de la passer dans chaque lien.
+                Une requête <IC>POST</IC> est envoyée dès que le paiement est confirmé ou échoue.
               </p>
 
               <Note type="info">
-                Le webhook est envoyé <strong className="text-zinc-200">depuis nos serveurs</strong> vers ton serveur backend — assure-toi que l'URL est accessible publiquement (pas localhost).
+                Tu peux aussi passer un <IC>notify_url</IC> spécifique lors de la création d'un lien — il remplacera l'URL configurée par défaut pour ce lien uniquement. Le webhook est envoyé <strong className="text-zinc-200">depuis nos serveurs</strong> vers ton serveur — l'URL doit être publiquement accessible (pas localhost).
               </Note>
 
               <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide">Payload reçu</p>
               <CodeBlock language="json" code={`{
-  "event": "payment.success",          // ou "payment.failed"
+  "event": "payment.completed",     // ou "payment.failed"
   "transaction_id": "uuid-de-la-txn",
   "reference": "ASHPAY-DEP-XXXXXXXXXXXX",
-  "status": "success",                 // ou "failed"
-  "source": "payment_link",
-  "amount": 5000,                      // montant brut payé par le client
-  "credited_amount": 4750,             // montant crédité sur ton wallet (frais déduits)
-  "fee_amount": 250,
+  "status": "completed",            // ou "failed"
+  "amount": 4750,                   // montant net crédité sur ton wallet (frais déduits)
+  "total_amount": 5000,             // montant brut payé par le client
   "currency": "XAF",
+  "type": "deposit",
   "phone": "656123456",
-  "payment_link_id": "uuid-du-lien",
-  "confirmed_at": "2026-03-16T03:00:00.000Z"  // null si echec
+  "timestamp": "2026-03-16T03:00:00.000Z"
 }`} />
 
               <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide">Exemple de récepteur webhook (Node.js / Express)</p>
               <CodeBlock language="javascript" code={`app.post("/webhooks/ashtechpay", express.json(), (req, res) => {
-  const { event, status, transaction_id, amount, currency, payment_link_id } = req.body;
+  // ✅ Toujours répondre 200 d'abord, traiter ensuite
+  res.sendStatus(200);
 
-  if (event === "payment.success" && status === "success") {
-    // ✅ Paiement confirmé — créditer le compte client, livrer la commande, etc.
+  const { event, transaction_id, reference, amount, total_amount, currency } = req.body;
+
+  if (event === "payment.completed") {
+    // Paiement confirmé
+    // amount      = montant net crédité sur votre wallet (après frais)
+    // total_amount = montant brut payé par le client
     console.log(\`Paiement reçu : \${amount} \${currency} | txn: \${transaction_id}\`);
-    // ... votre logique métier ici
+    // → créditer le compte client, livrer la commande, etc.
   }
 
-  // Répondre 200 pour confirmer la réception
-  res.sendStatus(200);
+  if (event === "payment.failed") {
+    // Paiement échoué ou expiré
+    console.log(\`Paiement échoué | ref: \${reference}\`);
+    // → annuler la commande, notifier le client, etc.
+  }
 });`} />
 
               <Note type="warn">
-                Toujours répondre <IC>HTTP 200</IC> à Ashtech Pay pour éviter les retentatives. Si ton serveur retourne une erreur, le webhook n'est pas renvoyé automatiquement.
+                Réponds toujours <IC>HTTP 200</IC> immédiatement — même si une erreur survient côté serveur. Si ton serveur répond autre chose, le webhook ne sera pas renvoyé.
               </Note>
             </Section>
 
@@ -538,7 +545,7 @@ async function createLink({ amount, currency, description, countries }) {
       description,
       is_fixed_amount: !!amount,           // false si pas de montant
       allowed_countries: countries ?? null, // null = tous les pays
-      notify_url: "https://monsite.com/webhooks/ashtechpay", // URL webhook
+      // notify_url configurée dans les paramètres — récupérée automatiquement
     }),
   });
   return res.json();
