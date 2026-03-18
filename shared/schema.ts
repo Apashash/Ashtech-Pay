@@ -973,6 +973,7 @@ export const hostedPageConfigs = pgTable("hosted_page_configs", {
   userId: varchar("user_id").notNull().unique(),
   successUrl: text("success_url"),
   cancelUrl: text("cancel_url"),
+  notifyUrl: text("notify_url"),
   pkLive: text("pk_live").unique(),
   skLive: text("sk_live").unique(),
   hpLive: text("hp_live").unique(),

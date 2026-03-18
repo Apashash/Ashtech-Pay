@@ -7497,12 +7497,13 @@ export async function registerRoutes(
   app.post("/api/hosted-page/config", async (req: Request, res: Response) => {
     if (!req.session?.userId) return res.status(401).json({ error: "Unauthorized" });
     try {
-      const { successUrl, cancelUrl, regenerate } = req.body;
+      const { successUrl, cancelUrl, notifyUrl, regenerate } = req.body;
       const existing = await storage.getHostedPageConfig(req.session.userId);
       const hasKeys = existing?.pkLive && existing?.skLive && existing?.hpLive;
       const data: any = {};
       if (successUrl !== undefined) data.successUrl = successUrl;
       if (cancelUrl !== undefined) data.cancelUrl = cancelUrl;
+      if (notifyUrl !== undefined) data.notifyUrl = notifyUrl || null;
       if (!hasKeys || regenerate) {
         data.pkLive = generateHpKey("pk_live_");
         data.skLive = generateHpKey("sk_live_");
@@ -7577,6 +7578,10 @@ export async function registerRoutes(
 
       const expiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 min
 
+      // Use merchant's default notify_url if none provided in request
+      const merchantConfig = await storage.getHostedPageConfig(merchant.id).catch(() => null);
+      const effectiveNotifyUrl = notify_url || (merchantConfig as any)?.notifyUrl || null;
+
       // Create a real payment link in the existing system → uses the existing /pay/:slug page
       const paymentLink = await storage.createPaymentLink({
         userId: merchant.id,
@@ -7592,7 +7597,7 @@ export async function registerRoutes(
         redirectUrl: null,
         expiresAt,
         allowedCountries: countriesFilter,
-        notifyUrl: notify_url || null,
+        notifyUrl: effectiveNotifyUrl,
       });
 
       const host = req.headers.host || "pay.ashtechpay.top";

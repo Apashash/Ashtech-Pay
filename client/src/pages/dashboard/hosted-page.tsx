@@ -19,6 +19,7 @@ interface HostedPageConfig {
   userId: string;
   successUrl: string | null;
   cancelUrl: string | null;
+  notifyUrl: string | null;
   pkLive: string | null;
   skLive: string | null;
   hpLive: string | null;
@@ -78,6 +79,7 @@ export default function HostedPageDashboard() {
   const queryClient = useQueryClient();
   const [successUrl, setSuccessUrl] = useState("");
   const [cancelUrl, setCancelUrl] = useState("");
+  const [notifyUrl, setNotifyUrl] = useState("");
   const [initialized, setInitialized] = useState(false);
 
   const { data: config, isLoading } = useQuery<HostedPageConfig | null>({
@@ -89,11 +91,12 @@ export default function HostedPageDashboard() {
   if (config && !initialized) {
     setSuccessUrl(config.successUrl || "");
     setCancelUrl(config.cancelUrl || "");
+    setNotifyUrl(config.notifyUrl || "");
     setInitialized(true);
   }
 
   const saveMutation = useMutation({
-    mutationFn: (data: { successUrl: string; cancelUrl: string; regenerate?: boolean }) =>
+    mutationFn: (data: { successUrl: string; cancelUrl: string; notifyUrl: string; regenerate?: boolean }) =>
       apiRequest("POST", "/api/hosted-page/config", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/hosted-page/config"] });
@@ -107,15 +110,15 @@ export default function HostedPageDashboard() {
   const hasKeys = config?.pkLive && config?.skLive && config?.hpLive;
 
   function handleGenerate() {
-    saveMutation.mutate({ successUrl, cancelUrl });
+    saveMutation.mutate({ successUrl, cancelUrl, notifyUrl });
   }
 
   function handleRegenerate() {
-    saveMutation.mutate({ successUrl, cancelUrl, regenerate: true });
+    saveMutation.mutate({ successUrl, cancelUrl, notifyUrl, regenerate: true });
   }
 
   function handleSaveUrls() {
-    saveMutation.mutate({ successUrl, cancelUrl });
+    saveMutation.mutate({ successUrl, cancelUrl, notifyUrl });
   }
 
   return (
@@ -181,6 +184,23 @@ export default function HostedPageDashboard() {
               />
               <p className="text-xs text-muted-foreground">
                 URL vers laquelle le client sera redirigé si le paiement échoue ou est annulé.
+              </p>
+            </div>
+
+            <div className="space-y-2 pt-2 border-t">
+              <Label htmlFor="notify-url" className="flex items-center gap-2">
+                Webhook URL (notify_url)
+                <span className="text-[10px] bg-violet-500/10 text-violet-500 border border-violet-500/20 px-1.5 py-0.5 rounded font-mono">Recommandé</span>
+              </Label>
+              <Input
+                id="notify-url"
+                data-testid="input-notify-url"
+                placeholder="https://monsite.com/webhooks/ashtechpay"
+                value={notifyUrl}
+                onChange={(e) => setNotifyUrl(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                URL de votre serveur qui recevra une notification automatique (POST) dès que chaque paiement est confirmé ou échoue. Utilisée comme valeur par défaut si aucune <code className="font-mono text-xs">notify_url</code> n'est passée lors de la création du lien.
               </p>
             </div>
 
