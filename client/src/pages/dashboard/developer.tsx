@@ -882,64 +882,111 @@ if (data.flow === "wave") {
             </div>
 
             <p className="text-zinc-400 leading-relaxed">
-              Quand un paiement atteint un état final, Ashtech Pay envoie automatiquement une requête{" "}
+              Quand une transaction atteint un état final, Ashtech Pay envoie automatiquement une requête{" "}
               <code className="text-[#79c0ff] bg-white/10 px-1.5 py-0.5 rounded text-xs">POST</code>{" "}
-              à votre <code className="text-[#79c0ff] bg-white/10 px-1.5 py-0.5 rounded text-xs">notify_url</code>.
-              Le compte marchand est crédité du <code className="text-[#79c0ff] bg-white/10 px-1.5 py-0.5 rounded text-xs">credited_amount</code> dès
-              la confirmation.
+              à la <code className="text-[#79c0ff] bg-white/10 px-1.5 py-0.5 rounded text-xs">notify_url</code>{" "}
+              que vous avez passée dans votre appel à <code className="text-[#79c0ff] bg-white/10 px-1.5 py-0.5 rounded text-xs">/v1/collect</code>.
+              Le champ <code className="text-[#79c0ff] bg-white/10 px-1.5 py-0.5 rounded text-xs">amount</code> correspond au montant net après frais,
+              et <code className="text-[#79c0ff] bg-white/10 px-1.5 py-0.5 rounded text-xs">total_amount</code> au montant brut collecté.
             </p>
 
             <div className="grid lg:grid-cols-2 gap-5">
               <div className="space-y-2 min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Payload — Succès</p>
+                <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Payload — paiement réussi</p>
                 <CodeBlock language="json" code={`{
-  "event": "payment.success",
+  "event": "payment.completed",
   "transaction_id": "8f3e1c2d-...",
   "reference": "ORDER-001",
-  "status": "success",
-  "amount": 5000,
-  "credited_amount": 4750,
-  "fee_amount": 250,
+  "status": "completed",
+  "amount": 4750,
+  "total_amount": 5000,
   "currency": "XAF",
+  "type": "deposit",
   "phone": "670000000",
-  "confirmed_at": "2026-03-15T14:02:17Z"
+  "timestamp": "2026-03-15T14:02:17.000Z"
 }`} />
               </div>
               <div className="space-y-2 min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Handler (Node.js)</p>
-                <CodeBlock language="javascript" code={`app.post("/webhook", async (req, res) => {
-  const {
-    event, reference,
-    credited_amount, currency
-  } = req.body;
+                <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Payload — paiement échoué</p>
+                <CodeBlock language="json" code={`{
+  "event": "payment.failed",
+  "transaction_id": "8f3e1c2d-...",
+  "reference": "ORDER-001",
+  "status": "failed",
+  "amount": 5000,
+  "total_amount": 5000,
+  "currency": "XAF",
+  "type": "deposit",
+  "phone": "670000000",
+  "timestamp": "2026-03-15T14:03:55.000Z"
+}`} />
+              </div>
+            </div>
 
-  if (event === "payment.success") {
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Événements disponibles</p>
+              <div className="rounded-xl border border-white/10 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-white/5 border-b border-white/10">
+                      <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">Événement</th>
+                      <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">Déclencheur</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      { event: "payment.completed", desc: "Paiement (dépôt) confirmé avec succès" },
+                      { event: "payment.failed",    desc: "Paiement refusé, expiré ou annulé" },
+                      { event: "payout.completed",  desc: "Retrait ou virement sortant confirmé" },
+                      { event: "payout.failed",     desc: "Retrait ou virement échoué" },
+                    ].map(({ event, desc }) => (
+                      <tr key={event} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                        <td className="px-3 py-3 font-mono text-[#79c0ff] text-xs whitespace-nowrap">{event}</td>
+                        <td className="px-3 py-3 text-zinc-300 text-sm">{desc}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Handler (Node.js / Express)</p>
+              <CodeBlock language="javascript" code={`app.post("/webhook", express.json(), async (req, res) => {
+  // Toujours répondre 200 en premier
+  res.status(200).json({ received: true });
+
+  const { event, transaction_id, reference, amount, currency } = req.body;
+
+  if (event === "payment.completed") {
     // Créditer le client dans votre base
-    await markOrderAsPaid(reference, {
-      amount: credited_amount,
-      currency
-    });
+    // amount = montant net (après frais)
+    await markOrderAsPaid(reference, { transactionId: transaction_id, amount, currency });
   }
 
   if (event === "payment.failed") {
     await cancelOrder(reference);
   }
 
-  // Toujours répondre 200
-  res.status(200).json({ received: true });
+  if (event === "payout.completed") {
+    await markPayoutDone(reference, { transactionId: transaction_id });
+  }
+
+  if (event === "payout.failed") {
+    await markPayoutFailed(reference);
+  }
 });`} />
-              </div>
             </div>
 
             <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-5 space-y-2">
               <p className="text-sm font-semibold text-blue-300">Bonnes pratiques</p>
               <ul className="space-y-1.5 text-sm text-zinc-400">
                 {[
-                  "Répondez toujours HTTP 200 pour accuser réception, même en cas d'erreur de votre côté",
-                  "En cas d'échec de livraison, Ashtech Pay retentera jusqu'à 3 fois",
+                  "Répondez toujours HTTP 200 immédiatement pour accuser réception",
+                  "Traitez la logique métier après avoir répondu 200 (asynchrone)",
                   "Vérifiez le transaction_id dans votre base pour éviter les doublons",
-                  "Traitez le webhook de manière asynchrone pour répondre rapidement",
                   "Le webhook est complémentaire à GET /v1/transaction/:id — utilisez les deux",
+                  "Votre notify_url doit être une URL HTTPS publique (pas localhost)",
                 ].map(item => (
                   <li key={item} className="flex items-start gap-2">
                     <ChevronRight className="w-3.5 h-3.5 mt-0.5 text-blue-400 shrink-0" />
