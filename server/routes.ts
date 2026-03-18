@@ -1310,9 +1310,9 @@ export async function registerRoutes(
           payoutResult = afribaResult;
 
         } else if (transferProvider === "pixpay") {
-          const cashInServiceId = getPixPayServiceId(operator?.name || "", countryCode, "cash_in");
+          const cashInServiceId = getPixPayServiceId(operator?.name || "", countryCode, "cash_out");
           if (!cashInServiceId) {
-            console.error(`[Transfer] PixPay: no cash_in service_id for ${operator?.name} in ${countryCode}`);
+            console.error(`[Transfer] PixPay: no cash_out service_id for ${operator?.name} in ${countryCode}`);
             await storage.updateTransactionStatus(transaction.id, "failed");
             if (isPrimaryTransfer) {
               await storage.updateUserBalance(senderId, totalAmount);
@@ -1792,7 +1792,7 @@ export async function registerRoutes(
 
           } else if (paymentProvider === "pixpay") {
             // ─── PixPay Payin (USSD / OTP / Wave) ────────────────────────────
-            const pixpayAutoServiceId = getPixPayServiceId((operatorRecord as any)?.name || "", countryCode, "cash_out");
+            const pixpayAutoServiceId = getPixPayServiceId((operatorRecord as any)?.name || "", countryCode, "cash_in");
             if (!pixpayAutoServiceId) {
               await storage.updateTransactionStatus(transaction.id, "failed");
               return res.status(400).json({ message: "Opérateur non supporté par PixPay pour ce pays. Contactez l'administrateur." });
@@ -2142,9 +2142,9 @@ export async function registerRoutes(
 
         } else if (paymentProvider === "pixpay") {
           // ─── PixPay Payout ──────────────────────────────────────────────────
-          const cashOutServiceId = getPixPayServiceId(operator?.name || "", countryCode, "cash_in");
+          const cashOutServiceId = getPixPayServiceId(operator?.name || "", countryCode, "cash_out");
           if (!cashOutServiceId) {
-            console.error(`[Withdrawal] PixPay: no cash_in service_id for ${operator?.name} in ${countryCode}`);
+            console.error(`[Withdrawal] PixPay: no cash_out service_id for ${operator?.name} in ${countryCode}`);
             await storage.updateTransactionStatus(transaction.id, "failed");
             await storage.updateUserBalance(userId, totalAmount);
             return res.status(400).json({
@@ -3805,7 +3805,7 @@ export async function registerRoutes(
 
           // ─── PixPay branch (USSD / OTP / Wave) ────────────────────────────
           if (paymentProvider === "pixpay") {
-            const pxAutoServiceId = getPixPayServiceId((operatorRecord as any)?.name || "", paymentCountryCode, "cash_out");
+            const pxAutoServiceId = getPixPayServiceId((operatorRecord as any)?.name || "", paymentCountryCode, "cash_in");
             if (!pxAutoServiceId) {
               await storage.updatePaymentIntentStatus(intent.id, "failed");
               const failedTxPx = await storage.getTransactionByReference(reference);
@@ -5884,7 +5884,7 @@ export async function registerRoutes(
         payoutResult = result;
 
       } else if (provider === "pixpay") {
-        const serviceId = getPixPayServiceId(operator?.name || "", countryCode, "cash_in");
+        const serviceId = getPixPayServiceId(operator?.name || "", countryCode, "cash_out");
         if (!serviceId) {
           return res.status(400).json({ message: `PixPay non supporté pour cet opérateur (${operator?.name}) dans ${countryCode}` });
         }

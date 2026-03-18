@@ -94,9 +94,9 @@ export function detectPixPayFlowType(operatorName: string, countryCode: string):
 
 // ─── Fixed service ID lookup table (from merchant integration dossier) ────────
 // Format: operator_keyword → { COUNTRY_CODE: { cash_in: id, cash_out: id } }
-// PixPay naming (opposite of intuition):
-//   cash_out = payin  = deposit   (platform collects from user)
-//   cash_in  = payout = withdrawal (platform sends to user)
+// PixPay naming:
+//   cash_in  = deposit  (money flows IN from user's phone → platform collects)
+//   cash_out = payout   (money flows OUT to user's phone → platform sends)
 const PIXPAY_SERVICE_ID_TABLE: Record<string, Partial<Record<string, { cash_in: number; cash_out: number }>>> = {
   // ── Orange / OM ───────────────────────────────────────────────────────────
   orange: {
@@ -150,7 +150,7 @@ const PIXPAY_SERVICE_ID_TABLE: Record<string, Partial<Record<string, { cash_in: 
 };
 
 // ─── Auto-resolve service ID from operator name + country + direction ─────────
-// direction: "cash_out" for deposits/collections (PixPay payin), "cash_in" for withdrawals/payouts (PixPay payout)
+// direction: "cash_in" for deposits/collections (platform receives), "cash_out" for withdrawals/payouts (platform sends)
 export function getPixPayServiceId(
   operatorName: string,
   countryCode: string,
