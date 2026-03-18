@@ -3112,14 +3112,6 @@ export async function registerRoutes(
         return res.status(403).json({ message: "Non autorisé" });
       }
 
-      // Check if link has associated payment intents
-      const intents = await storage.getPaymentIntentsByLinkId(linkId);
-      if (intents.length > 0) {
-        return res.status(400).json({ 
-          message: "Ce lien a des paiements associés. Désactivez-le plutôt que de le supprimer." 
-        });
-      }
-
       await storage.deletePaymentLink(linkId);
       res.json({ success: true });
     } catch (error) {

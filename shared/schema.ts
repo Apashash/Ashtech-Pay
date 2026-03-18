@@ -219,7 +219,7 @@ export const paymentLinks = pgTable("payment_links", {
 // Payment intents for public payment submissions (pending until verified)
 export const paymentIntents = pgTable("payment_intents", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  paymentLinkId: varchar("payment_link_id").notNull().references(() => paymentLinks.id),
+  paymentLinkId: varchar("payment_link_id").references(() => paymentLinks.id, { onDelete: "set null" }),
   merchantId: varchar("merchant_id").notNull().references(() => users.id),
   payerName: text("payer_name").notNull(),
   payerEmail: text("payer_email").notNull(),
