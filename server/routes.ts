@@ -16,7 +16,8 @@ import {
   CURRENCY_SYMBOLS,
   EXCHANGE_RATES,
   ALL_FX_CURRENCIES,
-  type SupportedCurrency
+  type SupportedCurrency,
+  type Transaction,
 } from "@shared/schema";
 import crypto from "crypto";
 import { z } from "zod";
@@ -6509,12 +6510,38 @@ export async function registerRoutes(
   // ─── Merchant webhook forwarding ─────────────────────────────────────────────
   // Fire-and-forget: sends a POST to the merchant's notify_url (if set) after
   // a payment status change. Never throws — errors are logged only.
+  // SSRF protection: only HTTPS URLs to non-private hosts are allowed.
+  function isSafeWebhookUrl(rawUrl: string): boolean {
+    let parsed: URL;
+    try { parsed = new URL(rawUrl); } catch { return false; }
+    if (parsed.protocol !== "https:") return false;
+    const host = parsed.hostname.toLowerCase();
+    // Block loopback, link-local, private ranges, and metadata services
+    if (
+      host === "localhost" ||
+      host.endsWith(".localhost") ||
+      host === "169.254.169.254" ||             // AWS/GCP/Azure metadata
+      /^127\./.test(host) ||                    // 127.x.x.x
+      /^10\./.test(host) ||                     // 10.x.x.x
+      /^192\.168\./.test(host) ||               // 192.168.x.x
+      /^172\.(1[6-9]|2\d|3[01])\./.test(host) || // 172.16-31.x.x
+      /^::1$/.test(host) ||                     // IPv6 loopback
+      /^fd/.test(host) ||                       // IPv6 ULA
+      /^fe80/.test(host)                        // IPv6 link-local
+    ) return false;
+    return true;
+  }
+
   async function forwardMerchantWebhook(
-    transaction: any,
+    transaction: Transaction,
     finalStatus: "completed" | "failed"
   ): Promise<void> {
-    const notifyUrl = transaction.notifyUrl as string | null | undefined;
+    const notifyUrl = transaction.notifyUrl;
     if (!notifyUrl) return;
+    if (!isSafeWebhookUrl(notifyUrl)) {
+      console.warn(`[MerchantWebhook] Blocked unsafe notify_url: ${notifyUrl}`);
+      return;
+    }
     const payload = {
       event: finalStatus === "completed" ? "payment.completed" : "payment.failed",
       transaction_id: transaction.id,
@@ -6524,22 +6551,24 @@ export async function registerRoutes(
       total_amount: transaction.totalAmount || transaction.amount,
       currency: transaction.currency,
       type: transaction.type,
-      phone: transaction.recipientPhone || null,
+      phone: transaction.recipientPhone ?? null,
       timestamp: new Date().toISOString(),
     };
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10_000);
     try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 10_000);
       const resp = await fetch(notifyUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
         signal: controller.signal,
       });
-      clearTimeout(timer);
       console.log(`[MerchantWebhook] → ${notifyUrl} | status=${resp.status}`);
-    } catch (err: any) {
-      console.warn(`[MerchantWebhook] Failed to reach ${notifyUrl}:`, err?.message);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`[MerchantWebhook] Failed to reach ${notifyUrl}:`, msg);
+    } finally {
+      clearTimeout(timer);
     }
   }
 
