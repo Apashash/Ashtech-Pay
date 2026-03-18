@@ -100,11 +100,12 @@ function Navbar() {
     {
       title: "Ressources",
       items: [
-        { label: "Documentation", href: "/docs/api", icon: Code2 },
         { label: "Centre d'aide", href: "/help", icon: HelpCircle },
         { label: "FAQ", href: "/faq", icon: MessageCircleQuestion },
         { label: "Blog", href: "/blog", icon: BookOpen },
         { label: "Contact", href: "/contact", icon: Mail },
+        { label: "Documentation API", href: "/docs/api", icon: Terminal },
+        { label: "Documentation Hosted Page", href: "/docs/hosted-page", icon: Code2 },
       ],
     },
     {
@@ -182,27 +183,6 @@ function Navbar() {
             </div>
 
             <div className="p-3 space-y-3">
-              <Link href="/docs/api">
-                <button
-                  onClick={() => setMenuOpen(false)}
-                  className="w-full flex items-center gap-2 px-4 py-2.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-left font-semibold"
-                  data-testid="button-sidebar-documentation-api"
-                >
-                  <Terminal className="w-4 h-4" />
-                  <span>Documentation API</span>
-                </button>
-              </Link>
-              <Link href="/docs/hosted-page">
-                <button
-                  onClick={() => setMenuOpen(false)}
-                  className="w-full flex items-center gap-2 px-4 py-2.5 rounded-lg bg-primary/10 border border-primary/30 text-primary hover:bg-primary/20 transition-colors text-left font-semibold"
-                  data-testid="button-sidebar-documentation-hosted"
-                >
-                  <Code2 className="w-4 h-4" />
-                  <span>Documentation Hosted Page</span>
-                </button>
-              </Link>
-
               {menuGroups.map((group) => (
                 <div key={group.title}>
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-1">{group.title}</p>
