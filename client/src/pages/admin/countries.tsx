@@ -310,11 +310,12 @@ export default function AdminCountries() {
                   
                   return (
                     <div key={country.id} className="border rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="font-semibold flex items-center gap-2">
-                          <span>{country.flag}</span> {country.name}
+                      <div className="flex flex-wrap items-center gap-2 mb-2">
+                        <h3 className="font-semibold flex items-center gap-2 min-w-0 flex-1">
+                          <span className="shrink-0">{country.flag}</span>
+                          <span className="truncate">{country.name}</span>
                         </h3>
-                        <div className="flex gap-1">
+                        <div className="flex gap-1 shrink-0">
                           <Button
                             size="sm"
                             variant="outline"
@@ -335,16 +336,16 @@ export default function AdminCountries() {
                       </div>
                       <div className="space-y-2">
                         {countryOperators.map(op => (
-                          <div key={op.id} className="flex items-center justify-between bg-muted/50 p-2 rounded text-sm">
-                            <div className="flex items-center gap-2">
-                              <span>{op.name}</span>
-                              <Badge variant="default" className="text-[10px] px-1 h-4 bg-purple-600">
+                          <div key={op.id} className="flex items-center gap-2 bg-muted/50 p-2 rounded text-sm min-w-0">
+                            <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
+                              <span className="truncate shrink min-w-0">{op.name}</span>
+                              <Badge variant="default" className="text-[10px] px-1 h-4 bg-purple-600 shrink-0">
                                 Swychr
                               </Badge>
-                              {op.isInMaintenance && <Badge variant="destructive" className="text-[10px] px-1 h-4">Maintenance</Badge>}
-                              {!op.isActive && <Badge variant="outline" className="text-[10px] px-1 h-4">Off</Badge>}
+                              {op.isInMaintenance && <Badge variant="destructive" className="text-[10px] px-1 h-4 shrink-0">Maintenance</Badge>}
+                              {!op.isActive && <Badge variant="outline" className="text-[10px] px-1 h-4 shrink-0">Off</Badge>}
                             </div>
-                            <div className="flex gap-1">
+                            <div className="flex gap-1 shrink-0">
                               <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEditOperator(op)}>
                                 <Pencil className="w-3 h-3" />
                               </Button>
