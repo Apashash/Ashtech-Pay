@@ -73,6 +73,7 @@ export interface IStorage {
   getUserByResetToken(token: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUserBalance(id: string, amount: number): Promise<User | undefined>;
+  refundToOriginalWallet(userId: string, txType: string, txCurrency: string, amount: number): Promise<void>;
   updateUserCurrency(id: string, currency: SupportedCurrency): Promise<User | undefined>;
   setResetToken(id: string, token: string, expiry: Date): Promise<User | undefined>;
   updatePassword(id: string, hashedPassword: string): Promise<User | undefined>;
@@ -336,6 +337,23 @@ export class DatabaseStorage implements IStorage {
       .returning();
     
     return updatedUser;
+  }
+
+  async refundToOriginalWallet(userId: string, txType: string, txCurrency: string, amount: number): Promise<void> {
+    // Withdrawals always debit users.balance (the primary wallet)
+    // Transfers debit users.balance only if currency matches user's preferredCurrency, otherwise the specific wallet
+    if (txType === "withdrawal") {
+      await this.updateUserBalance(userId, amount);
+      return;
+    }
+    // For transfer_out: check against the user's preferred currency
+    const user = await this.getUserById(userId);
+    const userPrimary = user?.preferredCurrency || "XAF";
+    if (txCurrency === userPrimary) {
+      await this.updateUserBalance(userId, amount);
+    } else {
+      await this.upsertWallet(userId, txCurrency, amount);
+    }
   }
 
   async updateUserCurrency(id: string, currency: SupportedCurrency): Promise<User | undefined> {

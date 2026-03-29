@@ -16,6 +16,8 @@ interface PendingPayout {
   attempts:       number;
   provider:       "swychr" | "afribapay" | "pixpay";
   countryCode:    string;
+  txType:         string;
+  txCurrency:     string;
 }
 
 const pendingPayouts = new Map<string, PendingPayout>();
@@ -68,6 +70,8 @@ export async function recoverPendingPayouts() {
         attempts:      0,
         provider,
         countryCode,
+        txType:        t.type,
+        txCurrency:    t.currency || "XAF",
       });
       console.log(`[PayoutPoller] Recovered: ${pollerRef} (${t.type}, provider=${provider})`);
     }
@@ -113,7 +117,7 @@ async function processPayout(payout: PendingPayout, apiStatus: string) {
     } else {
       await storage.updateTransactionStatus(payout.transactionId, "failed");
       const refundAmount = parseFloat(payout.totalDebited || payout.amount);
-      await storage.updateUserBalance(payout.userId, refundAmount);
+      await storage.refundToOriginalWallet(payout.userId, payout.txType, payout.txCurrency, refundAmount);
       await storage.createUserNotification({
         userId:        payout.userId,
         type:          "withdrawal_failed",

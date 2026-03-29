@@ -1366,6 +1366,8 @@ export async function registerRoutes(
             totalDebited:  totalAmount.toFixed(2),
             provider:      transferProvider as "swychr" | "afribapay" | "pixpay",
             countryCode:   transferCountryCode.toUpperCase(),
+            txType:        "transfer_out",
+            txCurrency:    txCurrency,
           });
         } else {
           const errMsg = (payoutResult.message || "").toLowerCase();
@@ -2202,6 +2204,8 @@ export async function registerRoutes(
             totalDebited:  totalAmount.toFixed(2),
             provider:      paymentProvider as "swychr" | "afribapay" | "pixpay",
             countryCode,
+            txType:        "withdrawal",
+            txCurrency:    withdrawalCurrency,
           });
         } else {
           const errMsg = (payoutResult.message || "").toLowerCase();
@@ -4717,6 +4721,8 @@ export async function registerRoutes(
               totalDebited:  transaction.totalAmount || transaction.amount,
               provider:      ((operator as any)?.paymentProvider || "swychr") as "swychr" | "afribapay" | "pixpay",
               countryCode:   countryCode,
+              txType:        transaction.type,
+              txCurrency:    transaction.currency || "XAF",
             });
             // Send withdrawal approved email
             const txUser = await storage.getUser(transaction.userId).catch(() => null);
@@ -4785,11 +4791,11 @@ export async function registerRoutes(
       const isNowRejected = status === "failed" || status === "cancelled";
       
       if (wasNotRejected && isNowRejected && (transaction.type === "transfer_out" || transaction.type === "withdrawal")) {
-        // Refund total amount (amount + fee)
+        // Refund total amount (amount + fee) to the wallet that was originally debited
         const refundAmount = transaction.totalAmount 
           ? parseFloat(transaction.totalAmount) 
           : parseFloat(transaction.amount);
-        await storage.updateUserBalance(transaction.userId, refundAmount);
+        await storage.refundToOriginalWallet(transaction.userId, transaction.type, transaction.currency || "XAF", refundAmount);
 
         if (transaction.type === "withdrawal") {
           await storage.createUserNotification({
@@ -5923,6 +5929,8 @@ export async function registerRoutes(
           totalDebited:  totalAmount.toFixed(2),
           provider,
           countryCode,
+          txType:        tx.type,
+          txCurrency:    tx.currency || "XAF",
         });
         await storage.createAdminLog({
           adminId: req.userId!,
@@ -5995,7 +6003,7 @@ export async function registerRoutes(
       }
       const totalAmount = parseFloat(tx.totalAmount || tx.amount);
       await storage.updateTransactionStatus(tx.id, "failed");
-      await storage.updateUserBalance(tx.userId, totalAmount);
+      await storage.refundToOriginalWallet(tx.userId, tx.type, tx.currency || "XAF", totalAmount);
       await storage.createUserNotification({
         userId: tx.userId,
         type: tx.type === "withdrawal" ? "withdrawal_failed" : "transfer_failed",
@@ -6737,9 +6745,9 @@ export async function registerRoutes(
         await storage.updateTransactionStatus(transaction.id, "failed");
 
         if (isPayout) {
-          // Payout failed: refund the full debited amount to user
+          // Payout failed: refund the full debited amount to the wallet that was originally debited
           const refundAmount = parseFloat((transaction as any).totalAmount || transaction.amount);
-          await storage.updateUserBalance(transaction.userId, refundAmount);
+          await storage.refundToOriginalWallet(transaction.userId, transaction.type, txCurrency, refundAmount);
           removePendingPayout(ref);
           await storage.createUserNotification({
             userId: transaction.userId,
@@ -6849,9 +6857,9 @@ export async function registerRoutes(
         await storage.updateTransactionStatus(transaction.id, "failed");
 
         if (isPayout) {
-          // Payout failed: refund the full debited amount to user
+          // Payout failed: refund the full debited amount to the wallet that was originally debited
           const refundAmount = parseFloat((transaction as any).totalAmount || transaction.amount);
-          await storage.updateUserBalance(transaction.userId, refundAmount);
+          await storage.refundToOriginalWallet(transaction.userId, transaction.type, txCurrency, refundAmount);
           removePendingPayout(ref);
           await storage.createUserNotification({
             userId: transaction.userId,
