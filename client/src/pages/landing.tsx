@@ -271,23 +271,6 @@ function HeroSection() {
                 </Button>
               </Link>
             </div>
-            
-            <div className="flex items-center gap-8 pt-4">
-              <div className="text-center">
-                <p className="text-2xl font-bold text-slate-900">50K+</p>
-                <p className="text-sm text-slate-500">Vendeurs</p>
-              </div>
-              <div className="w-px h-10 bg-slate-200" />
-              <div className="text-center">
-                <p className="text-2xl font-bold text-slate-900">10M+</p>
-                <p className="text-sm text-slate-500">Transactions</p>
-              </div>
-              <div className="w-px h-10 bg-slate-200" />
-              <div className="text-center">
-                <p className="text-2xl font-bold text-slate-900">18+</p>
-                <p className="text-sm text-slate-500">Pays</p>
-              </div>
-            </div>
           </div>
           
           <div className="relative lg:pl-8">
@@ -1407,6 +1390,7 @@ export default function LandingPage() {
     <div className="min-h-screen bg-background overflow-x-hidden">
       <Navbar />
       <HeroSection />
+      <ReadyToStartSection />
       <VideoPaymentSection />
       <OperatorLogosSection />
       <OnlineSalesSection />
@@ -1420,7 +1404,6 @@ export default function LandingPage() {
       <SecuritySection />
       <ApiDeveloperSection />
       <TestimonialsSection />
-      <ReadyToStartSection />
       <CTASection />
       <Footer />
     </div>
