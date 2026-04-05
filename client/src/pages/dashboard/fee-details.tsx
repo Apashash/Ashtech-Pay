@@ -1,5 +1,5 @@
 import { DashboardLayout } from "@/components/dashboard-layout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
 import type { Fee, Country } from "@shared/schema";
@@ -7,8 +7,6 @@ import {
   ArrowDownCircle,
   ArrowUpCircle,
   ArrowLeftRight,
-  RefreshCw,
-  Info,
   Loader2,
   ChevronDown,
   ChevronRight,
@@ -16,12 +14,6 @@ import {
   Building2,
 } from "lucide-react";
 import { useState } from "react";
-
-interface FeeSettings {
-  conversionFeePercent: number;
-  depositFeePercent: number;
-  paymentLinkFeePercent: number;
-}
 
 interface PublicOperator {
   id: string;
@@ -87,10 +79,6 @@ export default function FeeDetailsPage() {
     queryKey: ["/api/public/operators"],
   });
 
-  const { data: feeSettings } = useQuery<FeeSettings>({
-    queryKey: ["/api/public/fee-settings"],
-  });
-
   const activeFees = fees.filter(f => f.isActive);
 
   function getGlobalFee(type: string): Fee | null {
@@ -113,8 +101,6 @@ export default function FeeDetailsPage() {
     TX_TYPES.some(t => resolvedFee(t.key, c.id) !== null)
   );
 
-  const globalFees = TX_TYPES.map(t => ({ ...t, fee: getGlobalFee(t.key) })).filter(t => t.fee);
-
   if (isLoading) {
     return (
       <DashboardLayout>
@@ -136,41 +122,6 @@ export default function FeeDetailsPage() {
             Frais mis à jour en temps réel. Cliquez sur un pays pour voir le détail par opérateur.
           </p>
         </div>
-
-        {/* Global fees summary */}
-        {globalFees.length > 0 && (
-          <Card className="border border-border" data-testid="card-fees-global">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Info className="w-4 h-4 text-muted-foreground" />
-                Frais par défaut (tous pays)
-              </CardTitle>
-              <p className="text-xs text-muted-foreground">
-                Appliqués si aucun frais spécifique n'est défini pour un pays.
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {globalFees.map(({ key, label, icon: Icon, color, bg, fee, badgeCls }) => (
-                <div key={key} className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-muted/40">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-7 h-7 rounded-md ${bg} flex items-center justify-center`}>
-                      <Icon className={`w-4 h-4 ${color}`} />
-                    </div>
-                    <span className="text-sm font-medium">{label}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {fmtMin(fee) && (
-                      <span className="text-xs text-muted-foreground hidden sm:inline">{fmtMin(fee)}</span>
-                    )}
-                    <Badge variant="outline" className={`text-sm font-semibold ${badgeCls}`}>
-                      {fmtFee(fee)}
-                    </Badge>
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
 
         {/* Per-country section */}
         {countriesWithFees.length > 0 && (
@@ -341,45 +292,6 @@ export default function FeeDetailsPage() {
           </div>
         )}
 
-        {/* Currency conversion */}
-        <Card className="border border-yellow-500/20" data-testid="card-fees-conversion">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-3 text-lg">
-              <div className="w-9 h-9 rounded-lg bg-yellow-500/10 flex items-center justify-center shrink-0">
-                <RefreshCw className="w-5 h-5 text-yellow-500" />
-              </div>
-              Conversion de devises
-            </CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Frais appliqués lors d'une conversion entre deux devises différentes.
-            </p>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between bg-muted/40 rounded-lg px-4 py-3">
-              <span className="text-sm font-medium">Frais de conversion</span>
-              <Badge variant="secondary" className="text-sm font-semibold" data-testid="badge-conversion-fee">
-                {feeSettings?.conversionFeePercent !== undefined
-                  ? `${feeSettings.conversionFeePercent.toFixed(2)}%`
-                  : "6.00%"}
-              </Badge>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Info note */}
-        <Card className="border border-primary/20 bg-primary/5">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Info className="w-5 h-5 text-primary" />
-              Frais minimum garantis
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground leading-relaxed">
-            Pour chaque pays, un montant minimum de frais peut être défini. Si le calcul du pourcentage
-            est inférieur à ce montant, c'est le frais minimum qui est appliqué. Le système retient
-            toujours le montant le plus élevé entre le pourcentage calculé et le frais minimum.
-          </CardContent>
-        </Card>
       </div>
     </DashboardLayout>
   );
