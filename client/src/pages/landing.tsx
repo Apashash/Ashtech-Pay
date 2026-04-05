@@ -41,6 +41,8 @@ import {
   MessageCircleQuestion
 } from "lucide-react";
 import heroImage from "@assets/IMG_0059_1775398520619.png";
+import operatorsImage from "@assets/IMG_0057_1775398589784.png";
+import globalReachImage from "@assets/IMG_0060_1775398589785.jpeg";
 import { useState, useEffect, useRef } from "react";
 import { useTheme } from "@/components/theme-provider";
 import { useScrollAnimation } from "@/hooks/use-scroll-animation";
@@ -594,7 +596,13 @@ function GlobalReachSection() {
             Recevez des paiements de partout dans le monde et retirez vos fonds localement via Mobile Money.
           </p>
         </div>
-        
+        <div className="flex justify-center">
+          <img
+            src={globalReachImage}
+            alt="Femme utilisant AshTech Pay avec logos des opérateurs"
+            className="w-full max-w-lg"
+          />
+        </div>
       </div>
     </section>
   );
@@ -961,6 +969,13 @@ function OperatorLogosSection() {
             </div>
           ))}
         </div>
+      </div>
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 mt-10">
+        <img
+          src={operatorsImage}
+          alt="Tous les opérateurs de paiement acceptés"
+          className="w-full"
+        />
       </div>
     </section>
   );
