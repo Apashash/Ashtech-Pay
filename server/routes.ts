@@ -39,6 +39,7 @@ import { addSSEClient, removeSSEClient, setActiveTicket, isUserOnline, getOnline
 import {
   sendWelcomeEmail,
   sendPasswordResetEmail,
+  sendCampaignEmail,
   sendKycApprovedEmail,
   sendWithdrawalApprovedEmail,
   sendWithdrawalNumberApprovedEmail,
@@ -8042,6 +8043,105 @@ export async function registerRoutes(
       res.json({ success: true, userId, apiEnabled: enabled });
     } catch (e: any) {
       console.error("[Admin API Toggle]", e);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // ─── EMAIL CAMPAIGN ROUTES ────────────────────────────────────────────────
+
+  async function getUsersBySegment(segment: string) {
+    const allUsers = await storage.getAllUsers();
+    // Only target users with a real email
+    const withEmail = allUsers.filter(u => u.email && u.role === "user");
+
+    if (segment === "all") return withEmail;
+    if (segment === "kyc_verified") return withEmail.filter(u => u.kycStatus === "verified");
+    if (segment === "kyc_pending") return withEmail.filter(u => u.kycStatus === "pending");
+    if (segment === "kyc_rejected") return withEmail.filter(u => u.kycStatus === "rejected");
+    if (segment === "kyc_not_submitted") return withEmail.filter(u => u.kycStatus === "not_submitted");
+
+    if (segment === "kyc_verified_no_tx" || segment === "active") {
+      const allTx = await storage.getAllTransactions();
+      const txCountByUser: Record<string, number> = {};
+      for (const tx of allTx) {
+        if (tx.userId) txCountByUser[tx.userId] = (txCountByUser[tx.userId] || 0) + 1;
+      }
+      if (segment === "kyc_verified_no_tx") {
+        return withEmail.filter(u => u.kycStatus === "verified" && !txCountByUser[u.id]);
+      }
+      if (segment === "active") {
+        return withEmail.filter(u => (txCountByUser[u.id] || 0) >= 10);
+      }
+    }
+    return [];
+  }
+
+  // GET /api/admin/email-segment-count?segment=xxx
+  app.get("/api/admin/email-segment-count", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const segment = req.query.segment as string;
+      if (!segment) return res.status(400).json({ message: "Segment requis" });
+      const users = await getUsersBySegment(segment);
+      res.json({ count: users.length });
+    } catch (e: any) {
+      console.error("[EmailSegmentCount]", e);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // POST /api/admin/send-email-campaign
+  app.post("/api/admin/send-email-campaign", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const {
+        segment, subject, previewText, body,
+        hasButton, buttonText, buttonUrl, buttonColor, buttonTextColor,
+      } = req.body;
+
+      if (!segment || !subject?.trim() || !body?.trim()) {
+        return res.status(400).json({ message: "Segment, objet et corps requis" });
+      }
+
+      const targets = await getUsersBySegment(segment);
+      if (targets.length === 0) {
+        return res.status(400).json({ message: "Aucun utilisateur dans ce segment" });
+      }
+
+      let sent = 0;
+      let failed = 0;
+
+      // Send in batches of 5 to avoid rate limits
+      for (let i = 0; i < targets.length; i += 5) {
+        const batch = targets.slice(i, i + 5);
+        await Promise.all(batch.map(async (user) => {
+          const firstName = (user.fullName?.trim().split(" ")[0]) || user.username || "client";
+          try {
+            await sendCampaignEmail({
+              to: user.email!,
+              firstName,
+              subject,
+              body,
+              hasButton: !!hasButton,
+              buttonText,
+              buttonUrl,
+              buttonColor,
+              buttonTextColor,
+            });
+            sent++;
+          } catch (err) {
+            console.error(`[Campaign] Failed for ${user.email}:`, err);
+            failed++;
+          }
+        }));
+        // Small delay between batches
+        if (i + 5 < targets.length) {
+          await new Promise(r => setTimeout(r, 200));
+        }
+      }
+
+      console.log(`[Campaign] Sent: ${sent}, Failed: ${failed}, Segment: ${segment}`);
+      res.json({ sent, failed, total: targets.length });
+    } catch (e: any) {
+      console.error("[EmailCampaign]", e);
       res.status(500).json({ message: "Erreur serveur" });
     }
   });

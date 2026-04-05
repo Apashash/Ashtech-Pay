@@ -53,7 +53,6 @@ export default function LoginPage() {
           </Link>
           <div className="text-center">
             <h1 className="text-3xl font-extrabold text-foreground tracking-tight">Connexion</h1>
-            <p className="text-muted-foreground mt-1 text-sm">Accédez à votre compte Ashtech Pay</p>
           </div>
         </div>
 

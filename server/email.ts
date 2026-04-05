@@ -1050,3 +1050,133 @@ export async function sendPayerConfirmationEmail(
 
   await sendEmail(to, `✅ Paiement confirmé — ${linkTitle}`, html, "payer confirmation");
 }
+
+// ─── CAMPAIGN EMAIL (Admin broadcast) ─────────────────────────────────────────
+
+export interface CampaignEmailOptions {
+  to: string;
+  firstName: string;
+  subject: string;
+  body: string;
+  hasButton?: boolean;
+  buttonText?: string;
+  buttonUrl?: string;
+  buttonColor?: string;
+  buttonTextColor?: string;
+}
+
+export async function sendCampaignEmail(opts: CampaignEmailOptions): Promise<void> {
+  const {
+    to, firstName, subject, body,
+    hasButton, buttonText, buttonUrl,
+    buttonColor = "#F0B90B", buttonTextColor = "#000000",
+  } = opts;
+
+  const bodyHtml = body
+    .replace(/\{prenom\}/gi, firstName)
+    .split("\n\n")
+    .map(p => `<p style="margin:0 0 16px;font-size:14px;color:#1F2937;line-height:1.75;">${p.replace(/\n/g, "<br/>")}</p>`)
+    .join("");
+
+  const buttonHtml = hasButton && buttonText && buttonUrl
+    ? `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:28px 0;">
+        <tr>
+          <td align="center">
+            <a href="${buttonUrl}"
+               style="display:inline-block;background:${buttonColor};color:${buttonTextColor};font-size:15px;font-weight:700;padding:14px 36px;border-radius:10px;text-decoration:none;letter-spacing:0.3px;">
+              ${buttonText}
+            </a>
+          </td>
+        </tr>
+      </table>`
+    : "";
+
+  const html = `<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>${subject}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#F5F7FA;font-family:Arial,Helvetica,sans-serif;color:#1F2937;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F5F7FA;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table width="600" cellpadding="0" cellspacing="0" border="0"
+               style="max-width:600px;width:100%;background-color:#FFFFFF;border-radius:20px;border:1px solid #E5E7EB;overflow:hidden;">
+
+          <!-- HEADER -->
+          <tr>
+            <td style="background:#FFFFFF;padding:28px 40px 20px;text-align:center;border-bottom:2px solid #F0B90B;">
+              <table cellpadding="0" cellspacing="0" border="0" align="center">
+                <tr>
+                  <td style="padding-right:10px;vertical-align:middle;">
+                    <img src="${LOGO_URL}" alt="AshTech Pay" width="44" height="44"
+                         style="display:block;max-height:44px;width:auto;" />
+                  </td>
+                  <td style="vertical-align:middle;">
+                    <span style="font-size:22px;font-weight:700;color:#1F2937;letter-spacing:-0.3px;">AshTech Pay</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- BODY -->
+          <tr>
+            <td style="padding:36px 40px;">
+              ${bodyHtml}
+              ${buttonHtml}
+            </td>
+          </tr>
+
+          <!-- SUPPORT -->
+          <tr>
+            <td style="padding:0 40px 28px;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                     style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:12px;">
+                <tr>
+                  <td style="padding:18px 22px;text-align:center;">
+                    <p style="margin:0 0 14px;font-size:12px;color:#1F2937;">Des questions ? Notre équipe est là pour toi.</p>
+                    <table cellpadding="0" cellspacing="0" border="0" align="center">
+                      <tr>
+                        <td style="padding:0 5px;">
+                          <a href="https://wa.me/${SUPPORT_PHONE.replace(/[\s+]/g, "")}"
+                             style="display:inline-block;background:#25D366;color:#FFFFFF;font-size:12px;font-weight:700;padding:9px 18px;border-radius:8px;text-decoration:none;">
+                            <img src="${WA_LOGO_URL}" width="18" height="18" style="display:inline;vertical-align:middle;margin-right:6px;border-radius:4px;" alt="WhatsApp" />WhatsApp
+                          </a>
+                        </td>
+                        <td style="padding:0 5px;">
+                          <a href="${FACEBOOK_URL}"
+                             style="display:inline-block;background:#1877F2;color:#FFFFFF;font-size:12px;font-weight:700;padding:9px 18px;border-radius:8px;text-decoration:none;">
+                            <img src="${FB_LOGO_URL}" width="18" height="18" style="display:inline;vertical-align:middle;margin-right:6px;border-radius:4px;" alt="Facebook" />Facebook
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- FOOTER -->
+          <tr>
+            <td style="padding:16px 40px 24px;border-top:1px solid #E5E7EB;text-align:center;">
+              <p style="margin:0 0 4px;font-size:11px;color:#6B7280;line-height:1.7;">
+                <a href="${APP_URL}" style="color:#F0B90B;text-decoration:none;">ashtechpay.top</a>
+                &nbsp;·&nbsp; Cameroun · Kenya · Sénégal · Côte d'Ivoire · Nigeria et 17 autres pays
+              </p>
+              <p style="margin:0;font-size:11px;color:#9CA3AF;">&copy; 2026 AshTech Pay &mdash; Tous droits réservés</p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  await sendEmail(to, subject, html, "campaign");
+}
