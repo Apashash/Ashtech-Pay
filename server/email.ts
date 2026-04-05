@@ -40,7 +40,7 @@ export async function sendPasswordResetEmail(to: string, fullName: string, reset
               <div style="margin-bottom:22px;">
                 <table cellpadding="0" cellspacing="0" border="0" align="center">
                   <tr>
-                    <td style="background:#000000;border-radius:14px;padding:10px 20px;">
+                    <td style="background:transparent;border-radius:14px;padding:10px 20px;">
                       <img src="${LOGO_URL}" alt="Ashtech Pay" width="140" height="auto"
                            style="display:block;max-height:45px;width:auto;" />
                     </td>
@@ -241,7 +241,7 @@ export async function sendWelcomeEmail(to: string, fullName: string): Promise<vo
               <div style="margin-bottom:24px;">
                 <table cellpadding="0" cellspacing="0" border="0" align="center">
                   <tr>
-                    <td style="background:#000000;border-radius:14px;padding:10px 20px;display:inline-block;">
+                    <td style="background:transparent;border-radius:14px;padding:10px 20px;display:inline-block;">
                       <img src="${LOGO_URL}" alt="Ashtech Pay" width="140" height="auto"
                            style="display:block;max-height:45px;width:auto;"
                            onerror="this.style.display='none'" />
@@ -389,7 +389,7 @@ export async function sendWelcomeEmail(to: string, fullName: string): Promise<vo
                       <tr>
                         <td style="font-size:20px;padding-right:12px;vertical-align:top;">🔒</td>
                         <td style="font-size:12px;color:#FFFFFF;line-height:1.6;vertical-align:top;">
-                          Pour ta sécurité, ne partage <strong style="color:#9CA3AF;">jamais ton mot de passe</strong>.
+                          Pour ta sécurité, ne partage <strong style="color:#FFFFFF;">jamais ton mot de passe</strong>.
                           Ashtech Pay ne te demandera jamais tes identifiants par email ou par téléphone.
                         </td>
                       </tr>
@@ -498,7 +498,7 @@ function emailHeader(firstName: string, badgeText: string, badgeColor: string, h
               <div style="margin-bottom:22px;">
                 <table cellpadding="0" cellspacing="0" border="0" align="center">
                   <tr>
-                    <td style="background:#000000;border-radius:14px;padding:10px 20px;">
+                    <td style="background:transparent;border-radius:14px;padding:10px 20px;">
                       <img src="${LOGO_URL}" alt="Ashtech Pay" width="140" height="auto"
                            style="display:block;max-height:45px;width:auto;" />
                     </td>
@@ -1007,7 +1007,7 @@ export async function sendPayerConfirmationEmail(
               <div style="margin-bottom:22px;">
                 <table cellpadding="0" cellspacing="0" border="0" align="center">
                   <tr>
-                    <td style="background:#000000;border-radius:14px;padding:10px 20px;">
+                    <td style="background:transparent;border-radius:14px;padding:10px 20px;">
                       <img src="${LOGO_URL}" alt="Ashtech Pay" width="140" height="auto" style="display:block;max-height:45px;width:auto;" />
                     </td>
                   </tr>

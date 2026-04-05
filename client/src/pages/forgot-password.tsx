@@ -150,10 +150,9 @@ export default function ForgotPasswordPage() {
             </Button>
           </Link>
           <Link href="/">
-            <div className="flex items-center justify-center cursor-pointer pt-4">
-              <div className="bg-black rounded-2xl px-6 py-3">
-                <img src="/logo.png" alt="Ashtech Pay" className="h-16 w-auto" />
-              </div>
+            <div className="flex items-center justify-center gap-3 cursor-pointer pt-4">
+              <img src="/logo.png" alt="Ashtech Pay" className="h-14 w-auto" />
+              <span className="text-2xl font-bold tracking-tight text-foreground">AshTech Pay</span>
             </div>
           </Link>
           <CardTitle className="text-2xl font-bold">Mot de passe oublié</CardTitle>
