@@ -132,9 +132,7 @@ function Navbar() {
           <div className="flex items-center justify-between h-16 gap-4">
             <Link href="/">
               <div className="flex items-center gap-2 cursor-pointer">
-                <div className="bg-black rounded-xl px-3 py-1.5">
-                  <img src="/logo.png" alt="Ashtech-Pay Afrique" className="h-10 w-auto" />
-                </div>
+                <img src="/logo.png" alt="Ashtech-Pay Afrique" className="h-10 w-auto" />
               </div>
             </Link>
             
@@ -1204,9 +1202,7 @@ function Footer() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-8 mb-12">
           <div>
             <div className="flex items-center gap-2 mb-4">
-              <div className="bg-black rounded-xl px-3 py-1.5">
-                <img src="/logo.png" alt="Ashtech-Pay Afrique" className="h-10 w-auto" />
-              </div>
+              <img src="/logo.png" alt="Ashtech-Pay Afrique" className="h-10 w-auto" />
             </div>
             <p className="text-muted-foreground text-sm">
               La plateforme de liens de paiement moderne, sécurisée et accessible à tous en Afrique.

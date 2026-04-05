@@ -670,7 +670,7 @@ export default function DashboardHome() {
                     <Wallet className="w-4 h-4" />
                     Comptes
                   </button>
-                  <div className="bg-black rounded-xl p-2 hidden sm:block">
+                  <div className="hidden sm:block">
                     <img
                       src="/logo.png"
                       alt="Tableau de bord Ashtech Pay"
