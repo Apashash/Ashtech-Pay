@@ -13,7 +13,7 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {
     if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("ashtech-theme") as Theme;
+      const stored = localStorage.getItem("ashtech-theme-v2") as Theme;
       if (stored === "light" || stored === "dark") return stored;
     }
     return "light";
@@ -21,12 +21,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const root = document.documentElement;
+    root.classList.remove("dark");
     if (theme === "dark") {
       root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
     }
-    localStorage.setItem("ashtech-theme", theme);
+    localStorage.setItem("ashtech-theme-v2", theme);
   }, [theme]);
 
   const setTheme = (newTheme: Theme) => {

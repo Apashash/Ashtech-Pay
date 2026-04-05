@@ -244,8 +244,8 @@ export default function HPayPage() {
               {payResult.flow === "otp_ussd" && payResult.ussd_code && (
                 <div className="rounded-2xl border border-violet-500/30 bg-violet-500/5 p-5 space-y-3">
                   <p className="text-sm font-semibold text-violet-300">Composez ce code USSD sur votre téléphone :</p>
-                  <div className="bg-zinc-900 rounded-xl p-3 text-center">
-                    <code className="text-2xl font-mono text-violet-300 tracking-wider">{payResult.ussd_code}</code>
+                  <div className="bg-slate-100 border border-border rounded-xl p-3 text-center">
+                    <code className="text-2xl font-mono text-violet-700 tracking-wider">{payResult.ussd_code}</code>
                   </div>
                   <p className="text-xs text-muted-foreground">Suivez les instructions sur votre téléphone pour confirmer le paiement.</p>
                 </div>
