@@ -40,6 +40,7 @@ import {
   Mail,
   MessageCircleQuestion
 } from "lucide-react";
+import heroImage from "@assets/IMG_0059_1775398520619.png";
 import { useState, useEffect, useRef } from "react";
 import { useTheme } from "@/components/theme-provider";
 import { useScrollAnimation } from "@/hooks/use-scroll-animation";
@@ -248,6 +249,14 @@ function HeroSection() {
                   Se connecter
                 </Button>
               </Link>
+            </div>
+
+            <div className="flex justify-center pt-4">
+              <img
+                src={heroImage}
+                alt="Femme utilisant AshTech Pay"
+                className="w-full max-w-sm"
+              />
             </div>
           </div>
           
