@@ -44,10 +44,6 @@ import { useState, useEffect, useRef } from "react";
 import { useTheme } from "@/components/theme-provider";
 import { useScrollAnimation } from "@/hooks/use-scroll-animation";
 
-import paymentValidatedImage from "@assets/IMG_7981_1772401047932.jpeg";
-import withdrawalImage from "@assets/IMG_7982_1772401047932.jpeg";
-import globalReachImage from "@assets/IMG_7984_1772401047932.jpeg";
-import shareImage from "@assets/IMG_7985_1772401047932.jpeg";
 
 const paymentMethods = [
   { name: "Orange Money" },
@@ -416,17 +412,9 @@ function OnlineSalesSection() {
 function PaymentLinksSection() {
   return (
     <section className="py-20 lg:py-32">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
-          <div className="flex justify-center order-2 lg:order-1 animate-on-scroll-left">
-            <img 
-              src={paymentValidatedImage} 
-              alt="Paiement validé - Processus de validation de paiement" 
-              className="w-full max-w-md rounded-2xl"
-            />
-          </div>
-          
-          <div className="space-y-6 order-1 lg:order-2 animate-on-scroll-right">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="animate-on-scroll">
+          <div className="space-y-6">
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20">
               <Link2 className="w-4 h-4 text-primary" />
               <span className="text-sm text-primary font-medium">Liens de paiement</span>
@@ -480,9 +468,9 @@ function PaymentLinksSection() {
 function ShareSection() {
   return (
     <section className="py-20 lg:py-32 bg-card/50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
-          <div className="space-y-6 animate-on-scroll-left">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="animate-on-scroll">
+          <div className="space-y-6">
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20">
               <Share2 className="w-4 h-4 text-primary" />
               <span className="text-sm text-primary font-medium">Partage facile</span>
@@ -515,13 +503,6 @@ function ShareSection() {
             </div>
           </div>
           
-          <div className="flex justify-center">
-            <img 
-              src={shareImage} 
-              alt="Partagez vos liens sur WhatsApp, Email, SMS et réseaux sociaux" 
-              className="w-full max-w-md rounded-2xl"
-            />
-          </div>
         </div>
       </div>
     </section>
@@ -531,17 +512,9 @@ function ShareSection() {
 function WithdrawalSection() {
   return (
     <section className="py-20 lg:py-32">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
-          <div className="flex justify-center order-2 lg:order-1 animate-on-scroll-left">
-            <img 
-              src={withdrawalImage} 
-              alt="Interface de retrait - Retrait rapide vers Mobile Money ou carte bancaire" 
-              className="w-full max-w-md rounded-2xl"
-            />
-          </div>
-          
-          <div className="space-y-6 order-1 lg:order-2 animate-on-scroll-right">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="animate-on-scroll">
+          <div className="space-y-6">
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20">
               <ArrowDownUp className="w-4 h-4 text-primary" />
               <span className="text-sm text-primary font-medium">Retraits</span>
@@ -613,13 +586,6 @@ function GlobalReachSection() {
           </p>
         </div>
         
-        <div className="flex justify-center">
-          <img 
-            src={globalReachImage} 
-            alt="Couverture internationale - Disponible dans plus de 21 pays" 
-            className="w-full max-w-3xl rounded-2xl"
-          />
-        </div>
       </div>
     </section>
   );
@@ -936,22 +902,6 @@ function TestimonialsSection() {
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-8 lg:gap-12 items-center animate-on-scroll">
-          <div className="flex justify-center">
-            <img
-              src="/avis-clients.jpeg"
-              alt="Avis des clients Ashtech Pay"
-              className="w-full max-w-md rounded-2xl shadow-2xl border border-border object-cover"
-            />
-          </div>
-          <div className="flex justify-center">
-            <img
-              src="/notification-transaction.png"
-              alt="Notification de transaction Ashtech Pay"
-              className="w-full max-w-sm rounded-2xl shadow-2xl border border-border object-contain"
-            />
-          </div>
-        </div>
       </div>
     </section>
   );
