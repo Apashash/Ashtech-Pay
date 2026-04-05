@@ -627,13 +627,28 @@ export default function PaymentPage() {
             <div className="space-y-2">
               <Label htmlFor="country">Pays *</Label>
               <Select value={country} onValueChange={(val) => { setCountry(val); setOperator(""); setErrors(p => ({...p, country: undefined as any})); }}>
-                <SelectTrigger data-testid="select-country" className={`h-12 ${errors.country ? "border-red-500" : ""}`}>
-                  <Globe className="w-4 h-4 text-muted-foreground mr-2" />
-                  <SelectValue placeholder="Sélectionnez votre pays" />
+                <SelectTrigger data-testid="select-country" className={`h-14 ${errors.country ? "border-red-500" : ""}`}>
+                  {selectedCountryData ? (
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <span className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-xl shrink-0">
+                        {selectedCountryData.flag}
+                      </span>
+                      <span className="font-semibold truncate">{selectedCountryData.name}</span>
+                      <span className="text-muted-foreground text-sm shrink-0">({selectedCountryData.currency})</span>
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground text-sm">Sélectionnez votre pays</span>
+                  )}
                 </SelectTrigger>
                 <SelectContent>
                   {depositConfig.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>{c.flag} {c.name}</SelectItem>
+                    <SelectItem key={c.id} value={c.id}>
+                      <span className="flex items-center gap-2">
+                        <span>{c.flag}</span>
+                        <span>{c.name}</span>
+                        <span className="text-muted-foreground text-xs">({c.currency})</span>
+                      </span>
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>

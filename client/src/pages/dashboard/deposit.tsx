@@ -701,14 +701,28 @@ export default function DepositPage() {
                               <FormLabel>Choisir le pays</FormLabel>
                               <Select onValueChange={(val) => { field.onChange(val); form.setValue("operatorId", ""); }} value={field.value}>
                                 <FormControl>
-                                  <SelectTrigger data-testid="select-country" className="h-12 text-sm">
-                                    <SelectValue placeholder="Sélectionner un pays" />
+                                  <SelectTrigger data-testid="select-country" className="h-14">
+                                    {selectedCountry ? (
+                                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                                        <span className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-xl shrink-0">
+                                          {getCountryFlagEmoji(selectedCountry.code)}
+                                        </span>
+                                        <span className="font-semibold truncate">{selectedCountry.name}</span>
+                                        <span className="text-muted-foreground text-sm shrink-0">({selectedCountry.currency})</span>
+                                      </div>
+                                    ) : (
+                                      <span className="text-muted-foreground text-sm">Sélectionner un pays</span>
+                                    )}
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
                                   {countries.map((country) => (
                                     <SelectItem key={country.id} value={country.id}>
-                                      {getCountryFlagEmoji(country.code)} {country.name} ({country.currency})
+                                      <span className="flex items-center gap-2">
+                                        <span>{getCountryFlagEmoji(country.code)}</span>
+                                        <span>{country.name}</span>
+                                        <span className="text-muted-foreground text-xs">({country.currency})</span>
+                                      </span>
                                     </SelectItem>
                                   ))}
                                 </SelectContent>
