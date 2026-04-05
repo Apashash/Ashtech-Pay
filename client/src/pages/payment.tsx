@@ -711,7 +711,8 @@ export default function PaymentPage() {
             {paymentMethod === "mobile_money" && country && operators.length > 0 && (
               <div className="space-y-2">
                 <Label>Opérateur Mobile Money *</Label>
-                <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
+                <div className="w-full overflow-hidden">
+                <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
                   {operators.map((op) => {
                     const logo = getOperatorLogo(op.name);
                     const isSelected = operator === op.id;
@@ -740,6 +741,7 @@ export default function PaymentPage() {
                       </button>
                     );
                   })}
+                </div>
                 </div>
                 {errors.operator && <p className="text-xs text-red-500">{errors.operator}</p>}
               </div>

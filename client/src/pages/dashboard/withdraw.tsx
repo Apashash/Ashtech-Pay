@@ -344,7 +344,8 @@ export default function WithdrawPage() {
                           {operators.length === 0 ? (
                             <p className="text-xs text-muted-foreground py-2">Aucun opérateur disponible</p>
                           ) : (
-                            <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+                            <div className="w-full overflow-hidden">
+                            <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
                               {operators.map((op) => {
                                 const logo = getOperatorLogo(op.name);
                                 const isSelected = selectedOperator === op.id;
@@ -373,6 +374,7 @@ export default function WithdrawPage() {
                                   </button>
                                 );
                               })}
+                            </div>
                             </div>
                           )}
                         </div>

@@ -411,7 +411,8 @@ export default function SendMoneyPage() {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Opérateur</FormLabel>
-                            <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
+                            <div className="w-full overflow-hidden">
+                            <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
                               {selectedCountry.operators.map((op) => {
                                 const logo = getOperatorLogo(op.name);
                                 const isSelected = field.value === op.id;
@@ -440,6 +441,7 @@ export default function SendMoneyPage() {
                                   </button>
                                 );
                               })}
+                            </div>
                             </div>
                             <FormMessage />
                           </FormItem>
