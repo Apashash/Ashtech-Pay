@@ -1160,6 +1160,52 @@ function ApiDeveloperSection() {
   );
 }
 
+function ReadyToStartSection() {
+  const stats = [
+    { value: "50 000", suffix: "+", label: "Marchands satisfaits" },
+    { value: "100",    suffix: "+", label: "Entreprises partenaires" },
+    { value: "30",     suffix: "+", label: "Opérateurs Mobile Money" },
+    { value: "22",     suffix: "+", label: "Pays africains" },
+  ];
+
+  return (
+    <section className="py-20 lg:py-28 bg-white relative overflow-hidden">
+      {/* World map dots background */}
+      <div
+        className="absolute inset-0 opacity-[0.04] pointer-events-none"
+        style={{
+          backgroundImage: `radial-gradient(circle, #1e3a8a 1px, transparent 1px)`,
+          backgroundSize: "28px 28px",
+        }}
+      />
+
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
+        <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-slate-900 mb-5 leading-tight">
+          Prêt à commencer ?
+        </h2>
+        <p className="text-base sm:text-lg text-slate-500 max-w-2xl mx-auto mb-14 leading-relaxed">
+          Permettez à vos clients de payer avec simplicité, sécurité et rapidité
+          sur votre site ou vos réseaux sociaux, quel que soit leur service Mobile Money.
+        </p>
+
+        <div className="grid grid-cols-2 gap-8 sm:gap-12 max-w-xl mx-auto">
+          {stats.map((stat) => (
+            <div key={stat.label} className="text-center">
+              <p className="text-4xl sm:text-5xl font-extrabold text-slate-900 leading-none">
+                {stat.value}
+                <span className="text-primary">{stat.suffix}</span>
+              </p>
+              <p className="mt-2 text-sm sm:text-base font-semibold text-slate-500 leading-tight">
+                {stat.label}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function CTASection() {
   return (
     <section className="py-20 lg:py-32 relative overflow-hidden">
@@ -1333,6 +1379,7 @@ export default function LandingPage() {
       <SecuritySection />
       <ApiDeveloperSection />
       <TestimonialsSection />
+      <ReadyToStartSection />
       <CTASection />
       <Footer />
     </div>
