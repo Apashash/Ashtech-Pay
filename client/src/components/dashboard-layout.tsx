@@ -285,8 +285,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         <Sidebar>
           <SidebarHeader className="p-4 border-b border-sidebar-border">
             <Link href="/dashboard">
-              <div className="flex items-center cursor-pointer">
+              <div className="flex items-center gap-2 cursor-pointer">
                 <img src="/logo.png" alt="Ashtech-Pay" className="h-9 w-auto" />
+                <span className="font-bold text-base text-sidebar-foreground tracking-tight">AshTech Pay</span>
               </div>
             </Link>
           </SidebarHeader>
@@ -535,9 +536,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 </PopoverContent>
               </Popover>
               <div className="relative">
-                <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                  <UserIcon className="w-5 h-5 text-primary" />
-                </div>
+                <RouterLink href="/dashboard/settings">
+                  <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center cursor-pointer hover:bg-primary/30 transition-colors" data-testid="button-profile">
+                    <UserIcon className="w-5 h-5 text-primary" />
+                  </div>
+                </RouterLink>
                 {user.isVerified ? (
                   <div 
                     className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center cursor-pointer"
