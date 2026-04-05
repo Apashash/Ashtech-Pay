@@ -2,26 +2,34 @@ import { DashboardLayout } from "@/components/dashboard-layout";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Megaphone, CheckCircle2, ArrowLeft, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+interface GlobalMessage {
+  id: string;
+  title: string;
+  message: string;
+  createdAt: string | null;
+  expiresAt: string | null;
+  isActive: boolean;
+}
+
 interface Notification {
   id: string;
   type: string;
-  title: string;
-  message: string;
-  transactionId: string | null;
   isRead: boolean;
-  createdAt: string | null;
 }
 
 export default function GlobalMessagePage() {
   const [, setLocation] = useLocation();
-  const [capturedNotif, setCapturedNotif] = useState<Notification | null>(null);
+
+  const { data: activeMessages = [], isLoading } = useQuery<GlobalMessage[]>({
+    queryKey: ["/api/global-messages/active"],
+  });
 
   const { data: notificationData } = useQuery<{ notifications: Notification[]; unreadCount: number }>({
     queryKey: ["/api/notifications"],
@@ -36,23 +44,22 @@ export default function GlobalMessagePage() {
     },
   });
 
-  const latestGlobalNotif = notificationData?.notifications
-    ?.filter(n => n.type === "global_message")
+  useEffect(() => {
+    if (!notificationData) return;
+    const unreadGlobal = notificationData.notifications.find(
+      n => n.type === "global_message" && !n.isRead,
+    );
+    if (unreadGlobal) {
+      markAsReadMutation.mutate(unreadGlobal.id);
+    }
+  }, [notificationData?.notifications?.length]);
+
+  const displayed = activeMessages
+    .slice()
     .sort((a, b) => {
       if (!a.createdAt || !b.createdAt) return 0;
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     })[0] ?? null;
-
-  useEffect(() => {
-    if (latestGlobalNotif && !capturedNotif) {
-      setCapturedNotif(latestGlobalNotif);
-      if (!latestGlobalNotif.isRead) {
-        markAsReadMutation.mutate(latestGlobalNotif.id);
-      }
-    }
-  }, [latestGlobalNotif?.id]);
-
-  const displayed = capturedNotif;
 
   return (
     <DashboardLayout>
@@ -68,7 +75,7 @@ export default function GlobalMessagePage() {
           Retour
         </Button>
 
-        {displayed ? (
+        {!isLoading && displayed ? (
           <div className="relative overflow-hidden rounded-2xl border border-purple-500/30 bg-gradient-to-br from-purple-500/10 via-background to-blue-500/5 shadow-xl">
 
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 via-violet-500 to-blue-500" />
@@ -120,7 +127,7 @@ export default function GlobalMessagePage() {
               </div>
             </div>
           </div>
-        ) : (
+        ) : !isLoading ? (
           <div className="text-center py-20 space-y-4">
             <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mx-auto">
               <Megaphone className="w-8 h-8 text-muted-foreground" />
@@ -131,7 +138,7 @@ export default function GlobalMessagePage() {
               Retour au tableau de bord
             </Button>
           </div>
-        )}
+        ) : null}
       </div>
     </DashboardLayout>
   );

@@ -6149,6 +6149,19 @@ export async function registerRoutes(
     }
   });
 
+  // Get active global messages for current user (regardless of dismissal)
+  app.get("/api/global-messages/active", requireAuth, async (req, res) => {
+    try {
+      const all = await storage.getActiveGlobalMessages();
+      const now = new Date();
+      const active = all.filter(m => !m.expiresAt || new Date(m.expiresAt) > now);
+      res.json(active);
+    } catch (error) {
+      console.error("Get active global messages error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   // ============= ADMIN GLOBAL MESSAGES =============
 
   // Get all global messages (admin)

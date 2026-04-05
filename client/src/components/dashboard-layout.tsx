@@ -154,6 +154,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     refetchInterval: 30000,
   });
 
+  const { data: activeGlobalMessages = [] } = useQuery<{ id: string; title: string; message: string; createdAt: string | null }[]>({
+    queryKey: ["/api/global-messages/active"],
+    refetchInterval: 60000,
+  });
+
   const { data: ticketStats } = useQuery<{ unreadCount: number; totalCount: number }>({
     queryKey: ["/api/tickets/stats"],
     refetchInterval: 30000,
@@ -417,7 +422,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           <header className="flex items-center justify-between h-14 px-4 border-b border-border bg-background/80 backdrop-blur-md">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
             <div className="flex items-center gap-3">
-              {(notificationData?.notifications ?? []).some(n => n.type === "global_message") && (
+              {activeGlobalMessages.length > 0 && (
                 <Button
                   variant="ghost"
                   size="icon"
