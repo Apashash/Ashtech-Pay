@@ -335,7 +335,7 @@ export default function PaymentPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-[#f0f4f8] flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
@@ -343,7 +343,7 @@ export default function PaymentPage() {
 
   if (error || !paymentLink) {
     return (
-      <div className="min-h-screen bg-background flex flex-col">
+      <div className="min-h-screen bg-[#f0f4f8] flex flex-col">
         <div className="flex-1 flex items-center justify-center p-4">
           <Card className="w-full max-w-md text-center">
             <CardContent className="pt-6">
@@ -361,7 +361,7 @@ export default function PaymentPage() {
 
   if (pixpayOtpStep && !paymentComplete) {
     return (
-      <div className="min-h-screen bg-background flex flex-col">
+      <div className="min-h-screen bg-[#f0f4f8] flex flex-col">
         <div className="flex-1 flex items-center justify-center p-4">
           <Card className="w-full max-w-md">
             <CardContent className="pt-8 pb-8 space-y-6 text-center">
@@ -426,7 +426,7 @@ export default function PaymentPage() {
 
   if (paymentComplete) {
     return (
-      <div className="min-h-screen bg-background flex flex-col">
+      <div className="min-h-screen bg-[#f0f4f8] flex flex-col">
         <div className="flex-1 flex items-center justify-center p-4">
           <Card className="w-full max-w-md text-center">
             <CardContent className="pt-6 space-y-4">
@@ -579,11 +579,14 @@ export default function PaymentPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent pointer-events-none" />
+    <div className="min-h-screen bg-[#f0f4f8] flex flex-col">
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/3 via-transparent to-transparent pointer-events-none" />
       
-      <header className="flex justify-between items-center px-4 py-4 relative z-10">
-        <img src="/logo.png" alt="Ashtech Pay Afrique" className="h-9 object-contain" data-testid="img-logo" />
+      <header className="flex justify-between items-center px-5 py-4 relative z-10 border-b border-border/60 bg-white/80 backdrop-blur-sm">
+        <div className="flex items-center gap-2">
+          <img src="/logo.png" alt="Ashtech Pay Afrique" className="h-9 object-contain" data-testid="img-logo" />
+          <span className="font-bold text-base text-foreground tracking-tight">AshTech Pay</span>
+        </div>
         <Select value={displayCurrency || linkCurrency} onValueChange={(val) => setDisplayCurrency(val as SupportedCurrency)}>
           <SelectTrigger className="w-auto gap-2 bg-muted/50 border-border">
             <Globe className="w-4 h-4" />
@@ -837,10 +840,11 @@ export default function PaymentPage() {
 
 function Footer() {
   return (
-    <footer className="border-t border-border bg-card/50 py-6 px-4">
+    <footer className="border-t border-border bg-white/70 py-6 px-4">
       <div className="max-w-lg mx-auto text-center space-y-4">
-        <div className="flex items-center justify-center gap-3">
-          <img src="/logo.png" alt="Ashtech Pay" className="h-9 w-auto" />
+        <div className="flex items-center justify-center gap-2">
+          <img src="/logo.png" alt="Ashtech Pay" className="h-8 w-auto" />
+          <span className="font-bold text-sm text-foreground tracking-tight">AshTech Pay</span>
         </div>
         <p className="text-sm text-muted-foreground">
           Propulsé par <span className="font-semibold text-foreground">Ashtech Pay</span>
