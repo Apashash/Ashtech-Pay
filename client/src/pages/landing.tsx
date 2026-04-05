@@ -216,58 +216,45 @@ function HeroSection() {
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-32 relative z-10">
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-start lg:items-center">
-          <div className="space-y-6">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/30 w-fit">
+          <div className="space-y-6 text-center lg:text-left">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/30">
               <Globe className="w-4 h-4 text-primary" />
               <span className="text-sm text-primary font-medium">+18 pays africains</span>
             </div>
-            
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-slate-900 leading-tight">
+
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-slate-900 leading-tight">
               Vendez en ligne.{" "}
               <span className="text-primary">Encaissez instantanément.</span>
             </h1>
-            
-            <Link href="/login">
-              <Button className="bg-blue-600 hover:bg-blue-700 text-white rounded-full px-6 py-3 text-sm font-semibold w-fit" data-testid="button-commencer-hero">
-                Commencer
-              </Button>
-            </Link>
-            
+
             <p className="text-base sm:text-lg md:text-xl text-slate-600 w-full">
               <span className="text-cyan-600 font-bold">ASHTECH PAY</span> est une <span className="font-bold text-slate-900">plateforme de paiement innovante</span> qui permet aux créateurs, entrepreneurs et commerçants de vendre leurs <span className="font-bold text-slate-900">produits physiques ou digitaux</span> grâce à un <span className="font-bold text-slate-900">simple lien de paiement</span>, et de recevoir leur argent <span className="font-bold text-slate-900">immédiatement, en toute sécurité</span>.
             </p>
-            
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-slate-700">
-                <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                <span>Aucun site requis.</span>
-              </div>
-              <div className="flex items-center gap-2 text-slate-700">
-                <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                <span>Aucun stress technique.</span>
-              </div>
-              <div className="flex items-center gap-2 text-slate-700">
-                <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                <span>Paiements locaux & internationaux.</span>
-              </div>
+
+            <div className="space-y-3 text-left inline-block w-full">
+              {[
+                "Aucun site requis.",
+                "Aucun stress technique.",
+                "Paiements locaux & internationaux.",
+              ].map((item) => (
+                <div key={item} className="flex items-center gap-2 text-slate-700">
+                  <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span>{item}</span>
+                </div>
+              ))}
             </div>
-            
-            <div className="flex flex-col sm:flex-row gap-4">
-              <Link href="/register">
-                <Button size="lg" className="w-full sm:w-auto text-lg px-8" data-testid="button-hero-register">
-                  Créer un compte
-                  <ChevronRight className="w-5 h-5 ml-2" />
+
+            <div className="flex flex-col gap-3 pt-2">
+              <Link href="/register" className="w-full">
+                <Button size="lg" className="w-full rounded-full text-base sm:text-lg px-8 py-6 font-semibold" data-testid="button-hero-register">
+                  Commencer maintenant
                 </Button>
               </Link>
-              <Link href="/login">
-                <Button size="lg" className="w-full sm:w-auto text-lg px-8 bg-blue-600 hover:bg-blue-700 text-white border-none" data-testid="button-hero-login">
-                  Créer un lien de paiement
+              <Link href="/login" className="w-full">
+                <Button size="lg" variant="outline" className="w-full rounded-full text-base sm:text-lg px-8 py-6 font-semibold border-2" data-testid="button-hero-login">
+                  Se connecter
                 </Button>
               </Link>
             </div>
