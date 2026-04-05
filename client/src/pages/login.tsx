@@ -46,8 +46,9 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         <div className="flex flex-col items-center gap-3 mb-8">
           <Link href="/">
-            <div className="bg-zinc-900 rounded-xl p-2 cursor-pointer inline-flex border border-zinc-700">
-              <img src="/logo.png" alt="Ashtech-Pay Afrique" className="h-9 w-auto" />
+            <div className="flex items-center gap-2 cursor-pointer">
+              <img src="/logo.png" alt="Ashtech-Pay Afrique" className="h-10 w-auto" />
+              <span className="font-bold text-xl text-foreground tracking-tight">AshTech Pay</span>
             </div>
           </Link>
           <div className="text-center">
