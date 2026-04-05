@@ -40,7 +40,7 @@ import {
   Mail,
   MessageCircleQuestion
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useTheme } from "@/components/theme-provider";
 import { useScrollAnimation } from "@/hooks/use-scroll-animation";
 
@@ -1160,17 +1160,66 @@ function ApiDeveloperSection() {
   );
 }
 
+function useCountUp(target: number, duration: number, started: boolean) {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    if (!started) return;
+    setCount(0);
+    const steps = 60;
+    const interval = duration / steps;
+    let current = 0;
+    const timer = setInterval(() => {
+      current += 1;
+      const progress = current / steps;
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setCount(Math.round(eased * target));
+      if (current >= steps) clearInterval(timer);
+    }, interval);
+    return () => clearInterval(timer);
+  }, [started, target, duration]);
+  return count;
+}
+
+function AnimatedStat({ target, suffix, label, started }: { target: number; suffix: string; label: string; started: boolean }) {
+  const count = useCountUp(target, 1400, started);
+  const formatted = count >= 1000 ? count.toLocaleString("fr-FR") : count.toString();
+  return (
+    <div className="text-center">
+      <p className="text-4xl sm:text-5xl font-extrabold text-slate-900 leading-none">
+        {formatted}
+        <span className="text-primary">{suffix}</span>
+      </p>
+      <p className="mt-2 text-sm sm:text-base font-semibold text-slate-500 leading-tight">
+        {label}
+      </p>
+    </div>
+  );
+}
+
 function ReadyToStartSection() {
+  const sectionRef = useRef<HTMLElement>(null);
+  const [started, setStarted] = useState(false);
+
+  useEffect(() => {
+    const el = sectionRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setStarted(true); observer.disconnect(); } },
+      { threshold: 0.25 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   const stats = [
-    { value: "50 000", suffix: "+", label: "Marchands satisfaits" },
-    { value: "100",    suffix: "+", label: "Entreprises partenaires" },
-    { value: "30",     suffix: "+", label: "Opérateurs Mobile Money" },
-    { value: "22",     suffix: "+", label: "Pays africains" },
+    { target: 50000, suffix: "+", label: "Marchands satisfaits" },
+    { target: 100,   suffix: "+", label: "Entreprises partenaires" },
+    { target: 30,    suffix: "+", label: "Opérateurs Mobile Money" },
+    { target: 22,    suffix: "+", label: "Pays africains" },
   ];
 
   return (
-    <section className="py-20 lg:py-28 bg-white relative overflow-hidden">
-      {/* World map dots background */}
+    <section ref={sectionRef} className="py-20 lg:py-28 bg-white relative overflow-hidden">
       <div
         className="absolute inset-0 opacity-[0.04] pointer-events-none"
         style={{
@@ -1190,15 +1239,7 @@ function ReadyToStartSection() {
 
         <div className="grid grid-cols-2 gap-8 sm:gap-12 max-w-xl mx-auto">
           {stats.map((stat) => (
-            <div key={stat.label} className="text-center">
-              <p className="text-4xl sm:text-5xl font-extrabold text-slate-900 leading-none">
-                {stat.value}
-                <span className="text-primary">{stat.suffix}</span>
-              </p>
-              <p className="mt-2 text-sm sm:text-base font-semibold text-slate-500 leading-tight">
-                {stat.label}
-              </p>
-            </div>
+            <AnimatedStat key={stat.label} target={stat.target} suffix={stat.suffix} label={stat.label} started={started} />
           ))}
         </div>
       </div>
