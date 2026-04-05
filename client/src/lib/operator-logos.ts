@@ -18,6 +18,9 @@ export function getOperatorLogo(name: string): string | null {
   if (n.includes("tigo")) return "/op-tigopesa.jpeg";
   if (n.includes("ttcl")) return "/op-ttcl.png";
   if (n.includes("paga")) return "/op-paga.jpeg";
+  if (n.includes("palmpay") || n.includes("palm")) return "/op-palmpay.jpeg";
+  if (n.includes("afrimoney") || n.includes("afri")) return "/op-afrimoney.png";
+  if (n.includes("opay")) return "/op-opay.png";
   if (n.includes("orange")) return "/op-orange.png";
   return null;
 }
