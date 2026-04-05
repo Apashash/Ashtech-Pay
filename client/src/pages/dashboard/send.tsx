@@ -281,7 +281,7 @@ export default function SendMoneyPage() {
         </div>
 
         <div className="grid md:grid-cols-3 gap-6">
-          <Card className="md:col-span-2">
+          <Card className="md:col-span-2 min-w-0 overflow-hidden">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Send className="w-5 h-5" />
@@ -289,7 +289,7 @@ export default function SendMoneyPage() {
               </CardTitle>
               <CardDescription>Sélectionnez la destination pour commencer</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-5">
+            <CardContent className="space-y-5 min-w-0">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Solde à débiter</label>
                 <Select value={selectedWallet} onValueChange={setSelectedWallet}>
@@ -397,7 +397,7 @@ export default function SendMoneyPage() {
                 </div>
               ) : (
                 <Form {...form}>
-                  <form onSubmit={form.handleSubmit((d) => externalMutation.mutate({ ...d, countryId: destination }))} className="space-y-4">
+                  <form onSubmit={form.handleSubmit((d) => externalMutation.mutate({ ...d, countryId: destination }))} className="space-y-4 min-w-0 w-full">
                     {!selectedCountry ? (
                       <p className="text-sm text-muted-foreground py-2">Choisissez une destination d'abord</p>
                     ) : selectedCountry.operators.length === 0 ? (
@@ -409,7 +409,7 @@ export default function SendMoneyPage() {
                         control={form.control}
                         name="operatorId"
                         render={({ field }) => (
-                          <FormItem>
+                          <FormItem className="min-w-0">
                             <FormLabel>Opérateur</FormLabel>
                             <div className="w-full overflow-hidden">
                             <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
