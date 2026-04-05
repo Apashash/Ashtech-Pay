@@ -2,7 +2,7 @@ import { DashboardLayout } from "@/components/dashboard-layout";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -21,6 +21,7 @@ interface Notification {
 
 export default function GlobalMessagePage() {
   const [, setLocation] = useLocation();
+  const [capturedNotif, setCapturedNotif] = useState<Notification | null>(null);
 
   const { data: notificationData } = useQuery<{ notifications: Notification[]; unreadCount: number }>({
     queryKey: ["/api/notifications"],
@@ -35,13 +36,23 @@ export default function GlobalMessagePage() {
     },
   });
 
-  const globalNotif = notificationData?.notifications?.find(n => n.type === "global_message");
+  const latestGlobalNotif = notificationData?.notifications
+    ?.filter(n => n.type === "global_message")
+    .sort((a, b) => {
+      if (!a.createdAt || !b.createdAt) return 0;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    })[0] ?? null;
 
   useEffect(() => {
-    if (globalNotif && !globalNotif.isRead) {
-      markAsReadMutation.mutate(globalNotif.id);
+    if (latestGlobalNotif && !capturedNotif) {
+      setCapturedNotif(latestGlobalNotif);
+      if (!latestGlobalNotif.isRead) {
+        markAsReadMutation.mutate(latestGlobalNotif.id);
+      }
     }
-  }, [globalNotif?.id]);
+  }, [latestGlobalNotif?.id]);
+
+  const displayed = capturedNotif;
 
   return (
     <DashboardLayout>
@@ -57,7 +68,7 @@ export default function GlobalMessagePage() {
           Retour
         </Button>
 
-        {globalNotif ? (
+        {displayed ? (
           <div className="relative overflow-hidden rounded-2xl border border-purple-500/30 bg-gradient-to-br from-purple-500/10 via-background to-blue-500/5 shadow-xl">
 
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 via-violet-500 to-blue-500" />
@@ -76,21 +87,21 @@ export default function GlobalMessagePage() {
                     </span>
                   </div>
                   <h1 className="text-xl font-bold text-foreground leading-tight">
-                    {globalNotif.title}
+                    {displayed.title}
                   </h1>
                 </div>
               </div>
 
               <div className="rounded-xl bg-background/60 border border-border/60 p-5">
                 <p className="text-base text-foreground leading-relaxed whitespace-pre-wrap">
-                  {globalNotif.message}
+                  {displayed.message}
                 </p>
               </div>
 
-              {globalNotif.createdAt && (
+              {displayed.createdAt && (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <div className="w-1.5 h-1.5 rounded-full bg-purple-500" />
-                  Publié le {format(new Date(globalNotif.createdAt), "dd MMMM yyyy à HH:mm", { locale: fr })}
+                  Publié le {format(new Date(displayed.createdAt), "dd MMMM yyyy à HH:mm", { locale: fr })}
                 </div>
               )}
 

@@ -483,7 +483,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                             data-testid={`notification-item-${notification.id}`}
                             onClick={() => {
                               if (notification.type === "global_message") {
-                                if (!notification.isRead) markAsReadMutation.mutate(notification.id);
                                 setLocation("/dashboard/global-message");
                                 return;
                               }
