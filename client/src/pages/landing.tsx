@@ -210,20 +210,19 @@ function Navbar() {
 
 function HeroSection() {
   return (
-    <section className="relative flex flex-col justify-start pt-20 md:pt-24 lg:min-h-screen lg:pt-0 lg:justify-center overflow-x-hidden bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900">
-      <div className="absolute inset-0" style={{ zIndex: 1, background: "linear-gradient(135deg, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.2) 55%, rgba(0,0,0,0.1) 100%)" }} />
-      <div className="absolute top-1/4 right-0 w-72 h-72 md:w-96 md:h-96 bg-primary/10 rounded-full blur-3xl" style={{ zIndex: 1 }} />
+    <section className="relative flex flex-col justify-start pt-20 md:pt-24 lg:min-h-screen lg:pt-0 lg:justify-center overflow-x-hidden bg-white">
+      <div className="absolute top-1/4 right-0 w-72 h-72 md:w-96 md:h-96 bg-primary/5 rounded-full blur-3xl" style={{ zIndex: 1 }} />
       <div className="absolute bottom-1/4 left-0 w-48 h-48 md:w-64 md:h-64 bg-primary/5 rounded-full blur-3xl" style={{ zIndex: 1 }} />
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-32 relative z-10">
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-start lg:items-center">
           <div className="space-y-6">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/20 rounded-full border border-primary/40 w-fit">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/30 w-fit">
               <Globe className="w-4 h-4 text-primary" />
               <span className="text-sm text-primary font-medium">+18 pays africains</span>
             </div>
             
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white leading-tight">
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-slate-900 leading-tight">
               Vendez en ligne.{" "}
               <span className="text-primary">Encaissez instantanément.</span>
             </h1>
@@ -234,25 +233,25 @@ function HeroSection() {
               </Button>
             </Link>
             
-            <p className="text-base sm:text-lg md:text-xl text-white/75 w-full">
-              <span className="text-cyan-400 font-bold">ASHTECH PAY</span> est une <span className="font-bold text-white">plateforme de paiement innovante</span> qui permet aux créateurs, entrepreneurs et commerçants de vendre leurs <span className="font-bold text-white">produits physiques ou digitaux</span> grâce à un <span className="font-bold text-white">simple lien de paiement</span>, et de recevoir leur argent <span className="font-bold text-white">immédiatement, en toute sécurité</span>.
+            <p className="text-base sm:text-lg md:text-xl text-slate-600 w-full">
+              <span className="text-cyan-600 font-bold">ASHTECH PAY</span> est une <span className="font-bold text-slate-900">plateforme de paiement innovante</span> qui permet aux créateurs, entrepreneurs et commerçants de vendre leurs <span className="font-bold text-slate-900">produits physiques ou digitaux</span> grâce à un <span className="font-bold text-slate-900">simple lien de paiement</span>, et de recevoir leur argent <span className="font-bold text-slate-900">immédiatement, en toute sécurité</span>.
             </p>
             
             <div className="space-y-3">
-              <div className="flex items-center gap-2 text-white/80">
-                <svg className="w-5 h-5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="flex items-center gap-2 text-slate-700">
+                <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
                 <span>Aucun site requis.</span>
               </div>
-              <div className="flex items-center gap-2 text-white/80">
-                <svg className="w-5 h-5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="flex items-center gap-2 text-slate-700">
+                <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
                 <span>Aucun stress technique.</span>
               </div>
-              <div className="flex items-center gap-2 text-white/80">
-                <svg className="w-5 h-5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="flex items-center gap-2 text-slate-700">
+                <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
                 <span>Paiements locaux & internationaux.</span>
@@ -275,18 +274,18 @@ function HeroSection() {
             
             <div className="flex items-center gap-8 pt-4">
               <div className="text-center">
-                <p className="text-2xl font-bold text-white">50K+</p>
-                <p className="text-sm text-white/60">Vendeurs</p>
+                <p className="text-2xl font-bold text-slate-900">50K+</p>
+                <p className="text-sm text-slate-500">Vendeurs</p>
               </div>
-              <div className="w-px h-10 bg-white/25" />
+              <div className="w-px h-10 bg-slate-200" />
               <div className="text-center">
-                <p className="text-2xl font-bold text-white">10M+</p>
-                <p className="text-sm text-white/60">Transactions</p>
+                <p className="text-2xl font-bold text-slate-900">10M+</p>
+                <p className="text-sm text-slate-500">Transactions</p>
               </div>
-              <div className="w-px h-10 bg-white/25" />
+              <div className="w-px h-10 bg-slate-200" />
               <div className="text-center">
-                <p className="text-2xl font-bold text-white">18+</p>
-                <p className="text-sm text-white/60">Pays</p>
+                <p className="text-2xl font-bold text-slate-900">18+</p>
+                <p className="text-sm text-slate-500">Pays</p>
               </div>
             </div>
           </div>
