@@ -14,6 +14,7 @@ import {
   Smartphone, CreditCard, ExternalLink, FileText, AlertTriangle, Globe,
   User, Mail, Phone, Hash
 } from "lucide-react";
+import { getOperatorLogo } from "@/lib/operator-logos";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { SiPaypal } from "react-icons/si";
 
@@ -694,18 +695,37 @@ export default function PaymentPage() {
             {/* Operator */}
             {paymentMethod === "mobile_money" && country && operators.length > 0 && (
               <div className="space-y-2">
-                <Label htmlFor="operator">Opérateur Mobile Money *</Label>
-                <Select value={operator} onValueChange={(val) => { setOperator(val); setErrors(p => ({...p, operator: undefined as any})); }}>
-                  <SelectTrigger data-testid="select-operator" className={`h-12 ${errors.operator ? "border-red-500" : ""}`}>
-                    <Smartphone className="w-4 h-4 text-muted-foreground mr-2" />
-                    <SelectValue placeholder="Sélectionnez votre opérateur" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {operators.map((op) => (
-                      <SelectItem key={op.id} value={op.id}>{op.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>Opérateur Mobile Money *</Label>
+                <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
+                  {operators.map((op) => {
+                    const logo = getOperatorLogo(op.name);
+                    const isSelected = operator === op.id;
+                    return (
+                      <button
+                        key={op.id}
+                        type="button"
+                        data-testid={`button-operator-${op.id}`}
+                        onClick={() => { setOperator(op.id); setErrors(p => ({...p, operator: undefined as any})); }}
+                        className={`flex-shrink-0 flex flex-col items-center justify-center gap-2 w-28 h-24 rounded-xl border-2 transition-all cursor-pointer ${
+                          isSelected
+                            ? "border-primary bg-primary/10 shadow-sm"
+                            : "border-border bg-white hover:border-primary/40 hover:bg-muted/30"
+                        }`}
+                      >
+                        {logo ? (
+                          <img src={logo} alt={op.name} className="w-12 h-12 object-contain rounded-lg" />
+                        ) : (
+                          <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
+                            <Smartphone className="w-6 h-6 text-primary" />
+                          </div>
+                        )}
+                        <span className={`text-xs font-medium text-center leading-tight px-1 ${isSelected ? "text-primary" : "text-foreground"}`}>
+                          {op.name}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
                 {errors.operator && <p className="text-xs text-red-500">{errors.operator}</p>}
               </div>
             )}

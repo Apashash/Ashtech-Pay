@@ -12,6 +12,8 @@ import { withdrawSchema, type SupportedCurrency, type WithdrawalNumber } from "@
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User } from "@shared/schema";
 import { Wallet, Smartphone, Building2, Loader2, CheckCircle, AlertCircle, Phone, Plus, Settings, Globe, Shield, Info, ArrowLeftRight } from "lucide-react";
+import { getOperatorLogo } from "@/lib/operator-logos";
+import { getCountryFlagEmoji } from "@/lib/country-flags";
 import { z } from "zod";
 import { useState, useEffect } from "react";
 import { formatCurrency } from "@/lib/currency";
@@ -314,44 +316,65 @@ export default function WithdrawPage() {
 
                   {selectedMethod === "mobile_money" && (
                     <>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-4">
                         <div className="space-y-2">
                           <FormLabel className="text-xs flex items-center gap-1">
                             <Globe className="w-3 h-3" />
                             Pays (compte principal)
                           </FormLabel>
                           <div
-                            className="h-9 flex items-center px-3 rounded-md border border-border bg-muted/50 text-xs text-foreground gap-2"
+                            className="h-11 flex items-center px-3 rounded-md border border-border bg-muted/50 text-sm text-foreground gap-2"
                             data-testid="display-country"
                           >
-                            <Globe className="w-3 h-3 text-muted-foreground shrink-0" />
+                            {selectedCountryData?.code && (
+                              <span className="text-lg">{getCountryFlagEmoji(selectedCountryData.code)}</span>
+                            )}
                             <span className="font-medium">
                               {selectedCountryData?.name || (countriesConfig.length === 0 ? "Chargement..." : "Non défini")}
                             </span>
-                            <span className="ml-auto text-muted-foreground">{userCurrency}</span>
+                            <span className="ml-auto text-muted-foreground text-xs">{userCurrency}</span>
                           </div>
                         </div>
+
                         <div className="space-y-2">
                           <FormLabel className="text-xs flex items-center gap-1">
                             <Smartphone className="w-3 h-3" />
-                            Opérateur
+                            Opérateur Mobile Money
                           </FormLabel>
-                          <Select 
-                            value={selectedOperator} 
-                            onValueChange={setSelectedOperator}
-                            disabled={!selectedCountry || operators.length === 0}
-                          >
-                            <SelectTrigger className="h-9 text-xs" data-testid="select-operator">
-                              <SelectValue placeholder={selectedCountry ? "Choisir un opérateur" : "Chargement..."} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {operators.map((op) => (
-                                <SelectItem key={op.id} value={op.id} className="text-xs">
-                                  {op.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          {operators.length === 0 ? (
+                            <p className="text-xs text-muted-foreground py-2">Aucun opérateur disponible</p>
+                          ) : (
+                            <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+                              {operators.map((op) => {
+                                const logo = getOperatorLogo(op.name);
+                                const isSelected = selectedOperator === op.id;
+                                return (
+                                  <button
+                                    key={op.id}
+                                    type="button"
+                                    data-testid={`button-operator-${op.id}`}
+                                    onClick={() => setSelectedOperator(op.id)}
+                                    className={`flex-shrink-0 flex flex-col items-center justify-center gap-1.5 w-24 h-20 rounded-xl border-2 transition-all cursor-pointer ${
+                                      isSelected
+                                        ? "border-primary bg-primary/10 shadow-sm"
+                                        : "border-border bg-card hover:border-primary/40 hover:bg-muted/50"
+                                    }`}
+                                  >
+                                    {logo ? (
+                                      <img src={logo} alt={op.name} className="w-10 h-10 object-contain rounded-lg" />
+                                    ) : (
+                                      <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                                        <Smartphone className="w-5 h-5 text-primary" />
+                                      </div>
+                                    )}
+                                    <span className={`text-xs font-medium text-center leading-tight px-1 ${isSelected ? "text-primary" : "text-foreground"}`}>
+                                      {op.name}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                       </div>
 

@@ -11,6 +11,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User, SupportedCurrency } from "@shared/schema";
 import { CreditCard, Loader2, Globe, AlertCircle, Phone, CheckCircle, XCircle, ArrowLeft, ArrowRight, Smartphone, ExternalLink, Hash } from "lucide-react";
+import { getOperatorLogo } from "@/lib/operator-logos";
 import { z } from "zod";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { formatCurrency } from "@/lib/currency";
@@ -697,18 +698,17 @@ export default function DepositPage() {
                           name="countryId"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Pays</FormLabel>
-                              <Select onValueChange={field.onChange} value={field.value}>
+                              <FormLabel>Choisir le pays</FormLabel>
+                              <Select onValueChange={(val) => { field.onChange(val); form.setValue("operatorId", ""); }} value={field.value}>
                                 <FormControl>
-                                  <SelectTrigger data-testid="select-country" className="h-12">
-                                    <Globe className="w-4 h-4 text-muted-foreground mr-2" />
+                                  <SelectTrigger data-testid="select-country" className="h-12 text-sm">
                                     <SelectValue placeholder="Sélectionner un pays" />
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
                                   {countries.map((country) => (
                                     <SelectItem key={country.id} value={country.id}>
-                                      {getCountryFlagEmoji(country.code)} {country.name} ({country.code})
+                                      {getCountryFlagEmoji(country.code)} {country.name} ({country.currency})
                                     </SelectItem>
                                   ))}
                                 </SelectContent>
@@ -723,32 +723,43 @@ export default function DepositPage() {
                           name="operatorId"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Opérateur</FormLabel>
-                              <Select 
-                                onValueChange={field.onChange} 
-                                value={field.value}
-                                disabled={!selectedCountry || selectedCountry.operators.length === 0}
-                              >
-                                <FormControl>
-                                  <SelectTrigger data-testid="select-operator" className="h-12">
-                                    <Smartphone className="w-4 h-4 text-muted-foreground mr-2" />
-                                    <SelectValue placeholder={
-                                      !selectedCountry 
-                                        ? "Choisir un pays d'abord" 
-                                        : selectedCountry.operators.length === 0 
-                                          ? "Aucun opérateur disponible"
-                                          : "Sélectionner un opérateur"
-                                    } />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  {selectedCountry?.operators.map((operator) => (
-                                    <SelectItem key={operator.id} value={operator.id}>
-                                      {operator.name}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              <FormLabel>Opérateur Mobile Money</FormLabel>
+                              {!selectedCountry ? (
+                                <p className="text-sm text-muted-foreground py-2">Choisissez un pays d'abord</p>
+                              ) : selectedCountry.operators.length === 0 ? (
+                                <p className="text-sm text-muted-foreground py-2">Aucun opérateur disponible</p>
+                              ) : (
+                                <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
+                                  {selectedCountry.operators.map((op) => {
+                                    const logo = getOperatorLogo(op.name);
+                                    const isSelected = field.value === op.id;
+                                    return (
+                                      <button
+                                        key={op.id}
+                                        type="button"
+                                        data-testid={`button-operator-${op.id}`}
+                                        onClick={() => field.onChange(op.id)}
+                                        className={`flex-shrink-0 flex flex-col items-center justify-center gap-2 w-28 h-24 rounded-xl border-2 transition-all cursor-pointer ${
+                                          isSelected
+                                            ? "border-primary bg-primary/10 shadow-sm"
+                                            : "border-border bg-card hover:border-primary/40 hover:bg-muted/50"
+                                        }`}
+                                      >
+                                        {logo ? (
+                                          <img src={logo} alt={op.name} className="w-12 h-12 object-contain rounded-lg" />
+                                        ) : (
+                                          <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
+                                            <Smartphone className="w-6 h-6 text-primary" />
+                                          </div>
+                                        )}
+                                        <span className={`text-xs font-medium text-center leading-tight px-1 ${isSelected ? "text-primary" : "text-foreground"}`}>
+                                          {op.name}
+                                        </span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
                               <FormMessage />
                             </FormItem>
                           )}
