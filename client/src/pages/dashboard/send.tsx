@@ -10,7 +10,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User, SupportedCurrency, Wallet } from "@shared/schema";
-import { Send, Globe, Loader2, ArrowRight, AlertCircle, Shield, CheckCircle2 } from "lucide-react";
+import { Send, Globe, Loader2, ArrowRight, AlertCircle, Shield, CheckCircle2, Smartphone } from "lucide-react";
+import { getOperatorLogo } from "@/lib/operator-logos";
 import { z } from "zod";
 import { formatCurrency, formatWalletBalance } from "@/lib/currency";
 import { useMemo, useEffect, useState, useCallback } from "react";
@@ -316,17 +317,40 @@ export default function SendMoneyPage() {
                     }
                   }}
                 >
-                  <SelectTrigger className="border-[#F0B90B]/50 ring-offset-background focus:ring-2 focus:ring-[#F0B90B]">
-                    <Globe className="w-4 h-4 text-muted-foreground mr-2" />
-                    <SelectValue placeholder="Sélectionner la destination" />
+                  <SelectTrigger className="h-14 border-[#F0B90B]/50 ring-offset-background focus:ring-2 focus:ring-[#F0B90B]">
+                    {destination === INTERNAL_KEY ? (
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <span className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-xl shrink-0">🏦</span>
+                        <span className="font-semibold truncate">Transfert Interne Ashtech Pay</span>
+                      </div>
+                    ) : selectedCountry ? (
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <span className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-xl shrink-0">
+                          {COUNTRY_FLAGS[selectedCountry.name] || "🌍"}
+                        </span>
+                        <span className="font-semibold truncate">{selectedCountry.name}</span>
+                        <span className="text-muted-foreground text-sm shrink-0">({selectedCountry.currency})</span>
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground text-sm">Sélectionner la destination</span>
+                    )}
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={INTERNAL_KEY}>🏦 Transfert Interne Ashtech Pay</SelectItem>
+                    <SelectItem value={INTERNAL_KEY}>
+                      <span className="flex items-center gap-2">
+                        <span>🏦</span>
+                        <span>Transfert Interne Ashtech Pay</span>
+                      </span>
+                    </SelectItem>
                     {isLoadingConfig
                       ? <SelectItem key="__loading__" value="__loading__" disabled>Chargement...</SelectItem>
                       : (countries ?? []).map(country => (
                       <SelectItem key={country.id} value={country.id}>
-                        {COUNTRY_FLAGS[country.name] || "🌍"} {country.name} ({country.currency})
+                        <span className="flex items-center gap-2">
+                          <span>{COUNTRY_FLAGS[country.name] || "🌍"}</span>
+                          <span>{country.name}</span>
+                          <span className="text-muted-foreground text-xs">({country.currency})</span>
+                        </span>
                       </SelectItem>
                     ))
                     }
@@ -374,40 +398,54 @@ export default function SendMoneyPage() {
               ) : (
                 <Form {...form}>
                   <form onSubmit={form.handleSubmit((d) => externalMutation.mutate({ ...d, countryId: destination }))} className="space-y-4">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Opérateur</label>
+                    {!selectedCountry ? (
+                      <p className="text-sm text-muted-foreground py-2">Choisissez une destination d'abord</p>
+                    ) : selectedCountry.operators.length === 0 ? (
+                      <div className="bg-muted/50 rounded-lg p-3 text-center text-sm text-muted-foreground">
+                        Aucun opérateur disponible pour ce pays
+                      </div>
+                    ) : (
                       <FormField
                         control={form.control}
                         name="operatorId"
                         render={({ field }) => (
                           <FormItem>
-                            <Select
-                              onValueChange={field.onChange}
-                              value={field.value}
-                              disabled={!selectedCountry || selectedCountry.operators.length === 0}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder={
-                                    !selectedCountry ? "Sélectionnez un pays d'abord"
-                                      : selectedCountry.operators.length === 0 ? "Aucun opérateur disponible"
-                                        : "Sélectionner un opérateur"
-                                  } />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {selectedCountry?.operators.map(op => (
-                                  <SelectItem key={op.id} value={op.id}>
-                                    {op.name} ({op.feePercentage}% frais)
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                            <FormLabel>Opérateur</FormLabel>
+                            <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
+                              {selectedCountry.operators.map((op) => {
+                                const logo = getOperatorLogo(op.name);
+                                const isSelected = field.value === op.id;
+                                return (
+                                  <button
+                                    key={op.id}
+                                    type="button"
+                                    data-testid={`button-operator-${op.id}`}
+                                    onClick={() => field.onChange(op.id)}
+                                    className={`flex-shrink-0 flex flex-col items-center justify-center gap-2 w-28 h-24 rounded-xl border-2 transition-all cursor-pointer ${
+                                      isSelected
+                                        ? "border-primary bg-primary/10 shadow-sm"
+                                        : "border-border bg-white hover:border-primary/40 hover:bg-muted/30"
+                                    }`}
+                                  >
+                                    {logo ? (
+                                      <img src={logo} alt={op.name} className="w-12 h-12 object-contain rounded-lg" />
+                                    ) : (
+                                      <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
+                                        <Smartphone className="w-6 h-6 text-primary" />
+                                      </div>
+                                    )}
+                                    <span className={`text-xs font-medium text-center leading-tight px-1 ${isSelected ? "text-primary" : "text-foreground"}`}>
+                                      {op.name}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
-                    </div>
+                    )}
 
                     <div className="grid sm:grid-cols-2 gap-4">
                       <FormField control={form.control} name="recipientName" render={({ field }) => (
