@@ -496,12 +496,21 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                               </div>
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center justify-between gap-1">
-                                  <p className="text-sm font-medium truncate">{notification.title}</p>
-                                  <span className="text-muted-foreground shrink-0">
-                                    {isExpanded
-                                      ? <ChevronUp className="w-3 h-3" />
-                                      : <ChevronDown className="w-3 h-3" />}
-                                  </span>
+                                  <div className="flex items-center gap-1.5 min-w-0">
+                                    <p className="text-sm font-medium truncate">{notification.title}</p>
+                                    {notification.type === "global_message" && (
+                                      <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/30">
+                                        Officiel
+                                      </span>
+                                    )}
+                                  </div>
+                                  {notification.type !== "global_message" && (
+                                    <span className="text-muted-foreground shrink-0">
+                                      {isExpanded
+                                        ? <ChevronUp className="w-3 h-3" />
+                                        : <ChevronDown className="w-3 h-3" />}
+                                    </span>
+                                  )}
                                 </div>
                                 <p className={`text-xs text-muted-foreground mt-0.5 ${isExpanded ? "whitespace-pre-wrap break-words" : "line-clamp-2"}`}>
                                   {notification.message?.replace(/\bXAF\b/g, preferredCurrency)}
