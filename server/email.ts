@@ -40,9 +40,12 @@ export async function sendPasswordResetEmail(to: string, fullName: string, reset
               <div style="margin-bottom:22px;">
                 <table cellpadding="0" cellspacing="0" border="0" align="center">
                   <tr>
-                    <td style="background:transparent;border-radius:14px;padding:10px 20px;">
-                      <img src="${LOGO_URL}" alt="Ashtech Pay" width="140" height="auto"
-                           style="display:block;max-height:45px;width:auto;" />
+                    <td style="padding-right:10px;vertical-align:middle;">
+                      <img src="${LOGO_URL}" alt="AshTech Pay" width="44" height="44"
+                           style="display:block;max-height:44px;width:auto;" />
+                    </td>
+                    <td style="vertical-align:middle;">
+                      <span style="font-size:22px;font-weight:700;color:#1F2937;letter-spacing:-0.3px;">AshTech Pay</span>
                     </td>
                   </tr>
                 </table>
@@ -241,10 +244,13 @@ export async function sendWelcomeEmail(to: string, fullName: string): Promise<vo
               <div style="margin-bottom:24px;">
                 <table cellpadding="0" cellspacing="0" border="0" align="center">
                   <tr>
-                    <td style="background:transparent;border-radius:14px;padding:10px 20px;display:inline-block;">
-                      <img src="${LOGO_URL}" alt="Ashtech Pay" width="140" height="auto"
-                           style="display:block;max-height:45px;width:auto;"
+                    <td style="padding-right:10px;vertical-align:middle;">
+                      <img src="${LOGO_URL}" alt="AshTech Pay" width="44" height="44"
+                           style="display:block;max-height:44px;width:auto;"
                            onerror="this.style.display='none'" />
+                    </td>
+                    <td style="vertical-align:middle;">
+                      <span style="font-size:22px;font-weight:700;color:#1F2937;letter-spacing:-0.3px;">AshTech Pay</span>
                     </td>
                   </tr>
                 </table>
@@ -498,9 +504,12 @@ function emailHeader(firstName: string, badgeText: string, badgeColor: string, h
               <div style="margin-bottom:22px;">
                 <table cellpadding="0" cellspacing="0" border="0" align="center">
                   <tr>
-                    <td style="background:transparent;border-radius:14px;padding:10px 20px;">
-                      <img src="${LOGO_URL}" alt="Ashtech Pay" width="140" height="auto"
-                           style="display:block;max-height:45px;width:auto;" />
+                    <td style="padding-right:10px;vertical-align:middle;">
+                      <img src="${LOGO_URL}" alt="AshTech Pay" width="44" height="44"
+                           style="display:block;max-height:44px;width:auto;" />
+                    </td>
+                    <td style="vertical-align:middle;">
+                      <span style="font-size:22px;font-weight:700;color:#1F2937;letter-spacing:-0.3px;">AshTech Pay</span>
                     </td>
                   </tr>
                 </table>

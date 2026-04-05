@@ -60,8 +60,9 @@ export default function ForgotPasswordPage() {
         <Card className="w-full max-w-md relative z-10 bg-card border-border">
           <CardHeader className="text-center space-y-4 pb-4">
             <Link href="/">
-              <div className="flex items-center justify-center cursor-pointer">
-                <img src="/logo.png" alt="Ashtech Pay" className="h-16 w-auto" />
+              <div className="flex items-center justify-center gap-3 cursor-pointer">
+                <img src="/logo.png" alt="Ashtech Pay" className="h-14 w-auto" />
+                <span className="text-2xl font-bold tracking-tight text-foreground">AshTech Pay</span>
               </div>
             </Link>
             <div className="flex justify-center">
