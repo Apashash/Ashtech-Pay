@@ -381,28 +381,26 @@ export default function WithdrawPage() {
                       </div>
 
                       {amountValue > 0 && selectedOperatorData && (
-                        <Card className="border-primary/30 bg-primary/5">
-                          <CardContent className="p-3 space-y-2">
-                            <div className="flex justify-between items-center text-xs">
-                              <span className="text-muted-foreground">Montant saisi</span>
-                              <span className="font-medium">{formatCurrency(amountValue, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</span>
-                            </div>
-                            <div className="flex justify-between items-center text-xs">
-                              <span className="text-muted-foreground">Frais</span>
-                              <span className="font-medium text-red-500">- {formatCurrency(feeAmount, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</span>
-                            </div>
-                            <div className="border-t border-border pt-2">
-                              <div className="flex justify-between items-center">
-                                <span className="font-semibold text-xs text-foreground">Net à recevoir</span>
-                                <span className="font-bold text-base text-primary">{formatCurrency(amountValue - feeAmount, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</span>
-                              </div>
-                            </div>
-                            <div className="mt-1 pt-1 border-t border-dashed border-border flex justify-between items-center text-[10px] text-muted-foreground">
-                              <span>Total débité de votre solde</span>
-                              <span>{formatCurrency(amountValue, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</span>
-                            </div>
-                          </CardContent>
-                        </Card>
+                        <div className="rounded-lg border bg-muted/30 p-4 space-y-3" data-testid="fee-calculator-withdrawal">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Montant saisi</span>
+                            <span className="font-medium">{formatCurrency(amountValue, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">
+                              Frais de retrait {feePercent > 0 ? `(${feePercent}%)` : "(Gratuit)"}
+                            </span>
+                            <span className={`font-medium ${feeAmount > 0 ? "text-red-500" : "text-green-500"}`}>
+                              {feeAmount > 0 ? `-${formatCurrency(feeAmount, (user?.preferredCurrency || "XAF") as SupportedCurrency)}` : "Gratuit"}
+                            </span>
+                          </div>
+                          <div className="border-t pt-3 flex items-center justify-between">
+                            <span className="font-medium text-foreground">Net à recevoir</span>
+                            <span className="text-xl font-bold text-green-500" data-testid="net-withdrawal-amount">
+                              {formatCurrency(amountValue - feeAmount, (user?.preferredCurrency || "XAF") as SupportedCurrency)}
+                            </span>
+                          </div>
+                        </div>
                       )}
                     </>
                   )}
