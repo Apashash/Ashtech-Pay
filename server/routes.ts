@@ -3194,6 +3194,26 @@ export async function registerRoutes(
     }
   });
 
+  // Public operators route — for fee-details page
+  app.get("/api/public/operators", async (_req, res) => {
+    try {
+      const all = await storage.getAllOperators();
+      const active = all
+        .filter(op => op.isActive)
+        .map(op => ({
+          id: op.id,
+          name: op.name,
+          type: op.type,
+          countryId: op.countryId,
+          logoUrl: op.logoUrl,
+        }));
+      res.json(active);
+    } catch (error) {
+      console.error("Public get operators error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   // Public exchange rates route — returns all fx_rate_XXX as units per 1 USD
   app.get("/api/public/exchange-rates", async (_req, res) => {
     try {

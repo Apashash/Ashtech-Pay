@@ -7,11 +7,15 @@ import {
   ArrowDownCircle,
   ArrowUpCircle,
   ArrowLeftRight,
-  Link2,
   RefreshCw,
   Info,
   Loader2,
+  ChevronDown,
+  ChevronRight,
+  Smartphone,
+  Building2,
 } from "lucide-react";
+import { useState } from "react";
 
 interface FeeSettings {
   conversionFeePercent: number;
@@ -19,50 +23,59 @@ interface FeeSettings {
   paymentLinkFeePercent: number;
 }
 
-function formatFeeValue(fee: Fee, currency?: string): string {
-  if (fee.feeType === "percentage") {
-    return `${parseFloat(fee.feeValue).toFixed(2)}%`;
-  }
+interface PublicOperator {
+  id: string;
+  name: string;
+  type: string;
+  countryId: string;
+  logoUrl: string | null;
+}
+
+function fmtFee(fee: Fee | null | undefined, currency?: string): string {
+  if (!fee) return "—";
+  if (fee.feeType === "percentage") return `${parseFloat(fee.feeValue).toFixed(2)}%`;
   return `${parseFloat(fee.feeValue).toLocaleString()} ${currency || ""}`.trim();
 }
 
-function minFeeLabel(fee: Fee, currency?: string): string | null {
-  if (!fee.minFee || parseFloat(fee.minFee) === 0) return null;
-  return `${parseFloat(fee.minFee).toLocaleString()} ${currency || ""}`.trim();
+function fmtMin(fee: Fee | null | undefined, currency?: string): string | null {
+  if (!fee || !fee.minFee || parseFloat(fee.minFee) === 0) return null;
+  return `min ${parseFloat(fee.minFee).toLocaleString()} ${currency || ""}`.trim();
 }
 
-const SECTION_CONFIG = [
+const TX_TYPES = [
   {
     key: "deposit",
     label: "Dépôt",
-    description: "Frais appliqués lorsque vous rechargez votre portefeuille.",
     icon: ArrowDownCircle,
     color: "text-green-500",
     bg: "bg-green-500/10",
     border: "border-green-500/20",
+    badgeCls: "border-green-500/30 text-green-700 dark:text-green-400",
   },
   {
     key: "withdrawal",
     label: "Retrait",
-    description: "Frais appliqués lorsque vous retirez des fonds vers votre mobile money.",
     icon: ArrowUpCircle,
     color: "text-orange-500",
     bg: "bg-orange-500/10",
     border: "border-orange-500/20",
+    badgeCls: "border-orange-500/30 text-orange-700 dark:text-orange-400",
   },
   {
     key: "transfer",
     label: "Transfert",
-    description: "Frais appliqués lorsque vous envoyez de l'argent vers un autre utilisateur ou un autre pays.",
     icon: ArrowLeftRight,
     color: "text-blue-500",
     bg: "bg-blue-500/10",
     border: "border-blue-500/20",
+    badgeCls: "border-blue-500/30 text-blue-700 dark:text-blue-400",
   },
-];
+] as const;
 
 export default function FeeDetailsPage() {
-  const { data: fees = [], isLoading: feesLoading } = useQuery<Fee[]>({
+  const [openCountry, setOpenCountry] = useState<string | null>(null);
+
+  const { data: fees = [], isLoading } = useQuery<Fee[]>({
     queryKey: ["/api/public/fees"],
   });
 
@@ -70,20 +83,39 @@ export default function FeeDetailsPage() {
     queryKey: ["/api/public/countries"],
   });
 
+  const { data: operators = [] } = useQuery<PublicOperator[]>({
+    queryKey: ["/api/public/operators"],
+  });
+
   const { data: feeSettings } = useQuery<FeeSettings>({
     queryKey: ["/api/public/fee-settings"],
   });
 
-  const getCountryName = (id: string | null | undefined) =>
-    countries.find((c) => c.id === id)?.name || null;
+  const activeFees = fees.filter(f => f.isActive);
 
-  const getCountryCurrency = (id: string | null | undefined) =>
-    countries.find((c) => c.id === id)?.currency || "";
+  function getGlobalFee(type: string): Fee | null {
+    return activeFees.find(f => f.transactionType === type && !f.countryId && !f.operatorId) ?? null;
+  }
 
-  const getFeesForType = (type: string) =>
-    fees.filter((f) => f.transactionType === type);
+  function getCountryFee(type: string, countryId: string): Fee | null {
+    return activeFees.find(f => f.transactionType === type && f.countryId === countryId && !f.operatorId) ?? null;
+  }
 
-  if (feesLoading) {
+  function getOperatorFee(type: string, operatorId: string): Fee | null {
+    return activeFees.find(f => f.transactionType === type && f.operatorId === operatorId) ?? null;
+  }
+
+  function resolvedFee(type: string, countryId: string): Fee | null {
+    return getCountryFee(type, countryId) ?? getGlobalFee(type);
+  }
+
+  const countriesWithFees = countries.filter(c =>
+    TX_TYPES.some(t => resolvedFee(t.key, c.id) !== null)
+  );
+
+  const globalFees = TX_TYPES.map(t => ({ ...t, fee: getGlobalFee(t.key) })).filter(t => t.fee);
+
+  if (isLoading) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-64">
@@ -97,81 +129,219 @@ export default function FeeDetailsPage() {
     <DashboardLayout>
       <div className="space-y-8 pb-10 max-w-3xl mx-auto">
         <div>
-          <h1 className="text-3xl font-bold text-foreground" data-testid="text-fees-title">Grille des frais</h1>
+          <h1 className="text-3xl font-bold text-foreground" data-testid="text-fees-title">
+            Grille des frais
+          </h1>
           <p className="text-muted-foreground mt-2">
-            Tous les frais appliqués sur la plateforme, mis à jour en temps réel.
+            Frais mis à jour en temps réel. Cliquez sur un pays pour voir le détail par opérateur.
           </p>
         </div>
 
-        {SECTION_CONFIG.map(({ key, label, description, icon: Icon, color, bg, border }) => {
-          const sectionFees = getFeesForType(key);
-          const globalFee = sectionFees.find((f) => !f.countryId && !f.operatorId);
-          const countryFees = sectionFees.filter((f) => f.countryId);
-
-          const depositOverride =
-            key === "deposit" && feeSettings?.depositFeePercent !== undefined
-              ? feeSettings.depositFeePercent
-              : null;
-
-          return (
-            <Card key={key} className={`border ${border}`} data-testid={`card-fees-${key}`}>
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-3 text-lg">
-                  <div className={`w-9 h-9 rounded-lg ${bg} flex items-center justify-center shrink-0`}>
-                    <Icon className={`w-5 h-5 ${color}`} />
+        {/* Global fees summary */}
+        {globalFees.length > 0 && (
+          <Card className="border border-border" data-testid="card-fees-global">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Info className="w-4 h-4 text-muted-foreground" />
+                Frais par défaut (tous pays)
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Appliqués si aucun frais spécifique n'est défini pour un pays.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {globalFees.map(({ key, label, icon: Icon, color, bg, fee, badgeCls }) => (
+                <div key={key} className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-muted/40">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-7 h-7 rounded-md ${bg} flex items-center justify-center`}>
+                      <Icon className={`w-4 h-4 ${color}`} />
+                    </div>
+                    <span className="text-sm font-medium">{label}</span>
                   </div>
-                  {label}
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">{description}</p>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {countryFees.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="divide-y divide-border rounded-lg border overflow-hidden">
-                      {countryFees
-                        .sort((a, b) =>
-                          (getCountryName(a.countryId) || "").localeCompare(
-                            getCountryName(b.countryId) || ""
-                          )
-                        )
-                        .map((fee) => {
-                          const cName = getCountryName(fee.countryId) || "Pays inconnu";
-                          const cCurrency = getCountryCurrency(fee.countryId);
-                          const min = minFeeLabel(fee, cCurrency);
+                  <div className="flex items-center gap-2">
+                    {fmtMin(fee) && (
+                      <span className="text-xs text-muted-foreground hidden sm:inline">{fmtMin(fee)}</span>
+                    )}
+                    <Badge variant="outline" className={`text-sm font-semibold ${badgeCls}`}>
+                      {fmtFee(fee)}
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Per-country section */}
+        {countriesWithFees.length > 0 && (
+          <div className="space-y-3">
+            <h2 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground px-1">
+              Frais par pays
+            </h2>
+            <div className="space-y-2">
+              {countriesWithFees.map(country => {
+                const isOpen = openCountry === country.id;
+                const countryOperators = operators.filter(op => op.countryId === country.id);
+
+                return (
+                  <Card
+                    key={country.id}
+                    className="border border-border overflow-hidden"
+                    data-testid={`card-country-${country.id}`}
+                  >
+                    {/* Country header — clickable */}
+                    <button
+                      className="w-full text-left"
+                      onClick={() => setOpenCountry(isOpen ? null : country.id)}
+                      data-testid={`btn-country-${country.id}`}
+                    >
+                      <div className="flex items-center justify-between px-5 py-4 hover:bg-muted/30 transition-colors">
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl">{country.flag || "🏳️"}</span>
+                          <div>
+                            <p className="font-semibold text-foreground">{country.name}</p>
+                            <p className="text-xs text-muted-foreground">{country.currency}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {/* Fee summary badges */}
+                          <div className="hidden sm:flex items-center gap-1.5">
+                            {TX_TYPES.map(({ key, label, badgeCls }) => {
+                              const fee = resolvedFee(key, country.id);
+                              if (!fee) return null;
+                              return (
+                                <Badge
+                                  key={key}
+                                  variant="outline"
+                                  className={`text-xs ${badgeCls}`}
+                                  title={label}
+                                >
+                                  {fmtFee(fee, country.currency)}
+                                </Badge>
+                              );
+                            })}
+                          </div>
+                          {isOpen ? (
+                            <ChevronDown className="w-4 h-4 text-muted-foreground ml-1" />
+                          ) : (
+                            <ChevronRight className="w-4 h-4 text-muted-foreground ml-1" />
+                          )}
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* Expanded detail */}
+                    {isOpen && (
+                      <div className="border-t border-border">
+                        {TX_TYPES.map(({ key, label, icon: Icon, color, bg, border, badgeCls }) => {
+                          const countryFee = getCountryFee(key, country.id);
+                          const globalFee = getGlobalFee(key);
+                          const baseFee = countryFee ?? globalFee;
+                          if (!baseFee) return null;
+
+                          const isGlobalFallback = !countryFee && !!globalFee;
+
+                          const opsWithFee = countryOperators.filter(
+                            op => getOperatorFee(key, op.id) !== null
+                          );
+                          const opsDefault = countryOperators.filter(
+                            op => getOperatorFee(key, op.id) === null
+                          );
+
                           return (
-                            <div
-                              key={fee.id}
-                              className="flex items-center justify-between px-4 py-3 hover:bg-muted/30 transition-colors"
-                              data-testid={`row-fee-${key}-${fee.id}`}
-                            >
-                              <div className="flex flex-col">
-                                <span className="text-sm font-medium">{cName}</span>
-                                {min && (
-                                  <span className="text-xs text-muted-foreground">
-                                    Frais minimum : {min}
-                                  </span>
-                                )}
+                            <div key={key} className={`border-b border-border last:border-0`}>
+                              {/* Transaction type header */}
+                              <div className={`flex items-center justify-between px-5 py-3 ${bg}`}>
+                                <div className="flex items-center gap-2">
+                                  <div className={`w-6 h-6 rounded-md flex items-center justify-center bg-white/60 dark:bg-black/20`}>
+                                    <Icon className={`w-3.5 h-3.5 ${color}`} />
+                                  </div>
+                                  <span className="text-sm font-semibold">{label}</span>
+                                  {isGlobalFallback && (
+                                    <Badge variant="secondary" className="text-xs py-0 h-5">défaut</Badge>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  {fmtMin(baseFee, country.currency) && (
+                                    <span className="text-xs text-muted-foreground hidden sm:inline">
+                                      {fmtMin(baseFee, country.currency)}
+                                    </span>
+                                  )}
+                                  <Badge variant="outline" className={`font-semibold text-sm ${badgeCls}`}>
+                                    {fmtFee(baseFee, country.currency)}
+                                  </Badge>
+                                </div>
                               </div>
-                              <Badge variant="outline" className="text-sm font-semibold">
-                                {formatFeeValue(fee, cCurrency)}
-                              </Badge>
+
+                              {/* Per-operator rows */}
+                              {countryOperators.length > 0 && (
+                                <div className="divide-y divide-border/60">
+                                  {/* Operators with specific fees */}
+                                  {opsWithFee.map(op => {
+                                    const opFee = getOperatorFee(key, op.id)!;
+                                    return (
+                                      <div
+                                        key={op.id}
+                                        className="flex items-center justify-between px-6 py-2.5 bg-background/60"
+                                        data-testid={`row-op-fee-${key}-${op.id}`}
+                                      >
+                                        <div className="flex items-center gap-2">
+                                          {op.type === "mobile_money" ? (
+                                            <Smartphone className="w-3.5 h-3.5 text-muted-foreground" />
+                                          ) : (
+                                            <Building2 className="w-3.5 h-3.5 text-muted-foreground" />
+                                          )}
+                                          <span className="text-sm text-foreground">{op.name}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          {fmtMin(opFee, country.currency) && (
+                                            <span className="text-xs text-muted-foreground hidden sm:inline">
+                                              {fmtMin(opFee, country.currency)}
+                                            </span>
+                                          )}
+                                          <Badge variant="outline" className={`text-xs font-semibold ${badgeCls}`}>
+                                            {fmtFee(opFee, country.currency)}
+                                          </Badge>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                  {/* Operators using country/global fee */}
+                                  {opsDefault.map(op => (
+                                    <div
+                                      key={op.id}
+                                      className="flex items-center justify-between px-6 py-2.5 bg-background/40"
+                                      data-testid={`row-op-default-${key}-${op.id}`}
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        {op.type === "mobile_money" ? (
+                                          <Smartphone className="w-3.5 h-3.5 text-muted-foreground" />
+                                        ) : (
+                                          <Building2 className="w-3.5 h-3.5 text-muted-foreground" />
+                                        )}
+                                        <span className="text-sm text-muted-foreground">{op.name}</span>
+                                      </div>
+                                      <Badge variant="secondary" className="text-xs">
+                                        {fmtFee(baseFee, country.currency)}
+                                      </Badge>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           );
                         })}
-                    </div>
-                  </div>
-                )}
+                      </div>
+                    )}
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
-                {!globalFee && countryFees.length === 0 && key !== "deposit" && (
-                  <p className="text-sm text-muted-foreground text-center py-4">
-                    Aucun frais configuré pour cette opération.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })}
-
+        {/* Currency conversion */}
         <Card className="border border-yellow-500/20" data-testid="card-fees-conversion">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-3 text-lg">
@@ -181,7 +351,7 @@ export default function FeeDetailsPage() {
               Conversion de devises
             </CardTitle>
             <p className="text-sm text-muted-foreground">
-              Frais appliqués lorsque vous convertissez entre deux devises différentes.
+              Frais appliqués lors d'une conversion entre deux devises différentes.
             </p>
           </CardHeader>
           <CardContent>
@@ -196,17 +366,18 @@ export default function FeeDetailsPage() {
           </CardContent>
         </Card>
 
+        {/* Info note */}
         <Card className="border border-primary/20 bg-primary/5">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <Info className="w-5 h-5 text-primary" />
-              Note sur le "Minimum Payout Fee"
+              Frais minimum garantis
             </CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground leading-relaxed">
-            Pour chaque pays, un montant minimum de frais (Frais minimum) est défini. 
-            Si le calcul du pourcentage est inférieur à ce montant, c'est le frais minimum qui sera appliqué. 
-            Le système retient toujours le montant le plus élevé entre le pourcentage et le frais minimum.
+            Pour chaque pays, un montant minimum de frais peut être défini. Si le calcul du pourcentage
+            est inférieur à ce montant, c'est le frais minimum qui est appliqué. Le système retient
+            toujours le montant le plus élevé entre le pourcentage calculé et le frais minimum.
           </CardContent>
         </Card>
       </div>
