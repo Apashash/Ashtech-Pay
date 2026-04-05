@@ -56,6 +56,7 @@ import {
   ChevronDown,
   ChevronUp,
   Receipt,
+  Megaphone,
 } from "lucide-react";
 import { 
   Dialog, 
@@ -195,6 +196,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     },
   });
 
+  const hasUnreadGlobalMessage = (notificationData?.notifications ?? []).some(
+    n => n.type === "global_message" && !n.isRead
+  );
+
   const [showPusdConvert, setShowPusdConvert] = useState(false);
   const [pusdAmount, setPusdAmount] = useState("");
   const [pusdCountry, setPusdCountry] = useState("CM");
@@ -230,6 +235,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       case "transfer_received":
         return <Send className="w-4 h-4 text-blue-500" />;
       case "global_message":
+        return <Megaphone className="w-4 h-4 text-purple-500" />;
       case "admin_message":
         return <MessageSquare className="w-4 h-4 text-purple-500" />;
       default:
@@ -465,9 +471,22 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                           return (
                           <div
                             key={notification.id}
-                            className={`p-3 transition-colors ${!notification.isRead ? "bg-primary/5" : ""} hover:bg-muted/40 cursor-pointer`}
+                            className={`p-3 transition-colors cursor-pointer ${
+                              notification.type === "global_message"
+                                ? !notification.isRead
+                                  ? "bg-purple-500/10 hover:bg-purple-500/15"
+                                  : "hover:bg-purple-500/5"
+                                : !notification.isRead
+                                  ? "bg-primary/5 hover:bg-muted/40"
+                                  : "hover:bg-muted/40"
+                            }`}
                             data-testid={`notification-item-${notification.id}`}
                             onClick={() => {
+                              if (notification.type === "global_message") {
+                                if (!notification.isRead) markAsReadMutation.mutate(notification.id);
+                                setLocation("/dashboard/global-message");
+                                return;
+                              }
                               setExpandedNotifId(isExpanded ? null : notification.id);
                               if (!notification.isRead) markAsReadMutation.mutate(notification.id);
                             }}
@@ -511,6 +530,15 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                                     Voir le message →
                                   </button>
                                 )}
+                                {isExpanded && notification.type === "global_message" && (
+                                  <button
+                                    className="text-xs text-purple-500 mt-2 underline font-medium"
+                                    onClick={(e) => { e.stopPropagation(); setLocation("/dashboard/global-message"); }}
+                                    data-testid={`button-notif-goto-global-${notification.id}`}
+                                  >
+                                    Lire le message officiel →
+                                  </button>
+                                )}
                               </div>
                               <div className="flex items-center gap-1 shrink-0">
                                 <Button
@@ -536,11 +564,16 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 </PopoverContent>
               </Popover>
               <div className="relative">
-                <RouterLink href="/dashboard/settings">
-                  <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center cursor-pointer hover:bg-primary/30 transition-colors" data-testid="button-profile">
-                    <UserIcon className="w-5 h-5 text-primary" />
-                  </div>
-                </RouterLink>
+                {hasUnreadGlobalMessage && (
+                  <span className="absolute -inset-1.5 rounded-full bg-red-500/40 animate-ping pointer-events-none" />
+                )}
+                <div
+                  className={`relative w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center cursor-pointer hover:bg-primary/30 transition-colors ${hasUnreadGlobalMessage ? "ring-2 ring-red-500 ring-offset-1 ring-offset-background" : ""}`}
+                  onClick={() => setLocation(hasUnreadGlobalMessage ? "/dashboard/global-message" : "/dashboard/settings")}
+                  data-testid="button-profile"
+                >
+                  <UserIcon className="w-5 h-5 text-primary" />
+                </div>
                 {user.isVerified ? (
                   <div 
                     className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center cursor-pointer"
