@@ -1233,7 +1233,7 @@ function Footer() {
             <span className="font-bold text-lg text-foreground tracking-tight">AshTech Pay</span>
           </div>
           <p className="text-muted-foreground text-sm max-w-sm mx-auto sm:mx-0">
-            La plateforme de liens de paiement moderne, sécurisée et accessible à tous en Afrique.
+            AshTech Pay est une FinTech et non une banque. Les services bancaires sont fournis par des partenaires bancaires agréés. Les services de paiement sont proposés en partenariat avec des fournisseurs de services de paiement dûment autorisés et réglementés.
           </p>
         </div>
 
