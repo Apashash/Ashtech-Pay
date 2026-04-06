@@ -57,7 +57,10 @@ import {
   ChevronUp,
   Receipt,
   Megaphone,
+  MessageCircle,
+  Phone,
 } from "lucide-react";
+import { SiWhatsapp, SiFacebook } from "react-icons/si";
 import { 
   Dialog, 
   DialogContent, 
@@ -206,6 +209,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   );
 
   const [showPusdConvert, setShowPusdConvert] = useState(false);
+  const [showContactMenu, setShowContactMenu] = useState(false);
   const [pusdAmount, setPusdAmount] = useState("");
   const [pusdCountry, setPusdCountry] = useState("CM");
   const [expandedNotifId, setExpandedNotifId] = useState<string | null>(null);
@@ -692,6 +696,52 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Floating contact button */}
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
+        {showContactMenu && (
+          <div className="flex flex-col items-end gap-2">
+            <a
+              href="https://whatsapp.com/channel/0029VbC5tPPCxoAveJ44Vs2w"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setShowContactMenu(false)}
+              className="flex items-center gap-2.5 bg-[#25D366] text-white text-sm font-medium px-4 py-2.5 rounded-full shadow-lg hover:bg-[#20bc5a] transition-all"
+              data-testid="link-contact-whatsapp"
+            >
+              <SiWhatsapp className="w-4 h-4" />
+              WhatsApp
+            </a>
+            <a
+              href="https://www.facebook.com/share/1Eczpeowdp/?mibextid=wwXIfr"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setShowContactMenu(false)}
+              className="flex items-center gap-2.5 bg-[#1877F2] text-white text-sm font-medium px-4 py-2.5 rounded-full shadow-lg hover:bg-[#1460c8] transition-all"
+              data-testid="link-contact-facebook"
+            >
+              <SiFacebook className="w-4 h-4" />
+              Facebook
+            </a>
+            <button
+              onClick={() => { setShowContactMenu(false); setLocation("/dashboard/support"); }}
+              className="flex items-center gap-2.5 bg-primary text-primary-foreground text-sm font-medium px-4 py-2.5 rounded-full shadow-lg hover:opacity-90 transition-all"
+              data-testid="link-contact-support"
+            >
+              <Phone className="w-4 h-4" />
+              Service client
+            </button>
+          </div>
+        )}
+        <button
+          onClick={() => setShowContactMenu(prev => !prev)}
+          className={`w-14 h-14 rounded-full shadow-xl flex items-center justify-center transition-all ${showContactMenu ? "bg-muted text-muted-foreground rotate-45" : "bg-primary text-primary-foreground"}`}
+          data-testid="button-contact-menu"
+          title="Nous contacter"
+        >
+          <MessageCircle className="w-6 h-6" />
+        </button>
+      </div>
     </SidebarProvider>
   );
 }
