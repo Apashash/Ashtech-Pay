@@ -1233,7 +1233,7 @@ function Footer() {
             <span className="font-bold text-lg text-foreground tracking-tight">AshTech Pay</span>
           </div>
           <p className="text-muted-foreground text-sm max-w-sm mx-auto sm:mx-0">
-            AshTech Pay est une FinTech et non une banque. Les services bancaires sont fournis par des partenaires bancaires agréés. Les services de paiement sont proposés en partenariat avec des fournisseurs de services de paiement dûment autorisés et réglementés.
+            AshTech Pay est une fintech et ne constitue pas une institution bancaire. Les services financiers sont fournis par des partenaires bancaires agréés et régulés. Les services de paiement sont opérés en partenariat avec des prestataires de paiement autorisés, conformément aux réglementations en vigueur.
           </p>
         </div>
 
