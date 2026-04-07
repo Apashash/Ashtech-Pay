@@ -347,12 +347,12 @@ export default function AdminWithdrawals() {
         </Card>
 
         <Dialog open={!!selectedTxId} onOpenChange={(open) => !open && setSelectedTxId(null)}>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
+          <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
+            <DialogHeader className="shrink-0">
               <DialogTitle>Détails du retrait</DialogTitle>
             </DialogHeader>
             {tx && (
-              <div className="space-y-4">
+              <div className="space-y-4 overflow-y-auto flex-1 pr-1">
                 <div className="text-center p-4 bg-muted/50 rounded-lg">
                   <p className="text-sm text-muted-foreground mb-1">Montant Net Retiré</p>
                   <p className="text-3xl font-bold text-red-500">
