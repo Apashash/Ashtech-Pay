@@ -1533,11 +1533,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   async setWalletBalance(userId: string, currency: string, newBalance: number): Promise<Wallet> {
-    const existing = await this.getWallet(userId, currency);
-    if (existing) {
+    const all = await db.select().from(wallets).where(and(eq(wallets.userId, userId), eq(wallets.currency, currency)));
+    if (all.length > 1) {
+      // Deduplicate: keep the first, delete the rest
+      const [keep, ...duplicates] = all;
+      for (const dup of duplicates) {
+        await db.delete(wallets).where(eq(wallets.id, dup.id));
+      }
       const [updated] = await db.update(wallets)
         .set({ balance: newBalance.toFixed(2), updatedAt: new Date() })
-        .where(and(eq(wallets.userId, userId), eq(wallets.currency, currency)))
+        .where(eq(wallets.id, keep.id))
+        .returning();
+      return updated;
+    } else if (all.length === 1) {
+      const [updated] = await db.update(wallets)
+        .set({ balance: newBalance.toFixed(2), updatedAt: new Date() })
+        .where(eq(wallets.id, all[0].id))
         .returning();
       return updated;
     } else {
