@@ -4379,8 +4379,21 @@ export async function registerRoutes(
   // Admin: Get all wallets for a user
   app.get("/api/admin/users/:id/wallets", requireAuth, requireAdmin, async (req, res) => {
     try {
-      const wallets = await storage.getUserWallets(req.params.id);
-      res.json(wallets);
+      const rawWallets = await storage.getUserWallets(req.params.id);
+      // Deduplicate by currency — merge duplicates by summing balances
+      const merged = new Map<string, typeof rawWallets[0]>();
+      for (const w of rawWallets) {
+        if (merged.has(w.currency)) {
+          const existing = merged.get(w.currency)!;
+          merged.set(w.currency, {
+            ...existing,
+            balance: (parseFloat(existing.balance) + parseFloat(w.balance)).toFixed(2),
+          });
+        } else {
+          merged.set(w.currency, { ...w });
+        }
+      }
+      res.json(Array.from(merged.values()));
     } catch (error) {
       res.status(500).json({ message: "Erreur serveur" });
     }
