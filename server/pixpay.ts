@@ -226,8 +226,8 @@ function buildBaseBody(params: PixPayBaseParams, countryCode: string): Record<st
 }
 
 // ─── Translate PixPay technical errors into user-friendly French messages ──────
-function humanizePixPayError(raw: string | undefined): string {
-  if (!raw) return "Échec du paiement. Veuillez réessayer.";
+function humanizePixPayError(raw: string | undefined | null): string {
+  if (!raw) return "Le service de paiement mobile est temporairement indisponible pour cet opérateur. Veuillez réessayer plus tard ou contacter le support.";
   const msg = raw.toLowerCase();
   if (msg.includes("destination") && msg.includes("no applicable"))
     return "Le numéro de téléphone ne correspond pas à l'opérateur sélectionné. Vérifiez que vous avez choisi le bon opérateur pour ce numéro.";
@@ -235,13 +235,15 @@ function humanizePixPayError(raw: string | undefined): string {
     return "Le code OTP Orange Money est requis. Composez #144*82# sur votre téléphone pour l'obtenir.";
   if (msg.includes("amount") && msg.includes("no applicable"))
     return "Montant trop faible pour cet opérateur. Veuillez entrer un montant plus élevé.";
-  if (msg.includes("insuffisance") || msg.includes("insufficient"))
+  if (msg.includes("insuffisance") || msg.includes("insufficient") || msg.includes("insuff"))
     return "Solde insuffisant dans votre portefeuille mobile. Veuillez recharger votre compte.";
-  if (msg.includes("not authorize") || msg.includes("unauthorized"))
-    return "Service non disponible pour ce pays ou opérateur.";
+  if (msg.includes("not authorize") || msg.includes("unauthorized") || msg.includes("not activated"))
+    return "Service non disponible pour ce pays ou opérateur. Contactez le support.";
   if (msg.includes("invalid") && msg.includes("key"))
     return "Erreur de configuration du service de paiement. Contactez le support.";
-  return raw; // fallback: return original if no match
+  if (msg === "operation success")
+    return "La transaction a été rejetée par l'opérateur mobile. Vérifiez que votre numéro est correct et que votre compte est actif.";
+  return raw;
 }
 
 // ─── Generic call helper ──────────────────────────────────────────────────────
@@ -255,14 +257,27 @@ async function callPixPay(body: Record<string, any>, logLabel: string): Promise<
   const data = await res.json();
   console.log(`[PixPay ${logLabel}] Response:`, JSON.stringify(data));
 
-  if (data.statut_code !== 200 || !data.data) {
-    return { success: false, message: humanizePixPayError(data.message), raw: data };
+  const d = data.data;
+
+  // Handle non-200 status codes — PixPay may still include useful error info in data
+  if (data.statut_code !== 200) {
+    const errMessage = d?.response || d?.message || data.message || data.error;
+    const txId = d?.transaction_id;
+    const state = (d?.state || "").toUpperCase();
+    console.error(`[PixPay ${logLabel}] FAILED — statut_code=${data.statut_code} | state=${state} | pix_tx=${txId} | response="${d?.response}" | msg="${data.message}"`);
+    const humanMsg = humanizePixPayError(errMessage);
+    return { success: false, message: humanMsg, transactionId: txId, raw: data };
   }
 
-  const d = data.data;
+  if (!d) {
+    return { success: false, message: "Réponse invalide du service de paiement", raw: data };
+  }
+
   const state = (d.state || "").toUpperCase();
   if (state === "FAILED" || state === "CANCELLED") {
-    return { success: false, message: humanizePixPayError(d.response || data.message) || "Transaction rejetée", raw: data };
+    const errMessage = d.response || data.message;
+    console.error(`[PixPay ${logLabel}] Transaction FAILED — pix_tx=${d.transaction_id} | response="${d.response}" | state=${state}`);
+    return { success: false, message: humanizePixPayError(errMessage) || "Transaction rejetée par l'opérateur", transactionId: d.transaction_id, raw: data };
   }
 
   // Wave operators return sms_link (payment URL)
