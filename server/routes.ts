@@ -1658,6 +1658,12 @@ export async function registerRoutes(
             if (prefix && localPhone.startsWith(prefix)) {
               localPhone = localPhone.slice(prefix.length);
             }
+            // Some countries use 10-digit local numbers with a leading 0 (e.g. CI: 0595857098 → 595857098)
+            // AfribaPay expects the number WITHOUT the leading 0
+            if (localPhone.startsWith("0") && localPhone.length >= 9) {
+              localPhone = localPhone.slice(1);
+            }
+            console.log(`[Deposit] AfribaPay phone formatted: raw="${data.phoneNumber}" → local="${localPhone}" country=${countryCode}`);
 
             // Build return/cancel URLs for Wave (redirect-based operators)
             const appBaseUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
@@ -1789,6 +1795,7 @@ export async function registerRoutes(
                 }
               });
             } else {
+              console.error(`[AfribaPay Payin FAILED] country=${countryCode} phone=${localPhone} operator=${afribapayOperatorCode} response=`, JSON.stringify(afribaResponse));
               await storage.updateTransactionStatus(transaction.id, "failed");
               res.status(400).json({ message: afribaResponse.message || "Échec de l'initiation du paiement AfribaPay" });
             }
