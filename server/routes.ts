@@ -956,7 +956,7 @@ export async function registerRoutes(
       if (!transaction) {
         return res.status(404).json({ message: "Transaction non trouvée", status: "not_found" });
       }
-      res.json({ status: transaction.status, reference: transaction.reference });
+      res.json({ status: transaction.status, reference: transaction.reference, description: transaction.status === "failed" ? transaction.description : undefined });
     } catch (error) {
       console.error("Get transaction status error:", error);
       res.status(500).json({ message: "Erreur serveur" });

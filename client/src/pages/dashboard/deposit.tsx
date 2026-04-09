@@ -67,6 +67,7 @@ export default function DepositPage() {
   const [showValidationMessage, setShowValidationMessage] = useState(false);
   const [depositReference, setDepositReference] = useState("");
   const [paymentStatus, setPaymentStatus] = useState<"pending" | "success" | "failed">("pending");
+  const [failureReason, setFailureReason] = useState<string>("");
   const [countdown, setCountdown] = useState(8 * 60);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
@@ -168,6 +169,25 @@ export default function DepositPage() {
     }
   }, [watchedCountryId, prevCountryId, form]);
 
+  const parseFailureMessage = (description?: string): string => {
+    if (!description) return "";
+    const errorCodeMap: Record<string, string> = {
+      "OPERATOR_PAYER_INSUFF_BALANCE": "Solde insuffisant sur votre compte Mobile Money.",
+      "OPERATOR_PAYER_NOT_FOUND": "Numéro de téléphone introuvable chez l'opérateur.",
+      "OPERATOR_PAYER_LIMIT_REACHED": "Limite de transaction Mobile Money atteinte.",
+      "OPERATOR_PAYER_ACCOUNT_BLOCKED": "Compte Mobile Money bloqué. Contactez votre opérateur.",
+      "OPERATOR_TRANSACTION_DECLINED": "Transaction refusée par l'opérateur.",
+      "OPERATOR_TIMEOUT": "Délai d'attente dépassé. Réessayez.",
+      "PAYER_CANCELED": "Vous avez annulé la transaction.",
+      "INVALID_PHONE": "Numéro de téléphone invalide pour cet opérateur.",
+    };
+    try {
+      const match = description.match(/errorMessage["\s:]+([A-Z_]+)/);
+      if (match && match[1] && errorCodeMap[match[1]]) return errorCodeMap[match[1]];
+    } catch {}
+    return "";
+  };
+
   const startDepositPolling = (ref: string) => {
     setCountdown(8 * 60);
     if (countdownRef.current) clearInterval(countdownRef.current);
@@ -196,6 +216,7 @@ export default function DepositPage() {
             queryClient.invalidateQueries({ queryKey: ["/api/user"] });
             queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
           } else if (statusData.status === "failed") {
+            setFailureReason(parseFailureMessage(statusData.description));
             setPaymentStatus("failed");
             if (countdownRef.current) clearInterval(countdownRef.current);
             if (pollingRef.current) clearInterval(pollingRef.current);
@@ -615,7 +636,7 @@ export default function DepositPage() {
                       <div>
                         <h3 className="text-xl font-semibold text-foreground mb-2">Dépôt échoué</h3>
                         <p className="text-muted-foreground">
-                          Le paiement n'a pas pu être confirmé. Veuillez réessayer.
+                          {failureReason || "Le paiement n'a pas pu être confirmé. Veuillez réessayer."}
                         </p>
                       </div>
                       {depositReference && (
