@@ -331,7 +331,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider style={style as React.CSSProperties}>
-      <div className="flex h-dvh w-full">
+      <div className="flex min-h-dvh w-full">
         <Sidebar>
           <SidebarHeader className="p-4 border-b border-sidebar-border">
             <Link href="/dashboard">
@@ -457,8 +457,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           </SidebarFooter>
         </Sidebar>
 
-        <div className="flex flex-col flex-1 overflow-hidden">
-          <header className="flex items-center justify-between h-14 px-4 border-b border-border bg-background/80 backdrop-blur-md">
+        <div className="flex flex-col flex-1 min-w-0">
+          <header className="sticky top-0 z-40 flex items-center justify-between h-14 px-4 border-b border-border bg-background/80 backdrop-blur-md">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
             <div className="flex items-center gap-3">
               {activeGlobalMessages.length > 0 && (
@@ -662,7 +662,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               </div>
             </div>
           </header>
-          <main className="flex-1 overflow-auto p-6">
+          <main className="flex-1 p-4 pb-10">
             {children}
           </main>
         </div>
