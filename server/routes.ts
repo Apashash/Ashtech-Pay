@@ -2083,8 +2083,12 @@ export async function registerRoutes(
       const totalAmount = amount;
 
       // Check primary wallet balance BEFORE any deduction
-      // Round to 2 decimal places to eliminate floating-point comparison artifacts
-      const availableBalance = Math.round(parseFloat(user.balance) * 100) / 100;
+      // Round balance to match display: integer for non-decimal currencies (XAF, XOF, etc.),
+      // 2 decimal places for USD/EUR, to avoid floating-point comparison mismatches.
+      const isDecimalCurrency = userCurrency === "USD" || userCurrency === "EUR";
+      const availableBalance = isDecimalCurrency
+        ? Math.floor(parseFloat(user.balance) * 100) / 100
+        : Math.round(parseFloat(user.balance));
       if (availableBalance < amount) {
         return res.status(400).json({ message: `Solde insuffisant dans votre compte principal (${amount.toFixed(0)} ${userCurrency} requis)` });
       }

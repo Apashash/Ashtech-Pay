@@ -68,8 +68,13 @@ export default function WithdrawPage() {
   const maxWithdrawal = Math.floor((limits?.maxWithdrawal ?? 5000000) * userFxRate / xafRate);
 
   // Primary balance = user.balance (always, regardless of currency)
-  // Round to 2 decimal places to eliminate IEEE 754 floating-point artifacts
-  const balance = Math.round(parseFloat(user?.balance || "0") * 100) / 100;
+  // Round to integer for non-decimal currencies (XAF, XOF, etc.) to match display rounding,
+  // or to 2 decimal places for USD/EUR. This avoids floating-point comparison mismatches.
+  const rawBalance = parseFloat(user?.balance || "0");
+  const isDecimalCurrency = userCurrency === "USD" || userCurrency === "EUR";
+  const balance = isDecimalCurrency
+    ? Math.floor(rawBalance * 100) / 100
+    : Math.round(rawBalance);
 
   const { data: withdrawalNumbers = [] } = useQuery<WithdrawalNumber[]>({
     queryKey: ["/api/withdrawal-numbers"],
