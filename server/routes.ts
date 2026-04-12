@@ -318,26 +318,32 @@ export async function registerRoutes(
   });
 
   // Session middleware
-  // Always use secure cookies with sameSite: none for Replit's HTTPS proxy environment
+  const sessionSecret = process.env.SESSION_SECRET;
+  if (!sessionSecret) {
+    console.warn("[Session] WARNING: SESSION_SECRET env var not set. Sessions will not persist across restarts. Please set SESSION_SECRET in your environment.");
+  }
+  const isSecureProxy = process.env.TRUST_PROXY === "true" || !!process.env.REPL_ID;
+  const cookieSecure = process.env.COOKIE_SECURE !== "false";
+  const cookieSameSite = (process.env.COOKIE_SAMESITE as "none" | "lax" | "strict") || (isSecureProxy ? "none" : "lax");
   app.use(
     session({
-      secret: process.env.SESSION_SECRET!,
+      secret: sessionSecret || crypto.randomBytes(32).toString("hex"),
       resave: false,
       saveUninitialized: false,
       store: new SessionStore({
         checkPeriod: 86400000,
       }),
-      proxy: true,
+      proxy: isSecureProxy,
       cookie: {
-        secure: true,
+        secure: cookieSecure,
         httpOnly: true,
-        sameSite: "none",
+        sameSite: cookieSameSite,
         maxAge: 24 * 60 * 60 * 1000,
       },
     })
   );
   
-  console.log("Session configured - Secure: true, SameSite: none (for Replit HTTPS proxy)");
+  console.log(`[Session] Configured - secure=${cookieSecure}, sameSite=${cookieSameSite}, proxy=${isSecureProxy}`);
 
   // Middleware to extract userId from either session or Bearer token
   app.use(async (req, res, next) => {
