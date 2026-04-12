@@ -1,0 +1,13 @@
+Options -MultiViews
+RewriteEngine On
+RewriteBase /
+
+# Ne pas réécrire les fichiers et dossiers existants
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+
+# Ne pas réécrire les routes API (laisser passer vers Node.js)
+RewriteRule ^api/ - [L]
+
+# Toutes les autres routes → index.html (SPA routing)
+RewriteRule ^ index.html [QSA,L]
