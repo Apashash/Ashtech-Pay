@@ -249,9 +249,18 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   }
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-dvh bg-background">
+      {/* Mobile backdrop — closes sidebar when tapping outside */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
       <aside className={cn(
         "border-r border-border bg-card flex flex-col transition-all duration-300",
+        // On mobile: fixed overlay; on desktop: static flex column
+        "fixed inset-y-0 left-0 z-50 md:relative md:inset-auto md:z-auto",
         sidebarOpen ? "w-64" : "w-0 overflow-hidden"
       )}>
         <div className="p-4 border-b border-border flex items-center justify-between">
