@@ -2083,7 +2083,9 @@ export async function registerRoutes(
       const totalAmount = amount;
 
       // Check primary wallet balance BEFORE any deduction
-      if (parseFloat(user.balance) < amount) {
+      // Round to 2 decimal places to eliminate floating-point comparison artifacts
+      const availableBalance = Math.round(parseFloat(user.balance) * 100) / 100;
+      if (availableBalance < amount) {
         return res.status(400).json({ message: `Solde insuffisant dans votre compte principal (${amount.toFixed(0)} ${userCurrency} requis)` });
       }
 

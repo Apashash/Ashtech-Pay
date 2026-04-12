@@ -68,7 +68,8 @@ export default function WithdrawPage() {
   const maxWithdrawal = Math.floor((limits?.maxWithdrawal ?? 5000000) * userFxRate / xafRate);
 
   // Primary balance = user.balance (always, regardless of currency)
-  const balance = parseFloat(user?.balance || "0");
+  // Round to 2 decimal places to eliminate IEEE 754 floating-point artifacts
+  const balance = Math.round(parseFloat(user?.balance || "0") * 100) / 100;
 
   const { data: withdrawalNumbers = [] } = useQuery<WithdrawalNumber[]>({
     queryKey: ["/api/withdrawal-numbers"],
