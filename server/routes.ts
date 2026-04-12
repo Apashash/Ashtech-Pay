@@ -3284,6 +3284,18 @@ export async function registerRoutes(
     }
   });
 
+  // Public maintenance status — no auth required so frontend can check before rendering dashboard
+  app.get("/api/public/maintenance", async (_req, res) => {
+    try {
+      const setting = await storage.getSetting("maintenance_mode");
+      const active = setting?.value === "true";
+      res.setHeader("Cache-Control", "no-store");
+      res.json({ active });
+    } catch {
+      res.json({ active: false });
+    }
+  });
+
   // Public support contact info route
   app.get("/api/public/support-contact", async (_req, res) => {
     try {

@@ -59,6 +59,7 @@ import {
   Megaphone,
   MessageCircle,
   Phone,
+  Wrench,
 } from "lucide-react";
 import { SiWhatsapp, SiFacebook } from "react-icons/si";
 import { 
@@ -111,6 +112,16 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   const { data: user, isLoading } = useQuery<User>({
     queryKey: ["/api/user"],
+  });
+
+  const { data: maintenanceData } = useQuery<{ active: boolean }>({
+    queryKey: ["/api/public/maintenance"],
+    staleTime: 30000,
+    refetchInterval: 60000,
+    queryFn: async () => {
+      const res = await fetch("/api/public/maintenance");
+      return res.json();
+    },
   });
 
   const { data: wallets = [] } = useQuery<{ currency: string; balance: string }[]>({
@@ -285,6 +296,23 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
+  const isPrivilegedUser = ["admin", "support", "finance"].includes(user.role);
+  if (maintenanceData?.active && !isPrivilegedUser) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center">
+        <img src="/logo.png" alt="AshTech Pay" className="h-12 w-auto mb-8 opacity-80" />
+        <div className="w-16 h-16 rounded-2xl bg-amber-500/10 flex items-center justify-center mb-6">
+          <Wrench className="w-8 h-8 text-amber-500" />
+        </div>
+        <h1 className="text-2xl font-bold text-foreground mb-3">Maintenance en cours</h1>
+        <p className="text-muted-foreground max-w-sm leading-relaxed mb-4">
+          La plateforme est momentanément en maintenance. Vous serez notifié dès qu'elle sera de nouveau disponible.
+        </p>
+        <p className="text-sm text-muted-foreground/70">Désolé pour la gêne occasionnée.</p>
       </div>
     );
   }
