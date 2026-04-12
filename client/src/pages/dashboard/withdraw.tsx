@@ -452,7 +452,7 @@ export default function WithdrawPage() {
                     </Card>
                   )}
 
-                  {(selectedMethod === "bank_transfer" || (selectedMethod === "mobile_money" && withdrawalNumbers.length === 0)) && (
+                  {selectedMethod === "bank_transfer" && (
                     <FormField
                       control={form.control}
                       name="accountDetails"
