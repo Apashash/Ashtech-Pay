@@ -2093,8 +2093,10 @@ export async function registerRoutes(
         return res.status(400).json({ message: `Solde insuffisant dans votre compte principal (${amount.toFixed(0)} ${userCurrency} requis)` });
       }
 
-      // Debit primary wallet
-      await storage.updateUserBalance(userId, -amount);
+      // Debit primary wallet — cap deduction to actual DB balance to avoid -0.01 float artifacts
+      const actualBalance = parseFloat(user.balance);
+      const actualDeduction = amount > actualBalance ? actualBalance : amount;
+      await storage.updateUserBalance(userId, -actualDeduction);
 
       console.log(`[Withdrawal] User=${userId}, RequestedAmount=${amount}, Fee=${feeAmount}, NetToUser=${creditedAmount} (${withdrawalCurrency})`);
 
