@@ -159,7 +159,7 @@ export default function WithdrawPage() {
     : 0;
   const totalAmount = amountValue + feeAmount;
 
-  const isAmountValid = amountValue >= minWithdrawal && amountValue <= maxWithdrawal && totalAmount <= balance;
+  const isAmountValid = amountValue >= minWithdrawal && amountValue <= maxWithdrawal && amountValue <= balance;
   const isMobileMoneyValid = selectedMethod === "mobile_money" ? (!!selectedCountry && !!selectedOperator && !!watchedAccountDetails) : true;
   const isBankTransferValid = selectedMethod === "bank_transfer" ? !!watchedAccountDetails : true;
   const isSubmitDisabled = withdrawMutation.isPending || !isAmountValid || !isMobileMoneyValid || !isBankTransferValid;
@@ -304,10 +304,10 @@ export default function WithdrawPage() {
                             Minimum : {minWithdrawal.toLocaleString()} {user?.preferredCurrency || "XAF"}
                           </p>
                         )}
-                        {amountValue > 0 && totalAmount > balance && (
+                        {amountValue > 0 && amountValue > balance && (
                           <p className="text-sm text-destructive flex items-center gap-1">
                             <AlertCircle className="w-3 h-3" />
-                            Solde insuffisant ({totalAmount.toLocaleString()} {user?.preferredCurrency || "XAF"} requis)
+                            Solde insuffisant ({amountValue.toLocaleString()} {user?.preferredCurrency || "XAF"} requis)
                           </p>
                         )}
                       </FormItem>
