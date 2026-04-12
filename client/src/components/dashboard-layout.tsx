@@ -304,7 +304,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   if (maintenanceData?.active && !isPrivilegedUser) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center">
-        <img src="/logo.png" alt="AshTech Pay" className="h-12 w-auto mb-8 opacity-80" />
+        <div className="flex items-center gap-2 mb-8">
+          <img src="/logo.png" alt="AshTech Pay" className="h-10 w-auto opacity-80" />
+          <span className="font-bold text-xl text-foreground tracking-tight">AshTech Pay</span>
+        </div>
         <div className="w-16 h-16 rounded-2xl bg-amber-500/10 flex items-center justify-center mb-6">
           <Wrench className="w-8 h-8 text-amber-500" />
         </div>
