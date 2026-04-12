@@ -265,16 +265,20 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
-      await apiRequest("POST", "/api/auth/logout");
+      try { await apiRequest("POST", "/api/auth/logout"); } catch { /* ignore network errors */ }
     },
     onSuccess: () => {
       removeAuthToken();
       queryClient.clear();
-      setLocation("/");
-      toast({
-        title: "Déconnexion réussie",
-        description: "À bientôt!",
-      });
+      toast({ title: "Déconnexion réussie", description: "À bientôt!" });
+      // Hard redirect: forces full page reload, resets ALL React state
+      window.location.href = "/login";
+    },
+    onError: () => {
+      // Even if API fails, clear local state and redirect
+      removeAuthToken();
+      queryClient.clear();
+      window.location.href = "/login";
     },
   });
 

@@ -343,7 +343,7 @@ export async function registerRoutes(
         secure: cookieSecure,
         httpOnly: true,
         sameSite: cookieSameSite,
-        maxAge: 30 * 24 * 60 * 60 * 1000,
+        maxAge: 5 * 24 * 60 * 60 * 1000,
       },
     })
   );
