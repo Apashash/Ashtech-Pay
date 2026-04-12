@@ -23,7 +23,9 @@ import crypto from "crypto";
 import { z } from "zod";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
-import { pool } from "./db";
+import { pool, db } from "./db";
+import { transactions as transactionsTable } from "@shared/schema";
+import { desc, eq, sql as drizzleSql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import multer from "multer";
 import path from "path";
@@ -725,12 +727,28 @@ export async function registerRoutes(
   app.get("/api/dashboard", requireAuth, async (req, res) => {
     try {
       const userId = req.userId!;
-      const [user, transactions, paymentLinks, extraWallets, notifications] = await Promise.all([
+
+      // Run all queries in parallel for maximum speed
+      const [user, recentTransactions, paymentLinks, extraWallets, notifications, txStats] = await Promise.all([
         storage.getUser(userId),
-        storage.getTransactionsByUserId(userId),
+        // Only fetch the 50 most recent transactions for display
+        db.select().from(transactionsTable).where(eq(transactionsTable.userId, userId))
+          .orderBy(desc(transactionsTable.createdAt)).limit(50),
         storage.getPaymentLinksByUserId(userId),
         storage.getUserWallets(userId),
         storage.getUserNotifications(userId, 20),
+        // Compute stats in a single SQL aggregate query instead of JS iteration
+        db.execute(drizzleSql`
+          SELECT
+            COALESCE(SUM(amount::numeric) FILTER (WHERE status='completed' AND type IN ('deposit','transfer_in','payment_link')), 0) AS total_received,
+            COALESCE(SUM(amount::numeric) FILTER (WHERE status='completed' AND type IN ('withdrawal','transfer_out')), 0) AS total_sent,
+            COUNT(*)::int AS total_transactions,
+            COUNT(*) FILTER (WHERE created_at >= date_trunc('month', NOW()))::int AS monthly_transactions,
+            COUNT(*) FILTER (WHERE status='pending')::int AS pending_transactions,
+            COUNT(*) FILTER (WHERE status='completed' AND type='payment_link')::int AS link_payments,
+            COALESCE(SUM(amount::numeric) FILTER (WHERE status='completed' AND type='payment_link'), 0) AS total_collected
+          FROM transactions WHERE user_id = ${userId}
+        `),
       ]);
 
       if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
@@ -744,27 +762,21 @@ export async function registerRoutes(
           .map(w => ({ currency: w.currency, balance: w.balance, symbol: CURRENCY_SYMBOLS[w.currency as SupportedCurrency] || w.currency })),
       ];
 
-      // Compute stats inline
-      const now = new Date();
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      const completed = transactions.filter(t => t.status === "completed");
-      const totalReceived = completed.filter(t => ["deposit","transfer_in","payment_link"].includes(t.type)).reduce((s,t)=>s+parseFloat(t.amount),0);
-      const totalSent = completed.filter(t => ["withdrawal","transfer_out"].includes(t.type)).reduce((s,t)=>s+parseFloat(t.amount),0);
-      const linkPayments = completed.filter(t => t.type === "payment_link");
+      const row = (txStats.rows?.[0] || {}) as Record<string, any>;
       const stats = {
-        totalReceived: totalReceived.toFixed(2),
-        totalSent: totalSent.toFixed(2),
-        totalTransactions: transactions.length,
-        monthlyTransactions: transactions.filter(t => t.createdAt && new Date(t.createdAt) >= startOfMonth).length,
-        pendingTransactions: transactions.filter(t => t.status === "pending").length,
-        totalClicks: paymentLinks.reduce((s,l) => s + (l.clickCount||0), 0),
-        linkPayments: linkPayments.length,
-        totalCollected: linkPayments.reduce((s,t)=>s+parseFloat(t.amount),0).toFixed(2),
-        activeLinks: paymentLinks.filter(l=>l.isActive).length,
+        totalReceived: parseFloat(row.total_received || "0").toFixed(2),
+        totalSent: parseFloat(row.total_sent || "0").toFixed(2),
+        totalTransactions: Number(row.total_transactions || 0),
+        monthlyTransactions: Number(row.monthly_transactions || 0),
+        pendingTransactions: Number(row.pending_transactions || 0),
+        totalClicks: paymentLinks.reduce((s, l) => s + (l.clickCount || 0), 0),
+        linkPayments: Number(row.link_payments || 0),
+        totalCollected: parseFloat(row.total_collected || "0").toFixed(2),
+        activeLinks: paymentLinks.filter(l => l.isActive).length,
       };
 
       const { password: _, ...safeUser } = user;
-      res.json({ user: safeUser, transactions, paymentLinks, wallets, stats, notifications });
+      res.json({ user: safeUser, transactions: recentTransactions, paymentLinks, wallets, stats, notifications });
     } catch (error) {
       console.error("Dashboard error:", error);
       res.status(500).json({ message: "Erreur serveur" });
@@ -3166,6 +3178,14 @@ export async function registerRoutes(
       console.error("Get contact info error:", error);
       res.status(500).json({ message: "Erreur serveur" });
     }
+  });
+
+  // Cache middleware for public (non-auth) endpoints — reduces server load
+  app.use("/api/public", (req, res, next) => {
+    // Don't cache hosted-session (dynamic per-session data)
+    if (req.path.startsWith("/hosted-session")) return next();
+    res.setHeader("Cache-Control", "public, max-age=300, stale-while-revalidate=60");
+    next();
   });
 
   app.get("/api/public/fees", async (_req, res) => {
