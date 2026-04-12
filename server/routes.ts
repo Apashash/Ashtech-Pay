@@ -22,7 +22,8 @@ import {
 import crypto from "crypto";
 import { z } from "zod";
 import session from "express-session";
-import MemoryStore from "memorystore";
+import connectPgSimple from "connect-pg-simple";
+import { pool } from "./db";
 import bcrypt from "bcryptjs";
 import multer from "multer";
 import path from "path";
@@ -106,7 +107,7 @@ const upload = multer({
   },
 });
 
-const SessionStore = MemoryStore(session);
+const SessionStore = connectPgSimple(session);
 
 declare module "express-session" {
   interface SessionData {
@@ -331,14 +332,16 @@ export async function registerRoutes(
       resave: false,
       saveUninitialized: false,
       store: new SessionStore({
-        checkPeriod: 86400000,
+        pool,
+        createTableIfMissing: true,
+        tableName: "session",
       }),
       proxy: isSecureProxy,
       cookie: {
         secure: cookieSecure,
         httpOnly: true,
         sameSite: cookieSameSite,
-        maxAge: 24 * 60 * 60 * 1000,
+        maxAge: 30 * 24 * 60 * 60 * 1000,
       },
     })
   );
