@@ -295,13 +295,23 @@ export default function WithdrawPage() {
                       <FormItem>
                         <FormLabel>Montant ({user?.preferredCurrency || "XAF"})</FormLabel>
                         <FormControl>
-                          <Input 
-                            type="number" 
-                            placeholder={minWithdrawal.toString()} 
-                            className="text-lg h-10"
-                            {...field} 
-                            data-testid="input-withdraw-amount"
-                          />
+                          <div className="relative">
+                            <Input 
+                              type="number" 
+                              placeholder={minWithdrawal.toString()} 
+                              className="text-lg h-10 pr-14"
+                              {...field} 
+                              data-testid="input-withdraw-amount"
+                            />
+                            <button
+                              type="button"
+                              data-testid="button-max-amount"
+                              onClick={() => form.setValue("amount", balance.toString(), { shouldValidate: true })}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                            >
+                              Max
+                            </button>
+                          </div>
                         </FormControl>
                         <FormMessage />
                         {amountValue > 0 && amountValue < minWithdrawal && (
