@@ -1,18 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import type { Transaction, User, SupportedCurrency } from "@shared/schema";
-import { History, TrendingUp, TrendingDown, Clock, CheckCircle, XCircle, Loader2, Search, Link2, Copy, ArrowRight, ArrowLeftRight, User as UserIcon, Mail, Phone, MapPin, CreditCard, FileText, ChevronLeft, ChevronRight, Smartphone, Code2, Globe } from "lucide-react";
+import { TrendingUp, TrendingDown, Clock, CheckCircle, XCircle, Loader2, Link2, ArrowLeftRight, User as UserIcon, MapPin, CreditCard, FileText, Smartphone, Code2, Globe, RefreshCw, Copy, Pencil } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { formatCurrency } from "@/lib/currency";
-import { Button } from "@/components/ui/button";
+import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 interface TransactionDetails extends Transaction {
@@ -21,22 +21,39 @@ interface TransactionDetails extends Transaction {
   recipient?: { fullName: string; username: string } | null;
 }
 
-const PAGE_SIZE = 25;
+const typeLabels: Record<string, string> = {
+  deposit: "Dépôt Mobile Money",
+  withdrawal: "Retrait",
+  transfer_in: "Virement reçu",
+  transfer_out: "Virement envoyé",
+  payment_link: "Lien de paiement",
+  conversion: "Conversion",
+};
+
+const paymentMethodLabels: Record<string, string> = {
+  mobile_money: "Mobile Money",
+  crypto: "Crypto",
+  bank_transfer: "Virement bancaire",
+  card: "Carte bancaire",
+};
 
 export default function TransactionsPage() {
   const { toast } = useToast();
-  const [filter, setFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
+  const [currencyFilter, setCurrencyFilter] = useState("all");
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
-  
+
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
-  const { data: transactions = [], isLoading } = useQuery<Transaction[]>({
+  const { data: transactions = [], isLoading, refetch, isFetching } = useQuery<Transaction[]>({
     queryKey: ["/api/transactions"],
   });
   const { data: wallets = [] } = useQuery<any[]>({ queryKey: ["/api/wallets"] });
   const { data: depositConfig } = useQuery<any>({ queryKey: ["/api/public/deposit-config"] });
+
+  const { data: txDetails } = useQuery<TransactionDetails>({
+    queryKey: selectedTx ? [`/api/transactions/${selectedTx.id}`] : ["__disabled__"],
+    enabled: !!selectedTx?.id,
+  });
 
   const operatorMap = useMemo<Record<string, string>>(() => {
     const map: Record<string, string> = {};
@@ -48,92 +65,68 @@ export default function TransactionsPage() {
     return map;
   }, [depositConfig]);
 
-  const localCurrency = user?.preferredCurrency || "XAF";
-  const localBalance = localCurrency === "XAF" 
-    ? (user?.balance || "0.00")
-    : (wallets.find(w => w.currency === localCurrency)?.balance || "0.00");
+  const availableCurrencies = useMemo(() => {
+    const set = new Set<string>();
+    transactions.forEach(tx => { if (tx.currency) set.add(tx.currency); });
+    wallets.forEach((w: any) => set.add(w.currency));
+    if (user?.preferredCurrency) set.add(user.preferredCurrency);
+    return Array.from(set).sort();
+  }, [transactions, wallets, user]);
 
-  const { data: txDetails, isLoading: txDetailsLoading } = useQuery<TransactionDetails>({
-    queryKey: selectedTx ? [`/api/transactions/${selectedTx.id}`] : ["__disabled__"],
-    enabled: !!selectedTx?.id,
-  });
-
-  const filteredTransactions = transactions.filter(tx => {
-    if (filter !== "all" && tx.type !== filter) return false;
+  const filteredTransactions = useMemo(() => transactions.filter(tx => {
     if (statusFilter !== "all" && tx.status !== statusFilter) return false;
-    if (search) {
-      const searchLower = search.toLowerCase();
-      const matchDesc = (tx.description ?? "").toLowerCase().includes(searchLower);
-      const matchPayer = (tx.payerName ?? "").toLowerCase().includes(searchLower);
-      const matchEmail = (tx.payerEmail ?? "").toLowerCase().includes(searchLower);
-      const matchRef = (tx.reference ?? "").toLowerCase().includes(searchLower);
-      if (!matchDesc && !matchPayer && !matchEmail && !matchRef) return false;
-    }
+    if (currencyFilter !== "all" && tx.currency !== currencyFilter) return false;
     return true;
-  });
+  }), [transactions, statusFilter, currencyFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredTransactions.length / PAGE_SIZE));
-  const paginatedTransactions = filteredTransactions.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const groupedByDate = useMemo(() => {
+    const groups: Record<string, Transaction[]> = {};
+    for (const tx of filteredTransactions) {
+      const dateKey = tx.createdAt
+        ? format(new Date(tx.createdAt), "yyyy-MM-dd")
+        : "inconnu";
+      if (!groups[dateKey]) groups[dateKey] = [];
+      groups[dateKey].push(tx);
+    }
+    return Object.entries(groups).sort(([a], [b]) => b.localeCompare(a));
+  }, [filteredTransactions]);
 
-  useEffect(() => { setPage(1); }, [filter, statusFilter, search]);
-
-  const typeLabels: Record<string, string> = {
-    deposit: "Dépôt",
-    withdrawal: "Retrait",
-    transfer_in: "Reçu",
-    transfer_out: "Envoyé",
-    payment_link: "Lien de paiement",
-    conversion: "Conversion",
+  const formatDateLabel = (dateKey: string) => {
+    try {
+      return format(new Date(dateKey), "d MMMM", { locale: fr }).toUpperCase();
+    } catch { return dateKey; }
   };
 
-  const paymentMethodLabels: Record<string, string> = {
-    mobile_money: "Mobile Money",
-    crypto: "Crypto",
-    bank_transfer: "Virement bancaire",
-    card: "Carte bancaire",
-    paypal: "PayPal",
+  const getStatusBadge = (status: string, compact = false) => {
+    const size = compact ? "text-[10px] px-1.5 py-0" : "text-xs";
+    switch (status) {
+      case "completed":
+        return <Badge className={`${size} bg-green-500/20 text-green-600 border-green-500/30 font-medium`}>Réussi</Badge>;
+      case "pending":
+      case "pending_manual":
+        return <Badge className={`${size} bg-amber-500/20 text-amber-600 border-amber-500/30 font-medium`}>En cours</Badge>;
+      case "failed":
+        return <Badge className={`${size} bg-red-500/20 text-red-600 border-red-500/30 font-medium`}>Échoué</Badge>;
+      case "cancelled":
+        return <Badge className={`${size} bg-muted text-muted-foreground font-medium`}>Annulé</Badge>;
+      default:
+        return <Badge className={`${size} bg-muted text-muted-foreground`}>{status}</Badge>;
+    }
   };
 
   const getApiBadge = (tx: Transaction) => {
     const t = tx as any;
-    if (t.type === "payment_link") {
-      return (
-        <Badge className="text-[10px] px-1.5 py-0 gap-1 bg-violet-500/10 text-violet-600 border-violet-500/30 font-medium">
-          <Link2 className="w-2.5 h-2.5" />Lien de paiement
-        </Badge>
-      );
+    if (t.confirmedAt && t.status === "completed" && t.type === "deposit") {
+      return <Badge className="text-[10px] px-1.5 py-0 gap-1 bg-violet-500/10 text-violet-600 border-violet-500/30 font-medium"><Pencil className="w-2.5 h-2.5" />Rectification</Badge>;
     }
+    if (t.type === "payment_link") return null;
     if (t.source === "hosted_page") {
-      return (
-        <Badge className="text-[10px] px-1.5 py-0 gap-1 bg-amber-500/10 text-amber-600 border-amber-500/30 font-medium">
-          <Globe className="w-2.5 h-2.5" />Hosted Page API
-        </Badge>
-      );
+      return <Badge className="text-[10px] px-1.5 py-0 gap-1 bg-amber-500/10 text-amber-600 border-amber-500/30"><Globe className="w-2.5 h-2.5" />Hosted Page</Badge>;
     }
     if (t.source === "api") {
-      return (
-        <Badge className="text-[10px] px-1.5 py-0 gap-1 bg-sky-500/10 text-sky-600 border-sky-500/30 font-medium">
-          <Code2 className="w-2.5 h-2.5" />SDK API
-        </Badge>
-      );
+      return <Badge className="text-[10px] px-1.5 py-0 gap-1 bg-sky-500/10 text-sky-600 border-sky-500/30"><Code2 className="w-2.5 h-2.5" />API</Badge>;
     }
     return null;
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "completed":
-        return <Badge className="bg-green-500/20 text-green-500 border-green-500/30 gap-1"><CheckCircle className="w-3 h-3" />Validé</Badge>;
-      case "pending":
-      case "pending_manual":
-        return <Badge className="bg-amber-500/20 text-amber-500 border-amber-500/30 gap-1"><Clock className="w-3 h-3" />En cours</Badge>;
-      case "failed":
-        return <Badge className="bg-red-500/20 text-red-500 border-red-500/30 gap-1"><XCircle className="w-3 h-3" />Rejeté</Badge>;
-      case "cancelled":
-        return <Badge variant="secondary" className="gap-1"><XCircle className="w-3 h-3" />Annulé</Badge>;
-      default:
-        return <Badge variant="secondary">{status}</Badge>;
-    }
   };
 
   const copyReference = (ref: string) => {
@@ -144,23 +137,52 @@ export default function TransactionsPage() {
   const tx = txDetails || selectedTx;
   const isIncomingSelected = tx ? ["deposit", "transfer_in", "payment_link"].includes(tx.type) : false;
 
+  const getTxIcon = (tx: Transaction) => {
+    const isIncoming = ["deposit", "transfer_in", "payment_link"].includes(tx.type);
+    const isConversion = tx.type === "conversion";
+    const isPaymentLink = tx.type === "payment_link";
+    if (isConversion) return <ArrowLeftRight className="w-5 h-5 text-blue-500" />;
+    if (isPaymentLink) return <Link2 className="w-5 h-5 text-primary" />;
+    if (isIncoming) return <TrendingUp className="w-5 h-5 text-green-500" />;
+    return <TrendingDown className="w-5 h-5 text-red-500" />;
+  };
+
+  const getTxIconBg = (tx: Transaction) => {
+    const isIncoming = ["deposit", "transfer_in", "payment_link"].includes(tx.type);
+    const isConversion = tx.type === "conversion";
+    const isPaymentLink = tx.type === "payment_link";
+    if (isConversion) return "bg-blue-500/10";
+    if (isPaymentLink) return "bg-primary/10";
+    return isIncoming ? "bg-green-500/10" : "bg-red-500/10";
+  };
+
+  const getAmountColor = (tx: Transaction) => {
+    const isIncoming = ["deposit", "transfer_in", "payment_link"].includes(tx.type);
+    if (tx.type === "conversion") return "text-blue-500";
+    if (tx.status === "completed") return isIncoming ? "text-green-500" : "text-red-500";
+    if (tx.status === "pending" || tx.status === "pending_manual") return "text-amber-500";
+    return "text-muted-foreground";
+  };
+
+  const getAmountPrefix = (tx: Transaction) => {
+    if (tx.type === "conversion") return "⇄ ";
+    return ["deposit", "transfer_in", "payment_link"].includes(tx.type) ? "+" : "-";
+  };
+
   if (isLoading) {
     return (
       <DashboardLayout>
-        <div className="space-y-6 animate-pulse">
-          <div>
-            <div className="h-8 w-48 bg-muted rounded mb-2" />
-            <div className="h-4 w-64 bg-muted rounded" />
+        <div className="space-y-4 animate-pulse">
+          <div className="h-8 w-48 bg-muted rounded mb-1" />
+          <div className="h-4 w-64 bg-muted rounded" />
+          <div className="flex gap-2">
+            <div className="h-9 w-40 bg-muted rounded" />
+            <div className="h-9 w-36 bg-muted rounded" />
+            <div className="h-9 w-24 bg-muted rounded" />
           </div>
-          <div className="grid grid-cols-3 gap-4">
-            {[...Array(3)].map((_, i) => <div key={i} className="h-24 bg-muted rounded-xl" />)}
-          </div>
-          <div className="flex gap-4">
-            <div className="h-10 flex-1 bg-muted rounded" />
-            <div className="h-10 w-36 bg-muted rounded" />
-            <div className="h-10 w-36 bg-muted rounded" />
-          </div>
-          <div className="h-96 bg-muted rounded-xl" />
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="h-16 bg-muted rounded-xl" />
+          ))}
         </div>
       </DashboardLayout>
     );
@@ -168,180 +190,108 @@ export default function TransactionsPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Transactions</h1>
-          <p className="text-muted-foreground">Historique de toutes vos transactions</p>
-        </div>
-
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input 
-              placeholder="Rechercher par description, référence..." 
-              className="pl-10"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              data-testid="input-search-transactions"
-            />
-          </div>
-          <Select value={filter} onValueChange={setFilter}>
-            <SelectTrigger className="w-full sm:w-48" data-testid="select-filter-type">
-              <SelectValue placeholder="Filtrer par type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tous les types</SelectItem>
-              <SelectItem value="deposit">Dépôts</SelectItem>
-              <SelectItem value="withdrawal">Retraits</SelectItem>
-              <SelectItem value="transfer_in">Reçus</SelectItem>
-              <SelectItem value="transfer_out">Envoyés</SelectItem>
-              <SelectItem value="payment_link">Liens de paiement</SelectItem>
-              <SelectItem value="conversion">Conversions</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-full sm:w-48" data-testid="select-filter-status">
-              <SelectValue placeholder="Filtrer par statut" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tous les statuts</SelectItem>
-              <SelectItem value="pending">En cours</SelectItem>
-              <SelectItem value="completed">Validés</SelectItem>
-              <SelectItem value="failed">Rejetés</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
+      <div className="space-y-4">
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <History className="w-5 h-5" />
-              Historique
-            </CardTitle>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold">Historique des transactions</CardTitle>
           </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="flex justify-center py-12">
-                <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-              </div>
-            ) : filteredTransactions.length === 0 ? (
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap gap-2 items-center">
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="h-8 w-auto min-w-[140px] text-xs" data-testid="select-filter-status">
+                  <SelectValue placeholder="Tous les statuts" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous les statuts</SelectItem>
+                  <SelectItem value="pending">En cours</SelectItem>
+                  <SelectItem value="completed">Réussi</SelectItem>
+                  <SelectItem value="failed">Échoué</SelectItem>
+                  <SelectItem value="cancelled">Annulé</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={currencyFilter} onValueChange={setCurrencyFilter}>
+                <SelectTrigger className="h-8 w-auto min-w-[130px] text-xs" data-testid="select-filter-currency">
+                  <SelectValue placeholder="Toutes devises" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Toutes devises</SelectItem>
+                  {availableCurrencies.map(c => (
+                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs gap-1.5"
+                onClick={() => refetch()}
+                disabled={isFetching}
+                data-testid="button-refresh-transactions"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? "animate-spin" : ""}`} />
+                Actualiser
+              </Button>
+            </div>
+
+            {filteredTransactions.length === 0 ? (
               <div className="text-center py-12">
-                <History className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">Aucune transaction trouvée</p>
+                <Clock className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+                <p className="text-muted-foreground text-sm">Aucune transaction trouvée</p>
               </div>
             ) : (
-              <>
-              <div className="overflow-x-auto overflow-y-auto max-h-[520px] -mx-4 px-4">
-                <div className="space-y-2 min-w-[320px]">
-                  {paginatedTransactions.map((tx) => {
-                    const isConversion = tx.type === "conversion";
-                    const isIncoming = ["deposit", "transfer_in", "payment_link"].includes(tx.type);
-                    const isPaymentLink = tx.type === "payment_link";
-                    return (
-                      <div 
-                        key={tx.id} 
-                        className="flex items-center justify-between p-3 sm:p-4 rounded-lg bg-card border border-border cursor-pointer hover-elevate gap-3" 
-                        onClick={() => setSelectedTx(tx)}
-                        data-testid={`transaction-item-${tx.id}`}
-                      >
-                        <div className="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
-                          <div className={`w-10 h-10 sm:w-12 sm:h-12 shrink-0 rounded-full flex items-center justify-center ${
-                            isConversion
-                              ? 'bg-blue-500/10'
-                              : isPaymentLink 
-                                ? 'bg-primary/10' 
-                                : isIncoming ? 'bg-green-500/10' : 'bg-red-500/10'
-                          }`}>
-                            {isConversion
-                              ? <ArrowLeftRight className="w-5 h-5 sm:w-6 sm:h-6 text-blue-500" />
-                              : isPaymentLink 
-                                ? <Link2 className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
-                                : isIncoming 
-                                  ? <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-green-500" /> 
-                                  : <TrendingDown className="w-5 h-5 sm:w-6 sm:h-6 text-red-500" />
-                            }
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <p className="font-medium text-foreground text-sm sm:text-base">{typeLabels[tx.type] || tx.type}</p>
-                              {getApiBadge(tx)}
-                              <div className="hidden sm:block">{getStatusBadge(tx.status)}</div>
+              <div className="space-y-4">
+                {groupedByDate.map(([dateKey, txs]) => (
+                  <div key={dateKey}>
+                    <p className="text-xs font-semibold text-primary mb-2 px-1">
+                      {formatDateLabel(dateKey)}
+                    </p>
+                    <div className="rounded-xl border border-border overflow-hidden divide-y divide-border">
+                      {txs.map((tx) => {
+                        const apiBadge = getApiBadge(tx);
+                        const operatorName = tx.operatorId ? operatorMap[tx.operatorId] : null;
+                        return (
+                          <div
+                            key={tx.id}
+                            className="flex items-center gap-3 px-3 py-3 bg-card cursor-pointer active:bg-muted/50 transition-colors"
+                            onClick={() => setSelectedTx(tx)}
+                            data-testid={`transaction-item-${tx.id}`}
+                          >
+                            <div className={`w-9 h-9 shrink-0 rounded-full flex items-center justify-center ${getTxIconBg(tx)}`}>
+                              {getTxIcon(tx)}
                             </div>
-                            {tx.reference && (
-                              <p className="text-xs font-mono text-muted-foreground truncate max-w-[120px] sm:max-w-none">{tx.reference}</p>
-                            )}
-                            {isPaymentLink && tx.payerName && (
-                              <p className="text-xs sm:text-sm text-foreground font-medium truncate">
-                                {tx.payerName}
-                              </p>
-                            )}
-                            <p className="text-xs sm:text-sm text-muted-foreground truncate max-w-[150px] sm:max-w-[250px]">{tx.description || "-"}</p>
-                            {tx.operatorId && operatorMap[tx.operatorId] && (
-                              <p className="text-xs text-primary font-medium flex items-center gap-1">
-                                <Smartphone className="w-3 h-3" />
-                                {operatorMap[tx.operatorId]}
-                              </p>
-                            )}
-                            <p className="text-xs text-muted-foreground">
-                              {tx.createdAt ? format(new Date(tx.createdAt), "dd/MM/yy", { locale: fr }) : ""}
-                              <span className="hidden sm:inline">
-                                {tx.createdAt ? format(new Date(tx.createdAt), " HH:mm", { locale: fr }) : ""}
-                              </span>
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex flex-col items-end gap-1 shrink-0">
-                          <span className={`font-bold text-sm sm:text-lg whitespace-nowrap ${
-                            isConversion
-                              ? 'text-blue-500'
-                              : tx.status === "completed" 
-                                ? (isIncoming ? 'text-green-500' : 'text-red-500')
-                                : tx.status === "pending" 
-                                  ? 'text-amber-500' 
-                                  : 'text-muted-foreground'
-                          }`}>
-                            {isConversion ? '⇄ ' : (isIncoming ? '+' : '-')}{formatCurrency(tx.amount, (user?.preferredCurrency || "XAF") as SupportedCurrency)}
-                          </span>
-                          <div className="sm:hidden">{getStatusBadge(tx.status)}</div>
-                          <ArrowRight className="w-4 h-4 text-muted-foreground hidden sm:block" />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
 
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between pt-4 border-t">
-                  <p className="text-sm text-muted-foreground">
-                    {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, filteredTransactions.length)} sur {filteredTransactions.length}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPage(p => Math.max(1, p - 1))}
-                      disabled={page === 1}
-                      data-testid="button-page-prev"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                      Précédent
-                    </Button>
-                    <span className="text-sm font-medium px-2">{page} / {totalPages}</span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                      disabled={page === totalPages}
-                      data-testid="button-page-next"
-                    >
-                      Suivant
-                      <ChevronRight className="w-4 h-4" />
-                    </Button>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <p className="text-sm font-medium text-foreground truncate max-w-[160px]">
+                                  {typeLabels[tx.type] || tx.type}
+                                </p>
+                                {apiBadge}
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {operatorName || (tx.description ? tx.description.slice(0, 24) : "—")}
+                              </p>
+                            </div>
+
+                            <div className="flex flex-col items-end gap-1 shrink-0">
+                              <span className={`text-sm font-bold whitespace-nowrap ${getAmountColor(tx)}`}>
+                                {getAmountPrefix(tx)}{formatCurrency(tx.amount, (tx.currency || user?.preferredCurrency || "XAF") as SupportedCurrency)}
+                              </span>
+                              <div className="flex items-center gap-1.5">
+                                {getStatusBadge(tx.status, true)}
+                                <span className="text-[10px] text-muted-foreground">
+                                  {tx.createdAt ? format(new Date(tx.createdAt), "HH:mm") : ""}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
-              </>
+                ))}
+              </div>
             )}
           </CardContent>
         </Card>
@@ -350,28 +300,15 @@ export default function TransactionsPage() {
       <Dialog open={!!selectedTx} onOpenChange={(open) => !open && setSelectedTx(null)}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              Détails de la transaction
-            </DialogTitle>
+            <DialogTitle>Détails de la transaction</DialogTitle>
           </DialogHeader>
-          
+
           {tx && (
             <div className="space-y-4">
               <div className="text-center p-4 bg-muted/50 rounded-lg">
-                <div className="flex items-center justify-center gap-2 mb-1 flex-wrap">
-                  <p className="text-sm text-muted-foreground">{typeLabels[tx.type] || tx.type}</p>
-                  {getApiBadge(tx)}
-                </div>
-                <p className={`text-3xl font-bold ${
-                  tx.type === "conversion"
-                    ? 'text-blue-500'
-                    : tx.status === "completed" 
-                      ? (isIncomingSelected ? 'text-green-500' : 'text-red-500')
-                      : tx.status === "pending" 
-                        ? 'text-amber-500' 
-                        : 'text-muted-foreground'
-                }`}>
-                  {tx.type === "conversion" ? '⇄ ' : (isIncomingSelected ? '+' : '-')}{formatCurrency(tx.amount, (user?.preferredCurrency || "XAF") as SupportedCurrency)}
+                <p className="text-sm text-muted-foreground mb-1">{typeLabels[tx.type] || tx.type}</p>
+                <p className={`text-3xl font-bold ${getAmountColor(tx)}`}>
+                  {getAmountPrefix(tx)}{formatCurrency(tx.amount, (tx.currency || user?.preferredCurrency || "XAF") as SupportedCurrency)}
                 </p>
                 <div className="mt-2">{getStatusBadge(tx.status)}</div>
               </div>
@@ -386,9 +323,9 @@ export default function TransactionsPage() {
                       <span className="text-sm">Référence</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <code className="text-sm font-mono bg-muted px-2 py-1 rounded">{tx.reference}</code>
-                      <Button size="icon" variant="ghost" onClick={() => copyReference(tx.reference!)} data-testid="button-copy-reference">
-                        <Copy className="w-4 h-4" />
+                      <code className="text-xs font-mono bg-muted px-2 py-1 rounded truncate max-w-[160px]">{tx.reference}</code>
+                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => copyReference(tx.reference!)} data-testid="button-copy-reference">
+                        <Copy className="w-3.5 h-3.5" />
                       </Button>
                     </div>
                   </div>
@@ -400,16 +337,16 @@ export default function TransactionsPage() {
                     {tx.totalAmount && (
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground">Montant brut</span>
-                        <span className="font-medium">{formatCurrency(tx.totalAmount, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</span>
+                        <span className="font-medium">{formatCurrency(tx.totalAmount, (tx.currency || user?.preferredCurrency || "XAF") as SupportedCurrency)}</span>
                       </div>
                     )}
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Frais</span>
-                      <span className="font-medium text-red-500">-{formatCurrency(tx.feeAmount, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</span>
+                      <span className="font-medium text-red-500">-{formatCurrency(tx.feeAmount, (tx.currency || user?.preferredCurrency || "XAF") as SupportedCurrency)}</span>
                     </div>
                     <div className="flex items-center justify-between text-sm border-t pt-2">
                       <span className="font-medium">Montant net</span>
-                      <span className="font-bold text-foreground">{formatCurrency(tx.amount, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</span>
+                      <span className="font-bold">{formatCurrency(tx.amount, (tx.currency || user?.preferredCurrency || "XAF") as SupportedCurrency)}</span>
                     </div>
                   </div>
                 )}
@@ -418,7 +355,7 @@ export default function TransactionsPage() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <CreditCard className="w-4 h-4" />
-                      <span className="text-sm">Méthode de paiement</span>
+                      <span className="text-sm">Méthode</span>
                     </div>
                     <span className="text-sm font-medium">{paymentMethodLabels[tx.paymentMethod] || tx.paymentMethod}</span>
                   </div>
@@ -445,12 +382,12 @@ export default function TransactionsPage() {
                 )}
 
                 {tx.description && (
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-2 text-muted-foreground">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-2 text-muted-foreground shrink-0">
                       <FileText className="w-4 h-4" />
                       <span className="text-sm">Description</span>
                     </div>
-                    <span className="text-sm font-medium text-right max-w-[60%]">{tx.description}</span>
+                    <span className="text-sm font-medium text-right">{tx.description}</span>
                   </div>
                 )}
               </div>
@@ -478,86 +415,29 @@ export default function TransactionsPage() {
                 </>
               )}
 
-              {(tx.payerName || tx.payerEmail || txDetails?.recipient) && (
+              {(txDetails?.paymentIntent?.payerPhone || txDetails?.paymentIntent?.payerCountry) && (
                 <>
                   <Separator />
                   <div className="space-y-3">
-                    <p className="text-sm font-semibold text-muted-foreground">
-                      {tx.type === "payment_link" ? "Informations du payeur" : "Destinataire"}
-                    </p>
-                    
-                    {tx.payerName && (
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <UserIcon className="w-4 h-4" />
-                          <span className="text-sm">Nom</span>
-                        </div>
-                        <span className="text-sm font-medium">{tx.payerName}</span>
-                      </div>
-                    )}
-
-                    {tx.payerEmail && (
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <Mail className="w-4 h-4" />
-                          <span className="text-sm">Email</span>
-                        </div>
-                        <span className="text-sm font-medium">{tx.payerEmail}</span>
-                      </div>
-                    )}
-
-                    {txDetails?.paymentIntent?.payerPhone && (
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <Phone className="w-4 h-4" />
-                          <span className="text-sm">Téléphone</span>
-                        </div>
-                        <span className="text-sm font-medium" data-testid="text-payer-phone">{txDetails.paymentIntent.payerPhone}</span>
-                      </div>
-                    )}
-
-                    {txDetails?.paymentIntent?.payerCountry && (
+                    <p className="text-sm font-semibold text-muted-foreground">Informations payeur</p>
+                    {txDetails.paymentIntent.payerCountry && (
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 text-muted-foreground">
                           <MapPin className="w-4 h-4" />
                           <span className="text-sm">Pays</span>
                         </div>
-                        <span className="text-sm font-medium" data-testid="text-payer-country">{txDetails.paymentIntent.payerCountry}</span>
+                        <span className="text-sm font-medium">{txDetails.paymentIntent.payerCountry}</span>
                       </div>
                     )}
-
-                    {txDetails?.recipient && (
-                      <>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 text-muted-foreground">
-                            <UserIcon className="w-4 h-4" />
-                            <span className="text-sm">Nom</span>
-                          </div>
-                          <span className="text-sm font-medium">{txDetails.recipient.fullName}</span>
+                    {txDetails.paymentIntent.payerPhone && (
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Smartphone className="w-4 h-4" />
+                          <span className="text-sm">Téléphone</span>
                         </div>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 text-muted-foreground">
-                            <span className="text-sm ml-6">@{txDetails.recipient.username}</span>
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </>
-              )}
-
-              {txDetails?.paymentLink && (
-                <>
-                  <Separator />
-                  <div className="space-y-3">
-                    <p className="text-sm font-semibold text-muted-foreground">Lien de paiement</p>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Link2 className="w-4 h-4" />
-                        <span className="text-sm">Titre</span>
+                        <span className="text-sm font-medium">{txDetails.paymentIntent.payerPhone}</span>
                       </div>
-                      <span className="text-sm font-medium">{txDetails.paymentLink.title}</span>
-                    </div>
+                    )}
                   </div>
                 </>
               )}
