@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, getAuthHeaders } from "@/lib/queryClient";
 import type { User, SupportedCurrency } from "@shared/schema";
 import { CreditCard, Loader2, Globe, AlertCircle, Phone, CheckCircle, XCircle, ArrowLeft, ArrowRight, Smartphone, ExternalLink, Hash } from "lucide-react";
 import { getOperatorLogo } from "@/lib/operator-logos";
@@ -206,7 +206,7 @@ export default function DepositPage() {
     if (pollingRef.current) clearInterval(pollingRef.current);
     pollingRef.current = setInterval(async () => {
       try {
-        const res = await fetch(`/api/transactions/status/${ref}`);
+        const res = await fetch(`/api/transactions/status/${ref}`, { credentials: "include", headers: getAuthHeaders() });
         if (res.ok) {
           const statusData = await res.json();
           if (statusData.status === "completed") {

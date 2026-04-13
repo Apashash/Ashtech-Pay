@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { getAuthHeaders } from "@/lib/queryClient";
 import { useParams, useLocation } from "wouter";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,7 +45,7 @@ export default function LinkDetailPage() {
   const { data, isLoading, isError } = useQuery<LinkAnalytics>({
     queryKey: ["/api/payment-links", id, "analytics"],
     queryFn: async () => {
-      const res = await fetch(`/api/payment-links/${id}/analytics`, { credentials: "include" });
+      const res = await fetch(`/api/payment-links/${id}/analytics`, { credentials: "include", headers: getAuthHeaders() });
       if (!res.ok) throw new Error("Erreur de chargement");
       return res.json();
     },

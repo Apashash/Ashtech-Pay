@@ -13,7 +13,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createPaymentLinkSchema } from "@shared/schema";
 import type { User } from "@shared/schema";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, getAuthHeaders } from "@/lib/queryClient";
 import { ArrowLeft, Loader2, Upload, X, FileText, Link as LinkIcon, ExternalLink, Calendar, Image, Globe, CheckSquare, Square, Check } from "lucide-react";
 import { z } from "zod";
 
@@ -102,6 +102,7 @@ export default function LinkCreatePage() {
     const response = await fetch("/api/uploads/file", {
       method: "POST",
       credentials: "include",
+      headers: getAuthHeaders(),
       body: formData,
     });
     if (!response.ok) throw new Error("Échec de l'upload");

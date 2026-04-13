@@ -347,7 +347,6 @@ export async function registerRoutes(
       saveUninitialized: false,
       store: new SessionStore({
         pool,
-        createTableIfMissing: true,
         tableName: "session",
       }),
       proxy: isSecureProxy,

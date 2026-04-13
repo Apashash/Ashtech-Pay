@@ -15,7 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createPaymentLinkSchema, type SupportedCurrency, EXCHANGE_RATES } from "@shared/schema";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, getAuthHeaders } from "@/lib/queryClient";
 import { getImageSrc } from "@/lib/image";
 import type { PaymentLink, Transaction, User, PaymentIntent } from "@shared/schema";
 import { 
@@ -120,6 +120,7 @@ function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => voi
     const response = await fetch("/api/uploads/file", {
       method: "POST",
       credentials: "include",
+      headers: getAuthHeaders(),
       body: formData,
     });
     if (!response.ok) throw new Error("Échec de l'upload");
@@ -484,6 +485,7 @@ function EditLinkDialog({ link, onClose, userCurrency }: {
     const response = await fetch("/api/uploads/file", {
       method: "POST",
       credentials: "include",
+      headers: getAuthHeaders(),
       body: formData,
     });
     if (!response.ok) throw new Error("Échec de l'upload");
@@ -795,7 +797,7 @@ function LinkAnalyticsDialog({
   const { data, isLoading } = useQuery<LinkAnalytics>({
     queryKey: ["/api/payment-links", linkId, "analytics"],
     queryFn: async () => {
-      const res = await fetch(`/api/payment-links/${linkId}/analytics`);
+      const res = await fetch(`/api/payment-links/${linkId}/analytics`, { credentials: "include", headers: getAuthHeaders() });
       if (!res.ok) throw new Error("Erreur de chargement");
       return res.json();
     },

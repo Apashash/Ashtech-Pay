@@ -15,7 +15,7 @@ import { SiWhatsapp } from "react-icons/si";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, getAuthHeaders } from "@/lib/queryClient";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { useSSE } from "@/hooks/use-sse";
@@ -128,7 +128,7 @@ export default function SupportPage() {
   }>({
     queryKey: ["/api/tickets", selectedTicket?.id, "messages"],
     queryFn: async () => {
-      const response = await fetch(`/api/tickets/${selectedTicket!.id}/messages`);
+      const response = await fetch(`/api/tickets/${selectedTicket!.id}/messages`, { credentials: "include", headers: getAuthHeaders() });
       return response.json();
     },
     enabled: !!selectedTicket,

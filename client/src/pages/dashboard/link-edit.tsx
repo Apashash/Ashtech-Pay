@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { User } from "@shared/schema";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, getAuthHeaders } from "@/lib/queryClient";
 import { ArrowLeft, Loader2, Upload, X, FileText, Link as LinkIcon, ExternalLink, Calendar, Image, Globe, Check } from "lucide-react";
 import { z } from "zod";
 
@@ -75,7 +75,7 @@ export default function LinkEditPage() {
   const { data: link, isLoading: linkLoading } = useQuery<PaymentLink>({
     queryKey: ["/api/payment-links", params.id],
     queryFn: async () => {
-      const res = await fetch(`/api/payment-links/${params.id}`, { credentials: "include" });
+      const res = await fetch(`/api/payment-links/${params.id}`, { credentials: "include", headers: getAuthHeaders() });
       if (!res.ok) throw new Error("Lien introuvable");
       return res.json();
     },
@@ -161,6 +161,7 @@ export default function LinkEditPage() {
     const res = await fetch("/api/uploads/file", {
       method: "POST",
       credentials: "include",
+      headers: getAuthHeaders(),
       body: formData,
     });
     if (!res.ok) throw new Error("Échec de l'upload");
