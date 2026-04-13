@@ -32,7 +32,7 @@ interface LinkAnalytics {
   transactions: Transaction[];
 }
 
-const PAGE_SIZE = 40;
+const PAGE_SIZE = 20;
 
 export default function LinkDetailPage() {
   const { id } = useParams<{ id: string }>();
