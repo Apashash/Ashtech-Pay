@@ -44,7 +44,7 @@ export default function LinkDetailPage() {
   const { data, isLoading, isError } = useQuery<LinkAnalytics>({
     queryKey: ["/api/payment-links", id, "analytics"],
     queryFn: async () => {
-      const res = await fetch(`/api/payment-links/${id}/analytics`);
+      const res = await fetch(`/api/payment-links/${id}/analytics`, { credentials: "include" });
       if (!res.ok) throw new Error("Erreur de chargement");
       return res.json();
     },

@@ -96,6 +96,16 @@ const fileStorage = multer.diskStorage({
   },
 });
 
+const memoryUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf"];
+    if (allowedTypes.includes(file.mimetype)) cb(null, true);
+    else cb(new Error("Type de fichier non autorisé"));
+  },
+});
+
 const upload = multer({
   storage: fileStorage,
   limits: { fileSize: 5 * 1024 * 1024 },
@@ -436,7 +446,7 @@ export async function registerRoutes(
   });
 
   // Direct file upload endpoint - uses Supabase Storage for persistence
-  app.post("/api/uploads/file", requireAuth, upload.single("file"), async (req, res) => {
+  app.post("/api/uploads/file", requireAuth, memoryUpload.single("file"), async (req, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ error: "Aucun fichier fourni" });
@@ -446,19 +456,15 @@ export async function registerRoutes(
       const allowedFolders = ["payment-links", "kyc"];
       const safeFolder = allowedFolders.includes(folder) ? folder : "payment-links";
 
-      // Try Supabase Storage first for persistent storage
-      const fileBuffer = fs.readFileSync(req.file.path);
+      // Try Supabase Storage first (file is already in memory — no disk I/O needed)
       const supabaseResult = await uploadToSupabase(
-        fileBuffer,
+        req.file.buffer,
         req.file.originalname,
         req.file.mimetype,
         safeFolder
       );
 
       if (supabaseResult) {
-        // Delete local file after successful Supabase upload
-        fs.unlinkSync(req.file.path);
-        
         res.json({ 
           success: true,
           objectPath: supabaseResult.path,
@@ -469,13 +475,18 @@ export async function registerRoutes(
           mimetype: req.file.mimetype
         });
       } else {
-        // Fallback to local storage
-        const filePath = `/uploads/${req.file.filename}`;
+        // Fallback: write buffer to disk
+        const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+        const ext = path.extname(req.file.originalname);
+        const filename = `${uniqueSuffix}${ext}`;
+        const diskPath = path.join(uploadsDir, filename);
+        fs.writeFileSync(diskPath, req.file.buffer);
+        const urlPath = `/uploads/${filename}`;
         res.json({ 
           success: true,
-          objectPath: filePath,
-          url: filePath,
-          filename: req.file.filename,
+          objectPath: urlPath,
+          url: urlPath,
+          filename,
           originalName: req.file.originalname,
           size: req.file.size,
           mimetype: req.file.mimetype
