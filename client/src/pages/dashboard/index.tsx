@@ -844,8 +844,8 @@ export default function DashboardHome() {
             {recentTransactions.length === 0 ? (
               <p className="text-center py-8 text-muted-foreground">Aucune transaction</p>
             ) : (
-              <div className="overflow-x-auto overflow-y-auto max-h-[320px]">
-                <div className="min-w-[420px] px-6">
+              <div>
+                <div className="px-4">
                   {recentTransactions.map((tx) => {
                     const isIncoming = ["deposit", "transfer_in", "payment_link"].includes(tx.type);
                     const typeLabels: Record<string, string> = {
