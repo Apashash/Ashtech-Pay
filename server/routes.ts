@@ -117,32 +117,34 @@ declare module "express-session" {
   }
 }
 
-// Token-based auth store (for when cookies don't work in iframes)
-const authTokens = new Map<string, { userId: string; expiresAt: Date }>();
+const TOKEN_EXPIRY_MS = 5 * 24 * 60 * 60 * 1000;
 
-function generateAuthToken(): string {
-  return crypto.randomBytes(32).toString('hex');
+function getTokenSecret(): string {
+  return process.env.SESSION_SECRET || "ashtech-fallback-secret-key";
 }
 
 function storeAuthToken(userId: string): string {
-  const token = generateAuthToken();
-  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-  authTokens.set(token, { userId, expiresAt });
-  return token;
+  const payload = `${userId}.${Date.now()}`;
+  const sig = crypto.createHmac("sha256", getTokenSecret()).update(payload).digest("hex");
+  return Buffer.from(`${payload}.${sig}`).toString("base64url");
 }
 
 function getUserIdFromToken(token: string): string | null {
-  const data = authTokens.get(token);
-  if (!data) return null;
-  if (data.expiresAt < new Date()) {
-    authTokens.delete(token);
+  try {
+    const decoded = Buffer.from(token, "base64url").toString();
+    const parts = decoded.split(".");
+    if (parts.length !== 3) return null;
+    const [userId, timestamp, sig] = parts;
+    const expectedSig = crypto.createHmac("sha256", getTokenSecret()).update(`${userId}.${timestamp}`).digest("hex");
+    if (sig !== expectedSig) return null;
+    if (Date.now() - parseInt(timestamp) > TOKEN_EXPIRY_MS) return null;
+    return userId;
+  } catch {
     return null;
   }
-  return data.userId;
 }
 
-function removeAuthToken(token: string): void {
-  authTokens.delete(token);
+function removeAuthToken(_token: string): void {
 }
 
 // Extended request to include userId from token
