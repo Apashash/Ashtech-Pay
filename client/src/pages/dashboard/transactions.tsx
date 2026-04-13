@@ -7,13 +7,16 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import type { Transaction, User, SupportedCurrency } from "@shared/schema";
-import { TrendingUp, TrendingDown, Clock, CheckCircle, XCircle, Loader2, Link2, ArrowLeftRight, User as UserIcon, MapPin, CreditCard, FileText, Smartphone, Code2, Globe, RefreshCw, Copy, Pencil } from "lucide-react";
+import { TrendingUp, TrendingDown, Clock, CheckCircle, XCircle, Loader2, Link2, ArrowLeftRight, User as UserIcon, MapPin, CreditCard, FileText, Smartphone, Code2, Globe, RefreshCw, Copy, Pencil, ChevronLeft, ChevronRight } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+
 import { formatCurrency } from "@/lib/currency";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+
+const PAGE_SIZE = 25;
 
 interface TransactionDetails extends Transaction {
   paymentLink?: { title: string; slug: string } | null;
@@ -41,6 +44,7 @@ export default function TransactionsPage() {
   const { toast } = useToast();
   const [statusFilter, setStatusFilter] = useState("all");
   const [currencyFilter, setCurrencyFilter] = useState("all");
+  const [page, setPage] = useState(1);
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
 
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
@@ -79,9 +83,14 @@ export default function TransactionsPage() {
     return true;
   }), [transactions, statusFilter, currencyFilter]);
 
+  const totalPages = Math.max(1, Math.ceil(filteredTransactions.length / PAGE_SIZE));
+  const paginatedTransactions = filteredTransactions.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  useEffect(() => { setPage(1); }, [statusFilter, currencyFilter]);
+
   const groupedByDate = useMemo(() => {
     const groups: Record<string, Transaction[]> = {};
-    for (const tx of filteredTransactions) {
+    for (const tx of paginatedTransactions) {
       const dateKey = tx.createdAt
         ? format(new Date(tx.createdAt), "yyyy-MM-dd")
         : "inconnu";
@@ -89,7 +98,7 @@ export default function TransactionsPage() {
       groups[dateKey].push(tx);
     }
     return Object.entries(groups).sort(([a], [b]) => b.localeCompare(a));
-  }, [filteredTransactions]);
+  }, [paginatedTransactions]);
 
   const formatDateLabel = (dateKey: string) => {
     try {
@@ -291,6 +300,38 @@ export default function TransactionsPage() {
                     </div>
                   </div>
                 ))}
+
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between pt-2">
+                    <span className="text-sm text-muted-foreground">
+                      Page {page} sur {totalPages}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 gap-1 text-sm"
+                        onClick={() => { setPage(p => Math.max(1, p - 1)); window.scrollTo(0, 0); }}
+                        disabled={page === 1}
+                        data-testid="button-page-prev"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                        Précédent
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 gap-1 text-sm"
+                        onClick={() => { setPage(p => Math.min(totalPages, p + 1)); window.scrollTo(0, 0); }}
+                        disabled={page === totalPages}
+                        data-testid="button-page-next"
+                      >
+                        Suivant
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>
