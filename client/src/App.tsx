@@ -11,6 +11,7 @@ import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
 import DashboardHome from "@/pages/dashboard/index";
 import TransactionsPage from "@/pages/dashboard/transactions";
+import TransactionDetailPage from "@/pages/dashboard/transaction-detail";
 import PaymentLinksPage from "@/pages/dashboard/links";
 import LinkDetailPage from "@/pages/dashboard/link-detail";
 import LinkCreatePage from "@/pages/dashboard/link-create";
@@ -89,6 +90,7 @@ function Router() {
       <Route path="/reset-password" component={ResetPasswordPage} />
       <Route path="/dashboard" component={DashboardHome} />
       <Route path="/dashboard/transactions" component={TransactionsPage} />
+      <Route path="/dashboard/transactions/:id" component={TransactionDetailPage} />
       <Route path="/dashboard/links" component={PaymentLinksPage} />
       <Route path="/dashboard/links/new" component={LinkCreatePage} />
       <Route path="/dashboard/links/:id/edit" component={LinkEditPage} />

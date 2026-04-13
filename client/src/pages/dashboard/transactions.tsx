@@ -4,25 +4,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Separator } from "@/components/ui/separator";
 import type { Transaction, User, SupportedCurrency } from "@shared/schema";
-import { TrendingUp, TrendingDown, Clock, CheckCircle, XCircle, Loader2, Link2, ArrowLeftRight, User as UserIcon, MapPin, CreditCard, FileText, Smartphone, Code2, Globe, RefreshCw, Copy, Pencil, ChevronLeft, ChevronRight } from "lucide-react";
+import { TrendingUp, TrendingDown, Clock, Loader2, Link2, ArrowLeftRight, Smartphone, Code2, Globe, RefreshCw, Pencil, ChevronLeft, ChevronRight } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { useState, useMemo, useEffect } from "react";
 
 import { formatCurrency } from "@/lib/currency";
-import { queryClient } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
+import { useLocation } from "wouter";
 
 const PAGE_SIZE = 25;
-
-interface TransactionDetails extends Transaction {
-  paymentLink?: { title: string; slug: string } | null;
-  paymentIntent?: { payerCountry: string; payerPhone: string } | null;
-  recipient?: { fullName: string; username: string } | null;
-}
 
 const typeLabels: Record<string, string> = {
   deposit: "Dépôt Mobile Money",
@@ -33,19 +24,11 @@ const typeLabels: Record<string, string> = {
   conversion: "Conversion",
 };
 
-const paymentMethodLabels: Record<string, string> = {
-  mobile_money: "Mobile Money",
-  crypto: "Crypto",
-  bank_transfer: "Virement bancaire",
-  card: "Carte bancaire",
-};
-
 export default function TransactionsPage() {
-  const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [statusFilter, setStatusFilter] = useState("all");
   const [currencyFilter, setCurrencyFilter] = useState("all");
   const [page, setPage] = useState(1);
-  const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
 
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const { data: transactions = [], isLoading, refetch, isFetching } = useQuery<Transaction[]>({
@@ -53,11 +36,6 @@ export default function TransactionsPage() {
   });
   const { data: wallets = [] } = useQuery<any[]>({ queryKey: ["/api/wallets"] });
   const { data: depositConfig } = useQuery<any>({ queryKey: ["/api/public/deposit-config"] });
-
-  const { data: txDetails } = useQuery<TransactionDetails>({
-    queryKey: selectedTx ? [`/api/transactions/${selectedTx.id}`] : ["__disabled__"],
-    enabled: !!selectedTx?.id,
-  });
 
   const operatorMap = useMemo<Record<string, string>>(() => {
     const map: Record<string, string> = {};
@@ -264,7 +242,7 @@ export default function TransactionsPage() {
                           <div
                             key={tx.id}
                             className="flex items-center gap-3 px-3 py-3 bg-card cursor-pointer active:bg-muted/50 transition-colors"
-                            onClick={() => setSelectedTx(tx)}
+                            onClick={() => setLocation(`/dashboard/transactions/${tx.id}`)}
                             data-testid={`transaction-item-${tx.id}`}
                           >
                             <div className={`w-9 h-9 shrink-0 rounded-full flex items-center justify-center ${getTxIconBg(tx)}`}>
@@ -338,154 +316,6 @@ export default function TransactionsPage() {
         </Card>
       </div>
 
-      <Dialog open={!!selectedTx} onOpenChange={(open) => !open && setSelectedTx(null)}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Détails de la transaction</DialogTitle>
-          </DialogHeader>
-
-          {tx && (
-            <div className="space-y-4">
-              <div className="text-center p-4 bg-muted/50 rounded-lg">
-                <p className="text-sm text-muted-foreground mb-1">{typeLabels[tx.type] || tx.type}</p>
-                <p className={`text-3xl font-bold ${getAmountColor(tx)}`}>
-                  {getAmountPrefix(tx)}{formatCurrency(tx.amount, (tx.currency || user?.preferredCurrency || "XAF") as SupportedCurrency)}
-                </p>
-                <div className="mt-2">{getStatusBadge(tx.status)}</div>
-              </div>
-
-              <Separator />
-
-              <div className="space-y-3">
-                {tx.reference && (
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <FileText className="w-4 h-4" />
-                      <span className="text-sm">Référence</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <code className="text-xs font-mono bg-muted px-2 py-1 rounded truncate max-w-[160px]">{tx.reference}</code>
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => copyReference(tx.reference!)} data-testid="button-copy-reference">
-                        <Copy className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                {(tx.feeAmount && parseFloat(tx.feeAmount) > 0) && (
-                  <div className="rounded-lg border bg-muted/30 p-3 space-y-2" data-testid="fee-details">
-                    <p className="text-sm font-semibold text-muted-foreground">Détails des frais</p>
-                    {tx.totalAmount && (
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Montant brut</span>
-                        <span className="font-medium">{formatCurrency(tx.totalAmount, (tx.currency || user?.preferredCurrency || "XAF") as SupportedCurrency)}</span>
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Frais</span>
-                      <span className="font-medium text-red-500">-{formatCurrency(tx.feeAmount, (tx.currency || user?.preferredCurrency || "XAF") as SupportedCurrency)}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm border-t pt-2">
-                      <span className="font-medium">Montant net</span>
-                      <span className="font-bold">{formatCurrency(tx.amount, (tx.currency || user?.preferredCurrency || "XAF") as SupportedCurrency)}</span>
-                    </div>
-                  </div>
-                )}
-
-                {tx.paymentMethod && (
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <CreditCard className="w-4 h-4" />
-                      <span className="text-sm">Méthode</span>
-                    </div>
-                    <span className="text-sm font-medium">{paymentMethodLabels[tx.paymentMethod] || tx.paymentMethod}</span>
-                  </div>
-                )}
-
-                {tx.operatorId && operatorMap[tx.operatorId] && (
-                  <div className="flex items-center justify-between" data-testid="detail-operator">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Smartphone className="w-4 h-4" />
-                      <span className="text-sm">Opérateur</span>
-                    </div>
-                    <span className="text-sm font-medium">{operatorMap[tx.operatorId]}</span>
-                  </div>
-                )}
-
-                {tx.createdAt && (
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Clock className="w-4 h-4" />
-                      <span className="text-sm">Date</span>
-                    </div>
-                    <span className="text-sm font-medium">{format(new Date(tx.createdAt), "d MMMM yyyy à HH:mm", { locale: fr })}</span>
-                  </div>
-                )}
-
-                {tx.description && (
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-center gap-2 text-muted-foreground shrink-0">
-                      <FileText className="w-4 h-4" />
-                      <span className="text-sm">Description</span>
-                    </div>
-                    <span className="text-sm font-medium text-right">{tx.description}</span>
-                  </div>
-                )}
-              </div>
-
-              {tx.type === "payment_link" && user?.country && (
-                <>
-                  <Separator />
-                  <div className="space-y-3">
-                    <p className="text-sm font-semibold text-muted-foreground">Propriétaire du compte</p>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <UserIcon className="w-4 h-4" />
-                        <span className="text-sm">Nom</span>
-                      </div>
-                      <span className="text-sm font-medium">{user.fullName}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <MapPin className="w-4 h-4" />
-                        <span className="text-sm">Pays</span>
-                      </div>
-                      <span className="text-sm font-medium" data-testid="text-owner-country">{user.country}</span>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {(txDetails?.paymentIntent?.payerPhone || txDetails?.paymentIntent?.payerCountry) && (
-                <>
-                  <Separator />
-                  <div className="space-y-3">
-                    <p className="text-sm font-semibold text-muted-foreground">Informations payeur</p>
-                    {txDetails.paymentIntent.payerCountry && (
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <MapPin className="w-4 h-4" />
-                          <span className="text-sm">Pays</span>
-                        </div>
-                        <span className="text-sm font-medium">{txDetails.paymentIntent.payerCountry}</span>
-                      </div>
-                    )}
-                    {txDetails.paymentIntent.payerPhone && (
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <Smartphone className="w-4 h-4" />
-                          <span className="text-sm">Téléphone</span>
-                        </div>
-                        <span className="text-sm font-medium">{txDetails.paymentIntent.payerPhone}</span>
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </DashboardLayout>
   );
 }
