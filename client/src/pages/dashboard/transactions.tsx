@@ -116,14 +116,6 @@ export default function TransactionsPage() {
     return null;
   };
 
-  const copyReference = (ref: string) => {
-    navigator.clipboard.writeText(ref);
-    toast({ title: "Référence copiée" });
-  };
-
-  const tx = txDetails || selectedTx;
-  const isIncomingSelected = tx ? ["deposit", "transfer_in", "payment_link"].includes(tx.type) : false;
-
   const getTxIcon = (tx: Transaction) => {
     const isIncoming = ["deposit", "transfer_in", "payment_link"].includes(tx.type);
     const isConversion = tx.type === "conversion";
