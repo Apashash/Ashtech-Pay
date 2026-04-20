@@ -12,7 +12,7 @@ import { getImageSrc } from "@/lib/image";
 import { 
   Loader2, CheckCircle, XCircle, Shield, 
   Smartphone, CreditCard, ExternalLink, FileText, AlertTriangle, Globe,
-  User, Mail, Phone, Hash
+  User, Mail, Phone, Hash, Clock
 } from "lucide-react";
 import { getOperatorLogo } from "@/lib/operator-logos";
 import { useState, useMemo, useEffect, useRef } from "react";
@@ -509,19 +509,58 @@ export default function PaymentPage() {
               )}
               {paymentStatus === "pending" && !otpRequired && !waveUrl && (
                 <>
-                  <Loader2 className="w-16 h-16 text-primary mx-auto animate-spin" />
-                  <h2 className="text-xl font-bold text-foreground">Validation en cours...</h2>
-                  <p className="text-muted-foreground">Validez le paiement sur votre téléphone via USSD.</p>
-                  <p className="text-sm text-muted-foreground bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
-                    ⏱ Le traitement peut prendre <strong>1 à 5 minutes</strong>. La page se mettra à jour automatiquement dès confirmation.
-                  </p>
-                  <p className="text-sm text-muted-foreground bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg px-3 py-2">
-                    ✅ Si vous avez déjà confirmé le paiement sur votre téléphone, vous pouvez quitter cette page. Le reste du traitement se fait en arrière-plan.
-                  </p>
-                  <div className="bg-muted/30 rounded-lg p-4">
-                    <p className="text-sm text-muted-foreground mb-1">Temps restant</p>
-                    <p className="text-2xl font-mono font-bold text-red-500">{formatCountdown(countdown)}</p>
+                  {/* Operator logo with halo */}
+                  <div className="relative flex items-center justify-center pt-2">
+                    <div className="absolute w-24 h-24 rounded-full bg-blue-500/10 animate-pulse" />
+                    <div className="w-16 h-16 rounded-full overflow-hidden bg-white border-2 border-border shadow-md flex items-center justify-center relative z-10">
+                      {selectedOperatorData && getOperatorLogo(selectedOperatorData.name) ? (
+                        <img src={getOperatorLogo(selectedOperatorData.name)!} alt={selectedOperatorData.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <Smartphone className="w-7 h-7 text-muted-foreground" />
+                      )}
+                    </div>
                   </div>
+
+                  {/* Title */}
+                  <div>
+                    <h2 className="text-xl font-bold text-foreground">Transaction en cours</h2>
+                    <p className="text-muted-foreground text-sm mt-1">Veuillez confirmer le paiement sur votre téléphone.</p>
+                  </div>
+
+                  {/* Amount card */}
+                  <div className="w-full bg-blue-50 dark:bg-blue-950/20 rounded-xl border border-blue-200/50 dark:border-blue-800/30 px-6 py-4 text-center">
+                    <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                      {formatAmount(displayAmount, (displayCurrency as string) || "XAF")}
+                    </p>
+                    {selectedOperatorData && (
+                      <p className="text-sm text-muted-foreground mt-1">via {selectedOperatorData.name}</p>
+                    )}
+                  </div>
+
+                  {/* Animated dots */}
+                  <div className="flex items-center justify-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: "0ms" }} />
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: "150ms" }} />
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: "300ms" }} />
+                  </div>
+
+                  {/* Countdown progress bar */}
+                  <div className="w-full space-y-1.5">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="flex items-center gap-1.5 text-muted-foreground">
+                        <Clock className="w-3.5 h-3.5" /> Expiration
+                      </span>
+                      <span className="font-semibold tabular-nums text-foreground">{countdown}s</span>
+                    </div>
+                    <div className="h-2 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-blue-500 rounded-full transition-all duration-1000 ease-linear"
+                        style={{ width: `${(countdown / (8 * 60)) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-muted-foreground">La transaction sera automatiquement annulée si non confirmée.</p>
                 </>
               )}
               {paymentStatus === "success" && (
