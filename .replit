@@ -51,3 +51,7 @@ APP_URL = "https://f96a6379-f341-4944-8f17-8e8a1d157003-00-rvqhzlc1jkpk.worf.rep
 
 [userenv.production]
 APP_URL = "https://ashtechpay.top"
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 20000
