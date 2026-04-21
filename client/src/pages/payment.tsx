@@ -387,35 +387,62 @@ export default function PaymentPage() {
       <div className="min-h-screen bg-[#f0f4f8] flex flex-col">
         <div className="flex-1 flex items-center justify-center p-4">
           <Card className="w-full max-w-md">
-            <CardContent className="pt-8 pb-8 space-y-6 text-center">
-              <div className="w-16 h-16 mx-auto rounded-full bg-orange-500/10 flex items-center justify-center">
-                <Hash className="w-8 h-8 text-orange-500" />
+            <CardContent className="pt-8 pb-8 space-y-5 text-center">
+              {/* Operator logo with amber halo */}
+              <div className="relative flex items-center justify-center pt-2">
+                <div className="absolute w-24 h-24 rounded-full bg-amber-500/10 animate-pulse" />
+                <div className="w-16 h-16 rounded-full overflow-hidden bg-white border-2 border-border shadow-md flex items-center justify-center relative z-10">
+                  {selectedOperatorData && getOperatorLogo(selectedOperatorData.name) ? (
+                    <img src={getOperatorLogo(selectedOperatorData.name)!} alt={selectedOperatorData.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <Phone className="w-7 h-7 text-amber-500" />
+                  )}
+                </div>
               </div>
-              <div className="space-y-2">
+
+              {/* Title */}
+              <div>
                 <h2 className="text-xl font-bold text-foreground">Code OTP requis</h2>
-                <p className="text-muted-foreground text-sm leading-relaxed">
-                  Composez{" "}
-                  <span className="font-mono font-bold text-orange-500 bg-orange-100 dark:bg-orange-950/40 px-2 py-0.5 rounded">
-                    {selectedOperatorData?.otpUssdCode || "#144*82#"}
-                  </span>{" "}
-                  sur votre téléphone pour obtenir votre code OTP, puis saisissez-le ci-dessous.
+                <p className="text-muted-foreground text-sm mt-1">
+                  Composez le code USSD sur votre téléphone pour obtenir votre OTP.
                 </p>
               </div>
-              <div className="space-y-4 max-w-xs mx-auto w-full">
+
+              {/* Amount card */}
+              <div className="w-full bg-amber-50 dark:bg-amber-950/20 rounded-xl border border-amber-200/50 dark:border-amber-800/30 px-6 py-4 text-center">
+                <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
+                  {formatAmount(displayAmount, (displayCurrency as string) || "XAF")}
+                </p>
+                {selectedOperatorData && (
+                  <p className="text-sm text-muted-foreground mt-1">via {selectedOperatorData.name}</p>
+                )}
+              </div>
+
+              {/* USSD code */}
+              {(selectedOperatorData?.otpUssdCode || "#144*82#") && (
+                <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded-xl px-5 py-4 inline-block mx-auto">
+                  <p className="text-2xl font-mono font-bold tracking-widest text-amber-700 dark:text-amber-300">
+                    {selectedOperatorData?.otpUssdCode || "#144*82#"}
+                  </p>
+                </div>
+              )}
+
+              {/* OTP input + buttons */}
+              <div className="space-y-3 max-w-xs mx-auto w-full">
                 <input
                   type="text"
                   inputMode="numeric"
                   pattern="[0-9]*"
                   maxLength={8}
-                  placeholder="Code OTP"
+                  placeholder="Ex : 123456"
                   value={pixpayOtpCode}
                   onChange={e => setPixpayOtpCode(e.target.value.replace(/\D/g, ""))}
-                  className="w-full text-center text-2xl font-mono tracking-widest h-14 border-2 border-orange-400 rounded-md bg-background text-foreground px-3 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                  className="w-full text-center text-2xl font-mono tracking-widest h-14 border-2 border-amber-400 rounded-md bg-background text-foreground px-3 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
                   data-testid="input-pixpay-otp-step"
                   autoFocus
                 />
                 <Button
-                  className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+                  className="w-full"
                   size="lg"
                   onClick={() => payMutation.mutate()}
                   disabled={pixpayOtpCode.length < 4 || payMutation.isPending}
@@ -435,7 +462,15 @@ export default function PaymentPage() {
                   ← Retour au formulaire
                 </Button>
               </div>
-              <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground pt-2">
+
+              {/* Animated dots */}
+              <div className="flex items-center justify-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-bounce" style={{ animationDelay: "0ms" }} />
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-bounce" style={{ animationDelay: "150ms" }} />
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-bounce" style={{ animationDelay: "300ms" }} />
+              </div>
+
+              <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
                 <Shield className="w-4 h-4" />
                 <span>Paiement sécurisé — Vos données sont protégées</span>
               </div>
@@ -455,29 +490,48 @@ export default function PaymentPage() {
             <CardContent className="pt-6 space-y-4">
               {paymentStatus === "pending" && otpRequired && (
                 <>
-                  <div className="w-16 h-16 mx-auto rounded-full bg-amber-500/10 flex items-center justify-center">
-                    <Loader2 className="w-8 h-8 text-amber-500" />
+                  {/* Operator logo with amber halo */}
+                  <div className="relative flex items-center justify-center pt-2">
+                    <div className="absolute w-24 h-24 rounded-full bg-amber-500/10 animate-pulse" />
+                    <div className="w-16 h-16 rounded-full overflow-hidden bg-white border-2 border-border shadow-md flex items-center justify-center relative z-10">
+                      {selectedOperatorData && getOperatorLogo(selectedOperatorData.name) ? (
+                        <img src={getOperatorLogo(selectedOperatorData.name)!} alt={selectedOperatorData.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <Phone className="w-7 h-7 text-amber-500" />
+                      )}
+                    </div>
                   </div>
-                  <h2 className="text-xl font-bold text-foreground">Code OTP requis</h2>
-                  {otpType === "ussd" && otpUssdCode ? (
-                    <div className="space-y-2">
-                      <p className="text-muted-foreground text-sm">
-                        Pour obtenir votre code OTP, composez le code USSD suivant sur votre téléphone :
-                      </p>
-                      <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded-xl px-5 py-4 inline-block mx-auto">
-                        <p className="text-2xl font-mono font-bold tracking-widest text-amber-700 dark:text-amber-300" data-testid="text-ussd-code">
-                          {otpUssdCode}
-                        </p>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        Après avoir composé ce code, entrez ci-dessous le code OTP reçu.
+
+                  {/* Title */}
+                  <div>
+                    <h2 className="text-xl font-bold text-foreground">Code OTP requis</h2>
+                    <p className="text-muted-foreground text-sm mt-1">
+                      {otpType === "ussd" && otpUssdCode
+                        ? "Composez le code USSD ci-dessous pour obtenir votre OTP."
+                        : "Un code OTP a été envoyé par SMS sur votre téléphone."}
+                    </p>
+                  </div>
+
+                  {/* Amount card */}
+                  <div className="w-full bg-amber-50 dark:bg-amber-950/20 rounded-xl border border-amber-200/50 dark:border-amber-800/30 px-6 py-4 text-center">
+                    <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
+                      {formatAmount(displayAmount, (displayCurrency as string) || "XAF")}
+                    </p>
+                    {selectedOperatorData && (
+                      <p className="text-sm text-muted-foreground mt-1">via {selectedOperatorData.name}</p>
+                    )}
+                  </div>
+
+                  {/* USSD code block if applicable */}
+                  {otpType === "ussd" && otpUssdCode && (
+                    <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded-xl px-5 py-4 inline-block mx-auto">
+                      <p className="text-2xl font-mono font-bold tracking-widest text-amber-700 dark:text-amber-300" data-testid="text-ussd-code">
+                        {otpUssdCode}
                       </p>
                     </div>
-                  ) : (
-                    <p className="text-muted-foreground text-sm">
-                      Un code OTP a été envoyé par SMS sur votre téléphone. Entrez-le ci-dessous pour confirmer le paiement.
-                    </p>
                   )}
+
+                  {/* OTP input + button */}
                   <div className="space-y-3 w-full max-w-xs mx-auto">
                     <input
                       type="text"
@@ -487,7 +541,7 @@ export default function PaymentPage() {
                       placeholder="Ex : 123456"
                       value={otpCode}
                       onChange={e => setOtpCode(e.target.value.replace(/\D/g, ""))}
-                      className="w-full text-center text-2xl font-mono tracking-widest h-14 border rounded-md bg-background text-foreground px-3 focus:outline-none focus:ring-2 focus:ring-primary"
+                      className="w-full text-center text-2xl font-mono tracking-widest h-14 border rounded-md bg-background text-foreground px-3 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
                       data-testid="input-otp-code"
                       autoFocus
                     />
@@ -501,17 +555,65 @@ export default function PaymentPage() {
                       {otpMutation.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Validation…</> : "Confirmer le code OTP"}
                     </Button>
                   </div>
+
+                  {/* Animated dots */}
+                  <div className="flex items-center justify-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-bounce" style={{ animationDelay: "0ms" }} />
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-bounce" style={{ animationDelay: "150ms" }} />
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-bounce" style={{ animationDelay: "300ms" }} />
+                  </div>
+
+                  {/* Countdown progress bar */}
+                  <div className="w-full space-y-1.5">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="flex items-center gap-1.5 text-muted-foreground">
+                        <Clock className="w-3.5 h-3.5" /> Expiration
+                      </span>
+                      <span className="font-semibold tabular-nums text-foreground">{countdown}s</span>
+                    </div>
+                    <div className="h-2 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-amber-500 rounded-full transition-all duration-1000 ease-linear"
+                        style={{ width: `${(countdown / (8 * 60)) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {paymentReference && (
+                    <div className="w-full bg-muted/30 rounded-lg p-3 text-left">
+                      <p className="text-xs text-muted-foreground">Référence de transaction</p>
+                      <p className="font-mono text-sm font-bold text-foreground mt-0.5">{paymentReference}</p>
+                    </div>
+                  )}
                 </>
               )}
               {paymentStatus === "pending" && !otpRequired && waveUrl && (
                 <>
-                  <div className="w-20 h-20 mx-auto rounded-full bg-blue-500/10 flex items-center justify-center">
-                    <img src="https://wave.com/favicon.ico" alt="Wave" className="w-10 h-10 rounded-full" onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }} />
+                  {/* Wave logo with blue halo */}
+                  <div className="relative flex items-center justify-center pt-2">
+                    <div className="absolute w-24 h-24 rounded-full bg-blue-500/10 animate-pulse" />
+                    <div className="w-16 h-16 rounded-full overflow-hidden bg-white border-2 border-border shadow-md flex items-center justify-center relative z-10">
+                      <img src="https://wave.com/favicon.ico" alt="Wave" className="w-10 h-10 rounded-full" onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }} />
+                    </div>
                   </div>
-                  <h2 className="text-xl font-bold text-foreground">Paiement Wave</h2>
-                  <p className="text-muted-foreground text-sm">
-                    Cliquez sur le bouton ci-dessous pour ouvrir l'interface Wave et confirmer votre paiement. Revenez ensuite sur cette page.
-                  </p>
+
+                  {/* Title */}
+                  <div>
+                    <h2 className="text-xl font-bold text-foreground">Paiement Wave</h2>
+                    <p className="text-muted-foreground text-sm mt-1">
+                      Ouvrez Wave et confirmez votre paiement, puis revenez sur cette page.
+                    </p>
+                  </div>
+
+                  {/* Amount card */}
+                  <div className="w-full bg-blue-50 dark:bg-blue-950/20 rounded-xl border border-blue-200/50 dark:border-blue-800/30 px-6 py-4 text-center">
+                    <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                      {formatAmount(displayAmount, (displayCurrency as string) || "XAF")}
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-1">via Wave</p>
+                  </div>
+
+                  {/* Wave URL button */}
                   <a
                     href={waveUrl}
                     target="_blank"
@@ -523,10 +625,38 @@ export default function PaymentPage() {
                       Payer avec Wave
                     </Button>
                   </a>
-                  <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                    <span>Attente de confirmation Wave…</span>
+
+                  {/* Animated dots */}
+                  <div className="flex items-center justify-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: "0ms" }} />
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: "150ms" }} />
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: "300ms" }} />
                   </div>
+
+                  {/* Countdown progress bar */}
+                  <div className="w-full space-y-1.5">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="flex items-center gap-1.5 text-muted-foreground">
+                        <Clock className="w-3.5 h-3.5" /> Expiration
+                      </span>
+                      <span className="font-semibold tabular-nums text-foreground">{countdown}s</span>
+                    </div>
+                    <div className="h-2 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-blue-500 rounded-full transition-all duration-1000 ease-linear"
+                        style={{ width: `${(countdown / (8 * 60)) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-muted-foreground">La transaction sera automatiquement annulée si non confirmée.</p>
+
+                  {paymentReference && (
+                    <div className="w-full bg-muted/30 rounded-lg p-3 text-left">
+                      <p className="text-xs text-muted-foreground">Référence de transaction</p>
+                      <p className="font-mono text-sm font-bold text-foreground mt-0.5">{paymentReference}</p>
+                    </div>
+                  )}
                 </>
               )}
               {paymentStatus === "pending" && !otpRequired && !waveUrl && (

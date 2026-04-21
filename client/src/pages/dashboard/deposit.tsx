@@ -457,31 +457,48 @@ export default function DepositPage() {
                 <div className="text-center py-8 space-y-4">
                   {paymentStatus === "pending" && otpRequired && (
                     <>
-                      <div className="w-16 h-16 mx-auto rounded-full bg-amber-500/10 flex items-center justify-center">
-                        <Phone className="w-8 h-8 text-amber-500" />
+                      {/* Operator logo with amber halo */}
+                      <div className="relative flex items-center justify-center pt-2">
+                        <div className="absolute w-24 h-24 rounded-full bg-amber-500/10 animate-pulse" />
+                        <div className="w-16 h-16 rounded-full overflow-hidden bg-white border-2 border-border shadow-md flex items-center justify-center relative z-10">
+                          {selectedOperator && getOperatorLogo(selectedOperator.name) ? (
+                            <img src={getOperatorLogo(selectedOperator.name)!} alt={selectedOperator.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <Phone className="w-7 h-7 text-amber-500" />
+                          )}
+                        </div>
                       </div>
+
+                      {/* Title */}
                       <div>
-                        <h3 className="text-xl font-semibold text-foreground mb-2">Code OTP requis</h3>
-                        {otpType === "ussd" && otpUssdCode ? (
-                          <div className="space-y-3">
-                            <p className="text-muted-foreground text-sm">
-                              Pour obtenir votre code OTP, composez le code USSD suivant sur votre téléphone :
-                            </p>
-                            <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded-xl px-5 py-4 inline-block mx-auto">
-                              <p className="text-2xl font-mono font-bold tracking-widest text-amber-700 dark:text-amber-300" data-testid="text-ussd-code">
-                                {otpUssdCode}
-                              </p>
-                            </div>
-                            <p className="text-sm text-muted-foreground">
-                              Après avoir composé ce code, entrez ci-dessous le code OTP reçu.
-                            </p>
-                          </div>
-                        ) : (
-                          <p className="text-muted-foreground text-sm">
-                            Un code OTP a été envoyé par SMS sur votre téléphone. Entrez-le ci-dessous pour valider votre paiement.
-                          </p>
+                        <h3 className="text-xl font-bold text-foreground">Code OTP requis</h3>
+                        <p className="text-muted-foreground text-sm mt-1">
+                          {otpType === "ussd" && otpUssdCode
+                            ? "Composez le code USSD ci-dessous pour obtenir votre OTP."
+                            : "Un code OTP a été envoyé par SMS sur votre téléphone."}
+                        </p>
+                      </div>
+
+                      {/* Amount card */}
+                      <div className="w-full bg-amber-50 dark:bg-amber-950/20 rounded-xl border border-amber-200/50 dark:border-amber-800/30 px-6 py-4 text-center">
+                        <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
+                          {watchedAmount ? formatCurrency(parseFloat(watchedAmount), (user?.preferredCurrency || "XAF") as SupportedCurrency) : "—"}
+                        </p>
+                        {selectedOperator && (
+                          <p className="text-sm text-muted-foreground mt-1">via {selectedOperator.name}</p>
                         )}
                       </div>
+
+                      {/* USSD code block if applicable */}
+                      {otpType === "ussd" && otpUssdCode && (
+                        <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded-xl px-5 py-4 inline-block mx-auto">
+                          <p className="text-2xl font-mono font-bold tracking-widest text-amber-700 dark:text-amber-300" data-testid="text-ussd-code">
+                            {otpUssdCode}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* OTP input + button */}
                       <div className="space-y-3 w-full max-w-xs mx-auto">
                         <Input
                           type="text"
@@ -505,10 +522,34 @@ export default function DepositPage() {
                           {otpMutation.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Validation…</> : "Confirmer le code OTP"}
                         </Button>
                       </div>
+
+                      {/* Animated dots */}
+                      <div className="flex items-center justify-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-bounce" style={{ animationDelay: "0ms" }} />
+                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-bounce" style={{ animationDelay: "150ms" }} />
+                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-bounce" style={{ animationDelay: "300ms" }} />
+                      </div>
+
+                      {/* Countdown progress bar */}
+                      <div className="w-full space-y-1.5">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="flex items-center gap-1.5 text-muted-foreground">
+                            <Clock className="w-3.5 h-3.5" /> Expiration
+                          </span>
+                          <span className="font-semibold tabular-nums text-foreground">{countdown}s</span>
+                        </div>
+                        <div className="h-2 bg-muted rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-amber-500 rounded-full transition-all duration-1000 ease-linear"
+                            style={{ width: `${(countdown / (8 * 60)) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+
                       {depositReference && (
-                        <div className="bg-muted/30 rounded-lg p-3">
-                          <p className="text-sm text-muted-foreground">Référence</p>
-                          <p className="font-mono font-bold text-foreground">{depositReference}</p>
+                        <div className="w-full bg-muted/30 rounded-lg p-3 text-left">
+                          <p className="text-xs text-muted-foreground">Référence</p>
+                          <p className="font-mono text-sm font-bold text-foreground mt-0.5">{depositReference}</p>
                         </div>
                       )}
                     </>
@@ -516,15 +557,31 @@ export default function DepositPage() {
 
                   {paymentStatus === "pending" && !otpRequired && waveUrl && (
                     <>
-                      <div className="w-20 h-20 mx-auto rounded-full bg-blue-500/10 flex items-center justify-center">
-                        <img src="https://wave.com/favicon.ico" alt="Wave" className="w-10 h-10 rounded-full" onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }} />
+                      {/* Wave logo with blue halo */}
+                      <div className="relative flex items-center justify-center pt-2">
+                        <div className="absolute w-24 h-24 rounded-full bg-blue-500/10 animate-pulse" />
+                        <div className="w-16 h-16 rounded-full overflow-hidden bg-white border-2 border-border shadow-md flex items-center justify-center relative z-10">
+                          <img src="https://wave.com/favicon.ico" alt="Wave" className="w-10 h-10 rounded-full" onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }} />
+                        </div>
                       </div>
+
+                      {/* Title */}
                       <div>
-                        <h3 className="text-xl font-semibold text-foreground mb-2">Paiement Wave</h3>
-                        <p className="text-muted-foreground text-sm">
-                          Cliquez sur le bouton ci-dessous pour ouvrir l'interface Wave et confirmer votre paiement. Revenez ensuite sur cette page.
+                        <h3 className="text-xl font-bold text-foreground">Paiement Wave</h3>
+                        <p className="text-muted-foreground text-sm mt-1">
+                          Ouvrez Wave et confirmez votre paiement, puis revenez sur cette page.
                         </p>
                       </div>
+
+                      {/* Amount card */}
+                      <div className="w-full bg-blue-50 dark:bg-blue-950/20 rounded-xl border border-blue-200/50 dark:border-blue-800/30 px-6 py-4 text-center">
+                        <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                          {watchedAmount ? formatCurrency(parseFloat(watchedAmount), (user?.preferredCurrency || "XAF") as SupportedCurrency) : "—"}
+                        </p>
+                        <p className="text-sm text-muted-foreground mt-1">via Wave</p>
+                      </div>
+
+                      {/* Wave URL button */}
                       <a
                         href={waveUrl}
                         target="_blank"
@@ -536,14 +593,36 @@ export default function DepositPage() {
                           Payer avec Wave
                         </Button>
                       </a>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                        <span>Attente de confirmation Wave…</span>
+
+                      {/* Animated dots */}
+                      <div className="flex items-center justify-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: "0ms" }} />
+                        <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: "150ms" }} />
+                        <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: "300ms" }} />
                       </div>
+
+                      {/* Countdown progress bar */}
+                      <div className="w-full space-y-1.5">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="flex items-center gap-1.5 text-muted-foreground">
+                            <Clock className="w-3.5 h-3.5" /> Expiration
+                          </span>
+                          <span className="font-semibold tabular-nums text-foreground">{countdown}s</span>
+                        </div>
+                        <div className="h-2 bg-muted rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-blue-500 rounded-full transition-all duration-1000 ease-linear"
+                            style={{ width: `${(countdown / (8 * 60)) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      <p className="text-xs text-muted-foreground">La transaction sera automatiquement annulée si non confirmée.</p>
+
                       {depositReference && (
-                        <div className="bg-muted/30 rounded-lg p-3">
-                          <p className="text-sm text-muted-foreground">Référence</p>
-                          <p className="font-mono font-bold text-foreground">{depositReference}</p>
+                        <div className="w-full bg-muted/30 rounded-lg p-3 text-left">
+                          <p className="text-xs text-muted-foreground">Référence</p>
+                          <p className="font-mono text-sm font-bold text-foreground mt-0.5">{depositReference}</p>
                         </div>
                       )}
                       <Button
