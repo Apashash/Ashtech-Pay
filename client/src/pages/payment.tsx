@@ -12,7 +12,7 @@ import { getImageSrc } from "@/lib/image";
 import { 
   Loader2, CheckCircle, XCircle, Shield, 
   Smartphone, CreditCard, ExternalLink, FileText, AlertTriangle, Globe,
-  User, Mail, Phone, Hash, Clock
+  User, Mail, Phone, Hash, Clock, Copy
 } from "lucide-react";
 import { getOperatorLogo } from "@/lib/operator-logos";
 import { useState, useMemo, useEffect, useRef } from "react";
@@ -582,7 +582,17 @@ export default function PaymentPage() {
                   {paymentReference && (
                     <div className="w-full bg-muted/30 rounded-lg p-3 text-left">
                       <p className="text-xs text-muted-foreground">Référence de transaction</p>
-                      <p className="font-mono text-sm font-bold text-foreground mt-0.5">{paymentReference}</p>
+                      <div className="flex items-center justify-between gap-2 mt-0.5">
+                        <p className="font-mono text-sm font-bold text-foreground">{paymentReference}</p>
+                        <button
+                          onClick={() => { navigator.clipboard.writeText(paymentReference).then(() => toast({ title: "Référence copiée" })).catch(() => toast({ title: "Échec de la copie", variant: "destructive" })); }}
+                          className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+                          aria-label="Copier la référence"
+                          data-testid="button-copy-reference"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   )}
                 </>
@@ -654,7 +664,17 @@ export default function PaymentPage() {
                   {paymentReference && (
                     <div className="w-full bg-muted/30 rounded-lg p-3 text-left">
                       <p className="text-xs text-muted-foreground">Référence de transaction</p>
-                      <p className="font-mono text-sm font-bold text-foreground mt-0.5">{paymentReference}</p>
+                      <div className="flex items-center justify-between gap-2 mt-0.5">
+                        <p className="font-mono text-sm font-bold text-foreground">{paymentReference}</p>
+                        <button
+                          onClick={() => { navigator.clipboard.writeText(paymentReference).then(() => toast({ title: "Référence copiée" })).catch(() => toast({ title: "Échec de la copie", variant: "destructive" })); }}
+                          className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+                          aria-label="Copier la référence"
+                          data-testid="button-copy-reference"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   )}
                 </>
@@ -717,7 +737,17 @@ export default function PaymentPage() {
                   {paymentReference && (
                     <div className="w-full bg-muted/30 rounded-lg p-3 text-left">
                       <p className="text-xs text-muted-foreground">Référence de transaction</p>
-                      <p className="font-mono text-sm font-bold text-foreground mt-0.5">{paymentReference}</p>
+                      <div className="flex items-center justify-between gap-2 mt-0.5">
+                        <p className="font-mono text-sm font-bold text-foreground">{paymentReference}</p>
+                        <button
+                          onClick={() => { navigator.clipboard.writeText(paymentReference).then(() => toast({ title: "Référence copiée" })).catch(() => toast({ title: "Échec de la copie", variant: "destructive" })); }}
+                          className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+                          aria-label="Copier la référence"
+                          data-testid="button-copy-reference"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   )}
                 </>
@@ -745,7 +775,17 @@ export default function PaymentPage() {
                   {paymentReference && (
                     <div className="w-full bg-muted/30 rounded-lg p-3 text-left">
                       <p className="text-xs text-muted-foreground">Référence de transaction</p>
-                      <p className="font-mono text-sm font-bold text-foreground mt-0.5">{paymentReference}</p>
+                      <div className="flex items-center justify-between gap-2 mt-0.5">
+                        <p className="font-mono text-sm font-bold text-foreground">{paymentReference}</p>
+                        <button
+                          onClick={() => { navigator.clipboard.writeText(paymentReference).then(() => toast({ title: "Référence copiée" })).catch(() => toast({ title: "Échec de la copie", variant: "destructive" })); }}
+                          className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+                          aria-label="Copier la référence"
+                          data-testid="button-copy-reference"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   )}
                   <Button
@@ -776,7 +816,17 @@ export default function PaymentPage() {
                   {paymentReference && (
                     <div className="w-full bg-muted/30 rounded-lg p-3 text-left">
                       <p className="text-xs text-muted-foreground">Référence de transaction</p>
-                      <p className="font-mono text-sm font-bold text-foreground mt-0.5">{paymentReference}</p>
+                      <div className="flex items-center justify-between gap-2 mt-0.5">
+                        <p className="font-mono text-sm font-bold text-foreground">{paymentReference}</p>
+                        <button
+                          onClick={() => { navigator.clipboard.writeText(paymentReference).then(() => toast({ title: "Référence copiée" })).catch(() => toast({ title: "Échec de la copie", variant: "destructive" })); }}
+                          className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+                          aria-label="Copier la référence"
+                          data-testid="button-copy-reference"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   )}
                   <Button

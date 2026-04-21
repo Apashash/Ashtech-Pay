@@ -10,7 +10,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest, queryClient, getAuthHeaders } from "@/lib/queryClient";
 import type { User, SupportedCurrency } from "@shared/schema";
-import { CreditCard, Loader2, Globe, AlertCircle, Phone, CheckCircle, XCircle, ArrowLeft, ArrowRight, Smartphone, ExternalLink, Hash, Clock } from "lucide-react";
+import { CreditCard, Loader2, Globe, AlertCircle, Phone, CheckCircle, XCircle, ArrowLeft, ArrowRight, Smartphone, ExternalLink, Hash, Clock, Copy } from "lucide-react";
 import { getOperatorLogo } from "@/lib/operator-logos";
 import { z } from "zod";
 import { useState, useEffect, useMemo, useRef } from "react";
@@ -549,7 +549,17 @@ export default function DepositPage() {
                       {depositReference && (
                         <div className="w-full bg-muted/30 rounded-lg p-3 text-left">
                           <p className="text-xs text-muted-foreground">Référence</p>
-                          <p className="font-mono text-sm font-bold text-foreground mt-0.5">{depositReference}</p>
+                          <div className="flex items-center justify-between gap-2 mt-0.5">
+                            <p className="font-mono text-sm font-bold text-foreground">{depositReference}</p>
+                            <button
+                              onClick={() => { navigator.clipboard.writeText(depositReference).then(() => toast({ title: "Référence copiée" })).catch(() => toast({ title: "Échec de la copie", variant: "destructive" })); }}
+                              className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+                              aria-label="Copier la référence"
+                              data-testid="button-copy-reference"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                       )}
                     </>
@@ -622,7 +632,17 @@ export default function DepositPage() {
                       {depositReference && (
                         <div className="w-full bg-muted/30 rounded-lg p-3 text-left">
                           <p className="text-xs text-muted-foreground">Référence</p>
-                          <p className="font-mono text-sm font-bold text-foreground mt-0.5">{depositReference}</p>
+                          <div className="flex items-center justify-between gap-2 mt-0.5">
+                            <p className="font-mono text-sm font-bold text-foreground">{depositReference}</p>
+                            <button
+                              onClick={() => { navigator.clipboard.writeText(depositReference).then(() => toast({ title: "Référence copiée" })).catch(() => toast({ title: "Échec de la copie", variant: "destructive" })); }}
+                              className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+                              aria-label="Copier la référence"
+                              data-testid="button-copy-reference"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                       )}
                       <Button
@@ -697,7 +717,17 @@ export default function DepositPage() {
                       {depositReference && (
                         <div className="bg-muted/30 rounded-lg p-3 w-full text-left">
                           <p className="text-xs text-muted-foreground">Référence</p>
-                          <p className="font-mono text-sm font-bold text-foreground">{depositReference}</p>
+                          <div className="flex items-center justify-between gap-2 mt-0.5">
+                            <p className="font-mono text-sm font-bold text-foreground">{depositReference}</p>
+                            <button
+                              onClick={() => { navigator.clipboard.writeText(depositReference).then(() => toast({ title: "Référence copiée" })).catch(() => toast({ title: "Échec de la copie", variant: "destructive" })); }}
+                              className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+                              aria-label="Copier la référence"
+                              data-testid="button-copy-reference"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                       )}
                       <Button
@@ -740,7 +770,17 @@ export default function DepositPage() {
                       {depositReference && (
                         <div className="w-full bg-muted/30 rounded-lg p-3 text-left">
                           <p className="text-xs text-muted-foreground">Référence de transaction</p>
-                          <p className="font-mono text-sm font-bold text-foreground mt-0.5">{depositReference}</p>
+                          <div className="flex items-center justify-between gap-2 mt-0.5">
+                            <p className="font-mono text-sm font-bold text-foreground">{depositReference}</p>
+                            <button
+                              onClick={() => { navigator.clipboard.writeText(depositReference).then(() => toast({ title: "Référence copiée" })).catch(() => toast({ title: "Échec de la copie", variant: "destructive" })); }}
+                              className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+                              aria-label="Copier la référence"
+                              data-testid="button-copy-reference"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                       )}
                       <Button
@@ -772,7 +812,17 @@ export default function DepositPage() {
                       {depositReference && (
                         <div className="w-full bg-muted/30 rounded-lg p-3 text-left">
                           <p className="text-xs text-muted-foreground">Référence de transaction</p>
-                          <p className="font-mono text-sm font-bold text-foreground mt-0.5">{depositReference}</p>
+                          <div className="flex items-center justify-between gap-2 mt-0.5">
+                            <p className="font-mono text-sm font-bold text-foreground">{depositReference}</p>
+                            <button
+                              onClick={() => { navigator.clipboard.writeText(depositReference).then(() => toast({ title: "Référence copiée" })).catch(() => toast({ title: "Échec de la copie", variant: "destructive" })); }}
+                              className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+                              aria-label="Copier la référence"
+                              data-testid="button-copy-reference"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                       )}
                       <Button
