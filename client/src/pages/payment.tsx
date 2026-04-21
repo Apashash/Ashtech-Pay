@@ -67,6 +67,7 @@ export default function PaymentPage() {
   const [displayCurrency, setDisplayCurrency] = useState<SupportedCurrency | "">("");
   
   const [paymentStatus, setPaymentStatus] = useState<"pending" | "success" | "failed">("pending");
+  const [failureReason, setFailureReason] = useState<string>("");
   const [countdown, setCountdown] = useState(8 * 60);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
@@ -149,6 +150,25 @@ export default function PaymentPage() {
   const operators = useMemo(() => selectedCountryData?.operators || [], [selectedCountryData]);
   const selectedOperatorData = useMemo(() => operators.find(o => o.id === operator), [operators, operator]);
 
+  const parseFailureMessage = (description?: string): string => {
+    if (!description) return "";
+    const errorCodeMap: Record<string, string> = {
+      "OPERATOR_PAYER_INSUFF_BALANCE": "Solde insuffisant sur votre compte Mobile Money.",
+      "OPERATOR_PAYER_NOT_FOUND": "Numéro de téléphone introuvable chez l'opérateur.",
+      "OPERATOR_PAYER_LIMIT_REACHED": "Limite de transaction Mobile Money atteinte.",
+      "OPERATOR_PAYER_ACCOUNT_BLOCKED": "Compte Mobile Money bloqué. Contactez votre opérateur.",
+      "OPERATOR_TRANSACTION_DECLINED": "Transaction refusée par l'opérateur.",
+      "OPERATOR_TIMEOUT": "Délai d'attente dépassé. Réessayez.",
+      "PAYER_CANCELED": "Vous avez annulé la transaction.",
+      "INVALID_PHONE": "Numéro de téléphone invalide pour cet opérateur.",
+    };
+    try {
+      const match = description.match(/errorMessage["\s:]+([A-Z_]+)/);
+      if (match && match[1] && errorCodeMap[match[1]]) return errorCodeMap[match[1]];
+    } catch {}
+    return "";
+  };
+
   const startPaymentPolling = (ref: string) => {
     setCountdown(8 * 60);
     if (countdownRef.current) clearInterval(countdownRef.current);
@@ -175,6 +195,7 @@ export default function PaymentPage() {
             if (countdownRef.current) clearInterval(countdownRef.current);
             if (pollingRef.current) clearInterval(pollingRef.current);
           } else if (statusData.status === "failed") {
+            setFailureReason(parseFailureMessage(statusData.description));
             setPaymentStatus("failed");
             if (countdownRef.current) clearInterval(countdownRef.current);
             if (pollingRef.current) clearInterval(pollingRef.current);
@@ -326,6 +347,7 @@ export default function PaymentPage() {
     setPaymentComplete(false);
     setPaymentStatus("pending");
     setPaymentReference("");
+    setFailureReason("");
     setFullName(""); setEmail(""); setPhone(""); setCustomAmount("");
     setCountry(""); setOperator(""); setPaymentMethod("");
     setErrors({});
@@ -561,30 +583,83 @@ export default function PaymentPage() {
                   </div>
 
                   <p className="text-xs text-muted-foreground">La transaction sera automatiquement annulée si non confirmée.</p>
+
+                  {paymentReference && (
+                    <div className="w-full bg-muted/30 rounded-lg p-3 text-left">
+                      <p className="text-xs text-muted-foreground">Référence de transaction</p>
+                      <p className="font-mono text-sm font-bold text-foreground mt-0.5">{paymentReference}</p>
+                    </div>
+                  )}
                 </>
               )}
               {paymentStatus === "success" && (
                 <>
-                  <CheckCircle className="w-16 h-16 text-green-500 mx-auto" />
-                  <h2 className="text-xl font-bold text-foreground">Paiement confirmé</h2>
-                  <p className="text-muted-foreground">Votre paiement a été reçu avec succès. Merci pour votre confiance !</p>
+                  {/* Animated success icon */}
+                  <div className="relative flex items-center justify-center">
+                    <div className="absolute w-28 h-28 rounded-full bg-green-500/10 animate-ping" style={{ animationDuration: "2s" }} />
+                    <div className="absolute w-24 h-24 rounded-full bg-green-500/15" />
+                    <div className="w-20 h-20 rounded-full bg-green-500/20 flex items-center justify-center relative z-10">
+                      <CheckCircle className="w-10 h-10 text-green-500" />
+                    </div>
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-foreground">Paiement confirmé</h2>
+                    <p className="text-muted-foreground text-sm mt-1">Votre paiement a été reçu avec succès. Merci pour votre confiance !</p>
+                  </div>
+                  {/* Amount summary */}
+                  <div className="w-full bg-green-50 dark:bg-green-950/20 rounded-xl border border-green-200/50 dark:border-green-800/30 px-6 py-4 text-center">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Montant reçu</p>
+                    <p className="text-2xl font-bold text-green-600 dark:text-green-400">{formatAmount(displayAmount, selectedDisplayCurrency)}</p>
+                  </div>
+                  {/* Reference */}
+                  {paymentReference && (
+                    <div className="w-full bg-muted/30 rounded-lg p-3 text-left">
+                      <p className="text-xs text-muted-foreground">Référence de transaction</p>
+                      <p className="font-mono text-sm font-bold text-foreground mt-0.5">{paymentReference}</p>
+                    </div>
+                  )}
+                  <Button
+                    size="lg"
+                    className="w-full"
+                    onClick={resetForm}
+                    data-testid="button-new-payment"
+                  >
+                    Retour à l'accueil
+                  </Button>
                 </>
               )}
               {paymentStatus === "failed" && (
                 <>
-                  <XCircle className="w-16 h-16 text-red-500 mx-auto" />
-                  <h2 className="text-xl font-bold text-foreground">Paiement échoué</h2>
-                  <p className="text-muted-foreground">Le paiement n'a pas pu être confirmé. Veuillez réessayer.</p>
-                  <Button onClick={resetForm} className="mt-4">Réessayer</Button>
+                  {/* Failure icon */}
+                  <div className="relative flex items-center justify-center">
+                    <div className="absolute w-24 h-24 rounded-full bg-red-500/10" />
+                    <div className="w-20 h-20 rounded-full bg-red-500/15 flex items-center justify-center relative z-10">
+                      <XCircle className="w-10 h-10 text-red-500" />
+                    </div>
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-foreground">Paiement échoué</h2>
+                    <p className="text-muted-foreground text-sm mt-1">
+                      {failureReason || "Le paiement n'a pas pu être confirmé. Veuillez réessayer."}
+                    </p>
+                  </div>
+                  {paymentReference && (
+                    <div className="w-full bg-muted/30 rounded-lg p-3 text-left">
+                      <p className="text-xs text-muted-foreground">Référence de transaction</p>
+                      <p className="font-mono text-sm font-bold text-foreground mt-0.5">{paymentReference}</p>
+                    </div>
+                  )}
+                  <Button
+                    onClick={resetForm}
+                    size="lg"
+                    className="w-full bg-red-500 hover:bg-red-600 text-white font-semibold"
+                    data-testid="button-retry-payment"
+                  >
+                    <XCircle className="w-4 h-4 mr-2" />
+                    Réessayer
+                  </Button>
                 </>
               )}
-              {paymentReference && (
-                <div className="bg-muted/30 rounded-lg p-3">
-                  <p className="text-sm text-muted-foreground">Référence</p>
-                  <p className="font-mono font-bold text-foreground">{paymentReference}</p>
-                </div>
-              )}
-              <div className="text-2xl font-bold text-primary">{formatAmount(displayAmount, selectedDisplayCurrency)}</div>
               {paymentLink?.hasPdfDelivery && paymentStatus === "success" && (
                 <div className="pt-4 border-t">
                   {pdfDownloadUrl ? (

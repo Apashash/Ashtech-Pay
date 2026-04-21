@@ -637,23 +637,36 @@ export default function DepositPage() {
                   
                   {paymentStatus === "success" && (
                     <>
-                      <div className="w-16 h-16 mx-auto rounded-full bg-green-500/10 flex items-center justify-center">
-                        <CheckCircle className="w-8 h-8 text-green-500" />
+                      {/* Animated success icon */}
+                      <div className="relative flex items-center justify-center">
+                        <div className="absolute w-28 h-28 rounded-full bg-green-500/10 animate-ping" style={{ animationDuration: "2s" }} />
+                        <div className="absolute w-24 h-24 rounded-full bg-green-500/15" />
+                        <div className="w-20 h-20 rounded-full bg-green-500/20 flex items-center justify-center relative z-10">
+                          <CheckCircle className="w-10 h-10 text-green-500" />
+                        </div>
                       </div>
                       <div>
-                        <h3 className="text-xl font-semibold text-foreground mb-2">Dépôt confirmé</h3>
-                        <p className="text-muted-foreground">
+                        <h3 className="text-xl font-bold text-foreground">Dépôt confirmé</h3>
+                        <p className="text-muted-foreground text-sm mt-1">
                           Votre dépôt a été crédité sur votre compte avec succès !
                         </p>
                       </div>
+                      {/* Amount summary */}
+                      <div className="w-full bg-green-50 dark:bg-green-950/20 rounded-xl border border-green-200/50 dark:border-green-800/30 px-6 py-4 text-center">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Montant reçu</p>
+                        <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                          {watchedAmount ? formatCurrency(parseFloat(watchedAmount), (user?.preferredCurrency || "XAF") as SupportedCurrency) : "—"}
+                        </p>
+                      </div>
                       {depositReference && (
-                        <div className="bg-muted/30 rounded-lg p-3">
-                          <p className="text-sm text-muted-foreground">Référence</p>
-                          <p className="font-mono font-bold text-foreground">{depositReference}</p>
+                        <div className="w-full bg-muted/30 rounded-lg p-3 text-left">
+                          <p className="text-xs text-muted-foreground">Référence de transaction</p>
+                          <p className="font-mono text-sm font-bold text-foreground mt-0.5">{depositReference}</p>
                         </div>
                       )}
-                      <Button 
-                        variant="outline" 
+                      <Button
+                        size="lg"
+                        className="w-full"
                         onClick={resetWizard}
                         data-testid="button-new-deposit"
                       >
@@ -664,22 +677,28 @@ export default function DepositPage() {
                   
                   {paymentStatus === "failed" && (
                     <>
-                      <div className="w-16 h-16 mx-auto rounded-full bg-red-500/10 flex items-center justify-center">
-                        <XCircle className="w-8 h-8 text-red-500" />
+                      {/* Failure icon */}
+                      <div className="relative flex items-center justify-center">
+                        <div className="absolute w-24 h-24 rounded-full bg-red-500/10" />
+                        <div className="w-20 h-20 rounded-full bg-red-500/15 flex items-center justify-center relative z-10">
+                          <XCircle className="w-10 h-10 text-red-500" />
+                        </div>
                       </div>
                       <div>
-                        <h3 className="text-xl font-semibold text-foreground mb-2">Dépôt échoué</h3>
-                        <p className="text-muted-foreground">
+                        <h3 className="text-xl font-bold text-foreground">Dépôt échoué</h3>
+                        <p className="text-muted-foreground text-sm mt-1">
                           {failureReason || "Le paiement n'a pas pu être confirmé. Veuillez réessayer."}
                         </p>
                       </div>
                       {depositReference && (
-                        <div className="bg-muted/30 rounded-lg p-3">
-                          <p className="text-sm text-muted-foreground">Référence</p>
-                          <p className="font-mono font-bold text-foreground">{depositReference}</p>
+                        <div className="w-full bg-muted/30 rounded-lg p-3 text-left">
+                          <p className="text-xs text-muted-foreground">Référence de transaction</p>
+                          <p className="font-mono text-sm font-bold text-foreground mt-0.5">{depositReference}</p>
                         </div>
                       )}
-                      <Button 
+                      <Button
+                        size="lg"
+                        className="w-full bg-red-500 hover:bg-red-600 text-white font-semibold"
                         onClick={() => {
                           setShowValidationMessage(false);
                           setPaymentStatus("pending");
@@ -687,6 +706,7 @@ export default function DepositPage() {
                         }}
                         data-testid="button-retry-deposit"
                       >
+                        <XCircle className="w-4 h-4 mr-2" />
                         Réessayer
                       </Button>
                     </>
