@@ -564,7 +564,7 @@ export default function DepositPage() {
                     <>
                       {/* Operator logo with halo */}
                       <div className="relative flex items-center justify-center pt-2">
-                        <div className="absolute w-24 h-24 rounded-full bg-blue-500/10 animate-pulse" />
+                        <div className="absolute w-24 h-24 rounded-full bg-blue-500/20 animate-ping" />
                         <div className="w-16 h-16 rounded-full overflow-hidden bg-white border-2 border-border shadow-md flex items-center justify-center relative z-10">
                           {selectedOperator && getOperatorLogo(selectedOperator.name) ? (
                             <img src={getOperatorLogo(selectedOperator.name)!} alt={selectedOperator.name} className="w-full h-full object-cover" />
