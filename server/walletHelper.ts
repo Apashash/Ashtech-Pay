@@ -141,14 +141,27 @@ export async function cleanupEmptyWallets(userId: string): Promise<void> {
   }
 }
 
+// West African CFA family (BCEAO) — XOF and all country-specific variants are 1:1
+const XOF_FAMILY = new Set(["XOF", "XOFC", "XOFF", "XOFN", "XOFB", "XOFT", "XOFS", "XOFM"]);
+// Central African CFA family (BEAC) — XAF and country-specific variants are 1:1
+const XAF_FAMILY = new Set(["XAF", "XAFC", "XAFG"]);
+
+function sameCfaFamily(a: string, b: string): boolean {
+  if (XOF_FAMILY.has(a) && XOF_FAMILY.has(b)) return true;
+  if (XAF_FAMILY.has(a) && XAF_FAMILY.has(b)) return true;
+  return false;
+}
+
 // Smart wallet crediting:
 //
 // Rules (in order):
 //  1. Exact match with preferred currency → credit primary balance
-//  2. Different currency → credit secondary wallet in the EXACT currency
-//     (e.g. XOFB stays XOFB, XOFT stays XOFT — merchant converts as needed)
+//  2. Same CFA family (e.g. XOF ↔ XOFT, XAF ↔ XAFC) → credit primary balance
+//     (avoids dual wallets for the same de-facto currency)
+//  3. Different currency → credit secondary wallet in the EXACT currency
 //
-// After any secondary wallet operation, zero-balance wallets are cleaned up.
+// After any operation, zero-balance secondary wallets in the same CFA family
+// as the preferred currency are cleaned up so the user only sees one CFA wallet.
 export async function creditUserWallet(
   userId: string,
   amount: number,
@@ -164,16 +177,39 @@ export async function creditUserWallet(
 
   const preferredCurrency = user.preferredCurrency || "XAF";
 
-  // Rule 1: Exact match → credit primary balance
-  if (paymentCurrency === preferredCurrency) {
+  // Rule 1 + 2: Exact match OR same CFA family → credit primary balance
+  if (paymentCurrency === preferredCurrency || sameCfaFamily(paymentCurrency, preferredCurrency)) {
     await storage.updateUserBalance(userId, amount);
+    // Remove any leftover same-family secondary wallets (e.g. an empty XOF wallet for a Togo/XOFT user)
+    await cleanupSameFamilyWallets(userId, preferredCurrency);
     return;
   }
 
-  // Rule 2: Different currency → credit secondary wallet in exact currency code
+  // Rule 3: Different currency → credit secondary wallet in exact currency code
   console.log(`[walletHelper] Crediting secondary wallet ${paymentCurrency} for user ${userId}: +${amount}`);
   await storage.upsertWallet(userId, paymentCurrency, amount);
 
   // Cleanup any zero-balance secondary wallets
   await cleanupEmptyWallets(userId);
+}
+
+// Remove any secondary wallets that belong to the same CFA family as the user's
+// preferred currency. Their balance (if any) is migrated to the primary balance.
+export async function cleanupSameFamilyWallets(userId: string, preferredCurrency: string): Promise<void> {
+  try {
+    const wallets = await storage.getUserWallets(userId);
+    for (const w of wallets) {
+      if (!w.currency || w.currency === preferredCurrency) continue;
+      if (sameCfaFamily(w.currency, preferredCurrency)) {
+        const bal = parseFloat(w.balance || "0");
+        if (bal > 0) {
+          await storage.updateUserBalance(userId, bal);
+          console.log(`[walletHelper] Migrated ${bal} ${w.currency} → primary ${preferredCurrency} for user ${userId}`);
+        }
+        await storage.deleteWallet(w.id);
+      }
+    }
+  } catch (err) {
+    console.error("[walletHelper] cleanupSameFamilyWallets error:", err);
+  }
 }

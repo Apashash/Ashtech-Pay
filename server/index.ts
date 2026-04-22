@@ -121,6 +121,45 @@ app.use((req, res, next) => {
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone)`);
     console.log("[Migration] Performance indexes ready");
+
+    // ── One-time data fix: normalize Togo users to XOFT and merge duplicate
+    //    same-family CFA wallets into the primary balance ──────────────────
+    try {
+      // 1. Fix Togo users whose preferred_currency was set to plain XOF
+      const fixTogo = await db.execute(sql`
+        UPDATE users SET preferred_currency = 'XOFT'
+        WHERE country = 'Togo' AND preferred_currency = 'XOF'
+        RETURNING id
+      `);
+      const fixedTogo = (fixTogo as any).rowCount ?? (fixTogo as any).rows?.length ?? 0;
+      if (fixedTogo > 0) console.log(`[Migration] Normalized ${fixedTogo} Togo user(s) preferred_currency XOF → XOFT`);
+
+      // 2. Merge same-family CFA secondary wallets into primary balance, then delete them
+      const xofFamily = ['XOF','XOFC','XOFF','XOFN','XOFB','XOFT','XOFS','XOFM'];
+      const xafFamily = ['XAF','XAFC','XAFG'];
+      const dupRows: any = await db.execute(sql`
+        SELECT w.id AS wallet_id, w.user_id, w.currency, w.balance, u.preferred_currency
+        FROM wallets w JOIN users u ON u.id = w.user_id
+        WHERE w.currency <> u.preferred_currency
+          AND (
+            (u.preferred_currency = ANY(${xofFamily}) AND w.currency = ANY(${xofFamily}))
+            OR
+            (u.preferred_currency = ANY(${xafFamily}) AND w.currency = ANY(${xafFamily}))
+          )
+      `);
+      const dupList = (dupRows as any).rows || [];
+      for (const row of dupList) {
+        const bal = parseFloat(row.balance || "0");
+        if (bal > 0) {
+          await db.execute(sql`UPDATE users SET balance = balance + ${bal} WHERE id = ${row.user_id}`);
+        }
+        await db.execute(sql`DELETE FROM wallets WHERE id = ${row.wallet_id}`);
+        console.log(`[Migration] Merged wallet ${row.currency} (${bal}) → primary ${row.preferred_currency} for user ${row.user_id}`);
+      }
+      if (dupList.length > 0) console.log(`[Migration] Merged ${dupList.length} duplicate same-family CFA wallet(s)`);
+    } catch (mErr: any) {
+      console.warn("[Migration] CFA wallet cleanup warning:", mErr?.message);
+    }
   } catch (err: any) {
     if (!err?.message?.includes("already exists")) {
       console.warn("[Migration] warning:", err?.message);
