@@ -169,6 +169,23 @@ export default function PaymentPage() {
     return "";
   };
 
+  const redirectAfterPayment = (outcome: "success" | "failed", ref: string) => {
+    const link: any = paymentLink;
+    const target = outcome === "success" ? link?.successUrl : link?.cancelUrl;
+    if (!target || typeof target !== "string") return;
+    try {
+      const url = new URL(target);
+      url.searchParams.set("reference", ref);
+      url.searchParams.set("status", outcome === "success" ? "success" : "failed");
+      const finalUrl = url.toString();
+      setTimeout(() => { window.location.href = finalUrl; }, 3000);
+    } catch (_) {
+      const sep = target.includes("?") ? "&" : "?";
+      const finalUrl = `${target}${sep}reference=${encodeURIComponent(ref)}&status=${outcome === "success" ? "success" : "failed"}`;
+      setTimeout(() => { window.location.href = finalUrl; }, 3000);
+    }
+  };
+
   const startPaymentPolling = (ref: string) => {
     setCountdown(8 * 60);
     if (countdownRef.current) clearInterval(countdownRef.current);
@@ -194,11 +211,13 @@ export default function PaymentPage() {
             setPaymentStatus("success");
             if (countdownRef.current) clearInterval(countdownRef.current);
             if (pollingRef.current) clearInterval(pollingRef.current);
+            redirectAfterPayment("success", ref);
           } else if (statusData.status === "failed") {
             setFailureReason(parseFailureMessage(statusData.description));
             setPaymentStatus("failed");
             if (countdownRef.current) clearInterval(countdownRef.current);
             if (pollingRef.current) clearInterval(pollingRef.current);
+            redirectAfterPayment("failed", ref);
           }
         }
       } catch (e) { console.error("Error checking payment status:", e); }

@@ -3497,7 +3497,24 @@ export async function registerRoutes(
       
       // Increment clicks
       await storage.incrementPaymentLinkClicks(link.slug);
-      
+
+      // Resolve redirect URLs:
+      //  - Hosted Page links (slug starts with "hp-") → use merchant's hosted_page_configs (successUrl / cancelUrl)
+      //  - Standard payment links → fall back to link.redirectUrl for both success & cancel
+      let successUrl: string | null = null;
+      let cancelUrl: string | null = null;
+      const isHostedPageLink = typeof link.slug === "string" && link.slug.startsWith("hp-");
+      if (isHostedPageLink) {
+        try {
+          const cfg = await storage.getHostedPageConfig(link.userId);
+          successUrl = (cfg as any)?.successUrl || null;
+          cancelUrl = (cfg as any)?.cancelUrl || null;
+        } catch (_) {}
+      } else {
+        successUrl = (link as any).redirectUrl || null;
+        cancelUrl = (link as any).redirectUrl || null;
+      }
+
       res.json({
         link: {
           id: link.id,
@@ -3509,6 +3526,9 @@ export async function registerRoutes(
           imagePath: link.imagePath,
           hasPdfDelivery: link.hasPdfDelivery,
           allowedCountries: link.allowedCountries || null,
+          successUrl,
+          cancelUrl,
+          isHostedPage: isHostedPageLink,
         },
         merchant: {
           fullName: user?.fullName,
