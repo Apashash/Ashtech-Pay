@@ -134,17 +134,21 @@ app.use((req, res, next) => {
       const fixedTogo = (fixTogo as any).rowCount ?? (fixTogo as any).rows?.length ?? 0;
       if (fixedTogo > 0) console.log(`[Migration] Normalized ${fixedTogo} Togo user(s) preferred_currency XOF → XOFT`);
 
-      // 2. Merge same-family CFA secondary wallets into primary balance, then delete them
+      // 2. Merge same-family CFA secondary wallets (and any wallet whose currency
+      //    equals the user's preferred currency — these are pure duplicates) into
+      //    the primary balance, then delete them.
       const dupRows: any = await db.execute(sql`
         SELECT w.id AS wallet_id, w.user_id, w.currency, w.balance, u.preferred_currency
         FROM wallets w JOIN users u ON u.id = w.user_id
-        WHERE w.currency <> u.preferred_currency
-          AND (
-            (u.preferred_currency IN ('XOF','XOFC','XOFF','XOFN','XOFB','XOFT','XOFS','XOFM')
-              AND w.currency IN ('XOF','XOFC','XOFF','XOFN','XOFB','XOFT','XOFS','XOFM'))
-            OR
-            (u.preferred_currency IN ('XAF','XAFC','XAFG')
-              AND w.currency IN ('XAF','XAFC','XAFG'))
+        WHERE
+          w.currency = u.preferred_currency
+          OR (
+            u.preferred_currency IN ('XOF','XOFC','XOFF','XOFN','XOFB','XOFT','XOFS','XOFM')
+            AND w.currency IN ('XOF','XOFC','XOFF','XOFN','XOFB','XOFT','XOFS','XOFM')
+          )
+          OR (
+            u.preferred_currency IN ('XAF','XAFC','XAFG')
+            AND w.currency IN ('XAF','XAFC','XAFG')
           )
       `);
       const dupList = (dupRows as any).rows || [];
