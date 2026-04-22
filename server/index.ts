@@ -135,16 +135,16 @@ app.use((req, res, next) => {
       if (fixedTogo > 0) console.log(`[Migration] Normalized ${fixedTogo} Togo user(s) preferred_currency XOF → XOFT`);
 
       // 2. Merge same-family CFA secondary wallets into primary balance, then delete them
-      const xofFamily = ['XOF','XOFC','XOFF','XOFN','XOFB','XOFT','XOFS','XOFM'];
-      const xafFamily = ['XAF','XAFC','XAFG'];
       const dupRows: any = await db.execute(sql`
         SELECT w.id AS wallet_id, w.user_id, w.currency, w.balance, u.preferred_currency
         FROM wallets w JOIN users u ON u.id = w.user_id
         WHERE w.currency <> u.preferred_currency
           AND (
-            (u.preferred_currency = ANY(${xofFamily}) AND w.currency = ANY(${xofFamily}))
+            (u.preferred_currency IN ('XOF','XOFC','XOFF','XOFN','XOFB','XOFT','XOFS','XOFM')
+              AND w.currency IN ('XOF','XOFC','XOFF','XOFN','XOFB','XOFT','XOFS','XOFM'))
             OR
-            (u.preferred_currency = ANY(${xafFamily}) AND w.currency = ANY(${xafFamily}))
+            (u.preferred_currency IN ('XAF','XAFC','XAFG')
+              AND w.currency IN ('XAF','XAFC','XAFG'))
           )
       `);
       const dupList = (dupRows as any).rows || [];

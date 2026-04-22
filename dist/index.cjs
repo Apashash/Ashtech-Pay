@@ -1136,16 +1136,18 @@ data: ${JSON.stringify(r)}
         UPDATE users SET preferred_currency = 'XOFT'
         WHERE country = 'Togo' AND preferred_currency = 'XOF'
         RETURNING id
-      `),r=e.rowCount??e.rows?.length??0;r>0&&console.log(`[Migration] Normalized ${r} Togo user(s) preferred_currency XOF \u2192 XOFT`);let n=["XOF","XOFC","XOFF","XOFN","XOFB","XOFT","XOFS","XOFM"],i=["XAF","XAFC","XAFG"],s=(await k.execute(T`
+      `),r=e.rowCount??e.rows?.length??0;r>0&&console.log(`[Migration] Normalized ${r} Togo user(s) preferred_currency XOF \u2192 XOFT`);let i=(await k.execute(T`
         SELECT w.id AS wallet_id, w.user_id, w.currency, w.balance, u.preferred_currency
         FROM wallets w JOIN users u ON u.id = w.user_id
         WHERE w.currency <> u.preferred_currency
           AND (
-            (u.preferred_currency = ANY(${n}) AND w.currency = ANY(${n}))
+            (u.preferred_currency IN ('XOF','XOFC','XOFF','XOFN','XOFB','XOFT','XOFS','XOFM')
+              AND w.currency IN ('XOF','XOFC','XOFF','XOFN','XOFB','XOFT','XOFS','XOFM'))
             OR
-            (u.preferred_currency = ANY(${i}) AND w.currency = ANY(${i}))
+            (u.preferred_currency IN ('XAF','XAFC','XAFG')
+              AND w.currency IN ('XAF','XAFC','XAFG'))
           )
-      `)).rows||[];for(let o of s){let u=parseFloat(o.balance||"0");u>0&&await k.execute(T`UPDATE users SET balance = balance + ${u} WHERE id = ${o.user_id}`),await k.execute(T`DELETE FROM wallets WHERE id = ${o.wallet_id}`),console.log(`[Migration] Merged wallet ${o.currency} (${u}) \u2192 primary ${o.preferred_currency} for user ${o.user_id}`)}s.length>0&&console.log(`[Migration] Merged ${s.length} duplicate same-family CFA wallet(s)`)}catch(e){console.warn("[Migration] CFA wallet cleanup warning:",e?.message)}}catch(e){e?.message?.includes("already exists")||console.warn("[Migration] warning:",e?.message)}await a7(f7,Ds),Ds.use((e,r,n,i)=>{let a=e.status||e.statusCode||500,s=e.message||"Internal Server Error";throw n.status(a).json({message:s}),e}),o7(Ds);let t=parseInt(process.env.PORT||"5000",10);f7.listen({port:t,host:"0.0.0.0",reusePort:!0},()=>{hC(`serving on port ${t}`),Nz(),jz().catch(e=>console.error("[PaymentPoller] Recovery error:",e)),Hz(),Jz().catch(e=>console.error("[PayoutPoller] Recovery error:",e)),u7().catch(e=>console.error("[FeesSeed] Error during fee seeding:",e)),p7()})})();0&&(module.exports={log});
+      `)).rows||[];for(let a of i){let s=parseFloat(a.balance||"0");s>0&&await k.execute(T`UPDATE users SET balance = balance + ${s} WHERE id = ${a.user_id}`),await k.execute(T`DELETE FROM wallets WHERE id = ${a.wallet_id}`),console.log(`[Migration] Merged wallet ${a.currency} (${s}) \u2192 primary ${a.preferred_currency} for user ${a.user_id}`)}i.length>0&&console.log(`[Migration] Merged ${i.length} duplicate same-family CFA wallet(s)`)}catch(e){console.warn("[Migration] CFA wallet cleanup warning:",e?.message)}}catch(e){e?.message?.includes("already exists")||console.warn("[Migration] warning:",e?.message)}await a7(f7,Ds),Ds.use((e,r,n,i)=>{let a=e.status||e.statusCode||500,s=e.message||"Internal Server Error";throw n.status(a).json({message:s}),e}),o7(Ds);let t=parseInt(process.env.PORT||"5000",10);f7.listen({port:t,host:"0.0.0.0",reusePort:!0},()=>{hC(`serving on port ${t}`),Nz(),jz().catch(e=>console.error("[PaymentPoller] Recovery error:",e)),Hz(),Jz().catch(e=>console.error("[PayoutPoller] Recovery error:",e)),u7().catch(e=>console.error("[FeesSeed] Error during fee seeding:",e)),p7()})})();0&&(module.exports={log});
 /*! Bundled license information:
 
 depd/index.js:
