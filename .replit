@@ -45,6 +45,7 @@ build = ["npm", "run", "build"]
 SUPABASE_URL = "https://vngfjjfgaxkcwtrzawdq.supabase.co/"
 SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZuZ2ZqamZnYXhrY3d0cnphd2RxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4NDQzNTIsImV4cCI6MjA4NzQyMDM1Mn0.gh76rmi7uEzjLbqGjiRIckoaKxmOAyiLyy9QZOxuucc"
 PIXPAY_WAVE_BUSINESS_ID = "am-23kv2kt281gqe"
+PIXPAY_API_KEY_XAF = "PIX_c2724339-716f-4034-b5e5-2a17c1c35d0e"
 
 [userenv.development]
 APP_URL = "https://f96a6379-f341-4944-8f17-8e8a1d157003-00-rvqhzlc1jkpk.worf.replit.dev"
