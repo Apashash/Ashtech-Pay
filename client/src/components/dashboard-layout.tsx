@@ -309,7 +309,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center">
         <div className="flex items-center gap-2 mb-8">
-          <img src="/logo.png" alt="AshTech Pay" className="h-20 w-auto opacity-80" />
+          <img src="/logo.png" alt="AshTech Pay" className="h-28 w-auto opacity-80" />
         </div>
         <div className="w-16 h-16 rounded-2xl bg-amber-500/10 flex items-center justify-center mb-6">
           <Wrench className="w-8 h-8 text-amber-500" />
@@ -335,7 +335,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           <SidebarHeader className="p-4 border-b border-sidebar-border">
             <Link href="/dashboard">
               <div className="flex items-center gap-2 cursor-pointer">
-                <img src="/logo.png" alt="AshTech Pay" className="h-16 w-auto" />
+                <img src="/logo.png" alt="AshTech Pay" className="h-24 w-auto" />
               </div>
             </Link>
           </SidebarHeader>

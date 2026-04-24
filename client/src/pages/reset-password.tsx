@@ -70,7 +70,7 @@ export default function ResetPasswordPage() {
           <CardHeader className="text-center space-y-4">
             <Link href="/">
               <div className="flex items-center justify-center cursor-pointer">
-                <img src="/logo.png" alt="Ashtech-Pay Afrique" className="h-20 w-auto" />
+                <img src="/logo.png" alt="Ashtech-Pay Afrique" className="h-28 w-auto" />
               </div>
             </Link>
             <CardTitle className="text-2xl font-bold text-destructive">Lien invalide</CardTitle>
@@ -108,7 +108,7 @@ export default function ResetPasswordPage() {
           <CardHeader className="text-center space-y-4">
             <Link href="/">
               <div className="flex items-center justify-center cursor-pointer">
-                <img src="/logo.png" alt="Ashtech-Pay Afrique" className="h-20 w-auto" />
+                <img src="/logo.png" alt="Ashtech-Pay Afrique" className="h-28 w-auto" />
               </div>
             </Link>
             <div className="flex justify-center">
@@ -150,7 +150,7 @@ export default function ResetPasswordPage() {
           <Link href="/">
             <div className="flex items-center justify-center cursor-pointer pt-4">
               <div className="bg-black rounded-2xl px-6 py-3">
-                <img src="/logo.png" alt="Ashtech-Pay Afrique" className="h-20 w-auto" />
+                <img src="/logo.png" alt="Ashtech-Pay Afrique" className="h-28 w-auto" />
               </div>
             </div>
           </Link>
