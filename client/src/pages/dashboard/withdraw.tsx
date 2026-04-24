@@ -64,6 +64,7 @@ export default function WithdrawPage() {
   const xafRate = fxRates["XAF"] || 585;
   const userFxRate = fxRates[userCurrency] || xafRate;
   const convertFromXAF = (xaf: number) => Math.ceil(xaf * userFxRate / xafRate);
+  const limitsLoaded = limits !== undefined && fxRates && Object.keys(fxRates).length > 0;
   const minWithdrawal = convertFromXAF(limits?.minWithdrawal ?? 2650);
   const maxWithdrawal = Math.floor((limits?.maxWithdrawal ?? 5000000) * userFxRate / xafRate);
 
@@ -298,7 +299,7 @@ export default function WithdrawPage() {
                           <div className="relative">
                             <Input 
                               type="number" 
-                              placeholder={minWithdrawal.toString()} 
+                              placeholder={limitsLoaded ? minWithdrawal.toString() : ""} 
                               className="text-lg h-10 pr-14"
                               {...field} 
                               data-testid="input-withdraw-amount"
