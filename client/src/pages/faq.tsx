@@ -81,7 +81,7 @@ export default function FAQPage() {
           <div className="flex items-center justify-between h-16">
             <Link href="/">
               <div className="flex items-center gap-2 cursor-pointer">
-                <img src="/logo.png" alt="Ashtech-Pay Afrique" className="h-14 w-auto" />
+                <img src="/logo.png" alt="Ashtech-Pay Afrique" className="h-20 w-auto" />
               </div>
             </Link>
             <Link href="/">

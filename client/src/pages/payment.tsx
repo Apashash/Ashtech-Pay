@@ -898,7 +898,7 @@ export default function PaymentPage() {
       
       <header className="flex justify-between items-center px-5 py-4 relative z-10 border-b border-border/60 bg-white/80 backdrop-blur-sm">
         <div className="flex items-center gap-2">
-          <img src="/logo.png" alt="AshTech Pay" className="h-12 object-contain" data-testid="img-logo" />
+          <img src="/logo.png" alt="AshTech Pay" className="h-16 object-contain" data-testid="img-logo" />
         </div>
         <Select value={displayCurrency || linkCurrency} onValueChange={(val) => setDisplayCurrency(val as SupportedCurrency)}>
           <SelectTrigger className="w-auto gap-2 bg-muted/50 border-border">
@@ -1192,7 +1192,7 @@ function Footer() {
     <footer className="border-t border-border bg-white/70 py-6 px-4">
       <div className="max-w-lg mx-auto text-center space-y-4">
         <div className="flex items-center justify-center gap-2">
-          <img src="/logo.png" alt="AshTech Pay" className="h-10 w-auto" />
+          <img src="/logo.png" alt="AshTech Pay" className="h-14 w-auto" />
         </div>
         <p className="text-sm text-muted-foreground">
           Propulsé par <span className="font-semibold text-foreground">Ashtech Pay</span>
