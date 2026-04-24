@@ -657,9 +657,13 @@ export default function DashboardHome() {
                 <div className="flex-1 min-w-0">
                   <p className="text-muted-foreground text-sm mb-1">Solde Principal ({user?.preferredCurrency || "XAF"})</p>
                   {(() => {
-                    const balanceText = formatWalletBalance(user?.balance || "0.00", user?.preferredCurrency || "XAF");
+                    const cur = user?.preferredCurrency || "XAF";
+                    const num = parseFloat(user?.balance || "0.00");
+                    const balanceText = (cur === "USD" || cur === "EUR")
+                      ? num.toFixed(2)
+                      : new Intl.NumberFormat("fr-FR").format(Math.round(num));
                     const len = balanceText.length;
-                    const sizeClass = len > 18 ? "text-lg" : len > 14 ? "text-xl" : len > 11 ? "text-2xl" : "text-3xl";
+                    const sizeClass = len > 14 ? "text-2xl" : len > 11 ? "text-3xl" : "text-4xl";
                     return (
                       <p className={`${sizeClass} font-bold text-foreground whitespace-nowrap`} data-testid="text-balance">
                         {balanceText}
