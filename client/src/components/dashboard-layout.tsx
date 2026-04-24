@@ -335,7 +335,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           <SidebarHeader className="p-4 border-b border-sidebar-border">
             <Link href="/dashboard">
               <div className="flex items-center gap-2 cursor-pointer">
-                <img src="/logo.png" alt="AshTech Pay" className="h-24 w-auto" />
+                <img src="/logo.png" alt="AshTech Pay" className="h-12 w-auto" />
               </div>
             </Link>
           </SidebarHeader>
