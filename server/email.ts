@@ -38,17 +38,8 @@ export async function sendPasswordResetEmail(to: string, fullName: string, reset
           <tr>
             <td style="background:#FFFFFF;padding:32px 40px 24px;text-align:center;border-bottom:2px solid #F0B90B;">
               <div style="margin-bottom:22px;">
-                <table cellpadding="0" cellspacing="0" border="0" align="center">
-                  <tr>
-                    <td style="padding-right:10px;vertical-align:middle;">
-                      <img src="${LOGO_URL}" alt="AshTech Pay" width="44" height="44"
-                           style="display:block;max-height:44px;width:auto;" />
-                    </td>
-                    <td style="vertical-align:middle;">
-                      <span style="font-size:22px;font-weight:700;color:#1F2937;letter-spacing:-0.3px;">AshTech Pay</span>
-                    </td>
-                  </tr>
-                </table>
+                <img src="${LOGO_URL}" alt="AshTech Pay" height="56"
+                     style="display:inline-block;max-height:56px;width:auto;" />
               </div>
               <div style="display:inline-block;background:#FEE2E2;border:1px solid #F87171;color:#DC2626;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;padding:5px 16px;border-radius:100px;margin-bottom:18px;">
                 🔐 &nbsp;Sécurité du compte
@@ -242,18 +233,9 @@ export async function sendWelcomeEmail(to: string, fullName: string): Promise<vo
             <td style="background:#FFFFFF;padding:32px 40px 24px;text-align:center;border-bottom:2px solid #F0B90B;">
               <!-- Logo -->
               <div style="margin-bottom:24px;">
-                <table cellpadding="0" cellspacing="0" border="0" align="center">
-                  <tr>
-                    <td style="padding-right:10px;vertical-align:middle;">
-                      <img src="${LOGO_URL}" alt="AshTech Pay" width="44" height="44"
-                           style="display:block;max-height:44px;width:auto;"
-                           onerror="this.style.display='none'" />
-                    </td>
-                    <td style="vertical-align:middle;">
-                      <span style="font-size:22px;font-weight:700;color:#1F2937;letter-spacing:-0.3px;">AshTech Pay</span>
-                    </td>
-                  </tr>
-                </table>
+                <img src="${LOGO_URL}" alt="AshTech Pay" height="56"
+                     style="display:inline-block;max-height:56px;width:auto;"
+                     onerror="this.style.display='none'" />
               </div>
 
               <!-- Badge -->

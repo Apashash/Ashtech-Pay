@@ -131,8 +131,7 @@ function Navbar() {
           <div className="flex items-center justify-between h-16 gap-4">
             <Link href="/">
               <div className="flex items-center gap-2 cursor-pointer">
-                <img src="/logo.png" alt="Ashtech-Pay Afrique" className="h-10 w-auto" />
-                <span className="font-bold text-lg text-foreground tracking-tight">AshTechPay</span>
+                <img src="/logo.png" alt="AshTech Pay" className="h-12 w-auto" />
               </div>
             </Link>
             
@@ -1229,8 +1228,7 @@ function Footer() {
         {/* Logo + description */}
         <div className="mb-10 text-center sm:text-left">
           <div className="flex items-center gap-2 justify-center sm:justify-start mb-3">
-            <img src="/logo.png" alt="AshTech Pay" className="h-9 w-auto" />
-            <span className="font-bold text-lg text-foreground tracking-tight">AshTech Pay</span>
+            <img src="/logo.png" alt="AshTech Pay" className="h-12 w-auto" />
           </div>
           <p className="text-muted-foreground text-sm max-w-sm mx-auto sm:mx-0">
             AshTech Pay est une fintech et ne constitue pas une institution bancaire. Les services financiers sont fournis par des partenaires bancaires agréés et régulés. Les services de paiement sont opérés en partenariat avec des prestataires de paiement autorisés, conformément aux réglementations en vigueur.

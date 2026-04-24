@@ -161,11 +161,8 @@ export default function AdminEmailCampaigns() {
           <div style="background:#FFFFFF;padding:28px 36px 20px;text-align:center;border-bottom:2px solid #F0B90B;">
             <table cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;">
               <tr>
-                <td style="padding-right:10px;vertical-align:middle;">
-                  <img src="/logo.png" width="40" height="40" style="display:block;" alt="logo"/>
-                </td>
-                <td style="vertical-align:middle;">
-                  <span style="font-size:20px;font-weight:700;color:#1F2937;">AshTech Pay</span>
+                <td style="vertical-align:middle;text-align:center;">
+                  <img src="/logo.png" height="52" style="display:inline-block;max-height:52px;width:auto;" alt="AshTech Pay"/>
                 </td>
               </tr>
             </table>
