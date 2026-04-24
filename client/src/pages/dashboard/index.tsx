@@ -654,11 +654,18 @@ export default function DashboardHome() {
           <CardContent className="p-6">
             <div className="flex flex-col gap-6">
               <div className="flex items-center justify-between gap-4">
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <p className="text-muted-foreground text-sm mb-1">Solde Principal ({user?.preferredCurrency || "XAF"})</p>
-                  <p className="text-3xl font-bold text-foreground" data-testid="text-balance">
-                    {formatWalletBalance(user?.balance || "0.00", user?.preferredCurrency || "XAF")}
-                  </p>
+                  {(() => {
+                    const balanceText = formatWalletBalance(user?.balance || "0.00", user?.preferredCurrency || "XAF");
+                    const len = balanceText.length;
+                    const sizeClass = len > 18 ? "text-lg" : len > 14 ? "text-xl" : len > 11 ? "text-2xl" : "text-3xl";
+                    return (
+                      <p className={`${sizeClass} font-bold text-foreground whitespace-nowrap`} data-testid="text-balance">
+                        {balanceText}
+                      </p>
+                    );
+                  })()}
                   <p className="text-xs text-muted-foreground mt-2">Ashtech Pay</p>
                 </div>
                 <div className="flex flex-col items-end gap-3 flex-shrink-0">
