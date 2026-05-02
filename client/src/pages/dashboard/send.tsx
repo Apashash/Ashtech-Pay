@@ -519,55 +519,57 @@ export default function SendMoneyPage() {
             </Card>
 
             {!isInternal && amountValue > 0 && selectedOperator && (
-              <Card>
-                <CardContent className="p-6 space-y-3">
-                  <p className="text-sm text-muted-foreground">
-                    Résumé {feePreview.isLoading && <Loader2 className="inline w-3 h-3 ml-1 animate-spin" />}
-                  </p>
-                  <div className="flex justify-between">
-                    <span>Montant à envoyer</span>
-                    <span className="font-medium">{formatWalletBalance(amountValue, localCurrency)}</span>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">
+                  Récapitulatif {feePreview.isLoading && <Loader2 className="inline w-3 h-3 ml-1 animate-spin" />}
+                </p>
+                <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
+                  <div className="flex items-center justify-between px-4 py-3.5">
+                    <span className="text-sm text-muted-foreground">Montant à envoyer</span>
+                    <span className="text-sm font-medium">{formatWalletBalance(amountValue, localCurrency)}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span>Frais ({feePreview.feePercentage || selectedOperator.feePercentage}%)</span>
-                    <span className="font-medium text-orange-500">- {formatWalletBalance(feePreview.feeAmount, localCurrency)}</span>
+                  <div className="flex items-center justify-between px-4 py-3.5">
+                    <span className="text-sm text-muted-foreground">Frais ({feePreview.feePercentage || selectedOperator.feePercentage}%)</span>
+                    <span className="text-sm font-medium text-orange-500">- {formatWalletBalance(feePreview.feeAmount, localCurrency)}</span>
                   </div>
-                  <div className="border-t pt-3 flex justify-between font-bold">
-                    <span>Net envoyé</span>
-                    <span>{formatWalletBalance(amountValue - feePreview.feeAmount, localCurrency)}</span>
+                  <div className="flex items-center justify-between px-4 py-3.5 bg-muted/30">
+                    <span className="text-sm font-semibold text-foreground">Net envoyé</span>
+                    <span className="text-sm font-bold text-foreground">{formatWalletBalance(amountValue - feePreview.feeAmount, localCurrency)}</span>
                   </div>
-                  <div className="border-t pt-2 flex justify-between text-sm text-muted-foreground">
-                    <span>Total débité (votre solde)</span>
-                    <span>{formatWalletBalance(amountValue, localCurrency)}</span>
-                  </div>
-                  {feePreview.totalAmount > balance && (
-                    <Alert variant="destructive">
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertDescription>Solde insuffisant</AlertDescription>
-                    </Alert>
-                  )}
-                  <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                    <span>{formatWalletBalance(balance, localCurrency)}</span>
-                    <ArrowRight className="w-3 h-3" />
-                    <span className={feePreview.totalAmount > balance ? "text-destructive" : ""}>
+                  <div className="flex items-center justify-between px-4 py-3 text-xs text-muted-foreground">
+                    <span>Solde après transfert</span>
+                    <span className={feePreview.totalAmount > balance ? "text-destructive font-medium" : ""}>
                       {formatWalletBalance(Math.max(0, balance - feePreview.totalAmount), localCurrency)}
                     </span>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+                {feePreview.totalAmount > balance && (
+                  <Alert variant="destructive" className="mt-2">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>Solde insuffisant</AlertDescription>
+                  </Alert>
+                )}
+              </div>
             )}
 
             {isInternal && (
-              <Card className="border-green-500/30 bg-green-50/50 dark:bg-green-950/10">
-                <CardContent className="p-5 space-y-2">
-                  <p className="text-sm font-medium text-green-700 dark:text-green-400">Transfert Interne</p>
-                  <ul className="text-sm text-muted-foreground space-y-1">
-                    <li>✓ Gratuit — aucun frais</li>
-                    <li>✓ Instantané — crédit immédiat</li>
-                    <li>✓ Sécurisé — compte vérifié</li>
-                  </ul>
-                </CardContent>
-              </Card>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">Avantages</p>
+                <div className="rounded-xl border border-green-500/30 bg-green-50/50 dark:bg-green-950/10 overflow-hidden divide-y divide-green-500/20">
+                  <div className="flex items-center gap-3 px-4 py-3.5">
+                    <span className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center text-green-600 text-xs font-bold shrink-0">✓</span>
+                    <span className="text-sm text-muted-foreground">Gratuit — aucun frais</span>
+                  </div>
+                  <div className="flex items-center gap-3 px-4 py-3.5">
+                    <span className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center text-green-600 text-xs font-bold shrink-0">✓</span>
+                    <span className="text-sm text-muted-foreground">Instantané — crédit immédiat</span>
+                  </div>
+                  <div className="flex items-center gap-3 px-4 py-3.5">
+                    <span className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center text-green-600 text-xs font-bold shrink-0">✓</span>
+                    <span className="text-sm text-muted-foreground">Sécurisé — compte vérifié</span>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         </div>

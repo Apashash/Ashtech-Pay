@@ -502,32 +502,31 @@ export default function SupportPage() {
           <p className="text-muted-foreground">Comment pouvons-nous vous aider?</p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-4">
-          {contactOptions.map((option) => (
-            <Card key={option.title} className="hover-elevate cursor-pointer overflow-hidden" onClick={() => handleContactClick(option.action)} data-testid={`contact-option-${option.action}`}>
-              <CardContent className="p-6">
-                <div className="flex items-start gap-4">
-                  <div className={cn("w-12 h-12 shrink-0 rounded-xl flex items-center justify-center", option.action === "whatsapp" ? "bg-green-500/10" : "bg-primary/10")}>
-                    <option.icon className={cn("w-6 h-6", option.action === "whatsapp" ? "text-green-500" : "text-primary")} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className="font-semibold text-foreground">{option.title}</p>
-                      {option.badge > 0 && (
-                        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold" data-testid="badge-unread-chat">{option.badge}</span>
-                      )}
-                    </div>
-                    <p className="text-sm text-muted-foreground truncate">{option.description}</p>
-                    {option.available && (
-                      <span className="inline-flex items-center gap-1 text-xs text-green-500 mt-1">
-                        <span className="w-2 h-2 rounded-full bg-green-500" />Disponible
-                      </span>
-                    )}
-                  </div>
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">Nous contacter</p>
+          <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
+            {contactOptions.map((option) => (
+              <button
+                key={option.title}
+                type="button"
+                className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-muted/50 transition-colors text-left"
+                onClick={() => handleContactClick(option.action)}
+                data-testid={`contact-option-${option.action}`}
+              >
+                <div className={cn("w-9 h-9 shrink-0 rounded-xl flex items-center justify-center", option.action === "whatsapp" ? "bg-green-500/10" : "bg-primary/10")}>
+                  <option.icon className={cn("w-4 h-4", option.action === "whatsapp" ? "text-green-500" : "text-primary")} />
                 </div>
-              </CardContent>
-            </Card>
-          ))}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground">{option.title}</p>
+                  <p className="text-xs text-muted-foreground truncate">{option.description}</p>
+                </div>
+                {option.badge > 0 && (
+                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold" data-testid="badge-unread-chat">{option.badge}</span>
+                )}
+                <ChevronRight className="w-4 h-4 text-muted-foreground/50 shrink-0" />
+              </button>
+            ))}
+          </div>
         </div>
 
         <Card className="border-green-500/30 bg-green-500/5">

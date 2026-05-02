@@ -328,9 +328,10 @@ export default function ApiKeysPage() {
             {/* Configuration URLs */}
             <Card>
               <CardHeader className="pb-3">
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Configuration</p>
                 <CardTitle className="text-base flex items-center gap-2">
-                  <Globe className="w-4 h-4 text-primary" />
-                  Configuration
+                  <Globe className="w-4 h-4 text-muted-foreground" />
+                  URLs de redirection
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -414,9 +415,10 @@ export default function ApiKeysPage() {
             {hasHpKeys && (
               <Card>
                 <CardHeader className="pb-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Clés générées</p>
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base flex items-center gap-2">
-                      <Key className="w-4 h-4 text-primary" />
+                      <Key className="w-4 h-4 text-muted-foreground" />
                       API Keys
                     </CardTitle>
                     <Badge variant="secondary" className="bg-green-500/10 text-green-600 border-green-500/20">
@@ -485,8 +487,9 @@ export default function ApiKeysPage() {
           <div className="space-y-4">
             <Card>
               <CardHeader className="pb-3">
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Authentification</p>
                 <CardTitle className="text-base flex items-center gap-2">
-                  <Shield className="w-4 h-4 text-primary" />
+                  <Shield className="w-4 h-4 text-muted-foreground" />
                   Votre clé API
                 </CardTitle>
               </CardHeader>
