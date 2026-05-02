@@ -11,7 +11,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { withdrawSchema, type SupportedCurrency, type WithdrawalNumber } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User } from "@shared/schema";
-import { Wallet, Smartphone, Building2, Loader2, CheckCircle, AlertCircle, Phone, Plus, Settings, Globe, Shield, Info, ArrowLeftRight } from "lucide-react";
+import { Wallet, Smartphone, Building2, Loader2, CheckCircle, AlertCircle, Phone, Plus, Settings, Globe, Shield, Info, ArrowLeftRight, ChevronRight, TrendingUp, TrendingDown } from "lucide-react";
+import { format } from "date-fns";
+import { fr } from "date-fns/locale";
+import type { Transaction } from "@shared/schema";
 import { getOperatorLogo } from "@/lib/operator-logos";
 import { getCountryFlagEmoji } from "@/lib/country-flags";
 import { z } from "zod";
@@ -55,6 +58,8 @@ export default function WithdrawPage() {
   const { toast } = useToast();
 
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
+  const { data: allTransactions = [] } = useQuery<Transaction[]>({ queryKey: ["/api/transactions"] });
+  const recentWithdrawals = allTransactions.filter(tx => tx.type === "withdrawal").slice(0, 5);
 
   const { data: limits } = useQuery<{ minWithdrawal: number; maxWithdrawal: number; minTransfer: number; maxTransfer: number }>({
     queryKey: ["/api/public/limits"],
@@ -524,6 +529,39 @@ export default function WithdrawPage() {
             </CardContent>
           </Card>
         </div>
+
+        {recentWithdrawals.length > 0 && (
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">Historique récent</p>
+            <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
+              {recentWithdrawals.map((tx) => {
+                const statusColors: Record<string, string> = { completed: "text-green-500", pending: "text-orange-500", failed: "text-red-500" };
+                const statusLabels: Record<string, string> = { completed: "Complété", pending: "En attente", failed: "Échoué" };
+                return (
+                  <div key={tx.id} className="flex items-center gap-3 px-4 py-3.5">
+                    <div className="w-9 h-9 rounded-full bg-orange-500/10 flex items-center justify-center shrink-0">
+                      <TrendingDown className="w-4 h-4 text-orange-500" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-foreground">Retrait Mobile Money</p>
+                      <p className="text-xs text-muted-foreground">
+                        {tx.createdAt ? format(new Date(tx.createdAt), "d MMM yyyy, HH:mm", { locale: fr }) : ""}
+                      </p>
+                    </div>
+                    <div className="flex flex-col items-end gap-0.5 shrink-0">
+                      <span className="text-sm font-semibold text-orange-500">
+                        -{formatCurrency(tx.amount, (user?.preferredCurrency || "XAF") as SupportedCurrency)}
+                      </span>
+                      <span className={`text-[10px] font-medium uppercase tracking-wide ${statusColors[tx.status] || "text-muted-foreground"}`}>
+                        {statusLabels[tx.status] || tx.status}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );

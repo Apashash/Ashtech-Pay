@@ -10,7 +10,10 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest, queryClient, getAuthHeaders } from "@/lib/queryClient";
 import type { User, SupportedCurrency } from "@shared/schema";
-import { CreditCard, Loader2, Globe, AlertCircle, Phone, CheckCircle, XCircle, ArrowLeft, ArrowRight, Smartphone, ExternalLink, Hash, Clock, Copy } from "lucide-react";
+import { CreditCard, Loader2, Globe, AlertCircle, Phone, CheckCircle, XCircle, ArrowLeft, ArrowRight, Smartphone, ExternalLink, Hash, Clock, Copy, ChevronRight, TrendingUp, TrendingDown } from "lucide-react";
+import { format } from "date-fns";
+import { fr } from "date-fns/locale";
+import type { Transaction } from "@shared/schema";
 import { getOperatorLogo } from "@/lib/operator-logos";
 import { z } from "zod";
 import { useState, useEffect, useMemo, useRef } from "react";
@@ -80,6 +83,8 @@ export default function DepositPage() {
   const [isCancelling, setIsCancelling] = useState(false);
   
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
+  const { data: allTransactions = [] } = useQuery<Transaction[]>({ queryKey: ["/api/transactions"] });
+  const recentDeposits = allTransactions.filter(tx => tx.type === "deposit").slice(0, 5);
   
   const { data: countries, isLoading: isLoadingConfig } = useQuery<CountryConfig[]>({
     queryKey: ["/api/transfers/config?type=deposit"],
@@ -1141,6 +1146,39 @@ export default function DepositPage() {
               )}
             </CardContent>
           </Card>
+        )}
+
+        {recentDeposits.length > 0 && (
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">Historique récent</p>
+            <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
+              {recentDeposits.map((tx) => {
+                const statusColors: Record<string, string> = { completed: "text-green-500", pending: "text-orange-500", failed: "text-red-500" };
+                const statusLabels: Record<string, string> = { completed: "Complété", pending: "En attente", failed: "Échoué" };
+                return (
+                  <div key={tx.id} className="flex items-center gap-3 px-4 py-3.5">
+                    <div className="w-9 h-9 rounded-full bg-green-500/10 flex items-center justify-center shrink-0">
+                      <TrendingUp className="w-4 h-4 text-green-500" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-foreground">Dépôt Mobile Money</p>
+                      <p className="text-xs text-muted-foreground">
+                        {tx.createdAt ? format(new Date(tx.createdAt), "d MMM yyyy, HH:mm", { locale: fr }) : ""}
+                      </p>
+                    </div>
+                    <div className="flex flex-col items-end gap-0.5 shrink-0">
+                      <span className="text-sm font-semibold text-green-500">
+                        +{formatCurrency(tx.amount, (user?.preferredCurrency || "XAF") as SupportedCurrency)}
+                      </span>
+                      <span className={`text-[10px] font-medium uppercase tracking-wide ${statusColors[tx.status] || "text-muted-foreground"}`}>
+                        {statusLabels[tx.status] || tx.status}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         )}
       </div>
     </DashboardLayout>
