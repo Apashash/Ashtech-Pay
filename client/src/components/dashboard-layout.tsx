@@ -138,9 +138,16 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   }, [!!user]);
 
   const preferredCurrency = user?.preferredCurrency || "XAF";
-  const sidebarBalance = preferredCurrency === "XAF"
-    ? (user?.balance || "0")
-    : (wallets.find(w => w.currency === preferredCurrency)?.balance || "0");
+  const sidebarBalance = (() => {
+    if (wallets.length === 0) return user?.balance || "0";
+    const localRate = rates[preferredCurrency] || 1;
+    let total = 0;
+    for (const wallet of wallets) {
+      const walletRate = rates[wallet.currency] || 1;
+      total += parseFloat(wallet.balance || "0") * (localRate / walletRate);
+    }
+    return total.toFixed(preferredCurrency === "USD" || preferredCurrency === "EUR" ? 2 : 0);
+  })();
 
   const handleKycClick = (e: React.MouseEvent) => {
     e.preventDefault();
