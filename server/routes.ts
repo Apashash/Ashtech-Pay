@@ -4418,10 +4418,38 @@ export async function registerRoutes(
       const offset = (page - 1) * limit;
 
       const filter = (req.query.filter as string) || "";
+      const fxRates = await loadFxRates();
+
+      // Special case: "has_balance" — fetch all users, compute total XAF (all wallets), filter & sort in memory
+      if (filter === "has_balance") {
+        const { data: allData } = await storage.getAdminUsersPaginated({ limit: 9999, offset: 0, search: search || undefined });
+        const allIds = allData.map(u => u.id);
+        const allWallets2 = allIds.length > 0 ? await storage.getWalletsByUserIds(allIds) : [];
+        const walletsByUser2 = new Map<string, { currency: string; balance: string }[]>();
+        for (const w of allWallets2) {
+          if (!walletsByUser2.has(w.userId)) walletsByUser2.set(w.userId, []);
+          walletsByUser2.get(w.userId)!.push({ currency: w.currency, balance: w.balance });
+        }
+        const withTotals = allData
+          .map(({ password, ...u }) => {
+            const pc = u.preferredCurrency || "XAF";
+            const pXAF = convertToXAF(parseFloat(u.balance) || 0, pc, fxRates);
+            const sXAF = (walletsByUser2.get(u.id) || [])
+              .filter(w => w.currency !== pc)
+              .reduce((s, w) => s + convertToXAF(parseFloat(w.balance) || 0, w.currency, fxRates), 0);
+            return { ...u, totalBalanceXAF: Math.round(pXAF + sXAF) };
+          })
+          .filter(u => u.totalBalanceXAF > 0)
+          .sort((a, b) => b.totalBalanceXAF - a.totalBalanceXAF);
+
+        const pagedData = withTotals.slice(offset, offset + limit);
+        const total2 = withTotals.length;
+        return res.json({ data: pagedData, total: total2, page, limit, pages: Math.ceil(total2 / limit) });
+      }
+
       const { data, total } = await storage.getAdminUsersPaginated({ limit, offset, search: search || undefined, filter: filter || undefined });
 
       // Batch-fetch all secondary wallets for these users in one query
-      const fxRates = await loadFxRates();
       const userIds = data.map(u => u.id);
       const allWallets = userIds.length > 0 ? await storage.getWalletsByUserIds(userIds) : [];
 
