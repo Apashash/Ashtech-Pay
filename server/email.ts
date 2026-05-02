@@ -9,6 +9,8 @@ const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KE
 const FROM_EMAIL    = "Ashtech Pay <noreply@ashtechpay.top>";
 const APP_URL       = "https://ashtechpay.top";
 const LOGO_URL      = "https://ashtechpay.top/logo.png";
+const WA_LOGO_URL   = "https://ashtechpay.top/wa-logo.svg";
+const FB_LOGO_URL   = "https://ashtechpay.top/fb-logo.svg";
 const FACEBOOK_URL  = "https://www.facebook.com/share/1Eczpeowdp/?mibextid=wwXIfr";
 const WHATSAPP_URL  = "https://whatsapp.com/channel/0029VbC5tPPCxoAveJ44Vs2w";
 const SUPPORT_PHONE = "+237 6 83 67 78 72";
@@ -58,15 +60,31 @@ function emailBase(title: string, bodyRows: string): string {
 
           <!-- NAVY BOTTOM BAR -->
           <tr>
-            <td style="background:${NAVY};padding:14px 40px;">
+            <td style="background:${NAVY};padding:16px 40px;">
               <table width="100%" cellpadding="0" cellspacing="0" border="0">
                 <tr>
-                  <td style="font-size:11px;color:#93C5FD;">
-                    <a href="${APP_URL}" style="color:#93C5FD;text-decoration:none;">ashtechpay.top</a>
-                    &nbsp;&nbsp;|&nbsp;&nbsp;
-                    <a href="${WHATSAPP_URL}" style="color:#93C5FD;text-decoration:none;">WhatsApp</a>
-                    &nbsp;&nbsp;|&nbsp;&nbsp;
-                    <a href="${FACEBOOK_URL}" style="color:#93C5FD;text-decoration:none;">Facebook</a>
+                  <td>
+                    <table cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="padding-right:10px;">
+                          <a href="${APP_URL}" style="font-size:11px;color:#93C5FD;text-decoration:none;">ashtechpay.top</a>
+                        </td>
+                        <td style="padding-right:10px;">
+                          <a href="${WHATSAPP_URL}"
+                             style="display:inline-block;background:#25D366;color:#FFFFFF;font-size:11px;font-weight:700;padding:6px 14px;border-radius:4px;text-decoration:none;vertical-align:middle;">
+                            <img src="${WA_LOGO_URL}" width="14" height="14"
+                                 style="display:inline;vertical-align:middle;margin-right:5px;border-radius:2px;" alt="WhatsApp"/>WhatsApp
+                          </a>
+                        </td>
+                        <td>
+                          <a href="${FACEBOOK_URL}"
+                             style="display:inline-block;background:#1877F2;color:#FFFFFF;font-size:11px;font-weight:700;padding:6px 14px;border-radius:4px;text-decoration:none;vertical-align:middle;">
+                            <img src="${FB_LOGO_URL}" width="14" height="14"
+                                 style="display:inline;vertical-align:middle;margin-right:5px;border-radius:2px;" alt="Facebook"/>Facebook
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
                   </td>
                   <td align="right" style="font-size:11px;color:#93C5FD;">&copy; 2026 Ashtech Pay</td>
                 </tr>
@@ -258,27 +276,30 @@ export async function sendWithdrawalApprovedEmail(
   fullName: string,
   amount: string,
   currency: string,
-  reference?: string
+  reference?: string,
+  operator?: string
 ): Promise<void> {
   const firstName = fullName?.trim().split(" ")[0] || "cher(e) client(e)";
 
   const refRow = reference ? [{ label: "Référence", value: reference }] : [];
+  const operatorRow = operator ? [{ label: "Opérateur Mobile Money", value: operator }] : [];
 
   const body = `
   <tr>
     <td style="padding:36px 40px 8px;">
       <h1 style="margin:0 0 20px;font-size:28px;font-weight:700;color:${TEXT};line-height:1.3;">
-        Votre retrait est approuvé.
+        Votre retrait a été effectué.
       </h1>
       <p style="margin:0 0 6px;font-size:15px;color:${TEXT};line-height:1.7;">Bonjour ${firstName},</p>
       <p style="margin:0 0 8px;font-size:15px;color:${TEXT};line-height:1.7;">
-        Votre demande de retrait a été approuvée. Le virement sera effectué vers votre
-        compte Mobile Money dans les prochaines minutes.
+        Votre retrait a été traité avec succès. Le virement a été envoyé
+        directement sur votre compte${operator ? ` <strong style="color:${TEXT};">${operator}</strong>` : " Mobile Money"}.
       </p>
 
       ${infoBox([
-        { label: "Montant", value: `${amount} ${currency}` },
-        { label: "Statut", value: "Approuvé — virement en cours" },
+        { label: "Montant envoyé", value: `${amount} ${currency}` },
+        ...operatorRow,
+        { label: "Statut", value: "Virement effectué" },
         { label: "Date", value: new Date().toLocaleString("fr-FR", { timeZone: "Africa/Douala" }) },
         ...refRow,
       ])}
@@ -289,8 +310,8 @@ export async function sendWithdrawalApprovedEmail(
     </td>
   </tr>`;
 
-  const html = emailBase("Retrait approuvé", body);
-  await sendEmail(to, "Retrait approuvé — Virement en cours sur Ashtech Pay", html, "withdrawal approved");
+  const html = emailBase("Retrait effectué", body);
+  await sendEmail(to, "Retrait effectué — Virement envoyé sur Ashtech Pay", html, "withdrawal approved");
 }
 
 // ─── WITHDRAWAL NUMBER APPROVED ───────────────────────────────────────────────

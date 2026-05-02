@@ -4854,7 +4854,8 @@ export async function registerRoutes(
                 txUser.fullName || txUser.username,
                 transaction.amount,
                 transaction.currency || "XAF",
-                transaction.reference || undefined
+                transaction.reference || undefined,
+                operatorName || transaction.operator || undefined
               ).catch(() => {});
             }
             await storage.createUserNotification({
@@ -4895,7 +4896,8 @@ export async function registerRoutes(
             txUser.fullName || txUser.username,
             transaction.amount,
             transaction.currency || "XAF",
-            transaction.reference || undefined
+            transaction.reference || undefined,
+            transaction.operator || undefined
           ).catch(() => {});
         }
         await storage.createUserNotification({
@@ -6089,7 +6091,8 @@ export async function registerRoutes(
           (txUser as any).fullName || (txUser as any).username,
           tx.amount,
           tx.currency || "XAF",
-          tx.reference || undefined
+          tx.reference || undefined,
+          (tx as any).operator || undefined
         ).catch(() => {});
       }
       await storage.createUserNotification({

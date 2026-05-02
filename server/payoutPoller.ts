@@ -100,7 +100,8 @@ async function processPayout(payout: PendingPayout, apiStatus: string) {
           txUser.fullName || txUser.username,
           payout.amount,
           currency,
-          transaction.reference || undefined
+          transaction.reference || undefined,
+          (transaction as any).operator || undefined
         ).catch((err: any) => console.error("[PayoutPoller] Email error:", err.message));
       }
 
