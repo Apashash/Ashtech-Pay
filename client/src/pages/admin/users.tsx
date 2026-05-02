@@ -461,8 +461,8 @@ export default function AdminUsers() {
         </div>
 
         <Card>
-          <CardHeader className="space-y-3">
-            <div className="flex items-center gap-4">
+          <CardHeader>
+            <div className="flex items-center gap-3">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
@@ -473,43 +473,32 @@ export default function AdminUsers() {
                   data-testid="input-search-users"
                 />
               </div>
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <Filter className="w-4 h-4 text-muted-foreground shrink-0" />
-              {[
-                { key: "all", label: "Tous", icon: <Users className="w-3 h-3" /> },
-                { key: "banned", label: "Bannis", icon: <Ban className="w-3 h-3" /> },
-                { key: "kyc_verified", label: "KYC Validé", icon: <CheckCircle className="w-3 h-3" /> },
-                { key: "kyc_rejected", label: "KYC Rejeté", icon: <XCircle className="w-3 h-3" /> },
-                { key: "pending_kyc", label: "KYC En attente", icon: <Clock className="w-3 h-3" /> },
-                { key: "no_kyc", label: "Sans KYC", icon: <Shield className="w-3 h-3" /> },
-              ].map(({ key, label, icon }) => (
-                <Button
-                  key={key}
-                  size="sm"
-                  variant={filter === key ? "default" : "outline"}
-                  className={`gap-1.5 h-7 text-xs ${
-                    filter === key
-                      ? key === "banned" ? "bg-red-500 hover:bg-red-600 border-red-500"
-                        : key === "kyc_verified" ? "bg-green-600 hover:bg-green-700 border-green-600"
-                        : key === "kyc_rejected" ? "bg-red-500 hover:bg-red-600 border-red-500"
-                        : key === "pending_kyc" ? "bg-yellow-500 hover:bg-yellow-600 border-yellow-500 text-black"
-                        : key === "no_kyc" ? "bg-gray-500 hover:bg-gray-600 border-gray-500"
-                        : ""
-                      : key === "banned" ? "border-red-500/40 text-red-500 hover:bg-red-500/10"
-                        : key === "kyc_verified" ? "border-green-500/40 text-green-500 hover:bg-green-500/10"
-                        : key === "kyc_rejected" ? "border-red-400/40 text-red-400 hover:bg-red-400/10"
-                        : key === "pending_kyc" ? "border-yellow-500/40 text-yellow-500 hover:bg-yellow-500/10"
-                        : key === "no_kyc" ? "border-gray-400/40 text-muted-foreground hover:bg-muted/50"
-                        : ""
-                  }`}
-                  onClick={() => { setFilter(key); setPage(1); }}
-                  data-testid={`button-filter-${key}`}
-                >
-                  {icon}
-                  {label}
-                </Button>
-              ))}
+              <Select value={filter} onValueChange={(val) => { setFilter(val); setPage(1); }}>
+                <SelectTrigger className="w-[180px] gap-2" data-testid="select-user-filter">
+                  <Filter className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <SelectValue placeholder="Filtrer..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">
+                    <span className="flex items-center gap-2"><Users className="w-3.5 h-3.5" />Tous les utilisateurs</span>
+                  </SelectItem>
+                  <SelectItem value="banned">
+                    <span className="flex items-center gap-2 text-red-500"><Ban className="w-3.5 h-3.5" />Bannis</span>
+                  </SelectItem>
+                  <SelectItem value="kyc_verified">
+                    <span className="flex items-center gap-2 text-green-500"><CheckCircle className="w-3.5 h-3.5" />KYC Validé</span>
+                  </SelectItem>
+                  <SelectItem value="kyc_rejected">
+                    <span className="flex items-center gap-2 text-red-400"><XCircle className="w-3.5 h-3.5" />KYC Rejeté</span>
+                  </SelectItem>
+                  <SelectItem value="pending_kyc">
+                    <span className="flex items-center gap-2 text-yellow-500"><Clock className="w-3.5 h-3.5" />KYC En attente</span>
+                  </SelectItem>
+                  <SelectItem value="no_kyc">
+                    <span className="flex items-center gap-2 text-muted-foreground"><Shield className="w-3.5 h-3.5" />Sans KYC</span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </CardHeader>
           <CardContent className="p-0">
