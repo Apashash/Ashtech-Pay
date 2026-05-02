@@ -393,6 +393,23 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                         </SidebarMenuItem>
                       );
                     }
+
+                    if (isKyc && user?.kycStatus !== "approved" && user?.kycStatus !== "verified") {
+                      return (
+                        <SidebarMenuItem key={item.title}>
+                          <SidebarMenuButton asChild isActive={location === item.url}>
+                            <Link href={item.url}>
+                              <item.icon className="w-4 h-4 animate-bell-ring text-red-500" />
+                              <span className="flex-1 text-red-500 font-semibold">{item.title}</span>
+                              <span className="relative ml-auto flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+                              </span>
+                            </Link>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      );
+                    }
                     
                     return (
                       <SidebarMenuItem key={item.title}>
@@ -652,8 +669,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                   </div>
                 ) : (
                   <RouterLink href="/dashboard/kyc">
+                    <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-red-500/40 animate-ping pointer-events-none" />
                     <div 
-                      className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-red-500 flex items-center justify-center cursor-pointer"
+                      className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-red-500 flex items-center justify-center cursor-pointer animate-bounce"
                       data-testid="badge-unverified"
                     >
                       <HelpCircle className="w-3 h-3 text-white" />
