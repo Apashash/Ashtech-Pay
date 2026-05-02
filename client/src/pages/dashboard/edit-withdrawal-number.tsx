@@ -10,6 +10,7 @@ import type { WithdrawalNumber, User } from "@shared/schema";
 import { Phone, Loader2, ArrowLeft, Check, AlertTriangle } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { useLocation, useParams } from "wouter";
+import { useLanguage } from "@/lib/language";
 
 interface CountryConfig {
   id: string;
@@ -25,6 +26,7 @@ interface CountryConfig {
 
 export default function EditWithdrawalNumberPage() {
   const { toast } = useToast();
+  const { t } = useLanguage();
   const [, setLocation] = useLocation();
   const params = useParams<{ id: string }>();
   const [selectedOperator, setSelectedOperator] = useState<string>("");
@@ -32,7 +34,7 @@ export default function EditWithdrawalNumberPage() {
   const [label, setLabel] = useState("");
 
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
-  
+
   const { data: withdrawalNumbers = [] } = useQuery<WithdrawalNumber[]>({
     queryKey: ["/api/withdrawal-numbers"],
   });
@@ -53,20 +55,20 @@ export default function EditWithdrawalNumberPage() {
 
   const operators = useMemo(() => {
     if (!countriesConfig.length || !user?.country) return [];
-    
+
     const userCountryLower = user.country.toLowerCase().trim();
-    
+
     const userCountry = countriesConfig.find(c => {
       const configNameLower = c.name.toLowerCase().trim();
-      return configNameLower === userCountryLower || 
+      return configNameLower === userCountryLower ||
              configNameLower.includes(userCountryLower) ||
              userCountryLower.includes(configNameLower) ||
              (c.name.toLowerCase().includes("cameroun") && userCountryLower.includes("cameroon")) ||
              (c.name.toLowerCase().includes("cameroon") && userCountryLower.includes("cameroun"));
     });
-    
+
     if (!userCountry) return [];
-    
+
     return userCountry.operators.map(op => op.name);
   }, [countriesConfig, user?.country]);
 
@@ -81,20 +83,20 @@ export default function EditWithdrawalNumberPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/withdrawal-number-changes"] });
-      toast({ 
-        title: "Demande envoyée", 
-        description: "Votre demande de modification a été envoyée pour approbation" 
+      toast({
+        title: t.editWithdrawalNumber.toastSent,
+        description: t.editWithdrawalNumber.toastSentDesc,
       });
       setLocation("/dashboard/withdrawal-numbers");
     },
     onError: (error: Error) => {
-      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+      toast({ title: t.editWithdrawalNumber.toastError, description: error.message, variant: "destructive" });
     },
   });
 
   const handleSubmit = () => {
     if (!selectedOperator || !phoneNumber || !params.id) {
-      toast({ title: "Erreur", description: "Veuillez remplir tous les champs", variant: "destructive" });
+      toast({ title: t.editWithdrawalNumber.toastError, description: t.editWithdrawalNumber.toastErrorDesc, variant: "destructive" });
       return;
     }
     requestChangeMutation.mutate({
@@ -119,16 +121,16 @@ export default function EditWithdrawalNumberPage() {
     <DashboardLayout>
       <div className="max-w-2xl mx-auto space-y-6">
         <div className="flex items-center gap-4">
-          <Button 
-            variant="ghost" 
+          <Button
+            variant="ghost"
             size="icon"
             onClick={() => setLocation("/dashboard/withdrawal-numbers")}
           >
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div>
-            <h1 className="text-2xl font-semibold text-foreground">Modifier le numéro de retrait</h1>
-            <p className="text-muted-foreground">La modification nécessite une approbation admin</p>
+            <h1 className="text-2xl font-semibold text-foreground">{t.editWithdrawalNumber.title}</h1>
+            <p className="text-muted-foreground">{t.editWithdrawalNumber.subtitle}</p>
           </div>
         </div>
 
@@ -137,10 +139,8 @@ export default function EditWithdrawalNumberPage() {
             <div className="flex items-start gap-3">
               <AlertTriangle className="w-5 h-5 text-yellow-500 mt-0.5" />
               <div>
-                <p className="font-medium text-yellow-500">Approbation requise</p>
-                <p className="text-sm text-muted-foreground">
-                  Toute modification de numéro de retrait doit être approuvée par un administrateur pour des raisons de sécurité.
-                </p>
+                <p className="font-medium text-yellow-500">{t.editWithdrawalNumber.approvalRequired}</p>
+                <p className="text-sm text-muted-foreground">{t.editWithdrawalNumber.approvalDesc}</p>
               </div>
             </div>
           </CardContent>
@@ -150,16 +150,16 @@ export default function EditWithdrawalNumberPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Phone className="w-5 h-5" />
-              Choisir un opérateur
+              {t.editWithdrawalNumber.chooseOperator}
             </CardTitle>
             <CardDescription>
-              Opérateurs disponibles pour {user?.country || "votre pays"}
+              {t.editWithdrawalNumber.operatorsFor} {user?.country || t.editWithdrawalNumber.yourCountry}
             </CardDescription>
           </CardHeader>
           <CardContent>
             {operators.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                <p>Aucun opérateur disponible pour votre pays</p>
+                <p>{t.editWithdrawalNumber.noOperators}</p>
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3">
@@ -189,14 +189,14 @@ export default function EditWithdrawalNumberPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Informations du numéro</CardTitle>
+            <CardTitle>{t.editWithdrawalNumber.numberInfo}</CardTitle>
             <CardDescription>
-              Modifiez les informations de votre numéro {selectedOperator}
+              {t.editWithdrawalNumber.numberInfoDescPre}{selectedOperator}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="phoneNumber">Numéro de téléphone</Label>
+              <Label htmlFor="phoneNumber">{t.editWithdrawalNumber.phoneLabel}</Label>
               <Input
                 id="phoneNumber"
                 placeholder="XXXXXXXXX"
@@ -205,10 +205,10 @@ export default function EditWithdrawalNumberPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="label">Libellé (optionnel)</Label>
+              <Label htmlFor="label">{t.editWithdrawalNumber.labelLabel}</Label>
               <Input
                 id="label"
-                placeholder="ex: Principal, Secondaire"
+                placeholder={t.editWithdrawalNumber.labelPlaceholder}
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
               />
@@ -219,7 +219,7 @@ export default function EditWithdrawalNumberPage() {
               disabled={requestChangeMutation.isPending || !phoneNumber || !selectedOperator}
             >
               {requestChangeMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Soumettre la demande de modification
+              {t.editWithdrawalNumber.submitButton}
             </Button>
           </CardContent>
         </Card>

@@ -14,6 +14,7 @@ import {
   CheckCircle2, Terminal, Shield, CheckCheck, ChevronRight, Key, Zap,
   AlertCircle, LockKeyhole, CheckCircle,
 } from "lucide-react";
+import { useLanguage } from "@/lib/language";
 
 type Mode = "hosted" | "sdk";
 
@@ -32,12 +33,13 @@ function CopyableKey({ label, value, icon }: { label: string; value: string; ico
   const [copied, setCopied] = useState(false);
   const [visible, setVisible] = useState(false);
   const { toast } = useToast();
+  const { t } = useLanguage();
 
   function copy() {
     navigator.clipboard.writeText(value);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-    toast({ title: "Clé copiée", description: `${label} copiée dans le presse-papiers.` });
+    toast({ title: t.apiKeys.toastKeyCopied, description: label + t.apiKeys.toastKeyCopiedDescSuf });
   }
 
   const masked = value.slice(0, 12) + "•".repeat(20) + value.slice(-4);
@@ -77,12 +79,11 @@ function CopyableKey({ label, value, icon }: { label: string; value: string; ico
 
 export default function ApiKeysPage() {
   const [mode, setMode] = useState<Mode>("hosted");
+  const { t } = useLanguage();
 
-  // SDK panel state
   const [showKey, setShowKey] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // Hosted page state
   const [successUrl, setSuccessUrl] = useState("");
   const [cancelUrl, setCancelUrl] = useState("");
   const [notifyUrl, setNotifyUrl] = useState("");
@@ -91,7 +92,6 @@ export default function ApiKeysPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Current user profile (for verification + API access status)
   const { data: currentUser, isLoading: userLoading } = useQuery<{ isVerified: boolean; apiEnabled: boolean }>({
     queryKey: ["/api/user"],
   });
@@ -99,7 +99,6 @@ export default function ApiKeysPage() {
   const apiEnabled = (currentUser as any)?.apiEnabled ?? false;
   const apiAccess = isVerified && apiEnabled;
 
-  // SDK: API key query
   const { data: sdkData, isLoading: sdkLoading } = useQuery<{ apiKey: string }>({
     queryKey: ["/api/user/api-key"],
   });
@@ -109,10 +108,10 @@ export default function ApiKeysPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/user/api-key"] });
       setShowKey(false);
-      toast({ title: "Clé regénérée", description: "Votre nouvelle clé API est prête. Mettez à jour votre intégration." });
+      toast({ title: t.apiKeys.toastRegenerated, description: t.apiKeys.toastRegeneratedDesc });
     },
     onError: () => {
-      toast({ title: "Erreur", description: "Impossible de regénérer la clé.", variant: "destructive" });
+      toast({ title: t.apiKeys.toastError, description: t.apiKeys.toastImpossibleRegen, variant: "destructive" });
     },
   });
 
@@ -124,10 +123,9 @@ export default function ApiKeysPage() {
     navigator.clipboard.writeText(apiKey);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-    toast({ title: "Clé copiée", description: "La clé API a été copiée dans le presse-papiers." });
+    toast({ title: t.apiKeys.toastApiKeyCopied, description: t.apiKeys.toastApiKeyCopiedDesc });
   }
 
-  // Hosted page: config query
   const { data: hpConfig, isLoading: hpLoading } = useQuery<HostedPageConfig | null>({
     queryKey: ["/api/hosted-page/config"],
     refetchOnWindowFocus: false,
@@ -145,17 +143,15 @@ export default function ApiKeysPage() {
       apiRequest("POST", "/api/hosted-page/config", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/hosted-page/config"] });
-      toast({ title: "Configuration sauvegardée", description: "Vos clés API Hosted Page sont prêtes." });
+      toast({ title: t.apiKeys.toastConfigSaved, description: t.apiKeys.toastConfigSavedDesc });
     },
     onError: () => {
-      toast({ title: "Erreur", description: "Impossible de sauvegarder.", variant: "destructive" });
+      toast({ title: t.apiKeys.toastError, description: t.apiKeys.toastImpossibleSave, variant: "destructive" });
     },
   });
 
   const hasHpKeys = hpConfig?.pkLive && hpConfig?.skLive && hpConfig?.hpLive;
 
-  // ── Guard: show blocked state whenever API is not accessible ──
-  // Show spinner while user data loads to avoid any flash of the full UI
   if (userLoading || !currentUser) {
     return (
       <DashboardLayout>
@@ -166,69 +162,64 @@ export default function ApiKeysPage() {
     );
   }
 
-  // Non-verified: KYC required first
   if (!isVerified) {
     return (
       <DashboardLayout>
         <div className="w-full max-w-3xl min-w-0 space-y-6">
           <div>
-            <h1 className="text-2xl font-semibold text-foreground">Clé API</h1>
-            <p className="text-muted-foreground text-sm mt-1">Intégrez Ashtech Pay directement dans votre application</p>
+            <h1 className="text-2xl font-semibold text-foreground">{t.apiKeys.title}</h1>
+            <p className="text-muted-foreground text-sm mt-1">{t.apiKeys.subtitle}</p>
           </div>
           <div className="rounded-2xl border border-amber-200 bg-amber-50 dark:border-amber-800/40 dark:bg-amber-950/30 p-8 flex flex-col items-center text-center gap-5" data-testid="banner-not-verified">
             <div className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center">
               <AlertCircle className="h-8 w-8 text-amber-600 dark:text-amber-400" />
             </div>
             <div className="space-y-2">
-              <h2 className="text-lg font-semibold text-amber-900 dark:text-amber-200">Compte non vérifié</h2>
-              <p className="text-sm text-amber-700 dark:text-amber-300 max-w-md">
-                Votre compte doit être <strong>vérifié (KYC)</strong> avant de pouvoir accéder à l'API. Complétez la vérification d'identité, puis contactez l'administrateur pour activer vos clés.
-              </p>
+              <h2 className="text-lg font-semibold text-amber-900 dark:text-amber-200">{t.apiKeys.notVerifiedTitle}</h2>
+              <p className="text-sm text-amber-700 dark:text-amber-300 max-w-md"
+                dangerouslySetInnerHTML={{ __html: t.apiKeys.notVerifiedDesc }}
+              />
             </div>
             <Link href="/dashboard/kyc">
               <Button className="gap-2" data-testid="button-go-kyc">
                 <CheckCircle className="h-4 w-4" />
-                Vérifier mon identité
+                {t.apiKeys.goKycButton}
               </Button>
             </Link>
-            <p className="text-xs text-amber-600 dark:text-amber-500">
-              Étape 1 : vérification KYC · Étape 2 : activation API par l'administrateur
-            </p>
+            <p className="text-xs text-amber-600 dark:text-amber-500">{t.apiKeys.kycStep}</p>
           </div>
         </div>
       </DashboardLayout>
     );
   }
 
-  // Verified but API not enabled by admin
   if (!apiEnabled) {
     return (
       <DashboardLayout>
         <div className="w-full max-w-3xl min-w-0 space-y-6">
           <div>
-            <h1 className="text-2xl font-semibold text-foreground">Clé API</h1>
-            <p className="text-muted-foreground text-sm mt-1">Intégrez Ashtech Pay directement dans votre application</p>
+            <h1 className="text-2xl font-semibold text-foreground">{t.apiKeys.title}</h1>
+            <p className="text-muted-foreground text-sm mt-1">{t.apiKeys.subtitle}</p>
           </div>
           <div className="rounded-2xl border border-sky-200 bg-sky-50 dark:border-sky-800/40 dark:bg-sky-950/30 p-8 flex flex-col items-center text-center gap-5" data-testid="banner-api-not-enabled">
             <div className="w-16 h-16 rounded-full bg-sky-100 dark:bg-sky-900/40 flex items-center justify-center">
               <LockKeyhole className="h-8 w-8 text-sky-600 dark:text-sky-400" />
             </div>
             <div className="space-y-2">
-              <h2 className="text-lg font-semibold text-sky-900 dark:text-sky-200">Accès API non activé</h2>
-              <p className="text-sm text-sky-700 dark:text-sky-300 max-w-md">
-                Votre compte est <strong>vérifié</strong>, mais l'accès API n'a pas encore été activé par l'administrateur.
-                Contactez-nous pour demander l'activation de vos clés.
-              </p>
+              <h2 className="text-lg font-semibold text-sky-900 dark:text-sky-200">{t.apiKeys.apiNotEnabledTitle}</h2>
+              <p className="text-sm text-sky-700 dark:text-sky-300 max-w-md"
+                dangerouslySetInnerHTML={{ __html: t.apiKeys.apiNotEnabledDesc }}
+              />
             </div>
             <a href="mailto:support@ashtechpay.top">
               <Button className="gap-2" data-testid="button-contact-admin">
                 <LockKeyhole className="h-4 w-4" />
-                Contacter l'administrateur
+                {t.apiKeys.contactAdminButton}
               </Button>
             </a>
             <div className="flex items-center gap-2 text-xs text-sky-600 dark:text-sky-500">
               <CheckCircle className="h-3.5 w-3.5 text-green-500" />
-              KYC validé · En attente d'activation API par l'administrateur
+              {t.apiKeys.apiActiveStatus}
             </div>
           </div>
         </div>
@@ -240,22 +231,18 @@ export default function ApiKeysPage() {
     <DashboardLayout>
       <div className="space-y-6 w-full max-w-3xl min-w-0">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Clé API</h1>
-          <p className="text-muted-foreground text-sm mt-1">Intégrez Ashtech Pay directement dans votre application</p>
+          <h1 className="text-2xl font-semibold text-foreground">{t.apiKeys.title}</h1>
+          <p className="text-muted-foreground text-sm mt-1">{t.apiKeys.subtitle}</p>
         </div>
 
-        {/* ── Active API banner ── */}
         <div className="flex items-start gap-3 rounded-xl border border-green-200 bg-green-50 dark:border-green-800/40 dark:bg-green-900/10 px-4 py-3.5" data-testid="banner-api-active">
           <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5 shrink-0" />
           <div>
-            <p className="text-sm font-semibold text-green-800 dark:text-green-300">API activée</p>
-            <p className="text-sm text-green-700 dark:text-green-400 mt-0.5">
-              Votre accès API est actif. Utilisez vos clés ci-dessous pour intégrer Ashtech Pay dans votre application.
-            </p>
+            <p className="text-sm font-semibold text-green-800 dark:text-green-300">{t.apiKeys.apiBannerTitle}</p>
+            <p className="text-sm text-green-700 dark:text-green-400 mt-0.5">{t.apiKeys.apiBannerDesc}</p>
           </div>
         </div>
 
-        {/* Mode selector */}
         <div className="grid grid-cols-2 gap-4">
           <button
             onClick={() => setMode("hosted")}
@@ -273,9 +260,9 @@ export default function ApiKeysPage() {
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-semibold text-foreground text-sm">Hosted Page</span>
-                  {mode === "hosted" && <Badge className="text-[10px] px-1.5 py-0">Actif</Badge>}
+                  {mode === "hosted" && <Badge className="text-[10px] px-1.5 py-0">{t.apiKeys.modeActive}</Badge>}
                 </div>
-                <p className="text-xs text-muted-foreground mt-0.5">Lien de paiement hébergé par Ashtech Pay</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{t.apiKeys.hostedPageDesc}</p>
               </div>
             </div>
           </button>
@@ -296,24 +283,21 @@ export default function ApiKeysPage() {
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-semibold text-foreground text-sm">SDK Direct API</span>
-                  {mode === "sdk" && <Badge className="text-[10px] px-1.5 py-0">Actif</Badge>}
+                  {mode === "sdk" && <Badge className="text-[10px] px-1.5 py-0">{t.apiKeys.modeActive}</Badge>}
                 </div>
-                <p className="text-xs text-muted-foreground mt-0.5">Intégration directe sans redirection</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{t.apiKeys.sdkDesc}</p>
               </div>
             </div>
           </button>
         </div>
 
-        {/* ── Hosted Page panel ── */}
         {mode === "hosted" && (
           <div className="space-y-4">
-
-            {/* How it works */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {[
-                { icon: Key, label: "1. Configurez", desc: "Entrez vos URLs de redirection et générez vos clés." },
-                { icon: Zap, label: "2. Créez un lien", desc: "Appelez l'API pour créer un lien de paiement unique." },
-                { icon: Shield, label: "3. Le client paie", desc: "Le client paie sur la page Ashtech Pay hébergée." },
+                { icon: Key, label: t.apiKeys.step1Label, desc: t.apiKeys.step1Desc },
+                { icon: Zap, label: t.apiKeys.step2Label, desc: t.apiKeys.step2Desc },
+                { icon: Shield, label: t.apiKeys.step3Label, desc: t.apiKeys.step3Desc },
               ].map(({ icon: Icon, label, desc }) => (
                 <div key={label} className="rounded-xl border bg-card p-4 space-y-2">
                   <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -325,13 +309,12 @@ export default function ApiKeysPage() {
               ))}
             </div>
 
-            {/* Configuration URLs */}
             <Card>
               <CardHeader className="pb-3">
-                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Configuration</p>
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{t.apiKeys.configSection}</p>
                 <CardTitle className="text-base flex items-center gap-2">
                   <Globe className="w-4 h-4 text-muted-foreground" />
-                  URLs de redirection
+                  {t.apiKeys.configTitle}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -344,9 +327,7 @@ export default function ApiKeysPage() {
                     value={successUrl}
                     onChange={(e) => setSuccessUrl(e.target.value)}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    URL vers laquelle le client sera redirigé après un paiement réussi.
-                  </p>
+                  <p className="text-xs text-muted-foreground">{t.apiKeys.successUrlDesc}</p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="cancel-url">Cancel Redirect URL</Label>
@@ -357,15 +338,13 @@ export default function ApiKeysPage() {
                     value={cancelUrl}
                     onChange={(e) => setCancelUrl(e.target.value)}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    URL vers laquelle le client sera redirigé si le paiement échoue ou est annulé.
-                  </p>
+                  <p className="text-xs text-muted-foreground">{t.apiKeys.cancelUrlDesc}</p>
                 </div>
 
                 <div className="space-y-2 pt-2 border-t">
                   <Label htmlFor="notify-url" className="flex items-center gap-2">
-                    Webhook URL (notify_url)
-                    <span className="text-[10px] bg-violet-500/10 text-violet-500 border border-violet-500/20 px-1.5 py-0.5 rounded font-mono">Automatique</span>
+                    {t.apiKeys.webhookLabel}
+                    <span className="text-[10px] bg-violet-500/10 text-violet-500 border border-violet-500/20 px-1.5 py-0.5 rounded font-mono">{t.apiKeys.webhookBadge}</span>
                   </Label>
                   <Input
                     id="notify-url"
@@ -374,9 +353,7 @@ export default function ApiKeysPage() {
                     value={notifyUrl}
                     onChange={(e) => setNotifyUrl(e.target.value)}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Votre serveur recevra automatiquement une notification POST à chaque paiement Hosted Page confirmé ou échoué — sans que vous ayez à le spécifier dans chaque lien.
-                  </p>
+                  <p className="text-xs text-muted-foreground">{t.apiKeys.webhookDesc}</p>
                 </div>
 
                 {hasHpKeys ? (
@@ -386,7 +363,7 @@ export default function ApiKeysPage() {
                     disabled={hpMutation.isPending}
                     data-testid="button-save-urls"
                   >
-                    {hpMutation.isPending ? "Sauvegarde..." : "Sauvegarder les URLs"}
+                    {hpMutation.isPending ? t.apiKeys.savingButton : t.apiKeys.saveUrlsButton}
                   </Button>
                 ) : (
                   <Button
@@ -398,7 +375,7 @@ export default function ApiKeysPage() {
                     {hpMutation.isPending ? (
                       <>
                         <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                        Génération...
+                        {t.apiKeys.generatingButton}
                       </>
                     ) : (
                       <>
@@ -411,18 +388,17 @@ export default function ApiKeysPage() {
               </CardContent>
             </Card>
 
-            {/* API Keys display */}
             {hasHpKeys && (
               <Card>
                 <CardHeader className="pb-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Clés générées</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{t.apiKeys.keysSection}</p>
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base flex items-center gap-2">
                       <Key className="w-4 h-4 text-muted-foreground" />
                       API Keys
                     </CardTitle>
                     <Badge variant="secondary" className="bg-green-500/10 text-green-600 border-green-500/20">
-                      Actives
+                      {t.apiKeys.keysActive}
                     </Badge>
                   </div>
                 </CardHeader>
@@ -453,22 +429,19 @@ export default function ApiKeysPage() {
                       className="text-destructive hover:text-destructive"
                     >
                       <RefreshCw className="h-3.5 w-3.5 mr-2" />
-                      Regénérer toutes les clés
+                      {t.apiKeys.regenerateKeys}
                     </Button>
-                    <p className="text-xs text-muted-foreground mt-1.5">
-                      Attention — regénérer les clés invalidera les clés actuelles.
-                    </p>
+                    <p className="text-xs text-muted-foreground mt-1.5">{t.apiKeys.regenerateWarning}</p>
                   </div>
                 </CardContent>
               </Card>
             )}
 
-            {/* Documentation button */}
             {hasHpKeys && (
               <Link href="/dashboard/hosted-page/docs">
                 <Button className="w-full" data-testid="button-documentation">
                   <BookOpen className="h-4 w-4 mr-2" />
-                  Documentation
+                  {t.apiKeys.docButton}
                   <ChevronRight className="h-4 w-4 ml-auto" />
                 </Button>
               </Link>
@@ -482,21 +455,18 @@ export default function ApiKeysPage() {
           </div>
         )}
 
-        {/* ── SDK Direct API panel ── */}
         {mode === "sdk" && (
           <div className="space-y-4">
             <Card>
               <CardHeader className="pb-3">
-                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Authentification</p>
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{t.apiKeys.sdkAuthSection}</p>
                 <CardTitle className="text-base flex items-center gap-2">
                   <Shield className="w-4 h-4 text-muted-foreground" />
-                  Votre clé API
+                  {t.apiKeys.sdkAuthTitle}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  Utilisez cette clé pour authentifier toutes vos requêtes à l'API Ashtech Pay. Ne la partagez jamais publiquement.
-                </p>
+                <p className="text-sm text-muted-foreground">{t.apiKeys.sdkAuthDesc}</p>
 
                 <div className="rounded-lg border bg-muted/30 p-4">
                   <div className="flex items-center justify-between gap-3 min-w-0">
@@ -504,7 +474,7 @@ export default function ApiKeysPage() {
                       className="text-sm font-mono text-foreground flex-1 min-w-0 break-all select-all"
                       data-testid="text-api-key"
                     >
-                      {sdkLoading ? "Chargement…" : showKey ? apiKey : maskedKey}
+                      {sdkLoading ? t.apiKeys.sdkLoading : showKey ? apiKey : maskedKey}
                     </code>
                     <div className="flex items-center gap-2 shrink-0">
                       <Button
@@ -514,7 +484,7 @@ export default function ApiKeysPage() {
                         onClick={() => setShowKey((v) => !v)}
                         disabled={sdkLoading || !apiKey}
                         data-testid="button-toggle-key-visibility"
-                        title={showKey ? "Masquer" : "Afficher"}
+                        title={showKey ? t.apiKeys.sdkHide : t.apiKeys.sdkShow}
                       >
                         {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </Button>
@@ -525,7 +495,7 @@ export default function ApiKeysPage() {
                         onClick={copyKey}
                         disabled={sdkLoading || !apiKey}
                         data-testid="button-copy-key"
-                        title="Copier"
+                        title={t.apiKeys.sdkCopy}
                       >
                         {copied ? <CheckCheck className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
                       </Button>
@@ -534,9 +504,7 @@ export default function ApiKeysPage() {
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <p className="text-xs text-muted-foreground">
-                    Si vous regénérez la clé, l'ancienne sera immédiatement invalidée.
-                  </p>
+                  <p className="text-xs text-muted-foreground">{t.apiKeys.sdkRegenerateWarning}</p>
                   <Button
                     variant="outline"
                     size="sm"
@@ -546,14 +514,14 @@ export default function ApiKeysPage() {
                     className="shrink-0 ml-4"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${regenerateMutation.isPending ? "animate-spin" : ""}`} />
-                    Regénérer
+                    {t.apiKeys.sdkRegenerate}
                   </Button>
                 </div>
 
                 <Link href="/dashboard/developer">
                   <Button className="w-full mt-2" data-testid="link-open-docs">
                     <BookOpen className="w-4 h-4 mr-2" />
-                    Documentation d'intégration
+                    {t.apiKeys.sdkDocsButton}
                     <ChevronRight className="w-4 h-4 ml-auto" />
                   </Button>
                 </Link>
@@ -564,7 +532,7 @@ export default function ApiKeysPage() {
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm flex items-center gap-2">
                   <Terminal className="w-4 h-4 text-primary" />
-                  Exemple rapide
+                  {t.apiKeys.sdkExampleTitle}
                 </CardTitle>
               </CardHeader>
               <CardContent>

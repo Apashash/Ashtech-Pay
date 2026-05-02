@@ -13,12 +13,12 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, getAuthHeaders } from "@/lib/queryClient";
 import type { User, KycSubmission } from "@shared/schema";
 import { KYC_DOCUMENT_TYPES, BUSINESS_CATEGORIES } from "@shared/schema";
-import { 
-  Shield, 
-  CheckCircle, 
-  Clock, 
-  Upload, 
-  FileText, 
+import {
+  Shield,
+  CheckCircle,
+  Clock,
+  Upload,
+  FileText,
   Building2,
   AlertCircle,
   Camera,
@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { useState, useRef, useCallback, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { useLanguage } from "@/lib/language";
 
 const africanCountries = [
   { code: "CM", name: "Cameroun", flag: "🇨🇲" },
@@ -64,6 +65,7 @@ interface UploadPreview {
 
 export default function KYCPage() {
   const { toast } = useToast();
+  const { t } = useLanguage();
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const { data: kycSubmission, isLoading: isLoadingKyc } = useQuery<KycSubmission | null>({
     queryKey: ["/api/kyc"],
@@ -77,19 +79,19 @@ export default function KYCPage() {
   const [businessCategory, setBusinessCategory] = useState("");
   const [businessDescription, setBusinessDescription] = useState("");
   const [categoryOpen, setCategoryOpen] = useState(false);
-  
+
   const [uploadedPaths, setUploadedPaths] = useState<UploadState>({
     front: null,
     back: null,
     selfie: null,
   });
-  
+
   const [uploadPreviews, setUploadPreviews] = useState<UploadPreview>({
     front: null,
     back: null,
     selfie: null,
   });
-  
+
   const [uploading, setUploading] = useState<{ [key in UploadField]: boolean }>({
     front: false,
     back: false,
@@ -130,14 +132,14 @@ export default function KYCPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/kyc"] });
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       toast({
-        title: "Demande soumise",
-        description: "Votre demande de vérification est en cours de traitement.",
+        title: t.kyc.toastSubmitted,
+        description: t.kyc.toastSubmittedDesc,
       });
     },
     onError: (error: Error) => {
       toast({
-        title: "Erreur",
-        description: error.message || "Une erreur est survenue",
+        title: t.kyc.toastError,
+        description: error.message || t.common.error,
         variant: "destructive",
       });
     },
@@ -149,8 +151,8 @@ export default function KYCPage() {
     const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
     if (!allowedTypes.includes(file.type)) {
       toast({
-        title: "Type de fichier non autorisé",
-        description: "Veuillez utiliser un fichier JPG, PNG ou WebP",
+        title: t.kyc.toastFileTypeError,
+        description: t.kyc.toastFileTypeDesc,
         variant: "destructive",
       });
       return;
@@ -158,8 +160,8 @@ export default function KYCPage() {
 
     if (file.size > 5 * 1024 * 1024) {
       toast({
-        title: "Fichier trop volumineux",
-        description: "La taille maximale est de 5 Mo",
+        title: t.kyc.toastFileSizeError,
+        description: t.kyc.toastFileSizeDesc,
         variant: "destructive",
       });
       return;
@@ -186,7 +188,7 @@ export default function KYCPage() {
       const storedPath = result.url || result.objectPath;
 
       setUploadedPaths(prev => ({ ...prev, [field]: storedPath }));
-      
+
       const reader = new FileReader();
       reader.onload = (e) => {
         setUploadPreviews(prev => ({ ...prev, [field]: e.target?.result as string }));
@@ -194,19 +196,19 @@ export default function KYCPage() {
       reader.readAsDataURL(file);
 
       toast({
-        title: "Fichier téléchargé",
-        description: "Le fichier a été téléchargé avec succès",
+        title: t.kyc.toastFileUploaded,
+        description: t.kyc.toastFileUploadedDesc,
       });
     } catch (error) {
       toast({
-        title: "Erreur de téléchargement",
-        description: error instanceof Error ? error.message : "Une erreur est survenue",
+        title: t.kyc.toastUploadError,
+        description: error instanceof Error ? error.message : t.common.error,
         variant: "destructive",
       });
     } finally {
       setUploading(prev => ({ ...prev, [field]: false }));
     }
-  }, [toast]);
+  }, [toast, t]);
 
   const handleInputChange = (field: UploadField) => (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -218,7 +220,7 @@ export default function KYCPage() {
   const removeUpload = (field: UploadField) => {
     setUploadedPaths(prev => ({ ...prev, [field]: null }));
     setUploadPreviews(prev => ({ ...prev, [field]: null }));
-    
+
     const inputRef = field === "front" ? frontInputRef : field === "back" ? backInputRef : selfieInputRef;
     if (inputRef.current) {
       inputRef.current.value = "";
@@ -230,8 +232,8 @@ export default function KYCPage() {
 
     if (!documentType || !documentNumber || !city || !postalCode || !businessType || !businessCategory || !businessDescription) {
       toast({
-        title: "Champs requis",
-        description: "Veuillez remplir tous les champs obligatoires (ville et code postal inclus)",
+        title: t.kyc.toastRequiredFields,
+        description: t.kyc.toastRequiredFieldsDesc,
         variant: "destructive",
       });
       return;
@@ -239,8 +241,8 @@ export default function KYCPage() {
 
     if (descriptionWordCount > 250) {
       toast({
-        title: "Description trop longue",
-        description: `La description ne peut pas dépasser 250 mots (actuellement ${descriptionWordCount} mots)`,
+        title: t.kyc.toastDescTooLong,
+        description: t.kyc.toastDescTooLongPre + descriptionWordCount + t.kyc.toastDescTooLongSuf,
         variant: "destructive",
       });
       return;
@@ -248,8 +250,8 @@ export default function KYCPage() {
 
     if (!uploadedPaths.front || !uploadedPaths.back || !uploadedPaths.selfie) {
       toast({
-        title: "Documents requis",
-        description: "Veuillez télécharger tous les documents requis",
+        title: t.kyc.toastDocsRequired,
+        description: t.kyc.toastDocsRequiredDesc,
         variant: "destructive",
       });
       return;
@@ -288,10 +290,8 @@ export default function KYCPage() {
             <div className="flex items-center gap-4">
               <CheckCircle className="w-10 h-10 text-green-500" />
               <div>
-                <p className="font-semibold text-foreground">Compte vérifié</p>
-                <p className="text-sm text-muted-foreground">
-                  Votre compte est entièrement vérifié. Vous avez accès à toutes les fonctionnalités.
-                </p>
+                <p className="font-semibold text-foreground">{t.kyc.statusApproved}</p>
+                <p className="text-sm text-muted-foreground">{t.kyc.statusApprovedDesc}</p>
               </div>
             </div>
           </CardContent>
@@ -306,10 +306,8 @@ export default function KYCPage() {
             <div className="flex items-center gap-4">
               <Clock className="w-10 h-10 text-yellow-500" />
               <div>
-                <p className="font-semibold text-foreground">Vérification en cours</p>
-                <p className="text-sm text-muted-foreground">
-                  Votre demande est en cours d'examen. Vous serez notifié par email une fois la vérification terminée.
-                </p>
+                <p className="font-semibold text-foreground">{t.kyc.statusPending}</p>
+                <p className="text-sm text-muted-foreground">{t.kyc.statusPendingDesc}</p>
               </div>
             </div>
           </CardContent>
@@ -324,14 +322,12 @@ export default function KYCPage() {
             <div className="flex items-start gap-4">
               <AlertCircle className="w-10 h-10 text-red-500 flex-shrink-0" />
               <div>
-                <p className="font-semibold text-foreground">Vérification rejetée</p>
-                <p className="text-sm text-muted-foreground mb-2">
-                  Votre demande a été rejetée. Veuillez soumettre de nouveaux documents.
-                </p>
+                <p className="font-semibold text-foreground">{t.kyc.statusRejected}</p>
+                <p className="text-sm text-muted-foreground mb-2">{t.kyc.statusRejectedDesc}</p>
                 {kycSubmission.reviewNote && (
                   <div className="bg-red-500/10 rounded-lg p-3 mt-2">
                     <p className="text-sm text-red-400">
-                      <strong>Raison :</strong> {kycSubmission.reviewNote}
+                      <strong>{t.kyc.statusRejectedReason}</strong> {kycSubmission.reviewNote}
                     </p>
                   </div>
                 )}
@@ -348,10 +344,8 @@ export default function KYCPage() {
           <div className="flex items-center gap-4">
             <Shield className="w-10 h-10 text-yellow-500" />
             <div>
-              <p className="font-semibold text-foreground">Vérification non effectuée</p>
-              <p className="text-sm text-muted-foreground">
-                Complétez votre vérification KYC pour accéder aux fonctionnalités d'envoi, de retrait et de transfert.
-              </p>
+              <p className="font-semibold text-foreground">{t.kyc.statusNone}</p>
+              <p className="text-sm text-muted-foreground">{t.kyc.statusNoneDesc}</p>
             </div>
           </div>
         </CardContent>
@@ -381,7 +375,7 @@ export default function KYCPage() {
           className="hidden"
           data-testid={`input-file-${field}`}
         />
-        
+
         {hasUploaded && preview ? (
           <div className="relative border-2 border-green-500/50 bg-green-500/5 rounded-lg p-4">
             <button
@@ -400,7 +394,7 @@ export default function KYCPage() {
               />
               <div className="flex items-center gap-2 text-green-500">
                 <CheckCircle className="w-5 h-5" />
-                <span className="text-sm font-medium">Téléchargé</span>
+                <span className="text-sm font-medium">{t.kyc.uploaded}</span>
               </div>
             </div>
           </div>
@@ -420,9 +414,9 @@ export default function KYCPage() {
               </div>
             )}
             <p className="text-sm text-muted-foreground">
-              {isUploading ? "Téléchargement en cours..." : description}
+              {isUploading ? t.kyc.uploading : description}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">JPG, PNG, WebP - Max 5 Mo</p>
+            <p className="text-xs text-muted-foreground mt-1">{t.kyc.fileFormat}</p>
           </button>
         )}
       </div>
@@ -451,8 +445,8 @@ export default function KYCPage() {
     <DashboardLayout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Vérification KYC</h1>
-          <p className="text-muted-foreground">Vérifiez votre identité pour débloquer toutes les fonctionnalités</p>
+          <h1 className="text-2xl font-semibold text-foreground">{t.kyc.title}</h1>
+          <p className="text-muted-foreground">{t.kyc.subtitle}</p>
         </div>
 
         {renderStatusCard()}
@@ -461,19 +455,17 @@ export default function KYCPage() {
           <form onSubmit={handleSubmit} className="space-y-6">
             <Card>
               <CardHeader>
-                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Identité</p>
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{t.kyc.identitySection}</p>
                 <CardTitle className="flex items-center gap-2 text-base">
                   <Shield className="w-4 h-4 text-muted-foreground" />
-                  Informations personnelles
+                  {t.kyc.identityTitle}
                 </CardTitle>
-                <CardDescription>
-                  Ces informations proviennent de votre compte et ne peuvent pas être modifiées ici
-                </CardDescription>
+                <CardDescription>{t.kyc.identityDesc}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid md:grid-cols-3 gap-4">
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">Nom complet</Label>
+                    <Label className="text-muted-foreground">{t.kyc.fullNameLabel}</Label>
                     <Input
                       value={user?.fullName || ""}
                       disabled
@@ -482,7 +474,7 @@ export default function KYCPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">Adresse email</Label>
+                    <Label className="text-muted-foreground">{t.kyc.emailLabel}</Label>
                     <Input
                       value={user?.email || ""}
                       disabled
@@ -491,9 +483,9 @@ export default function KYCPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">Numéro de téléphone</Label>
+                    <Label className="text-muted-foreground">{t.kyc.phoneLabel}</Label>
                     <Input
-                      value={user?.phone || "Non renseigné"}
+                      value={user?.phone || t.kyc.notFilled}
                       disabled
                       className="bg-muted/50"
                       data-testid="input-phone-readonly"
@@ -502,29 +494,29 @@ export default function KYCPage() {
                 </div>
                 <div className="grid md:grid-cols-3 gap-4">
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">Pays</Label>
+                    <Label className="text-muted-foreground">{t.kyc.countryLabel}</Label>
                     <Input
-                      value={user?.country || "Non renseigné"}
+                      value={user?.country || t.kyc.notFilled}
                       disabled
                       className="bg-muted/50"
                       data-testid="input-country-readonly"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Ville *</Label>
+                    <Label>{t.kyc.cityLabel}</Label>
                     <Input
                       value={city}
                       onChange={(e) => setCity(e.target.value)}
-                      placeholder="Ex: Douala"
+                      placeholder={t.kyc.cityPlaceholder}
                       data-testid="input-city"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Code postal *</Label>
+                    <Label>{t.kyc.postalCodeLabel}</Label>
                     <Input
                       value={postalCode}
                       onChange={(e) => setPostalCode(e.target.value)}
-                      placeholder="Ex: 00237"
+                      placeholder={t.kyc.postalCodePlaceholder}
                       data-testid="input-postal-code"
                     />
                   </div>
@@ -535,21 +527,19 @@ export default function KYCPage() {
             <div className="grid lg:grid-cols-2 gap-6">
               <Card>
                 <CardHeader>
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Documents</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{t.kyc.documentsSection}</p>
                   <CardTitle className="flex items-center gap-2 text-base">
                     <CreditCard className="w-4 h-4 text-muted-foreground" />
-                    Pièce d'identité
+                    {t.kyc.documentsTitle}
                   </CardTitle>
-                  <CardDescription>
-                    Téléchargez une copie de votre pièce d'identité valide
-                  </CardDescription>
+                  <CardDescription>{t.kyc.documentsDesc}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
-                    <Label>Type de document *</Label>
+                    <Label>{t.kyc.documentTypeLabel}</Label>
                     <Select value={documentType} onValueChange={setDocumentType}>
                       <SelectTrigger data-testid="select-document-type">
-                        <SelectValue placeholder="Choisir le type de document" />
+                        <SelectValue placeholder={t.kyc.documentTypePlaceholder} />
                       </SelectTrigger>
                       <SelectContent>
                         {KYC_DOCUMENT_TYPES.map((doc) => (
@@ -562,35 +552,35 @@ export default function KYCPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Numéro du document *</Label>
+                    <Label>{t.kyc.documentNumberLabel}</Label>
                     <Input
                       value={documentNumber}
                       onChange={(e) => setDocumentNumber(e.target.value)}
-                      placeholder="Ex: 123456789"
+                      placeholder={t.kyc.documentNumberPlaceholder}
                       data-testid="input-document-number"
                     />
                   </div>
 
                   {renderUploadBox(
                     "front",
-                    "Recto du document *",
-                    "Cliquez pour télécharger le recto",
+                    t.kyc.frontLabel,
+                    t.kyc.frontDesc,
                     <ImageIcon className="w-8 h-8" />,
                     frontInputRef as React.RefObject<HTMLInputElement>
                   )}
 
                   {renderUploadBox(
                     "back",
-                    "Verso du document *",
-                    "Cliquez pour télécharger le verso",
+                    t.kyc.backLabel,
+                    t.kyc.backDesc,
                     <ImageIcon className="w-8 h-8" />,
                     backInputRef as React.RefObject<HTMLInputElement>
                   )}
 
                   {renderUploadBox(
                     "selfie",
-                    "Selfie avec le document *",
-                    "Prenez un selfie en tenant votre document",
+                    t.kyc.selfieLabel,
+                    t.kyc.selfieDesc,
                     <Camera className="w-8 h-8" />,
                     selfieInputRef as React.RefObject<HTMLInputElement>
                   )}
@@ -599,37 +589,35 @@ export default function KYCPage() {
 
               <Card>
                 <CardHeader>
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Activité</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{t.kyc.activitySection}</p>
                   <CardTitle className="flex items-center gap-2 text-base">
                     <Building2 className="w-4 h-4 text-muted-foreground" />
-                    Informations sur l'activité
+                    {t.kyc.activityTitle}
                   </CardTitle>
-                  <CardDescription>
-                    Décrivez votre activité professionnelle ou commerciale
-                  </CardDescription>
+                  <CardDescription>{t.kyc.activityDesc}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
-                    <Label>Type d'activité *</Label>
-                    <Select 
-                      value={businessType} 
+                    <Label>{t.kyc.businessTypeLabel}</Label>
+                    <Select
+                      value={businessType}
                       onValueChange={(value: "physical" | "online") => {
                         setBusinessType(value);
                         setBusinessCategory("");
                       }}
                     >
                       <SelectTrigger data-testid="select-business-type">
-                        <SelectValue placeholder="Choisir le type d'activité" />
+                        <SelectValue placeholder={t.kyc.businessTypePlaceholder} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="physical">Commerce physique / Service en personne</SelectItem>
-                        <SelectItem value="online">Commerce en ligne / Service numérique</SelectItem>
+                        <SelectItem value="physical">{t.kyc.businessTypePhysical}</SelectItem>
+                        <SelectItem value="online">{t.kyc.businessTypeOnline}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Catégorie d'activité *</Label>
+                    <Label>{t.kyc.businessCategoryLabel}</Label>
                     <Popover open={categoryOpen} onOpenChange={setCategoryOpen}>
                       <PopoverTrigger asChild>
                         <Button
@@ -641,16 +629,16 @@ export default function KYCPage() {
                           data-testid="select-business-category"
                         >
                           {businessCategory
-                            ? filteredCategories.find(c => c.id === businessCategory)?.name ?? "Choisir la catégorie"
-                            : businessType ? "Choisir la catégorie" : "Sélectionnez d'abord le type"}
+                            ? filteredCategories.find(c => c.id === businessCategory)?.name ?? t.kyc.categoryChoose
+                            : businessType ? t.kyc.categoryChoose : t.kyc.categorySelectType}
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-full p-0" align="start">
                         <Command>
-                          <CommandInput placeholder="Rechercher une catégorie..." data-testid="input-category-search" />
+                          <CommandInput placeholder={t.kyc.categorySearch} data-testid="input-category-search" />
                           <CommandList>
-                            <CommandEmpty>Aucune catégorie trouvée.</CommandEmpty>
+                            <CommandEmpty>{t.kyc.categoryEmpty}</CommandEmpty>
                             <CommandGroup>
                               {filteredCategories.map((cat) => (
                                 <CommandItem
@@ -675,21 +663,21 @@ export default function KYCPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Description de l'activité *</Label>
+                    <Label>{t.kyc.businessDescLabel}</Label>
                     <Textarea
                       value={businessDescription}
                       onChange={(e) => setBusinessDescription(e.target.value)}
-                      placeholder="Décrivez brièvement votre activité, les produits ou services que vous proposez..."
+                      placeholder={t.kyc.businessDescPlaceholder}
                       rows={4}
                       data-testid="textarea-business-description"
                     />
                     <p className={cn("text-xs", descriptionWordCount > 250 ? "text-destructive font-medium" : "text-muted-foreground")}>
-                      {descriptionWordCount} / 250 mots
+                      {descriptionWordCount} {t.kyc.wordsOf}
                     </p>
                   </div>
 
                   <div className="p-4 bg-muted/50 rounded-lg space-y-2">
-                    <h4 className="font-medium text-sm">Documents requis</h4>
+                    <h4 className="font-medium text-sm">{t.kyc.requiredDocs}</h4>
                     <ul className="text-sm text-muted-foreground space-y-1">
                       <li className="flex items-center gap-2">
                         {uploadedPaths.front ? (
@@ -697,7 +685,7 @@ export default function KYCPage() {
                         ) : (
                           <div className="w-4 h-4 rounded-full border border-muted-foreground" />
                         )}
-                        Recto du document d'identité
+                        {t.kyc.docFront}
                       </li>
                       <li className="flex items-center gap-2">
                         {uploadedPaths.back ? (
@@ -705,7 +693,7 @@ export default function KYCPage() {
                         ) : (
                           <div className="w-4 h-4 rounded-full border border-muted-foreground" />
                         )}
-                        Verso du document d'identité
+                        {t.kyc.docBack}
                       </li>
                       <li className="flex items-center gap-2">
                         {uploadedPaths.selfie ? (
@@ -713,7 +701,7 @@ export default function KYCPage() {
                         ) : (
                           <div className="w-4 h-4 rounded-full border border-muted-foreground" />
                         )}
-                        Selfie avec le document
+                        {t.kyc.docSelfie}
                       </li>
                     </ul>
                   </div>
@@ -731,12 +719,12 @@ export default function KYCPage() {
                 {submitMutation.isPending ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Envoi en cours...
+                    {t.kyc.submitting}
                   </>
                 ) : (
                   <>
                     <Shield className="w-4 h-4 mr-2" />
-                    Soumettre pour vérification
+                    {t.kyc.submitButton}
                   </>
                 )}
               </Button>
