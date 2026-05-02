@@ -715,24 +715,11 @@ export default function DashboardHome() {
 
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">Actions rapides</p>
-          <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
-            {[
-              { icon: CreditCard, label: "Recharger mon compte", sub: "Via Mobile Money", color: "bg-green-500/10", iconColor: "text-green-500", path: "/dashboard/deposit", testId: "button-action-deposit" },
-              { icon: Send, label: "Envoyer de l'argent", sub: "Transfert instantané", color: "bg-blue-500/10", iconColor: "text-blue-500", path: "/dashboard/send", testId: "button-action-send" },
-              { icon: ArrowDownUp, label: "Retirer des fonds", sub: "Vers Mobile Money ou banque", color: "bg-orange-500/10", iconColor: "text-orange-500", path: "/dashboard/withdraw", testId: "button-action-withdraw" },
-              { icon: Link2, label: "Créer un lien de paiement", sub: "Collectez en ligne facilement", color: "bg-purple-500/10", iconColor: "text-purple-500", path: "/dashboard/links", testId: "button-action-link" },
-            ].map(({ icon: Icon, label, sub, color, iconColor, path, testId }) => (
-              <button key={path} type="button" className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-muted/50 transition-colors text-left" onClick={() => setLocation(path)} data-testid={testId}>
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${color}`}>
-                  <Icon className={`w-4 h-4 ${iconColor}`} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground">{label}</p>
-                  <p className="text-xs text-muted-foreground">{sub}</p>
-                </div>
-                <ChevronRight className="w-4 h-4 text-muted-foreground/50 shrink-0" />
-              </button>
-            ))}
+          <div className="grid grid-cols-2 gap-3">
+            <QuickActionCard icon={CreditCard} label="Dépôt" color="bg-green-500/10 text-green-500" onClick={() => setLocation("/dashboard/deposit")} testId="button-action-deposit" />
+            <QuickActionCard icon={Send} label="Envoyer" color="bg-blue-500/10 text-blue-500" onClick={() => setLocation("/dashboard/send")} testId="button-action-send" />
+            <QuickActionCard icon={ArrowDownUp} label="Retrait" color="bg-orange-500/10 text-orange-500" onClick={() => setLocation("/dashboard/withdraw")} testId="button-action-withdraw" />
+            <QuickActionCard icon={Link2} label="Lien paiement" color="bg-purple-500/10 text-purple-500" onClick={() => setLocation("/dashboard/links")} testId="button-action-link" />
           </div>
         </div>
 
