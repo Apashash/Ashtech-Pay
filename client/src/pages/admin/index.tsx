@@ -288,45 +288,6 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Solde total disponible sur la plateforme */}
-        <Card className="border-2 border-blue-500/40 bg-gradient-to-r from-blue-500/5 to-blue-600/10">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between flex-wrap gap-4">
-              <div className="flex items-center gap-3">
-                <div className="p-3 rounded-xl bg-blue-500/20">
-                  <Wallet className="w-6 h-6 text-blue-500" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground font-medium">Solde total disponible — Tous les comptes utilisateurs</p>
-                  <p className="text-xs text-muted-foreground">Somme de tous les wallets convertis en XAF · Mise à jour toutes les 60s</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-6 flex-wrap">
-                <div className="text-right">
-                  {balancesLoading ? (
-                    <Skeleton className="h-9 w-40" />
-                  ) : (
-                    <p className="text-3xl font-bold text-blue-500" data-testid="text-total-platform-balance">
-                      {formatCurrency(totalBalances?.totalXAF || 0, "XAF")}
-                    </p>
-                  )}
-                  <p className="text-xs text-muted-foreground mt-0.5">Équivalent XAF total</p>
-                </div>
-                {!balancesLoading && totalBalances?.breakdown && totalBalances.breakdown.length > 0 && (
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs max-w-xs">
-                    {totalBalances.breakdown.slice(0, 8).map(b => (
-                      <div key={b.currency} className="contents">
-                        <span className="text-muted-foreground font-medium">{b.currency}:</span>
-                        <span className="font-semibold text-right">{parseFloat(b.amount).toLocaleString("fr-FR", { maximumFractionDigits: 2 })}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Revenus du jour — toujours affiché indépendamment du filtre de période */}
         <Card className="border-2 border-primary/40 bg-gradient-to-r from-primary/5 to-primary/10">
           <CardContent className="p-4">
@@ -495,6 +456,45 @@ export default function AdminDashboard() {
                   {formatCurrency(parseFloat(stats?.totalRevenue || "0"), "XAF")}
                 </p>
               )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Solde total disponible sur la plateforme */}
+        <Card className="border-2 border-blue-500/40 bg-gradient-to-r from-blue-500/5 to-blue-600/10">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-xl bg-blue-500/20">
+                  <Wallet className="w-6 h-6 text-blue-500" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground font-medium">Solde total disponible — Tous les comptes utilisateurs</p>
+                  <p className="text-xs text-muted-foreground">Somme de tous les wallets convertis en XAF · Mise à jour toutes les 60s</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-6 flex-wrap">
+                <div className="text-right">
+                  {balancesLoading ? (
+                    <Skeleton className="h-9 w-40" />
+                  ) : (
+                    <p className="text-3xl font-bold text-blue-500" data-testid="text-total-platform-balance">
+                      {formatCurrency(totalBalances?.totalXAF || 0, "XAF")}
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-0.5">Équivalent XAF total</p>
+                </div>
+                {!balancesLoading && totalBalances?.breakdown && totalBalances.breakdown.length > 0 && (
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs max-w-xs">
+                    {totalBalances.breakdown.slice(0, 8).map(b => (
+                      <div key={b.currency} className="contents">
+                        <span className="text-muted-foreground font-medium">{b.currency}:</span>
+                        <span className="font-semibold text-right">{parseFloat(b.amount).toLocaleString("fr-FR", { maximumFractionDigits: 2 })}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>
