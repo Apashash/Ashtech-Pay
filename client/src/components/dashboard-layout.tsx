@@ -477,11 +477,14 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               <Popover>
                 <PopoverTrigger asChild>
                   <Button variant="ghost" size="icon" className="relative" data-testid="button-user-notifications">
-                    <Bell className="w-5 h-5" />
+                    <Bell className={`w-5 h-5 ${(notificationData?.unreadCount || 0) > 0 ? "animate-bell-ring text-red-500" : ""}`} />
                     {(notificationData?.unreadCount || 0) > 0 && (
-                      <Badge className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center bg-red-500 text-white text-xs">
-                        {notificationData!.unreadCount > 9 ? "9+" : notificationData!.unreadCount}
-                      </Badge>
+                      <>
+                        <span className="absolute inset-0 rounded-full animate-ping bg-red-500/30 pointer-events-none" />
+                        <Badge className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center bg-red-500 text-white text-xs">
+                          {notificationData!.unreadCount > 9 ? "9+" : notificationData!.unreadCount}
+                        </Badge>
+                      </>
                     )}
                   </Button>
                 </PopoverTrigger>

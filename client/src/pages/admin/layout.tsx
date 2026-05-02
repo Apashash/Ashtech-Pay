@@ -426,11 +426,14 @@ export function AdminLayout({ children }: AdminLayoutProps) {
             <Popover open={notificationsOpen} onOpenChange={setNotificationsOpen}>
               <PopoverTrigger asChild>
                 <Button variant="ghost" size="icon" className="relative" data-testid="button-notifications">
-                  <Bell className="w-5 h-5" />
+                  <Bell className={`w-5 h-5 ${(notifications.length + (layoutStats?.ticketUnread || 0)) > 0 ? "animate-bell-ring text-red-500" : ""}`} />
                   {(notifications.length + (layoutStats?.ticketUnread || 0)) > 0 && (
-                    <Badge className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center bg-red-500 text-white text-xs">
-                      {(notifications.length + (layoutStats?.ticketUnread || 0)) > 9 ? "9+" : notifications.length + (layoutStats?.ticketUnread || 0)}
-                    </Badge>
+                    <>
+                      <span className="absolute inset-0 rounded-full animate-ping bg-red-500/30 pointer-events-none" />
+                      <Badge className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center bg-red-500 text-white text-xs">
+                        {(notifications.length + (layoutStats?.ticketUnread || 0)) > 9 ? "9+" : notifications.length + (layoutStats?.ticketUnread || 0)}
+                      </Badge>
+                    </>
                   )}
                 </Button>
               </PopoverTrigger>
