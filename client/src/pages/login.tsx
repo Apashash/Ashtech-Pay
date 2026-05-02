@@ -52,7 +52,7 @@ export default function LoginPage() {
             </div>
           </Link>
           <div className="text-center">
-            <h1 className="text-3xl font-extrabold text-foreground tracking-tight">Connexion</h1>
+            <h1 className="text-2xl font-semibold text-foreground">Connexion</h1>
           </div>
         </div>
 

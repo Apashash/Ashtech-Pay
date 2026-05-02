@@ -237,7 +237,7 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <Zap className="w-5 h-5 text-primary shrink-0" />
-                <h1 className="text-2xl font-bold text-white">Introduction</h1>
+                <h1 className="text-2xl font-semibold text-white">Introduction</h1>
               </div>
               <p className="text-zinc-400 leading-relaxed">
                 L'API Ashtech Pay permet à vos applications d'initier des paiements Mobile Money dans{" "}
@@ -275,7 +275,7 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
           <section id="authentication" ref={el => sectionRefs.current.authentication = el} className="scroll-mt-20 space-y-6">
             <div className="flex items-center gap-2 border-b border-white/10 pb-4">
               <Shield className="w-5 h-5 text-primary shrink-0" />
-              <h2 className="text-xl font-bold text-white">Authentification</h2>
+              <h2 className="text-xl font-semibold text-white">Authentification</h2>
             </div>
             <p className="text-zinc-400 leading-relaxed">
               Toutes les requêtes doivent inclure votre clé API dans l'en-tête HTTP{" "}
@@ -306,7 +306,7 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
           <section id="countries" ref={el => sectionRefs.current.countries = el} className="scroll-mt-20 space-y-6">
             <div className="flex items-center gap-2 border-b border-white/10 pb-4">
               <List className="w-5 h-5 text-primary shrink-0" />
-              <h2 className="text-xl font-bold text-white">Pays et opérateurs</h2>
+              <h2 className="text-xl font-semibold text-white">Pays et opérateurs</h2>
             </div>
 
             <div className="flex items-center gap-3 flex-wrap">
@@ -394,7 +394,7 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
           <section id="collect" ref={el => sectionRefs.current.collect = el} className="scroll-mt-20 space-y-6">
             <div className="flex items-center gap-2 border-b border-white/10 pb-4">
               <Terminal className="w-5 h-5 text-primary shrink-0" />
-              <h2 className="text-xl font-bold text-white">Initier un paiement</h2>
+              <h2 className="text-xl font-semibold text-white">Initier un paiement</h2>
             </div>
 
             <div className="flex items-center gap-3 flex-wrap">
@@ -495,7 +495,7 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
           <section id="flows" ref={el => sectionRefs.current.flows = el} className="scroll-mt-20 space-y-8">
             <div className="flex items-center gap-2 border-b border-white/10 pb-4">
               <Zap className="w-5 h-5 text-primary shrink-0" />
-              <h2 className="text-xl font-bold text-white">Flux de paiement</h2>
+              <h2 className="text-xl font-semibold text-white">Flux de paiement</h2>
             </div>
 
             <p className="text-zinc-400 leading-relaxed">
@@ -808,7 +808,7 @@ if (data.flow === "wave") {
           <section id="transaction" ref={el => sectionRefs.current.transaction = el} className="scroll-mt-20 space-y-6">
             <div className="flex items-center gap-2 border-b border-white/10 pb-4">
               <CheckCircle2 className="w-5 h-5 text-primary shrink-0" />
-              <h2 className="text-xl font-bold text-white">Statut d'une transaction</h2>
+              <h2 className="text-xl font-semibold text-white">Statut d'une transaction</h2>
             </div>
 
             <div className="flex items-center gap-3 flex-wrap">
@@ -878,7 +878,7 @@ if (data.flow === "wave") {
           <section id="webhooks" ref={el => sectionRefs.current.webhooks = el} className="scroll-mt-20 space-y-6">
             <div className="flex items-center gap-2 border-b border-white/10 pb-4">
               <Webhook className="w-5 h-5 text-primary shrink-0" />
-              <h2 className="text-xl font-bold text-white">Webhooks</h2>
+              <h2 className="text-xl font-semibold text-white">Webhooks</h2>
             </div>
 
             <p className="text-zinc-400 leading-relaxed">
@@ -1001,7 +1001,7 @@ if (data.flow === "wave") {
           <section id="errors" ref={el => sectionRefs.current.errors = el} className="scroll-mt-20 space-y-6">
             <div className="flex items-center gap-2 border-b border-white/10 pb-4">
               <ArrowRight className="w-5 h-5 text-primary shrink-0" />
-              <h2 className="text-xl font-bold text-white">Codes d'erreur</h2>
+              <h2 className="text-xl font-semibold text-white">Codes d'erreur</h2>
             </div>
 
             <p className="text-zinc-400 leading-relaxed">

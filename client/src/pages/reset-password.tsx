@@ -73,7 +73,7 @@ export default function ResetPasswordPage() {
                 <img src="/logo.png" alt="Ashtech-Pay Afrique" className="h-28 w-auto" />
               </div>
             </Link>
-            <CardTitle className="text-2xl font-bold text-destructive">Lien invalide</CardTitle>
+            <CardTitle className="text-xl font-semibold text-destructive">Lien invalide</CardTitle>
             <CardDescription>
               Ce lien de réinitialisation est invalide ou a expiré.
             </CardDescription>
@@ -116,7 +116,7 @@ export default function ResetPasswordPage() {
                 <CheckCircle className="w-8 h-8 text-green-500" />
               </div>
             </div>
-            <CardTitle className="text-2xl font-bold">Mot de passe réinitialisé</CardTitle>
+            <CardTitle className="text-xl font-semibold">Mot de passe réinitialisé</CardTitle>
             <CardDescription>
               Votre mot de passe a été changé avec succès
             </CardDescription>
@@ -154,7 +154,7 @@ export default function ResetPasswordPage() {
               </div>
             </div>
           </Link>
-          <CardTitle className="text-2xl font-bold">Nouveau mot de passe</CardTitle>
+          <CardTitle className="text-xl font-semibold">Nouveau mot de passe</CardTitle>
           <CardDescription>
             Créez un nouveau mot de passe sécurisé pour votre compte
           </CardDescription>

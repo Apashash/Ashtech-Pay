@@ -93,7 +93,7 @@ export default function GlobalMessagePage() {
                       Message officiel
                     </span>
                   </div>
-                  <h1 className="text-xl font-bold text-foreground leading-tight">
+                  <h1 className="text-xl font-semibold text-foreground leading-tight">
                     {displayed.title}
                   </h1>
                 </div>

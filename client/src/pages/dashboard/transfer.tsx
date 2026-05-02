@@ -53,7 +53,7 @@ export default function TransferPage() {
       <DashboardLayout>
         <div className="space-y-6">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Envoyer de l'argent</h1>
+            <h1 className="text-2xl font-semibold text-foreground">Envoyer de l'argent</h1>
             <p className="text-muted-foreground">Transférez de l'argent à un autre utilisateur</p>
           </div>
           
@@ -62,7 +62,7 @@ export default function TransferPage() {
               <div className="w-16 h-16 mx-auto rounded-full bg-yellow-500/20 flex items-center justify-center">
                 <Shield className="w-8 h-8 text-yellow-500" />
               </div>
-              <h2 className="text-xl font-bold text-foreground">Compte non vérifié</h2>
+              <h2 className="text-xl font-semibold text-foreground">Compte non vérifié</h2>
               <p className="text-muted-foreground max-w-md mx-auto">
                 Pour envoyer de l'argent, vous devez d'abord vérifier votre compte. 
                 La vérification permet de sécuriser vos transactions et d'accéder à toutes les fonctionnalités.
@@ -86,7 +86,7 @@ export default function TransferPage() {
     <DashboardLayout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Envoyer de l'argent</h1>
+          <h1 className="text-2xl font-semibold text-foreground">Envoyer de l'argent</h1>
           <p className="text-muted-foreground">Transférez de l'argent à un autre utilisateur</p>
         </div>
 

@@ -66,7 +66,7 @@ export default function WithdrawalNumbersPage() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Numéros de retrait</h1>
+            <h1 className="text-xl font-semibold text-foreground">Numéros de retrait</h1>
             <p className="text-muted-foreground">Gérez vos numéros de téléphone pour les retraits (max. 2)</p>
           </div>
           {withdrawalNumbers.length < 2 && (

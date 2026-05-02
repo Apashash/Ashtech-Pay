@@ -1186,7 +1186,7 @@ export default function PaymentLinksPage() {
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Mes liens de paiement</h1>
+            <h1 className="text-2xl font-semibold text-foreground">Mes liens de paiement</h1>
             <p className="text-muted-foreground">Gérez vos liens et analysez vos performances</p>
           </div>
           <Button onClick={() => navigate("/dashboard/links/new")} data-testid="button-new-link">

@@ -646,7 +646,7 @@ export default function DashboardHome() {
     <DashboardLayout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Tableau de bord</h1>
+          <h1 className="text-2xl font-semibold text-foreground">Tableau de bord</h1>
           <p className="text-muted-foreground">Bienvenue, {user?.fullName}</p>
         </div>
 

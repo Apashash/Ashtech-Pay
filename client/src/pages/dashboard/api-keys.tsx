@@ -172,7 +172,7 @@ export default function ApiKeysPage() {
       <DashboardLayout>
         <div className="w-full max-w-3xl min-w-0 space-y-6">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Clé API</h1>
+            <h1 className="text-2xl font-semibold text-foreground">Clé API</h1>
             <p className="text-muted-foreground text-sm mt-1">Intégrez Ashtech Pay directement dans votre application</p>
           </div>
           <div className="rounded-2xl border border-amber-200 bg-amber-50 dark:border-amber-800/40 dark:bg-amber-950/30 p-8 flex flex-col items-center text-center gap-5" data-testid="banner-not-verified">
@@ -180,7 +180,7 @@ export default function ApiKeysPage() {
               <AlertCircle className="h-8 w-8 text-amber-600 dark:text-amber-400" />
             </div>
             <div className="space-y-2">
-              <h2 className="text-lg font-bold text-amber-900 dark:text-amber-200">Compte non vérifié</h2>
+              <h2 className="text-lg font-semibold text-amber-900 dark:text-amber-200">Compte non vérifié</h2>
               <p className="text-sm text-amber-700 dark:text-amber-300 max-w-md">
                 Votre compte doit être <strong>vérifié (KYC)</strong> avant de pouvoir accéder à l'API. Complétez la vérification d'identité, puis contactez l'administrateur pour activer vos clés.
               </p>
@@ -206,7 +206,7 @@ export default function ApiKeysPage() {
       <DashboardLayout>
         <div className="w-full max-w-3xl min-w-0 space-y-6">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Clé API</h1>
+            <h1 className="text-2xl font-semibold text-foreground">Clé API</h1>
             <p className="text-muted-foreground text-sm mt-1">Intégrez Ashtech Pay directement dans votre application</p>
           </div>
           <div className="rounded-2xl border border-sky-200 bg-sky-50 dark:border-sky-800/40 dark:bg-sky-950/30 p-8 flex flex-col items-center text-center gap-5" data-testid="banner-api-not-enabled">
@@ -214,7 +214,7 @@ export default function ApiKeysPage() {
               <LockKeyhole className="h-8 w-8 text-sky-600 dark:text-sky-400" />
             </div>
             <div className="space-y-2">
-              <h2 className="text-lg font-bold text-sky-900 dark:text-sky-200">Accès API non activé</h2>
+              <h2 className="text-lg font-semibold text-sky-900 dark:text-sky-200">Accès API non activé</h2>
               <p className="text-sm text-sky-700 dark:text-sky-300 max-w-md">
                 Votre compte est <strong>vérifié</strong>, mais l'accès API n'a pas encore été activé par l'administrateur.
                 Contactez-nous pour demander l'activation de vos clés.
@@ -240,7 +240,7 @@ export default function ApiKeysPage() {
     <DashboardLayout>
       <div className="space-y-6 w-full max-w-3xl min-w-0">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Clé API</h1>
+          <h1 className="text-2xl font-semibold text-foreground">Clé API</h1>
           <p className="text-muted-foreground text-sm mt-1">Intégrez Ashtech Pay directement dans votre application</p>
         </div>
 

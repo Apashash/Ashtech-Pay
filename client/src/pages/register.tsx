@@ -107,7 +107,7 @@ export default function RegisterPage() {
             </div>
           </Link>
           <div className="text-center">
-            <h1 className="text-3xl font-extrabold text-foreground tracking-tight">Créer un compte</h1>
+            <h1 className="text-2xl font-semibold text-foreground">Créer un compte</h1>
           </div>
         </div>
 

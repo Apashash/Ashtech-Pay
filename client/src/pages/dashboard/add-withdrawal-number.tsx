@@ -94,7 +94,7 @@ export default function AddWithdrawalNumberPage() {
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Ajouter un numéro de retrait</h1>
+            <h1 className="text-2xl font-semibold text-foreground">Ajouter un numéro de retrait</h1>
             <p className="text-muted-foreground">Sélectionnez votre opérateur et saisissez votre numéro</p>
           </div>
         </div>

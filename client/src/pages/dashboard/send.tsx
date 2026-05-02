@@ -249,7 +249,7 @@ export default function SendMoneyPage() {
       <DashboardLayout>
         <div className="space-y-6">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Envoyer de l'argent</h1>
+            <h1 className="text-2xl font-semibold text-foreground">Envoyer de l'argent</h1>
             <p className="text-muted-foreground">Envoyez de l'argent à un destinataire</p>
           </div>
           <Card className="border-yellow-500/50 bg-yellow-500/5">
@@ -257,7 +257,7 @@ export default function SendMoneyPage() {
               <div className="w-16 h-16 mx-auto rounded-full bg-yellow-500/20 flex items-center justify-center">
                 <Shield className="w-8 h-8 text-yellow-500" />
               </div>
-              <h2 className="text-xl font-bold">Compte non vérifié</h2>
+              <h2 className="text-xl font-semibold">Compte non vérifié</h2>
               <p className="text-muted-foreground max-w-md mx-auto">
                 Pour envoyer de l'argent, vous devez d'abord vérifier votre compte.
               </p>
@@ -276,7 +276,7 @@ export default function SendMoneyPage() {
     <DashboardLayout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Envoyer de l'argent</h1>
+          <h1 className="text-2xl font-semibold text-foreground">Envoyer de l'argent</h1>
           <p className="text-muted-foreground">Transfert instantané ou via Mobile Money</p>
         </div>
 

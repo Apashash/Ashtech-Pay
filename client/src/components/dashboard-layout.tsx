@@ -314,7 +314,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         <div className="w-16 h-16 rounded-2xl bg-amber-500/10 flex items-center justify-center mb-6">
           <Wrench className="w-8 h-8 text-amber-500" />
         </div>
-        <h1 className="text-2xl font-bold text-foreground mb-3">Maintenance en cours</h1>
+        <h1 className="text-2xl font-semibold text-foreground mb-3">Maintenance en cours</h1>
         <p className="text-muted-foreground max-w-sm leading-relaxed mb-4">
           La plateforme est momentanément en maintenance. Vous serez notifié dès qu'elle sera de nouveau disponible.
         </p>

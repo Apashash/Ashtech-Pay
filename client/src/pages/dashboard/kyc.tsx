@@ -451,7 +451,7 @@ export default function KYCPage() {
     <DashboardLayout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Vérification KYC</h1>
+          <h1 className="text-2xl font-semibold text-foreground">Vérification KYC</h1>
           <p className="text-muted-foreground">Vérifiez votre identité pour débloquer toutes les fonctionnalités</p>
         </div>
 

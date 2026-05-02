@@ -129,7 +129,7 @@ export default function HostedPageDashboard() {
             <div className="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center">
               <Globe className="h-4 w-4 text-violet-500" />
             </div>
-            <h1 className="text-2xl font-bold text-foreground">Hosted Payment Page</h1>
+            <h1 className="text-2xl font-semibold text-foreground">Hosted Payment Page</h1>
           </div>
           <p className="text-muted-foreground text-sm ml-11">
             Intégrez une page de paiement hébergée sur Ashtech Pay dans votre application.

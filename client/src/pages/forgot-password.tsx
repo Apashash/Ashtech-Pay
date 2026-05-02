@@ -69,7 +69,7 @@ export default function ForgotPasswordPage() {
                 <CheckCircle className="w-8 h-8 text-green-500" />
               </div>
             </div>
-            <CardTitle className="text-2xl font-bold">Email envoyé !</CardTitle>
+            <CardTitle className="text-xl font-semibold">Email envoyé !</CardTitle>
             <CardDescription className="text-sm leading-relaxed">
               Un lien de réinitialisation a été envoyé à<br />
               <span className="text-primary font-medium">{submittedIdentifier}</span>
@@ -154,7 +154,7 @@ export default function ForgotPasswordPage() {
               <img src="/logo.png" alt="AshTech Pay" className="h-32 w-auto" />
             </div>
           </Link>
-          <CardTitle className="text-2xl font-bold">Mot de passe oublié</CardTitle>
+          <CardTitle className="text-xl font-semibold">Mot de passe oublié</CardTitle>
           <CardDescription>
             Entre ton email pour recevoir un lien de réinitialisation sécurisé
           </CardDescription>
