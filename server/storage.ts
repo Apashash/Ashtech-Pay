@@ -969,9 +969,28 @@ export class DatabaseStorage implements IStorage {
       .slice(0, 8);
   }
 
-  async getStatsActivity(period: string = "this_month"): Promise<{ date: string; deposit: number; withdrawal: number; payment_link: number; transfer: number }[]> {
+  async getStatsActivity(period: string = "this_month"): Promise<{ date: string; deposit: number; withdrawal: number; payment_link: number; transfer: number; depositVol: number; withdrawalVol: number; paymentLinkVol: number; transferVol: number }[]> {
     const resetSetting = await this.getSetting("stats_reset_at");
     const resetAt: Date | null = resetSetting ? new Date(resetSetting.value) : null;
+
+    const allSettings = await this.getAllSettings();
+    const fxRates: Record<string, number> = {};
+    allSettings.forEach((s: { key: string; value: string }) => {
+      if (s.key.startsWith("fx_rate_")) {
+        const code = s.key.replace("fx_rate_", "");
+        const val = parseFloat(s.value);
+        if (!isNaN(val) && val > 0) fxRates[code] = val;
+      }
+    });
+    ALL_FX_CURRENCIES.forEach(c => { if (!fxRates[c.code]) fxRates[c.code] = c.defaultRate; });
+    if (!fxRates["USDT"]) fxRates["USDT"] = fxRates["USD"] || 1.0;
+    const CFA = new Set(["XAF","XAFC","XAFG","XOF","XOFC","XOFF","XOFN","XOFB","XOFT","XOFS","XOFM"]);
+    const toXAF = (amount: number, currency: string): number => {
+      if (!currency || CFA.has(currency)) return amount;
+      const fromRate = fxRates[currency];
+      if (!fromRate) return amount;
+      return (amount / fromRate) * (fxRates["XAF"] || 585);
+    };
 
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -1026,40 +1045,39 @@ export class DatabaseStorage implements IStorage {
       return t.status === "completed";
     });
 
-    type Bucket = { date: string; deposit: number; withdrawal: number; payment_link: number; transfer: number };
+    type Bucket = { date: string; deposit: number; withdrawal: number; payment_link: number; transfer: number; depositVol: number; withdrawalVol: number; paymentLinkVol: number; transferVol: number };
+    const empty = (): Bucket => ({ date: "", deposit: 0, withdrawal: 0, payment_link: 0, transfer: 0, depositVol: 0, withdrawalVol: 0, paymentLinkVol: 0, transferVol: 0 });
     const buckets: Record<string, Bucket> = {};
+
+    const addTx = (b: Bucket, tx: typeof filtered[0]) => {
+      const vol = toXAF(parseFloat(tx.amount || "0"), tx.currency || "XAF");
+      if (tx.type === "deposit") { b.deposit += 1; b.depositVol += vol; }
+      else if (tx.type === "withdrawal") { b.withdrawal += 1; b.withdrawalVol += vol; }
+      else if (tx.type === "payment_link") { b.payment_link += 1; b.paymentLinkVol += vol; }
+      else if (tx.type === "transfer_out") { b.transfer += 1; b.transferVol += vol; }
+    };
 
     if (useHourly) {
       const start = periodStart!;
       const end = periodEnd || now;
       for (let h = new Date(start); h <= end; h = new Date(h.getTime() + 3600000)) {
         const key = h.toISOString().slice(0, 13);
-        buckets[key] = { date: key, deposit: 0, withdrawal: 0, payment_link: 0, transfer: 0 };
+        buckets[key] = { ...empty(), date: key };
       }
       for (const tx of filtered) {
         const key = new Date(tx.createdAt!).toISOString().slice(0, 13);
-        if (buckets[key]) {
-          if (tx.type === "deposit") buckets[key].deposit += 1;
-          else if (tx.type === "withdrawal") buckets[key].withdrawal += 1;
-          else if (tx.type === "payment_link") buckets[key].payment_link += 1;
-          else if (tx.type === "transfer_out") buckets[key].transfer += 1;
-        }
+        if (buckets[key]) addTx(buckets[key], tx);
       }
     } else {
       const start = periodStart || new Date(todayStart.getTime() - 29 * 86400000);
       const end = periodEnd || now;
       for (let d = new Date(start); d <= end; d = new Date(d.getTime() + 86400000)) {
         const key = d.toISOString().slice(0, 10);
-        buckets[key] = { date: key, deposit: 0, withdrawal: 0, payment_link: 0, transfer: 0 };
+        buckets[key] = { ...empty(), date: key };
       }
       for (const tx of filtered) {
         const key = new Date(tx.createdAt!).toISOString().slice(0, 10);
-        if (buckets[key]) {
-          if (tx.type === "deposit") buckets[key].deposit += 1;
-          else if (tx.type === "withdrawal") buckets[key].withdrawal += 1;
-          else if (tx.type === "payment_link") buckets[key].payment_link += 1;
-          else if (tx.type === "transfer_out") buckets[key].transfer += 1;
-        }
+        if (buckets[key]) addTx(buckets[key], tx);
       }
     }
 

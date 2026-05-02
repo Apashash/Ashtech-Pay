@@ -113,7 +113,7 @@ export default function AdminDashboard() {
     refetchInterval: 30000,
   });
 
-  const { data: activityData = [] } = useQuery<{ date: string; deposit: number; withdrawal: number; payment_link: number; transfer: number }[]>({
+  const { data: activityData = [] } = useQuery<{ date: string; deposit: number; withdrawal: number; payment_link: number; transfer: number; depositVol: number; withdrawalVol: number; paymentLinkVol: number; transferVol: number }[]>({
     queryKey: [`/api/admin/stats/activity?period=${period}`],
     refetchInterval: 30000,
   });
@@ -609,6 +609,50 @@ export default function AdminDashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Volume XAF par type */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <DollarSign className="w-5 h-5 text-primary" />
+              Volume XAF par type — {period === "today" ? "Aujourd'hui (par heure)" : period === "yesterday" ? "Hier (par heure)" : "Par jour"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-3 mb-3 flex-wrap text-xs">
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-green-500 inline-block" />Dépôt</span>
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-orange-500 inline-block" />Retrait</span>
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-purple-500 inline-block" />Lien paiement</span>
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-blue-500 inline-block" />Envoi</span>
+            </div>
+            {activityData.length === 0 || activityData.every(d => d.depositVol === 0 && d.withdrawalVol === 0 && d.paymentLinkVol === 0 && d.transferVol === 0) ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <DollarSign className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                <p className="text-sm">Aucun volume sur cette période</p>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={chartActivity} margin={{ top: 4, right: 8, left: 10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                  <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#888" }} interval="preserveStartEnd" />
+                  <YAxis tick={{ fontSize: 10, fill: "#888" }} allowDecimals={false} tickFormatter={(v: number) => v >= 1000000 ? `${(v/1000000).toFixed(1)}M` : v >= 1000 ? `${(v/1000).toFixed(0)}k` : String(v)} />
+                  <Tooltip
+                    contentStyle={{ background: "#1a1a1a", border: "1px solid #333", borderRadius: 8, fontSize: 12 }}
+                    labelStyle={{ color: "#ccc" }}
+                    formatter={(value: number, name: string) => {
+                      const labels: Record<string, string> = { depositVol: "Dépôt", withdrawalVol: "Retrait", paymentLinkVol: "Lien paiement", transferVol: "Envoi" };
+                      return [value.toLocaleString("fr-FR", { maximumFractionDigits: 0 }) + " XAF", labels[name] || name];
+                    }}
+                  />
+                  <Bar dataKey="depositVol" stackId="vol" fill="#22c55e" name="depositVol" />
+                  <Bar dataKey="withdrawalVol" stackId="vol" fill="#f97316" name="withdrawalVol" />
+                  <Bar dataKey="paymentLinkVol" stackId="vol" fill="#a855f7" name="paymentLinkVol" />
+                  <Bar dataKey="transferVol" stackId="vol" fill="#3b82f6" name="transferVol" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       <Dialog open={showResetDialog} onOpenChange={setShowResetDialog}>
