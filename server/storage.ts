@@ -969,44 +969,101 @@ export class DatabaseStorage implements IStorage {
       .slice(0, 8);
   }
 
-  async getStatsActivity(): Promise<{ date: string; total: number; entrant: number; sortant: number; volume: number }[]> {
+  async getStatsActivity(period: string = "this_month"): Promise<{ date: string; deposit: number; withdrawal: number; payment_link: number; transfer: number }[]> {
     const resetSetting = await this.getSetting("stats_reset_at");
     const resetAt: Date | null = resetSetting ? new Date(resetSetting.value) : null;
 
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29);
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const dayOfWeek = now.getDay() === 0 ? 7 : now.getDay();
+    let periodStart: Date | null = null;
+    let periodEnd: Date | null = null;
+    let useHourly = false;
+
+    switch (period) {
+      case "today":
+        periodStart = todayStart;
+        useHourly = true;
+        break;
+      case "yesterday":
+        periodStart = new Date(todayStart.getTime() - 86400000);
+        periodEnd = todayStart;
+        useHourly = true;
+        break;
+      case "this_week":
+        periodStart = new Date(todayStart.getTime() - (dayOfWeek - 1) * 86400000);
+        break;
+      case "last_week":
+        periodStart = new Date(todayStart.getTime() - dayOfWeek * 86400000 - 6 * 86400000);
+        periodEnd = new Date(todayStart.getTime() - (dayOfWeek - 1) * 86400000);
+        break;
+      case "last_month":
+        periodStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        periodEnd = new Date(now.getFullYear(), now.getMonth(), 1);
+        break;
+      case "this_year":
+        periodStart = new Date(now.getFullYear(), 0, 1);
+        break;
+      case "last_year":
+        periodStart = new Date(now.getFullYear() - 1, 0, 1);
+        periodEnd = new Date(now.getFullYear(), 0, 1);
+        break;
+      case "all":
+        periodStart = new Date(todayStart.getTime() - 89 * 86400000);
+        break;
+      default: // this_month
+        periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        break;
+    }
 
     const allTx = await db.select().from(transactions);
     const filtered = allTx.filter(t => {
       if (!t.createdAt) return false;
       const d = new Date(t.createdAt);
-      if (d < thirtyDaysAgo) return false;
+      if (periodStart && d < periodStart) return false;
+      if (periodEnd && d >= periodEnd) return false;
       if (resetAt && d <= resetAt) return false;
       return t.status === "completed";
     });
 
-    const byDay: Record<string, { date: string; total: number; entrant: number; sortant: number; volume: number }> = {};
-    for (let i = 29; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const key = d.toISOString().slice(0, 10);
-      byDay[key] = { date: key, total: 0, entrant: 0, sortant: 0, volume: 0 };
-    }
+    type Bucket = { date: string; deposit: number; withdrawal: number; payment_link: number; transfer: number };
+    const buckets: Record<string, Bucket> = {};
 
-    for (const tx of filtered) {
-      const key = new Date(tx.createdAt!).toISOString().slice(0, 10);
-      if (byDay[key]) {
-        byDay[key].total += 1;
-        byDay[key].volume += parseFloat(tx.amount);
-        if (tx.type === "deposit" || tx.type === "payment_link") {
-          byDay[key].entrant += 1;
-        } else if (tx.type === "withdrawal" || tx.type === "transfer_out") {
-          byDay[key].sortant += 1;
+    if (useHourly) {
+      const start = periodStart!;
+      const end = periodEnd || now;
+      for (let h = new Date(start); h <= end; h = new Date(h.getTime() + 3600000)) {
+        const key = h.toISOString().slice(0, 13);
+        buckets[key] = { date: key, deposit: 0, withdrawal: 0, payment_link: 0, transfer: 0 };
+      }
+      for (const tx of filtered) {
+        const key = new Date(tx.createdAt!).toISOString().slice(0, 13);
+        if (buckets[key]) {
+          if (tx.type === "deposit") buckets[key].deposit += 1;
+          else if (tx.type === "withdrawal") buckets[key].withdrawal += 1;
+          else if (tx.type === "payment_link") buckets[key].payment_link += 1;
+          else if (tx.type === "transfer_out") buckets[key].transfer += 1;
+        }
+      }
+    } else {
+      const start = periodStart || new Date(todayStart.getTime() - 29 * 86400000);
+      const end = periodEnd || now;
+      for (let d = new Date(start); d <= end; d = new Date(d.getTime() + 86400000)) {
+        const key = d.toISOString().slice(0, 10);
+        buckets[key] = { date: key, deposit: 0, withdrawal: 0, payment_link: 0, transfer: 0 };
+      }
+      for (const tx of filtered) {
+        const key = new Date(tx.createdAt!).toISOString().slice(0, 10);
+        if (buckets[key]) {
+          if (tx.type === "deposit") buckets[key].deposit += 1;
+          else if (tx.type === "withdrawal") buckets[key].withdrawal += 1;
+          else if (tx.type === "payment_link") buckets[key].payment_link += 1;
+          else if (tx.type === "transfer_out") buckets[key].transfer += 1;
         }
       }
     }
 
-    return Object.values(byDay);
+    return Object.values(buckets);
   }
 
   async getAdminStats(period: string = "all"): Promise<any> {

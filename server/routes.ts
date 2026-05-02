@@ -4249,7 +4249,8 @@ export async function registerRoutes(
   // Admin: Activité récente (30 derniers jours)
   app.get("/api/admin/stats/activity", requireAdmin, async (req, res) => {
     try {
-      const result = await storage.getStatsActivity();
+      const period = typeof req.query.period === "string" ? req.query.period : "this_month";
+      const result = await storage.getStatsActivity(period);
       res.json(result);
     } catch (error) {
       console.error("Stats activity error:", error);
