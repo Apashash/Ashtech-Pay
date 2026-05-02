@@ -4417,7 +4417,8 @@ export async function registerRoutes(
       const search = (req.query.search as string) || "";
       const offset = (page - 1) * limit;
 
-      const { data, total } = await storage.getAdminUsersPaginated({ limit, offset, search: search || undefined });
+      const filter = (req.query.filter as string) || "";
+      const { data, total } = await storage.getAdminUsersPaginated({ limit, offset, search: search || undefined, filter: filter || undefined });
 
       // Batch-fetch all secondary wallets for these users in one query
       const fxRates = await loadFxRates();

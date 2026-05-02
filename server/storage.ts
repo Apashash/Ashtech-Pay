@@ -121,7 +121,7 @@ export interface IStorage {
   // Admin: Transaction management
   getAllTransactions(): Promise<Transaction[]>;
   getAdminTransactionsPaginated(params: { limit: number; offset: number; type?: string; status?: string; search?: string }): Promise<{ data: Transaction[]; total: number }>;
-  getAdminUsersPaginated(params: { limit: number; offset: number; search?: string }): Promise<{ data: User[]; total: number }>;
+  getAdminUsersPaginated(params: { limit: number; offset: number; search?: string; filter?: string }): Promise<{ data: User[]; total: number }>;
   getAdminLayoutStats(): Promise<{ pendingDeposits: number; pendingWithdrawals: number; pendingTransfers: number; pendingManualPayouts: number; kycPending: number; ticketUnread: number; conversionCount: number; withdrawalNumberCount: number; notifications: any[] }>;
   
   // Admin: Country operations
@@ -1256,8 +1256,8 @@ export class DatabaseStorage implements IStorage {
     return { data, total };
   }
 
-  async getAdminUsersPaginated(params: { limit: number; offset: number; search?: string }): Promise<{ data: User[]; total: number }> {
-    const { limit, offset, search } = params;
+  async getAdminUsersPaginated(params: { limit: number; offset: number; search?: string; filter?: string }): Promise<{ data: User[]; total: number }> {
+    const { limit, offset, search, filter } = params;
 
     const conditions: any[] = [];
     if (search) {
@@ -1266,6 +1266,21 @@ export class DatabaseStorage implements IStorage {
         like(users.email, `%${search}%`),
         like(users.username, `%${search}%`),
       ));
+    }
+    if (filter === "banned") {
+      conditions.push(eq(users.isBanned, true));
+    } else if (filter === "kyc_verified") {
+      conditions.push(eq(users.kycStatus, "verified"));
+    } else if (filter === "kyc_rejected") {
+      conditions.push(eq(users.kycStatus, "rejected"));
+    } else if (filter === "no_kyc") {
+      conditions.push(or(
+        eq(users.kycStatus, "not_submitted"),
+        eq(users.kycStatus, "none"),
+        eq(users.kycStatus, ""),
+      ));
+    } else if (filter === "pending_kyc") {
+      conditions.push(eq(users.kycStatus, "pending"));
     }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;

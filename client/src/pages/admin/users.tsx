@@ -43,7 +43,10 @@ import {
   Edit,
   Trash2,
   DollarSign,
-  RefreshCw
+  RefreshCw,
+  Filter,
+  Users,
+  Clock
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -96,6 +99,7 @@ export default function AdminUsers() {
   const [convFrom, setConvFrom] = useState("");
   const [convTo, setConvTo] = useState("");
   const [convAmount, setConvAmount] = useState("");
+  const [filter, setFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [debouncedSearch, setDebouncedSearch] = useState(search);
 
@@ -202,10 +206,11 @@ export default function AdminUsers() {
   }, [urlSearch]);
 
   const { data: usersData, isLoading } = useQuery<{ data: User[]; total: number; pages: number }>({
-    queryKey: ["/api/admin/users", page, debouncedSearch],
+    queryKey: ["/api/admin/users", page, debouncedSearch, filter],
     queryFn: async () => {
       const params = new URLSearchParams({ page: String(page), limit: "50" });
       if (debouncedSearch) params.set("search", debouncedSearch);
+      if (filter && filter !== "all") params.set("filter", filter);
       const res = await fetch(`/api/admin/users?${params}`, { credentials: "include", headers: { ...(localStorage.getItem("ashtech_auth_token") ? { Authorization: `Bearer ${localStorage.getItem("ashtech_auth_token")}` } : {}) } });
       if (!res.ok) throw new Error("Erreur");
       return res.json();
@@ -456,7 +461,7 @@ export default function AdminUsers() {
         </div>
 
         <Card>
-          <CardHeader>
+          <CardHeader className="space-y-3">
             <div className="flex items-center gap-4">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -468,6 +473,43 @@ export default function AdminUsers() {
                   data-testid="input-search-users"
                 />
               </div>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Filter className="w-4 h-4 text-muted-foreground shrink-0" />
+              {[
+                { key: "all", label: "Tous", icon: <Users className="w-3 h-3" /> },
+                { key: "banned", label: "Bannis", icon: <Ban className="w-3 h-3" /> },
+                { key: "kyc_verified", label: "KYC Validé", icon: <CheckCircle className="w-3 h-3" /> },
+                { key: "kyc_rejected", label: "KYC Rejeté", icon: <XCircle className="w-3 h-3" /> },
+                { key: "pending_kyc", label: "KYC En attente", icon: <Clock className="w-3 h-3" /> },
+                { key: "no_kyc", label: "Sans KYC", icon: <Shield className="w-3 h-3" /> },
+              ].map(({ key, label, icon }) => (
+                <Button
+                  key={key}
+                  size="sm"
+                  variant={filter === key ? "default" : "outline"}
+                  className={`gap-1.5 h-7 text-xs ${
+                    filter === key
+                      ? key === "banned" ? "bg-red-500 hover:bg-red-600 border-red-500"
+                        : key === "kyc_verified" ? "bg-green-600 hover:bg-green-700 border-green-600"
+                        : key === "kyc_rejected" ? "bg-red-500 hover:bg-red-600 border-red-500"
+                        : key === "pending_kyc" ? "bg-yellow-500 hover:bg-yellow-600 border-yellow-500 text-black"
+                        : key === "no_kyc" ? "bg-gray-500 hover:bg-gray-600 border-gray-500"
+                        : ""
+                      : key === "banned" ? "border-red-500/40 text-red-500 hover:bg-red-500/10"
+                        : key === "kyc_verified" ? "border-green-500/40 text-green-500 hover:bg-green-500/10"
+                        : key === "kyc_rejected" ? "border-red-400/40 text-red-400 hover:bg-red-400/10"
+                        : key === "pending_kyc" ? "border-yellow-500/40 text-yellow-500 hover:bg-yellow-500/10"
+                        : key === "no_kyc" ? "border-gray-400/40 text-muted-foreground hover:bg-muted/50"
+                        : ""
+                  }`}
+                  onClick={() => { setFilter(key); setPage(1); }}
+                  data-testid={`button-filter-${key}`}
+                >
+                  {icon}
+                  {label}
+                </Button>
+              ))}
             </div>
           </CardHeader>
           <CardContent className="p-0">
