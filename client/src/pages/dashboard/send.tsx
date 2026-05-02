@@ -11,6 +11,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User, SupportedCurrency, Wallet } from "@shared/schema";
 import { Send, Globe, Loader2, ArrowRight, AlertCircle, Shield, CheckCircle2, Smartphone } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { getOperatorLogo } from "@/lib/operator-logos";
 import { z } from "zod";
 import { formatCurrency, formatWalletBalance } from "@/lib/currency";
@@ -136,6 +137,9 @@ export default function SendMoneyPage() {
   const selectedOperator = useMemo(() => selectedCountry?.operators.find(o => o.id === watchedOperatorId), [selectedCountry, watchedOperatorId]);
   const amountValue = parseFloat(watchedAmount) || 0;
 
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [pendingExternalData, setPendingExternalData] = useState<ExternalFormData | null>(null);
+  const [showInternalConfirmDialog, setShowInternalConfirmDialog] = useState(false);
   const [prevCountryId, setPrevCountryId] = useState("");
   useEffect(() => {
     if (watchedCountryId !== prevCountryId) {
@@ -205,9 +209,11 @@ export default function SendMoneyPage() {
       toast({ title: "Transfert effectué ✓", description: `Compte de ${data.recipientName} crédité instantanément — Frais: 0` });
       setInternalIdentifier("");
       setInternalAmount("");
+      setShowInternalConfirmDialog(false);
     },
     onError: (error: Error) => {
       toast({ title: "Erreur", description: error.message, variant: "destructive" });
+      setShowInternalConfirmDialog(false);
     },
   });
 
@@ -379,7 +385,7 @@ export default function SendMoneyPage() {
                     <label className="text-sm font-medium">Montant ({selectedWallet})</label>
                     <Input
                       type="number"
-                      placeholder="10000"
+                      placeholder=""
                       className="text-xl h-12"
                       value={internalAmount}
                       onChange={e => setInternalAmount(e.target.value)}
@@ -389,7 +395,13 @@ export default function SendMoneyPage() {
                   <Button
                     className="w-full bg-[#F0B90B] hover:bg-[#D4A30A] text-black font-bold"
                     size="lg"
-                    onClick={() => internalMutation.mutate()}
+                    onClick={() => {
+                      if (!internalIdentifier.trim() || !parseFloat(internalAmount)) {
+                        internalMutation.mutate();
+                        return;
+                      }
+                      setShowInternalConfirmDialog(true);
+                    }}
                     disabled={internalMutation.isPending}
                   >
                     {internalMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
@@ -398,7 +410,7 @@ export default function SendMoneyPage() {
                 </div>
               ) : (
                 <Form {...form}>
-                  <form onSubmit={form.handleSubmit((d) => externalMutation.mutate({ ...d, countryId: destination }))} className="space-y-4 min-w-0 w-full">
+                  <form onSubmit={form.handleSubmit((d) => { setPendingExternalData({ ...d, countryId: destination }); setShowConfirmDialog(true); })} className="space-y-4 min-w-0 w-full">
                     {!selectedCountry ? (
                       <p className="text-sm text-muted-foreground py-2">Choisissez une destination d'abord</p>
                     ) : selectedCountry.operators.length === 0 ? (
@@ -471,7 +483,7 @@ export default function SendMoneyPage() {
                       <FormItem>
                         <FormLabel>Montant à envoyer ({selectedCountry?.currency || "XAF"})</FormLabel>
                         <FormControl>
-                          <Input type="number" placeholder={minTransfer.toString()} className="text-xl h-12" {...field} />
+                          <Input type="number" placeholder="" className="text-xl h-12" {...field} />
                         </FormControl>
                         <FormMessage />
                         {amountValue > 0 && amountValue < minTransfer && (
@@ -574,6 +586,98 @@ export default function SendMoneyPage() {
           </div>
         </div>
       </div>
+
+      {/* Dialog confirmation transfert interne */}
+      <Dialog open={showInternalConfirmDialog} onOpenChange={setShowInternalConfirmDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-center text-lg">Confirmer le transfert interne</DialogTitle>
+          </DialogHeader>
+          <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border my-2">
+            <div className="flex items-center justify-between px-4 py-3.5">
+              <span className="text-sm text-muted-foreground">Destinataire</span>
+              <span className="text-sm font-medium">{internalIdentifier}</span>
+            </div>
+            <div className="flex items-center justify-between px-4 py-3.5">
+              <span className="text-sm text-muted-foreground">Compte débité</span>
+              <span className="text-sm font-medium">{selectedWallet}</span>
+            </div>
+            <div className="flex items-center justify-between px-4 py-3.5">
+              <span className="text-sm text-muted-foreground">Montant</span>
+              <span className="text-sm font-medium">{formatWalletBalance(parseFloat(internalAmount) || 0, selectedWallet)}</span>
+            </div>
+            <div className="flex items-center justify-between px-4 py-3.5 bg-muted/30">
+              <span className="text-sm font-semibold text-foreground">Frais</span>
+              <span className="text-base font-bold text-green-500">Gratuit</span>
+            </div>
+          </div>
+          <DialogFooter className="flex gap-2 sm:flex-row">
+            <Button variant="outline" className="flex-1" onClick={() => setShowInternalConfirmDialog(false)}>
+              Retour
+            </Button>
+            <Button
+              className="flex-1 bg-[#F0B90B] hover:bg-[#D4A30A] text-black font-bold"
+              onClick={() => internalMutation.mutate()}
+              disabled={internalMutation.isPending}
+              data-testid="button-final-confirm-internal"
+            >
+              {internalMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
+              Confirmer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog confirmation transfert externe */}
+      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-center text-lg">Confirmer l'envoi</DialogTitle>
+          </DialogHeader>
+          <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border my-2">
+            <div className="flex items-center justify-between px-4 py-3.5">
+              <span className="text-sm text-muted-foreground">Destinataire</span>
+              <span className="text-sm font-medium">{pendingExternalData?.recipientName}</span>
+            </div>
+            <div className="flex items-center justify-between px-4 py-3.5">
+              <span className="text-sm text-muted-foreground">Numéro</span>
+              <span className="text-sm font-medium">{pendingExternalData?.recipientPhone}</span>
+            </div>
+            <div className="flex items-center justify-between px-4 py-3.5">
+              <span className="text-sm text-muted-foreground">Pays / Opérateur</span>
+              <span className="text-sm font-medium">{selectedCountry?.name} · {selectedOperator?.name}</span>
+            </div>
+            <div className="flex items-center justify-between px-4 py-3.5">
+              <span className="text-sm text-muted-foreground">Montant envoyé</span>
+              <span className="text-sm font-medium">{formatWalletBalance(amountValue, selectedWallet)}</span>
+            </div>
+            {feePreview.feeAmount > 0 && (
+              <div className="flex items-center justify-between px-4 py-3.5">
+                <span className="text-sm text-muted-foreground">Frais ({feePreview.feePercentage}%)</span>
+                <span className="text-sm font-medium text-red-500">-{formatWalletBalance(feePreview.feeAmount, selectedWallet)}</span>
+              </div>
+            )}
+            <div className="flex items-center justify-between px-4 py-3.5 bg-muted/30">
+              <span className="text-sm font-semibold text-foreground">Net reçu</span>
+              <span className="text-base font-bold text-green-500">{formatWalletBalance(amountValue - feePreview.feeAmount, selectedWallet)}</span>
+            </div>
+          </div>
+          <DialogFooter className="flex gap-2 sm:flex-row">
+            <Button variant="outline" className="flex-1" onClick={() => setShowConfirmDialog(false)}>
+              Retour
+            </Button>
+            <Button
+              className="flex-1 bg-[#F0B90B] hover:bg-[#D4A30A] text-black font-bold"
+              onClick={() => { if (pendingExternalData) externalMutation.mutate(pendingExternalData); }}
+              disabled={externalMutation.isPending}
+              data-testid="button-final-confirm-external"
+            >
+              {externalMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
+              Confirmer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

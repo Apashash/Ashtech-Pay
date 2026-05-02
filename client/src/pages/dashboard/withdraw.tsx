@@ -12,6 +12,7 @@ import { withdrawSchema, type SupportedCurrency, type WithdrawalNumber } from "@
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User } from "@shared/schema";
 import { Wallet, Smartphone, Building2, Loader2, CheckCircle, AlertCircle, Phone, Plus, Settings, Globe, Shield, Info, ArrowLeftRight } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { getOperatorLogo } from "@/lib/operator-logos";
 import { getCountryFlagEmoji } from "@/lib/country-flags";
 import { z } from "zod";
@@ -52,6 +53,7 @@ export default function WithdrawPage() {
   const [selectedNumber, setSelectedNumber] = useState<string>("");
   const [selectedCountry, setSelectedCountry] = useState<string>("");
   const [selectedOperator, setSelectedOperator] = useState<string>("");
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const { toast } = useToast();
 
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
@@ -143,9 +145,11 @@ export default function WithdrawPage() {
       toast({ title: "Retrait demandé", description: "Votre demande de retrait a été enregistrée" });
       form.reset();
       setSelectedNumber("");
+      setShowConfirmDialog(false);
     },
     onError: (error: Error) => {
       toast({ title: "Erreur", description: error.message, variant: "destructive" });
+      setShowConfirmDialog(false);
     },
   });
 
@@ -307,7 +311,7 @@ export default function WithdrawPage() {
                           <div className="relative">
                             <Input 
                               type="number" 
-                              placeholder={limitsLoaded ? minWithdrawal.toString() : ""} 
+                              placeholder=""
                               className="text-lg h-10 pr-14"
                               {...field} 
                               data-testid="input-withdraw-amount"
@@ -501,13 +505,14 @@ export default function WithdrawPage() {
                   )}
 
                   <Button 
-                    type="submit" 
+                    type="button"
                     className="w-full" 
                     size="lg" 
                     disabled={isSubmitDisabled}
                     data-testid="button-withdraw-confirm"
+                    onClick={() => setShowConfirmDialog(true)}
                   >
-                    {withdrawMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Wallet className="w-4 h-4 mr-2" />}
+                    <Wallet className="w-4 h-4 mr-2" />
                     Demander le retrait
                   </Button>
 
@@ -526,6 +531,66 @@ export default function WithdrawPage() {
         </div>
 
       </div>
+
+      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-center text-lg">Confirmer le retrait</DialogTitle>
+          </DialogHeader>
+          <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border my-2">
+            <div className="flex items-center justify-between px-4 py-3.5">
+              <span className="text-sm text-muted-foreground">Méthode</span>
+              <span className="text-sm font-medium">{selectedMethod === "mobile_money" ? "Mobile Money" : "Virement bancaire"}</span>
+            </div>
+            {selectedCountryData && (
+              <div className="flex items-center justify-between px-4 py-3.5">
+                <span className="text-sm text-muted-foreground">Pays</span>
+                <span className="text-sm font-medium">{selectedCountryData.name}</span>
+              </div>
+            )}
+            {selectedOperatorData && (
+              <div className="flex items-center justify-between px-4 py-3.5">
+                <span className="text-sm text-muted-foreground">Opérateur</span>
+                <span className="text-sm font-medium">{selectedOperatorData.name}</span>
+              </div>
+            )}
+            {form.getValues("accountDetails") && (
+              <div className="flex items-center justify-between px-4 py-3.5">
+                <span className="text-sm text-muted-foreground">Numéro</span>
+                <span className="text-sm font-medium">{form.getValues("accountDetails")}</span>
+              </div>
+            )}
+            <div className="flex items-center justify-between px-4 py-3.5">
+              <span className="text-sm text-muted-foreground">Montant demandé</span>
+              <span className="text-sm font-medium">{formatCurrency(amountValue, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</span>
+            </div>
+            {feeAmount > 0 && (
+              <div className="flex items-center justify-between px-4 py-3.5">
+                <span className="text-sm text-muted-foreground">Frais {feePercent > 0 ? `(${feePercent}%)` : ""}</span>
+                <span className="text-sm font-medium text-red-500">-{formatCurrency(feeAmount, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</span>
+              </div>
+            )}
+            <div className="flex items-center justify-between px-4 py-3.5 bg-muted/30">
+              <span className="text-sm font-semibold text-foreground">Net à recevoir</span>
+              <span className="text-base font-bold text-green-500">{formatCurrency(amountValue - feeAmount, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</span>
+            </div>
+          </div>
+          <DialogFooter className="flex gap-2 sm:flex-row">
+            <Button variant="outline" className="flex-1" onClick={() => setShowConfirmDialog(false)}>
+              Retour
+            </Button>
+            <Button
+              className="flex-1"
+              onClick={() => withdrawMutation.mutate(form.getValues())}
+              disabled={withdrawMutation.isPending}
+              data-testid="button-final-confirm-withdraw"
+            >
+              {withdrawMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Wallet className="w-4 h-4 mr-2" />}
+              Confirmer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

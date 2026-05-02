@@ -11,6 +11,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest, queryClient, getAuthHeaders } from "@/lib/queryClient";
 import type { User, SupportedCurrency } from "@shared/schema";
 import { CreditCard, Loader2, Globe, AlertCircle, Phone, CheckCircle, XCircle, ArrowLeft, ArrowRight, Smartphone, ExternalLink, Hash, Clock, Copy } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { getOperatorLogo } from "@/lib/operator-logos";
 import { z } from "zod";
 import { useState, useEffect, useMemo, useRef } from "react";
@@ -78,6 +79,8 @@ export default function DepositPage() {
   const [waveUrl, setWaveUrl] = useState<string | null>(null);
   const [pixpayOtpCode, setPixpayOtpCode] = useState("");
   const [isCancelling, setIsCancelling] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [pendingDepositData, setPendingDepositData] = useState<DepositFormData | null>(null);
   
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   
@@ -335,8 +338,15 @@ export default function DepositPage() {
   };
 
   const handleSubmit = (data: DepositFormData) => {
+    setPendingDepositData(data);
+    setShowConfirmDialog(true);
+  };
+
+  const handleConfirmDeposit = () => {
+    if (!pendingDepositData) return;
+    setShowConfirmDialog(false);
     setShowValidationMessage(false);
-    depositMutation.mutate(data);
+    depositMutation.mutate(pendingDepositData);
   };
 
   const canProceedToStep2 = useMemo(() => {
@@ -864,7 +874,7 @@ export default function DepositPage() {
                               <FormControl>
                                 <Input 
                                   type="number" 
-                                  placeholder="10000" 
+                                  placeholder=""
                                   className="text-2xl h-14 text-center"
                                   {...field} 
                                   data-testid="input-deposit-amount"
@@ -1144,6 +1154,64 @@ export default function DepositPage() {
         )}
 
       </div>
+
+      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-center text-lg">Confirmer le dépôt</DialogTitle>
+          </DialogHeader>
+          <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border my-2">
+            <div className="flex items-center justify-between px-4 py-3.5">
+              <span className="text-sm text-muted-foreground">Numéro Mobile Money</span>
+              <span className="text-sm font-medium">{pendingDepositData?.phoneNumber}</span>
+            </div>
+            <div className="flex items-center justify-between px-4 py-3.5">
+              <span className="text-sm text-muted-foreground">Pays</span>
+              <span className="text-sm font-medium">{selectedCountry?.name}</span>
+            </div>
+            <div className="flex items-center justify-between px-4 py-3.5">
+              <span className="text-sm text-muted-foreground">Opérateur</span>
+              <span className="text-sm font-medium">{selectedOperator?.name}</span>
+            </div>
+            <div className="flex items-center justify-between px-4 py-3.5">
+              <span className="text-sm text-muted-foreground">Montant saisi</span>
+              <span className="text-sm font-medium">
+                {feeCalculation ? formatCurrency(feeCalculation.amount.toString(), (selectedCountry?.currency || "XAF") as SupportedCurrency) : "—"}
+              </span>
+            </div>
+            {feeCalculation && feeCalculation.fee > 0 && (
+              <div className="flex items-center justify-between px-4 py-3.5">
+                <span className="text-sm text-muted-foreground">
+                  Frais {feeCalculation.feePercentage > 0 ? `(${feeCalculation.feePercentage}%)` : "(fixe)"}
+                </span>
+                <span className="text-sm font-medium text-red-500">
+                  -{formatCurrency(feeCalculation.fee.toString(), (selectedCountry?.currency || "XAF") as SupportedCurrency)}
+                </span>
+              </div>
+            )}
+            <div className="flex items-center justify-between px-4 py-3.5 bg-muted/30">
+              <span className="text-sm font-semibold text-foreground">Montant crédité</span>
+              <span className="text-base font-bold text-green-500">
+                {feeCalculation ? formatCurrency(feeCalculation.creditedAmount.toString(), (selectedCountry?.currency || "XAF") as SupportedCurrency) : "—"}
+              </span>
+            </div>
+          </div>
+          <DialogFooter className="flex gap-2 sm:flex-row">
+            <Button variant="outline" className="flex-1" onClick={() => setShowConfirmDialog(false)}>
+              Retour
+            </Button>
+            <Button
+              className="flex-1"
+              onClick={handleConfirmDeposit}
+              disabled={depositMutation.isPending}
+              data-testid="button-final-confirm-deposit"
+            >
+              {depositMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CreditCard className="w-4 h-4 mr-2" />}
+              Confirmer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
