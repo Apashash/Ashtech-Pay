@@ -24,7 +24,7 @@ import { z } from "zod";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import { pool, db } from "./db";
-import { transactions as transactionsTable } from "@shared/schema";
+import { transactions as transactionsTable, users as usersTable, wallets as walletsTable } from "@shared/schema";
 import { desc, eq, sql as drizzleSql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import multer from "multer";
@@ -4264,6 +4264,53 @@ export async function registerRoutes(
       res.json({ message: "Statistiques réinitialisées avec succès" });
     } catch (error) {
       console.error("Reset stats error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // Admin: Total balances across all user wallets
+  app.get("/api/admin/stats/total-balances", requireAdmin, async (req, res) => {
+    try {
+      const fxRates = await loadFxRates();
+
+      // 1. Sum primary wallets (users.balance grouped by preferredCurrency)
+      const primaryRows = await db
+        .select({
+          currency: usersTable.preferredCurrency,
+          total: drizzleSql<string>`COALESCE(SUM(${usersTable.balance}::numeric), 0)`,
+        })
+        .from(usersTable)
+        .where(drizzleSql`${usersTable.balance}::numeric > 0`)
+        .groupBy(usersTable.preferredCurrency);
+
+      // 2. Sum secondary wallets (wallets table grouped by currency)
+      const secondaryRows = await db
+        .select({
+          currency: walletsTable.currency,
+          total: drizzleSql<string>`COALESCE(SUM(${walletsTable.balance}::numeric), 0)`,
+        })
+        .from(walletsTable)
+        .where(drizzleSql`${walletsTable.balance}::numeric > 0`)
+        .groupBy(walletsTable.currency);
+
+      // 3. Merge into a single map: currency → total
+      const byCurrency: Record<string, number> = {};
+      for (const row of [...primaryRows, ...secondaryRows]) {
+        const amt = parseFloat(row.total) || 0;
+        if (amt > 0) byCurrency[row.currency] = (byCurrency[row.currency] || 0) + amt;
+      }
+
+      // 4. Convert each currency total to XAF
+      let totalXAF = 0;
+      const breakdown = Object.entries(byCurrency).map(([currency, amount]) => {
+        const inXAF = convertToXAF(amount, currency, fxRates);
+        totalXAF += inXAF;
+        return { currency, amount: amount.toFixed(2), amountXAF: Math.round(inXAF) };
+      }).sort((a, b) => b.amountXAF - a.amountXAF);
+
+      res.json({ totalXAF: Math.round(totalXAF), breakdown });
+    } catch (error) {
+      console.error("Total balances error:", error);
       res.status(500).json({ message: "Erreur serveur" });
     }
   });
