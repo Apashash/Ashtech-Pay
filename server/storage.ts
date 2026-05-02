@@ -1265,6 +1265,8 @@ export class DatabaseStorage implements IStorage {
         like(users.fullName, `%${search}%`),
         like(users.email, `%${search}%`),
         like(users.username, `%${search}%`),
+        like(users.phone, `%${search}%`),
+        like(users.country, `%${search}%`),
       ));
     }
     if (filter === "banned") {
