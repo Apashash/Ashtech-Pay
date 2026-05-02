@@ -377,8 +377,9 @@ export default function AdminDashboard() {
 
         <Card className="border-primary/30 bg-primary/5">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <DollarSign className="w-5 h-5 text-primary" />
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Revenus</p>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <DollarSign className="w-4 h-4 text-muted-foreground" />
               Revenus Ashtech Pay — Marge uniquement
             </CardTitle>
           </CardHeader>
@@ -506,8 +507,9 @@ export default function AdminDashboard() {
           {/* Transactions entrantes vs sortantes — 30 derniers jours */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CreditCard className="w-5 h-5 text-primary" />
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Activité</p>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <CreditCard className="w-4 h-4 text-muted-foreground" />
                 Flux transactions par type
               </CardTitle>
             </CardHeader>
@@ -568,8 +570,9 @@ export default function AdminDashboard() {
           {/* Top 8 pays par nombre de transactions */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-primary" />
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Géographie</p>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <TrendingUp className="w-4 h-4 text-muted-foreground" />
                 Top 8 pays — Nombre de transactions
               </CardTitle>
             </CardHeader>

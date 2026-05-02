@@ -146,8 +146,9 @@ export default function AdminConversionsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Settings className="w-5 h-5 text-primary" />
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Configuration</p>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Settings className="w-4 h-4 text-muted-foreground" />
               Frais de conversion par fournisseur
             </CardTitle>
           </CardHeader>
@@ -195,10 +196,7 @@ export default function AdminConversionsPage() {
         </Card>
 
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-primary" />
-            Historique des conversions
-          </h2>
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Historique des conversions</p>
           
           {isLoading ? (
             <div className="flex items-center justify-center py-12">

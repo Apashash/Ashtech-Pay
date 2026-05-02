@@ -185,8 +185,9 @@ export default function GlobalMessagesPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <MessageSquare className="w-5 h-5" />
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Historique</p>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <MessageSquare className="w-4 h-4 text-muted-foreground" />
               Historique des messages
             </CardTitle>
           </CardHeader>

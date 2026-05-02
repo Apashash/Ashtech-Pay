@@ -65,6 +65,7 @@ export default function AdminSettings() {
           <p className="text-muted-foreground">Configuration générale de la plateforme</p>
         </div>
 
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Modules de configuration</p>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {settingsSections.map((section) => {
             const Icon = section.icon;
@@ -80,7 +81,7 @@ export default function AdminSettings() {
                       <Icon className="w-6 h-6" />
                     </div>
                   </div>
-                  <CardTitle className="mt-4">{section.title}</CardTitle>
+                  <CardTitle className="mt-4 text-base">{section.title}</CardTitle>
                   <CardDescription>{section.description}</CardDescription>
                 </CardHeader>
                 <CardContent>

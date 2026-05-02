@@ -118,8 +118,9 @@ export default function AdminWithdrawalNumbersPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="w-5 h-5 text-yellow-500" />
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">En attente d'approbation</p>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Clock className="w-4 h-4 text-muted-foreground" />
               Demandes en attente ({pendingRequests.length})
             </CardTitle>
             <CardDescription>
@@ -218,7 +219,8 @@ export default function AdminWithdrawalNumbersPage() {
         {processedRequests.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle>Historique des demandes</CardTitle>
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Historique</p>
+              <CardTitle className="text-base">Historique des demandes</CardTitle>
               <CardDescription>Demandes déjà traitées</CardDescription>
             </CardHeader>
             <CardContent>

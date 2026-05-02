@@ -256,7 +256,10 @@ export default function AdminCountries() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card className="md:col-span-1">
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Pays</CardTitle>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">Pays</p>
+                <CardTitle className="text-base flex items-center gap-2"><Globe className="w-4 h-4 text-muted-foreground" />Pays actifs</CardTitle>
+              </div>
               <Button onClick={() => setShowCountryModal(true)} size="sm" className="gap-2">
                 <Plus className="w-4 h-4" /> Ajouter
               </Button>
@@ -297,7 +300,10 @@ export default function AdminCountries() {
 
           <Card className="md:col-span-1">
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Opérateurs par Pays</CardTitle>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">Opérateurs</p>
+                <CardTitle className="text-base flex items-center gap-2"><Smartphone className="w-4 h-4 text-muted-foreground" />Opérateurs par pays</CardTitle>
+              </div>
               <Button onClick={() => setShowOperatorModal(true)} size="sm" className="gap-2">
                 <Plus className="w-4 h-4" /> Ajouter
               </Button>
