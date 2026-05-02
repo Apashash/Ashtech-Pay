@@ -1292,7 +1292,7 @@ export class DatabaseStorage implements IStorage {
     const [{ total }] = await db.select({ total: count() }).from(users).where(whereClause);
     const data = await db.select().from(users)
       .where(whereClause)
-      .orderBy(desc(users.createdAt))
+      .orderBy(filter === "has_balance" ? desc(sql`CAST(${users.balance} AS DECIMAL)`) : desc(users.createdAt))
       .limit(limit)
       .offset(offset);
 
