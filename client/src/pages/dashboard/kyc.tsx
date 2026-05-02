@@ -461,8 +461,9 @@ export default function KYCPage() {
           <form onSubmit={handleSubmit} className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Shield className="w-5 h-5" />
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Identité</p>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Shield className="w-4 h-4 text-muted-foreground" />
                   Informations personnelles
                 </CardTitle>
                 <CardDescription>
@@ -534,8 +535,9 @@ export default function KYCPage() {
             <div className="grid lg:grid-cols-2 gap-6">
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <CreditCard className="w-5 h-5" />
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Documents</p>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <CreditCard className="w-4 h-4 text-muted-foreground" />
                     Pièce d'identité
                   </CardTitle>
                   <CardDescription>
@@ -597,8 +599,9 @@ export default function KYCPage() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Building2 className="w-5 h-5" />
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Activité</p>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Building2 className="w-4 h-4 text-muted-foreground" />
                     Informations sur l'activité
                   </CardTitle>
                   <CardDescription>

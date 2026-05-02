@@ -557,46 +557,44 @@ export default function SupportPage() {
         </Card>
 
         {tickets && tickets.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2"><MessageSquare className="w-5 h-5" />Mes conversations</CardTitle>
-              <CardDescription>Consultez vos échanges avec notre équipe support</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">Mes conversations</p>
+            <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
               {tickets.slice(0, 3).map((ticket) => (
-                <div key={ticket.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50 cursor-pointer hover-elevate" onClick={() => openTicket(ticket)} data-testid={`recent-ticket-${ticket.id}`}>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-foreground truncate">{ticket.subject}</p>
-                    <p className="text-sm text-muted-foreground">{ticket.createdAt && format(new Date(ticket.createdAt), "dd MMM yyyy", { locale: fr })}</p>
+                <div key={ticket.id} className="flex items-center gap-3 px-4 py-3.5 cursor-pointer hover:bg-muted/40 transition-colors" onClick={() => openTicket(ticket)} data-testid={`recent-ticket-${ticket.id}`}>
+                  <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                    <MessageSquare className="w-4 h-4 text-primary" />
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-foreground truncate">{ticket.subject}</p>
+                    <p className="text-xs text-muted-foreground">{ticket.createdAt && format(new Date(ticket.createdAt), "dd MMM yyyy", { locale: fr })}</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
                     <Badge className={statusColors[ticket.status] || statusColors.open}>{statusLabels[ticket.status] || ticket.status}</Badge>
                     <ChevronRight className="w-4 h-4 text-muted-foreground" />
                   </div>
                 </div>
               ))}
               {tickets.length > 3 && (
-                <Button variant="ghost" className="w-full" onClick={() => setShowChat(true)}>Voir toutes les conversations ({tickets.length})</Button>
+                <button className="w-full flex items-center justify-center gap-2 px-4 py-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground hover:bg-muted/40 transition-colors" onClick={() => setShowChat(true)}>
+                  Voir toutes les conversations ({tickets.length})
+                </button>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         )}
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Questions fréquentes</CardTitle>
-            <CardDescription>Trouvez rapidement une réponse à vos questions</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">Questions fréquentes</p>
+          <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
             {faqs.map((faq, i) => (
-              <div key={i} className="space-y-2">
-                <p className="font-medium text-foreground">{faq.question}</p>
-                <p className="text-sm text-muted-foreground">{faq.answer}</p>
-                {i < faqs.length - 1 && <div className="border-b" />}
+              <div key={i} className="px-4 py-3.5">
+                <p className="text-sm font-semibold text-foreground">{faq.question}</p>
+                <p className="text-xs text-muted-foreground mt-1">{faq.answer}</p>
               </div>
             ))}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     </DashboardLayout>
   );

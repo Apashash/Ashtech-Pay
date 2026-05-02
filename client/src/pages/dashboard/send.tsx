@@ -283,8 +283,9 @@ export default function SendMoneyPage() {
         <div className="grid md:grid-cols-3 gap-6">
           <Card className="md:col-span-2 min-w-0 overflow-hidden">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Send className="w-5 h-5" />
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Transfert</p>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Send className="w-4 h-4 text-muted-foreground" />
                 Nouveau transfert
               </CardTitle>
               <CardDescription>Sélectionnez la destination pour commencer</CardDescription>

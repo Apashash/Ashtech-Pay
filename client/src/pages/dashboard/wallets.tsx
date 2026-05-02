@@ -236,6 +236,8 @@ export default function WalletsPage() {
             <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
           </div>
         ) : (
+          <>
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Portefeuilles</p>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {walletList.map((wallet) => {
               const balance = parseFloat(wallet.balance || "0");
@@ -295,6 +297,7 @@ export default function WalletsPage() {
               );
             })}
           </div>
+          </>
         )}
 
         {/* Pending success banner */}

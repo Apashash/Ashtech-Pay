@@ -1,6 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/dashboard-layout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -79,147 +78,94 @@ export default function WithdrawalNumbersPage() {
           )}
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Phone className="w-5 h-5" />
-              Mes numéros enregistrés
-            </CardTitle>
-            <CardDescription>
-              Maximum 2 numéros autorisés. Pour modifier ou supprimer un numéro, une approbation de l'administrateur est requise.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {numbersLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : withdrawalNumbers.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Phone className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p>Aucun numéro de retrait enregistré</p>
-                <p className="text-sm">Ajoutez un numéro pour pouvoir effectuer des retraits</p>
-                <Link href="/dashboard/withdrawal-numbers/add">
-                  <Button className="mt-4">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Ajouter un numéro
-                  </Button>
-                </Link>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {withdrawalNumbers.map((number) => (
-                  <div
-                    key={number.id}
-                    className="flex items-center justify-between p-4 rounded-lg border bg-card"
-                    data-testid={`withdrawal-number-${number.id}`}
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-primary/10">
-                        <Phone className="w-6 h-6 text-primary" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-foreground">{number.phoneNumber}</p>
-                        <p className="text-sm text-muted-foreground">{number.operatorName}</p>
-                        {number.label && (
-                          <Badge variant="outline" className="mt-1">{number.label}</Badge>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Link href={`/dashboard/withdrawal-numbers/edit/${number.id}`}>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          data-testid={`button-edit-${number.id}`}
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                      </Link>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => requestDeleteMutation.mutate(number.id)}
-                        disabled={requestDeleteMutation.isPending}
-                        data-testid={`button-delete-${number.id}`}
-                      >
-                        <Trash2 className="w-4 h-4 text-destructive" />
-                      </Button>
-                    </div>
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">Numéros enregistrés</p>
+          {numbersLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : withdrawalNumbers.length === 0 ? (
+            <div className="text-center py-10 rounded-xl border border-border bg-card">
+              <Phone className="w-10 h-10 mx-auto mb-3 text-muted-foreground opacity-50" />
+              <p className="text-sm text-muted-foreground">Aucun numéro de retrait enregistré</p>
+              <p className="text-xs text-muted-foreground mt-1">Ajoutez un numéro pour pouvoir effectuer des retraits</p>
+              <Link href="/dashboard/withdrawal-numbers/add">
+                <Button className="mt-4" size="sm">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Ajouter un numéro
+                </Button>
+              </Link>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
+              {withdrawalNumbers.map((number) => (
+                <div
+                  key={number.id}
+                  className="flex items-center gap-3 px-4 py-3.5 hover:bg-muted/40 transition-colors"
+                  data-testid={`withdrawal-number-${number.id}`}
+                >
+                  <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-primary/10 shrink-0">
+                    <Phone className="w-5 h-5 text-primary" />
                   </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-foreground">{number.phoneNumber}</p>
+                    <p className="text-xs text-muted-foreground">{number.operatorName}{number.label ? ` · ${number.label}` : ""}</p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Link href={`/dashboard/withdrawal-numbers/edit/${number.id}`}>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" data-testid={`button-edit-${number.id}`}>
+                        <Edit className="w-3.5 h-3.5" />
+                      </Button>
+                    </Link>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => requestDeleteMutation.mutate(number.id)} disabled={requestDeleteMutation.isPending} data-testid={`button-delete-${number.id}`}>
+                      <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         {pendingRequests.length > 0 && (
-          <Card className="border-yellow-500/30 bg-yellow-500/5">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="w-5 h-5 text-yellow-500" />
-                Demandes en attente
-              </CardTitle>
-              <CardDescription>
-                Ces modifications attendent l'approbation d'un administrateur
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {pendingRequests.map((request) => (
-                  <div
-                    key={request.id}
-                    className="flex items-center justify-between p-4 rounded-lg border bg-card"
-                  >
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <Badge variant="outline">{getActionText(request.action)}</Badge>
-                        {getStatusBadge(request.status)}
-                      </div>
-                      {request.newPhoneNumber && (
-                        <p className="text-sm text-foreground">Nouveau numéro: {request.newPhoneNumber}</p>
-                      )}
-                      {request.newOperatorName && (
-                        <p className="text-sm text-muted-foreground">Opérateur: {request.newOperatorName}</p>
-                      )}
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">En attente d'approbation</p>
+            <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/5 overflow-hidden divide-y divide-yellow-500/20">
+              {pendingRequests.map((request) => (
+                <div key={request.id} className="flex items-center gap-3 px-4 py-3.5">
+                  <AlertCircle className="w-4 h-4 text-yellow-500 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge variant="outline" className="text-xs">{getActionText(request.action)}</Badge>
+                      {getStatusBadge(request.status)}
                     </div>
-                    <AlertCircle className="w-5 h-5 text-yellow-500" />
+                    {request.newPhoneNumber && <p className="text-sm text-foreground mt-0.5">{request.newPhoneNumber}</p>}
+                    {request.newOperatorName && <p className="text-xs text-muted-foreground">{request.newOperatorName}</p>}
                   </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
         {changeRequests.filter(r => r.status !== "pending").length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Historique des demandes</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {changeRequests.filter(r => r.status !== "pending").map((request) => (
-                  <div
-                    key={request.id}
-                    className="flex items-center justify-between p-4 rounded-lg border bg-card"
-                  >
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <Badge variant="outline">{getActionText(request.action)}</Badge>
-                        {getStatusBadge(request.status)}
-                      </div>
-                      {request.newPhoneNumber && (
-                        <p className="text-sm text-muted-foreground">Numéro: {request.newPhoneNumber}</p>
-                      )}
-                      {request.adminNote && (
-                        <p className="text-sm text-muted-foreground mt-1">Note: {request.adminNote}</p>
-                      )}
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">Historique des demandes</p>
+            <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
+              {changeRequests.filter(r => r.status !== "pending").map((request) => (
+                <div key={request.id} className="flex items-center gap-3 px-4 py-3.5">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge variant="outline" className="text-xs">{getActionText(request.action)}</Badge>
+                      {getStatusBadge(request.status)}
                     </div>
+                    {request.newPhoneNumber && <p className="text-xs text-muted-foreground mt-0.5">{request.newPhoneNumber}</p>}
+                    {request.adminNote && <p className="text-xs text-muted-foreground">Note : {request.adminNote}</p>}
                   </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
       </div>
     </DashboardLayout>
