@@ -497,6 +497,9 @@ export default function AdminUsers() {
                   <SelectItem value="no_kyc">
                     <span className="flex items-center gap-2 text-muted-foreground"><Shield className="w-3.5 h-3.5" />Sans KYC</span>
                   </SelectItem>
+                  <SelectItem value="has_balance">
+                    <span className="flex items-center gap-2 text-blue-500"><DollarSign className="w-3.5 h-3.5" />Avec solde</span>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>

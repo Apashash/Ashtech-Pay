@@ -1283,6 +1283,8 @@ export class DatabaseStorage implements IStorage {
       ));
     } else if (filter === "pending_kyc") {
       conditions.push(eq(users.kycStatus, "pending"));
+    } else if (filter === "has_balance") {
+      conditions.push(gt(users.balance, "0.00"));
     }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
