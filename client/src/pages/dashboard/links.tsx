@@ -391,6 +391,14 @@ function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => voi
   );
 }
 
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground select-none pb-1">
+      {children}
+    </p>
+  );
+}
+
 function StatCard({ title, value, icon: Icon, trend, color }: {
   title: string;
   value: string | number;
@@ -399,20 +407,16 @@ function StatCard({ title, value, icon: Icon, trend, color }: {
   color: string;
 }) {
   return (
-    <Card>
-      <CardContent className="p-6">
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="text-muted-foreground text-sm mb-1">{title}</p>
-            <p className="text-2xl font-bold text-foreground">{value}</p>
-            {trend && <p className="text-xs text-green-500 mt-1">{trend}</p>}
-          </div>
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${color}`}>
-            <Icon className="w-5 h-5" />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="rounded-xl border border-border bg-card p-4 flex items-center gap-4">
+      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${color}`}>
+        <Icon className="w-5 h-5" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{title}</p>
+        <p className="text-xl font-bold text-foreground mt-0.5">{value}</p>
+        {trend && <p className="text-xs text-green-500">{trend}</p>}
+      </div>
+    </div>
   );
 }
 
@@ -1197,163 +1201,88 @@ export default function PaymentLinksPage() {
 
         {/* Recent Links Section */}
         {paymentLinks.length > 0 && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between gap-4 pb-3">
-              <div>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Link2 className="w-5 h-5" />
-                  Liens récents
-                </CardTitle>
-                <CardDescription>
-                  {showAllRecentLinks 
-                    ? `Tous vos ${sortedLinks.length} liens` 
-                    : `Les ${Math.min(5, sortedLinks.length)} derniers liens créés`}
-                </CardDescription>
-              </div>
+          <div>
+            <SectionLabel>
+              {showAllRecentLinks ? `Tous vos ${sortedLinks.length} liens` : "Liens récents"}
+            </SectionLabel>
+            <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
+              {recentLinks.map((link) => {
+                const stats = getLinkStats(link.id);
+                return (
+                  <div
+                    key={link.id}
+                    className={`cursor-pointer hover:bg-muted/40 transition-colors ${!link.isActive ? "opacity-60" : ""}`}
+                    data-testid={`recent-link-${link.id}`}
+                    onClick={() => navigate(`/dashboard/links/${link.id}`)}
+                  >
+                    <div className="flex items-center gap-3 px-4 py-3.5">
+                      {link.imagePath ? (
+                        <img src={getImageSrc(link.imagePath)} alt={link.title} className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                      ) : (
+                        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                          <Link2 className="w-5 h-5 text-primary" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-sm font-semibold text-foreground truncate">{link.title}</p>
+                          {link.isActive
+                            ? <CheckCircle className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                            : <XCircle className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
+                        </div>
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                          <span className="flex items-center gap-1"><Eye className="w-3 h-3" />{link.clickCount || 0} clics</span>
+                          <span>{link.isFixedAmount ? formatCurrency(link.amount, (user?.preferredCurrency || "XAF") as SupportedCurrency) : "Montant libre"}</span>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-sm font-bold text-foreground">{formatCurrency(stats.totalCollected, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</p>
+                        <p className="text-xs text-muted-foreground">{stats.transactionCount} pmt.</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between px-4 pb-3 gap-2 border-t border-border/40">
+                      <p className="text-xs text-muted-foreground truncate">/pay/{link.slug}</p>
+                      <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => copyLink(link.slug)} title="Copier" data-testid={`button-copy-${link.id}`}>
+                          <Copy className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setQrModalLink(link)} title="QR Code" data-testid={`button-qr-${link.id}`}>
+                          <QrCode className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => generatePDF(link)} title="PDF" data-testid={`button-pdf-${link.id}`}>
+                          <Download className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" asChild>
+                          <a href={`/pay/${link.slug}`} target="_blank" rel="noopener noreferrer" data-testid={`button-open-${link.id}`}>
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => navigate(`/dashboard/links/${link.id}/edit`)} title="Modifier" data-testid={`button-edit-${link.id}`}>
+                          <Pencil className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className={`h-7 w-7 ${link.isActive ? "text-orange-500 hover:text-orange-600" : "text-green-500 hover:text-green-600"}`} onClick={() => deactivateMutation.mutate({ id: link.id, isActive: !link.isActive })} title={link.isActive ? "Désactiver" : "Activer"} data-testid={`button-toggle-${link.id}`}>
+                          <Power className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => { if (confirm("Êtes-vous sûr de vouloir supprimer ce lien définitivement ?")) deleteMutation.mutate(link.id); }} title="Supprimer" data-testid={`button-delete-${link.id}`}>
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
               {sortedLinks.length > 5 && (
-                <Button 
-                  variant="outline" 
-                  size="icon"
+                <button
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground hover:bg-muted/40 transition-colors"
                   onClick={() => setShowAllRecentLinks(!showAllRecentLinks)}
                   data-testid="button-toggle-all-links"
                 >
-                  {showAllRecentLinks ? (
-                    <XCircle className="w-4 h-4" />
-                  ) : (
-                    <Plus className="w-4 h-4" />
-                  )}
-                </Button>
+                  {showAllRecentLinks ? <XCircle className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                  {showAllRecentLinks ? "Afficher moins" : `Voir ${sortedLinks.length - 5} autres`}
+                </button>
               )}
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="space-y-4">
-                {recentLinks.map((link) => {
-                  const stats = getLinkStats(link.id);
-                  return (
-                    <div 
-                      key={link.id} 
-                      className={`p-4 rounded-lg border ${link.isActive ? 'bg-muted/30 border-border' : 'bg-muted/10 border-border/50 opacity-60'} cursor-pointer hover-elevate transition-all`}
-                      data-testid={`recent-link-${link.id}`}
-                      onClick={() => navigate(`/dashboard/links/${link.id}`)}
-                    >
-                      <div className="space-y-3">
-                        <div className="flex items-start gap-3">
-                          {link.imagePath ? (
-                            <img 
-                              src={getImageSrc(link.imagePath)} 
-                              alt={link.title}
-                              className="w-12 h-12 rounded-lg object-cover flex-shrink-0"
-                            />
-                          ) : (
-                            <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                              <Link2 className="w-6 h-6 text-primary" />
-                            </div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between gap-2">
-                              <h4 className="font-bold text-lg text-foreground truncate">{link.title}</h4>
-                              <span className="font-bold text-lg text-foreground whitespace-nowrap">
-                                {formatCurrency(stats.totalCollected, (user?.preferredCurrency || "XAF") as SupportedCurrency)}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                              <Eye className="w-4 h-4" />
-                              <span>{link.clickCount || 0} clics</span>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <div className="border-t border-border pt-3 space-y-1">
-                          <p className="text-sm text-muted-foreground break-all">
-                            {window.location.origin}/pay/{link.slug}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {link.isFixedAmount 
-                              ? formatCurrency(link.amount, (user?.preferredCurrency || "XAF") as SupportedCurrency)
-                              : "Montant flexible"}
-                          </p>
-                        </div>
-                        
-                        <div className="flex items-center justify-between pt-2 border-t border-border gap-2 flex-wrap">
-                          <div className="flex items-center gap-1">
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              onClick={(e) => { e.stopPropagation(); copyLink(link.slug); }} 
-                              title="Copier le lien"
-                              data-testid={`button-copy-${link.id}`}
-                            >
-                              <Copy className="w-4 h-4" />
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              onClick={(e) => { e.stopPropagation(); setQrModalLink(link); }}
-                              title="Afficher QR code"
-                              data-testid={`button-qr-${link.id}`}
-                            >
-                              <QrCode className="w-4 h-4" />
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              onClick={(e) => { e.stopPropagation(); generatePDF(link); }}
-                              title="Télécharger PDF"
-                              data-testid={`button-pdf-${link.id}`}
-                            >
-                              <Download className="w-4 h-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" asChild title="Ouvrir le lien" onClick={(e) => e.stopPropagation()}>
-                              <a href={`/pay/${link.slug}`} target="_blank" rel="noopener noreferrer" data-testid={`button-open-${link.id}`}>
-                                <ExternalLink className="w-4 h-4" />
-                              </a>
-                            </Button>
-                          </div>
-                          
-                          <div className="flex items-center gap-1">
-                            <Button 
-                              variant="ghost" 
-                              size="icon"
-                              onClick={(e) => { e.stopPropagation(); navigate(`/dashboard/links/${link.id}/edit`); }}
-                              title="Modifier"
-                              data-testid={`button-edit-${link.id}`}
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon"
-                              onClick={(e) => { e.stopPropagation(); deactivateMutation.mutate({ id: link.id, isActive: !link.isActive }); }}
-                              title={link.isActive ? "Désactiver" : "Activer"}
-                              className={link.isActive ? "text-orange-500 hover:text-orange-600" : "text-green-500 hover:text-green-600"}
-                              data-testid={`button-toggle-${link.id}`}
-                            >
-                              <Power className="w-4 h-4" />
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (confirm("Êtes-vous sûr de vouloir supprimer ce lien définitivement ?")) {
-                                  deleteMutation.mutate(link.id);
-                                }
-                              }}
-                              title="Supprimer"
-                              className="text-destructive hover:text-destructive"
-                              data-testid={`button-delete-${link.id}`}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         )}
 
         <div className="flex flex-col sm:flex-row gap-4">
@@ -1435,8 +1364,9 @@ export default function PaymentLinksPage() {
             <div className="grid lg:grid-cols-3 gap-6">
               <Card className="lg:col-span-2">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <BarChart3 className="w-5 h-5" />
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Analytiques</p>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <BarChart3 className="w-4 h-4 text-muted-foreground" />
                     Montants collectés par période
                   </CardTitle>
                   <CardDescription>
@@ -1476,8 +1406,9 @@ export default function PaymentLinksPage() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Globe className="w-5 h-5" />
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Géographie</p>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Globe className="w-4 h-4 text-muted-foreground" />
                     Pays principaux
                   </CardTitle>
                 </CardHeader>
@@ -1516,7 +1447,8 @@ export default function PaymentLinksPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Sources de paiement</CardTitle>
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Méthodes</p>
+                <CardTitle className="text-base">Sources de paiement</CardTitle>
                 <CardDescription>Répartition des paiements par méthode</CardDescription>
               </CardHeader>
               <CardContent>
@@ -1568,8 +1500,9 @@ export default function PaymentLinksPage() {
           <TabsContent value="payments" className="mt-6">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Wallet className="w-5 h-5" />
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Paiements</p>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Wallet className="w-4 h-4 text-muted-foreground" />
                   Paiements reçus
                 </CardTitle>
                 <CardDescription>Tous les paiements effectués via vos liens</CardDescription>
@@ -1648,134 +1581,74 @@ export default function PaymentLinksPage() {
           </TabsContent>
 
           <TabsContent value="links" className="mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Link2 className="w-5 h-5" />
-                  Tous les liens
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {isLoading ? (
-                  <div className="flex justify-center py-12">
-                    <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-                  </div>
-                ) : paymentLinks.length === 0 ? (
-                  <div className="text-center py-12">
-                    <Link2 className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-muted-foreground mb-4">Aucun lien de paiement créé</p>
-                    <Button onClick={() => navigate("/dashboard/links/new")} data-testid="button-create-first-link">
-                      <Plus className="w-4 h-4 mr-2" />
-                      Créer votre premier lien
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {paymentLinks.map((link) => {
-                      const stats = getLinkStats(link.id);
-                      return (
-                        <div 
-                          key={link.id} 
-                          className={`p-4 rounded-lg border ${link.isActive ? 'bg-muted/30 border-border' : 'bg-muted/10 border-border/50 opacity-60'}`}
-                          data-testid={`link-item-${link.id}`}
-                        >
-                          <div className="space-y-3">
-                            <div className="flex items-start justify-between gap-4">
-                              <div className="flex items-center gap-2">
-                                <h4 className="font-bold text-lg text-foreground">{link.title}</h4>
-                                {link.isActive ? (
-                                  <CheckCircle className="w-4 h-4 text-green-500" />
-                                ) : (
-                                  <XCircle className="w-4 h-4 text-muted-foreground" />
-                                )}
-                              </div>
-                              <span className="font-bold text-lg text-foreground whitespace-nowrap">
-                                {formatCurrency(stats.totalCollected, (user?.preferredCurrency || "XAF") as SupportedCurrency)}
-                              </span>
+            <div>
+              <SectionLabel>Tous les liens ({paymentLinks.length})</SectionLabel>
+              {isLoading ? (
+                <div className="flex justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : paymentLinks.length === 0 ? (
+                <div className="text-center py-12 rounded-xl border border-border bg-card">
+                  <Link2 className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground mb-4">Aucun lien de paiement créé</p>
+                  <Button onClick={() => navigate("/dashboard/links/new")} data-testid="button-create-first-link">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Créer votre premier lien
+                  </Button>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
+                  {paymentLinks.map((link) => {
+                    const stats = getLinkStats(link.id);
+                    return (
+                      <div
+                        key={link.id}
+                        className={!link.isActive ? "opacity-60" : ""}
+                        data-testid={`link-item-${link.id}`}
+                      >
+                        <div className="flex items-center gap-3 px-4 py-3.5">
+                          {link.imagePath ? (
+                            <img src={getImageSrc(link.imagePath)} alt={link.title} className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                          ) : (
+                            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                              <Link2 className="w-5 h-5 text-primary" />
                             </div>
-                            
-                            <div className="flex items-center gap-4 text-muted-foreground text-sm">
-                              <span className="flex items-center gap-1">
-                                <Eye className="w-4 h-4" />
-                                {link.clickCount || 0} clics
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <ArrowDownUp className="w-4 h-4" />
-                                {stats.transactionCount} paiements
-                              </span>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-sm font-semibold text-foreground truncate">{link.title}</p>
+                              {link.isActive ? <CheckCircle className="w-3.5 h-3.5 text-green-500 shrink-0" /> : <XCircle className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
                             </div>
-                            
-                            {link.description && <p className="text-sm text-muted-foreground">{link.description}</p>}
-                            
-                            <div className="border-t border-border pt-3 space-y-1">
-                              <p className="text-sm text-muted-foreground break-all">
-                                {window.location.origin}/pay/{link.slug}
-                              </p>
-                              <p className="text-sm text-muted-foreground">
-                                {link.isFixedAmount 
-                                  ? formatCurrency(link.amount, (user?.preferredCurrency || "XAF") as SupportedCurrency)
-                                  : "Montant flexible"}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                Créé le {link.createdAt ? format(new Date(link.createdAt), "d MMMM yyyy", { locale: fr }) : "-"}
-                              </p>
+                            <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                              <span className="flex items-center gap-1"><Eye className="w-3 h-3" />{link.clickCount || 0} clics</span>
+                              <span className="flex items-center gap-1"><ArrowDownUp className="w-3 h-3" />{stats.transactionCount} pmt.</span>
+                              <span>{link.isFixedAmount ? formatCurrency(link.amount, (user?.preferredCurrency || "XAF") as SupportedCurrency) : "Montant libre"}</span>
                             </div>
-                            
-                            <div className="flex items-center justify-between pt-2 border-t border-border gap-2 flex-wrap">
-                              <div className="flex items-center gap-1">
-                                <Button variant="ghost" size="icon" onClick={() => copyLink(link.slug)} title="Copier" data-testid={`button-copy-all-${link.id}`}>
-                                  <Copy className="w-4 h-4" />
-                                </Button>
-                                <Button variant="ghost" size="icon" onClick={() => setQrModalLink(link)} title="QR Code" data-testid={`button-qr-all-${link.id}`}>
-                                  <QrCode className="w-4 h-4" />
-                                </Button>
-                                <Button variant="ghost" size="icon" onClick={() => generatePDF(link)} title="Télécharger PDF" data-testid={`button-pdf-all-${link.id}`}>
-                                  <Download className="w-4 h-4" />
-                                </Button>
-                                <Button variant="ghost" size="icon" asChild title="Ouvrir">
-                                  <a href={`/pay/${link.slug}`} target="_blank" rel="noopener noreferrer" data-testid={`button-open-all-${link.id}`}>
-                                    <ExternalLink className="w-4 h-4" />
-                                  </a>
-                                </Button>
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <Button variant="ghost" size="icon" onClick={() => navigate(`/dashboard/links/${link.id}/edit`)} title="Modifier" data-testid={`button-edit-all-${link.id}`}>
-                                  <Pencil className="w-4 h-4" />
-                                </Button>
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon"
-                                  onClick={() => deactivateMutation.mutate({ id: link.id, isActive: !link.isActive })}
-                                  title={link.isActive ? "Désactiver" : "Activer"}
-                                  className={link.isActive ? "text-orange-500 hover:text-orange-600" : "text-green-500 hover:text-green-600"}
-                                  data-testid={`button-toggle-all-${link.id}`}
-                                >
-                                  <Power className="w-4 h-4" />
-                                </Button>
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon"
-                                  onClick={() => {
-                                    if (confirm("Êtes-vous sûr de vouloir supprimer ce lien définitivement ?")) {
-                                      deleteMutation.mutate(link.id);
-                                    }
-                                  }}
-                                  title="Supprimer"
-                                  className="text-destructive hover:text-destructive"
-                                  data-testid={`button-delete-all-${link.id}`}
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              </div>
-                            </div>
+                            {link.description && <p className="text-xs text-muted-foreground mt-0.5 truncate">{link.description}</p>}
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="text-sm font-bold text-foreground">{formatCurrency(stats.totalCollected, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</p>
+                            <p className="text-xs text-muted-foreground">{link.createdAt ? format(new Date(link.createdAt), "d MMM yy", { locale: fr }) : "-"}</p>
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                        <div className="flex items-center justify-between px-4 pb-3 gap-2 border-t border-border/40">
+                          <p className="text-xs text-muted-foreground truncate">/pay/{link.slug}</p>
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => copyLink(link.slug)} title="Copier" data-testid={`button-copy-all-${link.id}`}><Copy className="w-3.5 h-3.5" /></Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setQrModalLink(link)} title="QR" data-testid={`button-qr-all-${link.id}`}><QrCode className="w-3.5 h-3.5" /></Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => generatePDF(link)} title="PDF" data-testid={`button-pdf-all-${link.id}`}><Download className="w-3.5 h-3.5" /></Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" asChild><a href={`/pay/${link.slug}`} target="_blank" rel="noopener noreferrer" data-testid={`button-open-all-${link.id}`}><ExternalLink className="w-3.5 h-3.5" /></a></Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => navigate(`/dashboard/links/${link.id}/edit`)} title="Modifier" data-testid={`button-edit-all-${link.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
+                            <Button variant="ghost" size="icon" className={`h-7 w-7 ${link.isActive ? "text-orange-500 hover:text-orange-600" : "text-green-500 hover:text-green-600"}`} onClick={() => deactivateMutation.mutate({ id: link.id, isActive: !link.isActive })} title={link.isActive ? "Désactiver" : "Activer"} data-testid={`button-toggle-all-${link.id}`}><Power className="w-3.5 h-3.5" /></Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => { if (confirm("Êtes-vous sûr de vouloir supprimer ce lien définitivement ?")) deleteMutation.mutate(link.id); }} title="Supprimer" data-testid={`button-delete-all-${link.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </TabsContent>
         </Tabs>
       </div>

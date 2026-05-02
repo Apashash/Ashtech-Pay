@@ -41,20 +41,18 @@ function SectionCard({ number, title, subtitle, icon: Icon, children }: {
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
-      <div className="flex items-center gap-4 px-6 py-4 border-b border-border/60 bg-muted/30">
-        <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-primary/15 border border-primary/20 shrink-0">
-          <Icon className="w-4 h-4 text-primary" />
+    <div className="bg-card border border-border rounded-xl overflow-hidden">
+      <div className="flex items-center gap-4 px-5 py-4 border-b border-border bg-muted/20">
+        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-muted/60 border border-border shrink-0">
+          <Icon className="w-4 h-4 text-muted-foreground" />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-primary/70 uppercase tracking-wider">Étape {number}</span>
-          </div>
-          <h3 className="font-semibold text-foreground text-sm leading-tight">{title}</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>
+          <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Étape {number}</span>
+          <h3 className="font-semibold text-foreground text-sm leading-tight mt-0.5">{title}</h3>
+          <p className="text-xs text-muted-foreground">{subtitle}</p>
         </div>
       </div>
-      <div className="p-6 space-y-5">
+      <div className="p-5 space-y-5">
         {children}
       </div>
     </div>
