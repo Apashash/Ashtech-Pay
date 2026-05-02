@@ -6,566 +6,118 @@ if (!process.env.RESEND_API_KEY) {
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
-const FROM_EMAIL   = "Ashtech Pay <noreply@ashtechpay.top>";
-const APP_URL      = "https://ashtechpay.top";
-const LOGO_URL     = "https://ashtechpay.top/logo.png";
-const WA_LOGO_URL  = "https://ashtechpay.top/wa-logo.svg";
-const FB_LOGO_URL  = "https://ashtechpay.top/fb-logo.svg";
-const FACEBOOK_URL = "https://www.facebook.com/share/1Eczpeowdp/?mibextid=wwXIfr";
-const WHATSAPP_URL = "https://whatsapp.com/channel/0029VbC5tPPCxoAveJ44Vs2w";
+const FROM_EMAIL    = "Ashtech Pay <noreply@ashtechpay.top>";
+const APP_URL       = "https://ashtechpay.top";
+const LOGO_URL      = "https://ashtechpay.top/logo.png";
+const FACEBOOK_URL  = "https://www.facebook.com/share/1Eczpeowdp/?mibextid=wwXIfr";
+const WHATSAPP_URL  = "https://whatsapp.com/channel/0029VbC5tPPCxoAveJ44Vs2w";
 const SUPPORT_PHONE = "+237 6 83 67 78 72";
 
-export async function sendPasswordResetEmail(to: string, fullName: string, resetToken: string): Promise<void> {
-  const firstName = (fullName?.trim().split(" ")[0]) || "cher(e) client(e)";
-  const resetLink = `${APP_URL}/reset-password?token=${resetToken}`;
+// ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
+const NAVY   = "#1E3A8A";
+const TEXT   = "#111827";
+const MUTED  = "#6B7280";
+const BORDER = "#E5E7EB";
+const BOX_BG = "#F3F4F6";
 
-  const html = `<!DOCTYPE html>
-<html lang="fr" xmlns="http://www.w3.org/1999/xhtml">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
-  <title>Réinitialisation de mot de passe — Ashtech Pay</title>
-</head>
-<body style="margin:0;padding:0;background-color:#F5F7FA;font-family:Arial,Helvetica,sans-serif;color:#1F2937;">
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F5F7FA;">
-    <tr>
-      <td align="center" style="padding:32px 16px;">
+// ─── BASE LAYOUT ──────────────────────────────────────────────────────────────
 
-        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#FFFFFF;border-radius:20px;border:1px solid #E5E7EB;overflow:hidden;">
-
-          <!-- HEADER -->
-          <tr>
-            <td style="background:#FFFFFF;padding:32px 40px 24px;text-align:center;border-bottom:2px solid #F0B90B;">
-              <div style="margin-bottom:22px;">
-                <img src="${LOGO_URL}" alt="AshTech Pay" height="56"
-                     style="display:inline-block;max-height:56px;width:auto;" />
-              </div>
-              <div style="display:inline-block;background:#FEE2E2;border:1px solid #F87171;color:#DC2626;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;padding:5px 16px;border-radius:100px;margin-bottom:18px;">
-                🔐 &nbsp;Sécurité du compte
-              </div>
-              <h1 style="margin:0;font-size:26px;font-weight:700;color:#1F2937;line-height:1.3;">
-                Réinitialisation de<br/>mot de passe
-              </h1>
-              <p style="margin:12px 0 0;font-size:14px;color:#1F2937;line-height:1.6;">
-                Bonjour <strong style="color:#F0B90B;">${firstName}</strong>, une demande a été faite pour ce compte.
-              </p>
-            </td>
-          </tr>
-
-          <!-- BODY -->
-          <tr>
-            <td style="padding:36px 40px;">
-
-              <!-- Alert box -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0"
-                     style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:12px;margin-bottom:28px;">
-                <tr>
-                  <td style="padding:18px 20px;">
-                    <table cellpadding="0" cellspacing="0" border="0">
-                      <tr>
-                        <td style="font-size:22px;padding-right:14px;vertical-align:top;">⚠️</td>
-                        <td style="font-size:13px;color:#1F2937;line-height:1.7;vertical-align:top;">
-                          Si <strong style="color:#1F2937;">tu n'as pas</strong> demandé à réinitialiser ton mot de passe,
-                          ignore cet email. Ton compte reste sécurisé.<br/>
-                          <span style="font-size:12px;color:#1F2937;">Ce lien expire dans <strong style="color:#F0B90B;">1 heure</strong>.</span>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
-
-              <p style="margin:0 0 24px;font-size:14px;color:#1F2937;line-height:1.75;">
-                Clique sur le bouton ci-dessous pour choisir un nouveau mot de passe sécurisé pour ton compte Ashtech Pay.
-              </p>
-
-              <!-- CTA -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:28px;">
-                <tr>
-                  <td align="center">
-                    <a href="${resetLink}"
-                       style="display:inline-block;background:linear-gradient(135deg,#F0B90B 0%,#D4940A 100%);color:#000000;font-size:15px;font-weight:700;padding:15px 40px;border-radius:12px;text-decoration:none;letter-spacing:0.3px;">
-                      🔑 &nbsp;Réinitialiser mon mot de passe
-                    </a>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Fallback link -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0"
-                     style="background:#F8FAFC;border-radius:10px;margin-bottom:28px;">
-                <tr>
-                  <td style="padding:16px 20px;">
-                    <p style="margin:0 0 8px;font-size:12px;color:#1F2937;">Si le bouton ne fonctionne pas, copie ce lien dans ton navigateur :</p>
-                    <p style="margin:0;font-size:11px;color:#F0B90B;word-break:break-all;line-height:1.5;">${resetLink}</p>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Divider -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
-                <tr><td style="border-top:1px solid #E5E7EB;font-size:0;">&nbsp;</td></tr>
-              </table>
-
-              <!-- Security tips -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0"
-                     style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:14px;">
-                <tr>
-                  <td style="padding:20px 24px;">
-                    <p style="margin:0 0 14px;font-size:11px;font-weight:700;color:#F0B90B;letter-spacing:2px;text-transform:uppercase;">
-                      🛡️ &nbsp;Conseils de sécurité
-                    </p>
-                    <table cellpadding="0" cellspacing="0" border="0" width="100%">
-                      <tr>
-                        <td style="padding:5px 0;font-size:12px;color:#1F2937;line-height:1.6;">
-                          ✅ &nbsp;Utilise un mot de passe unique d'au moins <strong style="color:#1F2937;">8 caractères</strong>
-                        </td>
-                      </tr>
-                      <tr>
-                        <td style="padding:5px 0;font-size:12px;color:#1F2937;line-height:1.6;">
-                          ✅ &nbsp;Mélange <strong style="color:#1F2937;">majuscules, chiffres et symboles</strong>
-                        </td>
-                      </tr>
-                      <tr>
-                        <td style="padding:5px 0;font-size:12px;color:#1F2937;line-height:1.6;">
-                          ✅ &nbsp;Ne réutilise pas un ancien mot de passe
-                        </td>
-                      </tr>
-                      <tr>
-                        <td style="padding:5px 0;font-size:12px;color:#1F2937;line-height:1.6;">
-                          🚫 &nbsp;Ashtech Pay ne te demandera <strong style="color:#DC2626;">jamais</strong> ton mot de passe par téléphone ou email
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Support -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:24px;">
-                <tr>
-                  <td align="center">
-                    <p style="margin:0 0 12px;font-size:12px;color:#1F2937;">Un problème ? Notre équipe est là :</p>
-                    <table cellpadding="0" cellspacing="0" border="0" align="center">
-                      <tr>
-                        <td style="padding:0 6px;">
-                          <a href="https://wa.me/${SUPPORT_PHONE.replace(/[\s+]/g, "")}"
-                             style="display:inline-block;background:#25D366;color:#FFFFFF;font-size:12px;font-weight:700;padding:9px 18px;border-radius:8px;text-decoration:none;">
-                            <img src="${WA_LOGO_URL}" width="18" height="18" style="display:inline;vertical-align:middle;margin-right:6px;border-radius:4px;" alt="WhatsApp" />WhatsApp
-                          </a>
-                        </td>
-                        <td style="padding:0 6px;">
-                          <a href="${FACEBOOK_URL}"
-                             style="display:inline-block;background:#1877F2;color:#FFFFFF;font-size:12px;font-weight:700;padding:9px 18px;border-radius:8px;text-decoration:none;">
-                            <img src="${FB_LOGO_URL}" width="18" height="18" style="display:inline;vertical-align:middle;margin-right:6px;border-radius:4px;" alt="Facebook" />Facebook
-                          </a>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
-
-            </td>
-          </tr>
-
-          <!-- FOOTER -->
-          <tr>
-            <td style="padding:20px 40px 26px;border-top:1px solid #E5E7EB;text-align:center;">
-              <p style="margin:0 0 6px;font-size:11px;color:#1F2937;line-height:1.7;">
-                Tu reçois cet email car une réinitialisation a été demandée sur
-                <a href="${APP_URL}" style="color:#F0B90B;text-decoration:none;">ashtechpay.top</a>.
-              </p>
-              <p style="margin:0;font-size:11px;color:#1F2937;">&copy; 2026 Ashtech Pay &mdash; Tous droits réservés</p>
-            </td>
-          </tr>
-
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
-
-  if (!resend) {
-    console.warn("[Email] Skipping reset email — RESEND_API_KEY not configured.");
-    return;
-  }
-  try {
-    const { data, error } = await resend.emails.send({
-      from: FROM_EMAIL,
-      to: [to],
-      subject: "🔐 Réinitialisation de votre mot de passe Ashtech Pay",
-      html,
-    });
-    if (error) {
-      console.error("[Email] Resend reset error:", JSON.stringify(error));
-    } else {
-      console.log("[Email] Reset email sent:", data?.id, "→", to);
-    }
-  } catch (err: any) {
-    console.error("[Email] Failed to send reset email:", err.message);
-  }
-}
-
-export async function sendWelcomeEmail(to: string, fullName: string): Promise<void> {
-  const firstName = (fullName?.trim().split(" ")[0]) || "cher(e) client(e)";
-
-  const html = `<!DOCTYPE html>
-<html lang="fr" xmlns="http://www.w3.org/1999/xhtml">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
-  <title>Bienvenue chez Ashtech Pay</title>
-</head>
-<body style="margin:0;padding:0;background-color:#F5F7FA;font-family:Arial,Helvetica,sans-serif;color:#1F2937;">
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F5F7FA;">
-    <tr>
-      <td align="center" style="padding:32px 16px;">
-
-        <!-- MAIN CARD -->
-        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#FFFFFF;border-radius:20px;border:1px solid #E5E7EB;overflow:hidden;">
-
-          <!-- HEADER -->
-          <tr>
-            <td style="background:#FFFFFF;padding:32px 40px 24px;text-align:center;border-bottom:2px solid #F0B90B;">
-              <!-- Logo -->
-              <div style="margin-bottom:24px;">
-                <img src="${LOGO_URL}" alt="AshTech Pay" height="56"
-                     style="display:inline-block;max-height:56px;width:auto;"
-                     onerror="this.style.display='none'" />
-              </div>
-
-              <!-- Badge -->
-              <div style="display:inline-block;background:#FEF3C7;border:1px solid #D97706;color:#F0B90B;font-size:11px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;padding:5px 16px;border-radius:100px;margin-bottom:18px;">
-                ✦ &nbsp;Compte activé
-              </div>
-
-              <!-- Headline -->
-              <h1 style="margin:0;font-size:30px;font-weight:700;color:#1F2937;line-height:1.3;">
-                Bienvenue, <span style="color:#F0B90B;">${firstName}</span>&nbsp;! 🎉
-              </h1>
-              <p style="margin:12px 0 0;font-size:15px;color:#1F2937;line-height:1.6;">
-                Ton compte est créé ! Complète ta vérification KYC pour commencer à encaisser.
-              </p>
-            </td>
-          </tr>
-
-          <!-- BODY -->
-          <tr>
-            <td style="padding:36px 40px;">
-
-              <!-- Intro -->
-              <p style="margin:0 0 22px;font-size:14px;color:#1F2937;line-height:1.75;">
-                Tu rejoins des milliers de marchands africains qui font confiance à <strong style="color:#F0B90B;">Ashtech Pay</strong>
-                pour encaisser leurs paiements Mobile Money — dans <strong style="color:#1F2937;">22+ pays africains</strong>.
-              </p>
-
-              <!-- KYC reminder -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0"
-                     style="background:#FEF3C7;border:1px solid #D97706;border-radius:14px;margin-bottom:24px;">
-                <tr>
-                  <td style="padding:20px 24px;">
-                    <table cellpadding="0" cellspacing="0" border="0">
-                      <tr>
-                        <td style="font-size:28px;padding-right:16px;vertical-align:top;">🪪</td>
-                        <td style="vertical-align:top;">
-                          <p style="margin:0 0 4px;font-size:14px;font-weight:700;color:#F0B90B;">Étape importante : Vérification KYC</p>
-                          <p style="margin:0 0 12px;font-size:12px;color:#1F2937;line-height:1.65;">
-                            Pour <strong style="color:#1F2937;">commencer à collecter des paiements</strong>, tu dois d'abord valider ton identité (KYC).
-                            C'est rapide — prépare une pièce d'identité valide.
-                          </p>
-                          <a href="${APP_URL}/dashboard/kyc"
-                             style="display:inline-block;background:#F0B90B;color:#000000;font-size:12px;font-weight:700;padding:9px 22px;border-radius:8px;text-decoration:none;">
-                            Faire ma vérification KYC &rarr;
-                          </a>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Features box -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0"
-                     style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:14px;margin-bottom:32px;">
-                <tr>
-                  <td style="padding:24px 28px;">
-                    <p style="margin:0 0 18px;font-size:11px;font-weight:700;color:#F0B90B;letter-spacing:2px;text-transform:uppercase;">
-                      Ce que tu peux faire maintenant
-                    </p>
-
-                    <!-- Feature 1 -->
-                    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:16px;">
-                      <tr>
-                        <td width="42" valign="top">
-                          <div style="width:38px;height:38px;background:#FEF3C7;border-radius:10px;text-align:center;line-height:38px;font-size:18px;">🔗</div>
-                        </td>
-                        <td valign="top" style="padding-left:14px;">
-                          <p style="margin:0 0 2px;font-size:13px;font-weight:700;color:#1F2937;">Liens de paiement instantanés</p>
-                          <p style="margin:0;font-size:12px;color:#1F2937;line-height:1.5;">Crée un lien en 30 secondes, partage sur WhatsApp ou réseaux sociaux.</p>
-                        </td>
-                      </tr>
-                    </table>
-
-                    <!-- Feature 2 -->
-                    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:16px;">
-                      <tr>
-                        <td width="42" valign="top">
-                          <div style="width:38px;height:38px;background:#FEF3C7;border-radius:10px;text-align:center;line-height:38px;font-size:18px;">📲</div>
-                        </td>
-                        <td valign="top" style="padding-left:14px;">
-                          <p style="margin:0 0 2px;font-size:13px;font-weight:700;color:#1F2937;">Mobile Money dans 22+ pays</p>
-                          <p style="margin:0;font-size:12px;color:#1F2937;line-height:1.5;">MTN, Orange, Wave, Airtel, M-Pesa et plus encore — tout en un.</p>
-                        </td>
-                      </tr>
-                    </table>
-
-                    <!-- Feature 3 -->
-                    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:16px;">
-                      <tr>
-                        <td width="42" valign="top">
-                          <div style="width:38px;height:38px;background:#FEF3C7;border-radius:10px;text-align:center;line-height:38px;font-size:18px;">💼</div>
-                        </td>
-                        <td valign="top" style="padding-left:14px;">
-                          <p style="margin:0 0 2px;font-size:13px;font-weight:700;color:#1F2937;">Dashboard temps réel</p>
-                          <p style="margin:0;font-size:12px;color:#1F2937;line-height:1.5;">Suis tes transactions, télécharge tes reçus et pilote ton activité.</p>
-                        </td>
-                      </tr>
-                    </table>
-
-                    <!-- Feature 4 -->
-                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                      <tr>
-                        <td width="42" valign="top">
-                          <div style="width:38px;height:38px;background:#FEF3C7;border-radius:10px;text-align:center;line-height:38px;font-size:18px;">🏦</div>
-                        </td>
-                        <td valign="top" style="padding-left:14px;">
-                          <p style="margin:0 0 2px;font-size:13px;font-weight:700;color:#1F2937;">Retraits rapides</p>
-                          <p style="margin:0;font-size:12px;color:#1F2937;line-height:1.5;">Retire directement vers ton mobile money ou compte bancaire.</p>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- CTA Button -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:32px;">
-                <tr>
-                  <td align="center">
-                    <a href="${APP_URL}/dashboard"
-                       style="display:inline-block;background:linear-gradient(135deg,#F0B90B 0%,#D4940A 100%);color:#000000;font-size:15px;font-weight:700;padding:15px 40px;border-radius:12px;text-decoration:none;letter-spacing:0.3px;">
-                      Accéder à mon dashboard &rarr;
-                    </a>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Divider -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
-                <tr><td style="border-top:1px solid #E5E7EB;font-size:0;">&nbsp;</td></tr>
-              </table>
-
-              <!-- Security note -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F8FAFC;border-radius:10px;margin-bottom:28px;">
-                <tr>
-                  <td style="padding:14px 18px;">
-                    <table cellpadding="0" cellspacing="0" border="0">
-                      <tr>
-                        <td style="font-size:20px;padding-right:12px;vertical-align:top;">🔒</td>
-                        <td style="font-size:12px;color:#1F2937;line-height:1.6;vertical-align:top;">
-                          Pour ta sécurité, ne partage <strong style="color:#1F2937;">jamais ton mot de passe</strong>.
-                          Ashtech Pay ne te demandera jamais tes identifiants par email ou par téléphone.
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Support & Social -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0"
-                     style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:14px;">
-                <tr>
-                  <td style="padding:22px 28px;text-align:center;">
-                    <p style="margin:0 0 6px;font-size:12px;font-weight:700;color:#F0B90B;letter-spacing:1.5px;text-transform:uppercase;">
-                      Besoin d'aide ?
-                    </p>
-                    <p style="margin:0 0 18px;font-size:13px;color:#1F2937;">
-                      Notre équipe est disponible 7j/7 pour t'accompagner.
-                    </p>
-
-                    <!-- Phone -->
-                    <p style="margin:0 0 20px;">
-                      <a href="tel:${SUPPORT_PHONE.replace(/\s/g, "")}"
-                         style="display:inline-block;background:#F3F4F6;color:#374151;font-size:14px;font-weight:600;padding:10px 22px;border-radius:10px;text-decoration:none;">
-                        📞 &nbsp;${SUPPORT_PHONE}
-                      </a>
-                    </p>
-
-                    <!-- Social buttons -->
-                    <table cellpadding="0" cellspacing="0" border="0" align="center">
-                      <tr>
-                        <!-- WhatsApp -->
-                        <td style="padding:0 6px;">
-                          <a href="${WHATSAPP_URL}"
-                             style="display:inline-block;background:#25D366;color:#FFFFFF;font-size:13px;font-weight:700;padding:11px 22px;border-radius:10px;text-decoration:none;">
-                            <img src="${WA_LOGO_URL}" width="18" height="18" style="display:inline;vertical-align:middle;margin-right:6px;border-radius:4px;" alt="WhatsApp" />WhatsApp
-                          </a>
-                        </td>
-                        <!-- Facebook -->
-                        <td style="padding:0 6px;">
-                          <a href="${FACEBOOK_URL}"
-                             style="display:inline-block;background:#1877F2;color:#FFFFFF;font-size:13px;font-weight:700;padding:11px 22px;border-radius:10px;text-decoration:none;">
-                            <img src="${FB_LOGO_URL}" width="18" height="18" style="display:inline;vertical-align:middle;margin-right:6px;border-radius:4px;" alt="Facebook" />Facebook
-                          </a>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
-
-            </td>
-          </tr>
-
-          <!-- FOOTER -->
-          <tr>
-            <td style="padding:22px 40px 28px;border-top:1px solid #E5E7EB;text-align:center;">
-              <p style="margin:0 0 6px;font-size:11px;color:#1F2937;line-height:1.7;">
-                Tu reçois cet email car tu viens de créer un compte sur
-                <a href="${APP_URL}" style="color:#F0B90B;text-decoration:none;">ashtechpay.top</a>.
-              </p>
-              <p style="margin:0 0 6px;font-size:11px;color:#1F2937;line-height:1.7;">
-                Cameroun · Kenya · Sénégal · Côte d'Ivoire · Ghana · Nigeria · Rwanda · Togo · Mali · et 13 autres pays
-              </p>
-              <p style="margin:0;font-size:11px;color:#1F2937;">&copy; 2026 Ashtech Pay &mdash; Tous droits réservés</p>
-            </td>
-          </tr>
-
-        </table>
-        <!-- END MAIN CARD -->
-
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
-
-  if (!resend) {
-    console.warn("[Email] Skipping welcome email — RESEND_API_KEY not configured.");
-    return;
-  }
-  try {
-    const { data, error } = await resend.emails.send({
-      from: FROM_EMAIL,
-      to: [to],
-      subject: "🎉 Bienvenue chez Ashtech Pay — Votre compte est activé !",
-      html,
-    });
-
-    if (error) {
-      console.error("[Email] Resend error:", JSON.stringify(error));
-    } else {
-      console.log("[Email] Welcome email sent:", data?.id, "→", to);
-    }
-  } catch (err: any) {
-    console.error("[Email] Failed to send welcome email:", err.message);
-  }
-}
-
-// ─── SHARED LAYOUT HELPERS ────────────────────────────────────────────────────
-
-function emailHeader(firstName: string, badgeText: string, badgeColor: string, headline: string, subtitle: string) {
-  return `
-          <tr>
-            <td style="background:#FFFFFF;padding:32px 40px 24px;text-align:center;border-bottom:2px solid #F0B90B;">
-              <div style="margin-bottom:22px;">
-                <table cellpadding="0" cellspacing="0" border="0" align="center">
-                  <tr>
-                    <td style="padding-right:10px;vertical-align:middle;">
-                      <img src="${LOGO_URL}" alt="AshTech Pay" width="44" height="44"
-                           style="display:block;max-height:44px;width:auto;" />
-                    </td>
-                    <td style="vertical-align:middle;">
-                      <span style="font-size:22px;font-weight:700;color:#1F2937;letter-spacing:-0.3px;">AshTech Pay</span>
-                    </td>
-                  </tr>
-                </table>
-              </div>
-              <div style="display:inline-block;background:${badgeColor};border-radius:100px;padding:5px 16px;margin-bottom:18px;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;">
-                ${badgeText}
-              </div>
-              <h1 style="margin:0;font-size:26px;font-weight:700;color:#1F2937;line-height:1.3;">${headline}</h1>
-              <p style="margin:12px 0 0;font-size:14px;color:#1F2937;line-height:1.6;">
-                Bonjour <strong style="color:#F0B90B;">${firstName}</strong>, ${subtitle}
-              </p>
-            </td>
-          </tr>`;
-}
-
-function emailFooter(reason: string) {
-  return `
-          <tr>
-            <td style="padding:20px 40px 26px;border-top:1px solid #E5E7EB;text-align:center;">
-              <p style="margin:0 0 6px;font-size:11px;color:#1F2937;line-height:1.7;">${reason}</p>
-              <p style="margin:0;font-size:11px;color:#1F2937;">&copy; 2026 Ashtech Pay &mdash; Tous droits réservés</p>
-            </td>
-          </tr>`;
-}
-
-function emailSupportBlock() {
-  return `
-              <table width="100%" cellpadding="0" cellspacing="0" border="0"
-                     style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:12px;margin-top:24px;">
-                <tr>
-                  <td style="padding:18px 22px;text-align:center;">
-                    <p style="margin:0 0 14px;font-size:12px;color:#1F2937;">Des questions ? Notre équipe est là pour toi.</p>
-                    <table cellpadding="0" cellspacing="0" border="0" align="center">
-                      <tr>
-                        <td style="padding:0 5px;">
-                          <a href="https://wa.me/${SUPPORT_PHONE.replace(/[\s+]/g, "")}"
-                             style="display:inline-block;background:#25D366;color:#FFFFFF;font-size:12px;font-weight:700;padding:9px 18px;border-radius:8px;text-decoration:none;">
-                            <img src="${WA_LOGO_URL}" width="18" height="18" style="display:inline;vertical-align:middle;margin-right:6px;border-radius:4px;" alt="WhatsApp" />WhatsApp
-                          </a>
-                        </td>
-                        <td style="padding:0 5px;">
-                          <a href="${FACEBOOK_URL}"
-                             style="display:inline-block;background:#1877F2;color:#FFFFFF;font-size:12px;font-weight:700;padding:9px 18px;border-radius:8px;text-decoration:none;">
-                            <img src="${FB_LOGO_URL}" width="18" height="18" style="display:inline;vertical-align:middle;margin-right:6px;border-radius:4px;" alt="Facebook" />Facebook
-                          </a>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>`;
-}
-
-function emailWrap(rows: string) {
+function emailBase(title: string, bodyRows: string): string {
   return `<!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" xmlns="http://www.w3.org/1999/xhtml">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>Ashtech Pay</title>
+  <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+  <title>${title} — Ashtech Pay</title>
 </head>
-<body style="margin:0;padding:0;background-color:#F5F7FA;font-family:Arial,Helvetica,sans-serif;color:#1F2937;">
+<body style="margin:0;padding:0;background-color:#F5F7FA;font-family:Arial,Helvetica,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F5F7FA;">
     <tr>
-      <td align="center" style="padding:32px 16px;">
+      <td align="center" style="padding:32px 16px 40px;">
         <table width="600" cellpadding="0" cellspacing="0" border="0"
-               style="max-width:600px;width:100%;background-color:#FFFFFF;border-radius:20px;border:1px solid #E5E7EB;overflow:hidden;">
-          ${rows}
+               style="max-width:600px;width:100%;background-color:#FFFFFF;border-radius:8px;border:1px solid ${BORDER};overflow:hidden;">
+
+          <!-- TOP LOGO BAR -->
+          <tr>
+            <td style="padding:28px 40px 24px;border-bottom:1px solid ${BORDER};">
+              <img src="${LOGO_URL}" alt="Ashtech Pay" height="40"
+                   style="display:block;max-height:40px;width:auto;" />
+            </td>
+          </tr>
+
+          ${bodyRows}
+
+          <!-- FOOTER -->
+          <tr>
+            <td style="padding:24px 40px;border-top:1px solid ${BORDER};">
+              <p style="margin:0 0 4px;font-size:13px;color:${TEXT};line-height:1.6;">Cordialement,</p>
+              <p style="margin:0;font-size:13px;font-weight:700;color:${TEXT};">L'équipe Ashtech Pay</p>
+            </td>
+          </tr>
+
+          <!-- NAVY BOTTOM BAR -->
+          <tr>
+            <td style="background:${NAVY};padding:14px 40px;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="font-size:11px;color:#93C5FD;">
+                    <a href="${APP_URL}" style="color:#93C5FD;text-decoration:none;">ashtechpay.top</a>
+                    &nbsp;&nbsp;|&nbsp;&nbsp;
+                    <a href="${WHATSAPP_URL}" style="color:#93C5FD;text-decoration:none;">WhatsApp</a>
+                    &nbsp;&nbsp;|&nbsp;&nbsp;
+                    <a href="${FACEBOOK_URL}" style="color:#93C5FD;text-decoration:none;">Facebook</a>
+                  </td>
+                  <td align="right" style="font-size:11px;color:#93C5FD;">&copy; 2026 Ashtech Pay</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
         </table>
       </td>
     </tr>
   </table>
 </body>
 </html>`;
+}
+
+function infoBox(rows: { label: string; value: string }[]): string {
+  const rowsHtml = rows.map(r => `
+    <tr>
+      <td style="padding:10px 20px;border-bottom:1px solid ${BORDER};font-size:14px;color:${TEXT};">
+        <strong style="color:${TEXT};">${r.label}</strong>
+      </td>
+      <td style="padding:10px 20px;border-bottom:1px solid ${BORDER};font-size:14px;color:${TEXT};">${r.value}</td>
+    </tr>`).join("");
+  return `
+  <table width="100%" cellpadding="0" cellspacing="0" border="0"
+         style="background:${BOX_BG};border-radius:6px;margin:24px 0;overflow:hidden;">
+    ${rowsHtml}
+  </table>`;
+}
+
+function ctaButton(text: string, href: string, color = NAVY): string {
+  return `
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:28px 0;">
+    <tr>
+      <td>
+        <a href="${href}"
+           style="display:inline-block;background:${color};color:#FFFFFF;font-size:15px;font-weight:700;padding:14px 32px;border-radius:6px;text-decoration:none;letter-spacing:0.2px;">
+          ${text}
+        </a>
+      </td>
+    </tr>
+  </table>`;
+}
+
+function supportNote(): string {
+  return `
+  <p style="margin:24px 0 0;font-size:13px;color:${MUTED};line-height:1.6;">
+    Des questions ? Contactez notre support au
+    <a href="tel:${SUPPORT_PHONE.replace(/\s/g, "")}" style="color:${NAVY};text-decoration:none;">${SUPPORT_PHONE}</a>
+    ou via <a href="${WHATSAPP_URL}" style="color:${NAVY};text-decoration:none;">WhatsApp</a>.
+  </p>`;
 }
 
 async function sendEmail(to: string, subject: string, html: string, label: string) {
@@ -582,65 +134,121 @@ async function sendEmail(to: string, subject: string, html: string, label: strin
   }
 }
 
+// ─── PASSWORD RESET ───────────────────────────────────────────────────────────
+
+export async function sendPasswordResetEmail(to: string, fullName: string, resetToken: string): Promise<void> {
+  const firstName = fullName?.trim().split(" ")[0] || "cher(e) client(e)";
+  const resetLink = `${APP_URL}/reset-password?token=${resetToken}`;
+
+  const body = `
+  <!-- MAIN BODY -->
+  <tr>
+    <td style="padding:36px 40px 8px;">
+      <h1 style="margin:0 0 20px;font-size:28px;font-weight:700;color:${TEXT};line-height:1.3;">
+        Réinitialisation de<br/>votre mot de passe.
+      </h1>
+      <p style="margin:0 0 6px;font-size:15px;color:${TEXT};line-height:1.7;">Bonjour ${firstName},</p>
+      <p style="margin:0 0 20px;font-size:15px;color:${TEXT};line-height:1.7;">
+        Vous avez demandé à réinitialiser le mot de passe de votre compte Ashtech Pay.
+        Cliquez sur le bouton ci-dessous pour choisir un nouveau mot de passe sécurisé.
+      </p>
+
+      ${ctaButton("Réinitialiser mon mot de passe", resetLink)}
+
+      <p style="margin:0 0 8px;font-size:13px;color:${MUTED};line-height:1.6;">
+        Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :
+      </p>
+      <p style="margin:0 0 20px;font-size:12px;color:${NAVY};word-break:break-all;line-height:1.5;">${resetLink}</p>
+
+      <table width="100%" cellpadding="0" cellspacing="0" border="0"
+             style="background:${BOX_BG};border-radius:6px;margin:8px 0 24px;">
+        <tr>
+          <td style="padding:16px 20px;font-size:13px;color:${MUTED};line-height:1.6;">
+            Ce lien expire dans <strong style="color:${TEXT};">1 heure</strong>.
+            Si vous n'avez pas demandé cette réinitialisation, ignorez cet email — votre compte reste sécurisé.
+          </td>
+        </tr>
+      </table>
+
+      ${supportNote()}
+    </td>
+  </tr>`;
+
+  const html = emailBase("Réinitialisation de mot de passe", body);
+  await sendEmail(to, "Réinitialisation de votre mot de passe — Ashtech Pay", html, "password reset");
+}
+
+// ─── WELCOME ──────────────────────────────────────────────────────────────────
+
+export async function sendWelcomeEmail(to: string, fullName: string): Promise<void> {
+  const firstName = fullName?.trim().split(" ")[0] || "cher(e) client(e)";
+
+  const body = `
+  <tr>
+    <td style="padding:36px 40px 8px;">
+      <h1 style="margin:0 0 20px;font-size:28px;font-weight:700;color:${TEXT};line-height:1.3;">
+        Bienvenue sur votre nouveau compte.
+      </h1>
+      <p style="margin:0 0 6px;font-size:15px;color:${TEXT};line-height:1.7;">Bonjour ${firstName},</p>
+      <p style="margin:0 0 8px;font-size:15px;color:${TEXT};line-height:1.7;">
+        Votre compte Ashtech Pay a été créé avec succès. Veuillez vérifier vos informations ci-dessous :
+      </p>
+
+      ${infoBox([
+        { label: "Nom d'utilisateur", value: firstName },
+        { label: "Date", value: new Date().toLocaleString("fr-FR", { timeZone: "Africa/Douala" }) },
+      ])}
+
+      <p style="margin:0 0 8px;font-size:15px;color:${TEXT};line-height:1.7;">
+        Vous pouvez maintenant accéder à votre tableau de bord.
+      </p>
+
+      ${ctaButton("Accéder à mon compte", `${APP_URL}/dashboard`)}
+
+      <p style="margin:0 0 20px;font-size:13px;color:${MUTED};line-height:1.6;">
+        Pour commencer à encaisser des paiements Mobile Money dans 22+ pays africains,
+        complétez votre vérification d'identité (KYC) depuis votre tableau de bord.
+      </p>
+
+      ${supportNote()}
+    </td>
+  </tr>`;
+
+  const html = emailBase("Bienvenue", body);
+  await sendEmail(to, "Bienvenue sur Ashtech Pay — Votre compte est activé", html, "welcome");
+}
+
 // ─── KYC APPROVED ─────────────────────────────────────────────────────────────
 
 export async function sendKycApprovedEmail(to: string, fullName: string): Promise<void> {
   const firstName = fullName?.trim().split(" ")[0] || "cher(e) client(e)";
 
   const body = `
-          <tr>
-            <td style="padding:36px 40px;">
+  <tr>
+    <td style="padding:36px 40px 8px;">
+      <h1 style="margin:0 0 20px;font-size:28px;font-weight:700;color:${TEXT};line-height:1.3;">
+        Identité vérifiée avec succès.
+      </h1>
+      <p style="margin:0 0 6px;font-size:15px;color:${TEXT};line-height:1.7;">Bonjour ${firstName},</p>
+      <p style="margin:0 0 8px;font-size:15px;color:${TEXT};line-height:1.7;">
+        Votre vérification KYC a été approuvée. Votre compte est maintenant entièrement actif
+        et vous pouvez commencer à encaisser des paiements Mobile Money.
+      </p>
 
-              <p style="margin:0 0 24px;font-size:14px;color:#1F2937;line-height:1.75;">
-                Bonne nouvelle — ton identité a été vérifiée avec succès. Ton compte est maintenant
-                <strong style="color:#F0B90B;">entièrement actif</strong> et tu peux commencer à encaisser
-                des paiements Mobile Money dans tous nos pays partenaires.
-              </p>
+      ${infoBox([
+        { label: "Statut KYC", value: "Approuvé" },
+        { label: "Date d'approbation", value: new Date().toLocaleString("fr-FR", { timeZone: "Africa/Douala" }) },
+        { label: "Accès", value: "Paiements, retraits et liens activés" },
+      ])}
 
-              <!-- What's unlocked -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0"
-                     style="background:#F0FDF4;border:1px solid #86EFAC;border-radius:14px;margin-bottom:28px;">
-                <tr>
-                  <td style="padding:22px 26px;">
-                    <p style="margin:0 0 14px;font-size:11px;font-weight:700;color:#16A34A;letter-spacing:2px;text-transform:uppercase;">
-                      ✅ &nbsp;Ce qui est maintenant débloqué
-                    </p>
-                    <table cellpadding="0" cellspacing="0" border="0" width="100%">
-                      <tr><td style="padding:5px 0;font-size:13px;color:#1F2937;line-height:1.6;">💳 &nbsp;Création de <strong style="color:#FFF;">liens de paiement</strong> instantanés</td></tr>
-                      <tr><td style="padding:5px 0;font-size:13px;color:#1F2937;line-height:1.6;">📲 &nbsp;Collecte Mobile Money dans <strong style="color:#FFF;">22+ pays</strong></td></tr>
-                      <tr><td style="padding:5px 0;font-size:13px;color:#1F2937;line-height:1.6;">🏦 &nbsp;<strong style="color:#FFF;">Retraits</strong> vers ton compte mobile money</td></tr>
-                      <tr><td style="padding:5px 0;font-size:13px;color:#1F2937;line-height:1.6;">📊 &nbsp;Accès complet au <strong style="color:#FFF;">dashboard</strong> et aux rapports</td></tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
+      ${ctaButton("Commencer à collecter", `${APP_URL}/dashboard`)}
 
-              <!-- CTA -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
-                <tr>
-                  <td align="center">
-                    <a href="${APP_URL}/dashboard"
-                       style="display:inline-block;background:linear-gradient(135deg,#F0B90B 0%,#D4940A 100%);color:#000000;font-size:15px;font-weight:700;padding:15px 40px;border-radius:12px;text-decoration:none;">
-                      🚀 &nbsp;Commencer à collecter
-                    </a>
-                  </td>
-                </tr>
-              </table>
+      ${supportNote()}
+    </td>
+  </tr>`;
 
-              ${emailSupportBlock()}
-
-            </td>
-          </tr>`;
-
-  const html = emailWrap(
-    emailHeader(firstName,
-      "✦ &nbsp;KYC Approuvé", "rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);color:#4ADE80",
-      "Ton identité est vérifiée !",
-      "voici une excellente nouvelle pour ton compte."
-    ) + body + emailFooter(`Tu reçois cet email car ton KYC a été validé sur <a href="${APP_URL}" style="color:#F0B90B;text-decoration:none;">ashtechpay.top</a>.`)
-  );
-
-  await sendEmail(to, "✅ KYC validé — Tu peux commencer à encaisser sur Ashtech Pay", html, "KYC approved");
+  const html = emailBase("KYC approuvé", body);
+  await sendEmail(to, "KYC approuvé — Vous pouvez maintenant encaisser sur Ashtech Pay", html, "KYC approved");
 }
 
 // ─── WITHDRAWAL APPROVED ──────────────────────────────────────────────────────
@@ -654,74 +262,35 @@ export async function sendWithdrawalApprovedEmail(
 ): Promise<void> {
   const firstName = fullName?.trim().split(" ")[0] || "cher(e) client(e)";
 
+  const refRow = reference ? [{ label: "Référence", value: reference }] : [];
+
   const body = `
-          <tr>
-            <td style="padding:36px 40px;">
+  <tr>
+    <td style="padding:36px 40px 8px;">
+      <h1 style="margin:0 0 20px;font-size:28px;font-weight:700;color:${TEXT};line-height:1.3;">
+        Votre retrait est approuvé.
+      </h1>
+      <p style="margin:0 0 6px;font-size:15px;color:${TEXT};line-height:1.7;">Bonjour ${firstName},</p>
+      <p style="margin:0 0 8px;font-size:15px;color:${TEXT};line-height:1.7;">
+        Votre demande de retrait a été approuvée. Le virement sera effectué vers votre
+        compte Mobile Money dans les prochaines minutes.
+      </p>
 
-              <p style="margin:0 0 24px;font-size:14px;color:#1F2937;line-height:1.75;">
-                Ton retrait a été approuvé et le paiement est en cours de traitement vers ton compte Mobile Money.
-                Le virement sera effectué dans les <strong style="color:#F0B90B;">prochaines minutes</strong>.
-              </p>
+      ${infoBox([
+        { label: "Montant", value: `${amount} ${currency}` },
+        { label: "Statut", value: "Approuvé — virement en cours" },
+        { label: "Date", value: new Date().toLocaleString("fr-FR", { timeZone: "Africa/Douala" }) },
+        ...refRow,
+      ])}
 
-              <!-- Amount card -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0"
-                     style="background:#FFFBEB;border:1px solid #FCD34D;border-radius:14px;margin-bottom:28px;">
-                <tr>
-                  <td style="padding:24px 28px;text-align:center;">
-                    <p style="margin:0 0 6px;font-size:12px;color:#1F2937;text-transform:uppercase;letter-spacing:1.5px;">Montant du retrait</p>
-                    <p style="margin:0;font-size:32px;font-weight:700;color:#F0B90B;">${amount} ${currency}</p>
-                    ${reference ? `<p style="margin:8px 0 0;font-size:11px;color:#1F2937;">Réf : <span style="color:#1F2937;">${reference}</span></p>` : ""}
-                  </td>
-                </tr>
-              </table>
+      ${ctaButton("Voir mes transactions", `${APP_URL}/dashboard/transactions`)}
 
-              <!-- Status steps -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0"
-                     style="background:#F8FAFC;border-radius:12px;margin-bottom:24px;">
-                <tr>
-                  <td style="padding:18px 22px;">
-                    <p style="margin:0 0 12px;font-size:11px;font-weight:700;color:#1F2937;letter-spacing:1.5px;text-transform:uppercase;">Suivi du retrait</p>
-                    <table cellpadding="0" cellspacing="0" border="0" width="100%">
-                      <tr>
-                        <td style="padding:5px 0;font-size:12px;color:#16A34A;">✅ &nbsp;Demande reçue</td>
-                      </tr>
-                      <tr>
-                        <td style="padding:5px 0;font-size:12px;color:#16A34A;">✅ &nbsp;Retrait approuvé par l'équipe Ashtech Pay</td>
-                      </tr>
-                      <tr>
-                        <td style="padding:5px 0;font-size:12px;color:#F0B90B;">⏳ &nbsp;Virement vers ton mobile money en cours…</td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
+      ${supportNote()}
+    </td>
+  </tr>`;
 
-              <!-- CTA -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:8px;">
-                <tr>
-                  <td align="center">
-                    <a href="${APP_URL}/dashboard/transactions"
-                       style="display:inline-block;background:linear-gradient(135deg,#F0B90B 0%,#D4940A 100%);color:#000000;font-size:14px;font-weight:700;padding:13px 36px;border-radius:12px;text-decoration:none;">
-                      Voir mes transactions
-                    </a>
-                  </td>
-                </tr>
-              </table>
-
-              ${emailSupportBlock()}
-
-            </td>
-          </tr>`;
-
-  const html = emailWrap(
-    emailHeader(firstName,
-      "💸 &nbsp;Retrait approuvé", "rgba(240,185,11,0.12);border:1px solid #D97706;color:#F0B90B",
-      "Ton retrait est en cours !",
-      "voici les détails de ton retrait approuvé."
-    ) + body + emailFooter(`Tu reçois cet email car un retrait a été approuvé sur ton compte <a href="${APP_URL}" style="color:#F0B90B;text-decoration:none;">ashtechpay.top</a>.`)
-  );
-
-  await sendEmail(to, "💸 Retrait approuvé — Virement en cours sur Ashtech Pay", html, "withdrawal approved");
+  const html = emailBase("Retrait approuvé", body);
+  await sendEmail(to, "Retrait approuvé — Virement en cours sur Ashtech Pay", html, "withdrawal approved");
 }
 
 // ─── WITHDRAWAL NUMBER APPROVED ───────────────────────────────────────────────
@@ -734,74 +303,45 @@ export async function sendWithdrawalNumberApprovedEmail(
 ): Promise<void> {
   const firstName = fullName?.trim().split(" ")[0] || "cher(e) client(e)";
 
+  const operatorRow = operator ? [{ label: "Opérateur", value: operator }] : [];
+
   const body = `
-          <tr>
-            <td style="padding:36px 40px;">
+  <tr>
+    <td style="padding:36px 40px 8px;">
+      <h1 style="margin:0 0 20px;font-size:28px;font-weight:700;color:${TEXT};line-height:1.3;">
+        Numéro de retrait approuvé.
+      </h1>
+      <p style="margin:0 0 6px;font-size:15px;color:${TEXT};line-height:1.7;">Bonjour ${firstName},</p>
+      <p style="margin:0 0 8px;font-size:15px;color:${TEXT};line-height:1.7;">
+        Votre numéro de retrait a été vérifié et approuvé par notre équipe.
+        Vous pouvez maintenant effectuer des retraits vers ce numéro.
+      </p>
 
-              <p style="margin:0 0 24px;font-size:14px;color:#1F2937;line-height:1.75;">
-                Ton numéro de retrait a été vérifié et approuvé par notre équipe. Tu peux maintenant
-                <strong style="color:#F0B90B;">effectuer des retraits</strong> directement vers ce numéro.
-              </p>
+      ${infoBox([
+        { label: "Numéro approuvé", value: phoneNumber },
+        ...operatorRow,
+        { label: "Statut", value: "Approuvé" },
+        { label: "Date", value: new Date().toLocaleString("fr-FR", { timeZone: "Africa/Douala" }) },
+      ])}
 
-              <!-- Number card -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0"
-                     style="background:#FFFBEB;border:1px solid #FCD34D;border-radius:14px;margin-bottom:28px;">
-                <tr>
-                  <td style="padding:22px 28px;text-align:center;">
-                    <p style="margin:0 0 6px;font-size:12px;color:#1F2937;text-transform:uppercase;letter-spacing:1.5px;">Numéro approuvé</p>
-                    <p style="margin:0;font-size:26px;font-weight:700;color:#F0B90B;">${phoneNumber}</p>
-                    ${operator ? `<p style="margin:8px 0 0;font-size:13px;color:#1F2937;">Opérateur : <strong style="color:#1F2937;">${operator}</strong></p>` : ""}
-                    <div style="margin-top:14px;display:inline-block;background:#DCFCE7;border:1px solid #4ADE80;color:#16A34A;font-size:11px;font-weight:700;padding:4px 14px;border-radius:100px;">
-                      ✅ &nbsp;Approuvé
-                    </div>
-                  </td>
-                </tr>
-              </table>
+      ${ctaButton("Effectuer un retrait", `${APP_URL}/dashboard/withdraw`)}
 
-              <!-- Security tip -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0"
-                     style="background:#F8FAFC;border-radius:12px;margin-bottom:24px;">
-                <tr>
-                  <td style="padding:16px 20px;">
-                    <table cellpadding="0" cellspacing="0" border="0">
-                      <tr>
-                        <td style="font-size:18px;padding-right:12px;vertical-align:top;">🛡️</td>
-                        <td style="font-size:12px;color:#1F2937;line-height:1.65;vertical-align:top;">
-                          Si tu n'es pas à l'origine de cette modification, contacte immédiatement notre équipe sur WhatsApp au
-                          <strong style="color:#1F2937;">${SUPPORT_PHONE}</strong>.
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
+      <table width="100%" cellpadding="0" cellspacing="0" border="0"
+             style="background:${BOX_BG};border-radius:6px;margin:8px 0 24px;">
+        <tr>
+          <td style="padding:16px 20px;font-size:13px;color:${MUTED};line-height:1.6;">
+            Si vous n'avez pas demandé cette modification, contactez immédiatement notre support
+            au <strong style="color:${TEXT};">${SUPPORT_PHONE}</strong>.
+          </td>
+        </tr>
+      </table>
 
-              <!-- CTA -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:8px;">
-                <tr>
-                  <td align="center">
-                    <a href="${APP_URL}/dashboard/withdraw"
-                       style="display:inline-block;background:linear-gradient(135deg,#F0B90B 0%,#D4940A 100%);color:#000000;font-size:14px;font-weight:700;padding:13px 36px;border-radius:12px;text-decoration:none;">
-                      Effectuer un retrait
-                    </a>
-                  </td>
-                </tr>
-              </table>
+      ${supportNote()}
+    </td>
+  </tr>`;
 
-              ${emailSupportBlock()}
-
-            </td>
-          </tr>`;
-
-  const html = emailWrap(
-    emailHeader(firstName,
-      "📱 &nbsp;Numéro validé", "rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.35);color:#4ADE80",
-      "Numéro de retrait approuvé",
-      "voici une confirmation pour ton numéro de retrait."
-    ) + body + emailFooter(`Confirmation de ton numéro de retrait sur <a href="${APP_URL}" style="color:#F0B90B;text-decoration:none;">ashtechpay.top</a>.`)
-  );
-
-  await sendEmail(to, "📱 Numéro de retrait approuvé — Ashtech Pay", html, "withdrawal number approved");
+  const html = emailBase("Numéro de retrait approuvé", body);
+  await sendEmail(to, "Numéro de retrait approuvé — Ashtech Pay", html, "withdrawal number approved");
 }
 
 // ─── ACCOUNT DELETED ──────────────────────────────────────────────────────────
@@ -810,81 +350,44 @@ export async function sendAccountDeletedEmail(to: string, fullName: string): Pro
   const firstName = fullName?.trim().split(" ")[0] || "cher(e) client(e)";
 
   const body = `
-          <tr>
-            <td style="padding:36px 40px;">
+  <tr>
+    <td style="padding:36px 40px 8px;">
+      <h1 style="margin:0 0 20px;font-size:28px;font-weight:700;color:${TEXT};line-height:1.3;">
+        Votre compte a été supprimé.
+      </h1>
+      <p style="margin:0 0 6px;font-size:15px;color:${TEXT};line-height:1.7;">Bonjour ${firstName},</p>
+      <p style="margin:0 0 8px;font-size:15px;color:${TEXT};line-height:1.7;">
+        Nous confirmons que votre compte Ashtech Pay a été définitivement supprimé
+        conformément à votre demande. Toutes vos données personnelles ont été effacées de nos serveurs.
+      </p>
 
-              <p style="margin:0 0 24px;font-size:14px;color:#1F2937;line-height:1.75;">
-                Nous confirmons que ton compte Ashtech Pay a été <strong style="color:#DC2626;">définitivement supprimé</strong>
-                conformément à ta demande. Toutes tes données personnelles ont été effacées de nos serveurs.
-              </p>
+      ${infoBox([
+        { label: "Compte", value: "Supprimé définitivement" },
+        { label: "Données effacées", value: "Profil, transactions, liens de paiement" },
+        { label: "Date", value: new Date().toLocaleString("fr-FR", { timeZone: "Africa/Douala" }) },
+      ])}
 
-              <!-- Confirmation box -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0"
-                     style="background:#FEF2F2;border:1px solid #FCA5A5;border-radius:14px;margin-bottom:28px;">
-                <tr>
-                  <td style="padding:22px 26px;">
-                    <p style="margin:0 0 14px;font-size:11px;font-weight:700;color:#DC2626;letter-spacing:2px;text-transform:uppercase;">
-                      🗑️ &nbsp;Ce qui a été supprimé
-                    </p>
-                    <table cellpadding="0" cellspacing="0" border="0" width="100%">
-                      <tr><td style="padding:4px 0;font-size:12px;color:#1F2937;line-height:1.6;">• Toutes tes informations personnelles</td></tr>
-                      <tr><td style="padding:4px 0;font-size:12px;color:#1F2937;line-height:1.6;">• Ton historique de transactions</td></tr>
-                      <tr><td style="padding:4px 0;font-size:12px;color:#1F2937;line-height:1.6;">• Tes liens de paiement et paramètres</td></tr>
-                      <tr><td style="padding:4px 0;font-size:12px;color:#1F2937;line-height:1.6;">• Tes numéros de retrait enregistrés</td></tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
+      <p style="margin:0 0 20px;font-size:15px;color:${TEXT};line-height:1.7;">
+        Vous pouvez créer un nouveau compte à tout moment sur
+        <a href="${APP_URL}" style="color:${NAVY};text-decoration:none;">ashtechpay.top</a>.
+      </p>
 
-              <!-- Farewell + re-register -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0"
-                     style="background:#F8FAFC;border-radius:12px;margin-bottom:24px;">
-                <tr>
-                  <td style="padding:18px 22px;text-align:center;">
-                    <p style="margin:0 0 8px;font-size:13px;color:#1F2937;">
-                      Nous sommes tristes de te voir partir, <strong style="color:#F0B90B;">${firstName}</strong>. 💛
-                    </p>
-                    <p style="margin:0;font-size:12px;color:#1F2937;line-height:1.65;">
-                      Tu es toujours le(la) bienvenu(e) si tu souhaites revenir.
-                      Un nouveau compte peut être créé à tout moment sur&nbsp;
-                      <a href="${APP_URL}" style="color:#F0B90B;text-decoration:none;">ashtechpay.top</a>.
-                    </p>
-                  </td>
-                </tr>
-              </table>
+      <table width="100%" cellpadding="0" cellspacing="0" border="0"
+             style="background:${BOX_BG};border-radius:6px;margin:8px 0 24px;">
+        <tr>
+          <td style="padding:16px 20px;font-size:13px;color:${MUTED};line-height:1.6;">
+            Si vous n'avez pas demandé cette suppression, contactez immédiatement notre support
+            au <strong style="color:${TEXT};">${SUPPORT_PHONE}</strong>.
+          </td>
+        </tr>
+      </table>
 
-              <!-- Alert if not requested -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0"
-                     style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:12px;margin-bottom:8px;">
-                <tr>
-                  <td style="padding:16px 20px;">
-                    <table cellpadding="0" cellspacing="0" border="0">
-                      <tr>
-                        <td style="font-size:18px;padding-right:12px;vertical-align:top;">⚠️</td>
-                        <td style="font-size:12px;color:#1F2937;line-height:1.65;vertical-align:top;">
-                          Si tu n'as <strong style="color:#1F2937;">pas</strong> demandé cette suppression, contacte-nous
-                          immédiatement au <strong style="color:#1F2937;">${SUPPORT_PHONE}</strong>.
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
+      ${supportNote()}
+    </td>
+  </tr>`;
 
-              ${emailSupportBlock()}
-
-            </td>
-          </tr>`;
-
-  const html = emailWrap(
-    emailHeader(firstName,
-      "🗑️ &nbsp;Compte supprimé", "rgba(255,80,80,0.12);border:1px solid #F87171;color:#FF6B6B",
-      "Ton compte a été supprimé",
-      "voici la confirmation de suppression de ton compte."
-    ) + body + emailFooter(`Tu reçois cet email car ton compte <a href="${APP_URL}" style="color:#F0B90B;text-decoration:none;">ashtechpay.top</a> a été supprimé.`)
-  );
-
-  await sendEmail(to, "🗑️ Compte Ashtech Pay supprimé — Confirmation", html, "account deleted");
+  const html = emailBase("Compte supprimé", body);
+  await sendEmail(to, "Confirmation de suppression de compte — Ashtech Pay", html, "account deleted");
 }
 
 // ─── PAYER PAYMENT CONFIRMATION ──────────────────────────────────────────────
@@ -901,136 +404,49 @@ export async function sendPayerConfirmationEmail(
   const firstName = payerName?.trim().split(" ")[0] || "cher(e) client(e)";
 
   const pdfBlock = pdfUrl ? `
-              <table width="100%" cellpadding="0" cellspacing="0" border="0"
-                     style="background:#FEF3C7;border:1px solid #FCD34D;border-radius:14px;margin-top:24px;">
-                <tr>
-                  <td style="padding:20px 24px;text-align:center;">
-                    <p style="margin:0 0 6px;font-size:13px;font-weight:700;color:#F0B90B;">📄 Votre document est disponible</p>
-                    <p style="margin:0 0 16px;font-size:12px;color:#1F2937;">Cliquez sur le bouton ci-dessous pour accéder à votre fichier</p>
-                    <a href="${pdfUrl}" target="_blank"
-                       style="display:inline-block;background:#F0B90B;color:#000000;font-size:13px;font-weight:700;padding:12px 28px;border-radius:10px;text-decoration:none;">
-                      Accéder au document →
-                    </a>
-                    <p style="margin:14px 0 0;font-size:11px;color:#1F2937;word-break:break-all;">${pdfUrl}</p>
-                  </td>
-                </tr>
-              </table>` : "";
-
-  const body = `
-          <tr>
-            <td style="padding:36px 40px;">
-
-              <p style="margin:0 0 24px;font-size:14px;color:#1F2937;line-height:1.75;">
-                Votre paiement pour <strong style="color:#1F2937;">${linkTitle}</strong> a été
-                <strong style="color:#22C55E;">confirmé avec succès</strong>. Merci pour votre confiance !
-              </p>
-
-              <!-- Receipt box -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0"
-                     style="background:#F8FAFC;border:1px solid #E5E7EB;border-radius:14px;margin-bottom:24px;">
-                <tr>
-                  <td style="padding:20px 24px;">
-                    <p style="margin:0 0 16px;font-size:11px;font-weight:700;color:#F0B90B;letter-spacing:2px;text-transform:uppercase;">
-                      🧾 Reçu de paiement
-                    </p>
-                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                      <tr>
-                        <td style="padding:6px 0;font-size:13px;color:#1F2937;border-bottom:1px solid #E5E7EB;">Service</td>
-                        <td style="padding:6px 0;font-size:13px;color:#1F2937;text-align:right;border-bottom:1px solid #E5E7EB;">${linkTitle}</td>
-                      </tr>
-                      <tr>
-                        <td style="padding:6px 0;font-size:13px;color:#1F2937;border-bottom:1px solid #E5E7EB;">Montant payé</td>
-                        <td style="padding:6px 0;font-size:16px;font-weight:700;color:#22C55E;text-align:right;border-bottom:1px solid #E5E7EB;">${amount} ${currency}</td>
-                      </tr>
-                      <tr>
-                        <td style="padding:6px 0;font-size:13px;color:#1F2937;">Référence</td>
-                        <td style="padding:6px 0;font-size:12px;font-family:monospace;color:#F0B90B;text-align:right;">${reference}</td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
-
-              ${pdfBlock}
-
-              <!-- Support -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:28px;">
-                <tr>
-                  <td align="center">
-                    <p style="margin:0 0 12px;font-size:12px;color:#1F2937;">Un problème ? Contactez notre support :</p>
-                    <table cellpadding="0" cellspacing="0" border="0" align="center">
-                      <tr>
-                        <td style="padding:0 6px;">
-                          <a href="https://wa.me/${SUPPORT_PHONE.replace(/[\s+]/g, "")}"
-                             style="display:inline-block;background:#25D366;color:#FFFFFF;font-size:12px;font-weight:700;padding:9px 18px;border-radius:8px;text-decoration:none;">
-                            <img src="${WA_LOGO_URL}" width="18" height="18" style="display:inline;vertical-align:middle;margin-right:6px;border-radius:4px;" alt="WhatsApp" />WhatsApp
-                          </a>
-                        </td>
-                        <td style="padding:0 6px;">
-                          <a href="${FACEBOOK_URL}"
-                             style="display:inline-block;background:#1877F2;color:#FFFFFF;font-size:12px;font-weight:700;padding:9px 18px;border-radius:8px;text-decoration:none;">
-                            <img src="${FB_LOGO_URL}" width="18" height="18" style="display:inline;vertical-align:middle;margin-right:6px;border-radius:4px;" alt="Facebook" />Facebook
-                          </a>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
-
-            </td>
-          </tr>`;
-
-  const html = `<!DOCTYPE html>
-<html lang="fr" xmlns="http://www.w3.org/1999/xhtml">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Paiement confirmé — Ashtech Pay</title>
-</head>
-<body style="margin:0;padding:0;background-color:#F5F7FA;font-family:Arial,Helvetica,sans-serif;color:#1F2937;">
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F5F7FA;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0"
+         style="background:${BOX_BG};border-radius:6px;margin:16px 0 24px;">
     <tr>
-      <td align="center" style="padding:32px 16px;">
-        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#FFFFFF;border-radius:20px;border:1px solid #E5E7EB;overflow:hidden;">
-          <tr>
-            <td style="background:#FFFFFF;padding:32px 40px 24px;text-align:center;border-bottom:2px solid #F0B90B;">
-              <div style="margin-bottom:22px;">
-                <table cellpadding="0" cellspacing="0" border="0" align="center">
-                  <tr>
-                    <td style="background:transparent;border-radius:14px;padding:10px 20px;">
-                      <img src="${LOGO_URL}" alt="Ashtech Pay" width="140" height="auto" style="display:block;max-height:45px;width:auto;" />
-                    </td>
-                  </tr>
-                </table>
-              </div>
-              <div style="display:inline-block;background:#DCFCE7;border:1px solid #4ADE80;color:#22C55E;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;padding:5px 16px;border-radius:100px;margin-bottom:18px;">
-                ✅ &nbsp;Paiement confirmé
-              </div>
-              <h1 style="margin:0;font-size:26px;font-weight:700;color:#1F2937;line-height:1.3;">
-                Merci, ${firstName} !
-              </h1>
-              <p style="margin:12px 0 0;font-size:14px;color:#1F2937;line-height:1.6;">
-                Votre paiement a été reçu et traité avec succès.
-              </p>
-            </td>
-          </tr>
-          ${body}
-          <tr>
-            <td style="padding:20px 40px 26px;border-top:1px solid #E5E7EB;text-align:center;">
-              <p style="margin:0 0 6px;font-size:11px;color:#1F2937;line-height:1.7;">
-                Paiement sécurisé via <a href="${APP_URL}" style="color:#F0B90B;text-decoration:none;">Ashtech Pay</a> — Afrique digitale
-              </p>
-            </td>
-          </tr>
-        </table>
+      <td style="padding:20px 24px;">
+        <p style="margin:0 0 6px;font-size:14px;font-weight:700;color:${TEXT};">Document disponible</p>
+        <p style="margin:0 0 14px;font-size:13px;color:${MUTED};">Cliquez ci-dessous pour accéder à votre fichier.</p>
+        <a href="${pdfUrl}" target="_blank"
+           style="display:inline-block;background:${NAVY};color:#FFFFFF;font-size:13px;font-weight:700;padding:10px 24px;border-radius:6px;text-decoration:none;">
+          Accéder au document
+        </a>
+        <p style="margin:12px 0 0;font-size:11px;color:${MUTED};word-break:break-all;">${pdfUrl}</p>
       </td>
     </tr>
-  </table>
-</body>
-</html>`;
+  </table>` : "";
 
-  await sendEmail(to, `✅ Paiement confirmé — ${linkTitle}`, html, "payer confirmation");
+  const body = `
+  <tr>
+    <td style="padding:36px 40px 8px;">
+      <h1 style="margin:0 0 20px;font-size:28px;font-weight:700;color:${TEXT};line-height:1.3;">
+        Paiement confirmé.
+      </h1>
+      <p style="margin:0 0 6px;font-size:15px;color:${TEXT};line-height:1.7;">Bonjour ${firstName},</p>
+      <p style="margin:0 0 8px;font-size:15px;color:${TEXT};line-height:1.7;">
+        Votre paiement pour <strong style="color:${TEXT};">${linkTitle}</strong> a été reçu et confirmé avec succès.
+        Voici votre reçu de paiement :
+      </p>
+
+      ${infoBox([
+        { label: "Service", value: linkTitle },
+        { label: "Montant payé", value: `${amount} ${currency}` },
+        { label: "Référence", value: reference },
+        { label: "Date", value: new Date().toLocaleString("fr-FR", { timeZone: "Africa/Douala" }) },
+        { label: "Statut", value: "Confirmé" },
+      ])}
+
+      ${pdfBlock}
+
+      ${supportNote()}
+    </td>
+  </tr>`;
+
+  const html = emailBase("Paiement confirmé", body);
+  await sendEmail(to, `Paiement confirmé — ${linkTitle}`, html, "payer confirmation");
 }
 
 // ─── CAMPAIGN EMAIL (Admin broadcast) ─────────────────────────────────────────
@@ -1051,114 +467,29 @@ export async function sendCampaignEmail(opts: CampaignEmailOptions): Promise<voi
   const {
     to, firstName, subject, body,
     hasButton, buttonText, buttonUrl,
-    buttonColor = "#F0B90B", buttonTextColor = "#000000",
+    buttonColor = NAVY,
   } = opts;
 
   const bodyHtml = body
     .replace(/\{prenom\}/gi, firstName)
     .split("\n\n")
-    .map(p => `<p style="margin:0 0 16px;font-size:14px;color:#1F2937;line-height:1.75;">${p.replace(/\n/g, "<br/>")}</p>`)
+    .map(p => `<p style="margin:0 0 16px;font-size:15px;color:${TEXT};line-height:1.75;">${p.replace(/\n/g, "<br/>")}</p>`)
     .join("");
 
   const buttonHtml = hasButton && buttonText && buttonUrl
-    ? `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:28px 0;">
-        <tr>
-          <td align="center">
-            <a href="${buttonUrl}"
-               style="display:inline-block;background:${buttonColor};color:${buttonTextColor};font-size:15px;font-weight:700;padding:14px 36px;border-radius:10px;text-decoration:none;letter-spacing:0.3px;">
-              ${buttonText}
-            </a>
-          </td>
-        </tr>
-      </table>`
+    ? ctaButton(buttonText, buttonUrl, buttonColor)
     : "";
 
-  const html = `<!DOCTYPE html>
-<html lang="fr">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>${subject}</title>
-</head>
-<body style="margin:0;padding:0;background-color:#F5F7FA;font-family:Arial,Helvetica,sans-serif;color:#1F2937;">
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F5F7FA;">
-    <tr>
-      <td align="center" style="padding:32px 16px;">
-        <table width="600" cellpadding="0" cellspacing="0" border="0"
-               style="max-width:600px;width:100%;background-color:#FFFFFF;border-radius:20px;border:1px solid #E5E7EB;overflow:hidden;">
+  const bodyRows = `
+  <tr>
+    <td style="padding:36px 40px 8px;">
+      <p style="margin:0 0 6px;font-size:15px;color:${TEXT};line-height:1.7;">Bonjour ${firstName},</p>
+      ${bodyHtml}
+      ${buttonHtml}
+      ${supportNote()}
+    </td>
+  </tr>`;
 
-          <!-- HEADER -->
-          <tr>
-            <td style="background:#FFFFFF;padding:28px 40px 20px;text-align:center;border-bottom:2px solid #F0B90B;">
-              <table cellpadding="0" cellspacing="0" border="0" align="center">
-                <tr>
-                  <td style="padding-right:10px;vertical-align:middle;">
-                    <img src="${LOGO_URL}" alt="AshTech Pay" width="44" height="44"
-                         style="display:block;max-height:44px;width:auto;" />
-                  </td>
-                  <td style="vertical-align:middle;">
-                    <span style="font-size:22px;font-weight:700;color:#1F2937;letter-spacing:-0.3px;">AshTech Pay</span>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-
-          <!-- BODY -->
-          <tr>
-            <td style="padding:36px 40px;">
-              ${bodyHtml}
-              ${buttonHtml}
-            </td>
-          </tr>
-
-          <!-- SUPPORT -->
-          <tr>
-            <td style="padding:0 40px 28px;">
-              <table width="100%" cellpadding="0" cellspacing="0" border="0"
-                     style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:12px;">
-                <tr>
-                  <td style="padding:18px 22px;text-align:center;">
-                    <p style="margin:0 0 14px;font-size:12px;color:#1F2937;">Des questions ? Notre équipe est là pour toi.</p>
-                    <table cellpadding="0" cellspacing="0" border="0" align="center">
-                      <tr>
-                        <td style="padding:0 5px;">
-                          <a href="https://wa.me/${SUPPORT_PHONE.replace(/[\s+]/g, "")}"
-                             style="display:inline-block;background:#25D366;color:#FFFFFF;font-size:12px;font-weight:700;padding:9px 18px;border-radius:8px;text-decoration:none;">
-                            <img src="${WA_LOGO_URL}" width="18" height="18" style="display:inline;vertical-align:middle;margin-right:6px;border-radius:4px;" alt="WhatsApp" />WhatsApp
-                          </a>
-                        </td>
-                        <td style="padding:0 5px;">
-                          <a href="${FACEBOOK_URL}"
-                             style="display:inline-block;background:#1877F2;color:#FFFFFF;font-size:12px;font-weight:700;padding:9px 18px;border-radius:8px;text-decoration:none;">
-                            <img src="${FB_LOGO_URL}" width="18" height="18" style="display:inline;vertical-align:middle;margin-right:6px;border-radius:4px;" alt="Facebook" />Facebook
-                          </a>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-
-          <!-- FOOTER -->
-          <tr>
-            <td style="padding:16px 40px 24px;border-top:1px solid #E5E7EB;text-align:center;">
-              <p style="margin:0 0 4px;font-size:11px;color:#6B7280;line-height:1.7;">
-                <a href="${APP_URL}" style="color:#F0B90B;text-decoration:none;">ashtechpay.top</a>
-                &nbsp;·&nbsp; Cameroun · Kenya · Sénégal · Côte d'Ivoire · Nigeria et 17 autres pays
-              </p>
-              <p style="margin:0;font-size:11px;color:#9CA3AF;">&copy; 2026 AshTech Pay &mdash; Tous droits réservés</p>
-            </td>
-          </tr>
-
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
-
+  const html = emailBase(subject, bodyRows);
   await sendEmail(to, subject, html, "campaign");
 }
