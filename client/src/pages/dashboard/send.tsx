@@ -11,6 +11,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User, SupportedCurrency, Wallet } from "@shared/schema";
 import { Send, Globe, Loader2, ArrowRight, AlertCircle, Shield, CheckCircle2, Smartphone } from "lucide-react";
+import { useLanguage } from "@/lib/language";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { getOperatorLogo } from "@/lib/operator-logos";
 import { z } from "zod";
@@ -81,6 +82,7 @@ const COUNTRY_FLAGS: Record<string, string> = {
 export default function SendMoneyPage() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+  const { t } = useLanguage();
 
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const { data: wallets = [] } = useQuery<Wallet[]>({ queryKey: ["/api/wallets"] });
@@ -255,21 +257,21 @@ export default function SendMoneyPage() {
       <DashboardLayout>
         <div className="space-y-6">
           <div>
-            <h1 className="text-2xl font-semibold text-foreground">Envoyer de l'argent</h1>
-            <p className="text-muted-foreground">Envoyez de l'argent à un destinataire</p>
+            <h1 className="text-2xl font-semibold text-foreground">{t.send.title}</h1>
+            <p className="text-muted-foreground">{t.send.subtitleUnverified}</p>
           </div>
           <Card className="border-yellow-500/50 bg-yellow-500/5">
             <CardContent className="p-8 text-center space-y-4">
               <div className="w-16 h-16 mx-auto rounded-full bg-yellow-500/20 flex items-center justify-center">
                 <Shield className="w-8 h-8 text-yellow-500" />
               </div>
-              <h2 className="text-xl font-semibold">Compte non vérifié</h2>
+              <h2 className="text-xl font-semibold">{t.send.unverifiedTitle}</h2>
               <p className="text-muted-foreground max-w-md mx-auto">
-                Pour envoyer de l'argent, vous devez d'abord vérifier votre compte.
+                {t.send.unverifiedDesc}
               </p>
               <Button onClick={() => setLocation("/dashboard/kyc")}>
                 <Shield className="w-4 h-4 mr-2" />
-                Passer la vérification
+                {t.send.verifyButton}
               </Button>
             </CardContent>
           </Card>
@@ -282,23 +284,23 @@ export default function SendMoneyPage() {
     <DashboardLayout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Envoyer de l'argent</h1>
-          <p className="text-muted-foreground">Transfert instantané ou via Mobile Money</p>
+          <h1 className="text-2xl font-semibold text-foreground">{t.send.title}</h1>
+          <p className="text-muted-foreground">{t.send.subtitle}</p>
         </div>
 
         <div className="grid md:grid-cols-3 gap-6">
           <Card className="md:col-span-2 min-w-0 overflow-hidden">
             <CardHeader>
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Transfert</p>
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{t.send.sectionLabel}</p>
               <CardTitle className="flex items-center gap-2 text-base">
                 <Send className="w-4 h-4 text-muted-foreground" />
-                Nouveau transfert
+                {t.send.cardTitle}
               </CardTitle>
-              <CardDescription>Sélectionnez la destination pour commencer</CardDescription>
+              <CardDescription>{t.send.cardDesc}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-5 min-w-0">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Solde à débiter</label>
+                <label className="text-sm font-medium">{t.send.debitBalance}</label>
                 <Select value={selectedWallet} onValueChange={setSelectedWallet}>
                   <SelectTrigger className="border-[#F0B90B]/30">
                     <SelectValue />
@@ -306,7 +308,7 @@ export default function SendMoneyPage() {
                   <SelectContent>
                     {wallets.map((w, idx) => (
                       <SelectItem key={w.currency} value={w.currency}>
-                        {idx === 0 ? "Compte Principal" : `Compte ${w.currency}`} — {parseFloat(w.balance || "0").toLocaleString()} {w.currency}
+                        {idx === 0 ? t.send.mainAccount : `${t.send.mainAccount} ${w.currency}`} — {parseFloat(w.balance || "0").toLocaleString()} {w.currency}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -314,7 +316,7 @@ export default function SendMoneyPage() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Destination</label>
+                <label className="text-sm font-medium">{t.send.destination}</label>
                 <Select
                   value={destination}
                   onValueChange={(val) => {
@@ -328,7 +330,7 @@ export default function SendMoneyPage() {
                     {destination === INTERNAL_KEY ? (
                       <div className="flex items-center gap-3 flex-1 min-w-0">
                         <span className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-xl shrink-0">🏦</span>
-                        <span className="font-semibold truncate">Transfert Interne Ashtech Pay</span>
+                        <span className="font-semibold truncate">{t.send.internalTransfer}</span>
                       </div>
                     ) : selectedCountry ? (
                       <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -339,18 +341,18 @@ export default function SendMoneyPage() {
                         <span className="text-muted-foreground text-sm shrink-0">({selectedCountry.currency})</span>
                       </div>
                     ) : (
-                      <span className="text-muted-foreground text-sm">Sélectionner la destination</span>
+                      <span className="text-muted-foreground text-sm">{t.send.selectDestination}</span>
                     )}
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={INTERNAL_KEY}>
                       <span className="flex items-center gap-2">
                         <span>🏦</span>
-                        <span>Transfert Interne Ashtech Pay</span>
+                        <span>{t.send.internalTransfer}</span>
                       </span>
                     </SelectItem>
                     {isLoadingConfig
-                      ? <SelectItem key="__loading__" value="__loading__" disabled>Chargement...</SelectItem>
+                      ? <SelectItem key="__loading__" value="__loading__" disabled>{t.send.loading}</SelectItem>
                       : (countries ?? []).map(country => (
                       <SelectItem key={country.id} value={country.id}>
                         <span className="flex items-center gap-2">
@@ -369,11 +371,11 @@ export default function SendMoneyPage() {
                 <div className="space-y-4">
                   <div className="flex items-center gap-2 px-3 py-2 bg-green-50 dark:bg-green-950/30 rounded-lg border border-green-200 dark:border-green-800">
                     <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
-                    <span className="text-green-700 dark:text-green-300 text-sm font-medium">Frais: 0 — Transfert gratuit et instantané</span>
+                    <span className="text-green-700 dark:text-green-300 text-sm font-medium">{t.send.zeroFeeMsg}</span>
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Email, téléphone ou nom d'utilisateur</label>
+                    <label className="text-sm font-medium">{t.send.recipientLabel}</label>
                     <Input
                       placeholder="exemple@email.com / +237600000000 / username"
                       value={internalIdentifier}
@@ -382,7 +384,7 @@ export default function SendMoneyPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Montant ({selectedWallet})</label>
+                    <label className="text-sm font-medium">{t.send.amountLabel} ({selectedWallet})</label>
                     <Input
                       type="number"
                       placeholder=""
@@ -405,17 +407,17 @@ export default function SendMoneyPage() {
                     disabled={internalMutation.isPending}
                   >
                     {internalMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
-                    Envoyer
+                    {t.send.sendButton}
                   </Button>
                 </div>
               ) : (
                 <Form {...form}>
                   <form onSubmit={form.handleSubmit((d) => { setPendingExternalData({ ...d, countryId: destination }); setShowConfirmDialog(true); })} className="space-y-4 min-w-0 w-full">
                     {!selectedCountry ? (
-                      <p className="text-sm text-muted-foreground py-2">Choisissez une destination d'abord</p>
+                      <p className="text-sm text-muted-foreground py-2">{t.send.chooseDestFirst}</p>
                     ) : selectedCountry.operators.length === 0 ? (
                       <div className="bg-muted/50 rounded-lg p-3 text-center text-sm text-muted-foreground">
-                        Aucun opérateur disponible pour ce pays
+                        {t.send.noOperator}
                       </div>
                     ) : (
                       <FormField
@@ -423,7 +425,7 @@ export default function SendMoneyPage() {
                         name="operatorId"
                         render={({ field }) => (
                           <FormItem className="min-w-0">
-                            <FormLabel>Opérateur</FormLabel>
+                            <FormLabel>{t.send.operatorLabel}</FormLabel>
                             <div className="w-full overflow-hidden">
                             <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
                               {selectedCountry.operators.map((op) => {
@@ -465,14 +467,14 @@ export default function SendMoneyPage() {
                     <div className="grid sm:grid-cols-2 gap-4">
                       <FormField control={form.control} name="recipientName" render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Nom du destinataire</FormLabel>
+                          <FormLabel>{t.send.recipientName}</FormLabel>
                           <FormControl><Input placeholder="Jean Dupont" {...field} /></FormControl>
                           <FormMessage />
                         </FormItem>
                       )} />
                       <FormField control={form.control} name="recipientPhone" render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Numéro de téléphone</FormLabel>
+                          <FormLabel>{t.send.recipientPhone}</FormLabel>
                       <FormControl><Input placeholder="XXXXXXXXX" {...field} /></FormControl>
                           <FormMessage />
                         </FormItem>
@@ -481,7 +483,7 @@ export default function SendMoneyPage() {
 
                     <FormField control={form.control} name="amount" render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Montant à envoyer ({selectedCountry?.currency || "XAF"})</FormLabel>
+                        <FormLabel>{t.send.sendAmountLabel} ({selectedCountry?.currency || "XAF"})</FormLabel>
                         <FormControl>
                           <Input type="number" placeholder="" className="text-xl h-12" {...field} />
                         </FormControl>
@@ -489,13 +491,13 @@ export default function SendMoneyPage() {
                         {amountValue > 0 && amountValue < minTransfer && (
                           <p className="text-sm text-destructive flex items-center gap-1">
                             <AlertCircle className="w-3 h-3" />
-                            Montant minimum: {minTransfer.toLocaleString()} {senderCurrency}
+                            {t.send.minAmount} {minTransfer.toLocaleString()} {senderCurrency}
                           </p>
                         )}
                         {amountValue > 0 && amountValue > maxTransfer && (
                           <p className="text-sm text-destructive flex items-center gap-1">
                             <AlertCircle className="w-3 h-3" />
-                            Montant maximum: {maxTransfer.toLocaleString()} {senderCurrency}
+                            {t.send.maxAmount} {maxTransfer.toLocaleString()} {senderCurrency}
                           </p>
                         )}
                       </FormItem>
@@ -512,7 +514,7 @@ export default function SendMoneyPage() {
 
                     <Button type="submit" className="w-full bg-[#F0B90B] hover:bg-[#D4A30A] text-black font-bold" size="lg" disabled={!canSubmitExternal}>
                       {externalMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
-                      Envoyer {amountValue > 0 ? formatCurrency(amountValue, localCurrency as SupportedCurrency) : ""}
+                      {t.send.sendButton} {amountValue > 0 ? formatCurrency(amountValue, localCurrency as SupportedCurrency) : ""}
                     </Button>
                   </form>
                 </Form>
@@ -523,7 +525,7 @@ export default function SendMoneyPage() {
           <div className="space-y-4">
             <Card className="bg-gradient-to-br from-blue-500/10 to-transparent border-blue-500/20">
               <CardContent className="p-6">
-                <p className="text-sm text-muted-foreground mb-1">Votre solde ({localCurrency})</p>
+                <p className="text-sm text-muted-foreground mb-1">{t.send.yourBalance} ({localCurrency})</p>
                 <p className="text-2xl font-bold text-foreground">
                   {formatWalletBalance(balance, localCurrency)}
                 </p>
@@ -533,23 +535,23 @@ export default function SendMoneyPage() {
             {!isInternal && amountValue > 0 && selectedOperator && (
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">
-                  Récapitulatif {feePreview.isLoading && <Loader2 className="inline w-3 h-3 ml-1 animate-spin" />}
+                  {t.send.summary} {feePreview.isLoading && <Loader2 className="inline w-3 h-3 ml-1 animate-spin" />}
                 </p>
                 <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
                   <div className="flex items-center justify-between px-4 py-3.5">
-                    <span className="text-sm text-muted-foreground">Montant à envoyer</span>
+                    <span className="text-sm text-muted-foreground">{t.send.summaryAmount}</span>
                     <span className="text-sm font-medium">{formatWalletBalance(amountValue, localCurrency)}</span>
                   </div>
                   <div className="flex items-center justify-between px-4 py-3.5">
-                    <span className="text-sm text-muted-foreground">Frais ({feePreview.feePercentage || selectedOperator.feePercentage}%)</span>
+                    <span className="text-sm text-muted-foreground">{t.send.summaryFee} ({feePreview.feePercentage || selectedOperator.feePercentage}%)</span>
                     <span className="text-sm font-medium text-orange-500">- {formatWalletBalance(feePreview.feeAmount, localCurrency)}</span>
                   </div>
                   <div className="flex items-center justify-between px-4 py-3.5 bg-muted/30">
-                    <span className="text-sm font-semibold text-foreground">Net envoyé</span>
+                    <span className="text-sm font-semibold text-foreground">{t.send.summaryNet}</span>
                     <span className="text-sm font-bold text-foreground">{formatWalletBalance(amountValue - feePreview.feeAmount, localCurrency)}</span>
                   </div>
                   <div className="flex items-center justify-between px-4 py-3 text-xs text-muted-foreground">
-                    <span>Solde après transfert</span>
+                    <span>{t.send.balanceAfter}</span>
                     <span className={feePreview.totalAmount > balance ? "text-destructive font-medium" : ""}>
                       {formatWalletBalance(Math.max(0, balance - feePreview.totalAmount), localCurrency)}
                     </span>
@@ -558,7 +560,7 @@ export default function SendMoneyPage() {
                 {feePreview.totalAmount > balance && (
                   <Alert variant="destructive" className="mt-2">
                     <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>Solde insuffisant</AlertDescription>
+                    <AlertDescription>{t.send.insufficientBalance}</AlertDescription>
                   </Alert>
                 )}
               </div>
@@ -566,19 +568,19 @@ export default function SendMoneyPage() {
 
             {isInternal && (
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">Avantages</p>
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">{t.send.advantages}</p>
                 <div className="rounded-xl border border-green-500/30 bg-green-50/50 dark:bg-green-950/10 overflow-hidden divide-y divide-green-500/20">
                   <div className="flex items-center gap-3 px-4 py-3.5">
                     <span className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center text-green-600 text-xs font-bold shrink-0">✓</span>
-                    <span className="text-sm text-muted-foreground">Gratuit — aucun frais</span>
+                    <span className="text-sm text-muted-foreground">{t.send.advantageFree}</span>
                   </div>
                   <div className="flex items-center gap-3 px-4 py-3.5">
                     <span className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center text-green-600 text-xs font-bold shrink-0">✓</span>
-                    <span className="text-sm text-muted-foreground">Instantané — crédit immédiat</span>
+                    <span className="text-sm text-muted-foreground">{t.send.advantageInstant}</span>
                   </div>
                   <div className="flex items-center gap-3 px-4 py-3.5">
                     <span className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center text-green-600 text-xs font-bold shrink-0">✓</span>
-                    <span className="text-sm text-muted-foreground">Sécurisé — compte vérifié</span>
+                    <span className="text-sm text-muted-foreground">{t.send.advantageSecure}</span>
                   </div>
                 </div>
               </div>
@@ -591,29 +593,29 @@ export default function SendMoneyPage() {
       <Dialog open={showInternalConfirmDialog} onOpenChange={setShowInternalConfirmDialog}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-center text-lg">Confirmer le transfert interne</DialogTitle>
+            <DialogTitle className="text-center text-lg">{t.send.confirmInternalTitle}</DialogTitle>
           </DialogHeader>
           <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border my-2">
             <div className="flex items-center justify-between px-4 py-3.5">
-              <span className="text-sm text-muted-foreground">Destinataire</span>
+              <span className="text-sm text-muted-foreground">{t.send.confirmRecipient}</span>
               <span className="text-sm font-medium">{internalIdentifier}</span>
             </div>
             <div className="flex items-center justify-between px-4 py-3.5">
-              <span className="text-sm text-muted-foreground">Compte débité</span>
+              <span className="text-sm text-muted-foreground">{t.send.confirmDebitAccount}</span>
               <span className="text-sm font-medium">{selectedWallet}</span>
             </div>
             <div className="flex items-center justify-between px-4 py-3.5">
-              <span className="text-sm text-muted-foreground">Montant</span>
+              <span className="text-sm text-muted-foreground">{t.send.confirmAmount}</span>
               <span className="text-sm font-medium">{formatWalletBalance(parseFloat(internalAmount) || 0, selectedWallet)}</span>
             </div>
             <div className="flex items-center justify-between px-4 py-3.5 bg-muted/30">
-              <span className="text-sm font-semibold text-foreground">Frais</span>
-              <span className="text-base font-bold text-green-500">Gratuit</span>
+              <span className="text-sm font-semibold text-foreground">{t.send.confirmFee}</span>
+              <span className="text-base font-bold text-green-500">{t.send.free}</span>
             </div>
           </div>
           <DialogFooter className="flex gap-2 sm:flex-row">
             <Button variant="outline" className="flex-1" onClick={() => setShowInternalConfirmDialog(false)}>
-              Retour
+              {t.send.back}
             </Button>
             <Button
               className="flex-1 bg-[#F0B90B] hover:bg-[#D4A30A] text-black font-bold"
@@ -622,7 +624,7 @@ export default function SendMoneyPage() {
               data-testid="button-final-confirm-internal"
             >
               {internalMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
-              Confirmer
+              {t.send.confirm}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -632,39 +634,39 @@ export default function SendMoneyPage() {
       <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-center text-lg">Confirmer l'envoi</DialogTitle>
+            <DialogTitle className="text-center text-lg">{t.send.confirmExternalTitle}</DialogTitle>
           </DialogHeader>
           <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border my-2">
             <div className="flex items-center justify-between px-4 py-3.5">
-              <span className="text-sm text-muted-foreground">Destinataire</span>
+              <span className="text-sm text-muted-foreground">{t.send.confirmRecipient}</span>
               <span className="text-sm font-medium">{pendingExternalData?.recipientName}</span>
             </div>
             <div className="flex items-center justify-between px-4 py-3.5">
-              <span className="text-sm text-muted-foreground">Numéro</span>
+              <span className="text-sm text-muted-foreground">{t.send.confirmPhone}</span>
               <span className="text-sm font-medium">{pendingExternalData?.recipientPhone}</span>
             </div>
             <div className="flex items-center justify-between px-4 py-3.5">
-              <span className="text-sm text-muted-foreground">Pays / Opérateur</span>
+              <span className="text-sm text-muted-foreground">{t.send.confirmCountryOperator}</span>
               <span className="text-sm font-medium">{selectedCountry?.name} · {selectedOperator?.name}</span>
             </div>
             <div className="flex items-center justify-between px-4 py-3.5">
-              <span className="text-sm text-muted-foreground">Montant envoyé</span>
+              <span className="text-sm text-muted-foreground">{t.send.confirmSentAmount}</span>
               <span className="text-sm font-medium">{formatWalletBalance(amountValue, selectedWallet)}</span>
             </div>
             {feePreview.feeAmount > 0 && (
               <div className="flex items-center justify-between px-4 py-3.5">
-                <span className="text-sm text-muted-foreground">Frais ({feePreview.feePercentage}%)</span>
+                <span className="text-sm text-muted-foreground">{t.send.confirmFeePercent} ({feePreview.feePercentage}%)</span>
                 <span className="text-sm font-medium text-red-500">-{formatWalletBalance(feePreview.feeAmount, selectedWallet)}</span>
               </div>
             )}
             <div className="flex items-center justify-between px-4 py-3.5 bg-muted/30">
-              <span className="text-sm font-semibold text-foreground">Net reçu</span>
+              <span className="text-sm font-semibold text-foreground">{t.send.confirmNetReceived}</span>
               <span className="text-base font-bold text-green-500">{formatWalletBalance(amountValue - feePreview.feeAmount, selectedWallet)}</span>
             </div>
           </div>
           <DialogFooter className="flex gap-2 sm:flex-row">
             <Button variant="outline" className="flex-1" onClick={() => setShowConfirmDialog(false)}>
-              Retour
+              {t.send.back}
             </Button>
             <Button
               className="flex-1 bg-[#F0B90B] hover:bg-[#D4A30A] text-black font-bold"
@@ -673,7 +675,7 @@ export default function SendMoneyPage() {
               data-testid="button-final-confirm-external"
             >
               {externalMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
-              Confirmer
+              {t.send.confirm}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -12,6 +12,7 @@ import { withdrawSchema, type SupportedCurrency, type WithdrawalNumber } from "@
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User } from "@shared/schema";
 import { Wallet, Smartphone, Building2, Loader2, CheckCircle, AlertCircle, Phone, Plus, Settings, Globe, Shield, Info, ArrowLeftRight } from "lucide-react";
+import { useLanguage } from "@/lib/language";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { getOperatorLogo } from "@/lib/operator-logos";
 import { getCountryFlagEmoji } from "@/lib/country-flags";
@@ -79,6 +80,7 @@ export default function WithdrawPage() {
     ? Math.floor(rawBalance * 100) / 100
     : Math.round(rawBalance);
 
+  const { t } = useLanguage();
   const { data: withdrawalNumbers = [] } = useQuery<WithdrawalNumber[]>({
     queryKey: ["/api/withdrawal-numbers"],
   });
@@ -180,8 +182,8 @@ export default function WithdrawPage() {
       <DashboardLayout>
         <div className="space-y-6">
           <div>
-            <h1 className="text-2xl font-semibold text-foreground">Retirer de l'argent</h1>
-            <p className="text-muted-foreground">Retirez vos fonds vers votre compte</p>
+            <h1 className="text-2xl font-semibold text-foreground">{t.withdraw.title}</h1>
+            <p className="text-muted-foreground">{t.withdraw.subtitle}</p>
           </div>
           
           <Card className="border-yellow-500/50 bg-yellow-500/5">
@@ -189,10 +191,9 @@ export default function WithdrawPage() {
               <div className="w-16 h-16 mx-auto rounded-full bg-yellow-500/20 flex items-center justify-center">
                 <Shield className="w-8 h-8 text-yellow-500" />
               </div>
-              <h2 className="text-xl font-semibold text-foreground">Compte non vérifié</h2>
+              <h2 className="text-xl font-semibold text-foreground">{t.withdraw.unverifiedTitle}</h2>
               <p className="text-muted-foreground max-w-md mx-auto">
-                Pour effectuer des retraits, vous devez d'abord vérifier votre compte. 
-                La vérification permet de sécuriser vos transactions et d'accéder à toutes les fonctionnalités.
+                {t.withdraw.unverifiedDesc}
               </p>
               <Button 
                 onClick={() => setLocation("/dashboard/kyc")}
@@ -200,7 +201,7 @@ export default function WithdrawPage() {
                 data-testid="button-go-to-kyc"
               >
                 <Shield className="w-4 h-4 mr-2" />
-                Passer la vérification
+                {t.withdraw.verifyButton}
               </Button>
             </CardContent>
           </Card>
@@ -213,15 +214,15 @@ export default function WithdrawPage() {
     <DashboardLayout>
       <div className="space-y-4">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Retirer de l'argent</h1>
-          <p className="text-muted-foreground">Retirez vos fonds vers votre compte</p>
+          <h1 className="text-2xl font-semibold text-foreground">{t.withdraw.title}</h1>
+          <p className="text-muted-foreground">{t.withdraw.subtitle}</p>
         </div>
 
         <Card className="bg-gradient-to-br from-orange-500/10 to-transparent border-orange-500/20">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground mb-1">Solde compte principal</p>
+                <p className="text-sm text-muted-foreground mb-1">{t.withdraw.mainBalance}</p>
                 <div className="flex flex-col">
                   <p className="text-2xl font-bold text-foreground">{formatCurrency(balance, userCurrency as SupportedCurrency)}</p>
                   <p className="text-[10px] text-muted-foreground">
@@ -246,10 +247,10 @@ export default function WithdrawPage() {
         <div className="grid md:grid-cols-2 gap-4">
           <Card>
             <CardHeader className="pt-4 pb-3">
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Méthode</p>
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{t.withdraw.methodLabel}</p>
               <CardTitle className="text-base flex items-center gap-2">
                 <Smartphone className="w-4 h-4 text-muted-foreground" />
-                Mode de retrait
+                {t.withdraw.methodTitle}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 pb-4">
@@ -292,10 +293,10 @@ export default function WithdrawPage() {
 
           <Card>
             <CardHeader className="pt-4 pb-3">
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Formulaire</p>
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{t.withdraw.formLabel}</p>
               <CardTitle className="text-base flex items-center gap-2">
                 <Wallet className="w-4 h-4 text-muted-foreground" />
-                Détails du retrait
+                {t.withdraw.formTitle}
               </CardTitle>
             </CardHeader>
             <CardContent className="pb-4">
@@ -306,7 +307,7 @@ export default function WithdrawPage() {
                     name="amount"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Montant ({user?.preferredCurrency || "XAF"})</FormLabel>
+                        <FormLabel>{t.withdraw.amountLabel} ({user?.preferredCurrency || "XAF"})</FormLabel>
                         <FormControl>
                           <div className="relative">
                             <Input 
@@ -330,7 +331,7 @@ export default function WithdrawPage() {
                         {amountValue > 0 && amountValue < minWithdrawal && (
                           <p className="text-sm text-destructive flex items-center gap-1">
                             <AlertCircle className="w-3 h-3" />
-                            Minimum : {minWithdrawal.toLocaleString()} {user?.preferredCurrency || "XAF"}
+                            {t.withdraw.minAmount} {minWithdrawal.toLocaleString()} {user?.preferredCurrency || "XAF"}
                           </p>
                         )}
                         {amountValue > 0 && amountValue > balance && (
@@ -417,14 +418,14 @@ export default function WithdrawPage() {
                           </div>
                           <div className="flex items-center justify-between text-sm">
                             <span className="text-muted-foreground">
-                              Frais de retrait {feePercent > 0 ? `(${feePercent}%)` : "(Gratuit)"}
+                              {t.withdraw.withdrawalFee} {feePercent > 0 ? `(${feePercent}%)` : `(${t.withdraw.free})`}
                             </span>
                             <span className={`font-medium ${feeAmount > 0 ? "text-red-500" : "text-green-500"}`}>
-                              {feeAmount > 0 ? `-${formatCurrency(feeAmount, (user?.preferredCurrency || "XAF") as SupportedCurrency)}` : "Gratuit"}
+                              {feeAmount > 0 ? `-${formatCurrency(feeAmount, (user?.preferredCurrency || "XAF") as SupportedCurrency)}` : t.withdraw.free}
                             </span>
                           </div>
                           <div className="border-t pt-3 flex items-center justify-between">
-                            <span className="font-medium text-foreground">Net à recevoir</span>
+                            <span className="font-medium text-foreground">{t.withdraw.netReceive}</span>
                             <span className="text-xl font-bold text-green-500" data-testid="net-withdrawal-amount">
                               {formatCurrency(amountValue - feeAmount, (user?.preferredCurrency || "XAF") as SupportedCurrency)}
                             </span>
@@ -436,10 +437,10 @@ export default function WithdrawPage() {
 
                   {selectedMethod === "mobile_money" && withdrawalNumbers.length > 0 && (
                     <div className="space-y-1">
-                      <FormLabel className="text-xs">Numéro enregistré</FormLabel>
+                      <FormLabel className="text-xs">{t.withdraw.registeredNumber}</FormLabel>
                       <Select value={selectedNumber} onValueChange={setSelectedNumber}>
                         <SelectTrigger className="h-9 text-xs" data-testid="select-withdrawal-number">
-                          <SelectValue placeholder="Choisir un numéro" />
+                          <SelectValue placeholder={t.withdraw.chooseNumber} />
                         </SelectTrigger>
                         <SelectContent>
                           {withdrawalNumbers.map((number) => (
@@ -453,7 +454,7 @@ export default function WithdrawPage() {
                         <Link href="/dashboard/withdrawal-numbers">
                           <Button variant="ghost" size="sm" className="p-0 h-auto text-[10px]" data-testid="link-manage-numbers">
                             <Settings className="w-2.5 h-2.5 mr-1" />
-                            Gérer mes numéros
+                            {t.withdraw.manageNumbers}
                           </Button>
                         </Link>
                       </div>
@@ -467,12 +468,12 @@ export default function WithdrawPage() {
                           <Phone className="w-4 h-4 text-blue-500 mt-0.5" />
                           <div className="flex-1">
                             <p className="text-xs font-medium text-foreground">
-                              Aucun numéro enregistré
+                              {t.withdraw.noNumbers}
                             </p>
                             <Link href="/dashboard/withdrawal-numbers">
                               <Button size="sm" variant="link" className="p-0 h-auto text-[10px]" data-testid="button-add-withdrawal-number">
                                 <Plus className="w-3 h-3 mr-1" />
-                                Ajouter un numéro
+                                {t.withdraw.addNumber}
                               </Button>
                             </Link>
                           </div>
@@ -513,14 +514,14 @@ export default function WithdrawPage() {
                     onClick={() => setShowConfirmDialog(true)}
                   >
                     <Wallet className="w-4 h-4 mr-2" />
-                    Demander le retrait
+                    {t.withdraw.submitButton}
                   </Button>
 
                   <div className="flex justify-center pt-2">
                     <Link href="/dashboard/fee-details">
                       <Button variant="link" size="sm" className="text-muted-foreground text-xs h-auto p-0 gap-1">
                         <Info className="w-3 h-3" />
-                        Détails des frais
+                        {t.withdraw.feeDetails}
                       </Button>
                     </Link>
                   </div>
@@ -535,49 +536,49 @@ export default function WithdrawPage() {
       <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-center text-lg">Confirmer le retrait</DialogTitle>
+            <DialogTitle className="text-center text-lg">{t.withdraw.confirmTitle}</DialogTitle>
           </DialogHeader>
           <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border my-2">
             <div className="flex items-center justify-between px-4 py-3.5">
-              <span className="text-sm text-muted-foreground">Méthode</span>
-              <span className="text-sm font-medium">{selectedMethod === "mobile_money" ? "Mobile Money" : "Virement bancaire"}</span>
+              <span className="text-sm text-muted-foreground">{t.withdraw.confirmMethod}</span>
+              <span className="text-sm font-medium">{selectedMethod === "mobile_money" ? t.withdraw.mobileMoney : t.withdraw.bankTransfer}</span>
             </div>
             {selectedCountryData && (
               <div className="flex items-center justify-between px-4 py-3.5">
-                <span className="text-sm text-muted-foreground">Pays</span>
+                <span className="text-sm text-muted-foreground">{t.withdraw.confirmCountry}</span>
                 <span className="text-sm font-medium">{selectedCountryData.name}</span>
               </div>
             )}
             {selectedOperatorData && (
               <div className="flex items-center justify-between px-4 py-3.5">
-                <span className="text-sm text-muted-foreground">Opérateur</span>
+                <span className="text-sm text-muted-foreground">{t.withdraw.confirmOperator}</span>
                 <span className="text-sm font-medium">{selectedOperatorData.name}</span>
               </div>
             )}
             {form.getValues("accountDetails") && (
               <div className="flex items-center justify-between px-4 py-3.5">
-                <span className="text-sm text-muted-foreground">Numéro</span>
+                <span className="text-sm text-muted-foreground">{t.withdraw.confirmNumber}</span>
                 <span className="text-sm font-medium">{form.getValues("accountDetails")}</span>
               </div>
             )}
             <div className="flex items-center justify-between px-4 py-3.5">
-              <span className="text-sm text-muted-foreground">Montant demandé</span>
+              <span className="text-sm text-muted-foreground">{t.withdraw.confirmAmount}</span>
               <span className="text-sm font-medium">{formatCurrency(amountValue, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</span>
             </div>
             {feeAmount > 0 && (
               <div className="flex items-center justify-between px-4 py-3.5">
-                <span className="text-sm text-muted-foreground">Frais {feePercent > 0 ? `(${feePercent}%)` : ""}</span>
+                <span className="text-sm text-muted-foreground">{t.withdraw.confirmFee} {feePercent > 0 ? `(${feePercent}%)` : ""}</span>
                 <span className="text-sm font-medium text-red-500">-{formatCurrency(feeAmount, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</span>
               </div>
             )}
             <div className="flex items-center justify-between px-4 py-3.5 bg-muted/30">
-              <span className="text-sm font-semibold text-foreground">Net à recevoir</span>
+              <span className="text-sm font-semibold text-foreground">{t.withdraw.confirmNet}</span>
               <span className="text-base font-bold text-green-500">{formatCurrency(amountValue - feeAmount, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</span>
             </div>
           </div>
           <DialogFooter className="flex gap-2 sm:flex-row">
             <Button variant="outline" className="flex-1" onClick={() => setShowConfirmDialog(false)}>
-              Retour
+              {t.withdraw.back}
             </Button>
             <Button
               className="flex-1"
@@ -586,7 +587,7 @@ export default function WithdrawPage() {
               data-testid="button-final-confirm-withdraw"
             >
               {withdrawMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Wallet className="w-4 h-4 mr-2" />}
-              Confirmer
+              {t.withdraw.confirm}
             </Button>
           </DialogFooter>
         </DialogContent>

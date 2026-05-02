@@ -11,6 +11,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest, queryClient, getAuthHeaders } from "@/lib/queryClient";
 import type { User, SupportedCurrency } from "@shared/schema";
 import { CreditCard, Loader2, Globe, AlertCircle, Phone, CheckCircle, XCircle, ArrowLeft, ArrowRight, Smartphone, ExternalLink, Hash, Clock, Copy } from "lucide-react";
+import { useLanguage } from "@/lib/language";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { getOperatorLogo } from "@/lib/operator-logos";
 import { z } from "zod";
@@ -56,7 +57,7 @@ const depositFormSchema = z.object({
 
 type DepositFormData = z.infer<typeof depositFormSchema>;
 
-const STEPS = [
+const STEPS_FR = [
   { id: 1, title: "Montant", description: "Entrez le montant" },
   { id: 2, title: "Pays & Opérateur", description: "Sélectionnez votre pays" },
   { id: 3, title: "Confirmation", description: "Vérifiez et validez" },
@@ -64,6 +65,7 @@ const STEPS = [
 
 export default function DepositPage() {
   const { toast } = useToast();
+  const { t } = useLanguage();
   const [currentStep, setCurrentStep] = useState(1);
   const [showValidationMessage, setShowValidationMessage] = useState(false);
   const [depositReference, setDepositReference] = useState("");
@@ -400,13 +402,13 @@ export default function DepositPage() {
     <DashboardLayout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Recharger mon compte</h1>
-          <p className="text-muted-foreground">Ajoutez de l'argent à votre portefeuille via Mobile Money</p>
+          <h1 className="text-2xl font-semibold text-foreground">{t.deposit.title}</h1>
+          <p className="text-muted-foreground">{t.deposit.subtitle}</p>
         </div>
 
         <Card className="bg-gradient-to-br from-green-500/10 to-transparent border-green-500/20">
           <CardContent className="p-6">
-            <p className="text-sm text-muted-foreground mb-1">Solde actuel</p>
+            <p className="text-sm text-muted-foreground mb-1">{t.deposit.currentBalance}</p>
             <p className="text-3xl font-bold text-foreground">{formatCurrency(user?.balance || "0", (user?.preferredCurrency || "XAF") as SupportedCurrency)}</p>
           </CardContent>
         </Card>
@@ -419,18 +421,18 @@ export default function DepositPage() {
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              Aucun pays ou opérateur n'est actuellement disponible. Veuillez réessayer plus tard.
+              {t.deposit.noCountry}
             </AlertDescription>
           </Alert>
         ) : (
           <Card>
             <CardHeader>
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Dépôt Mobile Money</p>
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{t.deposit.sectionLabel}</p>
               <CardTitle className="flex items-center gap-2 text-base">
                 <CreditCard className="w-4 h-4 text-muted-foreground" />
-                Nouveau dépôt
+                {t.deposit.cardTitle}
               </CardTitle>
-              <CardDescription>Suivez les étapes pour recharger votre compte</CardDescription>
+              <CardDescription>{t.deposit.cardDesc}</CardDescription>
               
               {!showValidationMessage && (
                 <div className="pt-4">
@@ -482,11 +484,11 @@ export default function DepositPage() {
 
                       {/* Title */}
                       <div>
-                        <h3 className="text-xl font-bold text-foreground">Code OTP requis</h3>
+                        <h3 className="text-xl font-bold text-foreground">{t.deposit.otpRequired}</h3>
                         <p className="text-muted-foreground text-sm mt-1">
                           {otpType === "ussd" && otpUssdCode
-                            ? "Composez le code USSD ci-dessous pour obtenir votre OTP."
-                            : "Un code OTP a été envoyé par SMS sur votre téléphone."}
+                            ? t.deposit.otpUssd
+                            : t.deposit.otpSms}
                         </p>
                       </div>
 
@@ -530,7 +532,7 @@ export default function DepositPage() {
                           disabled={otpCode.length < 4 || otpMutation.isPending}
                           data-testid="button-confirm-otp"
                         >
-                          {otpMutation.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Validation…</> : "Confirmer le code OTP"}
+                          {otpMutation.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{t.deposit.otpValidating}</> : t.deposit.otpConfirm}
                         </Button>
                       </div>
 
@@ -545,7 +547,7 @@ export default function DepositPage() {
                       <div className="w-full space-y-1.5">
                         <div className="flex items-center justify-between text-sm">
                           <span className="flex items-center gap-1.5 text-muted-foreground">
-                            <Clock className="w-3.5 h-3.5" /> Expiration
+                            <Clock className="w-3.5 h-3.5" /> {t.deposit.expiration}
                           </span>
                           <span className="font-semibold tabular-nums text-foreground">{countdown}s</span>
                         </div>
@@ -559,7 +561,7 @@ export default function DepositPage() {
 
                       {depositReference && (
                         <div className="w-full bg-muted/30 rounded-lg p-3 text-left">
-                          <p className="text-xs text-muted-foreground">Référence</p>
+                          <p className="text-xs text-muted-foreground">{t.deposit.reference}</p>
                           <div className="flex items-center justify-between gap-2 mt-0.5">
                             <p className="font-mono text-sm font-bold text-foreground">{depositReference}</p>
                             <button
@@ -588,9 +590,9 @@ export default function DepositPage() {
 
                       {/* Title */}
                       <div>
-                        <h3 className="text-xl font-bold text-foreground">Paiement Wave</h3>
+                        <h3 className="text-xl font-bold text-foreground">{t.deposit.waveTitle}</h3>
                         <p className="text-muted-foreground text-sm mt-1">
-                          Ouvrez Wave et confirmez votre paiement, puis revenez sur cette page.
+                          {t.deposit.waveDesc}
                         </p>
                       </div>
 
@@ -611,7 +613,7 @@ export default function DepositPage() {
                       >
                         <Button size="lg" className="bg-blue-600 hover:bg-blue-700 text-white gap-2 w-full max-w-xs">
                           <ExternalLink className="w-5 h-5" />
-                          Payer avec Wave
+                          {t.deposit.waveButton}
                         </Button>
                       </a>
 
@@ -626,7 +628,7 @@ export default function DepositPage() {
                       <div className="w-full space-y-1.5">
                         <div className="flex items-center justify-between text-sm">
                           <span className="flex items-center gap-1.5 text-muted-foreground">
-                            <Clock className="w-3.5 h-3.5" /> Expiration
+                            <Clock className="w-3.5 h-3.5" /> {t.deposit.expiration}
                           </span>
                           <span className="font-semibold tabular-nums text-foreground">{countdown}s</span>
                         </div>
@@ -642,7 +644,7 @@ export default function DepositPage() {
 
                       {depositReference && (
                         <div className="w-full bg-muted/30 rounded-lg p-3 text-left">
-                          <p className="text-xs text-muted-foreground">Référence</p>
+                          <p className="text-xs text-muted-foreground">{t.deposit.reference}</p>
                           <div className="flex items-center justify-between gap-2 mt-0.5">
                             <p className="font-mono text-sm font-bold text-foreground">{depositReference}</p>
                             <button
@@ -711,7 +713,7 @@ export default function DepositPage() {
                       <div className="w-full space-y-1.5">
                         <div className="flex items-center justify-between text-sm">
                           <span className="flex items-center gap-1.5 text-muted-foreground">
-                            <Clock className="w-3.5 h-3.5" /> Expiration
+                            <Clock className="w-3.5 h-3.5" /> {t.deposit.expiration}
                           </span>
                           <span className="font-semibold tabular-nums text-foreground">{countdown}s</span>
                         </div>
@@ -727,7 +729,7 @@ export default function DepositPage() {
 
                       {depositReference && (
                         <div className="bg-muted/30 rounded-lg p-3 w-full text-left">
-                          <p className="text-xs text-muted-foreground">Référence</p>
+                          <p className="text-xs text-muted-foreground">{t.deposit.reference}</p>
                           <div className="flex items-center justify-between gap-2 mt-0.5">
                             <p className="font-mono text-sm font-bold text-foreground">{depositReference}</p>
                             <button

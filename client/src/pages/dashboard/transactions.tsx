@@ -16,37 +16,27 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { formatCurrency } from "@/lib/currency";
 import { useLocation } from "wouter";
 import { useExchangeRates } from "@/hooks/use-exchange-rates";
+import { useLanguage } from "@/lib/language";
 
 const PAGE_SIZE = 25;
 
-const typeLabels: Record<string, string> = {
-  deposit: "Dépôt Mobile Money",
-  withdrawal: "Retrait",
-  transfer_in: "Virement reçu",
-  transfer_out: "Virement envoyé",
-  payment_link: "Lien de paiement",
-  conversion: "Conversion",
-};
-
-const typeFilters = [
-  { value: "all", label: "Tous les types" },
-  { value: "deposit", label: "Dépôts" },
-  { value: "withdrawal", label: "Retraits" },
-  { value: "transfer_in", label: "Reçus" },
-  { value: "transfer_out", label: "Envoyés" },
-  { value: "payment_link", label: "Liens paiement" },
-  { value: "conversion", label: "Conversions" },
-];
-
-function exportToCSV(transactions: Transaction[], user: User | undefined) {
+function exportToCSV(transactions: Transaction[], user: User | undefined, tObj: any) {
   const currency = user?.preferredCurrency || "XAF";
-  const headers = ["Date", "Type", "Montant", "Devise", "Statut", "Référence", "Description"];
+  const tl: Record<string, string> = {
+    deposit: tObj.transactions.typeDeposit,
+    withdrawal: tObj.transactions.typeWithdrawal,
+    transfer_in: tObj.transactions.typeTransferIn,
+    transfer_out: tObj.transactions.typeTransferOut,
+    payment_link: tObj.transactions.typePaymentLink,
+    conversion: tObj.transactions.typeConversion,
+  };
+  const headers = [tObj.transactions.csvDate, tObj.transactions.csvType, tObj.transactions.csvAmount, tObj.transactions.csvCurrency, tObj.transactions.csvStatus, tObj.transactions.csvReference, tObj.transactions.csvDescription];
   const rows = transactions.map(tx => [
     tx.createdAt ? format(new Date(tx.createdAt), "dd/MM/yyyy HH:mm") : "",
-    typeLabels[tx.type] || tx.type,
+    tl[tx.type] || tx.type,
     tx.amount,
     tx.currency || currency,
-    tx.status === "completed" ? "Réussi" : tx.status === "pending" ? "En attente" : tx.status === "failed" ? "Échoué" : tx.status,
+    tx.status === "completed" ? tObj.transactions.csvStatusCompleted : tx.status === "pending" ? tObj.transactions.csvStatusPending : tx.status === "failed" ? tObj.transactions.csvStatusFailed : tx.status,
     tx.reference || "",
     tx.description || "",
   ]);
@@ -68,6 +58,26 @@ export default function TransactionsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
   const { rates } = useExchangeRates();
+  const { t } = useLanguage();
+
+  const typeLabels: Record<string, string> = {
+    deposit: t.transactions.typeDeposit,
+    withdrawal: t.transactions.typeWithdrawal,
+    transfer_in: t.transactions.typeTransferIn,
+    transfer_out: t.transactions.typeTransferOut,
+    payment_link: t.transactions.typePaymentLink,
+    conversion: t.transactions.typeConversion,
+  };
+
+  const typeFilters = [
+    { value: "all", label: t.transactions.allTypes },
+    { value: "deposit", label: t.transactions.typeDeposits },
+    { value: "withdrawal", label: t.transactions.typeWithdrawals },
+    { value: "transfer_in", label: t.transactions.typeReceived },
+    { value: "transfer_out", label: t.transactions.typeSent },
+    { value: "payment_link", label: t.transactions.typePaymentLinks },
+    { value: "conversion", label: t.transactions.typeConversions },
+  ];
 
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const { data: transactions = [], isLoading, refetch, isFetching } = useQuery<Transaction[]>({
@@ -145,14 +155,14 @@ export default function TransactionsPage() {
     return Object.entries(groups).sort(([a], [b]) => b.localeCompare(a));
   }, [paginatedTransactions]);
 
-  const formatDateLabel = (dateKey: string) => {
+  const formatDateLabel = (dateKey: string, tRef: typeof t) => {
     try {
       const date = new Date(dateKey);
       const today = new Date();
       const yesterday = new Date(today);
       yesterday.setDate(yesterday.getDate() - 1);
-      if (format(date, "yyyy-MM-dd") === format(today, "yyyy-MM-dd")) return "Aujourd'hui";
-      if (format(date, "yyyy-MM-dd") === format(yesterday, "yyyy-MM-dd")) return "Hier";
+      if (format(date, "yyyy-MM-dd") === format(today, "yyyy-MM-dd")) return tRef.transactions.today;
+      if (format(date, "yyyy-MM-dd") === format(yesterday, "yyyy-MM-dd")) return tRef.transactions.yesterday;
       return format(date, "d MMMM yyyy", { locale: fr });
     } catch { return dateKey; }
   };
@@ -160,14 +170,14 @@ export default function TransactionsPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "completed":
-        return <Badge className="text-[10px] px-1.5 py-0 bg-green-500/20 text-green-600 border-green-500/30 font-medium">Réussi</Badge>;
+        return <Badge className="text-[10px] px-1.5 py-0 bg-green-500/20 text-green-600 border-green-500/30 font-medium">{t.transactions.statusCompleted}</Badge>;
       case "pending":
       case "pending_manual":
-        return <Badge className="text-[10px] px-1.5 py-0 bg-amber-500/20 text-amber-600 border-amber-500/30 font-medium">En cours</Badge>;
+        return <Badge className="text-[10px] px-1.5 py-0 bg-amber-500/20 text-amber-600 border-amber-500/30 font-medium">{t.transactions.statusPending}</Badge>;
       case "failed":
-        return <Badge className="text-[10px] px-1.5 py-0 bg-red-500/20 text-red-600 border-red-500/30 font-medium">Échoué</Badge>;
+        return <Badge className="text-[10px] px-1.5 py-0 bg-red-500/20 text-red-600 border-red-500/30 font-medium">{t.transactions.statusFailed}</Badge>;
       case "cancelled":
-        return <Badge className="text-[10px] px-1.5 py-0 bg-muted text-muted-foreground font-medium">Annulé</Badge>;
+        return <Badge className="text-[10px] px-1.5 py-0 bg-muted text-muted-foreground font-medium">{t.transactions.statusCancelled}</Badge>;
       default:
         return <Badge className="text-[10px] px-1.5 py-0 bg-muted text-muted-foreground">{status}</Badge>;
     }
@@ -231,20 +241,20 @@ export default function TransactionsPage() {
       <div className="space-y-6">
 
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Transactions</h1>
-          <p className="text-muted-foreground">{transactions.length} transaction{transactions.length !== 1 ? "s" : ""} au total</p>
+          <h1 className="text-2xl font-semibold text-foreground">{t.transactions.title}</h1>
+          <p className="text-muted-foreground">{transactions.length} {transactions.length !== 1 ? t.transactions.totalCountPlural : t.transactions.totalCount}</p>
         </div>
 
         {/* Stats summary */}
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">Résumé{hasActiveFilters ? " (filtré)" : ""}</p>
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">{hasActiveFilters ? t.transactions.summaryFiltered : t.transactions.summaryLabel}</p>
           <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
             <div className="flex items-center justify-between px-4 py-3.5">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-green-500/10 flex items-center justify-center">
                   <TrendingUp className="w-3.5 h-3.5 text-green-500" />
                 </div>
-                <span className="text-sm text-muted-foreground">Total entrant</span>
+                <span className="text-sm text-muted-foreground">{t.transactions.totalIn}</span>
               </div>
               <span className="text-sm font-semibold text-green-500">
                 +{formatCurrency(stats.totalIn, stats.currency, rates)}
@@ -255,7 +265,7 @@ export default function TransactionsPage() {
                 <div className="w-8 h-8 rounded-full bg-red-500/10 flex items-center justify-center">
                   <TrendingDown className="w-3.5 h-3.5 text-red-500" />
                 </div>
-                <span className="text-sm text-muted-foreground">Total sortant</span>
+                <span className="text-sm text-muted-foreground">{t.transactions.totalOut}</span>
               </div>
               <span className="text-sm font-semibold text-red-500">
                 -{formatCurrency(stats.totalOut, stats.currency, rates)}
@@ -266,7 +276,7 @@ export default function TransactionsPage() {
                 <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
                   <Filter className="w-3.5 h-3.5 text-muted-foreground" />
                 </div>
-                <span className="text-sm text-muted-foreground">Résultats affichés</span>
+                <span className="text-sm text-muted-foreground">{t.transactions.displayed}</span>
               </div>
               <span className="text-sm font-semibold">{filteredTransactions.length}</span>
             </div>
@@ -276,7 +286,7 @@ export default function TransactionsPage() {
                   <div className="w-8 h-8 rounded-full bg-amber-500/10 flex items-center justify-center">
                     <Clock className="w-3.5 h-3.5 text-amber-500" />
                   </div>
-                  <span className="text-sm text-muted-foreground">En attente</span>
+                  <span className="text-sm text-muted-foreground">{t.transactions.pendingCount}</span>
                 </div>
                 <span className="text-sm font-semibold text-amber-500">{stats.pendingCount}</span>
               </div>
@@ -286,12 +296,12 @@ export default function TransactionsPage() {
 
         {/* Filters */}
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">Filtres</p>
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">{t.transactions.filtersLabel}</p>
           <div className="space-y-2">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
               <Input
-                placeholder="Rechercher par montant, opérateur, référence..."
+                placeholder={t.transactions.searchPlaceholder}
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 className="pl-9 pr-9 h-9 text-sm"
@@ -322,23 +332,23 @@ export default function TransactionsPage() {
 
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="h-8 w-auto min-w-[140px] text-xs" data-testid="select-filter-status">
-                  <SelectValue placeholder="Tous les statuts" />
+                  <SelectValue placeholder={t.transactions.allStatuses} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Tous les statuts</SelectItem>
-                  <SelectItem value="completed">Réussi</SelectItem>
-                  <SelectItem value="pending">En cours</SelectItem>
-                  <SelectItem value="failed">Échoué</SelectItem>
-                  <SelectItem value="cancelled">Annulé</SelectItem>
+                  <SelectItem value="all">{t.transactions.allStatuses}</SelectItem>
+                  <SelectItem value="completed">{t.transactions.statusCompleted}</SelectItem>
+                  <SelectItem value="pending">{t.transactions.statusPending}</SelectItem>
+                  <SelectItem value="failed">{t.transactions.statusFailed}</SelectItem>
+                  <SelectItem value="cancelled">{t.transactions.statusCancelled}</SelectItem>
                 </SelectContent>
               </Select>
 
               <Select value={currencyFilter} onValueChange={setCurrencyFilter}>
                 <SelectTrigger className="h-8 w-auto min-w-[120px] text-xs" data-testid="select-filter-currency">
-                  <SelectValue placeholder="Devise" />
+                  <SelectValue placeholder={t.transactions.allCurrencies} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Toutes devises</SelectItem>
+                  <SelectItem value="all">{t.transactions.allCurrencies}</SelectItem>
                   {availableCurrencies.map(c => (
                     <SelectItem key={c} value={c}>{c}</SelectItem>
                   ))}
@@ -349,24 +359,24 @@ export default function TransactionsPage() {
                 {hasActiveFilters && (
                   <Button variant="ghost" size="sm" className="h-8 text-xs gap-1.5 text-muted-foreground" onClick={clearFilters} data-testid="button-clear-filters">
                     <X className="w-3.5 h-3.5" />
-                    Effacer
+                    {t.transactions.clearFilters}
                   </Button>
                 )}
                 <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={() => refetch()} disabled={isFetching} data-testid="button-refresh-transactions">
                   <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? "animate-spin" : ""}`} />
                   {isFetching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-                  Actualiser
+                  {t.transactions.refresh}
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
                   className="h-8 text-xs gap-1.5"
-                  onClick={() => exportToCSV(filteredTransactions, user)}
+                  onClick={() => exportToCSV(filteredTransactions, user, { transactions: t.transactions })}
                   disabled={filteredTransactions.length === 0}
                   data-testid="button-export-csv"
                 >
                   <Download className="w-3.5 h-3.5" />
-                  Export CSV
+                  {t.transactions.exportCsv}
                 </Button>
               </div>
             </div>
@@ -375,19 +385,19 @@ export default function TransactionsPage() {
 
         {/* Transaction list */}
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">Historique</p>
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">{t.transactions.historyLabel}</p>
 
           {filteredTransactions.length === 0 ? (
             <div className="rounded-xl border border-border bg-card">
               <div className="text-center py-16">
                 <Clock className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-                <p className="text-sm font-medium text-foreground mb-1">Aucune transaction trouvée</p>
+                <p className="text-sm font-medium text-foreground mb-1">{t.transactions.noTransaction}</p>
                 <p className="text-xs text-muted-foreground">
-                  {hasActiveFilters ? "Essayez de modifier les filtres" : "Vos transactions apparaîtront ici"}
+                  {hasActiveFilters ? t.transactions.noTransactionFiltered : t.transactions.noTransactionHint}
                 </p>
                 {hasActiveFilters && (
                   <button onClick={clearFilters} className="mt-3 text-xs text-primary font-semibold hover:underline" type="button">
-                    Effacer les filtres
+                    {t.transactions.clearFiltersLink}
                   </button>
                 )}
               </div>
@@ -397,7 +407,7 @@ export default function TransactionsPage() {
               {groupedByDate.map(([dateKey, txs]) => (
                 <div key={dateKey}>
                   <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
-                    {formatDateLabel(dateKey)}
+                    {formatDateLabel(dateKey, t)}
                   </p>
                   <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
                     {txs.map((tx) => {
@@ -444,8 +454,8 @@ export default function TransactionsPage() {
                 <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
                   <div className="flex items-center justify-between px-4 py-3">
                     <span className="text-sm text-muted-foreground">
-                      Page <span className="font-semibold text-foreground">{page}</span> sur <span className="font-semibold text-foreground">{totalPages}</span>
-                      <span className="ml-2 text-xs">({filteredTransactions.length} résultats)</span>
+                      {t.transactions.page} <span className="font-semibold text-foreground">{page}</span> {t.transactions.of} <span className="font-semibold text-foreground">{totalPages}</span>
+                      <span className="ml-2 text-xs">({filteredTransactions.length} {t.transactions.results})</span>
                     </span>
                     <div className="flex items-center gap-2">
                       <Button
@@ -457,7 +467,7 @@ export default function TransactionsPage() {
                         data-testid="button-page-prev"
                       >
                         <ChevronLeft className="w-4 h-4" />
-                        Précédent
+                        {t.transactions.previous}
                       </Button>
                       <Button
                         variant="outline"
@@ -467,7 +477,7 @@ export default function TransactionsPage() {
                         disabled={page === totalPages}
                         data-testid="button-page-next"
                       >
-                        Suivant
+                        {t.transactions.next}
                         <ChevronRight className="w-4 h-4" />
                       </Button>
                     </div>

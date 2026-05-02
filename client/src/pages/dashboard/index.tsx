@@ -43,16 +43,7 @@ import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Link } from "wouter";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-
-
-const periodOptions = [
-  { value: "today", label: "Aujourd'hui" },
-  { value: "week", label: "Cette semaine" },
-  { value: "month", label: "Ce mois-ci" },
-  { value: "last_month", label: "Mois dernier" },
-  { value: "year", label: "Cette année" },
-  { value: "all", label: "Tout" },
-];
+import { useLanguage } from "@/lib/language";
 
 interface UserStats {
   totalReceived: string;
@@ -535,6 +526,16 @@ export default function DashboardHome() {
   const [selectedPeriod, setSelectedPeriod] = useState("month");
   const [selectedLink, setSelectedLink] = useState("all");
   const { rates } = useExchangeRates();
+  const { t } = useLanguage();
+
+  const periodOptions = [
+    { value: "today", label: t.dashboard.periodToday },
+    { value: "week", label: t.dashboard.periodWeek },
+    { value: "month", label: t.dashboard.periodMonth },
+    { value: "last_month", label: t.dashboard.periodLastMonth },
+    { value: "year", label: t.dashboard.periodYear },
+    { value: "all", label: t.dashboard.periodAll },
+  ];
 
   const { data: depositConfig } = useQuery<any>({ queryKey: ["/api/public/deposit-config"] });
 
@@ -648,8 +649,8 @@ export default function DashboardHome() {
     <DashboardLayout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Tableau de bord</h1>
-          <p className="text-muted-foreground">Bienvenue, {user?.fullName}</p>
+          <h1 className="text-2xl font-semibold text-foreground">{t.dashboard.title}</h1>
+          <p className="text-muted-foreground">{t.dashboard.welcome}, {user?.fullName}</p>
         </div>
 
         <Card className="bg-gradient-to-br from-primary/20 via-primary/10 to-transparent border-primary/20 overflow-hidden">
@@ -657,7 +658,7 @@ export default function DashboardHome() {
             <div className="flex flex-col gap-6">
               <div className="flex items-center justify-between gap-4">
                 <div className="flex-1 min-w-0">
-                  <p className="text-muted-foreground text-sm mb-1">Solde Principal ({user?.preferredCurrency || "XAF"})</p>
+                  <p className="text-muted-foreground text-sm mb-1">{t.dashboard.mainBalance} ({user?.preferredCurrency || "XAF"})</p>
                   {(() => {
                     const cur = user?.preferredCurrency || "XAF";
                     const num = parseFloat(user?.balance || "0.00");
@@ -681,7 +682,7 @@ export default function DashboardHome() {
                     data-testid="button-wallets"
                   >
                     <Wallet className="w-4 h-4" />
-                    Comptes
+                    {t.dashboard.accounts}
                   </button>
                   <div className="hidden sm:block">
                     <img
@@ -714,12 +715,12 @@ export default function DashboardHome() {
         </Card>
 
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">Actions rapides</p>
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">{t.dashboard.quickActions}</p>
           <div className="grid grid-cols-2 gap-3">
-            <QuickActionCard icon={CreditCard} label="Dépôt" color="bg-green-500/10 text-green-500" onClick={() => setLocation("/dashboard/deposit")} testId="button-action-deposit" />
-            <QuickActionCard icon={Send} label="Envoyer" color="bg-blue-500/10 text-blue-500" onClick={() => setLocation("/dashboard/send")} testId="button-action-send" />
-            <QuickActionCard icon={ArrowDownUp} label="Retrait" color="bg-orange-500/10 text-orange-500" onClick={() => setLocation("/dashboard/withdraw")} testId="button-action-withdraw" />
-            <QuickActionCard icon={Link2} label="Lien paiement" color="bg-purple-500/10 text-purple-500" onClick={() => setLocation("/dashboard/links")} testId="button-action-link" />
+            <QuickActionCard icon={CreditCard} label={t.dashboard.deposit} color="bg-green-500/10 text-green-500" onClick={() => setLocation("/dashboard/deposit")} testId="button-action-deposit" />
+            <QuickActionCard icon={Send} label={t.dashboard.send} color="bg-blue-500/10 text-blue-500" onClick={() => setLocation("/dashboard/send")} testId="button-action-send" />
+            <QuickActionCard icon={ArrowDownUp} label={t.dashboard.withdraw} color="bg-orange-500/10 text-orange-500" onClick={() => setLocation("/dashboard/withdraw")} testId="button-action-withdraw" />
+            <QuickActionCard icon={Link2} label={t.dashboard.paymentLink} color="bg-purple-500/10 text-purple-500" onClick={() => setLocation("/dashboard/links")} testId="button-action-link" />
           </div>
         </div>
 
@@ -728,10 +729,10 @@ export default function DashboardHome() {
             <Filter className="w-4 h-4 text-muted-foreground" />
             <Select value={selectedLink} onValueChange={setSelectedLink}>
               <SelectTrigger className="w-48" data-testid="select-link-filter">
-                <SelectValue placeholder="Tous les liens" />
+                <SelectValue placeholder={t.dashboard.allLinks} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tous les liens</SelectItem>
+                <SelectItem value="all">{t.dashboard.allLinks}</SelectItem>
                 {paymentLinks.map((link) => (
                   <SelectItem key={link.id} value={link.id}>{link.title}</SelectItem>
                 ))}
@@ -753,29 +754,29 @@ export default function DashboardHome() {
           </div>
         </div>
 
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Vue d'ensemble</p>
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{t.dashboard.overview}</p>
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <StatCard 
-            title="Clics sur les liens" 
+            title={t.dashboard.linkClicks} 
             value={(userStats?.totalClicks || 0).toLocaleString('fr-FR')} 
             icon={MousePointer} 
             color="bg-blue-500/10 text-blue-500"
           />
           <StatCard 
-            title="Transactions" 
+            title={t.dashboard.totalTransactions} 
             value={userStats?.totalTransactions || 0} 
             icon={ArrowDownUp} 
             color="bg-green-500/10 text-green-500"
           />
           <StatCard 
-            title="Total collecté" 
+            title={t.dashboard.totalCollected} 
             value={formatCurrency(parseFloat(userStats?.totalCollected || "0"), (user?.preferredCurrency || "XAF") as SupportedCurrency, rates)} 
             icon={Wallet} 
             color="bg-primary/10 text-primary"
           />
           <StatCard 
-            title="Liens actifs" 
+            title={t.dashboard.activeLinks} 
             value={userStats?.activeLinks || 0}
             icon={Link2} 
             color="bg-purple-500/10 text-purple-500"
@@ -786,12 +787,12 @@ export default function DashboardHome() {
         <div className="grid lg:grid-cols-3 gap-6">
           <Card className="lg:col-span-2">
             <CardHeader className="pb-3">
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Activité</p>
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{t.dashboard.activity}</p>
               <CardTitle className="flex items-center gap-2 text-base">
                 <BarChart3 className="w-4 h-4 text-muted-foreground" />
-                Montants collectés
+                {t.dashboard.collectedAmounts}
               </CardTitle>
-              <CardDescription>Ces 7 derniers jours</CardDescription>
+              <CardDescription>{t.dashboard.last7days}</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="h-72">
@@ -814,32 +815,32 @@ export default function DashboardHome() {
 
           <Card>
             <CardHeader className="pb-3">
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Résumé financier</p>
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{t.dashboard.financialSummary}</p>
               <CardTitle className="flex items-center gap-2 text-base">
                 <TrendingUp className="w-4 h-4 text-muted-foreground" />
-                Statistiques
+                {t.dashboard.statistics}
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               <div className="divide-y divide-border">
                 <div className="flex items-center justify-between px-6 py-3.5">
-                  <span className="text-sm text-muted-foreground">Total reçu</span>
+                  <span className="text-sm text-muted-foreground">{t.dashboard.totalReceived}</span>
                   <span className="text-sm font-semibold text-green-500">
                     {formatCurrency(parseFloat(userStats?.totalReceived || "0"), (user?.preferredCurrency || "XAF") as SupportedCurrency, rates)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between px-6 py-3.5">
-                  <span className="text-sm text-muted-foreground">Total envoyé</span>
+                  <span className="text-sm text-muted-foreground">{t.dashboard.totalSent}</span>
                   <span className="text-sm font-semibold text-red-500">
                     {formatCurrency(parseFloat(userStats?.totalSent || "0"), (user?.preferredCurrency || "XAF") as SupportedCurrency, rates)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between px-6 py-3.5">
-                  <span className="text-sm text-muted-foreground">Ce mois-ci</span>
+                  <span className="text-sm text-muted-foreground">{t.dashboard.thisMonth}</span>
                   <span className="text-sm font-semibold">{userStats?.monthlyTransactions || 0} transactions</span>
                 </div>
                 <div className="flex items-center justify-between px-6 py-3.5">
-                  <span className="text-sm text-muted-foreground">En attente</span>
+                  <span className="text-sm text-muted-foreground">{t.dashboard.pending}</span>
                   <span className="text-sm font-semibold text-orange-500">{userStats?.pendingTransactions || 0}</span>
                 </div>
               </div>
@@ -848,27 +849,27 @@ export default function DashboardHome() {
         </div>
 
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">Activité récente</p>
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">{t.dashboard.recentActivity}</p>
           <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
             <div className="flex items-center justify-between px-4 py-3 bg-muted/30">
               <div className="flex items-center gap-2">
                 <History className="w-4 h-4 text-muted-foreground" />
-                <span className="text-sm font-medium text-foreground">Transactions récentes</span>
+                <span className="text-sm font-medium text-foreground">{t.dashboard.recentTransactions}</span>
               </div>
               <Link href="/dashboard/transactions">
                 <button type="button" className="text-xs text-primary font-semibold flex items-center gap-1 hover:underline" data-testid="button-view-all-transactions">
                   <Eye className="w-3 h-3" />
-                  Tout voir
+                  {t.dashboard.viewAll}
                 </button>
               </Link>
             </div>
             {recentTransactions.length === 0 ? (
-              <p className="text-center py-8 text-sm text-muted-foreground">Aucune transaction</p>
+              <p className="text-center py-8 text-sm text-muted-foreground">{t.dashboard.noTransactions}</p>
             ) : (
               recentTransactions.map((tx) => {
                 const isIncoming = ["deposit", "transfer_in", "payment_link"].includes(tx.type);
-                const typeLabels: Record<string, string> = {
-                  deposit: "Dépôt", withdrawal: "Retrait", transfer_in: "Reçu", transfer_out: "Envoyé", payment_link: "Lien de paiement", conversion: "Conversion"
+                const txTypeLabels: Record<string, string> = {
+                  deposit: t.dashboard.typeDeposit, withdrawal: t.dashboard.typeWithdrawal, transfer_in: t.dashboard.typeTransferIn, transfer_out: t.dashboard.typeTransferOut, payment_link: t.dashboard.typePaymentLink, conversion: t.dashboard.typeConversion
                 };
                 const operatorName = tx.operatorId ? operatorMap[tx.operatorId] : null;
                 const statusColors: Record<string, string> = { completed: "text-green-500", pending: "text-orange-500", failed: "text-red-500" };
@@ -878,7 +879,7 @@ export default function DashboardHome() {
                       {isIncoming ? <TrendingUp className="w-4 h-4 text-green-500" /> : <TrendingDown className="w-4 h-4 text-red-500" />}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-foreground truncate">{typeLabels[tx.type] || tx.type}</p>
+                      <p className="text-sm font-medium text-foreground truncate">{txTypeLabels[tx.type] || tx.type}</p>
                       <p className="text-xs text-muted-foreground">
                         {operatorName && <span className="mr-1">{operatorName} ·</span>}
                         {tx.createdAt ? format(new Date(tx.createdAt), "d MMM, HH:mm", { locale: fr }) : ""}
@@ -889,7 +890,7 @@ export default function DashboardHome() {
                         {isIncoming ? '+' : '-'}{formatCurrency(tx.amount, (user?.preferredCurrency || "XAF") as SupportedCurrency, rates)}
                       </span>
                       <span className={`text-[10px] font-medium uppercase tracking-wide ${statusColors[tx.status] || 'text-muted-foreground'}`}>
-                        {tx.status === "completed" ? "Complété" : tx.status === "pending" ? "En attente" : "Échoué"}
+                        {tx.status === "completed" ? t.dashboard.statusCompleted : tx.status === "pending" ? t.dashboard.statusPending : t.dashboard.statusFailed}
                       </span>
                     </div>
                   </div>
