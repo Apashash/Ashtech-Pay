@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/dashboard-layout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -170,12 +170,9 @@ export default function TransactionsPage() {
   return (
     <DashboardLayout>
       <div className="space-y-4">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base font-semibold">Historique des transactions</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-wrap gap-2 items-center">
+        <div className="space-y-4">
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Historique</p>
+          <div className="flex flex-wrap gap-2 items-center">
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="h-8 w-auto min-w-[140px] text-xs" data-testid="select-filter-status">
                   <SelectValue placeholder="Tous les statuts" />
@@ -223,7 +220,7 @@ export default function TransactionsPage() {
               <div className="space-y-4">
                 {groupedByDate.map(([dateKey, txs]) => (
                   <div key={dateKey}>
-                    <p className="text-xs font-semibold text-primary mb-2 px-1">
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-2 px-1">
                       {formatDateLabel(dateKey)}
                     </p>
                     <div className="rounded-xl border border-border overflow-hidden divide-y divide-border">
@@ -304,9 +301,8 @@ export default function TransactionsPage() {
                 )}
               </div>
             )}
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </div>
 
     </DashboardLayout>
   );

@@ -415,8 +415,9 @@ export default function DepositPage() {
         ) : (
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CreditCard className="w-5 h-5" />
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Dépôt Mobile Money</p>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <CreditCard className="w-4 h-4 text-muted-foreground" />
                 Nouveau dépôt
               </CardTitle>
               <CardDescription>Suivez les étapes pour recharger votre compte</CardDescription>

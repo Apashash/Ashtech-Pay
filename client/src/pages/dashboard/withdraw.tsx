@@ -241,8 +241,12 @@ export default function WithdrawPage() {
 
         <div className="grid md:grid-cols-2 gap-4">
           <Card>
-            <CardHeader className="py-4">
-              <CardTitle className="text-lg">Mode de retrait</CardTitle>
+            <CardHeader className="pt-4 pb-3">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Méthode</p>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Smartphone className="w-4 h-4 text-muted-foreground" />
+                Mode de retrait
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 pb-4">
               {withdrawMethods.map((method) => (
@@ -283,8 +287,12 @@ export default function WithdrawPage() {
           </Card>
 
           <Card>
-            <CardHeader className="py-4">
-              <CardTitle className="text-lg">Détails du retrait</CardTitle>
+            <CardHeader className="pt-4 pb-3">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Formulaire</p>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Wallet className="w-4 h-4 text-muted-foreground" />
+                Détails du retrait
+              </CardTitle>
             </CardHeader>
             <CardContent className="pb-4">
               <Form {...form}>
