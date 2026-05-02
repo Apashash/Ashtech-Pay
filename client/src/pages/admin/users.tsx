@@ -512,7 +512,7 @@ export default function AdminUsers() {
                   <TableHead className="min-w-[140px]">Utilisateur</TableHead>
                   <TableHead className="min-w-[160px]">Contact</TableHead>
                   <TableHead className="min-w-[70px]">Pays</TableHead>
-                  <TableHead className="min-w-[100px]">Solde</TableHead>
+                  <TableHead className="min-w-[130px]">Solde total XAF</TableHead>
                   <TableHead className="min-w-[110px]">Statut</TableHead>
                   <TableHead className="min-w-[80px]">Rôle</TableHead>
                   <TableHead className="min-w-[100px]">Inscrit le</TableHead>
@@ -548,10 +548,16 @@ export default function AdminUsers() {
                         </div>
                       </TableCell>
                       <TableCell className="text-sm">{user.country || "-"}</TableCell>
-                      <TableCell className="font-medium text-sm whitespace-nowrap">
+                      <TableCell className="whitespace-nowrap">
                         <div>
-                          <p>{(user.totalBalanceXAF ?? 0).toLocaleString("fr-FR")} XAF</p>
-                          <p className="text-xs text-muted-foreground">≈ tout wallets</p>
+                          <p className={`font-semibold text-sm ${(user.totalBalanceXAF ?? 0) > 0 ? "text-green-500" : "text-muted-foreground"}`}>
+                            {formatCurrency(user.totalBalanceXAF ?? 0, "XAF")}
+                          </p>
+                          {(user.totalBalanceXAF ?? 0) > 0 && parseFloat(user.balance) > 0 && user.preferredCurrency !== "XAF" && (
+                            <p className="text-xs text-muted-foreground">
+                              {formatCurrency(parseFloat(user.balance), user.preferredCurrency)}
+                            </p>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell>
