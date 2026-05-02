@@ -85,30 +85,36 @@ import { formatCurrency, formatWalletBalance } from "@/lib/currency";
 import { useExchangeRates } from "@/hooks/use-exchange-rates";
 import type { SupportedCurrency } from "@shared/schema";
 import { COUNTRY_CURRENCIES } from "@shared/schema";
+import { useLanguage } from "@/lib/language";
+import { LanguageSwitcher } from "@/components/language-switcher";
 
-const menuItems = [
-  { title: "Tableau de bord", url: "/dashboard", icon: LayoutDashboard },
-  { title: "Mes liens", url: "/dashboard/links", icon: Link2 },
-  { title: "Transactions", url: "/dashboard/transactions", icon: History },
-  { title: "Dépôt", url: "/dashboard/deposit", icon: CreditCard },
-  { title: "Retrait", url: "/dashboard/withdraw", icon: Wallet },
-  { title: "Envoyer", url: "/dashboard/send", icon: Send },
-  { title: "Comptes", url: "/dashboard/wallets", icon: Coins },
-];
+const MENU_URLS = [
+  { key: "dashboard", url: "/dashboard", icon: LayoutDashboard },
+  { key: "links", url: "/dashboard/links", icon: Link2 },
+  { key: "transactions", url: "/dashboard/transactions", icon: History },
+  { key: "deposit", url: "/dashboard/deposit", icon: CreditCard },
+  { key: "withdraw", url: "/dashboard/withdraw", icon: Wallet },
+  { key: "send", url: "/dashboard/send", icon: Send },
+  { key: "wallets", url: "/dashboard/wallets", icon: Coins },
+] as const;
 
-const settingsItems = [
-  { title: "KYC", url: "/dashboard/kyc", icon: Shield },
-  { title: "Support", url: "/dashboard/support", icon: Headphones },
-  { title: "Clés API", url: "/dashboard/api-keys", icon: Key },
-  { title: "Paramètres", url: "/dashboard/settings", icon: Settings },
-  { title: "Frais", url: "/dashboard/fee-details", icon: Receipt },
-];
+const SETTINGS_URLS = [
+  { key: "kyc", url: "/dashboard/kyc", icon: Shield },
+  { key: "support", url: "/dashboard/support", icon: Headphones },
+  { key: "apiKeys", url: "/dashboard/api-keys", icon: Key },
+  { key: "settings", url: "/dashboard/settings", icon: Settings },
+  { key: "fees", url: "/dashboard/fee-details", icon: Receipt },
+] as const;
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
   const { toast } = useToast();
   const [showKycUpdateDialog, setShowKycUpdateDialog] = useState(false);
   const { rates } = useExchangeRates();
+  const { t } = useLanguage();
+
+  const menuItems = MENU_URLS.map(item => ({ title: t.sidebar[item.key], url: item.url, icon: item.icon }));
+  const settingsItems = SETTINGS_URLS.map(item => ({ title: t.sidebar[item.key], url: item.url, icon: item.icon }));
 
   const { data: user, isLoading } = useQuery<User>({
     queryKey: ["/api/user"],
@@ -350,7 +356,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           <SidebarContent>
             <SidebarGroup>
               <div className="px-4 py-3 mx-2 my-2 bg-primary/10 rounded-lg border border-primary/20">
-                <p className="text-xs text-muted-foreground mb-1">Solde disponible</p>
+                <p className="text-xs text-muted-foreground mb-1">{t.sidebar.availableBalance}</p>
                 <p className="text-lg font-bold text-primary" data-testid="text-sidebar-balance">
                   {formatWalletBalance(sidebarBalance, preferredCurrency)}
                 </p>
@@ -358,7 +364,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             </SidebarGroup>
 
             <SidebarGroup>
-              <SidebarGroupLabel>Menu Principal</SidebarGroupLabel>
+              <SidebarGroupLabel>{t.sidebar.mainMenu}</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
                   {menuItems.map((item) => (
@@ -376,7 +382,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             </SidebarGroup>
 
             <SidebarGroup>
-              <SidebarGroupLabel>Paramètres & Support</SidebarGroupLabel>
+              <SidebarGroupLabel>{t.sidebar.settingsSupport}</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
                   {settingsItems.map((item) => {
@@ -394,7 +400,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                             <item.icon className="w-4 h-4" />
                             <span className="flex-1">{item.title}</span>
                             <Badge className="ml-auto bg-green-500 text-white h-5 px-1.5 text-xs">
-                              Vérifié
+                              {t.sidebar.verified}
                             </Badge>
                           </SidebarMenuButton>
                         </SidebarMenuItem>
@@ -440,14 +446,14 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
             {(user.role === "admin" || user.role === "support" || user.role === "finance") && (
               <SidebarGroup>
-                <SidebarGroupLabel>Administration</SidebarGroupLabel>
+                <SidebarGroupLabel>{t.sidebar.administration}</SidebarGroupLabel>
                 <SidebarGroupContent>
                   <SidebarMenu>
                     <SidebarMenuItem>
                       <SidebarMenuButton asChild isActive={location.startsWith("/admin")}>
                         <Link href="/admin">
                           <Shield className="w-4 h-4" />
-                          <span>Panel Admin</span>
+                          <span>{t.sidebar.adminPanel}</span>
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -474,7 +480,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               data-testid="button-logout"
             >
               <LogOut className="w-4 h-4 mr-2" />
-              Déconnexion
+              {t.sidebar.logout}
             </Button>
           </SidebarFooter>
         </Sidebar>
@@ -482,7 +488,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         <div className="flex flex-col flex-1 min-w-0">
           <header className="sticky top-0 z-40 flex items-center justify-between h-14 px-4 border-b border-border bg-background/80 backdrop-blur-md">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <LanguageSwitcher variant="compact" />
               {activeGlobalMessages.length > 0 && (
                 <Button
                   variant="ghost"
@@ -516,7 +523,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                   <div className="p-3 border-b border-border flex items-center justify-between">
                     <h4 className="font-semibold flex items-center gap-2">
                       <Bell className="w-4 h-4 text-primary" />
-                      Notifications
+                      {t.notifications.title}
                     </h4>
                     {(notificationData?.unreadCount || 0) > 0 && (
                       <Button
@@ -527,7 +534,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                         data-testid="button-mark-all-read"
                       >
                         <CheckCheck className="w-3 h-3 mr-1" />
-                        Tout lire
+                        {t.notifications.markAllRead}
                       </Button>
                     )}
                     {(notificationData?.notifications && notificationData.notifications.length > 0) && (
@@ -546,7 +553,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                   <ScrollArea className="max-h-80">
                     {(!notificationData?.notifications || notificationData.notifications.length === 0) ? (
                       <div className="p-4 text-center text-muted-foreground text-sm">
-                        Aucune notification
+                        {t.notifications.noNotifications}
                       </div>
                     ) : (
                       <div className="divide-y divide-border">

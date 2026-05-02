@@ -46,6 +46,8 @@ import globalReachImage from "@assets/IMG_0060_1775398589785.jpeg";
 import { useState, useEffect, useRef } from "react";
 import { useTheme } from "@/components/theme-provider";
 import { useScrollAnimation } from "@/hooks/use-scroll-animation";
+import { useLanguage } from "@/lib/language";
+import { LanguageSwitcher } from "@/components/language-switcher";
 
 
 const paymentMethods = [
@@ -86,40 +88,41 @@ const countries = [
 
 function Navbar() {
   const { theme, toggleTheme } = useTheme();
+  const { t } = useLanguage();
   const [menuOpen, setMenuOpen] = useState(false);
 
   const menuGroups = [
     {
-      title: "Compte",
+      title: t.nav.account,
       items: [
-        { label: "Se connecter", href: "/login", icon: LogIn },
-        { label: "Créer un compte", href: "/register", icon: UserPlus },
+        { label: t.nav.login, href: "/login", icon: LogIn },
+        { label: t.nav.register, href: "/register", icon: UserPlus },
       ],
     },
     {
-      title: "Ressources",
+      title: t.nav.resources,
       items: [
-        { label: "Centre d'aide", href: "/help", icon: HelpCircle },
-        { label: "FAQ", href: "/faq", icon: MessageCircleQuestion },
-        { label: "Blog", href: "/blog", icon: BookOpen },
-        { label: "Contact", href: "/contact", icon: Mail },
-        { label: "Documentation API", href: "/docs/api", icon: Terminal },
-        { label: "Documentation Hosted Page", href: "/docs/hosted-page", icon: Code2 },
+        { label: t.nav.help, href: "/help", icon: HelpCircle },
+        { label: t.nav.faq, href: "/faq", icon: MessageCircleQuestion },
+        { label: t.nav.blog, href: "/blog", icon: BookOpen },
+        { label: t.nav.contact, href: "/contact", icon: Mail },
+        { label: t.nav.apiDocs, href: "/docs/api", icon: Terminal },
+        { label: t.nav.hostedDocs, href: "/docs/hosted-page", icon: Code2 },
       ],
     },
     {
-      title: "À propos",
+      title: t.nav.about,
       items: [
-        { label: "À propos", href: "/about", icon: Info },
-        { label: "Carrières", href: "/careers", icon: Briefcase },
+        { label: t.nav.about_link, href: "/about", icon: Info },
+        { label: t.nav.careers, href: "/careers", icon: Briefcase },
       ],
     },
     {
-      title: "Légal",
+      title: t.nav.legal,
       items: [
-        { label: "Conditions d'utilisation", href: "/terms", icon: Terms },
-        { label: "Politique de confidentialité", href: "/privacy", icon: ShieldCheck },
-        { label: "Mentions légales", href: "/legal", icon: Scale },
+        { label: t.nav.terms, href: "/terms", icon: Terms },
+        { label: t.nav.privacy, href: "/privacy", icon: ShieldCheck },
+        { label: t.nav.legalNotice, href: "/legal", icon: Scale },
       ],
     },
   ];
@@ -135,7 +138,8 @@ function Navbar() {
               </div>
             </Link>
             
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <LanguageSwitcher />
               <button
                 onClick={toggleTheme}
                 className="p-2 rounded-full hover:bg-accent transition-colors"
@@ -169,11 +173,11 @@ function Navbar() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-              <span className="font-semibold text-base text-foreground">Menu</span>
+              <span className="font-semibold text-base text-foreground">{t.nav.menu}</span>
               <button
                 onClick={() => setMenuOpen(false)}
                 className="p-1.5 rounded-lg hover:bg-accent transition-colors"
-                aria-label="Fermer le menu"
+                aria-label={t.nav.close}
               >
                 <X className="w-4 h-4 text-foreground" />
               </button>
