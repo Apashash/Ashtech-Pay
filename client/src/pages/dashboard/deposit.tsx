@@ -57,15 +57,15 @@ const depositFormSchema = z.object({
 
 type DepositFormData = z.infer<typeof depositFormSchema>;
 
-const STEPS_FR = [
-  { id: 1, title: "Montant", description: "Entrez le montant" },
-  { id: 2, title: "Pays & Opérateur", description: "Sélectionnez votre pays" },
-  { id: 3, title: "Confirmation", description: "Vérifiez et validez" },
-];
-
 export default function DepositPage() {
   const { toast } = useToast();
   const { t } = useLanguage();
+
+  const STEPS = [
+    { id: 1, title: t.deposit.stepAmount, description: t.deposit.stepAmountDesc },
+    { id: 2, title: t.deposit.stepCountry, description: t.deposit.stepCountryDesc },
+    { id: 3, title: t.deposit.stepConfirm, description: t.deposit.stepConfirmDesc },
+  ];
   const [currentStep, setCurrentStep] = useState(1);
   const [showValidationMessage, setShowValidationMessage] = useState(false);
   const [depositReference, setDepositReference] = useState("");
