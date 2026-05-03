@@ -364,6 +364,15 @@ const translations = {
       detailStatusFailed: "Échoué",
       detailStatusCancelled: "Annulé",
     },
+    feePage: {
+      title: "Grille des frais",
+      subtitle: "Frais mis à jour en temps réel. Cliquez sur un pays pour voir le détail par opérateur.",
+      byCountry: "Frais par pays",
+      defaultBadge: "défaut",
+      typeDeposit: "Dépôt",
+      typeWithdrawal: "Retrait",
+      typeTransfer: "Transfert",
+    },
     deposit: {
       title: "Recharger mon compte",
       subtitle: "Ajoutez de l'argent à votre portefeuille via Mobile Money",
@@ -1529,6 +1538,15 @@ const translations = {
       detailStatusPending: "In progress",
       detailStatusFailed: "Failed",
       detailStatusCancelled: "Cancelled",
+    },
+    feePage: {
+      title: "Fee schedule",
+      subtitle: "Fees updated in real time. Click a country to see details by operator.",
+      byCountry: "Fees by country",
+      defaultBadge: "default",
+      typeDeposit: "Deposit",
+      typeWithdrawal: "Withdrawal",
+      typeTransfer: "Transfer",
     },
     deposit: {
       title: "Top up my account",

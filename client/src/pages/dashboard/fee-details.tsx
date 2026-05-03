@@ -14,6 +14,7 @@ import {
   Building2,
 } from "lucide-react";
 import { useState } from "react";
+import { useLanguage } from "@/lib/language";
 
 interface PublicOperator {
   id: string;
@@ -34,38 +35,40 @@ function fmtMin(fee: Fee | null | undefined, currency?: string): string | null {
   return `min ${parseFloat(fee.minFee).toLocaleString()} ${currency || ""}`.trim();
 }
 
-const TX_TYPES = [
-  {
-    key: "deposit",
-    label: "Dépôt",
-    icon: ArrowDownCircle,
-    color: "text-green-500",
-    bg: "bg-green-500/10",
-    border: "border-green-500/20",
-    badgeCls: "border-green-500/30 text-green-700 dark:text-green-400",
-  },
-  {
-    key: "withdrawal",
-    label: "Retrait",
-    icon: ArrowUpCircle,
-    color: "text-orange-500",
-    bg: "bg-orange-500/10",
-    border: "border-orange-500/20",
-    badgeCls: "border-orange-500/30 text-orange-700 dark:text-orange-400",
-  },
-  {
-    key: "transfer",
-    label: "Transfert",
-    icon: ArrowLeftRight,
-    color: "text-blue-500",
-    bg: "bg-blue-500/10",
-    border: "border-blue-500/20",
-    badgeCls: "border-blue-500/30 text-blue-700 dark:text-blue-400",
-  },
-] as const;
-
 export default function FeeDetailsPage() {
   const [openCountry, setOpenCountry] = useState<string | null>(null);
+  const { t } = useLanguage();
+  const fp = t.feePage;
+
+  const TX_TYPES = [
+    {
+      key: "deposit",
+      label: fp.typeDeposit,
+      icon: ArrowDownCircle,
+      color: "text-green-500",
+      bg: "bg-green-500/10",
+      border: "border-green-500/20",
+      badgeCls: "border-green-500/30 text-green-700 dark:text-green-400",
+    },
+    {
+      key: "withdrawal",
+      label: fp.typeWithdrawal,
+      icon: ArrowUpCircle,
+      color: "text-orange-500",
+      bg: "bg-orange-500/10",
+      border: "border-orange-500/20",
+      badgeCls: "border-orange-500/30 text-orange-700 dark:text-orange-400",
+    },
+    {
+      key: "transfer",
+      label: fp.typeTransfer,
+      icon: ArrowLeftRight,
+      color: "text-blue-500",
+      bg: "bg-blue-500/10",
+      border: "border-blue-500/20",
+      badgeCls: "border-blue-500/30 text-blue-700 dark:text-blue-400",
+    },
+  ] as const;
 
   const { data: fees = [], isLoading } = useQuery<Fee[]>({
     queryKey: ["/api/public/fees"],
@@ -116,18 +119,17 @@ export default function FeeDetailsPage() {
       <div className="space-y-8 pb-10 max-w-3xl mx-auto">
         <div>
           <h1 className="text-2xl font-semibold text-foreground" data-testid="text-fees-title">
-            Grille des frais
+            {fp.title}
           </h1>
           <p className="text-muted-foreground mt-2">
-            Frais mis à jour en temps réel. Cliquez sur un pays pour voir le détail par opérateur.
+            {fp.subtitle}
           </p>
         </div>
 
-        {/* Per-country section */}
         {countriesWithFees.length > 0 && (
           <div className="space-y-3">
             <h2 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground px-1">
-              Frais par pays
+              {fp.byCountry}
             </h2>
             <div className="space-y-2">
               {countriesWithFees.map(country => {
@@ -140,7 +142,6 @@ export default function FeeDetailsPage() {
                     className="border border-border overflow-hidden"
                     data-testid={`card-country-${country.id}`}
                   >
-                    {/* Country header — clickable */}
                     <button
                       className="w-full text-left"
                       onClick={() => setOpenCountry(isOpen ? null : country.id)}
@@ -156,7 +157,6 @@ export default function FeeDetailsPage() {
                         </div>
 
                         <div className="flex items-center gap-2">
-                          {/* Fee summary badges */}
                           <div className="hidden sm:flex items-center gap-1.5">
                             {TX_TYPES.map(({ key, label, badgeCls }) => {
                               const fee = resolvedFee(key, country.id);
@@ -182,7 +182,6 @@ export default function FeeDetailsPage() {
                       </div>
                     </button>
 
-                    {/* Expanded detail */}
                     {isOpen && (
                       <div className="border-t border-border">
                         {TX_TYPES.map(({ key, label, icon: Icon, color, bg, border, badgeCls }) => {
@@ -201,16 +200,15 @@ export default function FeeDetailsPage() {
                           );
 
                           return (
-                            <div key={key} className={`border-b border-border last:border-0`}>
-                              {/* Transaction type header */}
+                            <div key={key} className="border-b border-border last:border-0">
                               <div className={`flex items-center justify-between px-5 py-3 ${bg}`}>
                                 <div className="flex items-center gap-2">
-                                  <div className={`w-6 h-6 rounded-md flex items-center justify-center bg-white/60 dark:bg-black/20`}>
+                                  <div className="w-6 h-6 rounded-md flex items-center justify-center bg-white/60 dark:bg-black/20">
                                     <Icon className={`w-3.5 h-3.5 ${color}`} />
                                   </div>
                                   <span className="text-sm font-semibold">{label}</span>
                                   {isGlobalFallback && (
-                                    <Badge variant="secondary" className="text-xs py-0 h-5">défaut</Badge>
+                                    <Badge variant="secondary" className="text-xs py-0 h-5">{fp.defaultBadge}</Badge>
                                   )}
                                 </div>
                                 <div className="flex items-center gap-2">
@@ -225,10 +223,8 @@ export default function FeeDetailsPage() {
                                 </div>
                               </div>
 
-                              {/* Per-operator rows */}
                               {countryOperators.length > 0 && (
                                 <div className="divide-y divide-border/60">
-                                  {/* Operators with specific fees */}
                                   {opsWithFee.map(op => {
                                     const opFee = getOperatorFee(key, op.id)!;
                                     return (
@@ -258,7 +254,6 @@ export default function FeeDetailsPage() {
                                       </div>
                                     );
                                   })}
-                                  {/* Operators using country/global fee */}
                                   {opsDefault.map(op => (
                                     <div
                                       key={op.id}
