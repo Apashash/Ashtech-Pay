@@ -33,8 +33,8 @@ interface OperatorConfig {
   afribapayFee?: number;
   pixpayFee?: number;
   ashtechMargin?: number;
-  pixpayOperatorType?: string; // 'ussd' | 'otp' | 'wave'
-  otpUssdCode?: string | null; // USSD code to dial to get OTP (PixPay Orange CI/SN/ML/BF)
+  pixpayOperatorType?: string;
+  otpUssdCode?: string | null;
   minFee: number | null;
   maxFee: number | null;
 }
@@ -48,10 +48,10 @@ interface CountryConfig {
 }
 
 const depositFormSchema = z.object({
-  countryId: z.string().min(1, "Veuillez sélectionner un pays"),
-  operatorId: z.string().min(1, "Veuillez sélectionner un opérateur"),
-  phoneNumber: z.string().min(8, "Numéro de téléphone invalide"),
-  amount: z.string().min(1, "Montant requis").refine(v => parseFloat(v) > 0, "Le montant doit être supérieur à 0"),
+  countryId: z.string().min(1),
+  operatorId: z.string().min(1),
+  phoneNumber: z.string().min(8),
+  amount: z.string().min(1).refine(v => parseFloat(v) > 0),
   description: z.string().optional(),
 });
 
@@ -117,9 +117,7 @@ export default function DepositPage() {
 
   const feeCalculation = useMemo(() => {
     const amount = parseFloat(watchedAmount) || 0;
-    if (amount <= 0 || !selectedOperator) {
-      return null;
-    }
+    if (amount <= 0 || !selectedOperator) return null;
 
     const provider = selectedOperator.paymentProvider || "swychr";
     const isAfribaPay = provider === "afribapay";
@@ -146,25 +144,12 @@ export default function DepositPage() {
       } else if (fixedFee > 0) {
         fee = fixedFee;
       }
-      if (selectedOperator.minFee !== null && fee < (selectedOperator.minFee ?? 0)) {
-        fee = selectedOperator.minFee ?? 0;
-      }
-      if (selectedOperator.maxFee !== null && fee > (selectedOperator.maxFee ?? Infinity)) {
-        fee = selectedOperator.maxFee ?? fee;
-      }
+      if (selectedOperator.minFee !== null && fee < (selectedOperator.minFee ?? 0)) fee = selectedOperator.minFee ?? 0;
+      if (selectedOperator.maxFee !== null && fee > (selectedOperator.maxFee ?? Infinity)) fee = selectedOperator.maxFee ?? fee;
     }
 
     const creditedAmount = amount - fee;
-
-    return {
-      amount,
-      fee,
-      creditedAmount: creditedAmount > 0 ? creditedAmount : 0,
-      feePercentage,
-      fixedFee: selectedOperator.fixedFee || 0,
-      isAfribaPay,
-      isPixPay,
-    };
+    return { amount, fee, creditedAmount: creditedAmount > 0 ? creditedAmount : 0, feePercentage, fixedFee: selectedOperator.fixedFee || 0, isAfribaPay, isPixPay };
   }, [watchedAmount, selectedOperator]);
 
   useEffect(() => {
@@ -240,9 +225,7 @@ export default function DepositPage() {
     if (pollingRef.current) clearInterval(pollingRef.current);
     setPaymentStatus("failed");
     if (depositReference) {
-      try {
-        await apiRequest("POST", `/api/transactions/cancel/${depositReference}`, {});
-      } catch {}
+      try { await apiRequest("POST", `/api/transactions/cancel/${depositReference}`, {}); } catch {}
     }
     setIsCancelling(false);
   };
@@ -260,19 +243,12 @@ export default function DepositPage() {
         phoneNumber: data.phoneNumber,
         description: data.description,
       };
-      // For PixPay OTP operators, include the OTP code in the initial call
-      if (isPixPayOtp && pixpayOtpCode) {
-        payload.pixpayOtp = pixpayOtpCode;
-      }
+      if (isPixPayOtp && pixpayOtpCode) payload.pixpayOtp = pixpayOtpCode;
       const res = await apiRequest("POST", "/api/deposits", payload);
       return res.json();
     },
     onSuccess: (data) => {
-      if (data.checkoutUrl) {
-        window.location.href = data.checkoutUrl;
-        return;
-      }
-      
+      if (data.checkoutUrl) { window.location.href = data.checkoutUrl; return; }
       const ref = data.reference || data.transaction?.reference || "";
       setShowValidationMessage(true);
       setDepositReference(ref);
@@ -281,63 +257,46 @@ export default function DepositPage() {
       setWaveUrl(null);
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
-
       if (data.waveUrl) {
-        // Wave flow: show Wave link, start polling in background
         setWaveUrl(data.waveUrl);
         setOtpRequired(false);
         startDepositPolling(ref);
       } else if (data.otpRequired) {
-        // OTP flow: wait for user to enter OTP before polling
         setOtpRequired(true);
         setOtpType(data.otpType || "api");
         setOtpUssdCode(data.ussdCode || "");
       } else {
-        // USSD flow: start countdown + polling immediately
         setOtpRequired(false);
         startDepositPolling(ref);
       }
     },
     onError: (error: Error) => {
-      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+      toast({ title: t.deposit.toastError, description: error.message, variant: "destructive" });
     },
   });
 
   const otpMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/deposits/confirm-otp", {
-        ref: depositReference,
-        otpCode,
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.message || "Code OTP invalide");
-      }
+      const res = await apiRequest("POST", "/api/deposits/confirm-otp", { ref: depositReference, otpCode });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.message || "Code OTP invalide"); }
       return res.json();
     },
     onSuccess: () => {
       setOtpRequired(false);
-      toast({ title: "OTP validé", description: "Paiement en cours de traitement…" });
+      toast({ title: t.deposit.otpValidated, description: t.deposit.otpProcessing });
       startDepositPolling(depositReference);
     },
     onError: (error: Error) => {
-      toast({ title: "Erreur OTP", description: error.message, variant: "destructive" });
+      toast({ title: t.deposit.otpErrorTitle, description: error.message, variant: "destructive" });
     },
   });
 
-  // Cleanup on unmount only
   useEffect(() => {
     return () => {
       if (countdownRef.current) clearInterval(countdownRef.current);
       if (pollingRef.current) clearInterval(pollingRef.current);
     };
   }, []);
-
-  const formatCountdown = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
 
   const handleSubmit = (data: DepositFormData) => {
     setPendingDepositData(data);
@@ -351,10 +310,7 @@ export default function DepositPage() {
     depositMutation.mutate(pendingDepositData);
   };
 
-  const canProceedToStep2 = useMemo(() => {
-    const amount = parseFloat(watchedAmount) || 0;
-    return amount > 0;
-  }, [watchedAmount]);
+  const canProceedToStep2 = useMemo(() => (parseFloat(watchedAmount) || 0) > 0, [watchedAmount]);
 
   const canProceedToStep3 = useMemo(() => {
     if (!watchedCountryId || !watchedOperatorId) return false;
@@ -363,24 +319,12 @@ export default function DepositPage() {
   }, [watchedCountryId, watchedOperatorId, selectedCountry]);
 
   const goToNextStep = async () => {
-    if (currentStep === 1) {
-      const isValid = await form.trigger(["amount"]);
-      if (!isValid) return;
-    }
-    if (currentStep === 2) {
-      const isValid = await form.trigger(["countryId", "operatorId"]);
-      if (!isValid) return;
-    }
-    if (currentStep < 3) {
-      setCurrentStep(currentStep + 1);
-    }
+    if (currentStep === 1) { const isValid = await form.trigger(["amount"]); if (!isValid) return; }
+    if (currentStep === 2) { const isValid = await form.trigger(["countryId", "operatorId"]); if (!isValid) return; }
+    if (currentStep < 3) setCurrentStep(currentStep + 1);
   };
 
-  const goToPreviousStep = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
-    }
-  };
+  const goToPreviousStep = () => { if (currentStep > 1) setCurrentStep(currentStep - 1); };
 
   const resetWizard = () => {
     setCurrentStep(1);
@@ -394,6 +338,12 @@ export default function DepositPage() {
     if (countdownRef.current) clearInterval(countdownRef.current);
     if (pollingRef.current) clearInterval(pollingRef.current);
     form.reset();
+  };
+
+  const copyRef = () => {
+    navigator.clipboard.writeText(depositReference)
+      .then(() => toast({ title: t.deposit.refCopied }))
+      .catch(() => toast({ title: t.deposit.refCopyFail, variant: "destructive" }));
   };
 
   const progressPercentage = (currentStep / 3) * 100;
@@ -420,9 +370,7 @@ export default function DepositPage() {
         ) : !countries?.length ? (
           <Alert>
             <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              {t.deposit.noCountry}
-            </AlertDescription>
+            <AlertDescription>{t.deposit.noCountry}</AlertDescription>
           </Alert>
         ) : (
           <Card>
@@ -438,23 +386,8 @@ export default function DepositPage() {
                 <div className="pt-4">
                   <div className="flex justify-between text-sm mb-2">
                     {STEPS.map((step) => (
-                      <div 
-                        key={step.id} 
-                        className={`flex flex-col items-center ${
-                          step.id === currentStep 
-                            ? "text-primary font-medium" 
-                            : step.id < currentStep 
-                              ? "text-green-500" 
-                              : "text-muted-foreground"
-                        }`}
-                      >
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-1 ${
-                          step.id === currentStep 
-                            ? "bg-primary text-primary-foreground" 
-                            : step.id < currentStep 
-                              ? "bg-green-500 text-white" 
-                              : "bg-muted text-muted-foreground"
-                        }`}>
+                      <div key={step.id} className={`flex flex-col items-center ${step.id === currentStep ? "text-primary font-medium" : step.id < currentStep ? "text-green-500" : "text-muted-foreground"}`}>
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-1 ${step.id === currentStep ? "bg-primary text-primary-foreground" : step.id < currentStep ? "bg-green-500 text-white" : "bg-muted text-muted-foreground"}`}>
                           {step.id < currentStep ? <CheckCircle className="w-4 h-4" /> : step.id}
                         </div>
                         <span className="text-xs hidden sm:block">{step.title}</span>
@@ -470,7 +403,6 @@ export default function DepositPage() {
                 <div className="text-center py-8 space-y-4">
                   {paymentStatus === "pending" && otpRequired && (
                     <>
-                      {/* Operator logo with amber halo */}
                       <div className="relative flex items-center justify-center pt-2">
                         <div className="absolute w-24 h-24 rounded-full bg-amber-500/10 animate-pulse" />
                         <div className="w-16 h-16 rounded-full overflow-hidden bg-white border-2 border-border shadow-md flex items-center justify-center relative z-10">
@@ -481,95 +413,49 @@ export default function DepositPage() {
                           )}
                         </div>
                       </div>
-
-                      {/* Title */}
                       <div>
                         <h3 className="text-xl font-bold text-foreground">{t.deposit.otpRequired}</h3>
                         <p className="text-muted-foreground text-sm mt-1">
-                          {otpType === "ussd" && otpUssdCode
-                            ? t.deposit.otpUssd
-                            : t.deposit.otpSms}
+                          {otpType === "ussd" && otpUssdCode ? t.deposit.otpUssd : t.deposit.otpSms}
                         </p>
                       </div>
-
-                      {/* Amount card */}
                       <div className="w-full bg-amber-50 dark:bg-amber-950/20 rounded-xl border border-amber-200/50 dark:border-amber-800/30 px-6 py-4 text-center">
                         <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
                           {watchedAmount ? formatCurrency(parseFloat(watchedAmount), (user?.preferredCurrency || "XAF") as SupportedCurrency) : "—"}
                         </p>
-                        {selectedOperator && (
-                          <p className="text-sm text-muted-foreground mt-1">via {selectedOperator.name}</p>
-                        )}
+                        {selectedOperator && <p className="text-sm text-muted-foreground mt-1">via {selectedOperator.name}</p>}
                       </div>
-
-                      {/* USSD code block if applicable */}
                       {otpType === "ussd" && otpUssdCode && (
                         <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded-xl px-5 py-4 inline-block mx-auto">
-                          <p className="text-2xl font-mono font-bold tracking-widest text-amber-700 dark:text-amber-300" data-testid="text-ussd-code">
-                            {otpUssdCode}
-                          </p>
+                          <p className="text-2xl font-mono font-bold tracking-widest text-amber-700 dark:text-amber-300" data-testid="text-ussd-code">{otpUssdCode}</p>
                         </div>
                       )}
-
-                      {/* OTP input + button */}
                       <div className="space-y-3 w-full max-w-xs mx-auto">
-                        <Input
-                          type="text"
-                          inputMode="numeric"
-                          pattern="[0-9]*"
-                          maxLength={8}
-                          placeholder="Ex : 123456"
-                          value={otpCode}
-                          onChange={e => setOtpCode(e.target.value.replace(/\D/g, ""))}
-                          className="text-center text-2xl font-mono tracking-widest h-14"
-                          data-testid="input-otp-code"
-                          autoFocus
-                        />
-                        <Button
-                          className="w-full"
-                          size="lg"
-                          onClick={() => otpMutation.mutate()}
-                          disabled={otpCode.length < 4 || otpMutation.isPending}
-                          data-testid="button-confirm-otp"
-                        >
+                        <Input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={8} placeholder="Ex : 123456" value={otpCode} onChange={e => setOtpCode(e.target.value.replace(/\D/g, ""))} className="text-center text-2xl font-mono tracking-widest h-14" data-testid="input-otp-code" autoFocus />
+                        <Button className="w-full" size="lg" onClick={() => otpMutation.mutate()} disabled={otpCode.length < 4 || otpMutation.isPending} data-testid="button-confirm-otp">
                           {otpMutation.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{t.deposit.otpValidating}</> : t.deposit.otpConfirm}
                         </Button>
                       </div>
-
-                      {/* Animated dots */}
                       <div className="flex items-center justify-center gap-2">
                         <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-bounce" style={{ animationDelay: "0ms" }} />
                         <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-bounce" style={{ animationDelay: "150ms" }} />
                         <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-bounce" style={{ animationDelay: "300ms" }} />
                       </div>
-
-                      {/* Countdown progress bar */}
                       <div className="w-full space-y-1.5">
                         <div className="flex items-center justify-between text-sm">
-                          <span className="flex items-center gap-1.5 text-muted-foreground">
-                            <Clock className="w-3.5 h-3.5" /> {t.deposit.expiration}
-                          </span>
+                          <span className="flex items-center gap-1.5 text-muted-foreground"><Clock className="w-3.5 h-3.5" /> {t.deposit.expiration}</span>
                           <span className="font-semibold tabular-nums text-foreground">{countdown}s</span>
                         </div>
                         <div className="h-2 bg-muted rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-amber-500 rounded-full transition-all duration-1000 ease-linear"
-                            style={{ width: `${(countdown / (8 * 60)) * 100}%` }}
-                          />
+                          <div className="h-full bg-amber-500 rounded-full transition-all duration-1000 ease-linear" style={{ width: `${(countdown / (8 * 60)) * 100}%` }} />
                         </div>
                       </div>
-
                       {depositReference && (
                         <div className="w-full bg-muted/30 rounded-lg p-3 text-left">
                           <p className="text-xs text-muted-foreground">{t.deposit.reference}</p>
                           <div className="flex items-center justify-between gap-2 mt-0.5">
                             <p className="font-mono text-sm font-bold text-foreground">{depositReference}</p>
-                            <button
-                              onClick={() => { navigator.clipboard.writeText(depositReference).then(() => toast({ title: "Référence copiée" })).catch(() => toast({ title: "Échec de la copie", variant: "destructive" })); }}
-                              className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
-                              aria-label="Copier la référence"
-                              data-testid="button-copy-reference"
-                            >
+                            <button onClick={copyRef} className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0" aria-label="Copier la référence" data-testid="button-copy-reference">
                               <Copy className="w-3.5 h-3.5" />
                             </button>
                           </div>
@@ -580,101 +466,63 @@ export default function DepositPage() {
 
                   {paymentStatus === "pending" && !otpRequired && waveUrl && (
                     <>
-                      {/* Wave logo with blue halo */}
                       <div className="relative flex items-center justify-center pt-2">
                         <div className="absolute w-24 h-24 rounded-full bg-blue-500/10 animate-pulse" />
                         <div className="w-16 h-16 rounded-full overflow-hidden bg-white border-2 border-border shadow-md flex items-center justify-center relative z-10">
                           <img src="https://wave.com/favicon.ico" alt="Wave" className="w-10 h-10 rounded-full" onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }} />
                         </div>
                       </div>
-
-                      {/* Title */}
                       <div>
                         <h3 className="text-xl font-bold text-foreground">{t.deposit.waveTitle}</h3>
-                        <p className="text-muted-foreground text-sm mt-1">
-                          {t.deposit.waveDesc}
-                        </p>
+                        <p className="text-muted-foreground text-sm mt-1">{t.deposit.waveDesc}</p>
                       </div>
-
-                      {/* Amount card */}
                       <div className="w-full bg-blue-50 dark:bg-blue-950/20 rounded-xl border border-blue-200/50 dark:border-blue-800/30 px-6 py-4 text-center">
                         <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                           {watchedAmount ? formatCurrency(parseFloat(watchedAmount), (user?.preferredCurrency || "XAF") as SupportedCurrency) : "—"}
                         </p>
                         <p className="text-sm text-muted-foreground mt-1">via Wave</p>
                       </div>
-
-                      {/* Wave URL button */}
-                      <a
-                        href={waveUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        data-testid="button-open-wave"
-                      >
+                      <a href={waveUrl} target="_blank" rel="noopener noreferrer" data-testid="button-open-wave">
                         <Button size="lg" className="bg-blue-600 hover:bg-blue-700 text-white gap-2 w-full max-w-xs">
                           <ExternalLink className="w-5 h-5" />
                           {t.deposit.waveButton}
                         </Button>
                       </a>
-
-                      {/* Animated dots */}
                       <div className="flex items-center justify-center gap-2">
                         <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: "0ms" }} />
                         <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: "150ms" }} />
                         <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: "300ms" }} />
                       </div>
-
-                      {/* Countdown progress bar */}
                       <div className="w-full space-y-1.5">
                         <div className="flex items-center justify-between text-sm">
-                          <span className="flex items-center gap-1.5 text-muted-foreground">
-                            <Clock className="w-3.5 h-3.5" /> {t.deposit.expiration}
-                          </span>
+                          <span className="flex items-center gap-1.5 text-muted-foreground"><Clock className="w-3.5 h-3.5" /> {t.deposit.expiration}</span>
                           <span className="font-semibold tabular-nums text-foreground">{countdown}s</span>
                         </div>
                         <div className="h-2 bg-muted rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-blue-500 rounded-full transition-all duration-1000 ease-linear"
-                            style={{ width: `${(countdown / (8 * 60)) * 100}%` }}
-                          />
+                          <div className="h-full bg-blue-500 rounded-full transition-all duration-1000 ease-linear" style={{ width: `${(countdown / (8 * 60)) * 100}%` }} />
                         </div>
                       </div>
-
-                      <p className="text-xs text-muted-foreground">La transaction sera automatiquement annulée si non confirmée.</p>
-
+                      <p className="text-xs text-muted-foreground">{t.deposit.txAutoCancel}</p>
                       {depositReference && (
                         <div className="w-full bg-muted/30 rounded-lg p-3 text-left">
                           <p className="text-xs text-muted-foreground">{t.deposit.reference}</p>
                           <div className="flex items-center justify-between gap-2 mt-0.5">
                             <p className="font-mono text-sm font-bold text-foreground">{depositReference}</p>
-                            <button
-                              onClick={() => { navigator.clipboard.writeText(depositReference).then(() => toast({ title: "Référence copiée" })).catch(() => toast({ title: "Échec de la copie", variant: "destructive" })); }}
-                              className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
-                              aria-label="Copier la référence"
-                              data-testid="button-copy-reference"
-                            >
+                            <button onClick={copyRef} className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0" aria-label="Copier la référence" data-testid="button-copy-reference">
                               <Copy className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         </div>
                       )}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleCancelDeposit}
-                        disabled={isCancelling}
-                        data-testid="button-cancel-deposit-wave"
-                        className="border-red-500/30 text-red-500 hover:bg-red-500/10"
-                      >
+                      <Button variant="outline" size="sm" onClick={handleCancelDeposit} disabled={isCancelling} data-testid="button-cancel-deposit-wave" className="border-red-500/30 text-red-500 hover:bg-red-500/10">
                         <XCircle className="w-4 h-4 mr-2" />
-                        Annuler le paiement
+                        {t.deposit.cancelPayment}
                       </Button>
                     </>
                   )}
 
                   {paymentStatus === "pending" && !otpRequired && !waveUrl && (
                     <>
-                      {/* Operator logo with halo */}
                       <div className="relative flex items-center justify-center pt-2">
                         <div className="absolute w-24 h-24 rounded-full bg-blue-500/20 animate-ping" />
                         <div className="w-16 h-16 rounded-full overflow-hidden bg-white border-2 border-border shadow-md flex items-center justify-center relative z-10">
@@ -685,81 +533,51 @@ export default function DepositPage() {
                           )}
                         </div>
                       </div>
-
-                      {/* Title */}
                       <div>
-                        <h3 className="text-xl font-bold text-foreground">Transaction en cours</h3>
-                        <p className="text-muted-foreground text-sm mt-1">Veuillez confirmer le paiement sur votre téléphone.</p>
+                        <h3 className="text-xl font-bold text-foreground">{t.deposit.processingTitle}</h3>
+                        <p className="text-muted-foreground text-sm mt-1">{t.deposit.processingDesc}</p>
                       </div>
-
-                      {/* Amount card */}
                       <div className="w-full bg-blue-50 dark:bg-blue-950/20 rounded-xl border border-blue-200/50 dark:border-blue-800/30 px-6 py-4 text-center">
                         <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                           {watchedAmount ? formatCurrency(parseFloat(watchedAmount), (user?.preferredCurrency || "XAF") as SupportedCurrency) : "—"}
                         </p>
-                        {selectedOperator && (
-                          <p className="text-sm text-muted-foreground mt-1">via {selectedOperator.name}</p>
-                        )}
+                        {selectedOperator && <p className="text-sm text-muted-foreground mt-1">via {selectedOperator.name}</p>}
                       </div>
-
-                      {/* Animated dots */}
                       <div className="flex items-center justify-center gap-2">
                         <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: "0ms" }} />
                         <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: "150ms" }} />
                         <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: "300ms" }} />
                       </div>
-
-                      {/* Countdown progress bar */}
                       <div className="w-full space-y-1.5">
                         <div className="flex items-center justify-between text-sm">
-                          <span className="flex items-center gap-1.5 text-muted-foreground">
-                            <Clock className="w-3.5 h-3.5" /> {t.deposit.expiration}
-                          </span>
+                          <span className="flex items-center gap-1.5 text-muted-foreground"><Clock className="w-3.5 h-3.5" /> {t.deposit.expiration}</span>
                           <span className="font-semibold tabular-nums text-foreground">{countdown}s</span>
                         </div>
                         <div className="h-2 bg-muted rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-blue-500 rounded-full transition-all duration-1000 ease-linear"
-                            style={{ width: `${(countdown / (8 * 60)) * 100}%` }}
-                          />
+                          <div className="h-full bg-blue-500 rounded-full transition-all duration-1000 ease-linear" style={{ width: `${(countdown / (8 * 60)) * 100}%` }} />
                         </div>
                       </div>
-
-                      <p className="text-xs text-muted-foreground">La transaction sera automatiquement annulée si non confirmée.</p>
-
+                      <p className="text-xs text-muted-foreground">{t.deposit.txAutoCancel}</p>
                       {depositReference && (
                         <div className="bg-muted/30 rounded-lg p-3 w-full text-left">
                           <p className="text-xs text-muted-foreground">{t.deposit.reference}</p>
                           <div className="flex items-center justify-between gap-2 mt-0.5">
                             <p className="font-mono text-sm font-bold text-foreground">{depositReference}</p>
-                            <button
-                              onClick={() => { navigator.clipboard.writeText(depositReference).then(() => toast({ title: "Référence copiée" })).catch(() => toast({ title: "Échec de la copie", variant: "destructive" })); }}
-                              className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
-                              aria-label="Copier la référence"
-                              data-testid="button-copy-reference"
-                            >
+                            <button onClick={copyRef} className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0" aria-label="Copier la référence" data-testid="button-copy-reference">
                               <Copy className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         </div>
                       )}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleCancelDeposit}
-                        disabled={isCancelling}
-                        data-testid="button-cancel-deposit"
-                        className="border-red-500/30 text-red-500 hover:bg-red-500/10"
-                      >
+                      <Button variant="outline" size="sm" onClick={handleCancelDeposit} disabled={isCancelling} data-testid="button-cancel-deposit" className="border-red-500/30 text-red-500 hover:bg-red-500/10">
                         <XCircle className="w-4 h-4 mr-2" />
-                        Annuler le paiement
+                        {t.deposit.cancelPayment}
                       </Button>
                     </>
                   )}
                   
                   {paymentStatus === "success" && (
                     <>
-                      {/* Animated success icon */}
                       <div className="relative flex items-center justify-center">
                         <div className="absolute w-28 h-28 rounded-full bg-green-500/10 animate-ping" style={{ animationDuration: "2s" }} />
                         <div className="absolute w-24 h-24 rounded-full bg-green-500/15" />
@@ -768,48 +586,34 @@ export default function DepositPage() {
                         </div>
                       </div>
                       <div>
-                        <h3 className="text-xl font-bold text-foreground">Dépôt confirmé</h3>
-                        <p className="text-muted-foreground text-sm mt-1">
-                          Votre dépôt a été crédité sur votre compte avec succès !
-                        </p>
+                        <h3 className="text-xl font-bold text-foreground">{t.deposit.successTitle}</h3>
+                        <p className="text-muted-foreground text-sm mt-1">{t.deposit.successDesc}</p>
                       </div>
-                      {/* Amount summary */}
                       <div className="w-full bg-green-50 dark:bg-green-950/20 rounded-xl border border-green-200/50 dark:border-green-800/30 px-6 py-4 text-center">
-                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Montant reçu</p>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">{t.deposit.amountReceived}</p>
                         <p className="text-2xl font-bold text-green-600 dark:text-green-400">
                           {watchedAmount ? formatCurrency(parseFloat(watchedAmount), (user?.preferredCurrency || "XAF") as SupportedCurrency) : "—"}
                         </p>
                       </div>
                       {depositReference && (
                         <div className="w-full bg-muted/30 rounded-lg p-3 text-left">
-                          <p className="text-xs text-muted-foreground">Référence de transaction</p>
+                          <p className="text-xs text-muted-foreground">{t.deposit.txRef}</p>
                           <div className="flex items-center justify-between gap-2 mt-0.5">
                             <p className="font-mono text-sm font-bold text-foreground">{depositReference}</p>
-                            <button
-                              onClick={() => { navigator.clipboard.writeText(depositReference).then(() => toast({ title: "Référence copiée" })).catch(() => toast({ title: "Échec de la copie", variant: "destructive" })); }}
-                              className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
-                              aria-label="Copier la référence"
-                              data-testid="button-copy-reference"
-                            >
+                            <button onClick={copyRef} className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0" aria-label="Copier la référence" data-testid="button-copy-reference">
                               <Copy className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         </div>
                       )}
-                      <Button
-                        size="lg"
-                        className="w-full"
-                        onClick={resetWizard}
-                        data-testid="button-new-deposit"
-                      >
-                        Faire un nouveau dépôt
+                      <Button size="lg" className="w-full" onClick={resetWizard} data-testid="button-new-deposit">
+                        {t.deposit.newDeposit}
                       </Button>
                     </>
                   )}
                   
                   {paymentStatus === "failed" && (
                     <>
-                      {/* Failure icon */}
                       <div className="relative flex items-center justify-center">
                         <div className="absolute w-24 h-24 rounded-full bg-red-500/10" />
                         <div className="w-20 h-20 rounded-full bg-red-500/15 flex items-center justify-center relative z-10">
@@ -817,39 +621,25 @@ export default function DepositPage() {
                         </div>
                       </div>
                       <div>
-                        <h3 className="text-xl font-bold text-foreground">Dépôt échoué</h3>
+                        <h3 className="text-xl font-bold text-foreground">{t.deposit.failedTitle}</h3>
                         <p className="text-muted-foreground text-sm mt-1">
-                          {failureReason || "Le paiement n'a pas pu être confirmé. Veuillez réessayer."}
+                          {failureReason || t.deposit.failedDesc}
                         </p>
                       </div>
                       {depositReference && (
                         <div className="w-full bg-muted/30 rounded-lg p-3 text-left">
-                          <p className="text-xs text-muted-foreground">Référence de transaction</p>
+                          <p className="text-xs text-muted-foreground">{t.deposit.txRef}</p>
                           <div className="flex items-center justify-between gap-2 mt-0.5">
                             <p className="font-mono text-sm font-bold text-foreground">{depositReference}</p>
-                            <button
-                              onClick={() => { navigator.clipboard.writeText(depositReference).then(() => toast({ title: "Référence copiée" })).catch(() => toast({ title: "Échec de la copie", variant: "destructive" })); }}
-                              className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
-                              aria-label="Copier la référence"
-                              data-testid="button-copy-reference"
-                            >
+                            <button onClick={copyRef} className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0" aria-label="Copier la référence" data-testid="button-copy-reference">
                               <Copy className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         </div>
                       )}
-                      <Button
-                        size="lg"
-                        className="w-full bg-red-500 hover:bg-red-600 text-white font-semibold"
-                        onClick={() => {
-                          setShowValidationMessage(false);
-                          setPaymentStatus("pending");
-                          setDepositReference("");
-                        }}
-                        data-testid="button-retry-deposit"
-                      >
+                      <Button size="lg" className="w-full bg-red-500 hover:bg-red-600 text-white font-semibold" onClick={() => { setShowValidationMessage(false); setPaymentStatus("pending"); setDepositReference(""); }} data-testid="button-retry-deposit">
                         <XCircle className="w-4 h-4 mr-2" />
-                        Réessayer
+                        {t.deposit.retry}
                       </Button>
                     </>
                   )}
@@ -863,38 +653,24 @@ export default function DepositPage() {
                           <div className="w-16 h-16 mx-auto rounded-full bg-primary/10 flex items-center justify-center mb-4">
                             <CreditCard className="w-8 h-8 text-primary" />
                           </div>
-                          <h3 className="text-lg font-semibold">Quel montant souhaitez-vous déposer ?</h3>
-                          <p className="text-sm text-muted-foreground">Entrez le montant souhaité</p>
+                          <h3 className="text-lg font-semibold">{t.deposit.step1Question}</h3>
+                          <p className="text-sm text-muted-foreground">{t.deposit.step1Hint}</p>
                         </div>
-
                         <FormField
                           control={form.control}
                           name="amount"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Montant ({user?.preferredCurrency || "XAF"})</FormLabel>
+                              <FormLabel>{t.deposit.amountLabel} ({user?.preferredCurrency || "XAF"})</FormLabel>
                               <FormControl>
-                                <Input 
-                                  type="number" 
-                                  placeholder=""
-                                  className="text-2xl h-14 text-center"
-                                  {...field} 
-                                  data-testid="input-deposit-amount"
-                                />
+                                <Input type="number" placeholder="" className="text-2xl h-14 text-center" {...field} data-testid="input-deposit-amount" />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
-
-                        <Button 
-                          type="button"
-                          className="w-full" 
-                          size="lg"
-                          onClick={goToNextStep}
-                          disabled={!canProceedToStep2}
-                        >
-                          Continuer
+                        <Button type="button" className="w-full" size="lg" onClick={goToNextStep} disabled={!canProceedToStep2}>
+                          {t.deposit.continue}
                           <ArrowRight className="w-4 h-4 ml-2" />
                         </Button>
                       </div>
@@ -906,29 +682,26 @@ export default function DepositPage() {
                           <div className="w-16 h-16 mx-auto rounded-full bg-primary/10 flex items-center justify-center mb-4">
                             <Globe className="w-8 h-8 text-primary" />
                           </div>
-                          <h3 className="text-lg font-semibold">Sélectionnez votre pays et opérateur</h3>
-                          <p className="text-sm text-muted-foreground">Choisissez votre fournisseur Mobile Money</p>
+                          <h3 className="text-lg font-semibold">{t.deposit.step2Question}</h3>
+                          <p className="text-sm text-muted-foreground">{t.deposit.step2Hint}</p>
                         </div>
-
                         <FormField
                           control={form.control}
                           name="countryId"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Choisir le pays</FormLabel>
+                              <FormLabel>{t.deposit.chooseCountry}</FormLabel>
                               <Select onValueChange={(val) => { field.onChange(val); form.setValue("operatorId", ""); }} value={field.value}>
                                 <FormControl>
                                   <SelectTrigger data-testid="select-country" className="h-14">
                                     {selectedCountry ? (
                                       <div className="flex items-center gap-3 flex-1 min-w-0">
-                                        <span className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-xl shrink-0">
-                                          {getCountryFlagEmoji(selectedCountry.code)}
-                                        </span>
+                                        <span className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-xl shrink-0">{getCountryFlagEmoji(selectedCountry.code)}</span>
                                         <span className="font-semibold truncate">{selectedCountry.name}</span>
                                         <span className="text-muted-foreground text-sm shrink-0">({selectedCountry.currency})</span>
                                       </div>
                                     ) : (
-                                      <span className="text-muted-foreground text-sm">Sélectionner un pays</span>
+                                      <span className="text-muted-foreground text-sm">{t.deposit.selectCountry}</span>
                                     )}
                                   </SelectTrigger>
                                 </FormControl>
@@ -948,76 +721,43 @@ export default function DepositPage() {
                             </FormItem>
                           )}
                         />
-
                         <FormField
                           control={form.control}
                           name="operatorId"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Opérateur Mobile Money</FormLabel>
+                              <FormLabel>{t.deposit.operatorMobileLabel}</FormLabel>
                               {!selectedCountry ? (
-                                <p className="text-sm text-muted-foreground py-2">Choisissez un pays d'abord</p>
+                                <p className="text-sm text-muted-foreground py-2">{t.deposit.noCountrySelected}</p>
                               ) : selectedCountry.operators.length === 0 ? (
-                                <p className="text-sm text-muted-foreground py-2">Aucun opérateur disponible</p>
+                                <p className="text-sm text-muted-foreground py-2">{t.deposit.noOperator}</p>
                               ) : (
                                 <div className="w-full overflow-hidden">
-                                <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
-                                  {selectedCountry.operators.map((op) => {
-                                    const logo = getOperatorLogo(op.name);
-                                    const isSelected = field.value === op.id;
-                                    return (
-                                      <button
-                                        key={op.id}
-                                        type="button"
-                                        data-testid={`button-operator-${op.id}`}
-                                        onClick={() => field.onChange(op.id)}
-                                        className={`flex-shrink-0 flex flex-col items-center justify-center gap-2 w-28 h-24 rounded-xl border-2 transition-all cursor-pointer ${
-                                          isSelected
-                                            ? "border-primary bg-primary/10 shadow-sm"
-                                            : "border-border bg-card hover:border-primary/40 hover:bg-muted/50"
-                                        }`}
-                                      >
-                                        {logo ? (
-                                          <img src={logo} alt={op.name} className="w-12 h-12 object-contain rounded-lg" />
-                                        ) : (
-                                          <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                                            <Smartphone className="w-6 h-6 text-primary" />
-                                          </div>
-                                        )}
-                                        <span className={`text-xs font-medium text-center leading-tight px-1 ${isSelected ? "text-primary" : "text-foreground"}`}>
-                                          {op.name}
-                                        </span>
-                                      </button>
-                                    );
-                                  })}
-                                </div>
+                                  <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
+                                    {selectedCountry.operators.map((op) => {
+                                      const logo = getOperatorLogo(op.name);
+                                      const isSelected = field.value === op.id;
+                                      return (
+                                        <button key={op.id} type="button" data-testid={`button-operator-${op.id}`} onClick={() => field.onChange(op.id)}
+                                          className={`flex-shrink-0 flex flex-col items-center justify-center gap-2 w-28 h-24 rounded-xl border-2 transition-all cursor-pointer ${isSelected ? "border-primary bg-primary/10 shadow-sm" : "border-border bg-card hover:border-primary/40 hover:bg-muted/50"}`}>
+                                          {logo ? <img src={logo} alt={op.name} className="w-12 h-12 object-contain rounded-lg" /> : <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center"><Smartphone className="w-6 h-6 text-primary" /></div>}
+                                          <span className={`text-xs font-medium text-center leading-tight px-1 ${isSelected ? "text-primary" : "text-foreground"}`}>{op.name}</span>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
                                 </div>
                               )}
                               <FormMessage />
                             </FormItem>
                           )}
                         />
-
                         <div className="flex gap-3">
-                          <Button 
-                            type="button"
-                            variant="outline"
-                            className="flex-1" 
-                            size="md"
-                            onClick={goToPreviousStep}
-                          >
-                            <ArrowLeft className="w-4 h-4 mr-2" />
-                            Retour
+                          <Button type="button" variant="outline" className="flex-1" size="md" onClick={goToPreviousStep}>
+                            <ArrowLeft className="w-4 h-4 mr-2" />{t.deposit.back}
                           </Button>
-                          <Button 
-                            type="button"
-                            className="flex-1" 
-                            size="md"
-                            onClick={goToNextStep}
-                            disabled={!canProceedToStep3}
-                          >
-                            Continuer
-                            <ArrowRight className="w-4 h-4 ml-2" />
+                          <Button type="button" className="flex-1" size="md" onClick={goToNextStep} disabled={!canProceedToStep3}>
+                            {t.deposit.continue}<ArrowRight className="w-4 h-4 ml-2" />
                           </Button>
                         </div>
                       </div>
@@ -1029,120 +769,78 @@ export default function DepositPage() {
                           <div className="w-16 h-16 mx-auto rounded-full bg-green-500/10 flex items-center justify-center mb-4">
                             <CheckCircle className="w-8 h-8 text-green-500" />
                           </div>
-                          <h3 className="text-lg font-semibold">Confirmez votre dépôt</h3>
-                          <p className="text-sm text-muted-foreground">Entrez votre numéro et validez</p>
+                          <h3 className="text-lg font-semibold">{t.deposit.step3Question}</h3>
+                          <p className="text-sm text-muted-foreground">{t.deposit.step3Hint}</p>
                         </div>
-
                         <FormField
                           control={form.control}
                           name="phoneNumber"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Numéro de téléphone Mobile Money</FormLabel>
+                              <FormLabel>{t.deposit.phoneMobileLabel}</FormLabel>
                               <FormControl>
                                 <div className="relative">
                                   <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                                  <Input 
-                                    placeholder="XXX XXX XXX"
-                                    className="pl-10"
-                                    {...field} 
-                                    data-testid="input-phone-number"
-                                  />
+                                  <Input placeholder="XXX XXX XXX" className="pl-10" {...field} data-testid="input-phone-number" />
                                 </div>
                               </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
-
-                        {/* PixPay OTP — Orange CI / SN / ML / BF */}
                         {isPixPayOtp && (
                           <div className="rounded-lg border-2 border-orange-400 bg-orange-50 dark:bg-orange-950/30 p-4 space-y-3">
                             <div className="flex items-center gap-2 text-orange-700 dark:text-orange-300 font-semibold text-sm">
                               <Hash className="h-4 w-4 shrink-0" />
-                              Code OTP requis — Orange Money
+                              {t.deposit.otpOrangeLabel}
                             </div>
                             <p className="text-xs text-orange-600 dark:text-orange-400">
-                              Composez <code className="font-mono bg-orange-200 dark:bg-orange-900 px-1 rounded font-bold">{selectedOperator?.otpUssdCode || "#144*82#"}</code> sur votre téléphone pour obtenir votre code OTP, puis saisissez-le ci-dessous.
+                              Composez <code className="font-mono bg-orange-200 dark:bg-orange-900 px-1 rounded font-bold">{selectedOperator?.otpUssdCode || "#144*82#"}</code> {t.deposit.otpOrangeInstruction}
                             </p>
-                            <Input
-                              type="text"
-                              inputMode="numeric"
-                              pattern="[0-9]*"
-                              maxLength={8}
-                              placeholder="Votre code OTP"
-                              value={pixpayOtpCode}
-                              onChange={e => setPixpayOtpCode(e.target.value.replace(/\D/g, ""))}
-                              className="text-center text-xl font-mono tracking-widest h-12 border-orange-300"
-                              data-testid="input-pixpay-otp"
-                            />
+                            <Input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={8} placeholder={t.deposit.otpPlaceholder} value={pixpayOtpCode} onChange={e => setPixpayOtpCode(e.target.value.replace(/\D/g, ""))} className="text-center text-xl font-mono tracking-widest h-12 border-orange-300" data-testid="input-pixpay-otp" />
                           </div>
                         )}
-
                         <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
                           <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">Pays</span>
+                            <span className="text-muted-foreground">{t.deposit.confirmCountry}</span>
                             <span className="font-medium">{selectedCountry?.name}</span>
                           </div>
                           <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">Opérateur</span>
+                            <span className="text-muted-foreground">{t.deposit.confirmOperator}</span>
                             <span className="font-medium">{selectedOperator?.name}</span>
                           </div>
                         </div>
-
                         {feeCalculation && (
                           <div className="rounded-lg border bg-muted/30 p-4 space-y-3" data-testid="fee-calculator">
                             <div className="flex items-center justify-between text-sm">
-                              <span className="text-muted-foreground">Montant saisi</span>
+                              <span className="text-muted-foreground">{t.deposit.amountEntered}</span>
                               <span className="font-medium">{formatCurrency(feeCalculation.amount.toString(), (selectedCountry?.currency || "XAF") as SupportedCurrency)}</span>
                             </div>
                             <div className="flex items-center justify-between text-sm">
                               <span className="text-muted-foreground">
-                                Frais de dépôt {feeCalculation.feePercentage > 0 
-                                  ? `(${feeCalculation.feePercentage}%)`
-                                  : feeCalculation.fixedFee > 0 ? "(fixe)" : "(Gratuit)"}
+                                {t.deposit.depositFeeLabel} {feeCalculation.feePercentage > 0 ? `(${feeCalculation.feePercentage}%)` : feeCalculation.fixedFee > 0 ? t.deposit.feeFixed : t.deposit.feeFree}
                               </span>
                               <span className={`font-medium ${feeCalculation.fee > 0 ? "text-red-500" : "text-green-500"}`}>
                                 {feeCalculation.fee > 0 ? `-${formatCurrency(feeCalculation.fee.toString(), (selectedCountry?.currency || "XAF") as SupportedCurrency)}` : "0 XAF"}
                               </span>
                             </div>
                             <div className="border-t pt-3 flex items-center justify-between">
-                              <span className="font-medium text-foreground">Montant crédité</span>
+                              <span className="font-medium text-foreground">{t.deposit.creditedLabel}</span>
                               <span className="text-xl font-bold text-green-500" data-testid="credited-amount">
                                 {formatCurrency(feeCalculation.creditedAmount.toString(), (selectedCountry?.currency || "XAF") as SupportedCurrency)}
                               </span>
                             </div>
                           </div>
                         )}
-
                         <div className="flex gap-3">
-                          <Button 
-                            type="button"
-                            variant="outline"
-                            className="flex-1" 
-                            size="md"
-                            onClick={goToPreviousStep}
-                          >
-                            <ArrowLeft className="w-4 h-4 mr-2" />
-                            Retour
+                          <Button type="button" variant="outline" className="flex-1" size="md" onClick={goToPreviousStep}>
+                            <ArrowLeft className="w-4 h-4 mr-2" />{t.deposit.back}
                           </Button>
-                          <Button 
-                            type="submit" 
-                            className="flex-1" 
-                            size="md" 
-                            disabled={depositMutation.isPending || (isPixPayOtp && pixpayOtpCode.length < 4)} 
-                            data-testid="button-deposit-confirm"
-                          >
+                          <Button type="submit" className="flex-1" size="md" disabled={depositMutation.isPending || (isPixPayOtp && pixpayOtpCode.length < 4)} data-testid="button-deposit-confirm">
                             {depositMutation.isPending ? (
-                              <>
-                                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                                Traitement...
-                              </>
+                              <><Loader2 className="w-4 h-4 animate-spin mr-2" />{t.deposit.processing}</>
                             ) : (
-                              <>
-                                <CreditCard className="w-4 h-4 mr-2" />
-                                Confirmer
-                              </>
+                              <><CreditCard className="w-4 h-4 mr-2" />{t.deposit.confirmBtn}</>
                             )}
                           </Button>
                         </div>
@@ -1154,29 +852,28 @@ export default function DepositPage() {
             </CardContent>
           </Card>
         )}
-
       </div>
 
       <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-center text-lg">Confirmer le dépôt</DialogTitle>
+            <DialogTitle className="text-center text-lg">{t.deposit.confirmTitle}</DialogTitle>
           </DialogHeader>
           <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border my-2">
             <div className="flex items-center justify-between px-4 py-3.5">
-              <span className="text-sm text-muted-foreground">Numéro Mobile Money</span>
+              <span className="text-sm text-muted-foreground">{t.deposit.dialogPhone}</span>
               <span className="text-sm font-medium">{pendingDepositData?.phoneNumber}</span>
             </div>
             <div className="flex items-center justify-between px-4 py-3.5">
-              <span className="text-sm text-muted-foreground">Pays</span>
+              <span className="text-sm text-muted-foreground">{t.deposit.confirmCountry}</span>
               <span className="text-sm font-medium">{selectedCountry?.name}</span>
             </div>
             <div className="flex items-center justify-between px-4 py-3.5">
-              <span className="text-sm text-muted-foreground">Opérateur</span>
+              <span className="text-sm text-muted-foreground">{t.deposit.confirmOperator}</span>
               <span className="text-sm font-medium">{selectedOperator?.name}</span>
             </div>
             <div className="flex items-center justify-between px-4 py-3.5">
-              <span className="text-sm text-muted-foreground">Montant saisi</span>
+              <span className="text-sm text-muted-foreground">{t.deposit.amountEntered}</span>
               <span className="text-sm font-medium">
                 {feeCalculation ? formatCurrency(feeCalculation.amount.toString(), (selectedCountry?.currency || "XAF") as SupportedCurrency) : "—"}
               </span>
@@ -1184,7 +881,7 @@ export default function DepositPage() {
             {feeCalculation && feeCalculation.fee > 0 && (
               <div className="flex items-center justify-between px-4 py-3.5">
                 <span className="text-sm text-muted-foreground">
-                  Frais {feeCalculation.feePercentage > 0 ? `(${feeCalculation.feePercentage}%)` : "(fixe)"}
+                  {t.deposit.confirmFee} {feeCalculation.feePercentage > 0 ? `(${feeCalculation.feePercentage}%)` : t.deposit.feeFixed}
                 </span>
                 <span className="text-sm font-medium text-red-500">
                   -{formatCurrency(feeCalculation.fee.toString(), (selectedCountry?.currency || "XAF") as SupportedCurrency)}
@@ -1192,24 +889,17 @@ export default function DepositPage() {
               </div>
             )}
             <div className="flex items-center justify-between px-4 py-3.5 bg-muted/30">
-              <span className="text-sm font-semibold text-foreground">Montant crédité</span>
+              <span className="text-sm font-semibold text-foreground">{t.deposit.creditedLabel}</span>
               <span className="text-base font-bold text-green-500">
                 {feeCalculation ? formatCurrency(feeCalculation.creditedAmount.toString(), (selectedCountry?.currency || "XAF") as SupportedCurrency) : "—"}
               </span>
             </div>
           </div>
           <DialogFooter className="flex gap-2 sm:flex-row">
-            <Button variant="outline" className="flex-1" onClick={() => setShowConfirmDialog(false)}>
-              Retour
-            </Button>
-            <Button
-              className="flex-1"
-              onClick={handleConfirmDeposit}
-              disabled={depositMutation.isPending}
-              data-testid="button-final-confirm-deposit"
-            >
+            <Button variant="outline" className="flex-1" onClick={() => setShowConfirmDialog(false)}>{t.deposit.back}</Button>
+            <Button className="flex-1" onClick={handleConfirmDeposit} disabled={depositMutation.isPending} data-testid="button-final-confirm-deposit">
               {depositMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CreditCard className="w-4 h-4 mr-2" />}
-              Confirmer
+              {t.deposit.confirmBtn}
             </Button>
           </DialogFooter>
         </DialogContent>
