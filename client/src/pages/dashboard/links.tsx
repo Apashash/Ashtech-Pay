@@ -33,15 +33,7 @@ import { z } from "zod";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from "recharts";
 import { formatCurrency } from "@/lib/currency";
 import { useUpload } from "@/hooks/use-upload";
-
-const periodOptions = [
-  { value: "today", label: "Aujourd'hui" },
-  { value: "week", label: "Cette semaine" },
-  { value: "month", label: "Ce mois-ci" },
-  { value: "last_month", label: "Mois dernier" },
-  { value: "year", label: "Cette année" },
-  { value: "all", label: "Tout" },
-];
+import { useLanguage } from "@/lib/language";
 
 const countryCodeMap: Record<string, string> = {
   "Cameroon": "cm",
@@ -66,6 +58,7 @@ const countryCodeMap: Record<string, string> = {
 
 function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { toast } = useToast();
+  const { t } = useLanguage();
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -75,7 +68,7 @@ function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => voi
       form.setValue("imagePath", response.objectPath);
     },
     onError: (error) => {
-      toast({ title: "Erreur upload image", description: error.message, variant: "destructive" });
+      toast({ title: t.links.toastUploadError, description: error.message, variant: "destructive" });
     }
   });
 
@@ -142,14 +135,14 @@ function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => voi
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/payment-links"] });
-      toast({ title: "Lien créé", description: "Votre lien de paiement a été créé avec succès" });
+      toast({ title: t.links.toastLinkCreated, description: t.links.toastLinkCreatedDesc });
       form.reset();
       setImageFile(null);
       setImagePreview(null);
       onClose();
     },
     onError: (error: Error) => {
-      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+      toast({ title: t.links.toastError, description: error.message, variant: "destructive" });
     },
   });
 
@@ -157,8 +150,8 @@ function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => voi
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-lg max-h-[90vh]">
         <DialogHeader>
-          <DialogTitle>Créer un lien de paiement</DialogTitle>
-          <DialogDescription>Créez un lien partageable pour recevoir des paiements</DialogDescription>
+          <DialogTitle>{t.links.createDialogTitle}</DialogTitle>
+          <DialogDescription>{t.links.createDialogDesc}</DialogDescription>
         </DialogHeader>
         <ScrollArea className="max-h-[60vh] pr-4">
           <Form {...form}>
@@ -168,9 +161,9 @@ function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => voi
                 name="title"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Titre *</FormLabel>
+                    <FormLabel>{t.links.formTitle}</FormLabel>
                     <FormControl>
-                      <Input placeholder="Ex: Paiement commande #123" {...field} data-testid="input-link-title" />
+                      <Input placeholder={t.links.formTitlePlaceholder} {...field} data-testid="input-link-title" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -182,9 +175,9 @@ function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => voi
                 name="description"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Description (optionnel)</FormLabel>
+                    <FormLabel>{t.links.formDesc}</FormLabel>
                     <FormControl>
-                      <Input placeholder="Description du paiement..." {...field} data-testid="input-link-description" />
+                      <Input placeholder={t.links.formDescPlaceholder} {...field} data-testid="input-link-description" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -198,7 +191,7 @@ function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => voi
                   <FormItem>
                     <FormLabel className="flex items-center gap-2">
                       <LinkIcon className="w-4 h-4" />
-                      URL personnalisée (optionnel)
+                      {t.links.formSlug}
                     </FormLabel>
                     <FormControl>
                       <div className="flex items-center gap-2">
@@ -206,7 +199,7 @@ function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => voi
                         <Input placeholder="mon-lien-unique" {...field} data-testid="input-link-slug" />
                       </div>
                     </FormControl>
-                    <FormDescription className="text-xs">Laissez vide pour générer automatiquement</FormDescription>
+                    <FormDescription className="text-xs">{t.links.formSlugHint}</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -215,10 +208,10 @@ function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => voi
               <FormItem>
                 <FormLabel className="flex items-center gap-2">
                   <Image className="w-4 h-4" />
-                  Image (optionnel)
+                  {t.links.formImage}
                 </FormLabel>
                 <FormDescription className="text-xs">
-                  Cette image s'affichera sur la page de paiement
+                  {t.links.formImageDesc}
                 </FormDescription>
                 <div className="space-y-2">
                   <input
@@ -250,7 +243,7 @@ function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => voi
                       onClick={() => imageInputRef.current?.click()}
                     >
                       <Upload className="w-4 h-4 mr-2" />
-                      Choisir une image
+                      {t.links.formImageUpload}
                     </Button>
                   )}
                 </div>
@@ -263,10 +256,10 @@ function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => voi
                   <FormItem>
                     <FormLabel className="flex items-center gap-2">
                       <FileText className="w-4 h-4" />
-                      Lien PDF (optionnel)
+                      {t.links.formPdf}
                     </FormLabel>
                     <FormDescription className="text-xs text-amber-500">
-                      Ce PDF sera envoyé au client uniquement après paiement réussi
+                      {t.links.formPdfDesc}
                     </FormDescription>
                     <FormControl>
                       <div className="flex items-center gap-2">
@@ -290,9 +283,9 @@ function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => voi
                   render={({ field }) => (
                     <FormItem className="flex items-center justify-between rounded-lg border border-amber-500/50 bg-amber-500/10 p-3">
                       <div className="space-y-0.5">
-                        <FormLabel className="text-amber-500">Livraison PDF après paiement</FormLabel>
+                        <FormLabel className="text-amber-500">{t.links.formPdfDelivery}</FormLabel>
                         <FormDescription className="text-xs">
-                          Le client recevra ce lien PDF après avoir payé avec succès
+                          {t.links.formPdfDeliveryDesc}
                         </FormDescription>
                       </div>
                       <FormControl>
@@ -313,9 +306,9 @@ function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => voi
                 render={({ field }) => (
                   <FormItem className="flex items-center justify-between rounded-lg border p-3">
                     <div className="space-y-0.5">
-                      <FormLabel>Type de montant</FormLabel>
+                      <FormLabel>{t.links.formAmountType}</FormLabel>
                       <FormDescription className="text-xs">
-                        {field.value ? "Montant fixe défini par vous" : "Montant libre choisi par le payeur"}
+                        {field.value ? t.links.formFixed : t.links.formFree}
                       </FormDescription>
                     </div>
                     <FormControl>
@@ -335,7 +328,7 @@ function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => voi
                   name="amount"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Montant ({user?.preferredCurrency || "XAF"}) *</FormLabel>
+                      <FormLabel>{t.links.formAmount} ({user?.preferredCurrency || "XAF"}) *</FormLabel>
                       <FormControl>
                         <Input type="number" placeholder="10000" {...field} data-testid="input-link-amount" />
                       </FormControl>
@@ -352,7 +345,7 @@ function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => voi
                   <FormItem>
                     <FormLabel className="flex items-center gap-2">
                       <Calendar className="w-4 h-4" />
-                      Date d'expiration (optionnel)
+                      {t.links.formExpiry}
                     </FormLabel>
                     <FormControl>
                       <Input type="datetime-local" {...field} data-testid="input-link-expiry" />
@@ -369,7 +362,7 @@ function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => voi
                   <FormItem>
                     <FormLabel className="flex items-center gap-2">
                       <ExternalLink className="w-4 h-4" />
-                      URL de redirection après paiement (optionnel)
+                      {t.links.formRedirect}
                     </FormLabel>
                     <FormControl>
                       <Input placeholder="https://monsite.com/merci" {...field} data-testid="input-link-redirect" />
@@ -381,7 +374,7 @@ function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => voi
 
               <Button type="submit" className="w-full" disabled={createMutation.isPending} data-testid="button-create-link-confirm">
                 {createMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                Créer le lien
+                {t.links.formCreateButton}
               </Button>
             </form>
           </Form>
@@ -426,13 +419,14 @@ function EditLinkDialog({ link, onClose, userCurrency }: {
   userCurrency: SupportedCurrency;
 }) {
   const { toast } = useToast();
+  const { t } = useLanguage();
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(link.imagePath || null);
   
   const imageUpload = useUpload({
     onError: (error) => {
-      toast({ title: "Erreur upload image", description: error.message, variant: "destructive" });
+      toast({ title: t.links.toastUploadError, description: error.message, variant: "destructive" });
     }
   });
 
@@ -524,11 +518,11 @@ function EditLinkDialog({ link, onClose, userCurrency }: {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/payment-links"] });
-      toast({ title: "Lien modifié", description: "Les modifications ont été enregistrées" });
+      toast({ title: t.links.toastLinkUpdated, description: t.links.toastLinkUpdatedDesc });
       onClose();
     },
     onError: (error: Error) => {
-      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+      toast({ title: t.links.toastError, description: error.message, variant: "destructive" });
     },
   });
 
@@ -536,8 +530,8 @@ function EditLinkDialog({ link, onClose, userCurrency }: {
     <Dialog open={true} onOpenChange={onClose}>
       <DialogContent className="max-w-lg max-h-[90vh]">
         <DialogHeader>
-          <DialogTitle>Modifier le lien de paiement</DialogTitle>
-          <DialogDescription>Modifiez les informations de votre lien</DialogDescription>
+          <DialogTitle>{t.links.editDialogTitle}</DialogTitle>
+          <DialogDescription>{t.links.editDialogDesc}</DialogDescription>
         </DialogHeader>
         <ScrollArea className="max-h-[60vh] pr-4">
           <Form {...form}>
@@ -547,9 +541,9 @@ function EditLinkDialog({ link, onClose, userCurrency }: {
                 name="title"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Titre *</FormLabel>
+                    <FormLabel>{t.links.formTitle}</FormLabel>
                     <FormControl>
-                      <Input placeholder="Ex: Paiement commande #123" {...field} data-testid="input-edit-title" />
+                      <Input placeholder={t.links.formTitlePlaceholder} {...field} data-testid="input-edit-title" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -561,9 +555,9 @@ function EditLinkDialog({ link, onClose, userCurrency }: {
                 name="description"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Description (optionnel)</FormLabel>
+                    <FormLabel>{t.links.formDesc}</FormLabel>
                     <FormControl>
-                      <Input placeholder="Description du paiement..." {...field} data-testid="input-edit-description" />
+                      <Input placeholder={t.links.formDescPlaceholder} {...field} data-testid="input-edit-description" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -577,7 +571,7 @@ function EditLinkDialog({ link, onClose, userCurrency }: {
                   <FormItem>
                     <FormLabel className="flex items-center gap-2">
                       <LinkIcon className="w-4 h-4" />
-                      URL personnalisée (optionnel)
+                      {t.links.formSlug}
                     </FormLabel>
                     <FormControl>
                       <div className="flex items-center gap-2">
@@ -586,7 +580,7 @@ function EditLinkDialog({ link, onClose, userCurrency }: {
                       </div>
                     </FormControl>
                     <FormDescription className="text-xs">
-                      Laissez vide pour générer automatiquement
+                      {t.links.formSlugHint}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -596,7 +590,7 @@ function EditLinkDialog({ link, onClose, userCurrency }: {
               <div className="space-y-3 rounded-lg border p-3">
                 <div className="flex items-center gap-2">
                   <Image className="w-4 h-4" />
-                  <span className="text-sm font-medium">Image (optionnel)</span>
+                  <span className="text-sm font-medium">{t.links.formImage}</span>
                 </div>
                 {imagePreview ? (
                   <div className="relative">
@@ -618,7 +612,7 @@ function EditLinkDialog({ link, onClose, userCurrency }: {
                     onClick={() => imageInputRef.current?.click()}
                   >
                     <Upload className="w-6 h-6 mx-auto mb-2 text-muted-foreground" />
-                    <p className="text-xs text-muted-foreground">Cliquez pour ajouter une image</p>
+                    <p className="text-xs text-muted-foreground">{t.links.formImageAdd}</p>
                   </div>
                 )}
                 <input
@@ -638,10 +632,10 @@ function EditLinkDialog({ link, onClose, userCurrency }: {
                   <FormItem>
                     <FormLabel className="flex items-center gap-2">
                       <FileText className="w-4 h-4" />
-                      Lien PDF (optionnel)
+                      {t.links.formPdf}
                     </FormLabel>
                     <FormDescription className="text-xs text-amber-500">
-                      Ce PDF sera envoyé au client uniquement après paiement réussi
+                      {t.links.formPdfDesc}
                     </FormDescription>
                     <FormControl>
                       <div className="flex items-center gap-2">
@@ -667,10 +661,10 @@ function EditLinkDialog({ link, onClose, userCurrency }: {
                       <div className="space-y-0.5">
                         <FormLabel className="text-amber-500 flex items-center gap-2">
                           <FileText className="w-4 h-4" />
-                          Livraison PDF après paiement
+                          {t.links.formPdfDelivery}
                         </FormLabel>
                         <FormDescription className="text-xs">
-                          Le client recevra ce lien PDF après avoir payé avec succès
+                          {t.links.formPdfDeliveryDesc}
                         </FormDescription>
                       </div>
                       <FormControl>
@@ -691,9 +685,9 @@ function EditLinkDialog({ link, onClose, userCurrency }: {
                 render={({ field }) => (
                   <FormItem className="flex items-center justify-between rounded-lg border p-3">
                     <div className="space-y-0.5">
-                      <FormLabel>Type de montant</FormLabel>
+                      <FormLabel>{t.links.formAmountType}</FormLabel>
                       <FormDescription className="text-xs">
-                        {field.value ? "Montant fixe défini par vous" : "Montant libre choisi par le payeur"}
+                        {field.value ? t.links.formFixed : t.links.formFree}
                       </FormDescription>
                     </div>
                     <FormControl>
@@ -713,7 +707,7 @@ function EditLinkDialog({ link, onClose, userCurrency }: {
                   name="amount"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Montant ({userCurrency}) *</FormLabel>
+                      <FormLabel>{t.links.formAmount} ({userCurrency}) *</FormLabel>
                       <FormControl>
                         <Input type="number" placeholder="10000" {...field} data-testid="input-edit-amount" />
                       </FormControl>
@@ -730,7 +724,7 @@ function EditLinkDialog({ link, onClose, userCurrency }: {
                   <FormItem>
                     <FormLabel className="flex items-center gap-2">
                       <Calendar className="w-4 h-4" />
-                      Date d'expiration (optionnel)
+                      {t.links.formExpiry}
                     </FormLabel>
                     <FormControl>
                       <Input type="datetime-local" {...field} data-testid="input-edit-expiry" />
@@ -747,7 +741,7 @@ function EditLinkDialog({ link, onClose, userCurrency }: {
                   <FormItem>
                     <FormLabel className="flex items-center gap-2">
                       <ExternalLink className="w-4 h-4" />
-                      URL de redirection après paiement (optionnel)
+                      {t.links.formRedirect}
                     </FormLabel>
                     <FormControl>
                       <Input placeholder="https://monsite.com/merci" {...field} data-testid="input-edit-redirect" />
@@ -759,11 +753,11 @@ function EditLinkDialog({ link, onClose, userCurrency }: {
 
               <div className="flex gap-2 pt-4">
                 <Button type="button" variant="outline" onClick={onClose} className="flex-1" data-testid="button-edit-cancel">
-                  Annuler
+                  {t.links.cancel}
                 </Button>
                 <Button type="submit" disabled={updateMutation.isPending} className="flex-1" data-testid="button-edit-save">
                   {updateMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                  Enregistrer
+                  {t.links.formSaveButton}
                 </Button>
               </div>
             </form>
@@ -939,6 +933,16 @@ export default function PaymentLinksPage() {
   const [showAllRecentLinks, setShowAllRecentLinks] = useState(false);
   const [qrModalLink, setQrModalLink] = useState<PaymentLink | null>(null);
   const { toast } = useToast();
+  const { t } = useLanguage();
+
+  const periodOptions = [
+    { value: "today", label: t.links.periodToday },
+    { value: "week", label: t.links.periodWeek },
+    { value: "month", label: t.links.periodMonth },
+    { value: "last_month", label: t.links.periodLastMonth },
+    { value: "year", label: t.links.periodYear },
+    { value: "all", label: t.links.periodAll },
+  ];
   
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const { data: paymentLinks = [], isLoading } = useQuery<PaymentLink[]>({
@@ -988,10 +992,10 @@ export default function PaymentLinksPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/payment-links"] });
-      toast({ title: "Lien mis à jour", description: "Le statut du lien a été modifié" });
+      toast({ title: t.links.toastLinkUpdated, description: t.links.toastLinkUpdatedDesc });
     },
     onError: () => {
-      toast({ title: "Erreur", description: "Impossible de modifier le lien", variant: "destructive" });
+      toast({ title: t.links.toastError, description: "Impossible de modifier le lien", variant: "destructive" });
     },
   });
 
@@ -1001,11 +1005,11 @@ export default function PaymentLinksPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/payment-links"] });
-      toast({ title: "Lien supprimé", description: "Le lien a été supprimé définitivement" });
+      toast({ title: t.links.toastDeleted, description: t.links.toastDeletedDesc });
     },
     onError: (error: Error) => {
       toast({ 
-        title: "Erreur", 
+        title: t.links.toastError, 
         description: error.message || "Impossible de supprimer le lien", 
         variant: "destructive" 
       });
@@ -1032,23 +1036,23 @@ export default function PaymentLinksPage() {
     const pageWidth = doc.internal.pageSize.getWidth();
     
     doc.setFontSize(20);
-    doc.text("Rapport du lien de paiement", pageWidth / 2, 20, { align: "center" });
+    doc.text(t.links.pdfReportTitle, pageWidth / 2, 20, { align: "center" });
     
     doc.setFontSize(14);
     doc.text(link.title, 20, 40);
     
     doc.setFontSize(12);
     doc.text(`URL: ${window.location.origin}/pay/${link.slug}`, 20, 55);
-    doc.text(`Type: ${link.isFixedAmount ? "Montant fixe" : "Montant flexible"}`, 20, 65);
-    doc.text(`Montant: ${link.isFixedAmount ? formatCurrency(link.amount, (user?.preferredCurrency || "XAF") as SupportedCurrency) : "Variable"}`, 20, 75);
-    doc.text(`Statut: ${link.isActive ? "Actif" : "Inactif"}`, 20, 85);
+    doc.text(`Type: ${link.isFixedAmount ? t.links.pdfFixed : t.links.pdfFree}`, 20, 65);
+    doc.text(`Montant: ${link.isFixedAmount ? formatCurrency(link.amount, (user?.preferredCurrency || "XAF") as SupportedCurrency) : t.links.pdfFree}`, 20, 75);
+    doc.text(`Statut: ${link.isActive ? t.links.pdfActive : t.links.pdfInactive}`, 20, 85);
     doc.text(`Clics: ${link.clickCount || 0}`, 20, 100);
     doc.text(`Transactions: ${stats.transactionCount}`, 20, 110);
-    doc.text(`Total collecté: ${formatCurrency(stats.totalCollected, (user?.preferredCurrency || "XAF") as SupportedCurrency)}`, 20, 120);
-    doc.text(`Créé le: ${link.createdAt ? format(new Date(link.createdAt), "dd/MM/yyyy HH:mm", { locale: fr }) : "-"}`, 20, 135);
+    doc.text(`Total: ${formatCurrency(stats.totalCollected, (user?.preferredCurrency || "XAF") as SupportedCurrency)}`, 20, 120);
+    doc.text(`Date: ${link.createdAt ? format(new Date(link.createdAt), "dd/MM/yyyy HH:mm", { locale: fr }) : "-"}`, 20, 135);
     
     doc.save(`${link.slug}-rapport.pdf`);
-    toast({ title: "PDF téléchargé", description: "Le rapport a été généré avec succès" });
+    toast({ title: t.links.toastPdf, description: t.links.toastPdfDesc });
   };
 
   const analytics = useMemo(() => {
@@ -1096,10 +1100,10 @@ export default function PaymentLinksPage() {
       "other": "#A855F7"
     };
     const methodLabels: Record<string, string> = {
-      "mobile_money": "Mobile Money",
-      "card": "Carte bancaire",
-      "paypal": "PayPal",
-      "other": "Autre"
+      "mobile_money": t.links.methodMobileMoney,
+      "card": t.links.methodCard,
+      "paypal": t.links.methodPaypal,
+      "other": t.links.methodOther,
     };
     const sources = Object.entries(methodStats).map(([method, amount]) => ({
       name: methodLabels[method] || method,
@@ -1112,7 +1116,7 @@ export default function PaymentLinksPage() {
       transactions: completedIntents.length,
       totalCollected,
       countries,
-      sources: sources.length > 0 ? sources : [{ name: "Aucune donnée", value: 100, color: "#6B7280" }],
+      sources: sources.length > 0 ? sources : [{ name: t.links.noData, value: 100, color: "#6B7280" }],
     };
   }, [paymentLinks, paymentIntents, countriesList]);
 
@@ -1182,7 +1186,7 @@ export default function PaymentLinksPage() {
   const copyLink = (slug: string) => {
     const url = `${window.location.origin}/pay/${slug}`;
     navigator.clipboard.writeText(url);
-    toast({ title: "Lien copié", description: "Le lien a été copié dans le presse-papier" });
+    toast({ title: t.links.toastCopied, description: t.links.toastCopiedDesc });
   };
 
   return (
@@ -1190,12 +1194,12 @@ export default function PaymentLinksPage() {
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-foreground">Mes liens de paiement</h1>
-            <p className="text-muted-foreground">Gérez vos liens et analysez vos performances</p>
+            <h1 className="text-2xl font-semibold text-foreground">{t.links.title}</h1>
+            <p className="text-muted-foreground">{t.links.subtitle}</p>
           </div>
           <Button onClick={() => navigate("/dashboard/links/new")} data-testid="button-new-link">
             <Plus className="w-4 h-4 mr-2" />
-            Nouveau lien
+            {t.links.newLink}
           </Button>
         </div>
 
@@ -1203,7 +1207,7 @@ export default function PaymentLinksPage() {
         {paymentLinks.length > 0 && (
           <div>
             <SectionLabel>
-              {showAllRecentLinks ? `Tous vos ${sortedLinks.length} liens` : "Liens récents"}
+              {showAllRecentLinks ? `${t.links.allYourLinks} ${sortedLinks.length} ${t.links.linksWord}` : t.links.recentLinks}
             </SectionLabel>
             <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
               {recentLinks.map((link) => {
@@ -1231,8 +1235,8 @@ export default function PaymentLinksPage() {
                             : <XCircle className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
                         </div>
                         <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
-                          <span className="flex items-center gap-1"><Eye className="w-3 h-3" />{link.clickCount || 0} clics</span>
-                          <span>{link.isFixedAmount ? formatCurrency(link.amount, (user?.preferredCurrency || "XAF") as SupportedCurrency) : "Montant libre"}</span>
+                          <span className="flex items-center gap-1"><Eye className="w-3 h-3" />{link.clickCount || 0} {t.links.clicks}</span>
+                          <span>{link.isFixedAmount ? formatCurrency(link.amount, (user?.preferredCurrency || "XAF") as SupportedCurrency) : t.links.freeAmount}</span>
                         </div>
                       </div>
                       <div className="text-right shrink-0">
@@ -1260,10 +1264,10 @@ export default function PaymentLinksPage() {
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => navigate(`/dashboard/links/${link.id}/edit`)} title="Modifier" data-testid={`button-edit-${link.id}`}>
                           <Pencil className="w-3.5 h-3.5" />
                         </Button>
-                        <Button variant="ghost" size="icon" className={`h-7 w-7 ${link.isActive ? "text-orange-500 hover:text-orange-600" : "text-green-500 hover:text-green-600"}`} onClick={() => deactivateMutation.mutate({ id: link.id, isActive: !link.isActive })} title={link.isActive ? "Désactiver" : "Activer"} data-testid={`button-toggle-${link.id}`}>
+                        <Button variant="ghost" size="icon" className={`h-7 w-7 ${link.isActive ? "text-orange-500 hover:text-orange-600" : "text-green-500 hover:text-green-600"}`} onClick={() => deactivateMutation.mutate({ id: link.id, isActive: !link.isActive })} title={link.isActive ? t.links.deactivate : t.links.activate} data-testid={`button-toggle-${link.id}`}>
                           <Power className="w-3.5 h-3.5" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => { if (confirm("Êtes-vous sûr de vouloir supprimer ce lien définitivement ?")) deleteMutation.mutate(link.id); }} title="Supprimer" data-testid={`button-delete-${link.id}`}>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => { if (confirm(t.links.deleteConfirm)) deleteMutation.mutate(link.id); }} title={t.links.deactivate} data-testid={`button-delete-${link.id}`}>
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       </div>
@@ -1278,7 +1282,7 @@ export default function PaymentLinksPage() {
                   data-testid="button-toggle-all-links"
                 >
                   {showAllRecentLinks ? <XCircle className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
-                  {showAllRecentLinks ? "Afficher moins" : `Voir ${sortedLinks.length - 5} autres`}
+                  {showAllRecentLinks ? t.links.showLess : `${t.links.seeMore} ${sortedLinks.length - 5} ${t.links.moreLinks}`}
                 </button>
               )}
             </div>
@@ -1290,10 +1294,10 @@ export default function PaymentLinksPage() {
             <Filter className="w-4 h-4 text-muted-foreground" />
             <Select value={selectedLink} onValueChange={setSelectedLink}>
               <SelectTrigger className="w-48" data-testid="select-link-filter">
-                <SelectValue placeholder="Tous les liens" />
+                <SelectValue placeholder={t.links.allLinks} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tous les liens</SelectItem>
+                <SelectItem value="all">{t.links.allLinks}</SelectItem>
                 {paymentLinks.map((link) => (
                   <SelectItem key={link.id} value={link.id}>{link.title}</SelectItem>
                 ))}
@@ -1317,27 +1321,27 @@ export default function PaymentLinksPage() {
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <StatCard 
-            title="Clics sur les liens" 
+            title={t.links.statClicks} 
             value={analytics.clicks.toLocaleString('fr-FR')} 
             icon={MousePointer} 
-            trend="+12% vs période précédente"
+            trend={t.links.trendVsPrevious}
             color="bg-blue-500/10 text-blue-500"
           />
           <StatCard 
-            title="Transactions" 
+            title={t.links.statTransactions} 
             value={analytics.transactions} 
             icon={ArrowDownUp} 
-            trend="+8% vs période précédente"
+            trend={t.links.trendTransactions}
             color="bg-green-500/10 text-green-500"
           />
           <StatCard 
-            title="Total collecté" 
+            title={t.links.statCollected} 
             value={formatCurrency(analytics.totalCollected, (user?.preferredCurrency || "XAF") as SupportedCurrency)} 
             icon={Wallet} 
             color="bg-primary/10 text-primary"
           />
           <StatCard 
-            title="Taux de conversion" 
+            title={t.links.statConversion} 
             value={analytics.clicks > 0 ? `${((analytics.transactions / analytics.clicks) * 100).toFixed(1)}%` : "0%"}
             icon={TrendingUp} 
             color="bg-purple-500/10 text-purple-500"
@@ -1348,15 +1352,15 @@ export default function PaymentLinksPage() {
           <TabsList className="flex flex-wrap gap-2 h-auto bg-transparent p-0">
             <TabsTrigger value="analytics" data-testid="tab-analytics">
               <BarChart3 className="w-4 h-4 mr-2" />
-              Analytiques
+              {t.links.tabAnalytics}
             </TabsTrigger>
             <TabsTrigger value="payments" data-testid="tab-payments">
               <Wallet className="w-4 h-4 mr-2" />
-              Paiements ({paymentIntents.length})
+              {t.links.tabPayments} ({paymentIntents.length})
             </TabsTrigger>
             <TabsTrigger value="links" data-testid="tab-links">
               <Link2 className="w-4 h-4 mr-2" />
-              Liens ({paymentLinks.length})
+              {t.links.tabLinks} ({paymentLinks.length})
             </TabsTrigger>
           </TabsList>
 
@@ -1364,13 +1368,13 @@ export default function PaymentLinksPage() {
             <div className="grid lg:grid-cols-3 gap-6">
               <Card className="lg:col-span-2">
                 <CardHeader>
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Analytiques</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{t.links.tabAnalytics}</p>
                   <CardTitle className="flex items-center gap-2 text-base">
                     <BarChart3 className="w-4 h-4 text-muted-foreground" />
-                    Montants collectés par période
+                    {t.links.chartTitle}
                   </CardTitle>
                   <CardDescription>
-                    {selectedPeriod === "week" ? "Cette semaine" : "Ces 6 derniers mois"}
+                    {selectedPeriod === "week" ? t.links.chartDescWeek : t.links.chartDescMonths}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -1389,7 +1393,7 @@ export default function PaymentLinksPage() {
                           tickFormatter={(value) => `${(value / 1000000).toFixed(1)}M`}
                         />
                         <Tooltip 
-                          formatter={(value: number) => [formatCurrency(value, (user?.preferredCurrency || "XAF") as SupportedCurrency), "Montant"]}
+                          formatter={(value: number) => [formatCurrency(value, (user?.preferredCurrency || "XAF") as SupportedCurrency), t.links.chartTitle]}
                           contentStyle={{
                             backgroundColor: "hsl(var(--card))",
                             border: "1px solid hsl(var(--border))",
@@ -1406,10 +1410,10 @@ export default function PaymentLinksPage() {
 
               <Card>
                 <CardHeader>
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Géographie</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{t.links.geoSection}</p>
                   <CardTitle className="flex items-center gap-2 text-base">
                     <Globe className="w-4 h-4 text-muted-foreground" />
-                    Pays principaux
+                    {t.links.geoTitle}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -1447,9 +1451,9 @@ export default function PaymentLinksPage() {
 
             <Card>
               <CardHeader>
-                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Méthodes</p>
-                <CardTitle className="text-base">Sources de paiement</CardTitle>
-                <CardDescription>Répartition des paiements par méthode</CardDescription>
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{t.links.methodsSection}</p>
+                <CardTitle className="text-base">{t.links.methodsTitle}</CardTitle>
+                <CardDescription>{t.links.methodsDesc}</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="grid md:grid-cols-2 gap-6">
@@ -1500,18 +1504,18 @@ export default function PaymentLinksPage() {
           <TabsContent value="payments" className="mt-6">
             <Card>
               <CardHeader>
-                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Paiements</p>
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{t.links.tabPayments}</p>
                 <CardTitle className="flex items-center gap-2 text-base">
                   <Wallet className="w-4 h-4 text-muted-foreground" />
-                  Paiements reçus
+                  {t.links.paymentsTitle}
                 </CardTitle>
-                <CardDescription>Tous les paiements effectués via vos liens</CardDescription>
+                <CardDescription>{t.links.paymentsDesc}</CardDescription>
               </CardHeader>
               <CardContent>
                 {paymentIntents.length === 0 ? (
                   <div className="text-center py-12">
                     <Wallet className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-muted-foreground">Aucun paiement reçu pour le moment</p>
+                    <p className="text-muted-foreground">{t.links.noPayments}</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -1523,15 +1527,15 @@ export default function PaymentLinksPage() {
                               <h4 className="font-medium text-foreground">{intent.payerName}</h4>
                               {intent.status === "completed" ? (
                                 <span className="flex items-center gap-1 text-xs text-green-500">
-                                  <CheckCircle className="w-3 h-3" /> Complété
+                                  <CheckCircle className="w-3 h-3" /> {t.links.statusCompleted}
                                 </span>
                               ) : intent.status === "pending" ? (
                                 <span className="flex items-center gap-1 text-xs text-yellow-500">
-                                  <Loader2 className="w-3 h-3" /> En attente
+                                  <Loader2 className="w-3 h-3" /> {t.links.statusPending}
                                 </span>
                               ) : (
                                 <span className="flex items-center gap-1 text-xs text-red-500">
-                                  <XCircle className="w-3 h-3" /> Échoué
+                                  <XCircle className="w-3 h-3" /> {t.links.statusFailed}
                                 </span>
                               )}
                             </div>
@@ -1552,19 +1556,19 @@ export default function PaymentLinksPage() {
                                 </span>
                                 {intent.feeAmount && parseFloat(intent.feeAmount) > 0 && (
                                   <span className="text-xs text-muted-foreground">
-                                    Montant payé: {formatCurrency(intent.amount, (intent.currency as SupportedCurrency) || "XAF")}
+                                    {t.links.amountPaid} {formatCurrency(intent.amount, (intent.currency as SupportedCurrency) || "XAF")}
                                     <span className="text-amber-500 ml-1">
-                                      (-{formatCurrency(parseFloat(intent.feeAmount), (intent.currency as SupportedCurrency) || "XAF")} frais)
+                                      (-{formatCurrency(parseFloat(intent.feeAmount), (intent.currency as SupportedCurrency) || "XAF")} {t.links.fee})
                                     </span>
                                   </span>
                                 )}
                               </div>
                               <span className="text-xs text-muted-foreground">
-                                {intent.paymentMethod === "mobile_money" ? "Mobile Money" : intent.paymentMethod}
+                                {intent.paymentMethod === "mobile_money" ? t.links.methodMobileMoney : intent.paymentMethod}
                                 {intent.operator && ` - ${getOperatorDisplay(intent.operator)}`}
                               </span>
                               <span className="text-xs text-muted-foreground">
-                                Réf: {intent.reference}
+                                {t.links.ref}: {intent.reference}
                               </span>
                             </div>
                             <p className="text-xs text-muted-foreground mt-2">
@@ -1582,7 +1586,7 @@ export default function PaymentLinksPage() {
 
           <TabsContent value="links" className="mt-6">
             <div>
-              <SectionLabel>Tous les liens ({paymentLinks.length})</SectionLabel>
+              <SectionLabel>{t.links.allLinksSection} ({paymentLinks.length})</SectionLabel>
               {isLoading ? (
                 <div className="flex justify-center py-12">
                   <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
@@ -1590,10 +1594,10 @@ export default function PaymentLinksPage() {
               ) : paymentLinks.length === 0 ? (
                 <div className="text-center py-12 rounded-xl border border-border bg-card">
                   <Link2 className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground mb-4">Aucun lien de paiement créé</p>
+                  <p className="text-muted-foreground mb-4">{t.links.noLinks}</p>
                   <Button onClick={() => navigate("/dashboard/links/new")} data-testid="button-create-first-link">
                     <Plus className="w-4 h-4 mr-2" />
-                    Créer votre premier lien
+                    {t.links.createFirstLink}
                   </Button>
                 </div>
               ) : (
@@ -1620,9 +1624,9 @@ export default function PaymentLinksPage() {
                               {link.isActive ? <CheckCircle className="w-3.5 h-3.5 text-green-500 shrink-0" /> : <XCircle className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
                             </div>
                             <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
-                              <span className="flex items-center gap-1"><Eye className="w-3 h-3" />{link.clickCount || 0} clics</span>
-                              <span className="flex items-center gap-1"><ArrowDownUp className="w-3 h-3" />{stats.transactionCount} pmt.</span>
-                              <span>{link.isFixedAmount ? formatCurrency(link.amount, (user?.preferredCurrency || "XAF") as SupportedCurrency) : "Montant libre"}</span>
+                              <span className="flex items-center gap-1"><Eye className="w-3 h-3" />{link.clickCount || 0} {t.links.clicks}</span>
+                              <span className="flex items-center gap-1"><ArrowDownUp className="w-3 h-3" />{stats.transactionCount} {t.links.pmtShort}</span>
+                              <span>{link.isFixedAmount ? formatCurrency(link.amount, (user?.preferredCurrency || "XAF") as SupportedCurrency) : t.links.freeAmount}</span>
                             </div>
                             {link.description && <p className="text-xs text-muted-foreground mt-0.5 truncate">{link.description}</p>}
                           </div>
@@ -1639,8 +1643,8 @@ export default function PaymentLinksPage() {
                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => generatePDF(link)} title="PDF" data-testid={`button-pdf-all-${link.id}`}><Download className="w-3.5 h-3.5" /></Button>
                             <Button variant="ghost" size="icon" className="h-7 w-7" asChild><a href={`/pay/${link.slug}`} target="_blank" rel="noopener noreferrer" data-testid={`button-open-all-${link.id}`}><ExternalLink className="w-3.5 h-3.5" /></a></Button>
                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => navigate(`/dashboard/links/${link.id}/edit`)} title="Modifier" data-testid={`button-edit-all-${link.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
-                            <Button variant="ghost" size="icon" className={`h-7 w-7 ${link.isActive ? "text-orange-500 hover:text-orange-600" : "text-green-500 hover:text-green-600"}`} onClick={() => deactivateMutation.mutate({ id: link.id, isActive: !link.isActive })} title={link.isActive ? "Désactiver" : "Activer"} data-testid={`button-toggle-all-${link.id}`}><Power className="w-3.5 h-3.5" /></Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => { if (confirm("Êtes-vous sûr de vouloir supprimer ce lien définitivement ?")) deleteMutation.mutate(link.id); }} title="Supprimer" data-testid={`button-delete-all-${link.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
+                            <Button variant="ghost" size="icon" className={`h-7 w-7 ${link.isActive ? "text-orange-500 hover:text-orange-600" : "text-green-500 hover:text-green-600"}`} onClick={() => deactivateMutation.mutate({ id: link.id, isActive: !link.isActive })} title={link.isActive ? t.links.deactivate : t.links.activate} data-testid={`button-toggle-all-${link.id}`}><Power className="w-3.5 h-3.5" /></Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => { if (confirm(t.links.deleteConfirm)) deleteMutation.mutate(link.id); }} title={t.links.deactivate} data-testid={`button-delete-all-${link.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
                           </div>
                         </div>
                       </div>
@@ -1659,9 +1663,9 @@ export default function PaymentLinksPage() {
       <Dialog open={!!qrModalLink} onOpenChange={() => setQrModalLink(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>QR Code</DialogTitle>
+            <DialogTitle>{t.links.qrTitle}</DialogTitle>
             <DialogDescription>
-              Scannez ce code pour accéder au lien de paiement
+              {t.links.qrModalDesc}
             </DialogDescription>
           </DialogHeader>
           {qrModalLink && (
@@ -1678,7 +1682,7 @@ export default function PaymentLinksPage() {
               </p>
               <Button onClick={() => copyLink(qrModalLink.slug)} className="w-full" data-testid="button-copy-qr-link">
                 <Copy className="w-4 h-4 mr-2" />
-                Copier le lien
+                {t.links.copyLink}
               </Button>
             </div>
           )}

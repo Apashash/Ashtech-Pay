@@ -13,6 +13,7 @@ import { Wallet, ArrowLeftRight, Info, Plus, Loader2, CheckCircle2, X, AlertTria
 import { ALL_FX_CURRENCIES, CURRENCY_SYMBOLS } from "@shared/schema";
 import type { User, Transaction } from "@shared/schema";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useLanguage } from "@/lib/language";
 
 interface WalletEntry {
   currency: string;
@@ -44,6 +45,7 @@ ALL_FX_CURRENCIES.forEach(c => { CURRENCY_NAMES[c.code] = c.name; });
 
 export default function WalletsPage() {
   const { toast } = useToast();
+  const { t } = useLanguage();
   const [convertOpen, setConvertOpen] = useState(false);
   const [addWalletOpen, setAddWalletOpen] = useState(false);
   const [pendingSuccess, setPendingSuccess] = useState<{ fromCurrency: string; toCurrency: string; fromAmount: number } | null>(null);
@@ -103,7 +105,7 @@ export default function WalletsPage() {
       setConvertAmount("");
     },
     onError: (error: Error) => {
-      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+      toast({ title: t.wallets.toastError, description: error.message, variant: "destructive" });
     },
   });
 
@@ -125,12 +127,12 @@ export default function WalletsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/wallets"] });
-      toast({ title: "Compte créé", description: `Compte ${newWalletCurrency} créé avec succès` });
+      toast({ title: t.wallets.toastCreated, description: `${t.wallets.toastCreatedDescPre}${newWalletCurrency}${t.wallets.toastCreatedDescSuf}` });
       setAddWalletOpen(false);
       setNewWalletCurrency("");
     },
     onError: (error: Error) => {
-      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+      toast({ title: t.wallets.toastError, description: error.message, variant: "destructive" });
     },
   });
 
@@ -143,11 +145,11 @@ export default function WalletsPage() {
     },
     onSuccess: (_, currency) => {
       queryClient.invalidateQueries({ queryKey: ["/api/wallets"] });
-      toast({ title: "Compte désactivé", description: `Le compte ${currency} a été supprimé` });
+      toast({ title: t.wallets.toastDisabled, description: `${t.wallets.toastDisabledDescPre}${currency}${t.wallets.toastDisabledDescSuf}` });
       setWalletToDelete(null);
     },
     onError: (error: Error) => {
-      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+      toast({ title: t.wallets.toastError, description: error.message, variant: "destructive" });
       setWalletToDelete(null);
     },
   });
@@ -214,20 +216,19 @@ export default function WalletsPage() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-foreground">Mes Comptes</h1>
-            <p className="text-muted-foreground">Gérez vos portefeuilles multi-devises</p>
+            <h1 className="text-2xl font-semibold text-foreground">{t.wallets.title}</h1>
+            <p className="text-muted-foreground">{t.wallets.subtitle}</p>
           </div>
           <Button variant="outline" onClick={() => setAddWalletOpen(true)} className="gap-2" data-testid="button-add-wallet">
             <Plus className="w-4 h-4" />
-            Ajouter un compte
+            {t.wallets.addAccount}
           </Button>
         </div>
 
         <Alert>
           <Info className="h-4 w-4" />
           <AlertDescription>
-            Les paiements reçus sont crédités dans le wallet correspondant à la devise du paiement.
-            Utilisez la conversion pour transférer entre vos comptes.
+            {t.wallets.alertDesc}
           </AlertDescription>
         </Alert>
 
@@ -237,7 +238,7 @@ export default function WalletsPage() {
           </div>
         ) : (
           <>
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Portefeuilles</p>
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{t.wallets.walletsLabel}</p>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {walletList.map((wallet) => {
               const balance = parseFloat(wallet.balance || "0");
@@ -259,14 +260,14 @@ export default function WalletsPage() {
                       <div className="flex items-center gap-2">
                         {isMain && (
                           <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full font-medium">
-                            Principal
+                            {t.wallets.principal}
                           </span>
                         )}
                         {!isMain && (
                           <button
                             onClick={() => setWalletToDelete(wallet)}
                             className="w-7 h-7 flex items-center justify-center rounded-full bg-destructive/10 hover:bg-destructive/20 text-destructive transition-colors"
-                            title="Désactiver ce compte"
+                            title={t.wallets.disableTooltip}
                             data-testid={`button-disable-wallet-${wallet.currency}`}
                           >
                             <X className="w-4 h-4" />
@@ -275,7 +276,7 @@ export default function WalletsPage() {
                       </div>
                     </div>
                     <div className="mb-4">
-                      <p className="text-muted-foreground text-sm mb-1">Solde</p>
+                      <p className="text-muted-foreground text-sm mb-1">{t.wallets.balance}</p>
                       <p className="text-2xl font-bold">
                         {balance.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         <span className="text-base font-normal text-muted-foreground ml-1">{wallet.symbol || walletSymbol(wallet.currency)}</span>
@@ -290,7 +291,7 @@ export default function WalletsPage() {
                       data-testid={`button-convert-${wallet.currency}`}
                     >
                       <ArrowLeftRight className="w-4 h-4" />
-                      Demander une conversion
+                      {t.wallets.requestConversion}
                     </Button>
                   </CardContent>
                 </Card>
@@ -300,17 +301,16 @@ export default function WalletsPage() {
           </>
         )}
 
-        {/* Pending success banner */}
         {pendingSuccess && (
           <Card className="border-green-500/40 bg-green-500/5">
             <CardContent className="p-4 flex items-start gap-3">
               <CheckCircle2 className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
               <div>
-                <p className="font-semibold text-green-600">Conversion effectuée</p>
+                <p className="font-semibold text-green-600">{t.wallets.conversionDone}</p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Votre conversion de{" "}
-                  <strong>{pendingSuccess.fromAmount.toLocaleString("fr-FR")} {pendingSuccess.fromCurrency}</strong>{" "}
-                  vers <strong>{pendingSuccess.toCurrency}</strong> a été traitée avec succès.
+                  {t.wallets.conversionDoneDescPre}
+                  <strong>{pendingSuccess.fromAmount.toLocaleString("fr-FR")} {pendingSuccess.fromCurrency}</strong>
+                  {t.wallets.conversionDoneDescMid}<strong>{pendingSuccess.toCurrency}</strong>{t.wallets.conversionDoneDescSuf}
                 </p>
               </div>
             </CardContent>
@@ -323,15 +323,15 @@ export default function WalletsPage() {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <ArrowLeftRight className="w-5 h-5" />
-                Conversion de devises
+                {t.wallets.convertDialogTitle}
               </DialogTitle>
               <DialogDescription>
-                Convertissez vos fonds instantanément. Les frais de conversion sont appliqués automatiquement.
+                {t.wallets.convertDialogDesc}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label>Compte source (à débiter)</Label>
+                <Label>{t.wallets.fromAccount}</Label>
                 <Select value={fromCurrency} onValueChange={(v) => { setFromCurrency(v); setConvertAmount(""); }}>
                   <SelectTrigger data-testid="select-from-currency">
                     <SelectValue />
@@ -347,7 +347,7 @@ export default function WalletsPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>Compte cible (à créditer)</Label>
+                <Label>{t.wallets.toAccount}</Label>
                 <Select value={toCurrency} onValueChange={setToCurrency}>
                   <SelectTrigger data-testid="select-to-currency">
                     <SelectValue />
@@ -363,7 +363,7 @@ export default function WalletsPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>Montant à convertir ({fromCurrency})</Label>
+                <Label>{t.wallets.convertAmountLabel} ({fromCurrency})</Label>
                 <Input
                   type="number"
                   placeholder="0"
@@ -375,25 +375,25 @@ export default function WalletsPage() {
                 />
                 {convertAmount && parsedAmount > 0 && !hasSufficientBalance && (
                   <p className="text-xs text-red-500">
-                    Solde insuffisant. Disponible : {sourceParsedBalance.toLocaleString("fr-FR")} {fromCurrency}
+                    {t.wallets.insufficientPre}{sourceParsedBalance.toLocaleString("fr-FR")} {fromCurrency}
                   </p>
                 )}
                 {convertAmount && hasSufficientBalance && (
                   <div className="mt-4 p-3 bg-primary/5 border border-primary/10 rounded-lg space-y-1">
                     <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>Montant brut</span>
+                      <span>{t.wallets.grossAmount}</span>
                       <span>{parsedAmount.toLocaleString("fr-FR")} {fromCurrency}</span>
                     </div>
                     <div className="flex justify-between text-xs text-amber-600 font-medium">
-                      <span>Frais de conversion (estimé)</span>
+                      <span>{t.wallets.conversionFee}</span>
                       <span>-{feeAmount.toLocaleString("fr-FR")} {fromCurrency}</span>
                     </div>
                     <div className="flex justify-between text-sm font-bold border-t border-primary/10 pt-1 mt-1">
-                      <span>Vous recevrez environ</span>
+                      <span>{t.wallets.youReceiveAbout}</span>
                       <span className="text-primary">{previewAmount.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {toCurrency}</span>
                     </div>
                     <p className="text-[10px] text-muted-foreground mt-2 italic text-center">
-                      Le taux final peut varier légèrement.
+                      {t.wallets.rateNote}
                     </p>
                   </div>
                 )}
@@ -401,7 +401,7 @@ export default function WalletsPage() {
 
               <div className="flex gap-3">
                 <Button variant="outline" className="flex-1" onClick={() => setConvertOpen(false)}>
-                  Annuler
+                  {t.wallets.cancel}
                 </Button>
                 <Button
                   className="flex-1 gap-2"
@@ -410,7 +410,7 @@ export default function WalletsPage() {
                   data-testid="button-confirm-convert"
                 >
                   {convertMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                  Convertir maintenant
+                  {t.wallets.convertNow}
                 </Button>
               </div>
             </div>
@@ -423,18 +423,18 @@ export default function WalletsPage() {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Wallet className="w-5 h-5" />
-                Ajouter un compte
+                {t.wallets.addDialogTitle}
               </DialogTitle>
               <DialogDescription>
-                Ouvrez un nouveau compte dans une autre devise. Le compte sera initialisé avec un solde de 0.
+                {t.wallets.addDialogDesc}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label>Devise</Label>
+                <Label>{t.wallets.currencyLabel}</Label>
                 <Select value={newWalletCurrency} onValueChange={setNewWalletCurrency}>
                   <SelectTrigger data-testid="select-new-wallet-currency">
-                    <SelectValue placeholder="Choisir une devise" />
+                    <SelectValue placeholder={t.wallets.chooseCurrency} />
                   </SelectTrigger>
                   <SelectContent>
                     {availableCurrencies.map(c => (
@@ -447,7 +447,7 @@ export default function WalletsPage() {
               </div>
               <div className="flex gap-3">
                 <Button variant="outline" className="flex-1" onClick={() => setAddWalletOpen(false)} data-testid="button-cancel-wallet">
-                  Annuler
+                  {t.wallets.cancel}
                 </Button>
                 <Button
                   className="flex-1"
@@ -456,7 +456,7 @@ export default function WalletsPage() {
                   data-testid="button-create-wallet"
                 >
                   {addWalletMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                  Créer
+                  {t.wallets.create}
                 </Button>
               </div>
             </div>
@@ -469,22 +469,20 @@ export default function WalletsPage() {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-destructive">
                 <AlertTriangle className="w-5 h-5" />
-                Désactiver ce compte
+                {t.wallets.disableTitle}
               </DialogTitle>
               <DialogDescription>
                 {hasBalanceToLose ? (
                   <>
-                    Ce compte <strong>{walletToDelete?.currency}</strong> contient un solde de{" "}
+                    {t.wallets.disableWithBalancePre}<strong>{walletToDelete?.currency}</strong>{t.wallets.disableWithBalanceMid}
                     <strong className="text-destructive">
                       {deleteBalance.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {walletToDelete?.symbol || walletToDelete?.currency}
                     </strong>.{" "}
-                    <span className="text-destructive font-semibold">Ce montant sera définitivement perdu</span> si vous désactivez ce compte.
-                    Voulez-vous vraiment continuer ?
+                    <span className="text-destructive font-semibold">{t.wallets.disableLose}</span>{t.wallets.disableWithBalanceSuf}
                   </>
                 ) : (
                   <>
-                    Voulez-vous désactiver le compte <strong>{walletToDelete?.currency}</strong> ?
-                    Ce compte sera supprimé de votre liste.
+                    {t.wallets.disableNoBalancePre}<strong>{walletToDelete?.currency}</strong>{t.wallets.disableNoBalanceSuf}
                   </>
                 )}
               </DialogDescription>
@@ -496,7 +494,7 @@ export default function WalletsPage() {
                 onClick={() => setWalletToDelete(null)}
                 data-testid="button-cancel-disable"
               >
-                Annuler
+                {t.wallets.cancel}
               </Button>
               <Button
                 variant="destructive"
@@ -506,7 +504,7 @@ export default function WalletsPage() {
                 data-testid="button-confirm-disable"
               >
                 {deleteWalletMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
-                {hasBalanceToLose ? "Désactiver et perdre le solde" : "Désactiver"}
+                {hasBalanceToLose ? t.wallets.disableButton : t.wallets.disableButtonSimple}
               </Button>
             </DialogFooter>
           </DialogContent>

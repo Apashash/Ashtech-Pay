@@ -1,5 +1,5 @@
 import { DashboardLayout } from "@/components/dashboard-layout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,6 +20,7 @@ import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { useSSE } from "@/hooks/use-sse";
 import { cn } from "@/lib/utils";
+import { useLanguage } from "@/lib/language";
 
 interface SupportTicket {
   id: string;
@@ -45,28 +46,6 @@ interface TicketMessage {
 
 interface SupportContact { email: string; phone: string; }
 
-const faqs = [
-  { question: "Comment recharger mon compte?", answer: "Allez dans Dépôt et choisissez votre mode de paiement préféré (Mobile Money ou Crypto)." },
-  { question: "Combien de temps prend un retrait?", answer: "Les retraits sont traités en 24h ouvrées. Mobile Money est généralement plus rapide (quelques minutes)." },
-  { question: "Comment créer un lien de paiement?", answer: "Allez dans 'Mes liens', cliquez sur 'Nouveau lien' et remplissez le formulaire." },
-  { question: "Quels sont les frais de transaction?", answer: "Les transferts entre utilisateurs Ashtech Pay sont gratuits. Des frais s'appliquent pour les retraits externes." },
-];
-
-const statusColors: Record<string, string> = {
-  open: "bg-blue-500/10 text-blue-500",
-  in_progress: "bg-yellow-500/10 text-yellow-500",
-  resolved: "bg-green-500/10 text-green-500",
-  closed: "bg-gray-500/10 text-gray-500",
-};
-
-const statusLabels: Record<string, string> = {
-  open: "Ouvert",
-  in_progress: "En cours",
-  resolved: "Résolu",
-  closed: "Clôturé",
-};
-
-// Read receipt ticks component
 function MessageTicks({ msg, adminOnline }: { msg: TicketMessage; adminOnline: boolean }) {
   if (msg.isAdmin) return null;
   if (msg.readByAdmin) {
@@ -94,6 +73,7 @@ function MessageTicks({ msg, adminOnline }: { msg: TicketMessage; adminOnline: b
 
 export default function SupportPage() {
   const { toast } = useToast();
+  const { t } = useLanguage();
   const [showNewTicket, setShowNewTicket] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
@@ -106,6 +86,27 @@ export default function SupportPage() {
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typingSentRef = useRef(false);
 
+  const faqs = [
+    { question: t.support.faq1Q, answer: t.support.faq1A },
+    { question: t.support.faq2Q, answer: t.support.faq2A },
+    { question: t.support.faq3Q, answer: t.support.faq3A },
+    { question: t.support.faq4Q, answer: t.support.faq4A },
+  ];
+
+  const statusColors: Record<string, string> = {
+    open: "bg-blue-500/10 text-blue-500",
+    in_progress: "bg-yellow-500/10 text-yellow-500",
+    resolved: "bg-green-500/10 text-green-500",
+    closed: "bg-gray-500/10 text-gray-500",
+  };
+
+  const statusLabels: Record<string, string> = {
+    open: t.support.statusOpen,
+    in_progress: t.support.statusInProgress,
+    resolved: t.support.statusResolved,
+    closed: t.support.statusClosed,
+  };
+
   const { data: supportContact } = useQuery<SupportContact>({ queryKey: ["/api/public/support-contact"] });
   const { data: ticketStats } = useQuery<{ unreadCount: number; totalCount: number }>({
     queryKey: ["/api/tickets/stats"],
@@ -116,7 +117,7 @@ export default function SupportPage() {
   const whatsappUrl = `https://wa.me/${whatsappPhone}?text=Bonjour%20Ashtech%20Pay%2C%20j%27ai%20besoin%20d%27aide.`;
 
   const contactOptions = [
-    { icon: MessageSquare, title: "Chat en direct", description: "Réponse en quelques minutes", available: true, action: "chat", badge: ticketStats?.unreadCount || 0 },
+    { icon: MessageSquare, title: t.support.chatTitle, description: t.support.chatDesc, available: true, action: "chat", badge: ticketStats?.unreadCount || 0 },
     { icon: Mail, title: "Email", description: supportContact?.email || "support@ashtechpay.com", available: true, action: "email", badge: 0 },
     { icon: SiWhatsapp, title: "WhatsApp", description: supportContact?.phone || "+237 6XX XXX XXX", available: true, action: "whatsapp", badge: 0 },
   ];
@@ -135,11 +136,9 @@ export default function SupportPage() {
     refetchInterval: selectedTicket ? 8000 : false,
   });
 
-  // SSE for real-time events
   const { isOnline } = useSSE(useCallback((event) => {
     if (event.type === "new_message" && event.data.ticketId === selectedTicket?.id) {
       refetchMessages();
-      // Mark as read immediately if we're viewing the ticket
       apiRequest("POST", `/api/tickets/${selectedTicket!.id}/read`).catch(() => {});
     }
     if (event.type === "typing" && event.data.ticketId === selectedTicket?.id && event.data.from === "admin") {
@@ -152,24 +151,17 @@ export default function SupportPage() {
     if (event.type === "messages_read" && event.data.ticketId === selectedTicket?.id) {
       refetchMessages();
     }
-    if (event.type === "online_status") {
-      const onlineIds = (event.data.onlineIds as string[]) || [];
-      // Check if any user that is not us is online — simplified: show based on admin notification
-    }
     if (event.type === "new_message" && !selectedTicket) {
       queryClient.invalidateQueries({ queryKey: ["/api/tickets"] });
     }
   }, [selectedTicket, refetchMessages]));
 
-  // Track admin online status via SSE onlineIds — admins have role check on server
-  // We track if admins are online by checking the adminsOnline field returned by the API
   useEffect(() => {
     if (ticketData?.adminsOnline !== undefined) {
       setAdminOnline(ticketData.adminsOnline);
     }
   }, [ticketData?.adminsOnline]);
 
-  // Mark messages as read when opening chat
   useEffect(() => {
     if (selectedTicket && ticketData?.messages) {
       const hasUnread = ticketData.messages.some(m => m.isAdmin && !m.readByUser);
@@ -179,14 +171,12 @@ export default function SupportPage() {
     }
   }, [selectedTicket, ticketData?.messages]);
 
-  // Auto-scroll to bottom
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [ticketData?.messages, adminTyping]);
 
-  // Open ticket from URL param (from notification click)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const ticketId = params.get("ticket");
@@ -213,7 +203,7 @@ export default function SupportPage() {
       setSelectedTicket(ticket);
       setShowChat(true);
     },
-    onError: () => toast({ title: "Erreur", description: "Impossible de créer le ticket.", variant: "destructive" }),
+    onError: () => toast({ title: t.support.statusClosed, description: t.support.errorCreate, variant: "destructive" }),
   });
 
   const sendMessageMutation = useMutation({
@@ -227,7 +217,7 @@ export default function SupportPage() {
       refetchMessages();
       stopTyping();
     },
-    onError: () => toast({ title: "Erreur", description: "Impossible d'envoyer le message.", variant: "destructive" }),
+    onError: () => toast({ title: t.support.statusClosed, description: t.support.errorSend, variant: "destructive" }),
   });
 
   const closeTicketMutation = useMutation({
@@ -239,7 +229,7 @@ export default function SupportPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tickets"] });
       refetchMessages();
-      toast({ title: "Ticket clôturé", description: "La conversation a été clôturée." });
+      toast({ title: t.support.ticketClosed, description: t.support.ticketClosedDesc });
     },
   });
 
@@ -298,7 +288,7 @@ export default function SupportPage() {
   const handleCreateTicket = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTicketSubject.trim() || !newTicketMessage.trim()) {
-      toast({ title: "Champs requis", description: "Veuillez remplir tous les champs.", variant: "destructive" });
+      toast({ title: t.support.requiredFields, description: t.support.requiredFieldsDesc, variant: "destructive" });
       return;
     }
     createTicketMutation.mutate({ subject: newTicketSubject, message: newTicketMessage });
@@ -308,7 +298,6 @@ export default function SupportPage() {
     return (
       <DashboardLayout>
         <div className="h-[calc(100vh-8rem)] flex flex-col">
-          {/* Chat header */}
           <div className="flex items-center justify-between p-4 border-b">
             <div className="flex items-center gap-3">
               <Button
@@ -319,7 +308,6 @@ export default function SupportPage() {
                 <ArrowLeft className="w-5 h-5" />
               </Button>
               <div className="flex items-center gap-3">
-                {/* Admin avatar with online dot */}
                 <div className="relative">
                   <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center">
                     <MessageSquare className="w-5 h-5 text-primary" />
@@ -330,12 +318,12 @@ export default function SupportPage() {
                 </div>
                 <div>
                   <h2 className="font-semibold text-foreground">
-                    {selectedTicket ? selectedTicket.subject : "Nouveau message"}
+                    {selectedTicket ? selectedTicket.subject : t.support.newConversationTitle}
                   </h2>
                   <p className="text-xs text-muted-foreground">
                     {adminOnline
-                      ? <span className="text-green-500 font-medium">Support en ligne</span>
-                      : "Support hors ligne"}
+                      ? <span className="text-green-500 font-medium">{t.support.supportOnline}</span>
+                      : t.support.supportOffline}
                   </p>
                 </div>
               </div>
@@ -348,20 +336,19 @@ export default function SupportPage() {
             <div className="flex flex-col items-end gap-1 shrink-0">
               {selectedTicket && selectedTicket.status !== "closed" && (
                 <Button variant="outline" size="sm" onClick={() => closeTicketMutation.mutate()} disabled={closeTicketMutation.isPending} data-testid="button-close-ticket">
-                  {closeTicketMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <><CheckCircle className="w-4 h-4 mr-1" />Clôturer</>}
+                  {closeTicketMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <><CheckCircle className="w-4 h-4 mr-1" />{t.support.close}</>}
                 </Button>
               )}
               <Button variant="outline" size="sm" onClick={() => setShowNewTicket(true)} data-testid="button-new-chat">
-                <Plus className="w-4 h-4 mr-1" />Nouveau
+                <Plus className="w-4 h-4 mr-1" />{t.support.newChat}
               </Button>
             </div>
           </div>
 
-          {/* Ticket list or messages */}
           {!selectedTicket ? (
             <div className="flex-1 p-4 overflow-auto">
               <div className="space-y-4">
-                <h3 className="font-semibold text-foreground">Mes conversations</h3>
+                <h3 className="font-semibold text-foreground">{t.support.myConversations}</h3>
                 {ticketsLoading ? (
                   <div className="flex items-center justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
                 ) : tickets && tickets.length > 0 ? (
@@ -384,8 +371,8 @@ export default function SupportPage() {
                   <Card>
                     <CardContent className="p-6 text-center">
                       <MessageSquare className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-                      <p className="text-muted-foreground">Aucune conversation</p>
-                      <Button className="mt-4" onClick={() => setShowNewTicket(true)} data-testid="button-start-new-conversation">Démarrer une conversation</Button>
+                      <p className="text-muted-foreground">{t.support.noConversations}</p>
+                      <Button className="mt-4" onClick={() => setShowNewTicket(true)} data-testid="button-start-new-conversation">{t.support.startConversation}</Button>
                     </CardContent>
                   </Card>
                 )}
@@ -415,7 +402,6 @@ export default function SupportPage() {
                         </div>
                       </div>
                     ))}
-                    {/* Typing indicator */}
                     {adminTyping && (
                       <div className="flex justify-start">
                         <div className="bg-muted rounded-2xl rounded-tl-sm px-4 py-3">
@@ -433,7 +419,7 @@ export default function SupportPage() {
                 ) : (
                   <div className="text-center py-8">
                     <MessageSquare className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-                    <p className="text-muted-foreground">Aucun message</p>
+                    <p className="text-muted-foreground">{t.support.noMessages}</p>
                   </div>
                 )}
               </ScrollArea>
@@ -444,7 +430,7 @@ export default function SupportPage() {
                     <Input
                       value={newMessage}
                       onChange={(e) => handleMessageInput(e.target.value)}
-                      placeholder="Écrivez votre message..."
+                      placeholder={t.support.messagePlaceholder}
                       className="flex-1"
                       disabled={sendMessageMutation.isPending}
                       data-testid="input-message"
@@ -458,7 +444,7 @@ export default function SupportPage() {
                 <div className="p-4 border-t bg-muted/50">
                   <div className="flex items-center justify-center gap-2 text-muted-foreground">
                     <CheckCircle className="w-4 h-4" />
-                    <span className="text-sm">Cette conversation est clôturée</span>
+                    <span className="text-sm">{t.support.closedConversation}</span>
                   </div>
                 </div>
               )}
@@ -468,22 +454,22 @@ export default function SupportPage() {
           <Dialog open={showNewTicket} onOpenChange={setShowNewTicket}>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Nouvelle conversation</DialogTitle>
-                <DialogDescription>Décrivez votre problème et notre équipe vous répondra rapidement.</DialogDescription>
+                <DialogTitle>{t.support.newConversationTitle}</DialogTitle>
+                <DialogDescription>{t.support.newConversationDesc}</DialogDescription>
               </DialogHeader>
               <form onSubmit={handleCreateTicket} className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Sujet *</Label>
-                  <Input value={newTicketSubject} onChange={(e) => setNewTicketSubject(e.target.value)} placeholder="Ex: Problème de dépôt" data-testid="input-ticket-subject" />
+                  <Label>{t.support.subjectLabel}</Label>
+                  <Input value={newTicketSubject} onChange={(e) => setNewTicketSubject(e.target.value)} placeholder={t.support.subjectPlaceholder} data-testid="input-ticket-subject" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Message *</Label>
-                  <Textarea value={newTicketMessage} onChange={(e) => setNewTicketMessage(e.target.value)} placeholder="Décrivez votre problème en détail..." className="min-h-32" data-testid="input-ticket-message" />
+                  <Label>{t.support.messageLabel}</Label>
+                  <Textarea value={newTicketMessage} onChange={(e) => setNewTicketMessage(e.target.value)} placeholder={t.support.messagePlaceholder2} className="min-h-32" data-testid="input-ticket-message" />
                 </div>
                 <div className="flex gap-2 justify-end">
-                  <Button type="button" variant="outline" onClick={() => setShowNewTicket(false)}>Annuler</Button>
+                  <Button type="button" variant="outline" onClick={() => setShowNewTicket(false)}>{t.support.cancel}</Button>
                   <Button type="submit" disabled={createTicketMutation.isPending}>
-                    {createTicketMutation.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Envoi...</> : <><Send className="w-4 h-4 mr-2" />Envoyer</>}
+                    {createTicketMutation.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{t.support.sending}</> : <><Send className="w-4 h-4 mr-2" />{t.support.send}</>}
                   </Button>
                 </div>
               </form>
@@ -498,12 +484,12 @@ export default function SupportPage() {
     <DashboardLayout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Support</h1>
-          <p className="text-muted-foreground">Comment pouvons-nous vous aider?</p>
+          <h1 className="text-2xl font-semibold text-foreground">{t.support.title}</h1>
+          <p className="text-muted-foreground">{t.support.subtitle}</p>
         </div>
 
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">Nous contacter</p>
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">{t.support.contactSection}</p>
           <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
             {contactOptions.map((option) => (
               <button
@@ -537,8 +523,8 @@ export default function SupportPage() {
                   <SiWhatsapp className="w-5 h-5 text-green-500" />
                 </div>
                 <div>
-                  <p className="font-semibold text-foreground">Rejoindre notre chaîne WhatsApp</p>
-                  <p className="text-sm text-muted-foreground">Restez informé des dernières actualités et mises à jour d'Ashtech Pay</p>
+                  <p className="font-semibold text-foreground">{t.support.whatsappChannelTitle}</p>
+                  <p className="text-sm text-muted-foreground">{t.support.whatsappChannelDesc}</p>
                 </div>
               </div>
               <Button
@@ -548,7 +534,7 @@ export default function SupportPage() {
                 data-testid="button-join-whatsapp-channel"
               >
                 <SiWhatsapp className="w-4 h-4" />
-                Rejoindre la chaîne
+                {t.support.joinChannel}
                 <ExternalLink className="w-3 h-3" />
               </Button>
             </div>
@@ -557,7 +543,7 @@ export default function SupportPage() {
 
         {tickets && tickets.length > 0 && (
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">Mes conversations</p>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">{t.support.myConversationsSection}</p>
             <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
               {tickets.slice(0, 3).map((ticket) => (
                 <div key={ticket.id} className="flex items-center gap-3 px-4 py-3.5 cursor-pointer hover:bg-muted/40 transition-colors" onClick={() => openTicket(ticket)} data-testid={`recent-ticket-${ticket.id}`}>
@@ -576,7 +562,7 @@ export default function SupportPage() {
               ))}
               {tickets.length > 3 && (
                 <button className="w-full flex items-center justify-center gap-2 px-4 py-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground hover:bg-muted/40 transition-colors" onClick={() => setShowChat(true)}>
-                  Voir toutes les conversations ({tickets.length})
+                  {t.support.seeAll} ({tickets.length})
                 </button>
               )}
             </div>
@@ -584,7 +570,7 @@ export default function SupportPage() {
         )}
 
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">Questions fréquentes</p>
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">{t.support.faqSection}</p>
           <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
             {faqs.map((faq, i) => (
               <div key={i} className="px-4 py-3.5">
