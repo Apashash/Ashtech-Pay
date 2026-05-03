@@ -121,9 +121,6 @@ export default function FeeDetailsPage() {
           <h1 className="text-2xl font-semibold text-foreground" data-testid="text-fees-title">
             {fp.title}
           </h1>
-          <p className="text-muted-foreground mt-2">
-            {fp.subtitle}
-          </p>
         </div>
 
         {countriesWithFees.length > 0 && (
