@@ -412,27 +412,27 @@ export default function SettingsPage() {
           <DialogHeader>
             <DialogTitle className="text-red-500 flex items-center gap-2">
               <AlertTriangle className="w-5 h-5" />
-              Supprimer votre compte définitivement
+              {t.settings.deleteDialogTitle}
             </DialogTitle>
             <DialogDescription>
-              Cette action est irréversible et supprimera toutes vos données.
+              {t.settings.deleteDialogDesc}
             </DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-3">
-            <Label className="text-sm">Entrez votre nom d'utilisateur pour confirmer</Label>
+            <Label className="text-sm">{t.settings.deleteConfirmLabel}</Label>
             <Input
-              placeholder={user?.username || "Votre nom d'utilisateur"}
+              placeholder={user?.username || ""}
               value={deleteConfirmUsername}
               onChange={(e) => setDeleteConfirmUsername(e.target.value)}
               data-testid="input-delete-confirm-username"
             />
             <p className="text-xs text-muted-foreground">
-              Tapez <span className="font-mono text-foreground">{user?.username}</span> pour confirmer
+              {t.settings.deleteConfirmHint} <span className="font-mono text-foreground">{user?.username}</span> {t.settings.deleteConfirmHint2}
             </p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setShowDeleteDialog(false); setDeleteConfirmUsername(""); }}>
-              Non, annuler
+              {t.settings.cancelDelete}
             </Button>
             <Button
               variant="destructive"
@@ -441,7 +441,7 @@ export default function SettingsPage() {
               data-testid="button-confirm-delete-account"
             >
               {deleteAccountMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
-              Oui, supprimer mon compte
+              {t.settings.confirmDelete}
             </Button>
           </DialogFooter>
         </DialogContent>
