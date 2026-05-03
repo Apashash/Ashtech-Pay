@@ -13,6 +13,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { User } from "@shared/schema";
 import { apiRequest, queryClient, getAuthHeaders } from "@/lib/queryClient";
+import { useLanguage } from "@/lib/language";
 import { ArrowLeft, Loader2, Upload, X, FileText, Link as LinkIcon, ExternalLink, Calendar, Image, Globe, Check } from "lucide-react";
 import { z } from "zod";
 
@@ -43,7 +44,7 @@ interface DepositConfigResponse {
 }
 
 const updateSchema = z.object({
-  title: z.string().min(1, "Titre requis"),
+  title: z.string().min(1),
   description: z.string().optional(),
   amount: z.string().optional(),
   customSlug: z.string().optional(),
@@ -60,6 +61,8 @@ export default function LinkEditPage() {
   const [, navigate] = useLocation();
   const params = useParams<{ id: string }>();
   const { toast } = useToast();
+  const { t } = useLanguage();
+  const lk = t.links;
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -76,7 +79,7 @@ export default function LinkEditPage() {
     queryKey: ["/api/payment-links", params.id],
     queryFn: async () => {
       const res = await fetch(`/api/payment-links/${params.id}`, { credentials: "include", headers: getAuthHeaders() });
-      if (!res.ok) throw new Error("Lien introuvable");
+      if (!res.ok) throw new Error(lk.linkNotFound);
       return res.json();
     },
   });
@@ -164,7 +167,7 @@ export default function LinkEditPage() {
       headers: getAuthHeaders(),
       body: formData,
     });
-    if (!res.ok) throw new Error("Échec de l'upload");
+    if (!res.ok) throw new Error(lk.toastUploadError);
     const result = await res.json();
     return result.url || result.objectPath;
   };
@@ -193,11 +196,11 @@ export default function LinkEditPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/payment-links"] });
-      toast({ title: "Lien modifié", description: "Les modifications ont été enregistrées" });
+      toast({ title: lk.toastLinkUpdated, description: lk.toastLinkUpdatedDesc });
       navigate("/dashboard/links");
     },
     onError: (error: Error) => {
-      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+      toast({ title: lk.toastError, description: error.message, variant: "destructive" });
     },
   });
 
@@ -215,12 +218,16 @@ export default function LinkEditPage() {
     return (
       <DashboardLayout>
         <div className="text-center py-12">
-          <p className="text-muted-foreground">Lien introuvable</p>
-          <Button onClick={() => navigate("/dashboard/links")} className="mt-4">Retour</Button>
+          <p className="text-muted-foreground">{lk.linkNotFound}</p>
+          <Button onClick={() => navigate("/dashboard/links")} className="mt-4">{lk.back}</Button>
         </div>
       </DashboardLayout>
     );
   }
+
+  const countriesLabel = selectedCountries.length === 0
+    ? lk.allCountries
+    : `${selectedCountries.length} ${selectedCountries.length > 1 ? lk.countriesSelectedPlural : lk.countriesSelected}`;
 
   return (
     <DashboardLayout>
@@ -235,8 +242,8 @@ export default function LinkEditPage() {
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Modifier le lien de paiement</h1>
-            <p className="text-muted-foreground text-sm">Modifiez les informations de votre lien</p>
+            <h1 className="text-2xl font-bold text-foreground">{lk.editDialogTitle}</h1>
+            <p className="text-muted-foreground text-sm">{lk.editDialogDesc}</p>
           </div>
         </div>
 
@@ -250,9 +257,9 @@ export default function LinkEditPage() {
                   name="title"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Titre *</FormLabel>
+                      <FormLabel>{lk.formTitle}</FormLabel>
                       <FormControl>
-                        <Input placeholder="Ex: Paiement commande #123" {...field} data-testid="input-edit-title" />
+                        <Input placeholder={lk.formTitlePlaceholder} {...field} data-testid="input-edit-title" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -264,9 +271,9 @@ export default function LinkEditPage() {
                   name="description"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Description (optionnel)</FormLabel>
+                      <FormLabel>{lk.formDesc}</FormLabel>
                       <FormControl>
-                        <Input placeholder="Description du paiement..." {...field} data-testid="input-edit-description" />
+                        <Input placeholder={lk.formDescPlaceholder} {...field} data-testid="input-edit-description" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -280,7 +287,7 @@ export default function LinkEditPage() {
                     <FormItem>
                       <FormLabel className="flex items-center gap-2">
                         <LinkIcon className="w-4 h-4" />
-                        URL personnalisée (optionnel)
+                        {lk.formSlug}
                       </FormLabel>
                       <FormControl>
                         <div className="flex items-center gap-2">
@@ -288,28 +295,23 @@ export default function LinkEditPage() {
                           <Input placeholder="mon-lien" {...field} data-testid="input-edit-slug" />
                         </div>
                       </FormControl>
-                      <FormDescription className="text-xs">Laissez vide pour générer automatiquement</FormDescription>
+                      <FormDescription className="text-xs">{lk.formSlugHint}</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
 
-                {/* Country selection */}
                 <FormItem>
                   <FormLabel className="flex items-center gap-2">
                     <Globe className="w-4 h-4" />
-                    Pays disponibles pour ce lien
+                    {lk.countriesLabel}
                   </FormLabel>
                   <FormDescription className="text-xs">
-                    Sélectionnez les pays depuis lesquels les clients peuvent payer. Laissez vide pour autoriser tous les pays.
+                    {lk.countriesDesc}
                   </FormDescription>
                   <div className="border rounded-lg overflow-hidden">
                     <div className="flex items-center justify-between px-3 py-2 bg-muted/50 border-b">
-                      <span className="text-sm font-medium">
-                        {selectedCountries.length === 0
-                          ? "Tous les pays autorisés"
-                          : `${selectedCountries.length} pays sélectionné${selectedCountries.length > 1 ? "s" : ""}`}
-                      </span>
+                      <span className="text-sm font-medium">{countriesLabel}</span>
                       <Button
                         type="button"
                         variant="ghost"
@@ -318,8 +320,8 @@ export default function LinkEditPage() {
                         data-testid="button-toggle-all-countries"
                       >
                         {selectedCountries.length === allCountries.length && allCountries.length > 0
-                          ? "Tout désélectionner"
-                          : "Tout sélectionner"}
+                          ? lk.deselectAllFull
+                          : lk.selectAllFull}
                       </Button>
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-0 max-h-64 overflow-y-auto">
@@ -373,7 +375,7 @@ export default function LinkEditPage() {
                 <FormItem>
                   <FormLabel className="flex items-center gap-2">
                     <Image className="w-4 h-4" />
-                    Image (optionnel)
+                    {lk.formImage}
                   </FormLabel>
                   <input
                     ref={imageInputRef}
@@ -385,7 +387,7 @@ export default function LinkEditPage() {
                   />
                   {imagePreview ? (
                     <div className="relative">
-                      <img src={imagePreview} alt="Aperçu" className="w-full h-48 object-cover rounded-lg" />
+                      <img src={imagePreview} alt="Preview" className="w-full h-48 object-cover rounded-lg" />
                       <Button
                         type="button"
                         variant="destructive"
@@ -404,7 +406,7 @@ export default function LinkEditPage() {
                       onClick={() => imageInputRef.current?.click()}
                     >
                       <Upload className="w-4 h-4 mr-2" />
-                      Choisir une image
+                      {lk.formImageUpload}
                     </Button>
                   )}
                 </FormItem>
@@ -416,10 +418,10 @@ export default function LinkEditPage() {
                     <FormItem>
                       <FormLabel className="flex items-center gap-2">
                         <FileText className="w-4 h-4" />
-                        Lien PDF (optionnel)
+                        {lk.formPdf}
                       </FormLabel>
                       <FormDescription className="text-xs text-amber-500">
-                        Ce PDF sera envoyé au client uniquement après paiement réussi
+                        {lk.formPdfDesc}
                       </FormDescription>
                       <FormControl>
                         <div className="flex items-center gap-2">
@@ -443,9 +445,9 @@ export default function LinkEditPage() {
                     render={({ field }) => (
                       <FormItem className="flex items-center justify-between rounded-lg border border-amber-500/50 bg-amber-500/10 p-4">
                         <div className="space-y-0.5">
-                          <FormLabel className="text-amber-500">Livraison PDF après paiement</FormLabel>
+                          <FormLabel className="text-amber-500">{lk.formPdfDelivery}</FormLabel>
                           <FormDescription className="text-xs">
-                            Le client recevra ce lien PDF après avoir payé avec succès
+                            {lk.formPdfDeliveryDesc}
                           </FormDescription>
                         </div>
                         <FormControl>
@@ -466,9 +468,9 @@ export default function LinkEditPage() {
                   render={({ field }) => (
                     <FormItem className="flex items-center justify-between rounded-lg border p-4">
                       <div className="space-y-0.5">
-                        <FormLabel>Type de montant</FormLabel>
+                        <FormLabel>{lk.formAmountType}</FormLabel>
                         <FormDescription className="text-xs">
-                          {field.value ? "Montant fixe défini par vous" : "Montant libre choisi par le payeur"}
+                          {field.value ? lk.formFixed : lk.formFree}
                         </FormDescription>
                       </div>
                       <FormControl>
@@ -488,7 +490,7 @@ export default function LinkEditPage() {
                     name="amount"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Montant ({user?.preferredCurrency || "XAF"}) *</FormLabel>
+                        <FormLabel>{lk.formAmount} ({user?.preferredCurrency || "XAF"}) *</FormLabel>
                         <FormControl>
                           <Input type="number" placeholder="10000" {...field} data-testid="input-edit-amount" />
                         </FormControl>
@@ -505,7 +507,7 @@ export default function LinkEditPage() {
                     <FormItem>
                       <FormLabel className="flex items-center gap-2">
                         <Calendar className="w-4 h-4" />
-                        Date d'expiration (optionnel)
+                        {lk.formExpiry}
                       </FormLabel>
                       <FormControl>
                         <Input type="datetime-local" {...field} data-testid="input-edit-expiry" />
@@ -522,7 +524,7 @@ export default function LinkEditPage() {
                     <FormItem>
                       <FormLabel className="flex items-center gap-2">
                         <ExternalLink className="w-4 h-4" />
-                        URL de redirection après paiement (optionnel)
+                        {lk.formRedirect}
                       </FormLabel>
                       <FormControl>
                         <Input placeholder="https://monsite.com/merci" {...field} data-testid="input-edit-redirect" />
@@ -540,7 +542,7 @@ export default function LinkEditPage() {
                     onClick={() => navigate("/dashboard/links")}
                     data-testid="button-edit-cancel"
                   >
-                    Annuler
+                    {lk.cancel}
                   </Button>
                   <Button
                     type="submit"
@@ -549,7 +551,7 @@ export default function LinkEditPage() {
                     data-testid="button-edit-save"
                   >
                     {updateMutation.isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-                    Enregistrer
+                    {lk.formSaveButton}
                   </Button>
                 </div>
               </form>

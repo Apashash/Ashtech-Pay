@@ -14,6 +14,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { createPaymentLinkSchema } from "@shared/schema";
 import type { User } from "@shared/schema";
 import { apiRequest, queryClient, getAuthHeaders } from "@/lib/queryClient";
+import { useLanguage } from "@/lib/language";
 import {
   ArrowLeft, Loader2, Upload, X, FileText, Link as LinkIcon,
   ExternalLink, Calendar, Image, Globe, Check, Link2,
@@ -40,6 +41,7 @@ function SectionCard({ number, title, subtitle, icon: Icon, children }: {
   icon: any;
   children: React.ReactNode;
 }) {
+  const { t } = useLanguage();
   return (
     <div className="bg-card border border-border rounded-xl overflow-hidden">
       <div className="flex items-center gap-4 px-5 py-4 border-b border-border bg-muted/20">
@@ -47,7 +49,7 @@ function SectionCard({ number, title, subtitle, icon: Icon, children }: {
           <Icon className="w-4 h-4 text-muted-foreground" />
         </div>
         <div className="flex-1 min-w-0">
-          <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Étape {number}</span>
+          <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{t.links.step} {number}</span>
           <h3 className="font-semibold text-foreground text-sm leading-tight mt-0.5">{title}</h3>
           <p className="text-xs text-muted-foreground">{subtitle}</p>
         </div>
@@ -62,6 +64,8 @@ function SectionCard({ number, title, subtitle, icon: Icon, children }: {
 export default function LinkCreatePage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const { t } = useLanguage();
+  const lk = t.links;
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -156,7 +160,7 @@ export default function LinkCreatePage() {
       headers: getAuthHeaders(),
       body: formData,
     });
-    if (!response.ok) throw new Error("Échec de l'upload");
+    if (!response.ok) throw new Error(lk.toastUploadError);
     const result = await response.json();
     return result.url || result.objectPath;
   };
@@ -174,11 +178,11 @@ export default function LinkCreatePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/payment-links"] });
-      toast({ title: "✓ Lien créé avec succès", description: "Votre lien de paiement est prêt à être partagé" });
+      toast({ title: lk.toastLinkCreated, description: lk.toastLinkCreatedDesc });
       navigate("/dashboard/links");
     },
     onError: (error: Error) => {
-      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+      toast({ title: lk.toastError, description: error.message, variant: "destructive" });
     },
   });
 
@@ -187,11 +191,14 @@ export default function LinkCreatePage() {
     ? new Intl.NumberFormat("fr-FR").format(Number(amountValue)) + ` ${currency}`
     : null;
 
+  const countriesLabel = selectedCountries.length === 0
+    ? lk.allCountries
+    : `${selectedCountries.length} ${selectedCountries.length > 1 ? lk.countriesSelectedPlural : lk.countriesSelected}`;
+
   return (
     <DashboardLayout>
       <div className="max-w-3xl mx-auto">
 
-        {/* Header */}
         <div className="flex items-center gap-3 mb-6">
           <Button
             variant="ghost"
@@ -203,26 +210,25 @@ export default function LinkCreatePage() {
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div>
-            <h1 className="text-xl font-bold text-foreground">Nouveau lien de paiement</h1>
-            <p className="text-muted-foreground text-sm">Créez un lien partageable pour recevoir des paiements</p>
+            <h1 className="text-xl font-bold text-foreground">{lk.pageCreateTitle}</h1>
+            <p className="text-muted-foreground text-sm">{lk.pageCreateSub}</p>
           </div>
         </div>
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit((d) => createMutation.mutate(d))} className="space-y-4">
 
-            {/* Step 1: Info de base */}
-            <SectionCard number={1} title="Informations de base" subtitle="Nom, description et visuel de votre lien" icon={ImageIcon}>
+            <SectionCard number={1} title={lk.step1Title} subtitle={lk.step1Sub} icon={ImageIcon}>
 
               <FormField
                 control={form.control}
                 name="title"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-sm font-medium">Titre du lien <span className="text-destructive">*</span></FormLabel>
+                    <FormLabel className="text-sm font-medium">{lk.formTitle} <span className="text-destructive">*</span></FormLabel>
                     <FormControl>
                       <Input
-                        placeholder="Ex : Formation trading, Commande #123..."
+                        placeholder={lk.formTitlePlaceholder}
                         className="h-11 rounded-xl border-border/60 focus:border-primary bg-background"
                         {...field}
                         data-testid="input-link-title"
@@ -238,10 +244,10 @@ export default function LinkCreatePage() {
                 name="description"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-sm font-medium">Description <span className="text-muted-foreground font-normal">(optionnel)</span></FormLabel>
+                    <FormLabel className="text-sm font-medium">{lk.formDesc}</FormLabel>
                     <FormControl>
                       <Textarea
-                        placeholder="Décrivez ce que le client va payer..."
+                        placeholder={lk.formDescPlaceholder}
                         className="rounded-xl border-border/60 focus:border-primary bg-background resize-none min-h-[80px]"
                         {...field}
                         data-testid="input-link-description"
@@ -252,10 +258,9 @@ export default function LinkCreatePage() {
                 )}
               />
 
-              {/* Image upload */}
               <div>
                 <FormLabel className="text-sm font-medium block mb-2">
-                  Image <span className="text-muted-foreground font-normal">(optionnel)</span>
+                  {lk.formImage}
                 </FormLabel>
                 <input
                   ref={imageInputRef}
@@ -277,7 +282,7 @@ export default function LinkCreatePage() {
                         className="rounded-lg"
                       >
                         <Upload className="w-3.5 h-3.5 mr-1.5" />
-                        Changer
+                        {lk.formImageChange}
                       </Button>
                       <Button
                         type="button"
@@ -287,7 +292,7 @@ export default function LinkCreatePage() {
                         className="rounded-lg"
                       >
                         <X className="w-3.5 h-3.5 mr-1.5" />
-                        Supprimer
+                        {lk.formImageDelete}
                       </Button>
                     </div>
                   </div>
@@ -306,15 +311,14 @@ export default function LinkCreatePage() {
                     <div className="w-12 h-12 rounded-xl bg-muted/50 flex items-center justify-center mx-auto mb-3">
                       <Image className="w-5 h-5 text-muted-foreground" />
                     </div>
-                    <p className="text-sm font-medium text-foreground mb-1">Glissez une image ici</p>
-                    <p className="text-xs text-muted-foreground">ou <span className="text-primary underline">parcourir</span> — PNG, JPG jusqu'à 5Mo</p>
+                    <p className="text-sm font-medium text-foreground mb-1">{lk.formImageDrag}</p>
+                    <p className="text-xs text-muted-foreground">{lk.formImageBrowse}</p>
                   </div>
                 )}
               </div>
             </SectionCard>
 
-            {/* Step 2: Montant */}
-            <SectionCard number={2} title="Montant & Type" subtitle="Définissez le montant et le mode de paiement" icon={DollarSign}>
+            <SectionCard number={2} title={lk.step2Title} subtitle={lk.step2Sub} icon={DollarSign}>
 
               <FormField
                 control={form.control}
@@ -322,9 +326,9 @@ export default function LinkCreatePage() {
                 render={({ field }) => (
                   <FormItem className="flex items-center justify-between rounded-xl border border-border/60 p-4 bg-muted/20">
                     <div>
-                      <FormLabel className="text-sm font-medium cursor-pointer">Montant fixe</FormLabel>
+                      <FormLabel className="text-sm font-medium cursor-pointer">{lk.formAmountType}</FormLabel>
                       <FormDescription className="text-xs mt-0.5">
-                        {field.value ? "Vous définissez le montant exact" : "Le payeur choisit librement son montant"}
+                        {field.value ? lk.formFixedDesc : lk.formFreeDesc}
                       </FormDescription>
                     </div>
                     <FormControl>
@@ -344,7 +348,7 @@ export default function LinkCreatePage() {
                   name="amount"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-sm font-medium">Montant ({currency}) <span className="text-destructive">*</span></FormLabel>
+                      <FormLabel className="text-sm font-medium">{lk.formAmount} ({currency}) <span className="text-destructive">*</span></FormLabel>
                       <FormControl>
                         <div className="relative">
                           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">{currency}</span>
@@ -370,7 +374,7 @@ export default function LinkCreatePage() {
                   <FormItem>
                     <FormLabel className="flex items-center gap-2 text-sm font-medium">
                       <FileText className="w-4 h-4 text-amber-500" />
-                      Lien PDF après paiement <span className="text-muted-foreground font-normal">(optionnel)</span>
+                      {lk.formPdf}
                     </FormLabel>
                     <FormControl>
                       <div className="relative">
@@ -385,7 +389,7 @@ export default function LinkCreatePage() {
                     </FormControl>
                     <FormDescription className="text-xs text-amber-500/80 flex items-center gap-1">
                       <AlertCircle className="w-3 h-3" />
-                      Envoyé automatiquement après paiement réussi
+                      {lk.formPdfAuto}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -399,9 +403,9 @@ export default function LinkCreatePage() {
                   render={({ field }) => (
                     <FormItem className="flex items-center justify-between rounded-xl border border-amber-500/30 bg-amber-500/8 p-4">
                       <div>
-                        <FormLabel className="text-sm font-medium text-amber-600 dark:text-amber-400">Activer la livraison PDF</FormLabel>
+                        <FormLabel className="text-sm font-medium text-amber-600 dark:text-amber-400">{lk.formPdfDelivery}</FormLabel>
                         <FormDescription className="text-xs mt-0.5">
-                          Le client reçoit ce lien uniquement après paiement réussi
+                          {lk.formPdfDeliveryDesc}
                         </FormDescription>
                       </div>
                       <FormControl>
@@ -417,8 +421,7 @@ export default function LinkCreatePage() {
               )}
             </SectionCard>
 
-            {/* Step 3: Pays */}
-            <SectionCard number={3} title="Pays autorisés" subtitle="Contrôlez depuis quels pays les paiements sont acceptés" icon={Globe}>
+            <SectionCard number={3} title={lk.step3Title} subtitle={lk.step3Sub} icon={Globe}>
               <div className="rounded-xl border border-border/60 overflow-hidden">
                 <button
                   type="button"
@@ -428,11 +431,7 @@ export default function LinkCreatePage() {
                 >
                   <div className="flex items-center gap-3">
                     <Globe className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-sm font-medium">
-                      {selectedCountries.length === 0
-                        ? "Tous les pays autorisés"
-                        : `${selectedCountries.length} pays sélectionné${selectedCountries.length > 1 ? "s" : ""}`}
-                    </span>
+                    <span className="text-sm font-medium">{countriesLabel}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     {selectedCountries.length > 0 && (
@@ -448,7 +447,7 @@ export default function LinkCreatePage() {
                   <div className="border-t border-border/60">
                     <div className="p-3 border-b border-border/40 flex items-center gap-2">
                       <Input
-                        placeholder="Rechercher un pays..."
+                        placeholder={lk.countrySearch}
                         value={countrySearch}
                         onChange={e => setCountrySearch(e.target.value)}
                         className="h-9 rounded-lg text-sm"
@@ -461,7 +460,7 @@ export default function LinkCreatePage() {
                         className="shrink-0 text-xs"
                         data-testid="button-toggle-all-countries"
                       >
-                        {selectedCountries.length === allCountries.length && allCountries.length > 0 ? "Désélect." : "Tout"}
+                        {selectedCountries.length === allCountries.length && allCountries.length > 0 ? lk.deselectAll : lk.selectAll}
                       </Button>
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-3 max-h-56 overflow-y-auto">
@@ -513,24 +512,21 @@ export default function LinkCreatePage() {
                   })}
                   {selectedCountries.length > 8 && (
                     <Badge variant="secondary" className="text-xs rounded-lg">
-                      +{selectedCountries.length - 8} autres
+                      +{selectedCountries.length - 8} {lk.moreLinks}
                     </Badge>
                   )}
                 </div>
               )}
             </SectionCard>
 
-            {/* Step 4: Options avancées */}
-            <SectionCard number={4} title="Options avancées" subtitle="URL personnalisée, expiration et redirection" icon={Settings2}>
+            <SectionCard number={4} title={lk.step4Title} subtitle={lk.step4Sub} icon={Settings2}>
 
               <FormField
                 control={form.control}
                 name="customSlug"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-sm font-medium">
-                      URL personnalisée <span className="text-muted-foreground font-normal">(optionnel)</span>
-                    </FormLabel>
+                    <FormLabel className="text-sm font-medium">{lk.formSlug}</FormLabel>
                     <FormControl>
                       <div className="flex items-center rounded-xl border border-border/60 focus-within:border-primary overflow-hidden bg-background">
                         <span className="px-3 py-2 bg-muted/40 text-muted-foreground text-sm border-r border-border/60 whitespace-nowrap shrink-0">/pay/</span>
@@ -542,7 +538,7 @@ export default function LinkCreatePage() {
                         />
                       </div>
                     </FormControl>
-                    <FormDescription className="text-xs">Laissez vide pour générer automatiquement</FormDescription>
+                    <FormDescription className="text-xs">{lk.formSlugHint}</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -555,7 +551,7 @@ export default function LinkCreatePage() {
                   <FormItem>
                     <FormLabel className="flex items-center gap-2 text-sm font-medium">
                       <Calendar className="w-4 h-4" />
-                      Date d'expiration <span className="text-muted-foreground font-normal">(optionnel)</span>
+                      {lk.formExpiry}
                     </FormLabel>
                     <FormControl>
                       <Input
@@ -577,7 +573,7 @@ export default function LinkCreatePage() {
                   <FormItem>
                     <FormLabel className="flex items-center gap-2 text-sm font-medium">
                       <ExternalLink className="w-4 h-4" />
-                      URL de redirection <span className="text-muted-foreground font-normal">(optionnel)</span>
+                      {lk.formRedirect}
                     </FormLabel>
                     <FormControl>
                       <Input
@@ -587,14 +583,13 @@ export default function LinkCreatePage() {
                         data-testid="input-link-redirect"
                       />
                     </FormControl>
-                    <FormDescription className="text-xs">Le client est redirigé ici après paiement réussi</FormDescription>
+                    <FormDescription className="text-xs">{lk.formRedirectDesc}</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
             </SectionCard>
 
-            {/* Preview Banner */}
             {titleValue && (
               <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 flex items-start gap-3">
                 <div className="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center shrink-0 mt-0.5">
@@ -608,14 +603,14 @@ export default function LinkCreatePage() {
                       <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md">{formattedAmount}</span>
                     )}
                     {!isFixedAmount && (
-                      <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-md">Montant libre</span>
+                      <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-md">{lk.freeAmount}</span>
                     )}
                     {selectedCountries.length > 0 && (
-                      <span className="text-xs text-muted-foreground">{selectedCountries.length} pays</span>
+                      <span className="text-xs text-muted-foreground">{selectedCountries.length} {lk.countriesSelectedPlural}</span>
                     )}
                     {imagePreview && (
                       <span className="text-xs text-green-600 flex items-center gap-1">
-                        <Check className="w-3 h-3" /> Image ajoutée
+                        <Check className="w-3 h-3" /> {lk.imageAdded}
                       </span>
                     )}
                   </div>
@@ -623,7 +618,6 @@ export default function LinkCreatePage() {
               </div>
             )}
 
-            {/* Submit */}
             <div className="flex gap-3 pt-1 pb-6">
               <Button
                 type="button"
@@ -632,7 +626,7 @@ export default function LinkCreatePage() {
                 onClick={() => navigate("/dashboard/links")}
                 data-testid="button-create-link-cancel"
               >
-                Annuler
+                {lk.cancel}
               </Button>
               <Button
                 type="submit"
@@ -643,12 +637,12 @@ export default function LinkCreatePage() {
                 {createMutation.isPending ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Création en cours...
+                    {lk.creating}
                   </>
                 ) : (
                   <>
                     <Sparkles className="w-4 h-4" />
-                    Créer le lien
+                    {lk.formCreateButton}
                   </>
                 )}
               </Button>
