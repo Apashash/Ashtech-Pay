@@ -9,21 +9,13 @@ import { useMemo } from "react";
 import { formatCurrency } from "@/lib/currency";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
+import { useLanguage } from "@/lib/language";
 
 interface TransactionDetails extends Transaction {
   paymentLink?: { title: string; slug: string } | null;
   paymentIntent?: { payerCountry: string; payerPhone: string } | null;
   recipient?: { fullName: string; username: string } | null;
 }
-
-const typeLabels: Record<string, string> = {
-  deposit: "Dépôt Mobile Money",
-  withdrawal: "Retrait",
-  transfer_in: "Virement reçu",
-  transfer_out: "Virement envoyé",
-  payment_link: "Lien de paiement",
-  conversion: "Conversion",
-};
 
 function formatDate(date: string | Date | null | undefined): string {
   if (!date) return "—";
@@ -56,6 +48,17 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 export default function TransactionDetailPage({ params }: { params: { id: string } }) {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+  const { t } = useLanguage();
+  const td = t.transactions;
+
+  const typeLabels: Record<string, string> = {
+    deposit: td.typeDeposit,
+    withdrawal: td.typeWithdrawal,
+    transfer_in: td.typeTransferIn,
+    transfer_out: td.typeTransferOut,
+    payment_link: td.typePaymentLink,
+    conversion: td.typeConversion,
+  };
 
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const { data: depositConfig } = useQuery<any>({ queryKey: ["/api/public/deposit-config"] });
@@ -75,7 +78,7 @@ export default function TransactionDetailPage({ params }: { params: { id: string
     return map;
   }, [depositConfig]);
 
-  const copy = (text: string, label = "Copié") => {
+  const copy = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
     toast({ title: label });
   };
@@ -94,9 +97,9 @@ export default function TransactionDetailPage({ params }: { params: { id: string
     return (
       <DashboardLayout>
         <div className="text-center py-16">
-          <p className="text-muted-foreground">Transaction introuvable</p>
+          <p className="text-muted-foreground">{td.detailNotFound}</p>
           <Button variant="ghost" className="mt-4" onClick={() => setLocation("/dashboard/transactions")}>
-            <ChevronLeft className="w-4 h-4 mr-1" /> Retour
+            <ChevronLeft className="w-4 h-4 mr-1" /> {td.detailBack}
           </Button>
         </div>
       </DashboardLayout>
@@ -128,11 +131,17 @@ export default function TransactionDetailPage({ params }: { params: { id: string
 
   const statusBadge = () => {
     switch (tx.status) {
-      case "completed": return <Badge className="bg-green-500/20 text-green-600 border-green-500/30">Réussi</Badge>;
-      case "pending": case "pending_manual": return <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/30">En cours</Badge>;
-      case "failed": return <Badge className="bg-red-500/20 text-red-600 border-red-500/30">Échoué</Badge>;
-      case "cancelled": return <Badge className="bg-muted text-muted-foreground">Annulé</Badge>;
-      default: return <Badge variant="secondary">{tx.status}</Badge>;
+      case "completed":
+        return <Badge className="bg-green-500/20 text-green-600 border-green-500/30">{td.detailStatusCompleted}</Badge>;
+      case "pending":
+      case "pending_manual":
+        return <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/30">{td.detailStatusPending}</Badge>;
+      case "failed":
+        return <Badge className="bg-red-500/20 text-red-600 border-red-500/30">{td.detailStatusFailed}</Badge>;
+      case "cancelled":
+        return <Badge className="bg-muted text-muted-foreground">{td.detailStatusCancelled}</Badge>;
+      default:
+        return <Badge variant="secondary">{tx.status}</Badge>;
     }
   };
 
@@ -180,13 +189,13 @@ export default function TransactionDetailPage({ params }: { params: { id: string
         <div className="bg-card border border-border rounded-2xl px-4 pb-4">
           {tx.reference && (
             <>
-              <SectionLabel>Références</SectionLabel>
+              <SectionLabel>{td.detailSectionRefs}</SectionLabel>
               <div className="flex items-center justify-between py-3 border-b border-border">
-                <span className="text-sm text-muted-foreground">Réf. AshtechPay</span>
+                <span className="text-sm text-muted-foreground">{td.detailRefAshtech}</span>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-semibold font-mono text-foreground">{tx.reference}</span>
                   <button
-                    onClick={() => copy(tx.reference!, "Référence copiée")}
+                    onClick={() => copy(tx.reference!, td.detailRefCopied)}
                     className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted transition-colors"
                     data-testid="button-copy-reference"
                   >
@@ -199,37 +208,37 @@ export default function TransactionDetailPage({ params }: { params: { id: string
 
           {(tx.totalAmount || tx.feeAmount) && (
             <>
-              <SectionLabel>Détails Financiers</SectionLabel>
+              <SectionLabel>{td.detailSectionFinance}</SectionLabel>
               {tx.totalAmount && parseFloat(tx.totalAmount) > 0 && (
                 <Row
-                  label="Montant brut"
+                  label={td.detailGross}
                   value={<span>{formatCurrency(tx.totalAmount, txCurrency)}</span>}
                 />
               )}
               {tx.feeAmount && parseFloat(tx.feeAmount) > 0 && (
                 <Row
-                  label={`Frais${feePercent ? ` (${feePercent}%)` : ""}`}
+                  label={`${td.detailFee}${feePercent ? ` (${feePercent}%)` : ""}`}
                   value={<span className="text-amber-500">{formatCurrency(tx.feeAmount, txCurrency)}</span>}
                 />
               )}
               <Row
-                label="Montant reçu"
+                label={td.detailReceived}
                 value={<span className="text-green-500">{formatCurrency(tx.amount, txCurrency)}</span>}
               />
             </>
           )}
 
-          <SectionLabel>Informations</SectionLabel>
-          <Row label="Type" value={typeLabels[tx.type] || tx.type} />
-          <Row label="Devise" value={tx.currency || "XAF"} />
+          <SectionLabel>{td.detailSectionInfo}</SectionLabel>
+          <Row label={td.detailType} value={typeLabels[tx.type] || tx.type} />
+          <Row label={td.detailCurrency} value={tx.currency || "XAF"} />
 
           {payerPhone && (
             <div className="flex items-center justify-between py-3 border-b border-border">
-              <span className="text-sm text-muted-foreground">Numéro de téléphone</span>
+              <span className="text-sm text-muted-foreground">{td.detailPhone}</span>
               <div className="flex items-center gap-2">
                 <span className="text-sm font-semibold text-foreground">{payerPhone}</span>
                 <button
-                  onClick={() => copy(payerPhone, "Numéro copié")}
+                  onClick={() => copy(payerPhone, td.detailPhoneCopied)}
                   className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted transition-colors"
                   data-testid="button-copy-phone"
                 >
@@ -240,27 +249,27 @@ export default function TransactionDetailPage({ params }: { params: { id: string
           )}
 
           {operatorInfo && (
-            <Row label="Opérateur" value={operatorInfo.name.toUpperCase()} />
+            <Row label={td.detailOperator} value={operatorInfo.name.toUpperCase()} />
           )}
 
           {payerCountry && (
-            <Row label="Pays" value={payerCountry} />
+            <Row label={td.detailCountry} value={payerCountry} />
           )}
 
           {tx.recipientName && (
-            <Row label="Destinataire" value={tx.recipientName} />
+            <Row label={td.detailRecipient} value={tx.recipientName} />
           )}
           {tx.recipientPhone && (
-            <Row label="Téléphone destinataire" value={tx.recipientPhone} />
+            <Row label={td.detailRecipientPhone} value={tx.recipientPhone} />
           )}
           {tx.payerName && (
-            <Row label="Payeur" value={tx.payerName} />
+            <Row label={td.detailPayer} value={tx.payerName} />
           )}
 
-          <Row label="ID transaction" value={`#${tx.id.slice(-8).toUpperCase()}`} />
-          <Row label="Date de création" value={formatDate(tx.createdAt)} />
+          <Row label={td.detailTxId} value={`#${tx.id.slice(-8).toUpperCase()}`} />
+          <Row label={td.detailCreatedAt} value={formatDate(tx.createdAt)} />
           {tx.confirmedAt && (
-            <Row label="Dernière mise à jour" value={formatDate(tx.confirmedAt)} />
+            <Row label={td.detailUpdatedAt} value={formatDate(tx.confirmedAt)} />
           )}
         </div>
       </div>
