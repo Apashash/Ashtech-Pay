@@ -713,7 +713,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 {user.isVerified ? (
                   <div 
                     className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center cursor-pointer"
-                    onClick={() => toast({ title: "Compte vérifié", description: "Votre compte est entièrement vérifié. Vous avez accès à toutes les fonctionnalités." })}
+                    onClick={() => toast({ title: t.kyc.statusApproved, description: t.kyc.statusApprovedDesc })}
                     data-testid="badge-verified"
                   >
                     <BadgeCheck className="w-3 h-3 text-white" />
