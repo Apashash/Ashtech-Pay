@@ -1,42 +1,40 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { Link } from "wouter";
 import {
-  Globe, Key, Copy, CheckCheck, RefreshCw, BookOpen,
-  ExternalLink, Zap, Shield, ChevronRight, Eye, EyeOff,
+  Key, Shield, Globe, Zap, Copy, Eye, EyeOff, CheckCheck, RefreshCw, BookOpen, ChevronRight
 } from "lucide-react";
+import { useLanguage } from "@/lib/language";
 
 interface HostedPageConfig {
-  id: string;
-  userId: string;
-  successUrl: string | null;
-  cancelUrl: string | null;
-  notifyUrl: string | null;
   pkLive: string | null;
   skLive: string | null;
   hpLive: string | null;
-  createdAt: string;
-  updatedAt: string;
+  successUrl: string | null;
+  cancelUrl: string | null;
+  notifyUrl: string | null;
 }
 
-function CopyableKey({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
+function CopyableKey({ label, value }: { label: string; value: string; icon?: React.ReactNode }) {
   const [copied, setCopied] = useState(false);
   const [visible, setVisible] = useState(false);
   const { toast } = useToast();
+  const { t } = useLanguage();
+  const hp = t.hostedPage;
 
   function copy() {
     navigator.clipboard.writeText(value);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-    toast({ title: "Clé copiée", description: `${label} copiée dans le presse-papiers.` });
+    toast({ title: hp.keyCopied, description: `${label} ${hp.keyCopiedDesc}` });
   }
 
   const masked = value.slice(0, 12) + "•".repeat(20) + value.slice(-4);
@@ -46,7 +44,6 @@ function CopyableKey({ label, value, icon }: { label: string; value: string; ico
       <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{label}</Label>
       <div className="flex items-center gap-2">
         <div className="flex-1 flex items-center gap-2 bg-muted/50 rounded-lg border px-3 py-2">
-          {icon && <span className="text-muted-foreground">{icon}</span>}
           <code className="text-sm font-mono flex-1 truncate text-foreground">
             {visible ? value : masked}
           </code>
@@ -76,7 +73,10 @@ function CopyableKey({ label, value, icon }: { label: string; value: string; ico
 
 export default function HostedPageDashboard() {
   const { toast } = useToast();
-  const queryClient = useQueryClient();
+  const qc = useQueryClient();
+  const { t } = useLanguage();
+  const hp = t.hostedPage;
+
   const [successUrl, setSuccessUrl] = useState("");
   const [cancelUrl, setCancelUrl] = useState("");
   const [notifyUrl, setNotifyUrl] = useState("");
@@ -99,27 +99,21 @@ export default function HostedPageDashboard() {
     mutationFn: (data: { successUrl: string; cancelUrl: string; notifyUrl: string; regenerate?: boolean }) =>
       apiRequest("POST", "/api/hosted-page/config", data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/hosted-page/config"] });
-      toast({ title: "Configuration sauvegardée", description: "Vos clés API sont prêtes à l'emploi." });
+      qc.invalidateQueries({ queryKey: ["/api/hosted-page/config"] });
+      toast({ title: hp.configSaved, description: hp.configSavedDesc });
     },
     onError: () => {
-      toast({ title: "Erreur", description: "Impossible de sauvegarder la configuration.", variant: "destructive" });
+      toast({ title: hp.configError, description: hp.configErrorDesc, variant: "destructive" });
     },
   });
 
   const hasKeys = config?.pkLive && config?.skLive && config?.hpLive;
 
-  function handleGenerate() {
-    saveMutation.mutate({ successUrl, cancelUrl, notifyUrl });
-  }
-
-  function handleRegenerate() {
-    saveMutation.mutate({ successUrl, cancelUrl, notifyUrl, regenerate: true });
-  }
-
-  function handleSaveUrls() {
-    saveMutation.mutate({ successUrl, cancelUrl, notifyUrl });
-  }
+  const steps = [
+    { icon: Key,    label: hp.step1Label, desc: hp.step1Desc },
+    { icon: Zap,    label: hp.step2Label, desc: hp.step2Desc },
+    { icon: Shield, label: hp.step3Label, desc: hp.step3Desc },
+  ];
 
   return (
     <DashboardLayout>
@@ -132,17 +126,12 @@ export default function HostedPageDashboard() {
             <h1 className="text-2xl font-semibold text-foreground">Hosted Payment Page</h1>
           </div>
           <p className="text-muted-foreground text-sm ml-11">
-            Intégrez une page de paiement hébergée sur Ashtech Pay dans votre application.
+            {hp.subtitle}
           </p>
         </div>
 
-        {/* How it works */}
         <div className="grid grid-cols-3 gap-4">
-          {[
-            { icon: Key, label: "1. Configurez", desc: "Entrez vos URLs de redirection et générez vos clés." },
-            { icon: Zap, label: "2. Créez un lien", desc: "Appelez l'API pour créer un lien de paiement unique." },
-            { icon: Shield, label: "3. Le client paie", desc: "Le client paie sur la page Ashtech Pay hébergée." },
-          ].map(({ icon: Icon, label, desc }) => (
+          {steps.map(({ icon: Icon, label, desc }) => (
             <div key={label} className="rounded-xl border bg-card p-4 space-y-2">
               <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
                 <Icon className="h-3.5 w-3.5 text-primary" />
@@ -153,11 +142,10 @@ export default function HostedPageDashboard() {
           ))}
         </div>
 
-        {/* Configuration */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Configuration</CardTitle>
-            <CardDescription>URLs de redirection après paiement</CardDescription>
+            <CardDescription>{hp.redirectsDesc}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -169,9 +157,7 @@ export default function HostedPageDashboard() {
                 value={successUrl}
                 onChange={(e) => setSuccessUrl(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">
-                URL vers laquelle le client sera redirigé après un paiement réussi.
-              </p>
+              <p className="text-xs text-muted-foreground">{hp.successUrlDesc}</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="cancel-url">Cancel Redirect URL</Label>
@@ -182,15 +168,15 @@ export default function HostedPageDashboard() {
                 value={cancelUrl}
                 onChange={(e) => setCancelUrl(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">
-                URL vers laquelle le client sera redirigé si le paiement échoue ou est annulé.
-              </p>
+              <p className="text-xs text-muted-foreground">{hp.cancelUrlDesc}</p>
             </div>
 
             <div className="space-y-2 pt-2 border-t">
               <Label htmlFor="notify-url" className="flex items-center gap-2">
                 Webhook URL (notify_url)
-                <span className="text-[10px] bg-violet-500/10 text-violet-500 border border-violet-500/20 px-1.5 py-0.5 rounded font-mono">Recommandé</span>
+                <span className="text-[10px] bg-violet-500/10 text-violet-500 border border-violet-500/20 px-1.5 py-0.5 rounded font-mono">
+                  {hp.recommended}
+                </span>
               </Label>
               <Input
                 id="notify-url"
@@ -199,23 +185,21 @@ export default function HostedPageDashboard() {
                 value={notifyUrl}
                 onChange={(e) => setNotifyUrl(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">
-                URL de votre serveur qui recevra une notification automatique (POST) dès que chaque paiement est confirmé ou échoue. Utilisée comme valeur par défaut si aucune <code className="font-mono text-xs">notify_url</code> n'est passée lors de la création du lien.
-              </p>
+              <p className="text-xs text-muted-foreground">{hp.notifyUrlDesc}</p>
             </div>
 
             {hasKeys ? (
               <Button
                 variant="outline"
-                onClick={handleSaveUrls}
+                onClick={() => saveMutation.mutate({ successUrl, cancelUrl, notifyUrl })}
                 disabled={saveMutation.isPending}
                 data-testid="button-save-urls"
               >
-                {saveMutation.isPending ? "Sauvegarde..." : "Sauvegarder les URLs"}
+                {saveMutation.isPending ? hp.saving : hp.saveUrls}
               </Button>
             ) : (
               <Button
-                onClick={handleGenerate}
+                onClick={() => saveMutation.mutate({ successUrl, cancelUrl, notifyUrl })}
                 disabled={saveMutation.isPending}
                 data-testid="button-generate-keys"
                 className="w-full sm:w-auto"
@@ -223,7 +207,7 @@ export default function HostedPageDashboard() {
                 {saveMutation.isPending ? (
                   <>
                     <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                    Génération...
+                    {hp.generating}
                   </>
                 ) : (
                   <>
@@ -236,67 +220,49 @@ export default function HostedPageDashboard() {
           </CardContent>
         </Card>
 
-        {/* API Keys */}
         {hasKeys && (
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="text-base">API Keys</CardTitle>
-                  <CardDescription>Utilisez ces clés pour intégrer Ashtech Pay dans votre application.</CardDescription>
+                  <CardDescription>{hp.keysDesc}</CardDescription>
                 </div>
                 <Badge variant="secondary" className="bg-green-500/10 text-green-600 border-green-500/20">
-                  Actives
+                  {hp.active}
                 </Badge>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <CopyableKey
-                label="Public Key"
-                value={config!.pkLive!}
-                icon={<Key className="h-3.5 w-3.5" />}
-              />
-              <CopyableKey
-                label="Secret Key"
-                value={config!.skLive!}
-                icon={<Shield className="h-3.5 w-3.5" />}
-              />
-              <CopyableKey
-                label="Hosted Page Key"
-                value={config!.hpLive!}
-                icon={<Globe className="h-3.5 w-3.5" />}
-              />
+              <CopyableKey label="Public Key"      value={config!.pkLive!} />
+              <CopyableKey label="Secret Key"      value={config!.skLive!} />
+              <CopyableKey label="Hosted Page Key" value={config!.hpLive!} />
 
               <div className="pt-2 border-t">
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={handleRegenerate}
+                  onClick={() => saveMutation.mutate({ successUrl, cancelUrl, notifyUrl, regenerate: true })}
                   disabled={saveMutation.isPending}
                   data-testid="button-regenerate-keys"
                   className="text-destructive hover:text-destructive"
                 >
                   <RefreshCw className="h-3.5 w-3.5 mr-2" />
-                  Regénérer toutes les clés
+                  {hp.regenerate}
                 </Button>
-                <p className="text-xs text-muted-foreground mt-1.5">
-                  Attention — regénérer les clés invalidera les clés actuelles.
-                </p>
+                <p className="text-xs text-muted-foreground mt-1.5">{hp.regenerateWarning}</p>
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Documentation button */}
         {hasKeys && (
           <Card className="border-violet-500/20 bg-violet-500/5">
             <CardContent className="pt-5">
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
-                  <p className="text-sm font-semibold">Documentation développeur</p>
-                  <p className="text-xs text-muted-foreground">
-                    Consultez la documentation complète pour intégrer la Hosted Payment Page.
-                  </p>
+                  <p className="text-sm font-semibold">{hp.docTitle}</p>
+                  <p className="text-xs text-muted-foreground">{hp.docDesc}</p>
                 </div>
                 <Link href="/dashboard/hosted-page/docs">
                   <Button data-testid="button-documentation" className="gap-2">

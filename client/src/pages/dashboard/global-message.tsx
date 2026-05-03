@@ -5,9 +5,10 @@ import { queryClient } from "@/lib/queryClient";
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
-import { fr } from "date-fns/locale";
+import { fr, enUS } from "date-fns/locale";
 import { Megaphone, CheckCircle2, ArrowLeft, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useLanguage } from "@/lib/language";
 
 interface GlobalMessage {
   id: string;
@@ -26,6 +27,8 @@ interface Notification {
 
 export default function GlobalMessagePage() {
   const [, setLocation] = useLocation();
+  const { t, language } = useLanguage();
+  const gm = t.globalMsg;
 
   const { data: activeMessages = [], isLoading } = useQuery<GlobalMessage[]>({
     queryKey: ["/api/global-messages/active"],
@@ -61,6 +64,9 @@ export default function GlobalMessagePage() {
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     })[0] ?? null;
 
+  const dateLocale = language === "fr" ? fr : enUS;
+  const datePattern = language === "fr" ? "dd MMMM yyyy 'à' HH:mm" : "MMMM dd, yyyy 'at' HH:mm";
+
   return (
     <DashboardLayout>
       <div className="max-w-2xl mx-auto py-8 px-4 space-y-6">
@@ -72,7 +78,7 @@ export default function GlobalMessagePage() {
           className="text-muted-foreground hover:text-foreground -ml-2"
         >
           <ArrowLeft className="w-4 h-4 mr-1" />
-          Retour
+          {gm.back}
         </Button>
 
         {!isLoading && displayed ? (
@@ -90,7 +96,7 @@ export default function GlobalMessagePage() {
                   <div className="flex items-center gap-2 mb-0.5">
                     <Shield className="w-3.5 h-3.5 text-purple-500" />
                     <span className="text-xs font-semibold uppercase tracking-widest text-purple-500">
-                      Message officiel
+                      {gm.officialBadge}
                     </span>
                   </div>
                   <h1 className="text-xl font-semibold text-foreground leading-tight">
@@ -108,7 +114,7 @@ export default function GlobalMessagePage() {
               {displayed.createdAt && (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <div className="w-1.5 h-1.5 rounded-full bg-purple-500" />
-                  Publié le {format(new Date(displayed.createdAt), "dd MMMM yyyy à HH:mm", { locale: fr })}
+                  {gm.published} {format(new Date(displayed.createdAt), datePattern, { locale: dateLocale })}
                 </div>
               )}
 
@@ -119,10 +125,10 @@ export default function GlobalMessagePage() {
                   data-testid="button-global-message-ack"
                 >
                   <CheckCircle2 className="w-4 h-4" />
-                  J'ai compris
+                  {gm.understood}
                 </Button>
                 <p className="text-xs text-muted-foreground">
-                  — L'équipe AshTech Pay
+                  {gm.team}
                 </p>
               </div>
             </div>
@@ -132,10 +138,10 @@ export default function GlobalMessagePage() {
             <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mx-auto">
               <Megaphone className="w-8 h-8 text-muted-foreground" />
             </div>
-            <p className="text-muted-foreground text-sm">Aucun message de l'administration pour le moment.</p>
+            <p className="text-muted-foreground text-sm">{gm.noMessage}</p>
             <Button variant="outline" onClick={() => setLocation("/dashboard")}>
               <ArrowLeft className="w-4 h-4 mr-1" />
-              Retour au tableau de bord
+              {gm.backToDashboard}
             </Button>
           </div>
         ) : null}

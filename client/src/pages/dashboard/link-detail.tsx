@@ -13,9 +13,10 @@ import {
   CheckCircle, XCircle, Loader2, BarChart3, ChevronLeft, ChevronRight
 } from "lucide-react";
 import { format } from "date-fns";
-import { fr } from "date-fns/locale";
+import { fr, enUS } from "date-fns/locale";
 import { formatCurrency } from "@/lib/currency";
 import { getImageSrc } from "@/lib/image";
+import { useLanguage } from "@/lib/language";
 
 interface LinkAnalytics {
   paymentLink: PaymentLink;
@@ -38,6 +39,8 @@ export default function LinkDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
   const [page, setPage] = useState(1);
+  const { t, language } = useLanguage();
+  const ld = t.linkDetail;
 
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const userCurrency = (user?.preferredCurrency || "XAF") as SupportedCurrency;
@@ -46,7 +49,7 @@ export default function LinkDetailPage() {
     queryKey: ["/api/payment-links", id, "analytics"],
     queryFn: async () => {
       const res = await fetch(`/api/payment-links/${id}/analytics`, { credentials: "include", headers: getAuthHeaders() });
-      if (!res.ok) throw new Error("Erreur de chargement");
+      if (!res.ok) throw new Error("Error loading");
       return res.json();
     },
     enabled: !!id,
@@ -59,11 +62,11 @@ export default function LinkDetailPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "completed":
-        return <Badge className="bg-green-500/20 text-green-500 border-green-500/30 gap-1"><CheckCircle className="w-3 h-3" />Validé</Badge>;
+        return <Badge className="bg-green-500/20 text-green-500 border-green-500/30 gap-1"><CheckCircle className="w-3 h-3" />{ld.statusCompleted}</Badge>;
       case "pending":
-        return <Badge className="bg-amber-500/20 text-amber-500 border-amber-500/30 gap-1"><Clock className="w-3 h-3" />En cours</Badge>;
+        return <Badge className="bg-amber-500/20 text-amber-500 border-amber-500/30 gap-1"><Clock className="w-3 h-3" />{ld.statusPending}</Badge>;
       case "failed":
-        return <Badge className="bg-red-500/20 text-red-500 border-red-500/30 gap-1"><XCircle className="w-3 h-3" />Rejeté</Badge>;
+        return <Badge className="bg-red-500/20 text-red-500 border-red-500/30 gap-1"><XCircle className="w-3 h-3" />{ld.statusFailed}</Badge>;
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }
@@ -91,9 +94,9 @@ export default function LinkDetailPage() {
             )}
             <div>
               <h1 className="text-2xl font-bold text-foreground">
-                {isLoading ? "Chargement..." : data?.paymentLink.title || "Lien de paiement"}
+                {isLoading ? ld.loading : data?.paymentLink.title || ld.defaultTitle}
               </h1>
-              <p className="text-muted-foreground text-sm">Statistiques et historique des transactions</p>
+              <p className="text-muted-foreground text-sm">{ld.subtitle}</p>
             </div>
           </div>
         </div>
@@ -104,9 +107,9 @@ export default function LinkDetailPage() {
           </div>
         ) : isError ? (
           <div className="text-center py-20">
-            <p className="text-muted-foreground">Impossible de charger les données de ce lien.</p>
+            <p className="text-muted-foreground">{ld.loadFail}</p>
             <Button variant="outline" className="mt-4" onClick={() => navigate("/dashboard/links")}>
-              Retour aux liens
+              {ld.backToLinks}
             </Button>
           </div>
         ) : data ? (
@@ -116,28 +119,28 @@ export default function LinkDetailPage() {
                 <CardContent className="p-6 text-center">
                   <MousePointer className="w-5 h-5 mx-auto mb-2 text-blue-500" />
                   <p className="text-3xl font-bold">{data.analytics.clickCount}</p>
-                  <p className="text-sm text-muted-foreground mt-1">Clics</p>
+                  <p className="text-sm text-muted-foreground mt-1">{ld.clicks}</p>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent className="p-6 text-center">
                   <ArrowDownUp className="w-5 h-5 mx-auto mb-2 text-green-500" />
                   <p className="text-3xl font-bold">{data.analytics.completedCount}</p>
-                  <p className="text-sm text-muted-foreground mt-1">Validés</p>
+                  <p className="text-sm text-muted-foreground mt-1">{ld.validated}</p>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent className="p-6 text-center">
                   <Clock className="w-5 h-5 mx-auto mb-2 text-amber-500" />
                   <p className="text-3xl font-bold">{data.analytics.pendingCount}</p>
-                  <p className="text-sm text-muted-foreground mt-1">En cours</p>
+                  <p className="text-sm text-muted-foreground mt-1">{ld.inProgress}</p>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent className="p-6 text-center">
                   <TrendingUp className="w-5 h-5 mx-auto mb-2 text-purple-500" />
                   <p className="text-3xl font-bold">{data.analytics.conversionRate}%</p>
-                  <p className="text-sm text-muted-foreground mt-1">Conversion</p>
+                  <p className="text-sm text-muted-foreground mt-1">{ld.conversion}</p>
                 </CardContent>
               </Card>
             </div>
@@ -145,7 +148,7 @@ export default function LinkDetailPage() {
             <div className="grid grid-cols-2 gap-4">
               <Card>
                 <CardContent className="p-6">
-                  <p className="text-muted-foreground text-sm mb-1">Total collecté</p>
+                  <p className="text-muted-foreground text-sm mb-1">{ld.totalCollected}</p>
                   <p className="text-2xl font-bold text-green-500">
                     {formatCurrency(parseFloat(data.analytics.totalCollected), userCurrency)}
                   </p>
@@ -153,7 +156,7 @@ export default function LinkDetailPage() {
               </Card>
               <Card>
                 <CardContent className="p-6">
-                  <p className="text-muted-foreground text-sm mb-1">En attente</p>
+                  <p className="text-muted-foreground text-sm mb-1">{ld.totalPending}</p>
                   <p className="text-2xl font-bold text-amber-500">
                     {formatCurrency(parseFloat(data.analytics.totalPending), userCurrency)}
                   </p>
@@ -165,14 +168,14 @@ export default function LinkDetailPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <BarChart3 className="w-5 h-5" />
-                  Historique des transactions ({transactions.length})
+                  {ld.history} ({transactions.length})
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {transactions.length === 0 ? (
                   <div className="text-center py-12">
                     <BarChart3 className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-                    <p className="text-muted-foreground">Aucune transaction pour ce lien</p>
+                    <p className="text-muted-foreground">{ld.noTransactions}</p>
                   </div>
                 ) : (
                   <>
@@ -190,7 +193,7 @@ export default function LinkDetailPage() {
                             </div>
                             <p className="text-xs text-muted-foreground mt-0.5">
                               {tx.payerEmail}
-                              {tx.createdAt && ` • ${format(new Date(tx.createdAt), "dd/MM/yyyy HH:mm", { locale: fr })}`}
+                              {tx.createdAt && ` • ${format(new Date(tx.createdAt), "dd/MM/yyyy HH:mm", { locale: language === "fr" ? fr : enUS })}`}
                             </p>
                           </div>
                           <p className={`font-bold text-lg whitespace-nowrap ml-4 ${
@@ -207,7 +210,7 @@ export default function LinkDetailPage() {
                     {totalPages > 1 && (
                       <div className="flex items-center justify-between pt-4 mt-4 border-t">
                         <p className="text-sm text-muted-foreground">
-                          {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, transactions.length)} sur {transactions.length}
+                          {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, transactions.length)} {ld.of} {transactions.length}
                         </p>
                         <div className="flex items-center gap-2">
                           <Button
@@ -218,7 +221,7 @@ export default function LinkDetailPage() {
                             data-testid="button-page-prev"
                           >
                             <ChevronLeft className="w-4 h-4" />
-                            Précédent
+                            {ld.prev}
                           </Button>
                           <span className="text-sm font-medium px-2">{page} / {totalPages}</span>
                           <Button
@@ -228,7 +231,7 @@ export default function LinkDetailPage() {
                             disabled={page === totalPages}
                             data-testid="button-page-next"
                           >
-                            Suivant
+                            {ld.next}
                             <ChevronRight className="w-4 h-4" />
                           </Button>
                         </div>
