@@ -88,10 +88,8 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
       await storage.createUserNotification({
         userId: payment.userId,
         type: isPaymentLink ? "payment_link_received" : "deposit_confirmed",
-        title: isPaymentLink ? "Paiement reçu" : "Dépôt confirmé",
-        message: isPaymentLink
-          ? `Vous avez reçu un paiement de ${payment.amount} ${paymentCurrency} via lien de paiement.`
-          : `Votre dépôt de ${payment.amount} ${paymentCurrency} a été confirmé et crédité sur votre compte.`,
+        title: isPaymentLink ? "payment_link_received" : "deposit_confirmed",
+        message: JSON.stringify({ amount: payment.amount, currency: paymentCurrency }),
         transactionId: transaction.id,
         isRead: false,
       });
@@ -123,10 +121,8 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
       await storage.createUserNotification({
         userId: payment.userId,
         type: isPaymentLink ? "payment_link_failed" : "deposit_failed",
-        title: isPaymentLink ? "Paiement rejeté" : "Dépôt rejeté",
-        message: isPaymentLink
-          ? "Le paiement a été rejeté ou a échoué."
-          : "Votre dépôt a été rejeté ou a échoué. Aucun montant n'a été débité.",
+        title: isPaymentLink ? "payment_link_failed" : "deposit_failed",
+        message: "{}",
         transactionId: transaction.id,
         isRead: false,
       });
@@ -226,10 +222,8 @@ export async function recoverPendingDeposits() {
           await storage.createUserNotification({
             userId: tx.userId,
             type: isPaymentLink ? "payment_link_failed" : "deposit_failed",
-            title: isPaymentLink ? "Paiement expiré" : "Dépôt expiré",
-            message: isPaymentLink
-              ? "Un paiement a expiré : aucune confirmation reçue de l'opérateur dans les 7 minutes."
-              : "Votre dépôt a expiré : aucune confirmation reçue de l'opérateur dans les 7 minutes. Aucun montant n'a été débité.",
+            title: isPaymentLink ? "payment_link_failed" : "deposit_failed",
+            message: "{}",
             transactionId: tx.id,
             isRead: false,
           });

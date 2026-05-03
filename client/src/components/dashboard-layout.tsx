@@ -77,7 +77,7 @@ import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
-import { fr } from "date-fns/locale";
+import { fr, enUS } from "date-fns/locale";
 import { Link as RouterLink } from "wouter";
 
 import { CurrencySelector } from "@/components/currency-selector";
@@ -111,7 +111,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { toast } = useToast();
   const [showKycUpdateDialog, setShowKycUpdateDialog] = useState(false);
   const { rates } = useExchangeRates();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   const menuItems = MENU_URLS.map(item => ({ title: t.sidebar[item.key], url: item.url, icon: item.icon }));
   const settingsItems = SETTINGS_URLS.map(item => ({ title: t.sidebar[item.key], url: item.url, icon: item.icon }));
@@ -224,7 +224,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
-      toast({ title: "Notifications supprimées", description: "Toutes vos notifications ont été effacées." });
+      toast({ title: t.notifications.deletedAll, description: t.notifications.deletedAllDesc });
     },
   });
 
@@ -258,6 +258,43 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       });
     }
   });
+
+  const getNotifTitle = (type: string, storedTitle: string): string => {
+    const map: Record<string, string> = {
+      deposit_confirmed: t.notifications.typeDepositConfirmedTitle,
+      deposit_failed: t.notifications.typeDepositFailedTitle,
+      payment_link_received: t.notifications.typePaymentLinkReceivedTitle,
+      payment_link_failed: t.notifications.typePaymentLinkFailedTitle,
+      withdrawal_confirmed: t.notifications.typeWithdrawalConfirmedTitle,
+      withdrawal_failed: t.notifications.typeWithdrawalFailedTitle,
+    };
+    return map[type] || storedTitle;
+  };
+
+  const getNotifMessage = (type: string, storedMessage: string, currency: string): string => {
+    let params: { amount?: string; currency?: string } = {};
+    try { params = JSON.parse(storedMessage); } catch { /* old plain-text notification */ }
+    const amt = params.amount;
+    const cur = (params.currency || "XAF").replace(/\bXAF\b/g, currency);
+    const tpl = (tmpl: string) =>
+      tmpl.replace("{amount}", amt || "").replace("{currency}", cur);
+    switch (type) {
+      case "deposit_confirmed":
+        return amt ? tpl(t.notifications.typeDepositConfirmedMsg) : storedMessage.replace(/\bXAF\b/g, currency);
+      case "deposit_failed":
+        return t.notifications.typeDepositFailedMsg;
+      case "payment_link_received":
+        return amt ? tpl(t.notifications.typePaymentLinkReceivedMsg) : storedMessage.replace(/\bXAF\b/g, currency);
+      case "payment_link_failed":
+        return t.notifications.typePaymentLinkFailedMsg;
+      case "withdrawal_confirmed":
+        return amt ? tpl(t.notifications.typeWithdrawalConfirmedMsg) : storedMessage.replace(/\bXAF\b/g, currency);
+      case "withdrawal_failed":
+        return amt ? tpl(t.notifications.typeWithdrawalFailedMsg) : storedMessage.replace(/\bXAF\b/g, currency);
+      default:
+        return storedMessage.replace(/\bXAF\b/g, currency);
+    }
+  };
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
@@ -588,10 +625,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center justify-between gap-1">
                                   <div className="flex items-center gap-1.5 min-w-0">
-                                    <p className="text-sm font-medium truncate">{notification.title}</p>
+                                    <p className="text-sm font-medium truncate">{getNotifTitle(notification.type, notification.title)}</p>
                                     {notification.type === "global_message" && (
                                       <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/30">
-                                        Officiel
+                                        {t.notifications.official}
                                       </span>
                                     )}
                                   </div>
@@ -604,11 +641,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                                   )}
                                 </div>
                                 <p className={`text-xs text-muted-foreground mt-0.5 ${isExpanded ? "whitespace-pre-wrap break-words" : "line-clamp-2"}`}>
-                                  {notification.message?.replace(/\bXAF\b/g, preferredCurrency)}
+                                  {getNotifMessage(notification.type, notification.message || "", preferredCurrency)}
                                 </p>
                                 {notification.createdAt && (
                                   <p className="text-xs text-muted-foreground mt-1">
-                                    {format(new Date(notification.createdAt), "dd MMM à HH:mm", { locale: fr })}
+                                    {format(new Date(notification.createdAt), language === "fr" ? "dd MMM 'à' HH:mm" : "dd MMM 'at' HH:mm", { locale: language === "fr" ? fr : enUS })}
                                   </p>
                                 )}
                                 {isExpanded && notification.transactionId && (
@@ -617,7 +654,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                                     onClick={(e) => { e.stopPropagation(); setLocation("/dashboard/transactions"); }}
                                     data-testid={`button-notif-goto-tx-${notification.id}`}
                                   >
-                                    Voir la transaction →
+                                    {t.notifications.viewTransaction}
                                   </button>
                                 )}
                                 {isExpanded && notification.type === "admin_message" && (
@@ -626,7 +663,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                                     onClick={(e) => { e.stopPropagation(); setLocation("/dashboard/support"); }}
                                     data-testid={`button-notif-goto-support-${notification.id}`}
                                   >
-                                    Voir le message →
+                                    {t.notifications.viewMessage}
                                   </button>
                                 )}
                                 {isExpanded && notification.type === "global_message" && (
@@ -635,7 +672,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                                     onClick={(e) => { e.stopPropagation(); setLocation("/dashboard/global-message"); }}
                                     data-testid={`button-notif-goto-global-${notification.id}`}
                                   >
-                                    Lire le message officiel →
+                                    {t.notifications.viewOfficialMessage}
                                   </button>
                                 )}
                               </div>

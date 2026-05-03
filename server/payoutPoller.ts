@@ -108,8 +108,8 @@ async function processPayout(payout: PendingPayout, apiStatus: string) {
       await storage.createUserNotification({
         userId:        payout.userId,
         type:          "withdrawal_confirmed",
-        title:         "Retrait confirmé",
-        message:       `Votre retrait de ${payout.amount} ${currency} a été envoyé avec succès.`,
+        title:         "withdrawal_confirmed",
+        message:       JSON.stringify({ amount: payout.amount, currency }),
         transactionId: payout.transactionId,
         isRead:        false,
       });
@@ -122,8 +122,8 @@ async function processPayout(payout: PendingPayout, apiStatus: string) {
       await storage.createUserNotification({
         userId:        payout.userId,
         type:          "withdrawal_failed",
-        title:         "Retrait échoué",
-        message:       `Votre retrait de ${payout.amount} ${currency} a échoué. Le montant a été recrédité sur votre compte.`,
+        title:         "withdrawal_failed",
+        message:       JSON.stringify({ amount: payout.amount, currency }),
         transactionId: payout.transactionId,
         isRead:        false,
       });
