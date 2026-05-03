@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { loginSchema } from "@shared/schema";
 import { apiRequest, queryClient, setAuthToken } from "@/lib/queryClient";
 import { Mail, Lock, Loader2, Eye, EyeOff, Home } from "lucide-react";
-
+import { useLanguage } from "@/lib/language";
 import { z } from "zod";
 
 type LoginFormData = z.infer<typeof loginSchema>;
@@ -18,6 +18,7 @@ type LoginFormData = z.infer<typeof loginSchema>;
 export default function LoginPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { t } = useLanguage();
   const [showPassword, setShowPassword] = useState(false);
 
   const form = useForm<LoginFormData>({
@@ -32,13 +33,12 @@ export default function LoginPage() {
     },
     onSuccess: (data) => {
       if (data.token) setAuthToken(data.token);
-      // Pre-populate cache so dashboard renders instantly without an extra request
       if (data.user) queryClient.setQueryData(["/api/user"], data.user);
-      toast({ title: "Connexion réussie", description: `Bienvenue, ${data.user.fullName}!`, duration: 2000, className: "bg-blue-600 text-white border-blue-700" });
+      toast({ title: t.login.toastSuccess, description: `${t.login.toastSuccessDescPre}${data.user.fullName}!`, duration: 2000, className: "bg-blue-600 text-white border-blue-700" });
       setLocation("/dashboard");
     },
     onError: (error: Error) => {
-      toast({ title: "Erreur de connexion", description: error.message || "Identifiants incorrects", variant: "destructive" });
+      toast({ title: t.login.toastError, description: error.message || t.login.toastErrorDesc, variant: "destructive" });
     },
   });
 
@@ -52,7 +52,7 @@ export default function LoginPage() {
             </div>
           </Link>
           <div className="text-center">
-            <h1 className="text-2xl font-semibold text-foreground">Connexion</h1>
+            <h1 className="text-2xl font-semibold text-foreground">{t.login.title}</h1>
           </div>
         </div>
 
@@ -64,12 +64,12 @@ export default function LoginPage() {
                 name="identifier"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="font-semibold text-sm">Email ou Téléphone</FormLabel>
+                    <FormLabel className="font-semibold text-sm">{t.login.emailLabel}</FormLabel>
                     <FormControl>
                       <div className="relative">
                         <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                         <Input
-                          placeholder="votreemail@exemple.com ou +237..."
+                          placeholder={t.login.emailPlaceholder}
                           className="pl-10"
                           data-testid="input-identifier"
                           {...field}
@@ -86,7 +86,7 @@ export default function LoginPage() {
                 name="password"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="font-semibold text-sm">Mot de passe</FormLabel>
+                    <FormLabel className="font-semibold text-sm">{t.login.passwordLabel}</FormLabel>
                     <FormControl>
                       <div className="relative">
                         <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -115,15 +115,15 @@ export default function LoginPage() {
               <div className="flex justify-end">
                 <Link href="/forgot-password">
                   <span className="text-sm text-primary hover:underline cursor-pointer font-medium" data-testid="link-forgot-password">
-                    Mot de passe oublié ?
+                    {t.login.forgotPassword}
                   </span>
                 </Link>
               </div>
 
               <Button type="submit" className="w-full font-bold text-base h-11" disabled={loginMutation.isPending} data-testid="button-login">
                 {loginMutation.isPending ? (
-                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Connexion...</>
-                ) : "Se connecter"}
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{t.login.submitting}</>
+                ) : t.login.submit}
               </Button>
             </form>
           </Form>
@@ -133,14 +133,14 @@ export default function LoginPage() {
           <Link href="/">
             <Button variant="ghost" size="sm" className="gap-1.5" data-testid="button-back-home">
               <Home className="w-3.5 h-3.5" />
-              Accueil
+              {t.login.home}
             </Button>
           </Link>
           <p className="text-muted-foreground text-sm">
-            Pas encore de compte ?{" "}
+            {t.login.noAccount}{" "}
             <Link href="/register">
               <span className="text-primary hover:underline cursor-pointer font-semibold" data-testid="link-register">
-                Créer un compte
+                {t.login.createAccount}
               </span>
             </Link>
           </p>

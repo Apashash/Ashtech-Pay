@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { registerSchema } from "@shared/schema";
 import { apiRequest, queryClient, setAuthToken } from "@/lib/queryClient";
 import { Mail, Lock, User, Phone, Loader2, Eye, EyeOff, Home } from "lucide-react";
-
+import { useLanguage } from "@/lib/language";
 import { z } from "zod";
 
 interface CountryData {
@@ -27,21 +27,22 @@ const fallbackCountries: CountryData[] = [
   { code: "CM", name: "Cameroun", flag: "🇨🇲", dialCode: "+237", currency: "XAF", exchangeRate: "1" },
 ];
 
-const extendedRegisterSchema = registerSchema.extend({
-  confirmPassword: z.string().min(6, "Le mot de passe doit contenir au moins 6 caractères"),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "Les mots de passe ne correspondent pas",
-  path: ["confirmPassword"],
-});
-
-type RegisterFormData = z.infer<typeof extendedRegisterSchema>;
-
 export default function RegisterPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { t } = useLanguage();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState<CountryData | null>(null);
+
+  const extendedRegisterSchema = registerSchema.extend({
+    confirmPassword: z.string().min(6, t.register.passwordMinError),
+  }).refine((data) => data.password === data.confirmPassword, {
+    message: t.register.passwordMismatch,
+    path: ["confirmPassword"],
+  });
+
+  type RegisterFormData = z.infer<typeof extendedRegisterSchema>;
 
   const { data: countries = fallbackCountries, isLoading: loadingCountries } = useQuery<CountryData[]>({
     queryKey: ["/api/public/countries"],
@@ -70,17 +71,17 @@ export default function RegisterPage() {
     onSuccess: (data) => {
       if (data.token) setAuthToken(data.token);
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
-      toast({ title: "Inscription réussie", description: `Bienvenue sur Ashtech Pay, ${data.user.fullName}!` });
+      toast({ title: t.register.toastSuccess, description: `${t.register.toastSuccessDescPre}${data.user.fullName}!` });
       setLocation("/dashboard");
     },
     onError: (error: Error) => {
-      toast({ title: "Erreur d'inscription", description: error.message || "Une erreur est survenue", variant: "destructive" });
+      toast({ title: t.register.toastError, description: error.message || t.register.toastErrorDesc, variant: "destructive" });
     },
   });
 
   const onSubmit = (data: RegisterFormData) => {
     if (!selectedCountry) {
-      toast({ title: "Erreur", description: "Veuillez sélectionner un pays", variant: "destructive" });
+      toast({ title: t.register.errorCountry, description: t.register.errorNoCountry, variant: "destructive" });
       return;
     }
     registerMutation.mutate(data);
@@ -107,7 +108,7 @@ export default function RegisterPage() {
             </div>
           </Link>
           <div className="text-center">
-            <h1 className="text-2xl font-semibold text-foreground">Créer un compte</h1>
+            <h1 className="text-2xl font-semibold text-foreground">{t.register.title}</h1>
           </div>
         </div>
 
@@ -119,7 +120,7 @@ export default function RegisterPage() {
                 name="fullName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="font-semibold text-sm">Nom complet</FormLabel>
+                    <FormLabel className="font-semibold text-sm">{t.register.fullName}</FormLabel>
                     <FormControl>
                       <div className="relative">
                         <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -136,7 +137,7 @@ export default function RegisterPage() {
                 name="username"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="font-semibold text-sm">Nom d'utilisateur</FormLabel>
+                    <FormLabel className="font-semibold text-sm">{t.register.username}</FormLabel>
                     <FormControl>
                       <div className="relative">
                         <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -153,7 +154,7 @@ export default function RegisterPage() {
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="font-semibold text-sm">Email</FormLabel>
+                    <FormLabel className="font-semibold text-sm">{t.register.email}</FormLabel>
                     <FormControl>
                       <div className="relative">
                         <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -170,7 +171,7 @@ export default function RegisterPage() {
                 name="phone"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="font-semibold text-sm">Téléphone</FormLabel>
+                    <FormLabel className="font-semibold text-sm">{t.register.phone}</FormLabel>
                     <FormControl>
                       <div className="flex gap-2">
                         <Select value={selectedCountry?.code || ""} onValueChange={handleCountryChange}>
@@ -181,7 +182,7 @@ export default function RegisterPage() {
                                   <span>{selectedCountry.flag}</span>
                                   <span className="text-sm">{selectedCountry.dialCode}</span>
                                 </span>
-                              ) : <span className="text-muted-foreground">Pays</span>}
+                              ) : <span className="text-muted-foreground">{t.register.country}</span>}
                             </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
@@ -212,7 +213,7 @@ export default function RegisterPage() {
                 name="password"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="font-semibold text-sm">Mot de passe</FormLabel>
+                    <FormLabel className="font-semibold text-sm">{t.register.password}</FormLabel>
                     <FormControl>
                       <div className="relative">
                         <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -232,7 +233,7 @@ export default function RegisterPage() {
                 name="confirmPassword"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="font-semibold text-sm">Confirmer le mot de passe</FormLabel>
+                    <FormLabel className="font-semibold text-sm">{t.register.confirmPassword}</FormLabel>
                     <FormControl>
                       <div className="relative">
                         <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -249,8 +250,8 @@ export default function RegisterPage() {
 
               <Button type="submit" className="w-full font-bold text-base h-11 mt-2" disabled={registerMutation.isPending || loadingCountries || !selectedCountry} data-testid="button-register">
                 {registerMutation.isPending ? (
-                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Création...</>
-                ) : "Créer mon compte"}
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{t.register.submitting}</>
+                ) : t.register.submit}
               </Button>
             </form>
           </Form>
@@ -260,14 +261,14 @@ export default function RegisterPage() {
           <Link href="/">
             <Button variant="ghost" size="sm" className="gap-1.5" data-testid="button-back-home">
               <Home className="w-3.5 h-3.5" />
-              Accueil
+              {t.register.home}
             </Button>
           </Link>
           <p className="text-muted-foreground text-sm">
-            Déjà un compte ?{" "}
+            {t.register.hasAccount}{" "}
             <Link href="/login">
               <span className="text-primary hover:underline cursor-pointer font-semibold" data-testid="link-login">
-                Se connecter
+                {t.register.login}
               </span>
             </Link>
           </p>
