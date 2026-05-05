@@ -32,11 +32,13 @@ export default function AddWithdrawalNumberPage() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [label, setLabel] = useState("");
 
-  const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
+  const { data: user, isLoading: userLoading } = useQuery<User>({ queryKey: ["/api/user"] });
 
-  const { data: countriesConfig = [] } = useQuery<CountryConfig[]>({
+  const { data: countriesConfig = [], isLoading: operatorsLoading } = useQuery<CountryConfig[]>({
     queryKey: ["/api/public/withdrawal-operators"],
   });
+
+  const isLoading = userLoading || operatorsLoading;
 
   const operators = useMemo(() => {
     if (!countriesConfig.length || !user?.country) return [];
@@ -112,7 +114,11 @@ export default function AddWithdrawalNumberPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {operators.length === 0 ? (
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : operators.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <p>{t.addWithdrawalNumber.noOperators}</p>
                 <p className="text-sm">{t.addWithdrawalNumber.contactSupport}</p>

@@ -33,9 +33,9 @@ export default function EditWithdrawalNumberPage() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [label, setLabel] = useState("");
 
-  const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
+  const { data: user, isLoading: userLoading } = useQuery<User>({ queryKey: ["/api/user"] });
 
-  const { data: withdrawalNumbers = [] } = useQuery<WithdrawalNumber[]>({
+  const { data: withdrawalNumbers = [], isLoading: numbersLoading } = useQuery<WithdrawalNumber[]>({
     queryKey: ["/api/withdrawal-numbers"],
   });
 
@@ -49,9 +49,11 @@ export default function EditWithdrawalNumberPage() {
     }
   }, [currentNumber]);
 
-  const { data: countriesConfig = [] } = useQuery<CountryConfig[]>({
+  const { data: countriesConfig = [], isLoading: operatorsLoading } = useQuery<CountryConfig[]>({
     queryKey: ["/api/public/withdrawal-operators"],
   });
+
+  const isLoadingOperators = userLoading || numbersLoading || operatorsLoading;
 
   const operators = useMemo(() => {
     if (!countriesConfig.length || !user?.country) return [];
@@ -157,7 +159,11 @@ export default function EditWithdrawalNumberPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {operators.length === 0 ? (
+            {isLoadingOperators ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : operators.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <p>{t.editWithdrawalNumber.noOperators}</p>
               </div>
