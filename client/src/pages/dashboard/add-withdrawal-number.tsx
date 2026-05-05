@@ -8,20 +8,13 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User } from "@shared/schema";
 import { Phone, Loader2, ArrowLeft, Check } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { useLanguage } from "@/lib/language";
 
-interface CountryConfig {
+interface OperatorOption {
   id: string;
   name: string;
-  code: string;
-  flag: string;
-  currency: string;
-  operators: Array<{
-    id: string;
-    name: string;
-  }>;
 }
 
 export default function AddWithdrawalNumberPage() {
@@ -32,32 +25,11 @@ export default function AddWithdrawalNumberPage() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [label, setLabel] = useState("");
 
-  const { data: user, isLoading: userLoading } = useQuery<User>({ queryKey: ["/api/user"] });
+  const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
 
-  const { data: countriesConfig = [], isLoading: operatorsLoading } = useQuery<CountryConfig[]>({
-    queryKey: ["/api/public/withdrawal-operators"],
+  const { data: operators = [], isLoading: operatorsLoading } = useQuery<OperatorOption[]>({
+    queryKey: ["/api/user/withdrawal-operators"],
   });
-
-  const isLoading = userLoading || operatorsLoading;
-
-  const operators = useMemo(() => {
-    if (!countriesConfig.length || !user?.country) return [];
-
-    const userCountryLower = user.country.toLowerCase().trim();
-
-    const userCountry = countriesConfig.find(c => {
-      const configNameLower = c.name.toLowerCase().trim();
-      return configNameLower === userCountryLower ||
-             configNameLower.includes(userCountryLower) ||
-             userCountryLower.includes(configNameLower) ||
-             (c.name.toLowerCase().includes("cameroun") && userCountryLower.includes("cameroon")) ||
-             (c.name.toLowerCase().includes("cameroon") && userCountryLower.includes("cameroun"));
-    });
-
-    if (!userCountry) return [];
-
-    return userCountry.operators.map(op => op.name);
-  }, [countriesConfig, user?.country]);
 
   const addNumberMutation = useMutation({
     mutationFn: async (data: { phoneNumber: string; operatorName: string; label?: string }) => {
@@ -114,7 +86,7 @@ export default function AddWithdrawalNumberPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {isLoading ? (
+            {operatorsLoading ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
               </div>
@@ -127,18 +99,18 @@ export default function AddWithdrawalNumberPage() {
               <div className="grid grid-cols-2 gap-3">
                 {operators.map((operator) => (
                   <button
-                    key={operator}
+                    key={operator.id}
                     type="button"
-                    onClick={() => setSelectedOperator(operator)}
+                    onClick={() => setSelectedOperator(operator.name)}
                     className={`p-4 rounded-xl border-2 text-left transition-all ${
-                      selectedOperator === operator
+                      selectedOperator === operator.name
                         ? "border-primary bg-primary/10"
                         : "border-border hover:border-primary/50 hover:bg-muted/50"
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-medium">{operator}</span>
-                      {selectedOperator === operator && (
+                      <span className="font-medium">{operator.name}</span>
+                      {selectedOperator === operator.name && (
                         <Check className="w-5 h-5 text-primary" />
                       )}
                     </div>

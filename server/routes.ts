@@ -3437,6 +3437,42 @@ export async function registerRoutes(
   });
 
   // Public withdrawal operators config (for withdrawal number registration)
+  // Authenticated endpoint: returns operators for the current user's country directly
+  // No client-side matching needed — server resolves by user.country
+  app.get("/api/user/withdrawal-operators", requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.userId!);
+      if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
+
+      const allCountries = await storage.getActiveCountries();
+      const allOperators = await storage.getAllOperators();
+      const allFees = await storage.getAllFees();
+
+      const userCountryLower = (user.country || "").toLowerCase().trim();
+      const country = allCountries.find(c => {
+        const n = c.name.toLowerCase().trim();
+        return n === userCountryLower || n.includes(userCountryLower) || userCountryLower.includes(n);
+      });
+
+      if (!country) return res.json([]);
+
+      const operators = allOperators
+        .filter(op => op.countryId === country.id && op.isActive && !op.isInMaintenance)
+        .filter(op => {
+          const hasOperatorFee = allFees.some(f => f.operatorId === op.id && f.transactionType === "withdrawal" && f.isActive);
+          const hasCountryFee = allFees.some(f => !f.operatorId && f.countryId === country.id && f.transactionType === "withdrawal" && f.isActive);
+          const hasGlobalFee = allFees.some(f => !f.operatorId && !f.countryId && f.transactionType === "withdrawal" && f.isActive);
+          return hasOperatorFee || hasCountryFee || hasGlobalFee;
+        })
+        .map(op => ({ id: op.id, name: op.name }));
+
+      res.json(operators);
+    } catch (error) {
+      console.error("Get user withdrawal operators error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   app.get("/api/public/withdrawal-operators", async (_req, res) => {
     try {
       const countries = await storage.getActiveCountries();

@@ -8,21 +8,10 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { WithdrawalNumber, User } from "@shared/schema";
 import { Phone, Loader2, ArrowLeft, Check, AlertTriangle } from "lucide-react";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useLocation, useParams } from "wouter";
 import { useLanguage } from "@/lib/language";
 
-interface CountryConfig {
-  id: string;
-  name: string;
-  code: string;
-  flag: string;
-  currency: string;
-  operators: Array<{
-    id: string;
-    name: string;
-  }>;
-}
 
 export default function EditWithdrawalNumberPage() {
   const { toast } = useToast();
@@ -33,7 +22,7 @@ export default function EditWithdrawalNumberPage() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [label, setLabel] = useState("");
 
-  const { data: user, isLoading: userLoading } = useQuery<User>({ queryKey: ["/api/user"] });
+  const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
 
   const { data: withdrawalNumbers = [], isLoading: numbersLoading } = useQuery<WithdrawalNumber[]>({
     queryKey: ["/api/withdrawal-numbers"],
@@ -49,30 +38,13 @@ export default function EditWithdrawalNumberPage() {
     }
   }, [currentNumber]);
 
-  const { data: countriesConfig = [], isLoading: operatorsLoading } = useQuery<CountryConfig[]>({
-    queryKey: ["/api/public/withdrawal-operators"],
+  const { data: operatorsList = [], isLoading: operatorsLoading } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ["/api/user/withdrawal-operators"],
   });
 
-  const isLoadingOperators = userLoading || numbersLoading || operatorsLoading;
+  const isLoadingOperators = numbersLoading || operatorsLoading;
 
-  const operators = useMemo(() => {
-    if (!countriesConfig.length || !user?.country) return [];
-
-    const userCountryLower = user.country.toLowerCase().trim();
-
-    const userCountry = countriesConfig.find(c => {
-      const configNameLower = c.name.toLowerCase().trim();
-      return configNameLower === userCountryLower ||
-             configNameLower.includes(userCountryLower) ||
-             userCountryLower.includes(configNameLower) ||
-             (c.name.toLowerCase().includes("cameroun") && userCountryLower.includes("cameroon")) ||
-             (c.name.toLowerCase().includes("cameroon") && userCountryLower.includes("cameroun"));
-    });
-
-    if (!userCountry) return [];
-
-    return userCountry.operators.map(op => op.name);
-  }, [countriesConfig, user?.country]);
+  const operators = operatorsList.map(op => op.name);
 
   const requestChangeMutation = useMutation({
     mutationFn: async (data: { id: string; phoneNumber: string; operatorName: string; label?: string }) => {
