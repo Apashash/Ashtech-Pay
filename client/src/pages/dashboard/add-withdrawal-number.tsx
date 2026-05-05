@@ -17,6 +17,13 @@ interface OperatorOption {
   name: string;
 }
 
+interface CountryData {
+  id: string;
+  name: string;
+  code: string;
+  operators: OperatorOption[];
+}
+
 export default function AddWithdrawalNumberPage() {
   const { toast } = useToast();
   const { t } = useLanguage();
@@ -25,11 +32,27 @@ export default function AddWithdrawalNumberPage() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [label, setLabel] = useState("");
 
-  const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
-
-  const { data: operators = [], isLoading: operatorsLoading } = useQuery<OperatorOption[]>({
-    queryKey: ["/api/user/withdrawal-operators"],
+  const { data: user, isLoading: userLoading } = useQuery<User>({
+    queryKey: ["/api/user"],
   });
+
+  const { data: allCountries = [], isLoading: countriesLoading } = useQuery<CountryData[]>({
+    queryKey: ["/api/public/withdrawal-operators"],
+  });
+
+  const isLoading = userLoading || countriesLoading;
+
+  const operators: OperatorOption[] = (() => {
+    if (!user?.country || allCountries.length === 0) return [];
+    const userCountryLower = user.country.toLowerCase().trim();
+    if (!userCountryLower) return [];
+    const match = allCountries.find(c => {
+      const n = c.name.toLowerCase().trim();
+      if (!n) return false;
+      return n === userCountryLower || n.includes(userCountryLower) || userCountryLower.includes(n);
+    });
+    return match?.operators ?? [];
+  })();
 
   const addNumberMutation = useMutation({
     mutationFn: async (data: { phoneNumber: string; operatorName: string; label?: string }) => {
@@ -86,7 +109,7 @@ export default function AddWithdrawalNumberPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {operatorsLoading ? (
+            {isLoading ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
               </div>

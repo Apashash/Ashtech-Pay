@@ -12,6 +12,11 @@ import { useState, useEffect } from "react";
 import { useLocation, useParams } from "wouter";
 import { useLanguage } from "@/lib/language";
 
+interface CountryData {
+  id: string;
+  name: string;
+  operators: Array<{ id: string; name: string }>;
+}
 
 export default function EditWithdrawalNumberPage() {
   const { toast } = useToast();
@@ -22,7 +27,9 @@ export default function EditWithdrawalNumberPage() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [label, setLabel] = useState("");
 
-  const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
+  const { data: user, isLoading: userLoading } = useQuery<User>({
+    queryKey: ["/api/user"],
+  });
 
   const { data: withdrawalNumbers = [], isLoading: numbersLoading } = useQuery<WithdrawalNumber[]>({
     queryKey: ["/api/withdrawal-numbers"],
@@ -38,13 +45,23 @@ export default function EditWithdrawalNumberPage() {
     }
   }, [currentNumber]);
 
-  const { data: operatorsList = [], isLoading: operatorsLoading } = useQuery<{ id: string; name: string }[]>({
-    queryKey: ["/api/user/withdrawal-operators"],
+  const { data: allCountries = [], isLoading: countriesLoading } = useQuery<CountryData[]>({
+    queryKey: ["/api/public/withdrawal-operators"],
   });
 
-  const isLoadingOperators = numbersLoading || operatorsLoading;
+  const isLoadingAll = userLoading || numbersLoading || countriesLoading;
 
-  const operators = operatorsList.map(op => op.name);
+  const operators: string[] = (() => {
+    if (!user?.country || allCountries.length === 0) return [];
+    const userCountryLower = user.country.toLowerCase().trim();
+    if (!userCountryLower) return [];
+    const match = allCountries.find(c => {
+      const n = c.name.toLowerCase().trim();
+      if (!n) return false;
+      return n === userCountryLower || n.includes(userCountryLower) || userCountryLower.includes(n);
+    });
+    return match?.operators.map(op => op.name) ?? [];
+  })();
 
   const requestChangeMutation = useMutation({
     mutationFn: async (data: { id: string; phoneNumber: string; operatorName: string; label?: string }) => {
@@ -81,7 +98,7 @@ export default function EditWithdrawalNumberPage() {
     });
   };
 
-  if (!currentNumber) {
+  if (isLoadingAll || !currentNumber) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center py-12">
@@ -131,11 +148,7 @@ export default function EditWithdrawalNumberPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {isLoadingOperators ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : operators.length === 0 ? (
+            {operators.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <p>{t.editWithdrawalNumber.noOperators}</p>
               </div>
