@@ -44,7 +44,7 @@ export default function RegisterPage() {
 
   type RegisterFormData = z.infer<typeof extendedRegisterSchema>;
 
-  const { data: countries = fallbackCountries, isLoading: loadingCountries } = useQuery<CountryData[]>({
+  const { data: rawCountries = fallbackCountries, isLoading: loadingCountries } = useQuery<CountryData[]>({
     queryKey: ["/api/public/countries"],
     queryFn: async () => {
       const res = await fetch("/api/public/countries");
@@ -52,6 +52,8 @@ export default function RegisterPage() {
       return res.json();
     },
   });
+
+  const countries = rawCountries.filter(c => c.code && c.name);
 
   useEffect(() => {
     if (countries.length > 0 && !selectedCountry) setSelectedCountry(countries[0]);

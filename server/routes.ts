@@ -3234,7 +3234,7 @@ export async function registerRoutes(
     try {
       const allCountries = await storage.getAllCountries();
       const activeCountries = allCountries
-        .filter(c => c.isActive)
+        .filter(c => c.isActive && c.name && c.code)
         .map(c => ({
           id: c.id,
           name: c.name,
