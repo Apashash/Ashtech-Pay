@@ -1186,7 +1186,7 @@ export async function registerRoutes(
       const txCurrency = sourceCurrency || sender.preferredCurrency || "XAF";
       const fxRates = await loadFxRates();
       const minTransferSetting = await storage.getSetting("min_transfer");
-      const minTransferXAF = minTransferSetting ? parseFloat(minTransferSetting.value) : 2650;
+      const minTransferXAF = minTransferSetting ? parseFloat(minTransferSetting.value) : 150;
       const minTransfer = Math.ceil(convertFromXAF(minTransferXAF, txCurrency, fxRates));
       if (parsedAmount < minTransfer) {
         return res.status(400).json({ message: `Le montant minimum de transfert est de ${minTransfer.toLocaleString()} ${txCurrency}` });
@@ -2039,7 +2039,7 @@ export async function registerRoutes(
       const fxRates = await loadFxRates();
 
       const minWithdrawalSetting = await storage.getSetting("min_withdrawal");
-      const minWithdrawalXAF = minWithdrawalSetting ? parseFloat(minWithdrawalSetting.value) : 2650;
+      const minWithdrawalXAF = minWithdrawalSetting ? parseFloat(minWithdrawalSetting.value) : 150;
       const minWithdrawal = Math.ceil(convertFromXAF(minWithdrawalXAF, userCurrency, fxRates));
       const maxWithdrawalSetting = await storage.getSetting("max_withdrawal");
       const maxWithdrawalXAF = maxWithdrawalSetting ? parseFloat(maxWithdrawalSetting.value) : 5000000;
@@ -3218,9 +3218,9 @@ export async function registerRoutes(
         return s ? parseFloat(s.value) : def;
       };
       res.json({
-        minTransfer: get("min_transfer", 2650),
+        minTransfer: get("min_transfer", 150),
         maxTransfer: get("max_transfer", 5000000),
-        minWithdrawal: get("min_withdrawal", 2650),
+        minWithdrawal: get("min_withdrawal", 150),
         maxWithdrawal: get("max_withdrawal", 5000000),
       });
     } catch (error) {

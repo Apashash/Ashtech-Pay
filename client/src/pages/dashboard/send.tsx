@@ -112,7 +112,7 @@ export default function SendMoneyPage() {
   const senderCurrency = (selectedWallet || primaryCurrency || "XAF") as string;
   const xafFxRate = fxRates["XAF"] || 585;
   const senderFxRate = fxRates[senderCurrency] || xafFxRate;
-  const minTransfer = Math.ceil((limits?.minTransfer ?? 2650) * senderFxRate / xafFxRate);
+  const minTransfer = Math.ceil((limits?.minTransfer ?? 150) * senderFxRate / xafFxRate);
   const maxTransfer = Math.floor((limits?.maxTransfer ?? 5000000) * senderFxRate / xafFxRate);
 
   const { data: countries, isLoading: isLoadingConfig } = useQuery<CountryConfig[]>({

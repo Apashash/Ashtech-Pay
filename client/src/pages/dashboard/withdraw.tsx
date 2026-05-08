@@ -68,7 +68,7 @@ export default function WithdrawPage() {
   const userFxRate = fxRates[userCurrency] || xafRate;
   const convertFromXAF = (xaf: number) => Math.ceil(xaf * userFxRate / xafRate);
   const limitsLoaded = limits !== undefined && fxRates && Object.keys(fxRates).length > 0;
-  const minWithdrawal = convertFromXAF(limits?.minWithdrawal ?? 2650);
+  const minWithdrawal = convertFromXAF(limits?.minWithdrawal ?? 150);
   const maxWithdrawal = Math.floor((limits?.maxWithdrawal ?? 5000000) * userFxRate / xafRate);
 
   // Primary balance = user.balance (always, regardless of currency)
@@ -235,7 +235,7 @@ export default function WithdrawPage() {
           </CardContent>
         </Card>
 
-        {balance < minWithdrawal && (
+        {limitsLoaded && balance < minWithdrawal && (
           <Card className="border-yellow-500/50 bg-yellow-500/5">
             <CardContent className="p-3 flex items-center gap-3">
               <AlertCircle className="w-4 h-4 text-yellow-500" />
