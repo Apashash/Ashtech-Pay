@@ -4,3 +4,8 @@ server/public
 vite.config.ts.*
 *.tar.gz
 .env
+dist
+logs
+uploads
+.local/afribapay_token.json
+.local/swychr_token.json
