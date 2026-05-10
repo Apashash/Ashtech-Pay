@@ -6276,8 +6276,9 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Transaction non trouvée ou statut incorrect" });
       }
       const totalAmount = parseFloat(tx.totalAmount || tx.amount);
-      await storage.updateTransactionStatus(tx.id, "failed");
+      // Refund FIRST — if this throws, status stays pending_manual and money is safe
       await storage.refundToOriginalWallet(tx.userId, tx.type, tx.currency || "XAF", totalAmount);
+      await storage.updateTransactionStatus(tx.id, "failed");
       await storage.createUserNotification({
         userId: tx.userId,
         type: tx.type === "withdrawal" ? "withdrawal_failed" : "transfer_failed",

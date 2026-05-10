@@ -347,7 +347,7 @@ export class DatabaseStorage implements IStorage {
       return;
     }
     // For transfer_out: check against the user's preferred currency
-    const user = await this.getUserById(userId);
+    const user = await this.getUser(userId);
     const userPrimary = user?.preferredCurrency || "XAF";
     if (txCurrency === userPrimary) {
       await this.updateUserBalance(userId, amount);
