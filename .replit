@@ -49,6 +49,8 @@ PIXPAY_WAVE_BUSINESS_ID = "am-23kv2kt281gqe"
 PIXPAY_API_KEY_XAF = "PIX_c2724339-716f-4034-b5e5-2a17c1c35d0e"
 SUPABASE_DATABASE_URL = "postgresql://postgres.vngfjjfgaxkcwtrzawdq:bHOFcwceoFfvhzMo@aws-1-eu-west-3.pooler.supabase.com:6543/postgres"
 SUPABASE_SERVICE_ROLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZuZ2ZqamZnYXhrY3d0cnphd2RxIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MTg0NDM1MiwiZXhwIjoyMDg3NDIwMzUyfQ.sbkaIdTLJmr08uZZ-SDmpjGdnub4awNUHR9oxLviCcw"
+APP_URL_DEV = "https://f96a6379-f341-4944-8f17-8e8a1d157003-00-rvqhzlc1jkpk.worf.replit.dev"
+APP_URL_PROD = "https://ashtechpay.top"
 
 [userenv.development]
 APP_URL = "https://f96a6379-f341-4944-8f17-8e8a1d157003-00-rvqhzlc1jkpk.worf.replit.dev"
