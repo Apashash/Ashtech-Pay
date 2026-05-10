@@ -232,10 +232,14 @@ export default function SendMoneyPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
-      toast({ title: "Transfert initié", description: "Votre transaction est en cours de traitement" });
+      queryClient.invalidateQueries({ queryKey: ["/api/wallets"] });
+      setShowConfirmDialog(false);
+      setPendingExternalData(null);
       form.reset();
+      toast({ title: "Paiement envoyé avec succès ✓", description: "Votre transaction est en cours de traitement" });
     },
     onError: (error: Error) => {
+      setShowConfirmDialog(false);
       toast({ title: "Erreur", description: error.message, variant: "destructive" });
     },
   });
