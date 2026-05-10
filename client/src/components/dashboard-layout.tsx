@@ -62,14 +62,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { SiWhatsapp, SiFacebook } from "react-icons/si";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogFooter,
-  DialogDescription 
-} from "@/components/ui/dialog";
+import { BottomSheet, BottomSheetContent, BottomSheetHeader, BottomSheetTitle, BottomSheetFooter, BottomSheetDescription } from "@/components/ui/bottom-sheet";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -755,14 +748,14 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog open={showPusdConvert} onOpenChange={setShowPusdConvert}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Conversion Fiat vers pUSD (AccountPE)</DialogTitle>
-            <DialogDescription>
+      <BottomSheet open={showPusdConvert} onOpenChange={setShowPusdConvert}>
+        <BottomSheetContent>
+          <BottomSheetHeader>
+            <BottomSheetTitle>Conversion Fiat vers pUSD (AccountPE)</BottomSheetTitle>
+            <BottomSheetDescription>
               Prend les fonds en monnaie locale présents sur le compte AccountPE et les transforme en pUSD pour les retraits.
-            </DialogDescription>
-          </DialogHeader>
+            </BottomSheetDescription>
+          </BottomSheetHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label>Pays (Source Fiat)</Label>
@@ -790,7 +783,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               />
             </div>
           </div>
-          <DialogFooter>
+          <BottomSheetFooter>
             <Button variant="outline" onClick={() => setShowPusdConvert(false)}>Annuler</Button>
             <Button 
               onClick={() => convertPusdMutation.mutate()} 
@@ -798,9 +791,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             >
               {convertPusdMutation.isPending ? "Conversion..." : "Convertir"}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </BottomSheetFooter>
+        </BottomSheetContent>
+      </BottomSheet>
 
       {/* Floating contact button — dashboard only */}
       {location === "/dashboard" && <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">

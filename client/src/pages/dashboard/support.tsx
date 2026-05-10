@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { BottomSheet, BottomSheetContent, BottomSheetDescription, BottomSheetHeader, BottomSheetTitle } from "@/components/ui/bottom-sheet";
 import { 
   MessageSquare, Mail, ExternalLink, ChevronRight, Send, Plus, ArrowLeft,
   CheckCircle, Loader2, Check
@@ -451,12 +451,12 @@ export default function SupportPage() {
             </>
           )}
 
-          <Dialog open={showNewTicket} onOpenChange={setShowNewTicket}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>{t.support.newConversationTitle}</DialogTitle>
-                <DialogDescription>{t.support.newConversationDesc}</DialogDescription>
-              </DialogHeader>
+          <BottomSheet open={showNewTicket} onOpenChange={setShowNewTicket}>
+            <BottomSheetContent>
+              <BottomSheetHeader>
+                <BottomSheetTitle>{t.support.newConversationTitle}</BottomSheetTitle>
+                <BottomSheetDescription>{t.support.newConversationDesc}</BottomSheetDescription>
+              </BottomSheetHeader>
               <form onSubmit={handleCreateTicket} className="space-y-4">
                 <div className="space-y-2">
                   <Label>{t.support.subjectLabel}</Label>
@@ -473,8 +473,8 @@ export default function SupportPage() {
                   </Button>
                 </div>
               </form>
-            </DialogContent>
-          </Dialog>
+            </BottomSheetContent>
+          </BottomSheet>
         </div>
       </DashboardLayout>
     );

@@ -13,7 +13,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User } from "@shared/schema";
 import { Wallet, Smartphone, Building2, Loader2, CheckCircle, AlertCircle, Phone, Plus, Settings, Globe, Shield, Info, ArrowLeftRight } from "lucide-react";
 import { useLanguage } from "@/lib/language";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { BottomSheet, BottomSheetContent, BottomSheetHeader, BottomSheetTitle, BottomSheetFooter } from "@/components/ui/bottom-sheet";
 import { getOperatorLogo } from "@/lib/operator-logos";
 import { getCountryFlagEmoji } from "@/lib/country-flags";
 import { z } from "zod";
@@ -533,11 +533,11 @@ export default function WithdrawPage() {
 
       </div>
 
-      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="text-center text-lg">{t.withdraw.confirmTitle}</DialogTitle>
-          </DialogHeader>
+      <BottomSheet open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <BottomSheetContent>
+          <BottomSheetHeader>
+            <BottomSheetTitle className="text-center text-lg">{t.withdraw.confirmTitle}</BottomSheetTitle>
+          </BottomSheetHeader>
           <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border my-2">
             <div className="flex items-center justify-between px-4 py-3.5">
               <span className="text-sm text-muted-foreground">{t.withdraw.confirmMethod}</span>
@@ -576,7 +576,7 @@ export default function WithdrawPage() {
               <span className="text-base font-bold text-green-500">{formatCurrency(amountValue - feeAmount, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</span>
             </div>
           </div>
-          <DialogFooter className="flex gap-2 sm:flex-row">
+          <BottomSheetFooter>
             <Button variant="outline" className="flex-1" onClick={() => setShowConfirmDialog(false)}>
               {t.withdraw.back}
             </Button>
@@ -589,9 +589,9 @@ export default function WithdrawPage() {
               {withdrawMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Wallet className="w-4 h-4 mr-2" />}
               {t.withdraw.confirm}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </BottomSheetFooter>
+        </BottomSheetContent>
+      </BottomSheet>
     </DashboardLayout>
   );
 }

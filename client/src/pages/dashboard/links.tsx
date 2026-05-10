@@ -4,7 +4,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { BottomSheet, BottomSheetContent, BottomSheetDescription, BottomSheetHeader, BottomSheetTitle } from "@/components/ui/bottom-sheet";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -147,12 +147,12 @@ function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => voi
   });
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg max-h-[90vh]">
-        <DialogHeader>
-          <DialogTitle>{t.links.createDialogTitle}</DialogTitle>
-          <DialogDescription>{t.links.createDialogDesc}</DialogDescription>
-        </DialogHeader>
+    <BottomSheet open={open} onOpenChange={onClose}>
+      <BottomSheetContent>
+        <BottomSheetHeader>
+          <BottomSheetTitle>{t.links.createDialogTitle}</BottomSheetTitle>
+          <BottomSheetDescription>{t.links.createDialogDesc}</BottomSheetDescription>
+        </BottomSheetHeader>
         <ScrollArea className="max-h-[60vh] pr-4">
           <Form {...form}>
             <form onSubmit={form.handleSubmit((d) => createMutation.mutate(d))} className="space-y-4">
@@ -379,8 +379,8 @@ function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => voi
             </form>
           </Form>
         </ScrollArea>
-      </DialogContent>
-    </Dialog>
+      </BottomSheetContent>
+    </BottomSheet>
   );
 }
 
@@ -527,12 +527,12 @@ function EditLinkDialog({ link, onClose, userCurrency }: {
   });
 
   return (
-    <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg max-h-[90vh]">
-        <DialogHeader>
-          <DialogTitle>{t.links.editDialogTitle}</DialogTitle>
-          <DialogDescription>{t.links.editDialogDesc}</DialogDescription>
-        </DialogHeader>
+    <BottomSheet open={true} onOpenChange={onClose}>
+      <BottomSheetContent>
+        <BottomSheetHeader>
+          <BottomSheetTitle>{t.links.editDialogTitle}</BottomSheetTitle>
+          <BottomSheetDescription>{t.links.editDialogDesc}</BottomSheetDescription>
+        </BottomSheetHeader>
         <ScrollArea className="max-h-[60vh] pr-4">
           <Form {...form}>
             <form onSubmit={form.handleSubmit((d) => updateMutation.mutate(d))} className="space-y-4">
@@ -763,8 +763,8 @@ function EditLinkDialog({ link, onClose, userCurrency }: {
             </form>
           </Form>
         </ScrollArea>
-      </DialogContent>
-    </Dialog>
+      </BottomSheetContent>
+    </BottomSheet>
   );
 }
 
@@ -816,10 +816,10 @@ function LinkAnalyticsDialog({
   };
 
   return (
-    <Dialog open={!!linkId} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-3">
+    <BottomSheet open={!!linkId} onOpenChange={onClose}>
+      <BottomSheetContent>
+        <BottomSheetHeader>
+          <BottomSheetTitle className="flex items-center gap-3">
             {data?.paymentLink.imagePath && (
               <img 
                 src={getImageSrc(data.paymentLink.imagePath)} 
@@ -828,11 +828,11 @@ function LinkAnalyticsDialog({
               />
             )}
             {data?.paymentLink.title || "Chargement..."}
-          </DialogTitle>
-          <DialogDescription>
+          </BottomSheetTitle>
+          <BottomSheetDescription>
             Statistiques et historique des transactions
-          </DialogDescription>
-        </DialogHeader>
+          </BottomSheetDescription>
+        </BottomSheetHeader>
         
         {isLoading ? (
           <div className="flex items-center justify-center py-8">
@@ -919,8 +919,8 @@ function LinkAnalyticsDialog({
             </div>
           </ScrollArea>
         ) : null}
-      </DialogContent>
-    </Dialog>
+      </BottomSheetContent>
+    </BottomSheet>
   );
 }
 
@@ -1660,14 +1660,14 @@ export default function PaymentLinksPage() {
       <CreateLinkDialog open={showCreate} onClose={() => setShowCreate(false)} />
 
       {/* QR Code Modal */}
-      <Dialog open={!!qrModalLink} onOpenChange={() => setQrModalLink(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{t.links.qrTitle}</DialogTitle>
-            <DialogDescription>
+      <BottomSheet open={!!qrModalLink} onOpenChange={() => setQrModalLink(null)}>
+        <BottomSheetContent>
+          <BottomSheetHeader>
+            <BottomSheetTitle>{t.links.qrTitle}</BottomSheetTitle>
+            <BottomSheetDescription>
               {t.links.qrModalDesc}
-            </DialogDescription>
-          </DialogHeader>
+            </BottomSheetDescription>
+          </BottomSheetHeader>
           {qrModalLink && (
             <div className="flex flex-col items-center gap-4 py-4">
               <div className="bg-white p-4 rounded-lg">
@@ -1686,8 +1686,8 @@ export default function PaymentLinksPage() {
               </Button>
             </div>
           )}
-        </DialogContent>
-      </Dialog>
+        </BottomSheetContent>
+      </BottomSheet>
 
     </DashboardLayout>
   );

@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { BottomSheet, BottomSheetContent, BottomSheetHeader, BottomSheetTitle, BottomSheetDescription, BottomSheetFooter } from "@/components/ui/bottom-sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -318,17 +318,17 @@ export default function WalletsPage() {
         )}
 
         {/* Conversion Dialog */}
-        <Dialog open={convertOpen} onOpenChange={setConvertOpen}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
+        <BottomSheet open={convertOpen} onOpenChange={setConvertOpen}>
+          <BottomSheetContent>
+            <BottomSheetHeader>
+              <BottomSheetTitle className="flex items-center gap-2">
                 <ArrowLeftRight className="w-5 h-5" />
                 {t.wallets.convertDialogTitle}
-              </DialogTitle>
-              <DialogDescription>
+              </BottomSheetTitle>
+              <BottomSheetDescription>
                 {t.wallets.convertDialogDesc}
-              </DialogDescription>
-            </DialogHeader>
+              </BottomSheetDescription>
+            </BottomSheetHeader>
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label>{t.wallets.fromAccount}</Label>
@@ -414,21 +414,21 @@ export default function WalletsPage() {
                 </Button>
               </div>
             </div>
-          </DialogContent>
-        </Dialog>
+          </BottomSheetContent>
+        </BottomSheet>
 
         {/* Add Wallet Dialog */}
-        <Dialog open={addWalletOpen} onOpenChange={setAddWalletOpen}>
-          <DialogContent className="max-w-sm">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
+        <BottomSheet open={addWalletOpen} onOpenChange={setAddWalletOpen}>
+          <BottomSheetContent>
+            <BottomSheetHeader>
+              <BottomSheetTitle className="flex items-center gap-2">
                 <Wallet className="w-5 h-5" />
                 {t.wallets.addDialogTitle}
-              </DialogTitle>
-              <DialogDescription>
+              </BottomSheetTitle>
+              <BottomSheetDescription>
                 {t.wallets.addDialogDesc}
-              </DialogDescription>
-            </DialogHeader>
+              </BottomSheetDescription>
+            </BottomSheetHeader>
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label>{t.wallets.currencyLabel}</Label>
@@ -460,18 +460,18 @@ export default function WalletsPage() {
                 </Button>
               </div>
             </div>
-          </DialogContent>
-        </Dialog>
+          </BottomSheetContent>
+        </BottomSheet>
 
         {/* Disable Wallet Confirmation Dialog */}
-        <Dialog open={!!walletToDelete} onOpenChange={(open) => { if (!open) setWalletToDelete(null); }}>
-          <DialogContent className="max-w-sm">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-destructive">
+        <BottomSheet open={!!walletToDelete} onOpenChange={(open) => { if (!open) setWalletToDelete(null); }}>
+          <BottomSheetContent>
+            <BottomSheetHeader>
+              <BottomSheetTitle className="flex items-center gap-2 text-destructive">
                 <AlertTriangle className="w-5 h-5" />
                 {t.wallets.disableTitle}
-              </DialogTitle>
-              <DialogDescription>
+              </BottomSheetTitle>
+              <BottomSheetDescription>
                 {hasBalanceToLose ? (
                   <>
                     {t.wallets.disableWithBalancePre}<strong>{walletToDelete?.currency}</strong>{t.wallets.disableWithBalanceMid}
@@ -485,9 +485,9 @@ export default function WalletsPage() {
                     {t.wallets.disableNoBalancePre}<strong>{walletToDelete?.currency}</strong>{t.wallets.disableNoBalanceSuf}
                   </>
                 )}
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter className="flex gap-3 mt-4">
+              </BottomSheetDescription>
+            </BottomSheetHeader>
+            <BottomSheetFooter>
               <Button
                 variant="outline"
                 className="flex-1"
@@ -506,9 +506,9 @@ export default function WalletsPage() {
                 {deleteWalletMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
                 {hasBalanceToLose ? t.wallets.disableButton : t.wallets.disableButtonSimple}
               </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </BottomSheetFooter>
+          </BottomSheetContent>
+        </BottomSheet>
       </div>
     </DashboardLayout>
   );

@@ -3,14 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import { BottomSheet, BottomSheetContent, BottomSheetDescription, BottomSheetHeader, BottomSheetTitle, BottomSheetFooter } from "@/components/ui/bottom-sheet";
 import {
   Collapsible,
   CollapsibleContent,
@@ -407,17 +400,17 @@ export default function SettingsPage() {
         <div className="h-8" />
       </div>
 
-      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="text-red-500 flex items-center gap-2">
+      <BottomSheet open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <BottomSheetContent>
+          <BottomSheetHeader>
+            <BottomSheetTitle className="text-red-500 flex items-center gap-2">
               <AlertTriangle className="w-5 h-5" />
               {t.settings.deleteDialogTitle}
-            </DialogTitle>
-            <DialogDescription>
+            </BottomSheetTitle>
+            <BottomSheetDescription>
               {t.settings.deleteDialogDesc}
-            </DialogDescription>
-          </DialogHeader>
+            </BottomSheetDescription>
+          </BottomSheetHeader>
           <div className="py-4 space-y-3">
             <Label className="text-sm">{t.settings.deleteConfirmLabel}</Label>
             <Input
@@ -430,7 +423,7 @@ export default function SettingsPage() {
               {t.settings.deleteConfirmHint} <span className="font-mono text-foreground">{user?.username}</span> {t.settings.deleteConfirmHint2}
             </p>
           </div>
-          <DialogFooter>
+          <BottomSheetFooter>
             <Button variant="outline" onClick={() => { setShowDeleteDialog(false); setDeleteConfirmUsername(""); }}>
               {t.settings.cancelDelete}
             </Button>
@@ -443,9 +436,9 @@ export default function SettingsPage() {
               {deleteAccountMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
               {t.settings.confirmDelete}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </BottomSheetFooter>
+        </BottomSheetContent>
+      </BottomSheet>
     </DashboardLayout>
   );
 }

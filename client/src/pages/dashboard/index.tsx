@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { BottomSheet, BottomSheetContent, BottomSheetDescription, BottomSheetHeader, BottomSheetTitle } from "@/components/ui/bottom-sheet";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -195,12 +195,12 @@ function SendMoneyDialog({ open, onClose, wallets = [] }: { open: boolean; onClo
   };
 
   return (
-    <Dialog open={open} onOpenChange={() => { reset(); onClose(); }}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Envoyer de l'argent</DialogTitle>
-          <DialogDescription>Transfert instantané vers un compte Ashtech Pay ou international</DialogDescription>
-        </DialogHeader>
+    <BottomSheet open={open} onOpenChange={() => { reset(); onClose(); }}>
+      <BottomSheetContent>
+        <BottomSheetHeader>
+          <BottomSheetTitle>Envoyer de l'argent</BottomSheetTitle>
+          <BottomSheetDescription>Transfert instantané vers un compte Ashtech Pay ou international</BottomSheetDescription>
+        </BottomSheetHeader>
 
         <div className="space-y-4">
           <div className="space-y-2">
@@ -277,8 +277,8 @@ function SendMoneyDialog({ open, onClose, wallets = [] }: { open: boolean; onClo
             Envoyer
           </Button>
         </div>
-      </DialogContent>
-    </Dialog>
+      </BottomSheetContent>
+    </BottomSheet>
   );
 }
 
@@ -308,12 +308,12 @@ function DepositDialog({ open, onClose }: { open: boolean; onClose: () => void }
   });
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Recharger mon compte</DialogTitle>
-          <DialogDescription>Ajoutez de l'argent à votre portefeuille</DialogDescription>
-        </DialogHeader>
+    <BottomSheet open={open} onOpenChange={onClose}>
+      <BottomSheetContent>
+        <BottomSheetHeader>
+          <BottomSheetTitle>Recharger mon compte</BottomSheetTitle>
+          <BottomSheetDescription>Ajoutez de l'argent à votre portefeuille</BottomSheetDescription>
+        </BottomSheetHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit((d) => depositMutation.mutate(d))} className="space-y-4">
             <FormField control={form.control} name="amount" render={({ field }) => (
@@ -344,8 +344,8 @@ function DepositDialog({ open, onClose }: { open: boolean; onClose: () => void }
             </Button>
           </form>
         </Form>
-      </DialogContent>
-    </Dialog>
+      </BottomSheetContent>
+    </BottomSheet>
   );
 }
 
@@ -375,12 +375,12 @@ function WithdrawDialog({ open, onClose }: { open: boolean; onClose: () => void 
   });
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Retirer de l'argent</DialogTitle>
-          <DialogDescription>Retirez de l'argent vers votre compte</DialogDescription>
-        </DialogHeader>
+    <BottomSheet open={open} onOpenChange={onClose}>
+      <BottomSheetContent>
+        <BottomSheetHeader>
+          <BottomSheetTitle>Retirer de l'argent</BottomSheetTitle>
+          <BottomSheetDescription>Retirez de l'argent vers votre compte</BottomSheetDescription>
+        </BottomSheetHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit((d) => withdrawMutation.mutate(d))} className="space-y-4">
             <FormField control={form.control} name="amount" render={({ field }) => (
@@ -418,8 +418,8 @@ function WithdrawDialog({ open, onClose }: { open: boolean; onClose: () => void 
             </Button>
           </form>
         </Form>
-      </DialogContent>
-    </Dialog>
+      </BottomSheetContent>
+    </BottomSheet>
   );
 }
 
@@ -427,17 +427,17 @@ function VerificationRequiredDialog({ open, onClose }: { open: boolean; onClose:
   const [, setLocation] = useLocation();
   
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+    <BottomSheet open={open} onOpenChange={onClose}>
+      <BottomSheetContent>
+        <BottomSheetHeader>
+          <BottomSheetTitle className="flex items-center gap-2">
             <AlertTriangle className="w-5 h-5 text-yellow-500" />
             Compte non vérifié
-          </DialogTitle>
-          <DialogDescription>
+          </BottomSheetTitle>
+          <BottomSheetDescription>
             Votre compte n'est pas encore vérifié. Pour utiliser cette fonctionnalité, vous devez d'abord passer la vérification KYC.
-          </DialogDescription>
-        </DialogHeader>
+          </BottomSheetDescription>
+        </BottomSheetHeader>
         <div className="flex flex-col gap-3 mt-4">
           <Button 
             onClick={() => { onClose(); setLocation("/dashboard/kyc"); }}
@@ -450,8 +450,8 @@ function VerificationRequiredDialog({ open, onClose }: { open: boolean; onClose:
             Annuler
           </Button>
         </div>
-      </DialogContent>
-    </Dialog>
+      </BottomSheetContent>
+    </BottomSheet>
   );
 }
 
@@ -480,12 +480,12 @@ function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => voi
   });
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Créer un lien de paiement</DialogTitle>
-          <DialogDescription>Créez un lien pour recevoir des paiements</DialogDescription>
-        </DialogHeader>
+    <BottomSheet open={open} onOpenChange={onClose}>
+      <BottomSheetContent>
+        <BottomSheetHeader>
+          <BottomSheetTitle>Créer un lien de paiement</BottomSheetTitle>
+          <BottomSheetDescription>Créez un lien pour recevoir des paiements</BottomSheetDescription>
+        </BottomSheetHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit((d) => createMutation.mutate(d))} className="space-y-4">
             <FormField control={form.control} name="title" render={({ field }) => (
@@ -515,8 +515,8 @@ function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => voi
             </Button>
           </form>
         </Form>
-      </DialogContent>
-    </Dialog>
+      </BottomSheetContent>
+    </BottomSheet>
   );
 }
 

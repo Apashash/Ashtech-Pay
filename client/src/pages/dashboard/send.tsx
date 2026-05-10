@@ -12,7 +12,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User, SupportedCurrency, Wallet } from "@shared/schema";
 import { Send, Globe, Loader2, ArrowRight, AlertCircle, Shield, CheckCircle2, Smartphone } from "lucide-react";
 import { useLanguage } from "@/lib/language";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { BottomSheet, BottomSheetContent, BottomSheetHeader, BottomSheetTitle, BottomSheetFooter } from "@/components/ui/bottom-sheet";
 import { getOperatorLogo } from "@/lib/operator-logos";
 import { z } from "zod";
 import { formatCurrency, formatWalletBalance } from "@/lib/currency";
@@ -594,11 +594,11 @@ export default function SendMoneyPage() {
       </div>
 
       {/* Dialog confirmation transfert interne */}
-      <Dialog open={showInternalConfirmDialog} onOpenChange={setShowInternalConfirmDialog}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="text-center text-lg">{t.send.confirmInternalTitle}</DialogTitle>
-          </DialogHeader>
+      <BottomSheet open={showInternalConfirmDialog} onOpenChange={setShowInternalConfirmDialog}>
+        <BottomSheetContent>
+          <BottomSheetHeader>
+            <BottomSheetTitle className="text-center text-lg">{t.send.confirmInternalTitle}</BottomSheetTitle>
+          </BottomSheetHeader>
           <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border my-2">
             <div className="flex items-center justify-between px-4 py-3.5">
               <span className="text-sm text-muted-foreground">{t.send.confirmRecipient}</span>
@@ -617,7 +617,7 @@ export default function SendMoneyPage() {
               <span className="text-base font-bold text-green-500">{t.send.free}</span>
             </div>
           </div>
-          <DialogFooter className="flex gap-2 sm:flex-row">
+          <BottomSheetFooter>
             <Button variant="outline" className="flex-1" onClick={() => setShowInternalConfirmDialog(false)}>
               {t.send.back}
             </Button>
@@ -630,16 +630,16 @@ export default function SendMoneyPage() {
               {internalMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
               {t.send.confirm}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </BottomSheetFooter>
+        </BottomSheetContent>
+      </BottomSheet>
 
       {/* Dialog confirmation transfert externe */}
-      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="text-center text-lg">{t.send.confirmExternalTitle}</DialogTitle>
-          </DialogHeader>
+      <BottomSheet open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <BottomSheetContent>
+          <BottomSheetHeader>
+            <BottomSheetTitle className="text-center text-lg">{t.send.confirmExternalTitle}</BottomSheetTitle>
+          </BottomSheetHeader>
           <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border my-2">
             <div className="flex items-center justify-between px-4 py-3.5">
               <span className="text-sm text-muted-foreground">{t.send.confirmRecipient}</span>
@@ -668,7 +668,7 @@ export default function SendMoneyPage() {
               <span className="text-base font-bold text-green-500">{formatWalletBalance(amountValue - feePreview.feeAmount, selectedWallet)}</span>
             </div>
           </div>
-          <DialogFooter className="flex gap-2 sm:flex-row">
+          <BottomSheetFooter>
             <Button variant="outline" className="flex-1" onClick={() => setShowConfirmDialog(false)}>
               {t.send.back}
             </Button>
@@ -681,9 +681,9 @@ export default function SendMoneyPage() {
               {externalMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
               {t.send.confirm}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </BottomSheetFooter>
+        </BottomSheetContent>
+      </BottomSheet>
     </DashboardLayout>
   );
 }
