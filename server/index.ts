@@ -1,6 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import helmet from "helmet";
 import { globalLimiter } from "./rateLimiter";
+import { botGuard } from "./botGuard";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
@@ -43,6 +44,9 @@ app.use(
     hsts: isProd ? { maxAge: 31536000, includeSubDomains: true } : false,
   })
 );
+
+// ── Security: Bot guard (UA check, honeypot, path injection, IP ban) ─────────
+app.use(botGuard);
 
 // ── Security: Global rate limit (50 req/min/IP on all /api routes) ───────────
 app.use(globalLimiter);
