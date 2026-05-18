@@ -1,4 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
@@ -11,6 +13,7 @@ import { sql } from "drizzle-orm";
 
 const app = express();
 const httpServer = createServer(app);
+const isProd = process.env.NODE_ENV === "production";
 
 declare module "http" {
   interface IncomingMessage {
@@ -18,15 +21,58 @@ declare module "http" {
   }
 }
 
+// ── Security: Helmet HTTP headers ────────────────────────────────────────────
+app.use(
+  helmet({
+    contentSecurityPolicy: isProd
+      ? {
+          directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+            fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
+            imgSrc: ["'self'", "data:", "blob:", "https:"],
+            connectSrc: ["'self'", "https:", "wss:"],
+            frameSrc: ["'none'"],
+            objectSrc: ["'none'"],
+            upgradeInsecureRequests: isProd ? [] : null,
+          },
+        }
+      : false,
+    crossOriginEmbedderPolicy: false,
+    hsts: isProd ? { maxAge: 31536000, includeSubDomains: true } : false,
+  })
+);
+
+// ── Security: Global API rate limit (200 req/min per IP) ─────────────────────
+const globalApiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (_req, res) => {
+    res.status(429).json({ message: "Trop de requêtes. Réessayez dans une minute." });
+  },
+  skip: (req) => !req.path.startsWith("/api"),
+});
+app.use(globalApiLimiter);
+
+// ── Security: Webhook routes bypass rate limiter ──────────────────────────────
+// (already excluded above since they still hit global limiter — 200/min is plenty)
+
+// ── Body parsers ──────────────────────────────────────────────────────────────
 app.use(
   express.json({
+    limit: "2mb",
     verify: (req, _res, buf) => {
       req.rawBody = buf;
     },
-  }),
+  })
 );
+app.use(express.urlencoded({ extended: false, limit: "2mb" }));
 
-app.use(express.urlencoded({ extended: false }));
+// ── Security: Remove server identity header ───────────────────────────────────
+app.disable("x-powered-by");
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
@@ -35,7 +81,6 @@ export function log(message: string, source = "express") {
     second: "2-digit",
     hour12: true,
   });
-
   console.log(`${formattedTime} [${source}] ${message}`);
 }
 
@@ -57,7 +102,6 @@ app.use((req, res, next) => {
       if (capturedJsonResponse) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
-
       log(logLine);
     }
   });
@@ -122,10 +166,7 @@ app.use((req, res, next) => {
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone)`);
     console.log("[Migration] Performance indexes ready");
 
-    // ── One-time data fix: normalize Togo users to XOFT and merge duplicate
-    //    same-family CFA wallets into the primary balance ──────────────────
     try {
-      // 1. Fix Togo users whose preferred_currency was set to plain XOF
       const fixTogo = await db.execute(sql`
         UPDATE users SET preferred_currency = 'XOFT'
         WHERE country = 'Togo' AND preferred_currency = 'XOF'
@@ -134,9 +175,6 @@ app.use((req, res, next) => {
       const fixedTogo = (fixTogo as any).rowCount ?? (fixTogo as any).rows?.length ?? 0;
       if (fixedTogo > 0) console.log(`[Migration] Normalized ${fixedTogo} Togo user(s) preferred_currency XOF → XOFT`);
 
-      // 2. Merge same-family CFA secondary wallets (and any wallet whose currency
-      //    equals the user's preferred currency — these are pure duplicates) into
-      //    the primary balance, then delete them.
       const dupRows: any = await db.execute(sql`
         SELECT w.id AS wallet_id, w.user_id, w.currency, w.balance, u.preferred_currency
         FROM wallets w JOIN users u ON u.id = w.user_id
@@ -172,35 +210,29 @@ app.use((req, res, next) => {
 
   await registerRoutes(httpServer, app);
 
+  // ── Security: Sanitized error handler (no stack traces in production) ─────
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
+    const message = isProd && status === 500
+      ? "Une erreur interne s'est produite."
+      : err.message || "Internal Server Error";
 
+    if (status >= 500) {
+      console.error("[Error]", isProd ? `${err.message}` : err);
+    }
     res.status(status).json({ message });
-    throw err;
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
-  if (process.env.NODE_ENV === "production") {
+  if (isProd) {
     serveStatic(app);
   } else {
     const { setupVite } = await import("./vite");
     await setupVite(httpServer, app);
   }
 
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || "5000", 10);
   httpServer.listen(
-    {
-      port,
-      host: "0.0.0.0",
-      reusePort: true,
-    },
+    { port, host: "0.0.0.0", reusePort: true },
     () => {
       log(`serving on port ${port}`);
       startPaymentPoller();

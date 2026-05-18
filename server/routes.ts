@@ -383,27 +383,35 @@ export async function registerRoutes(
   // Trust proxy (Replit uses reverse proxy in all environments)
   app.set("trust proxy", 1);
 
-  // CORS middleware for development - enable credentials
-  const allowedOrigins = [
-    process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : null,
-    process.env.REPL_SLUG ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co` : null,
-    'http://localhost:5000',
-    'https://localhost:5000',
-  ].filter(Boolean);
+  // CORS middleware — restrict to known origins in production
+  const appUrl = process.env.APP_URL ? process.env.APP_URL.replace(/\/$/, "") : null;
+  const allowedOrigins = new Set<string>(
+    [
+      appUrl,
+      process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : null,
+      process.env.REPL_SLUG ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co` : null,
+      "http://localhost:5000",
+      "https://localhost:5000",
+      "http://localhost:3000",
+    ].filter(Boolean) as string[]
+  );
 
   app.use((req, res, next) => {
     const origin = req.headers.origin;
-    // Always use the specific origin for credentials to work
+    const isProd = process.env.NODE_ENV === "production";
+
     if (origin) {
-      res.header('Access-Control-Allow-Origin', origin);
+      // In production: only allow listed origins. In dev: allow any origin.
+      const allowed = !isProd || allowedOrigins.has(origin);
+      if (allowed) {
+        res.header("Access-Control-Allow-Origin", origin);
+        res.header("Access-Control-Allow-Credentials", "true");
+      }
     }
-    res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-    
-    if (req.method === 'OPTIONS') {
-      return res.sendStatus(200);
-    }
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+
+    if (req.method === "OPTIONS") return res.sendStatus(200);
     next();
   });
 
