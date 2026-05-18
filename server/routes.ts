@@ -519,7 +519,9 @@ export async function registerRoutes(
       // VPN check for authenticated users — disconnect immediately if VPN detected
       if (req.path.startsWith("/api/") && !req.path.startsWith("/api/public/")) {
         const ip = getClientIp(req);
+        console.log(`[VPN-DEBUG] path=${req.path} ip=${ip} x-forwarded-for=${req.headers["x-forwarded-for"]} req.ip=${req.ip}`);
         const isVpn = await checkVpnOrProxy(ip);
+        console.log(`[VPN-DEBUG] ip=${ip} isVpn=${isVpn} isPrivate=${isPrivateIp(ip)}`);
         if (isVpn) {
           console.log(`[VPN] Disconnecting user ${userId} — VPN/proxy detected from ${ip}`);
           if (req.session) req.session.userId = undefined;
