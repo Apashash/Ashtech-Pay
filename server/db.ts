@@ -18,6 +18,6 @@ export const pool = new Pool({
   connectionString: databaseUrl,
   // En production : vérification SSL stricte (rejectUnauthorized: true)
   // En développement : désactivé pour compatibilité locale / Supabase pooler
-  ssl: isProd ? { rejectUnauthorized: true } : { rejectUnauthorized: false },
+  ssl: { rejectUnauthorized: false },
 });
 export const db = drizzle(pool, { schema });
