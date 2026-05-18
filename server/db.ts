@@ -12,8 +12,12 @@ if (!databaseUrl) {
   );
 }
 
+const isProd = process.env.NODE_ENV === "production";
+
 export const pool = new Pool({
   connectionString: databaseUrl,
-  ssl: { rejectUnauthorized: false },
+  // En production : vérification SSL stricte (rejectUnauthorized: true)
+  // En développement : désactivé pour compatibilité locale / Supabase pooler
+  ssl: isProd ? { rejectUnauthorized: true } : { rejectUnauthorized: false },
 });
 export const db = drizzle(pool, { schema });
