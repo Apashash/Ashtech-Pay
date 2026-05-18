@@ -8,3 +8,6 @@ logs
 uploads
 .local/afribapay_token.json
 .local/swychr_token.json
+
+# dist/ is intentionally NOT ignored — compiled files are committed to git
+# so Plesk only needs: git pull + pm2 restart (no build step on server)

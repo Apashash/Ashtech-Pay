@@ -1,24 +1,31 @@
 #!/bin/bash
+# =============================================================================
+# deploy.sh — Script de déploiement Plesk pour Ashtech Pay
+#
+# WORKFLOW :
+#   Sur Replit : npm run build  →  git add -A  →  git commit  →  git push
+#   Sur Plesk  : git pull origin main  →  bash deploy.sh
+#
+# Ce script NE compile PAS l'application (le dist/ est commité sur GitHub).
+# Il installe uniquement les dépendances de production et redémarre PM2.
+# =============================================================================
 set -e
 
-echo "=== Ashtech Pay — Déploiement ==="
+echo "=== Ashtech Pay — Mise à jour Plesk ==="
 
-echo "[1/4] Installation des dépendances..."
-npm install --production=false
+echo "[1/2] Installation des dépendances de production..."
+npm install --omit=dev
 
-echo "[2/4] Build (client + serveur)..."
-npm run build
-
-echo "[3/4] Migrations base de données..."
-npm run db:push
-
-echo "[4/4] Création du dossier logs + redémarrage..."
+echo "[2/2] Création du dossier logs + redémarrage PM2..."
 mkdir -p logs
 if command -v pm2 &>/dev/null; then
-  pm2 reload ecosystem.config.cjs --env production 2>/dev/null || pm2 start ecosystem.config.cjs --env production
+  pm2 startOrRestart ecosystem.config.js --env production
   pm2 save
+  echo "✓ Application redémarrée avec PM2"
 else
-  echo "PM2 non trouvé — démarrez avec : node dist/index.cjs"
+  echo "PM2 non trouvé. Installez-le : npm install -g pm2"
+  echo "Puis lancez : pm2 start ecosystem.config.js --env production"
+  exit 1
 fi
 
-echo "=== Déploiement terminé avec succès ==="
+echo "=== Mise à jour terminée ==="

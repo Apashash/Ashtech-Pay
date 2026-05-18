@@ -5,6 +5,10 @@ module.exports = {
       script: "dist/index.cjs",
       instances: 1,
       exec_mode: "fork",
+      // Les variables d'environnement DOIVENT être configurées dans Plesk
+      // (Domaines > votre-domaine > Node.js > Variables d'environnement)
+      // ou dans un fichier .env à la racine du projet (jamais commité sur Git).
+      // Les valeurs ci-dessous sont des DÉFAUTS SEULEMENT — écrasés par .env / Plesk.
       env_production: {
         NODE_ENV: "production",
         PORT: 5000,
@@ -16,6 +20,8 @@ module.exports = {
       log_date_format: "YYYY-MM-DD HH:mm:ss",
       restart_delay: 3000,
       max_restarts: 10,
+      // Lecture automatique du fichier .env si présent
+      env_file: ".env",
     },
   ],
 };
