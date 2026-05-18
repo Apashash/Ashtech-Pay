@@ -2,6 +2,23 @@ import { build as esbuild } from "esbuild";
 import { build as viteBuild } from "vite";
 import { rm } from "fs/promises";
 
+// Modules natifs ou dev-only jamais utilisés au runtime Express — à exclure du bundle.
+const EXTERNALS = [
+  // Binaires natifs (.node)
+  "sharp",
+  "bufferutil",
+  "utf-8-validate",
+  "cpu-features",
+  "ssh2",
+  "canvas",
+  // Modules CSS/build-time tirés par des dépendances transitives — inutiles au runtime
+  "lightningcss",
+  "@babel/core",
+  "@babel/preset-typescript",
+  "vite",
+  "esbuild",
+];
+
 async function buildAll() {
   await rm("dist", { recursive: true, force: true });
 
@@ -18,7 +35,7 @@ async function buildAll() {
     define: {
       "process.env.NODE_ENV": '"production"',
     },
-    packages: "external",
+    external: EXTERNALS,
     minify: true,
     logLevel: "info",
   });
