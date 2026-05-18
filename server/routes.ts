@@ -297,6 +297,81 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000); // Clean expired entries every 5 min
 
+// ─── Auth Rate Limiter ────────────────────────────────────────────────────────
+const authAttempts = new Map<string, { count: number; blockedUntil?: number }>();
+const MAX_AUTH_ATTEMPTS = 4;
+const AUTH_BLOCK_DURATION_MS = 7 * 60 * 1000; // 7 minutes
+
+function getClientIp(req: Request): string {
+  const forwarded = req.headers["x-forwarded-for"];
+  if (forwarded) {
+    const raw = Array.isArray(forwarded) ? forwarded[0] : forwarded;
+    return raw.split(",")[0].trim();
+  }
+  return req.ip || "unknown";
+}
+
+function checkAuthRateLimit(ip: string): { blocked: boolean; retryAfter?: number } {
+  const now = Date.now();
+  const record = authAttempts.get(ip);
+  if (record?.blockedUntil) {
+    if (now < record.blockedUntil) return { blocked: true, retryAfter: record.blockedUntil };
+    authAttempts.delete(ip);
+  }
+  return { blocked: false };
+}
+
+function recordAuthFailure(ip: string): { blocked: boolean; retryAfter?: number; attemptsLeft: number } {
+  const now = Date.now();
+  const existing = authAttempts.get(ip);
+  if (existing?.blockedUntil && now >= existing.blockedUntil) {
+    authAttempts.set(ip, { count: 1 });
+    return { blocked: false, attemptsLeft: MAX_AUTH_ATTEMPTS - 1 };
+  }
+  const newCount = (existing?.count || 0) + 1;
+  if (newCount >= MAX_AUTH_ATTEMPTS) {
+    const blockedUntil = now + AUTH_BLOCK_DURATION_MS;
+    authAttempts.set(ip, { count: newCount, blockedUntil });
+    return { blocked: true, retryAfter: blockedUntil, attemptsLeft: 0 };
+  }
+  authAttempts.set(ip, { count: newCount });
+  return { blocked: false, attemptsLeft: MAX_AUTH_ATTEMPTS - newCount };
+}
+
+function clearAuthAttempts(ip: string): void {
+  authAttempts.delete(ip);
+}
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, record] of authAttempts.entries()) {
+    if (!record.blockedUntil || now > record.blockedUntil + 60000) authAttempts.delete(ip);
+  }
+}, 10 * 60 * 1000);
+
+// ─── African Country Codes ────────────────────────────────────────────────────
+const AFRICAN_COUNTRY_CODES = new Set([
+  "DZ","AO","BJ","BW","BF","BI","CM","CV","CF","TD","KM","CG","CD",
+  "CI","DJ","EG","GQ","ER","ET","GA","GM","GH","GN","GW","KE","LS",
+  "LR","LY","MG","MW","ML","MR","MU","MA","MZ","NA","NE","NG","RW",
+  "ST","SN","SL","SO","ZA","SS","SD","SZ","TZ","TG","TN","UG","ZM",
+  "ZW","EH","SC","RE","YT","MU",
+]);
+
+function isPrivateIp(ip: string): boolean {
+  return (
+    ip === "127.0.0.1" ||
+    ip === "::1" ||
+    ip.startsWith("10.") ||
+    ip.startsWith("172.") ||
+    ip.startsWith("192.168.") ||
+    ip.startsWith("::ffff:10.") ||
+    ip.startsWith("::ffff:127.") ||
+    ip.startsWith("::ffff:172.") ||
+    ip.startsWith("::ffff:192.168.")
+  );
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -497,18 +572,56 @@ export async function registerRoutes(
     }
   });
 
+  // ─── Geo Check Endpoint ──────────────────────────────────────────────────────
+  app.get("/api/public/geo", async (req, res) => {
+    try {
+      const ip = getClientIp(req);
+      if (isPrivateIp(ip)) {
+        return res.json({ country: "CM", countryName: "Cameroun", isAfrica: true });
+      }
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3000);
+      try {
+        const geoRes = await fetch(`https://ip-api.com/json/${ip}?fields=status,country,countryCode`, { signal: controller.signal });
+        clearTimeout(timeout);
+        const geoData: any = await geoRes.json();
+        if (geoData.status === "success") {
+          const isAfrica = AFRICAN_COUNTRY_CODES.has(geoData.countryCode);
+          return res.json({ country: geoData.countryCode, countryName: geoData.country, isAfrica });
+        }
+      } catch {
+        clearTimeout(timeout);
+      }
+      return res.json({ country: "XX", countryName: "Unknown", isAfrica: true });
+    } catch {
+      return res.json({ country: "XX", countryName: "Unknown", isAfrica: true });
+    }
+  });
+
   // Auth routes
   app.post("/api/auth/register", async (req, res) => {
     try {
+      const ip = getClientIp(req);
+      const rateCheck = checkAuthRateLimit(ip);
+      if (rateCheck.blocked) {
+        return res.status(429).json({
+          message: "Trop de tentatives. Accès temporairement bloqué.",
+          blocked: true,
+          retryAfter: rateCheck.retryAfter,
+        });
+      }
+
       const data = registerSchema.parse(req.body);
 
       const existingEmail = await storage.getUserByEmail(data.email);
       if (existingEmail) {
+        recordAuthFailure(ip);
         return res.status(400).json({ message: "Cet email est déjà utilisé" });
       }
 
       const existingUsername = await storage.getUserByUsername(data.username);
       if (existingUsername) {
+        recordAuthFailure(ip);
         return res.status(400).json({ message: "Ce nom d'utilisateur est déjà pris" });
       }
 
@@ -525,6 +638,8 @@ export async function registerRoutes(
         password: hashedPassword,
         preferredCurrency,
       });
+
+      clearAuthAttempts(ip);
 
       // Send welcome email asynchronously (non-blocking)
       if (user.email) {
@@ -556,16 +671,31 @@ export async function registerRoutes(
 
   app.post("/api/auth/login", async (req, res) => {
     try {
+      const ip = getClientIp(req);
+      const rateCheck = checkAuthRateLimit(ip);
+      if (rateCheck.blocked) {
+        return res.status(429).json({
+          message: "Trop de tentatives. Accès temporairement bloqué.",
+          blocked: true,
+          retryAfter: rateCheck.retryAfter,
+        });
+      }
+
       const data = loginSchema.parse(req.body);
 
       const user = await storage.getUserByEmailOrPhone(data.identifier);
-      if (!user) {
-        return res.status(401).json({ message: "Email/téléphone ou mot de passe incorrect" });
-      }
-
-      const isValidPassword = await verifyPassword(data.password, user.password);
-      if (!isValidPassword) {
-        return res.status(401).json({ message: "Email/téléphone ou mot de passe incorrect" });
+      if (!user || !(await verifyPassword(data.password, user.password))) {
+        const failure = recordAuthFailure(ip);
+        const remaining = failure.attemptsLeft;
+        const msg = failure.blocked
+          ? "Trop de tentatives incorrectes. Accès bloqué pendant 7 minutes."
+          : `Email/téléphone ou mot de passe incorrect. ${remaining} tentative(s) restante(s).`;
+        return res.status(failure.blocked ? 429 : 401).json({
+          message: msg,
+          blocked: failure.blocked,
+          retryAfter: failure.retryAfter,
+          attemptsLeft: remaining,
+        });
       }
 
       if (user.isBanned) {
@@ -573,6 +703,8 @@ export async function registerRoutes(
           message: user.banReason || "Votre compte a été banni par l'administrateur." 
         });
       }
+
+      clearAuthAttempts(ip);
 
       // Generate auth token for token-based auth (works in iframes where cookies fail)
       const authToken = storeAuthToken(user.id);

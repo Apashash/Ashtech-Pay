@@ -1,6 +1,6 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -78,6 +78,32 @@ import BlogPage from "@/pages/blog";
 import HelpPage from "@/pages/help";
 import ContactPage from "@/pages/contact";
 import FAQPage from "@/pages/faq";
+import CountryBlockedPage from "@/pages/country-blocked";
+
+const GEO_BYPASS_PATHS = ["/pay/", "/hpay/", "/checkout/", "/admin"];
+
+function GeoGuard({ children }: { children: React.ReactNode }) {
+  const [location] = useLocation();
+
+  const isBypass = GEO_BYPASS_PATHS.some((p) => location.startsWith(p));
+
+  const { data, isLoading } = useQuery<{ country: string; countryName: string; isAfrica: boolean }>({
+    queryKey: ["/api/public/geo"],
+    queryFn: async () => {
+      const res = await fetch("/api/public/geo");
+      if (!res.ok) return { country: "XX", countryName: "Unknown", isAfrica: true };
+      return res.json();
+    },
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+    enabled: !isBypass,
+  });
+
+  if (isBypass) return <>{children}</>;
+  if (isLoading) return null;
+  if (data && data.isAfrica === false) return <CountryBlockedPage />;
+  return <>{children}</>;
+}
 
 function Router() {
   return (
@@ -168,7 +194,9 @@ function App() {
         <ThemeProvider>
           <TooltipProvider>
             <Toaster />
-            <Router />
+            <GeoGuard>
+              <Router />
+            </GeoGuard>
           </TooltipProvider>
         </ThemeProvider>
       </LanguageProvider>

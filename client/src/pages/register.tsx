@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { registerSchema } from "@shared/schema";
 import { apiRequest, queryClient, setAuthToken } from "@/lib/queryClient";
-import { Mail, Lock, User, Phone, Loader2, Eye, EyeOff, Home } from "lucide-react";
+import { Mail, Lock, User, Phone, Loader2, Eye, EyeOff, Home, Clock, ShieldAlert } from "lucide-react";
 import { useLanguage } from "@/lib/language";
 import { z } from "zod";
 
@@ -27,6 +27,37 @@ const fallbackCountries: CountryData[] = [
   { code: "CM", name: "Cameroun", flag: "🇨🇲", dialCode: "+237", currency: "XAF", exchangeRate: "1" },
 ];
 
+function useCountdown(retryAfter: number | null) {
+  const [remaining, setRemaining] = useState(0);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (!retryAfter) {
+      setRemaining(0);
+      return;
+    }
+    const tick = () => {
+      const diff = Math.max(0, Math.ceil((retryAfter - Date.now()) / 1000));
+      setRemaining(diff);
+      if (diff <= 0 && intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+    tick();
+    intervalRef.current = setInterval(tick, 1000);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [retryAfter]);
+
+  return remaining;
+}
+
+function formatCountdown(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
 export default function RegisterPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -34,6 +65,18 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState<CountryData | null>(null);
+  const [blockedUntil, setBlockedUntil] = useState<number | null>(null);
+  const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
+
+  const countdown = useCountdown(blockedUntil);
+  const isBlocked = blockedUntil !== null && countdown > 0;
+
+  useEffect(() => {
+    if (countdown === 0 && blockedUntil !== null) {
+      setBlockedUntil(null);
+      setAttemptsLeft(null);
+    }
+  }, [countdown, blockedUntil]);
 
   const extendedRegisterSchema = registerSchema.extend({
     confirmPassword: z.string().min(6, t.register.passwordMinError),
@@ -68,7 +111,9 @@ export default function RegisterPage() {
     mutationFn: async (data: RegisterFormData) => {
       const { confirmPassword, ...submitData } = data;
       const res = await apiRequest("POST", "/api/auth/register", { ...submitData, country: selectedCountry?.name || "" });
-      return res.json();
+      const json = await res.json();
+      if (!res.ok) throw Object.assign(new Error(json.message || "Erreur"), json);
+      return json;
     },
     onSuccess: (data) => {
       if (data.token) setAuthToken(data.token);
@@ -76,7 +121,12 @@ export default function RegisterPage() {
       toast({ title: t.register.toastSuccess, description: `${t.register.toastSuccessDescPre}${data.user.fullName}!` });
       setLocation("/dashboard");
     },
-    onError: (error: Error) => {
+    onError: (error: any) => {
+      if (error.blocked && error.retryAfter) {
+        setBlockedUntil(error.retryAfter);
+      } else if (error.attemptsLeft !== undefined) {
+        setAttemptsLeft(error.attemptsLeft);
+      }
       toast({ title: t.register.toastError, description: error.message || t.register.toastErrorDesc, variant: "destructive" });
     },
   });
@@ -115,148 +165,178 @@ export default function RegisterPage() {
         </div>
 
         <div className="bg-card border border-border rounded-2xl p-8">
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="fullName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="font-semibold text-sm">{t.register.fullName}</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                        <Input placeholder="Jean Dupont" className="pl-10" data-testid="input-fullname" {...field} />
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+          {isBlocked ? (
+            <div className="flex flex-col items-center gap-4 py-4">
+              <div className="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center">
+                <ShieldAlert className="w-8 h-8 text-red-500" />
+              </div>
+              <div className="text-center">
+                <p className="font-semibold text-foreground text-base mb-1">Création de compte bloquée</p>
+                <p className="text-muted-foreground text-sm mb-4">Trop de tentatives. Réessayez dans :</p>
+                <div className="inline-flex items-center gap-2 bg-red-500/10 border border-red-500/20 rounded-xl px-6 py-3">
+                  <Clock className="w-5 h-5 text-red-400" />
+                  <span className="text-2xl font-bold text-red-400 tabular-nums" data-testid="text-countdown">
+                    {formatCountdown(countdown)}
+                  </span>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground text-center mt-2">
+                Pour votre sécurité, les tentatives sont limitées à {4} par période.
+              </p>
+            </div>
+          ) : (
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                {attemptsLeft !== null && attemptsLeft > 0 && (
+                  <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                    <ShieldAlert className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      {attemptsLeft} tentative(s) restante(s) avant blocage temporaire.
+                    </p>
+                  </div>
                 )}
-              />
 
-              <FormField
-                control={form.control}
-                name="username"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="font-semibold text-sm">{t.register.username}</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                        <Input placeholder="jeandupont" className="pl-10" data-testid="input-username" {...field} />
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="font-semibold text-sm">{t.register.email}</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                        <Input placeholder="votreemail@exemple.com" className="pl-10" data-testid="input-email" {...field} />
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="phone"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="font-semibold text-sm">{t.register.phone}</FormLabel>
-                    <FormControl>
-                      <div className="flex gap-2">
-                        <Select value={selectedCountry?.code || ""} onValueChange={handleCountryChange}>
-                          <SelectTrigger className="w-[130px]" data-testid="select-country">
-                            <SelectValue>
-                              {selectedCountry ? (
-                                <span className="flex items-center gap-1.5">
-                                  <span>{selectedCountry.flag}</span>
-                                  <span className="text-sm">{selectedCountry.dialCode}</span>
-                                </span>
-                              ) : <span className="text-muted-foreground">{t.register.country}</span>}
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent>
-                            {countries.map((country) => (
-                              <SelectItem key={country.code} value={country.code}>
-                                <span className="flex items-center gap-2">
-                                  <span>{country.flag}</span>
-                                  <span>{country.name}</span>
-                                  <span className="text-muted-foreground">{country.dialCode}</span>
-                                </span>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <div className="relative flex-1">
-                          <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                          <Input placeholder="6XX XXX XXX" className="pl-10" data-testid="input-phone" {...field} value={field.value || ""} />
+                <FormField
+                  control={form.control}
+                  name="fullName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="font-semibold text-sm">{t.register.fullName}</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                          <Input placeholder="Jean Dupont" className="pl-10" data-testid="input-fullname" {...field} />
                         </div>
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="font-semibold text-sm">{t.register.password}</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                        <Input type={showPassword ? "text" : "password"} placeholder="••••••••" className="pl-10 pr-10" data-testid="input-password" {...field} />
-                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" data-testid="button-toggle-password">
-                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                <FormField
+                  control={form.control}
+                  name="username"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="font-semibold text-sm">{t.register.username}</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                          <Input placeholder="jeandupont" className="pl-10" data-testid="input-username" {...field} />
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-              <FormField
-                control={form.control}
-                name="confirmPassword"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="font-semibold text-sm">{t.register.confirmPassword}</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                        <Input type={showConfirmPassword ? "text" : "password"} placeholder="••••••••" className="pl-10 pr-10" data-testid="input-confirm-password" {...field} />
-                        <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" data-testid="button-toggle-confirm-password">
-                          {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="font-semibold text-sm">{t.register.email}</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                          <Input placeholder="votreemail@exemple.com" className="pl-10" data-testid="input-email" {...field} />
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-              <Button type="submit" className="w-full font-bold text-base h-11 mt-2" disabled={registerMutation.isPending || loadingCountries || !selectedCountry} data-testid="button-register">
-                {registerMutation.isPending ? (
-                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{t.register.submitting}</>
-                ) : t.register.submit}
-              </Button>
-            </form>
-          </Form>
+                <FormField
+                  control={form.control}
+                  name="phone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="font-semibold text-sm">{t.register.phone}</FormLabel>
+                      <FormControl>
+                        <div className="flex gap-2">
+                          <Select value={selectedCountry?.code || ""} onValueChange={handleCountryChange}>
+                            <SelectTrigger className="w-[130px]" data-testid="select-country">
+                              <SelectValue>
+                                {selectedCountry ? (
+                                  <span className="flex items-center gap-1.5">
+                                    <span>{selectedCountry.flag}</span>
+                                    <span className="text-sm">{selectedCountry.dialCode}</span>
+                                  </span>
+                                ) : <span className="text-muted-foreground">{t.register.country}</span>}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              {countries.map((country) => (
+                                <SelectItem key={country.code} value={country.code}>
+                                  <span className="flex items-center gap-2">
+                                    <span>{country.flag}</span>
+                                    <span>{country.name}</span>
+                                    <span className="text-muted-foreground">{country.dialCode}</span>
+                                  </span>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <div className="relative flex-1">
+                            <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                            <Input placeholder="6XX XXX XXX" className="pl-10" data-testid="input-phone" {...field} value={field.value || ""} />
+                          </div>
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="font-semibold text-sm">{t.register.password}</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                          <Input type={showPassword ? "text" : "password"} placeholder="••••••••" className="pl-10 pr-10" data-testid="input-password" {...field} />
+                          <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" data-testid="button-toggle-password">
+                            {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="confirmPassword"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="font-semibold text-sm">{t.register.confirmPassword}</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                          <Input type={showConfirmPassword ? "text" : "password"} placeholder="••••••••" className="pl-10 pr-10" data-testid="input-confirm-password" {...field} />
+                          <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" data-testid="button-toggle-confirm-password">
+                            {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <Button type="submit" className="w-full font-bold text-base h-11 mt-2" disabled={registerMutation.isPending || loadingCountries || !selectedCountry} data-testid="button-register">
+                  {registerMutation.isPending ? (
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{t.register.submitting}</>
+                  ) : t.register.submit}
+                </Button>
+              </form>
+            </Form>
+          )}
         </div>
 
         <div className="mt-5 flex items-center justify-between px-1">

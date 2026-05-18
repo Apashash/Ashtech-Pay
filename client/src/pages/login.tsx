@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -9,17 +9,60 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from "@/hooks/use-toast";
 import { loginSchema } from "@shared/schema";
 import { apiRequest, queryClient, setAuthToken } from "@/lib/queryClient";
-import { Mail, Lock, Loader2, Eye, EyeOff, Home } from "lucide-react";
+import { Mail, Lock, Loader2, Eye, EyeOff, Home, Clock, ShieldAlert } from "lucide-react";
 import { useLanguage } from "@/lib/language";
 import { z } from "zod";
 
 type LoginFormData = z.infer<typeof loginSchema>;
+
+function useCountdown(retryAfter: number | null) {
+  const [remaining, setRemaining] = useState(0);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (!retryAfter) {
+      setRemaining(0);
+      return;
+    }
+    const tick = () => {
+      const diff = Math.max(0, Math.ceil((retryAfter - Date.now()) / 1000));
+      setRemaining(diff);
+      if (diff <= 0 && intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+    tick();
+    intervalRef.current = setInterval(tick, 1000);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [retryAfter]);
+
+  return remaining;
+}
+
+function formatCountdown(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
 
 export default function LoginPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { t } = useLanguage();
   const [showPassword, setShowPassword] = useState(false);
+  const [blockedUntil, setBlockedUntil] = useState<number | null>(null);
+  const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
+
+  const countdown = useCountdown(blockedUntil);
+  const isBlocked = blockedUntil !== null && countdown > 0;
+
+  useEffect(() => {
+    if (countdown === 0 && blockedUntil !== null) {
+      setBlockedUntil(null);
+      setAttemptsLeft(null);
+    }
+  }, [countdown, blockedUntil]);
 
   const form = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -29,7 +72,9 @@ export default function LoginPage() {
   const loginMutation = useMutation({
     mutationFn: async (data: LoginFormData) => {
       const res = await apiRequest("POST", "/api/auth/login", data);
-      return res.json();
+      const json = await res.json();
+      if (!res.ok) throw Object.assign(new Error(json.message || "Erreur"), json);
+      return json;
     },
     onSuccess: (data) => {
       if (data.token) setAuthToken(data.token);
@@ -37,7 +82,12 @@ export default function LoginPage() {
       toast({ title: t.login.toastSuccess, description: `${t.login.toastSuccessDescPre}${data.user.fullName}!`, duration: 2000, className: "bg-blue-600 text-white border-blue-700" });
       setLocation("/dashboard");
     },
-    onError: (error: Error) => {
+    onError: (error: any) => {
+      if (error.blocked && error.retryAfter) {
+        setBlockedUntil(error.retryAfter);
+      } else if (error.attemptsLeft !== undefined) {
+        setAttemptsLeft(error.attemptsLeft);
+      }
       toast({ title: t.login.toastError, description: error.message || t.login.toastErrorDesc, variant: "destructive" });
     },
   });
@@ -57,76 +107,106 @@ export default function LoginPage() {
         </div>
 
         <div className="bg-card border border-border rounded-2xl p-8">
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(loginMutation.mutate)} className="space-y-5">
-              <FormField
-                control={form.control}
-                name="identifier"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="font-semibold text-sm">{t.login.emailLabel}</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                        <Input
-                          placeholder={t.login.emailPlaceholder}
-                          className="pl-10"
-                          data-testid="input-identifier"
-                          {...field}
-                        />
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="font-semibold text-sm">{t.login.passwordLabel}</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                        <Input
-                          type={showPassword ? "text" : "password"}
-                          placeholder="••••••••"
-                          className="pl-10 pr-10"
-                          data-testid="input-password"
-                          {...field}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                          data-testid="button-toggle-password"
-                        >
-                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="flex justify-end">
-                <Link href="/forgot-password">
-                  <span className="text-sm text-primary hover:underline cursor-pointer font-medium" data-testid="link-forgot-password">
-                    {t.login.forgotPassword}
-                  </span>
-                </Link>
+          {isBlocked ? (
+            <div className="flex flex-col items-center gap-4 py-4">
+              <div className="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center">
+                <ShieldAlert className="w-8 h-8 text-red-500" />
               </div>
+              <div className="text-center">
+                <p className="font-semibold text-foreground text-base mb-1">Accès temporairement bloqué</p>
+                <p className="text-muted-foreground text-sm mb-4">Trop de tentatives incorrectes. Réessayez dans :</p>
+                <div className="inline-flex items-center gap-2 bg-red-500/10 border border-red-500/20 rounded-xl px-6 py-3">
+                  <Clock className="w-5 h-5 text-red-400" />
+                  <span className="text-2xl font-bold text-red-400 tabular-nums" data-testid="text-countdown">
+                    {formatCountdown(countdown)}
+                  </span>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground text-center mt-2">
+                Pour votre sécurité, l'accès est bloqué après {4} tentatives incorrectes.
+              </p>
+            </div>
+          ) : (
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(loginMutation.mutate)} className="space-y-5">
+                {attemptsLeft !== null && attemptsLeft > 0 && (
+                  <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                    <ShieldAlert className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      {attemptsLeft} tentative(s) restante(s) avant blocage temporaire.
+                    </p>
+                  </div>
+                )}
 
-              <Button type="submit" className="w-full font-bold text-base h-11" disabled={loginMutation.isPending} data-testid="button-login">
-                {loginMutation.isPending ? (
-                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{t.login.submitting}</>
-                ) : t.login.submit}
-              </Button>
-            </form>
-          </Form>
+                <FormField
+                  control={form.control}
+                  name="identifier"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="font-semibold text-sm">{t.login.emailLabel}</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                          <Input
+                            placeholder={t.login.emailPlaceholder}
+                            className="pl-10"
+                            data-testid="input-identifier"
+                            {...field}
+                          />
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="font-semibold text-sm">{t.login.passwordLabel}</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                          <Input
+                            type={showPassword ? "text" : "password"}
+                            placeholder="••••••••"
+                            className="pl-10 pr-10"
+                            data-testid="input-password"
+                            {...field}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                            data-testid="button-toggle-password"
+                          >
+                            {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="flex justify-end">
+                  <Link href="/forgot-password">
+                    <span className="text-sm text-primary hover:underline cursor-pointer font-medium" data-testid="link-forgot-password">
+                      {t.login.forgotPassword}
+                    </span>
+                  </Link>
+                </div>
+
+                <Button type="submit" className="w-full font-bold text-base h-11" disabled={loginMutation.isPending} data-testid="button-login">
+                  {loginMutation.isPending ? (
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{t.login.submitting}</>
+                  ) : t.login.submit}
+                </Button>
+              </form>
+            </Form>
+          )}
         </div>
 
         <div className="mt-5 flex items-center justify-between px-1">
