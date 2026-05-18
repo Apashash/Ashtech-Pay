@@ -248,8 +248,8 @@ export default function SendMoneyPage() {
 
   const canSubmitExternal = amountValue >= minTransfer &&
     amountValue <= maxTransfer &&
-    feePreview.totalAmount <= balance &&
-    feePreview.totalAmount > 0 &&
+    amountValue <= balance &&
+    amountValue > 0 &&
     watchedCountryId &&
     watchedOperatorId &&
     !externalMutation.isPending &&
@@ -556,12 +556,12 @@ export default function SendMoneyPage() {
                   </div>
                   <div className="flex items-center justify-between px-4 py-3 text-xs text-muted-foreground">
                     <span>{t.send.balanceAfter}</span>
-                    <span className={feePreview.totalAmount > balance ? "text-destructive font-medium" : ""}>
-                      {formatWalletBalance(Math.max(0, balance - feePreview.totalAmount), localCurrency)}
+                    <span className={amountValue > balance ? "text-destructive font-medium" : ""}>
+                      {formatWalletBalance(Math.max(0, balance - amountValue), localCurrency)}
                     </span>
                   </div>
                 </div>
-                {feePreview.totalAmount > balance && (
+                {amountValue > balance && (
                   <Alert variant="destructive" className="mt-2">
                     <AlertCircle className="h-4 w-4" />
                     <AlertDescription>{t.send.insufficientBalance}</AlertDescription>
