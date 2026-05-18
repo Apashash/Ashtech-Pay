@@ -9,7 +9,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from "@/hooks/use-toast";
 import { loginSchema } from "@shared/schema";
 import { apiRequest, queryClient, setAuthToken } from "@/lib/queryClient";
-import { Mail, Lock, Loader2, Eye, EyeOff, Home, Clock, ShieldAlert } from "lucide-react";
+import { Mail, Lock, Loader2, Eye, EyeOff, Home, Clock, ShieldAlert, WifiOff } from "lucide-react";
 import { useLanguage } from "@/lib/language";
 import { z } from "zod";
 
@@ -53,6 +53,13 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [blockedUntil, setBlockedUntil] = useState<number | null>(null);
   const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
+  // Auto-show VPN screen if redirected from a VPN-triggered disconnect (?vpn=1)
+  const [vpnDetected, setVpnDetected] = useState(() => {
+    if (typeof window !== "undefined") {
+      return new URLSearchParams(window.location.search).get("vpn") === "1";
+    }
+    return false;
+  });
 
   const countdown = useCountdown(blockedUntil);
   const isBlocked = blockedUntil !== null && countdown > 0;
@@ -83,6 +90,10 @@ export default function LoginPage() {
       setLocation("/dashboard");
     },
     onError: (error: any) => {
+      if (error.vpnDetected) {
+        setVpnDetected(true);
+        return;
+      }
       if (error.blocked && error.retryAfter) {
         setBlockedUntil(error.retryAfter);
       } else if (error.attemptsLeft !== undefined) {
@@ -107,7 +118,27 @@ export default function LoginPage() {
         </div>
 
         <div className="bg-card border border-border rounded-2xl p-8">
-          {isBlocked ? (
+          {vpnDetected ? (
+            <div className="flex flex-col items-center gap-4 py-4">
+              <div className="w-16 h-16 rounded-full bg-orange-500/10 border border-orange-500/30 flex items-center justify-center">
+                <WifiOff className="w-8 h-8 text-orange-500" />
+              </div>
+              <div className="text-center">
+                <p className="font-semibold text-foreground text-base mb-2">Connexion VPN détectée</p>
+                <p className="text-muted-foreground text-sm leading-relaxed">
+                  Vous utilisez un VPN ou un proxy. Veuillez le désactiver pour accéder à votre compte.
+                </p>
+              </div>
+              <div className="w-full bg-orange-500/10 border border-orange-500/20 rounded-xl px-4 py-3 text-center">
+                <p className="text-xs text-orange-600 dark:text-orange-400 font-medium">
+                  Pour votre sécurité et la conformité réglementaire, les connexions via VPN ou proxy ne sont pas autorisées.
+                </p>
+              </div>
+              <Button variant="outline" className="w-full mt-2" onClick={() => setVpnDetected(false)}>
+                Réessayer
+              </Button>
+            </div>
+          ) : isBlocked ? (
             <div className="flex flex-col items-center gap-4 py-4">
               <div className="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center">
                 <ShieldAlert className="w-8 h-8 text-red-500" />

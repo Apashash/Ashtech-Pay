@@ -28,7 +28,13 @@ async function throwIfResNotOk(res: Response) {
     const text = (await res.text()) || res.statusText;
     try {
       const json = JSON.parse(text);
-      throw new Error(json.message || text);
+      // If VPN was detected and user was logged in, clear local auth and redirect
+      if (json.vpnDetected && res.status === 403) {
+        removeAuthToken();
+        // Dispatch a custom event so the app can react (redirect to login with vpn flag)
+        window.dispatchEvent(new CustomEvent("vpn-disconnect", { detail: { message: json.message } }));
+      }
+      throw Object.assign(new Error(json.message || text), json);
     } catch (e) {
       if (e instanceof SyntaxError) {
         throw new Error(text);

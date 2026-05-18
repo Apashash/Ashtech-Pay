@@ -381,6 +381,39 @@ function isPrivateIp(ip: string): boolean {
   );
 }
 
+// ─── VPN / Proxy detection cache ──────────────────────────────────────────────
+const vpnCache = new Map<string, { isVpn: boolean; ts: number }>();
+const VPN_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+async function checkVpnOrProxy(ip: string): Promise<boolean> {
+  if (isPrivateIp(ip)) return false;
+  const cached = vpnCache.get(ip);
+  if (cached && Date.now() - cached.ts < VPN_CACHE_TTL_MS) return cached.isVpn;
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+    const res = await fetch(
+      `https://ip-api.com/json/${ip}?fields=status,proxy,hosting`,
+      { signal: controller.signal }
+    );
+    clearTimeout(timeout);
+    const data: any = await res.json();
+    const isVpn = data.status === "success" && (data.proxy === true || data.hosting === true);
+    vpnCache.set(ip, { isVpn, ts: Date.now() });
+    return isVpn;
+  } catch {
+    return false;
+  }
+}
+
+// Clean up VPN cache periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of vpnCache.entries()) {
+    if (now - entry.ts > VPN_CACHE_TTL_MS) vpnCache.delete(ip);
+  }
+}, 10 * 60 * 1000);
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -482,6 +515,24 @@ export async function registerRoutes(
           banned: true 
         });
       }
+
+      // VPN check for authenticated users — disconnect immediately if VPN detected
+      if (req.path.startsWith("/api/") && !req.path.startsWith("/api/public/")) {
+        const ip = getClientIp(req);
+        const isVpn = await checkVpnOrProxy(ip);
+        if (isVpn) {
+          console.log(`[VPN] Disconnecting user ${userId} — VPN/proxy detected from ${ip}`);
+          if (req.session) req.session.userId = undefined;
+          if (authHeader && authHeader.startsWith('Bearer ')) {
+            removeAuthToken(authHeader.substring(7));
+          }
+          return res.status(403).json({
+            message: "Connexion VPN détectée. Veuillez désactiver votre VPN ou proxy pour continuer.",
+            vpnDetected: true,
+          });
+        }
+      }
+
       req.userId = userId;
     }
     next();
@@ -594,24 +645,27 @@ export async function registerRoutes(
     try {
       const ip = getClientIp(req);
       if (isPrivateIp(ip)) {
-        return res.json({ country: "CM", countryName: "Cameroun", isAfrica: true });
+        return res.json({ country: "CM", countryName: "Cameroun", isAfrica: true, isVpn: false });
       }
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 3000);
       try {
-        const geoRes = await fetch(`https://ip-api.com/json/${ip}?fields=status,country,countryCode`, { signal: controller.signal });
+        const geoRes = await fetch(`https://ip-api.com/json/${ip}?fields=status,country,countryCode,proxy,hosting`, { signal: controller.signal });
         clearTimeout(timeout);
         const geoData: any = await geoRes.json();
         if (geoData.status === "success") {
           const isAfrica = AFRICAN_COUNTRY_CODES.has(geoData.countryCode);
-          return res.json({ country: geoData.countryCode, countryName: geoData.country, isAfrica });
+          const isVpn = geoData.proxy === true || geoData.hosting === true;
+          // Cache the result
+          vpnCache.set(ip, { isVpn, ts: Date.now() });
+          return res.json({ country: geoData.countryCode, countryName: geoData.country, isAfrica, isVpn });
         }
       } catch {
         clearTimeout(timeout);
       }
-      return res.json({ country: "XX", countryName: "Unknown", isAfrica: true });
+      return res.json({ country: "XX", countryName: "Unknown", isAfrica: true, isVpn: false });
     } catch {
-      return res.json({ country: "XX", countryName: "Unknown", isAfrica: true });
+      return res.json({ country: "XX", countryName: "Unknown", isAfrica: true, isVpn: false });
     }
   });
 
@@ -625,6 +679,14 @@ export async function registerRoutes(
           message: "Trop de tentatives. Accès temporairement bloqué.",
           blocked: true,
           retryAfter: rateCheck.retryAfter,
+        });
+      }
+
+      const isVpn = await checkVpnOrProxy(ip);
+      if (isVpn) {
+        return res.status(403).json({
+          message: "Connexion VPN détectée. Veuillez désactiver votre VPN ou proxy pour vous inscrire.",
+          vpnDetected: true,
         });
       }
 
@@ -695,6 +757,14 @@ export async function registerRoutes(
           message: "Trop de tentatives. Accès temporairement bloqué.",
           blocked: true,
           retryAfter: rateCheck.retryAfter,
+        });
+      }
+
+      const isVpn = await checkVpnOrProxy(ip);
+      if (isVpn) {
+        return res.status(403).json({
+          message: "Connexion VPN détectée. Veuillez désactiver votre VPN ou proxy pour vous connecter.",
+          vpnDetected: true,
         });
       }
 

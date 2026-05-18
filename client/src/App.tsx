@@ -1,6 +1,7 @@
 import { Switch, Route, useLocation } from "wouter";
-import { queryClient } from "./lib/queryClient";
+import { queryClient, removeAuthToken } from "./lib/queryClient";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -187,6 +188,25 @@ function Router() {
   );
 }
 
+function VpnDisconnectGuard() {
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      // Clear all cached query data so the user is fully signed out
+      queryClient.clear();
+      removeAuthToken();
+      // Redirect to login with VPN flag in query string
+      setLocation("/login?vpn=1");
+    };
+    window.addEventListener("vpn-disconnect", handler);
+    return () => window.removeEventListener("vpn-disconnect", handler);
+  }, [setLocation]);
+
+  return null;
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -194,6 +214,7 @@ function App() {
         <ThemeProvider>
           <TooltipProvider>
             <Toaster />
+            <VpnDisconnectGuard />
             <GeoGuard>
               <Router />
             </GeoGuard>
