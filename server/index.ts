@@ -1,6 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
 import helmet from "helmet";
-import rateLimit from "express-rate-limit";
+import { globalLimiter } from "./rateLimiter";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
@@ -44,21 +44,8 @@ app.use(
   })
 );
 
-// ── Security: Global API rate limit (200 req/min per IP) ─────────────────────
-const globalApiLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 200,
-  standardHeaders: true,
-  legacyHeaders: false,
-  handler: (_req, res) => {
-    res.status(429).json({ message: "Trop de requêtes. Réessayez dans une minute." });
-  },
-  skip: (req) => !req.path.startsWith("/api"),
-});
-app.use(globalApiLimiter);
-
-// ── Security: Webhook routes bypass rate limiter ──────────────────────────────
-// (already excluded above since they still hit global limiter — 200/min is plenty)
+// ── Security: Global rate limit (50 req/min/IP on all /api routes) ───────────
+app.use(globalLimiter);
 
 // ── Body parsers ──────────────────────────────────────────────────────────────
 app.use(

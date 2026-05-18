@@ -1,6 +1,15 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import {
+  loginLimiter,
+  registerLimiter,
+  withdrawalLimiter,
+  depositLimiter,
+  transferLimiter,
+  passwordResetLimiter,
+  publicPayLimiter,
+} from "./rateLimiter";
 import { 
   loginSchema, 
   registerSchema, 
@@ -607,7 +616,7 @@ export async function registerRoutes(
   });
 
   // Auth routes
-  app.post("/api/auth/register", async (req, res) => {
+  app.post("/api/auth/register", registerLimiter, async (req, res) => {
     try {
       const ip = getClientIp(req);
       const rateCheck = checkAuthRateLimit(ip);
@@ -677,7 +686,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/auth/login", async (req, res) => {
+  app.post("/api/auth/login", loginLimiter, async (req, res) => {
     try {
       const ip = getClientIp(req);
       const rateCheck = checkAuthRateLimit(ip);
@@ -754,7 +763,7 @@ export async function registerRoutes(
   });
 
   // Forgot password
-  app.post("/api/auth/forgot-password", async (req, res) => {
+  app.post("/api/auth/forgot-password", passwordResetLimiter, async (req, res) => {
     try {
       const data = forgotPasswordSchema.parse(req.body);
       
@@ -1303,7 +1312,7 @@ export async function registerRoutes(
   });
 
   // Send money externally (with operator and fees)
-  app.post("/api/transfers/send", requireAuth, async (req, res) => {
+  app.post("/api/transfers/send", requireAuth, transferLimiter, async (req, res) => {
     try {
       const { recipientName, recipientPhone, countryId, operatorId, amount, description, sourceCurrency } = req.body;
 
@@ -1592,7 +1601,7 @@ export async function registerRoutes(
   });
 
   // Transfer between Ashtech Pay accounts (by email or username)
-  app.post("/api/transfers/internal", requireAuth, async (req, res) => {
+  app.post("/api/transfers/internal", requireAuth, transferLimiter, async (req, res) => {
     try {
       const { recipientIdentifier, amount, description, sourceCurrency } = req.body;
       const senderId = req.userId!;
@@ -1699,7 +1708,7 @@ export async function registerRoutes(
   });
 
   // Deposit money (creates pending deposit - needs admin confirmation to credit account)
-  app.post("/api/deposits", requireAuth, async (req, res) => {
+  app.post("/api/deposits", requireAuth, depositLimiter, async (req, res) => {
     try {
       const data = depositSchema.parse(req.body);
       const userId = req.userId!;
@@ -2164,7 +2173,7 @@ export async function registerRoutes(
   });
 
   // Withdraw money
-  app.post("/api/withdrawals", requireAuth, async (req, res) => {
+  app.post("/api/withdrawals", requireAuth, withdrawalLimiter, async (req, res) => {
     try {
       const data = withdrawSchema.parse(req.body);
       const userId = req.userId!;
@@ -3787,7 +3796,7 @@ export async function registerRoutes(
   });
 
   // Pay via payment link - PUBLIC endpoint, creates pending payment intent
-  app.post("/api/payment-links/:slug/pay", async (req, res) => {
+  app.post("/api/payment-links/:slug/pay", publicPayLimiter, async (req, res) => {
     try {
       const { slug } = req.params;
       const { fullName, email, country, phone, amount: providedAmount, currency: providedCurrency, paymentMethod, operator } = req.body;
