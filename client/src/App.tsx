@@ -293,18 +293,15 @@ function GlobalSSEWatcher() {
 }
 
 function VpnDisconnectGuard() {
-  const [, setLocation] = useLocation();
-
   useEffect(() => {
     const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
       queryClient.clear();
       removeAuthToken();
-      setLocation("/login?vpn=1");
+      window.location.href = "/login?vpn=1";
     };
     window.addEventListener("vpn-disconnect", handler);
     return () => window.removeEventListener("vpn-disconnect", handler);
-  }, [setLocation]);
+  }, []);
 
   return null;
 }
