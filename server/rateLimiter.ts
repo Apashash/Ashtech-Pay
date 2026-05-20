@@ -1,14 +1,14 @@
 import rateLimit from "express-rate-limit";
 import type { Request, Response } from "express";
 
-// ─── Helper: extract real client IP (handles proxies) ────────────────────────
+// ─── Helper: extract real client IP (handles proxies / Apache / Nginx) ────────
 function getIp(req: Request): string {
   const fwd = req.headers["x-forwarded-for"];
   if (fwd) {
     const raw = Array.isArray(fwd) ? fwd[0] : fwd;
     return raw.split(",")[0].trim();
   }
-  return req.ip || "unknown";
+  return req.ip || req.socket?.remoteAddress || "unknown";
 }
 
 function reject(res: Response, msg: string, retryAfterSec = 60) {
@@ -22,22 +22,24 @@ export const globalLimiter = rateLimit({
   max: 50,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: getIp,
   skip: (req) => !req.path.startsWith("/api"),
   handler: (_req, res) =>
     reject(res, "Trop de requêtes. Réessayez dans une minute.", 60),
 });
 
-// ─── 2. Login : 20 tentatives / 7 minutes / IP (aligné sur le blocage custom 7 min) ───
+// ─── 2. Login : 20 tentatives / 30 minutes / IP (aligné sur le blocage IP custom 30 min) ───
 export const loginLimiter = rateLimit({
-  windowMs: 7 * 60 * 1000,
+  windowMs: 30 * 60 * 1000,
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: getIp,
   handler: (_req, res) =>
     reject(
       res,
-      "Trop de tentatives de connexion. Réessayez dans 7 minutes.",
-      7 * 60
+      "Trop de tentatives de connexion. Réessayez dans 30 minutes.",
+      30 * 60
     ),
 });
 
@@ -47,6 +49,7 @@ export const registerLimiter = rateLimit({
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: getIp,
   handler: (_req, res) =>
     reject(
       res,
@@ -61,6 +64,7 @@ export const withdrawalLimiter = rateLimit({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: getIp,
   handler: (_req, res) =>
     reject(
       res,
@@ -75,6 +79,7 @@ export const depositLimiter = rateLimit({
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: getIp,
   handler: (_req, res) =>
     reject(res, "Trop de demandes de dépôt. Réessayez dans une minute.", 60),
 });
@@ -85,6 +90,7 @@ export const transferLimiter = rateLimit({
   max: 15,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: getIp,
   handler: (_req, res) =>
     reject(
       res,
@@ -99,6 +105,7 @@ export const passwordResetLimiter = rateLimit({
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: getIp,
   handler: (_req, res) =>
     reject(
       res,
@@ -113,6 +120,7 @@ export const publicPayLimiter = rateLimit({
   max: 30,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: getIp,
   handler: (_req, res) =>
     reject(res, "Trop de requêtes. Réessayez dans une minute.", 60),
 });
