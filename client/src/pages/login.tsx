@@ -42,17 +42,11 @@ function useCountdown(retryAfter: number | null) {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    if (!retryAfter) {
-      setRemaining(0);
-      return;
-    }
+    if (!retryAfter) { setRemaining(0); return; }
     const tick = () => {
       const diff = Math.max(0, Math.ceil((retryAfter - Date.now()) / 1000));
       setRemaining(diff);
-      if (diff <= 0 && intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
+      if (diff <= 0 && intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
     };
     tick();
     intervalRef.current = setInterval(tick, 1000);
@@ -73,9 +67,11 @@ export default function LoginPage() {
   const { toast } = useToast();
   const { t } = useLanguage();
   const [showPassword, setShowPassword] = useState(false);
+
+  // Start with localStorage value for instant render, then confirm with server
   const [blockedUntil, setBlockedUntil] = useState<number | null>(() => loadRateLimit());
   const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
-  // Auto-show VPN screen if redirected from a VPN-triggered disconnect (?vpn=1)
+  const [checking, setChecking] = useState(true); // loading while server check runs
   const [vpnDetected, setVpnDetected] = useState(() => {
     if (typeof window !== "undefined") {
       return new URLSearchParams(window.location.search).get("vpn") === "1";
@@ -85,6 +81,20 @@ export default function LoginPage() {
 
   const countdown = useCountdown(blockedUntil);
   const isBlocked = blockedUntil !== null && countdown > 0;
+
+  // Server-side IP check on mount — works for ANY browser/device on blocked IP
+  useEffect(() => {
+    fetch("/api/auth/ip-status")
+      .then(r => r.json())
+      .then(data => {
+        if (data.blocked && data.retryAfter) {
+          saveRateLimit(data.retryAfter);
+          setBlockedUntil(data.retryAfter);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setChecking(false));
+  }, []);
 
   useEffect(() => {
     if (countdown === 0 && blockedUntil !== null) {
@@ -113,13 +123,11 @@ export default function LoginPage() {
       setLocation("/dashboard");
     },
     onError: (error: any) => {
-      if (error.vpnDetected) {
-        setVpnDetected(true);
-        return;
-      }
+      if (error.vpnDetected) { setVpnDetected(true); return; }
       if (error.blocked && error.retryAfter) {
         saveRateLimit(error.retryAfter);
         setBlockedUntil(error.retryAfter);
+        return; // no toast, blocked screen replaces form
       } else if (error.attemptsLeft !== undefined) {
         setAttemptsLeft(error.attemptsLeft);
       }
@@ -142,7 +150,12 @@ export default function LoginPage() {
         </div>
 
         <div className="bg-card border border-border rounded-2xl p-8">
-          {vpnDetected ? (
+          {/* Loading while server checks IP */}
+          {checking ? (
+            <div className="flex flex-col items-center gap-4 py-8">
+              <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : vpnDetected ? (
             <div className="flex flex-col items-center gap-4 py-4">
               <div className="w-16 h-16 rounded-full bg-orange-500/10 border border-orange-500/30 flex items-center justify-center">
                 <WifiOff className="w-8 h-8 text-orange-500" />

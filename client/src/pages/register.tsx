@@ -91,9 +91,24 @@ export default function RegisterPage() {
   const [blockedUntil, setBlockedUntil] = useState<number | null>(() => loadRateLimit());
   const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
   const [vpnDetected, setVpnDetected] = useState(false);
+  const [checking, setChecking] = useState(true);
 
   const countdown = useCountdown(blockedUntil);
   const isBlocked = blockedUntil !== null && countdown > 0;
+
+  // Server-side IP check on mount — works for ANY browser/device on blocked IP
+  useEffect(() => {
+    fetch("/api/auth/ip-status")
+      .then(r => r.json())
+      .then(data => {
+        if (data.blocked && data.retryAfter) {
+          saveRateLimit(data.retryAfter);
+          setBlockedUntil(data.retryAfter);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setChecking(false));
+  }, []);
 
   useEffect(() => {
     if (countdown === 0 && blockedUntil !== null) {
@@ -154,6 +169,7 @@ export default function RegisterPage() {
       if (error.blocked && error.retryAfter) {
         saveRateLimit(error.retryAfter);
         setBlockedUntil(error.retryAfter);
+        return; // no toast, blocked screen replaces form
       } else if (error.attemptsLeft !== undefined) {
         setAttemptsLeft(error.attemptsLeft);
       }
@@ -195,7 +211,11 @@ export default function RegisterPage() {
         </div>
 
         <div className="bg-card border border-border rounded-2xl p-8">
-          {vpnDetected ? (
+          {checking ? (
+            <div className="flex flex-col items-center gap-4 py-8">
+              <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : vpnDetected ? (
             <div className="flex flex-col items-center gap-4 py-4">
               <div className="w-16 h-16 rounded-full bg-orange-500/10 border border-orange-500/30 flex items-center justify-center">
                 <WifiOff className="w-8 h-8 text-orange-500" />
