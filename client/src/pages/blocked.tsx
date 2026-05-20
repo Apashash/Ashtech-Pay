@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
-import { useLocation } from "wouter";
-import { ShieldAlert, Clock } from "lucide-react";
+import { Link, useLocation } from "wouter";
+import { ShieldAlert, Clock, Home, LogIn, UserPlus } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 function useCountdown(retryAfter: number | null) {
   // Initialiser directement avec le temps restant réel pour éviter un
@@ -54,7 +55,7 @@ export default function BlockedPage() {
 
   return (
     <div className="min-h-screen bg-[#0B0E11] flex items-center justify-center p-4">
-      <div className="w-full max-w-sm">
+      <div className="w-full max-w-sm flex flex-col">
         <div className="bg-[#1E2329] border border-red-500/20 rounded-2xl p-8 flex flex-col items-center gap-6 shadow-2xl">
           <div className="w-20 h-20 rounded-full bg-red-500/10 border-2 border-red-500/30 flex items-center justify-center">
             <ShieldAlert className="w-10 h-10 text-red-500" />
@@ -100,6 +101,29 @@ export default function BlockedPage() {
             Pour votre sécurité, l'accès est bloqué après 4 tentatives incorrectes.
             Vous serez automatiquement redirigé vers la connexion à l'expiration du délai.
           </p>
+        </div>
+
+        <div className="mt-5 flex items-center justify-between px-1">
+          <Link href="/">
+            <Button variant="ghost" size="sm" className="gap-1.5 text-gray-400 hover:text-white">
+              <Home className="w-3.5 h-3.5" />
+              Accueil
+            </Button>
+          </Link>
+          <div className="flex items-center gap-1">
+            <Link href="/login">
+              <Button variant="ghost" size="sm" className="gap-1.5 text-gray-400 hover:text-white" data-testid="link-blocked-login">
+                <LogIn className="w-3.5 h-3.5" />
+                Connexion
+              </Button>
+            </Link>
+            <Link href="/register">
+              <Button variant="ghost" size="sm" className="gap-1.5 text-gray-400 hover:text-white" data-testid="link-blocked-register">
+                <UserPlus className="w-3.5 h-3.5" />
+                S'inscrire
+              </Button>
+            </Link>
+          </div>
         </div>
       </div>
     </div>
