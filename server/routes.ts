@@ -9442,9 +9442,22 @@ export async function registerRoutes(
 
   // Register Telegram webhook after all routes are set up
   setImmediate(async () => {
-    const domain = process.env.REPLIT_DEV_DOMAIN;
-    if (domain) {
-      await registerTelegramWebhook(`https://${domain}/api/telegram/webhook`);
+    const replitDomain = process.env.REPLIT_DEV_DOMAIN;
+    const appUrl = (process.env.APP_URL || "").replace(/\/$/, "");
+
+    let webhookBase: string | null = null;
+    if (replitDomain) {
+      webhookBase = `https://${replitDomain}`;
+    } else if (appUrl) {
+      webhookBase = appUrl;
+    }
+
+    if (webhookBase) {
+      const webhookUrl = `${webhookBase}/api/telegram/webhook`;
+      console.log(`[Telegram] Registering webhook → ${webhookUrl}`);
+      await registerTelegramWebhook(webhookUrl);
+    } else {
+      console.warn("[Telegram] No domain found (REPLIT_DEV_DOMAIN / APP_URL) — webhook not registered.");
     }
   });
 
