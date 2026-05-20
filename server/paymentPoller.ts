@@ -96,12 +96,13 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
       });
       console.log(`[PaymentPoller] ✓ Payment COMPLETED for ${payment.reference} (${payment.provider || "swychr"}) → credited ${payment.amount} ${paymentCurrency}`);
 
-      const [txUser, txOperator, txIntent] = await Promise.all([
+      const isLink = payment.type === "payment_link";
+      const [txUser, txOperator, txIntent, txPaymentLink] = await Promise.all([
         storage.getUser(payment.userId).catch(() => null),
         transaction.operatorId ? storage.getOperator(transaction.operatorId).catch(() => null) : Promise.resolve(null),
         transaction.paymentIntentId ? storage.getPaymentIntentById(transaction.paymentIntentId).catch(() => null) : Promise.resolve(null),
+        isLink && transaction.paymentLinkId ? storage.getPaymentLinkById(transaction.paymentLinkId).catch(() => null) : Promise.resolve(null),
       ]);
-      const isLink = payment.type === "payment_link";
       notifyDepositConfirmed({
         userName: (txUser as any)?.fullName || (txUser as any)?.username || "Utilisateur",
         userEmail: (txUser as any)?.email || "",
@@ -122,6 +123,7 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
           beneficiaryUsername: (txUser as any)?.username || undefined,
           beneficiaryPhone: (txUser as any)?.phone || undefined,
           creditedCurrency: paymentCurrency,
+          linkTitle: (txPaymentLink as any)?.title || undefined,
         }),
       }).catch(() => {});
 

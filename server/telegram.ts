@@ -255,6 +255,7 @@ export async function notifyDepositConfirmed(opts: {
   beneficiaryUsername?: string;
   beneficiaryPhone?: string;
   creditedCurrency?: string;
+  linkTitle?: string;
 }): Promise<void> {
   const pays = opts.country ? countryDisplay(opts.country) : countryDisplay(opts.currency);
   const hasGross = opts.grossAmount != null && String(opts.grossAmount) !== String(opts.amount);
@@ -269,6 +270,7 @@ export async function notifyDepositConfirmed(opts: {
     `📧 Email : ${opts.userEmail}\n` +
     (pays ? `🌍 Pays : <b>${pays}</b>\n` : "") +
     `📋 Type : <b>${typeLabel}</b>\n` +
+    (isLink && opts.linkTitle ? `🔗 Lien : <b>${opts.linkTitle}</b>\n` : "") +
     (methodLabel ? `📱 Méthode : ${methodLabel}\n` : "") +
     (opts.operator ? `📡 Opérateur : <b>${opts.operator}</b>\n` : "") +
     (opts.phone ? `📞 Numéro : ${opts.phone}\n` : "") +

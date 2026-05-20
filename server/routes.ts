@@ -7653,7 +7653,8 @@ export async function registerRoutes(
             storage.getUser(transaction.userId).catch(() => null),
             transaction.operatorId ? storage.getOperator(transaction.operatorId).catch(() => null) : Promise.resolve(null),
             transaction.paymentIntentId ? storage.getPaymentIntentById(transaction.paymentIntentId).catch(() => null) : Promise.resolve(null),
-          ]).then(([txUser, txOp, txIntent]) => {
+            isPaymentLink && transaction.paymentLinkId ? storage.getPaymentLinkById(transaction.paymentLinkId).catch(() => null) : Promise.resolve(null),
+          ]).then(([txUser, txOp, txIntent, txLink]) => {
             notifyDepositConfirmed({
               userName: txUser?.fullName || txUser?.username || "Utilisateur",
               userEmail: txUser?.email || "",
@@ -7674,6 +7675,7 @@ export async function registerRoutes(
                 beneficiaryUsername: txUser?.username || undefined,
                 beneficiaryPhone: txUser?.phone || undefined,
                 creditedCurrency: txCurrency,
+                linkTitle: (txLink as any)?.title || undefined,
               }),
             }).catch(() => {});
           }).catch(() => {});
@@ -7834,7 +7836,8 @@ export async function registerRoutes(
             storage.getUser(transaction.userId).catch(() => null),
             transaction.operatorId ? storage.getOperator(transaction.operatorId).catch(() => null) : Promise.resolve(null),
             transaction.paymentIntentId ? storage.getPaymentIntentById(transaction.paymentIntentId).catch(() => null) : Promise.resolve(null),
-          ]).then(([txUser, txOp, txIntent]) => {
+            isPaymentLink && transaction.paymentLinkId ? storage.getPaymentLinkById(transaction.paymentLinkId).catch(() => null) : Promise.resolve(null),
+          ]).then(([txUser, txOp, txIntent, txLink]) => {
             notifyDepositConfirmed({
               userName: txUser?.fullName || txUser?.username || "Utilisateur",
               userEmail: txUser?.email || "",
@@ -7855,6 +7858,7 @@ export async function registerRoutes(
                 beneficiaryUsername: txUser?.username || undefined,
                 beneficiaryPhone: txUser?.phone || undefined,
                 creditedCurrency: txCurrency,
+                linkTitle: (txLink as any)?.title || undefined,
               }),
             }).catch(() => {});
           }).catch(() => {});
