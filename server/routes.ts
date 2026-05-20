@@ -247,6 +247,11 @@ function extractUserId(req: Request, _res: Response, next: NextFunction) {
 
   if (req.session?.userId) {
     userId = req.session.userId;
+    // Backfill clientIp dans les sessions existantes créées avant le fix
+    if (!req.session.clientIp) {
+      req.session.clientIp = getClientIp(req);
+      req.session.save(() => {});
+    }
   } else {
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -406,8 +411,18 @@ const activeIpRegistry = new Map<string, string>();
 
 async function destroyUserSessions(userId: string, blockedUntil: number): Promise<void> {
   try {
+    // Marque les sessions comme révoquées AVANT la suppression pour que
+    // les requêtes en cours reçoivent sessionRevoked:true
+    const result = await db.execute(sql`SELECT sid FROM session WHERE sess->>'userId' = ${userId}`);
+    for (const row of result.rows as { sid: string }[]) {
+      revokedSessions.set(row.sid, blockedUntil);
+    }
     forcedLogoutMap.set(userId, blockedUntil);
+    revokedTokensBefore.set(userId, Date.now());
+    // Pousse la déconnexion immédiatement via SSE (sans attendre la prochaine requête)
+    notifyUserForceLogout(userId);
     await db.execute(sql`DELETE FROM session WHERE sess->>'userId' = ${userId}`);
+    console.log(`[Auth] destroyUserSessions — userId=${userId} déconnecté immédiatement`);
   } catch (err: any) {
     console.error("[Auth] Failed to destroy sessions for user:", userId, err?.message);
   }
