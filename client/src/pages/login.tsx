@@ -9,7 +9,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from "@/hooks/use-toast";
 import { loginSchema } from "@shared/schema";
 import { apiRequest, queryClient, setAuthToken } from "@/lib/queryClient";
-import { Mail, Lock, Loader2, Eye, EyeOff, Home, Clock, ShieldAlert, WifiOff } from "lucide-react";
+import { Mail, Lock, Loader2, Eye, EyeOff, Home, Clock, ShieldAlert, WifiOff, MonitorSmartphone } from "lucide-react";
 import { useLanguage } from "@/lib/language";
 import { z } from "zod";
 
@@ -67,6 +67,12 @@ export default function LoginPage() {
   const { toast } = useToast();
   const { t } = useLanguage();
   const [showPassword, setShowPassword] = useState(false);
+  const [kicked, setKicked] = useState(() => {
+    if (typeof window !== "undefined") {
+      return new URLSearchParams(window.location.search).get("kicked") === "1";
+    }
+    return false;
+  });
 
   // Start with localStorage value for instant render, then confirm with server
   const [blockedUntil, setBlockedUntil] = useState<number | null>(() => loadRateLimit());
@@ -153,6 +159,19 @@ export default function LoginPage() {
         </div>
 
         <div className="bg-card border border-border rounded-2xl p-8">
+          {/* Kicked: account connected on another device */}
+          {kicked && !checking && !isBlocked && !vpnDetected && (
+            <div className="flex items-start gap-3 bg-blue-500/10 border border-blue-500/25 rounded-xl px-4 py-3 mb-5">
+              <MonitorSmartphone className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-blue-400">Compte connecté sur un autre appareil</p>
+                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                  Votre session a été fermée car votre compte vient d'être connecté sur un autre navigateur ou appareil.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Loading while server checks IP */}
           {checking ? (
             <div className="flex flex-col items-center gap-4 py-8">

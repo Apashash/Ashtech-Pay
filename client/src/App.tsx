@@ -238,6 +238,7 @@ function SSEForceLogoutListener() {
   return null;
 }
 
+
 function GlobalSSEWatcher() {
   const { data: user } = useQuery({
     queryKey: ["/api/user"],
@@ -263,7 +264,7 @@ function GlobalSSEWatcher() {
             if (body.sessionRevoked) {
               queryClient.clear();
               removeAuthToken();
-              window.dispatchEvent(new CustomEvent("force-logout", { detail: { retryAfter: body.retryAfter } }));
+              window.dispatchEvent(new CustomEvent("force-logout", { detail: { reason: "new_device", retryAfter: body.retryAfter } }));
               return;
             }
           } catch {}
@@ -317,10 +318,12 @@ function ForceLogoutGuard() {
       queryClient.clear();
       removeAuthToken();
       const retryAfter = detail?.retryAfter;
+      const reason = detail?.reason;
       if (retryAfter) {
-        // Persiste en localStorage pour que BlockGuard bloque les prochaines navigations
         try { localStorage.setItem("ashtech_rate_limit_until", String(retryAfter)); } catch {}
         setLocation(`/blocked?until=${retryAfter}`);
+      } else if (reason === "new_device") {
+        setLocation("/login?kicked=1");
       } else {
         setLocation("/login");
       }

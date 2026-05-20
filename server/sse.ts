@@ -82,10 +82,10 @@ export function broadcastOnlineStatus() {
   }
 }
 
-export function notifyUserForceLogout(userId: string, retryAfter?: number) {
+export function notifyUserForceLogout(userId: string, retryAfter?: number, reason?: string) {
   for (const client of clients.values()) {
     if (client.userId === userId) {
-      sendEvent(client.res, "force_logout", { reason: "ip_blocked", retryAfter });
+      sendEvent(client.res, "force_logout", { reason: reason ?? "ip_blocked", retryAfter });
     }
   }
 }

@@ -542,7 +542,7 @@ async function revokeOtherSessionsForSingleDevice(userId: string): Promise<void>
     }
     // Pousser l'événement SSE en temps réel AVANT de supprimer les sessions
     // → l'ancien navigateur reçoit force_logout immédiatement via la connexion SSE ouverte
-    notifyUserForceLogout(userId);
+    notifyUserForceLogout(userId, undefined, "new_device");
     await db.execute(sql`DELETE FROM session WHERE sess->>'userId' = ${userId}`);
     const revokedAt = Date.now();
     revokedTokensBefore.set(userId, revokedAt);
