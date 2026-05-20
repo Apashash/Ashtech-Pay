@@ -581,7 +581,7 @@ export async function notifyLoginFailed(opts: {
       `──────────────────\n` +
       `🔑 Identifiant : <code>${opts.identifier}</code>\n` +
       `🌐 IP : <code>${opts.ip}</code>\n` +
-      `🚫 Accès bloqué pendant 7 minutes\n` +
+      `🚫 Accès bloqué pendant 30 minutes\n` +
       `🕐 Heure : ${now()}`;
     await sendMessage(msg);
   } else if (opts.attemptsLeft <= 2) {
@@ -594,6 +594,28 @@ export async function notifyLoginFailed(opts: {
       `🕐 Heure : ${now()}`;
     await sendMessage(msg);
   }
+}
+
+export async function notifyIpBlocked(opts: {
+  ip: string;
+  identifier: string;
+  attempts: number;
+  blockedUntil: number;
+}): Promise<void> {
+  const unblockTime = new Date(opts.blockedUntil).toLocaleTimeString("fr-FR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Africa/Douala",
+  });
+  const msg =
+    `🚨 <b>IP BLOQUÉE — ATTAQUE DÉTECTÉE</b>\n` +
+    `──────────────────\n` +
+    `🌐 IP : <code>${opts.ip}</code>\n` +
+    `🔑 Dernier identifiant : <code>${opts.identifier}</code>\n` +
+    `🔁 Tentatives : <b>${opts.attempts}</b>\n` +
+    `⏳ Bloquée jusqu'à : <b>${unblockTime}</b> (30 min)\n` +
+    `🕐 Heure : ${now()}`;
+  await sendMessage(msg);
 }
 
 export async function notifyAdminLogin(opts: {

@@ -61,6 +61,7 @@ import {
   notifyWithdrawalAutoValidated,
   notifyWithdrawalFailed,
   notifyLoginFailed,
+  notifyIpBlocked,
   notifyAdminLogin,
   notifyAdminLoginSuccess,
   notifyAdminLoginFailed,
@@ -958,6 +959,14 @@ export async function registerRoutes(
           ? "Trop de tentatives incorrectes. Accès bloqué pendant 30 minutes."
           : `Email/téléphone ou mot de passe incorrect. ${remaining} tentative(s) restante(s).`;
         notifyLoginFailed({ identifier: data.identifier, ip, attemptsLeft: remaining, blocked: !!failure.blocked }).catch(() => {});
+        if (failure.blocked && failure.retryAfter) {
+          notifyIpBlocked({
+            ip,
+            identifier: data.identifier,
+            attempts: 4,
+            blockedUntil: failure.retryAfter,
+          }).catch(() => {});
+        }
         if (user?.role === "admin") {
           notifyAdminLoginFailed({ identifier: data.identifier, ip }).catch(() => {});
         }
