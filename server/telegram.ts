@@ -883,7 +883,12 @@ export async function handleTelegramUpdate(
       userName: string; createdAt: Date | string | null; description?: string;
     } | null>;
     getActiveLinks: () => Promise<{ title: string; slug: string; amount: string; currency: string; userName: string }[]>;
-    getPlatformBalance: () => Promise<{ total: number; currency: string; userCount: number; walletCount: number }>;
+    getPlatformBalance: () => Promise<{
+      totalXAF: number;
+      byCurrency: { currency: string; balance: number }[];
+      userCount: number;
+      revenue: { deposits: number; withdrawals: number; transfers: number; paymentLinks: number; conversions: number; total: number };
+    }>;
     resetUserPassword: (email: string) => Promise<{ userName: string; found: boolean } | null>;
     approveWithdrawal: (reference: string) => Promise<{ userName: string; amount: string; currency: string } | null>;
     rejectWithdrawal: (reference: string, reason: string) => Promise<{ userName: string } | null>;
@@ -941,11 +946,28 @@ export async function handleTelegramUpdate(
       // Solde plateforme
       if (cmd === "soldeA") {
         const bal = await handlers.getPlatformBalance();
+        const currLines = bal.byCurrency.map(({ currency, balance }) =>
+          `  • ${currency} : <b>${fmtNum(balance)}</b>`
+        ).join("\n") || "  Aucun solde";
+        const rev = bal.revenue;
         await callBotApi("sendMessage", {
           chat_id: chatId,
-          text: `💳 <b>SOLDE TOTAL PLATEFORME</b>\n──────────────────\n${
-            Object.entries(bal).map(([k, v]) => `  • ${k} : <b>${fmtNum(v as number)}</b>`).join("\n")
-          }\n🕐 ${now()}`,
+          text:
+            `💳 <b>SOLDE TOTAL PLATEFORME</b>\n` +
+            `──────────────────\n` +
+            `${currLines}\n` +
+            `💰 <b>Total ≈ ${fmtNum(bal.totalXAF)} XAF</b>\n` +
+            `👥 Utilisateurs actifs : <b>${bal.userCount}</b>\n` +
+            `──────────────────\n` +
+            `📊 <b>REVENUS (marges)</b>\n` +
+            `  • Dépôts : <b>${fmtNum(rev.deposits)} XAF</b>\n` +
+            `  • Retraits : <b>${fmtNum(rev.withdrawals)} XAF</b>\n` +
+            `  • Envois : <b>${fmtNum(rev.transfers)} XAF</b>\n` +
+            `  • Liens paiement : <b>${fmtNum(rev.paymentLinks)} XAF</b>\n` +
+            `  • Conversions : <b>${fmtNum(rev.conversions)} XAF</b>\n` +
+            `💵 <b>Total revenus : ${fmtNum(rev.total)} XAF</b>\n` +
+            `──────────────────\n` +
+            `🕐 ${now()}`,
           parse_mode: "HTML", reply_markup: { inline_keyboard: backBtn },
         });
         return;
@@ -1397,14 +1419,26 @@ export async function handleTelegramUpdate(
     // ── /soldeA — platform total balance ──
     if (text === "/soldeA" || text === "/soldea" || text === "/SOLDEA") {
       const info = await handlers.getPlatformBalance();
+      const currLines = info.byCurrency.map(({ currency, balance }) =>
+        `  • ${currency} : <b>${fmtNum(balance)}</b>`
+      ).join("\n") || "  Aucun solde";
+      const rev = info.revenue;
       await callBotApi("sendMessage", {
         chat_id: chatId,
         text:
           `🏦 <b>SOLDE TOTAL ASHTECH PAY</b>\n` +
           `──────────────────\n` +
-          `💰 En circulation : <b>${fmt(info.total, info.currency)}</b>\n` +
+          `${currLines}\n` +
+          `💰 <b>Total ≈ ${fmtNum(info.totalXAF)} XAF</b>\n` +
           `👥 Utilisateurs actifs : <b>${info.userCount}</b>\n` +
-          `🗂 Wallets secondaires : <b>${info.walletCount}</b>\n` +
+          `──────────────────\n` +
+          `📊 <b>REVENUS (marges)</b>\n` +
+          `  • Dépôts : <b>${fmtNum(rev.deposits)} XAF</b>\n` +
+          `  • Retraits : <b>${fmtNum(rev.withdrawals)} XAF</b>\n` +
+          `  • Envois : <b>${fmtNum(rev.transfers)} XAF</b>\n` +
+          `  • Liens paiement : <b>${fmtNum(rev.paymentLinks)} XAF</b>\n` +
+          `  • Conversions : <b>${fmtNum(rev.conversions)} XAF</b>\n` +
+          `💵 <b>Total revenus : ${fmtNum(rev.total)} XAF</b>\n` +
           `──────────────────\n` +
           `🕐 ${now()}`,
         parse_mode: "HTML",

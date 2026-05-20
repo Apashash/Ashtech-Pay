@@ -9330,15 +9330,47 @@ export async function registerRoutes(
 
         // ── Platform total balance ───────────────────────────────────────────
         getPlatformBalance: async () => {
-          const allUsers = await storage.getAllUsers().catch(() => [] as any[]);
+          const [allUsers, fxRates, adminStats] = await Promise.all([
+            storage.getAllUsers().catch(() => [] as any[]),
+            loadFxRates(),
+            storage.getAdminStats("all").catch(() => null as any),
+          ]);
           const activeUsers = allUsers.filter((u: any) => !u.isBanned);
-          const totalPrimary = activeUsers.reduce((sum: number, u: any) => sum + parseFloat(u.balance ?? "0"), 0);
-          const wallets = await storage.getWalletsByUserIds(activeUsers.map((u: any) => u.id)).catch(() => [] as any[]);
+          const userIds = activeUsers.map((u: any) => u.id);
+          const secWallets = await storage.getWalletsByUserIds(userIds).catch(() => [] as any[]);
+
+          // Merge primary (users.balance grouped by preferredCurrency) + secondary wallets
+          const byMap: Record<string, number> = {};
+          for (const u of activeUsers) {
+            const cur = u.preferredCurrency || "XAF";
+            byMap[cur] = (byMap[cur] || 0) + parseFloat(u.balance ?? "0");
+          }
+          for (const w of secWallets) {
+            const bal = parseFloat(w.balance ?? "0");
+            if (bal > 0) byMap[w.currency] = (byMap[w.currency] || 0) + bal;
+          }
+
+          const byCurrency = Object.entries(byMap)
+            .filter(([, v]) => v > 0)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([currency, balance]) => ({ currency, balance: Math.round(balance * 100) / 100 }));
+
+          const totalXAF = byCurrency.reduce((sum, { currency, balance }) => {
+            return sum + convertToXAF(balance, currency, fxRates);
+          }, 0);
+
           return {
-            total: totalPrimary,
-            currency: "XAF",
+            totalXAF: Math.round(totalXAF * 100) / 100,
+            byCurrency,
             userCount: activeUsers.length,
-            walletCount: wallets.filter((w: any) => parseFloat(w.balance) > 0).length,
+            revenue: {
+              deposits: parseFloat(adminStats?.depositFees ?? "0"),
+              withdrawals: parseFloat(adminStats?.withdrawalFees ?? "0"),
+              transfers: parseFloat(adminStats?.transferFees ?? "0"),
+              paymentLinks: parseFloat(adminStats?.paymentLinkFees ?? "0"),
+              conversions: parseFloat(adminStats?.conversionFees ?? "0"),
+              total: parseFloat(adminStats?.totalRevenue ?? "0"),
+            },
           };
         },
 
