@@ -1,6 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/dashboard-layout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -10,7 +9,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User, SupportedCurrency, Wallet } from "@shared/schema";
-import { Send, Globe, Loader2, ArrowRight, AlertCircle, Shield, CheckCircle2, Smartphone } from "lucide-react";
+import { Send, Globe, Loader2, ArrowRight, AlertCircle, Shield, CheckCircle2, Smartphone, TrendingDown, Wallet as WalletIcon } from "lucide-react";
 import { useLanguage } from "@/lib/language";
 import { BottomSheet, BottomSheetContent, BottomSheetHeader, BottomSheetTitle, BottomSheetFooter } from "@/components/ui/bottom-sheet";
 import { getOperatorLogo } from "@/lib/operator-logos";
@@ -53,30 +52,12 @@ const externalFormSchema = z.object({
 type ExternalFormData = z.infer<typeof externalFormSchema>;
 
 const COUNTRY_FLAGS: Record<string, string> = {
-  "Bénin": "🇧🇯",
-  "Burkina Faso": "🇧🇫",
-  "Cameroun": "🇨🇲",
-  "Centrafrique": "🇨🇫",
-  "Congo": "🇨🇬",
-  "Côte d'Ivoire": "🇨🇮",
-  "Gabon": "🇬🇦",
-  "Ghana": "🇬🇭",
-  "Guinée Conakry": "🇬🇳",
-  "Guinée équatoriale": "🇬🇶",
-  "Guinée-Bissau": "🇬🇼",
-  "Kenya": "🇰🇪",
-  "Mali": "🇲🇱",
-  "Niger": "🇳🇪",
-  "Nigeria": "🇳🇬",
-  "Nigéria": "🇳🇬",
-  "Ouganda": "🇺🇬",
-  "RD Congo": "🇨🇩",
-  "Rwanda": "🇷🇼",
-  "Sénégal": "🇸🇳",
-  "Tanzanie": "🇹🇿",
-  "Tchad": "🇹🇩",
-  "Togo": "🇹🇬",
-  "USA": "🇺🇸"
+  "Bénin": "🇧🇯", "Burkina Faso": "🇧🇫", "Cameroun": "🇨🇲", "Centrafrique": "🇨🇫",
+  "Congo": "🇨🇬", "Côte d'Ivoire": "🇨🇮", "Gabon": "🇬🇦", "Ghana": "🇬🇭",
+  "Guinée Conakry": "🇬🇳", "Guinée équatoriale": "🇬🇶", "Guinée-Bissau": "🇬🇼",
+  "Kenya": "🇰🇪", "Mali": "🇲🇱", "Niger": "🇳🇪", "Nigeria": "🇳🇬", "Nigéria": "🇳🇬",
+  "Ouganda": "🇺🇬", "RD Congo": "🇨🇩", "Rwanda": "🇷🇼", "Sénégal": "🇸🇳",
+  "Tanzanie": "🇹🇿", "Tchad": "🇹🇩", "Togo": "🇹🇬", "USA": "🇺🇸"
 };
 
 export default function SendMoneyPage() {
@@ -93,7 +74,6 @@ export default function SendMoneyPage() {
   const [internalIdentifier, setInternalIdentifier] = useState("");
   const [internalAmount, setInternalAmount] = useState("");
 
-  // Sync selectedWallet when user data loads
   useEffect(() => {
     if (primaryCurrency && selectedWallet === "XAF" && primaryCurrency !== "XAF") {
       setSelectedWallet(primaryCurrency);
@@ -101,10 +81,9 @@ export default function SendMoneyPage() {
   }, [primaryCurrency]);
 
   const isInternal = destination === INTERNAL_KEY;
-
   const balance = parseFloat(wallets.find(w => w.currency === selectedWallet)?.balance || "0");
-
   const localCurrency = primaryCurrency;
+
   const { data: limits } = useQuery<{ minTransfer: number; maxTransfer: number }>({
     queryKey: ["/api/public/limits"],
   });
@@ -138,21 +117,20 @@ export default function SendMoneyPage() {
   const selectedCountry = useMemo(() => countries?.find(c => c.id === watchedCountryId), [countries, watchedCountryId]);
   const selectedOperator = useMemo(() => selectedCountry?.operators.find(o => o.id === watchedOperatorId), [selectedCountry, watchedOperatorId]);
   const amountValue = parseFloat(watchedAmount) || 0;
+  const internalAmountValue = parseFloat(internalAmount) || 0;
 
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pendingExternalData, setPendingExternalData] = useState<ExternalFormData | null>(null);
   const [showInternalConfirmDialog, setShowInternalConfirmDialog] = useState(false);
   const [prevCountryId, setPrevCountryId] = useState("");
+
   useEffect(() => {
     if (watchedCountryId !== prevCountryId) {
       form.setValue("operatorId", "");
       setPrevCountryId(watchedCountryId);
-      // Auto-switch wallet to match destination country currency if user has that wallet
       if (selectedCountry?.currency) {
         const matchingWallet = wallets.find(w => w.currency === selectedCountry.currency);
-        if (matchingWallet) {
-          setSelectedWallet(selectedCountry.currency);
-        }
+        if (matchingWallet) setSelectedWallet(selectedCountry.currency);
       }
     }
   }, [watchedCountryId, prevCountryId, form, selectedCountry, wallets]);
@@ -186,8 +164,8 @@ export default function SendMoneyPage() {
   }, [watchedOperatorId, amountValue, selectedOperator]);
 
   useEffect(() => {
-    const t = setTimeout(fetchFeePreview, 300);
-    return () => clearTimeout(t);
+    const timer = setTimeout(fetchFeePreview, 300);
+    return () => clearTimeout(timer);
   }, [fetchFeePreview]);
 
   const internalMutation = useMutation({
@@ -221,10 +199,7 @@ export default function SendMoneyPage() {
 
   const externalMutation = useMutation({
     mutationFn: async (data: ExternalFormData) => {
-      const res = await apiRequest("POST", "/api/transfers/send", {
-        ...data,
-        sourceCurrency: selectedWallet
-      });
+      const res = await apiRequest("POST", "/api/transfers/send", { ...data, sourceCurrency: selectedWallet });
       const json = await res.json();
       if (!res.ok) throw new Error(json.message || "Erreur lors du transfert");
       return json;
@@ -259,26 +234,23 @@ export default function SendMoneyPage() {
   if (user && !user.isVerified) {
     return (
       <DashboardLayout>
-        <div className="space-y-6">
+        <div className="max-w-lg mx-auto space-y-4">
           <div>
-            <h1 className="text-2xl font-semibold text-foreground">{t.send.title}</h1>
-            <p className="text-muted-foreground">{t.send.subtitleUnverified}</p>
+            <h1 className="text-xl font-bold text-foreground">{t.send.title}</h1>
+            <p className="text-sm text-muted-foreground">{t.send.subtitleUnverified}</p>
           </div>
-          <Card className="border-yellow-500/50 bg-yellow-500/5">
-            <CardContent className="p-8 text-center space-y-4">
-              <div className="w-16 h-16 mx-auto rounded-full bg-yellow-500/20 flex items-center justify-center">
-                <Shield className="w-8 h-8 text-yellow-500" />
-              </div>
-              <h2 className="text-xl font-semibold">{t.send.unverifiedTitle}</h2>
-              <p className="text-muted-foreground max-w-md mx-auto">
-                {t.send.unverifiedDesc}
-              </p>
-              <Button onClick={() => setLocation("/dashboard/kyc")}>
-                <Shield className="w-4 h-4 mr-2" />
-                {t.send.verifyButton}
-              </Button>
-            </CardContent>
-          </Card>
+          <div className="bg-card border border-yellow-500/30 rounded-2xl p-8 text-center space-y-5">
+            <div className="w-16 h-16 mx-auto rounded-full bg-yellow-500/15 flex items-center justify-center">
+              <Shield className="w-8 h-8 text-yellow-500" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold">{t.send.unverifiedTitle}</h2>
+              <p className="text-sm text-muted-foreground mt-1 max-w-xs mx-auto">{t.send.unverifiedDesc}</p>
+            </div>
+            <Button onClick={() => setLocation("/dashboard/kyc")} className="rounded-xl">
+              <Shield className="w-4 h-4 mr-2" />{t.send.verifyButton}
+            </Button>
+          </div>
         </div>
       </DashboardLayout>
     );
@@ -286,141 +258,201 @@ export default function SendMoneyPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="max-w-lg mx-auto space-y-4 pb-8">
+
+        {/* Header */}
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">{t.send.title}</h1>
-          <p className="text-muted-foreground">{t.send.subtitle}</p>
+          <h1 className="text-xl font-bold text-foreground">{t.send.title}</h1>
+          <p className="text-sm text-muted-foreground">{t.send.subtitle}</p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6">
-          <Card className="md:col-span-2 min-w-0 overflow-hidden">
-            <CardHeader>
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{t.send.sectionLabel}</p>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Send className="w-4 h-4 text-muted-foreground" />
-                {t.send.cardTitle}
-              </CardTitle>
-              <CardDescription>{t.send.cardDesc}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-5 min-w-0">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">{t.send.debitBalance}</label>
-                <Select value={selectedWallet} onValueChange={setSelectedWallet}>
-                  <SelectTrigger className="border-[#F0B90B]/30">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {wallets.map((w, idx) => (
-                      <SelectItem key={w.currency} value={w.currency}>
-                        {idx === 0 ? t.send.mainAccount : `${t.send.mainAccount} ${w.currency}`} — {parseFloat(w.balance || "0").toLocaleString()} {w.currency}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+        {/* Wallet selector + balance */}
+        <div className="flex items-center gap-3 bg-gradient-to-r from-primary/10 to-transparent border border-primary/20 rounded-2xl px-4 py-3">
+          <div className="w-9 h-9 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
+            <WalletIcon className="w-4 h-4 text-primary" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-muted-foreground">{t.send.yourBalance}</p>
+            <p className="text-base font-bold text-foreground tabular-nums">
+              {formatWalletBalance(balance, selectedWallet)}
+            </p>
+          </div>
+          {wallets.length > 1 && (
+            <Select value={selectedWallet} onValueChange={setSelectedWallet}>
+              <SelectTrigger className="h-8 w-auto border-primary/30 rounded-lg text-xs font-semibold bg-primary/5 gap-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {wallets.map((w) => (
+                  <SelectItem key={w.currency} value={w.currency}>
+                    {w.currency} — {parseFloat(w.balance || "0").toLocaleString()}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+
+        {/* Tab switcher: Internal vs External */}
+        <div className="flex gap-2 p-1 bg-muted rounded-xl">
+          <button
+            type="button"
+            onClick={() => setDestination(INTERNAL_KEY)}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+              isInternal
+                ? "bg-card shadow text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <span className="text-base">🏦</span>
+            {t.send.internalTransfer}
+          </button>
+          <button
+            type="button"
+            onClick={() => { if (isInternal) setDestination(""); }}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+              !isInternal
+                ? "bg-card shadow text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Globe className="w-4 h-4" />
+            Mobile Money
+          </button>
+        </div>
+
+        {/* INTERNAL TRANSFER */}
+        {isInternal && (
+          <div className="bg-card border border-border rounded-2xl overflow-hidden">
+            <div className="px-5 pt-5 pb-2">
+              <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                <span className="text-sm font-semibold">{t.send.zeroFeeMsg}</span>
+              </div>
+            </div>
+
+            <div className="px-5 pb-5 space-y-4 pt-3">
+              {/* Recipient */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t.send.recipientLabel}</label>
+                <Input
+                  placeholder="email / +237600000000 / @username"
+                  value={internalIdentifier}
+                  onChange={e => setInternalIdentifier(e.target.value)}
+                  className="h-12 rounded-xl"
+                />
               </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium">{t.send.destination}</label>
+              {/* Amount */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {t.send.amountLabel} ({selectedWallet})
+                </label>
+                <div className="flex items-center gap-2 border border-border rounded-xl px-4 py-2 focus-within:border-primary transition-colors h-14">
+                  <span className="text-sm font-semibold text-muted-foreground shrink-0">{selectedWallet}</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="0"
+                    className="flex-1 text-2xl font-bold bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground/30"
+                    value={internalAmount}
+                    onChange={e => setInternalAmount(e.target.value.replace(/[^0-9.]/g, ""))}
+                  />
+                </div>
+                {internalAmountValue > balance && (
+                  <p className="text-xs text-red-500 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" /> Solde insuffisant ({formatWalletBalance(balance, selectedWallet)} disponible)
+                  </p>
+                )}
+              </div>
+
+              {/* Fee info */}
+              <div className="flex items-center justify-between py-2 px-3 bg-green-500/5 border border-green-500/20 rounded-xl text-sm">
+                <span className="text-muted-foreground">{t.send.confirmFee}</span>
+                <span className="font-bold text-green-500">{t.send.free}</span>
+              </div>
+
+              <Button
+                className="w-full h-12 bg-primary hover:bg-primary/90 text-black font-bold rounded-xl"
+                size="lg"
+                onClick={() => {
+                  if (!internalIdentifier.trim() || !parseFloat(internalAmount)) {
+                    internalMutation.mutate();
+                    return;
+                  }
+                  setShowInternalConfirmDialog(true);
+                }}
+                disabled={internalMutation.isPending || !internalIdentifier.trim() || internalAmountValue <= 0 || internalAmountValue > balance}
+              >
+                {internalMutation.isPending
+                  ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Envoi...</>
+                  : <><Send className="w-4 h-4 mr-2" />{t.send.sendButton}</>
+                }
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* EXTERNAL TRANSFER */}
+        {!isInternal && (
+          <div className="bg-card border border-border rounded-2xl overflow-hidden">
+            <div className="px-5 pt-5 pb-5 space-y-5">
+
+              {/* Country select */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t.send.destination}</label>
                 <Select
-                  value={destination}
+                  value={destination === INTERNAL_KEY ? "" : destination}
                   onValueChange={(val) => {
                     setDestination(val);
-                    if (val !== INTERNAL_KEY) {
-                      form.setValue("countryId", val);
-                    }
+                    form.setValue("countryId", val);
                   }}
                 >
-                  <SelectTrigger className="h-14 border-[#F0B90B]/50 ring-offset-background focus:ring-2 focus:ring-[#F0B90B]">
-                    {destination === INTERNAL_KEY ? (
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <span className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-xl shrink-0">🏦</span>
-                        <span className="font-semibold truncate">{t.send.internalTransfer}</span>
-                      </div>
-                    ) : selectedCountry ? (
+                  <SelectTrigger className="h-14 rounded-xl border-border">
+                    {selectedCountry ? (
                       <div className="flex items-center gap-3 flex-1 min-w-0">
                         <span className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-xl shrink-0">
                           {COUNTRY_FLAGS[selectedCountry.name] || "🌍"}
                         </span>
-                        <span className="font-semibold truncate">{selectedCountry.name}</span>
-                        <span className="text-muted-foreground text-sm shrink-0">({selectedCountry.currency})</span>
+                        <div className="text-left min-w-0">
+                          <p className="font-semibold truncate text-sm">{selectedCountry.name}</p>
+                          <p className="text-xs text-muted-foreground">{selectedCountry.currency}</p>
+                        </div>
                       </div>
                     ) : (
                       <span className="text-muted-foreground text-sm">{t.send.selectDestination}</span>
                     )}
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={INTERNAL_KEY}>
-                      <span className="flex items-center gap-2">
-                        <span>🏦</span>
-                        <span>{t.send.internalTransfer}</span>
-                      </span>
-                    </SelectItem>
                     {isLoadingConfig
-                      ? <SelectItem key="__loading__" value="__loading__" disabled>{t.send.loading}</SelectItem>
+                      ? <SelectItem value="__loading__" disabled>{t.send.loading}</SelectItem>
                       : (countries ?? []).map(country => (
-                      <SelectItem key={country.id} value={country.id}>
-                        <span className="flex items-center gap-2">
-                          <span>{COUNTRY_FLAGS[country.name] || "🌍"}</span>
-                          <span>{country.name}</span>
-                          <span className="text-muted-foreground text-xs">({country.currency})</span>
-                        </span>
-                      </SelectItem>
-                    ))
+                        <SelectItem key={country.id} value={country.id}>
+                          <span className="flex items-center gap-2">
+                            <span>{COUNTRY_FLAGS[country.name] || "🌍"}</span>
+                            <span>{country.name}</span>
+                            <span className="text-muted-foreground text-xs">({country.currency})</span>
+                          </span>
+                        </SelectItem>
+                      ))
                     }
                   </SelectContent>
                 </Select>
               </div>
 
-              {isInternal ? (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 px-3 py-2 bg-green-50 dark:bg-green-950/30 rounded-lg border border-green-200 dark:border-green-800">
-                    <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
-                    <span className="text-green-700 dark:text-green-300 text-sm font-medium">{t.send.zeroFeeMsg}</span>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">{t.send.recipientLabel}</label>
-                    <Input
-                      placeholder="exemple@email.com / +237600000000 / username"
-                      value={internalIdentifier}
-                      onChange={e => setInternalIdentifier(e.target.value)}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">{t.send.amountLabel} ({selectedWallet})</label>
-                    <Input
-                      type="number"
-                      placeholder=""
-                      className="text-xl h-12"
-                      value={internalAmount}
-                      onChange={e => setInternalAmount(e.target.value)}
-                    />
-                  </div>
-
-                  <Button
-                    className="w-full bg-[#F0B90B] hover:bg-[#D4A30A] text-black font-bold"
-                    size="lg"
-                    onClick={() => {
-                      if (!internalIdentifier.trim() || !parseFloat(internalAmount)) {
-                        internalMutation.mutate();
-                        return;
-                      }
-                      setShowInternalConfirmDialog(true);
-                    }}
-                    disabled={internalMutation.isPending}
-                  >
-                    {internalMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
-                    {t.send.sendButton}
-                  </Button>
-                </div>
-              ) : (
+              {/* Operator grid */}
+              {selectedCountry && (
                 <Form {...form}>
-                  <form onSubmit={form.handleSubmit((d) => { setPendingExternalData({ ...d, countryId: destination }); setShowConfirmDialog(true); })} className="space-y-4 min-w-0 w-full">
-                    {!selectedCountry ? (
-                      <p className="text-sm text-muted-foreground py-2">{t.send.chooseDestFirst}</p>
-                    ) : selectedCountry.operators.length === 0 ? (
-                      <div className="bg-muted/50 rounded-lg p-3 text-center text-sm text-muted-foreground">
+                  <form
+                    id="external-form"
+                    onSubmit={form.handleSubmit((d) => {
+                      setPendingExternalData({ ...d, countryId: destination });
+                      setShowConfirmDialog(true);
+                    })}
+                    className="space-y-5"
+                  >
+                    {selectedCountry.operators.length === 0 ? (
+                      <div className="text-center py-4 text-sm text-muted-foreground bg-muted/30 rounded-xl">
                         {t.send.noOperator}
                       </div>
                     ) : (
@@ -428,39 +460,36 @@ export default function SendMoneyPage() {
                         control={form.control}
                         name="operatorId"
                         render={({ field }) => (
-                          <FormItem className="min-w-0">
-                            <FormLabel>{t.send.operatorLabel}</FormLabel>
-                            <div className="w-full overflow-hidden">
-                            <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
-                              {selectedCountry.operators.map((op) => {
-                                const logo = getOperatorLogo(op.name);
-                                const isSelected = field.value === op.id;
-                                return (
-                                  <button
-                                    key={op.id}
-                                    type="button"
-                                    data-testid={`button-operator-${op.id}`}
-                                    onClick={() => field.onChange(op.id)}
-                                    className={`flex-shrink-0 flex flex-col items-center justify-center gap-2 w-28 h-24 rounded-xl border-2 transition-all cursor-pointer ${
-                                      isSelected
-                                        ? "border-primary bg-primary/10 shadow-sm"
-                                        : "border-border bg-white hover:border-primary/40 hover:bg-muted/30"
-                                    }`}
-                                  >
-                                    {logo ? (
-                                      <img src={logo} alt={op.name} className="w-12 h-12 object-contain rounded-lg" />
-                                    ) : (
-                                      <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                                        <Smartphone className="w-6 h-6 text-primary" />
-                                      </div>
-                                    )}
-                                    <span className={`text-xs font-medium text-center leading-tight px-1 ${isSelected ? "text-primary" : "text-foreground"}`}>
-                                      {op.name}
-                                    </span>
-                                  </button>
-                                );
-                              })}
-                            </div>
+                          <FormItem>
+                            <FormLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t.send.operatorLabel}</FormLabel>
+                            <div className="overflow-hidden">
+                              <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+                                {selectedCountry.operators.map((op) => {
+                                  const logo = getOperatorLogo(op.name);
+                                  const isSelected = field.value === op.id;
+                                  return (
+                                    <button
+                                      key={op.id}
+                                      type="button"
+                                      data-testid={`button-operator-${op.id}`}
+                                      onClick={() => field.onChange(op.id)}
+                                      className={`flex-shrink-0 flex flex-col items-center justify-center gap-2 w-24 h-20 rounded-2xl border-2 transition-all cursor-pointer ${
+                                        isSelected
+                                          ? "border-primary bg-primary/10 shadow-md"
+                                          : "border-border bg-card/50 hover:border-primary/40"
+                                      }`}
+                                    >
+                                      {logo
+                                        ? <img src={logo} alt={op.name} className="w-10 h-10 object-contain rounded-xl" />
+                                        : <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center"><Smartphone className="w-5 h-5 text-primary" /></div>
+                                      }
+                                      <span className={`text-[11px] font-semibold text-center leading-tight px-1 ${isSelected ? "text-primary" : "text-foreground"}`}>
+                                        {op.name}
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
                             </div>
                             <FormMessage />
                           </FormItem>
@@ -468,132 +497,156 @@ export default function SendMoneyPage() {
                       />
                     )}
 
-                    <div className="grid sm:grid-cols-2 gap-4">
+                    {/* Amount */}
+                    <FormField
+                      control={form.control}
+                      name="amount"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            {t.send.sendAmountLabel} ({selectedCountry?.currency || "XAF"})
+                          </FormLabel>
+                          <FormControl>
+                            <div className="flex items-center gap-2 border border-border rounded-xl px-4 py-2 focus-within:border-primary transition-colors h-14">
+                              <span className="text-sm font-semibold text-muted-foreground shrink-0">
+                                {selectedCountry?.currency || senderCurrency}
+                              </span>
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                placeholder="0"
+                                className="flex-1 text-2xl font-bold bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground/30"
+                                value={field.value}
+                                onChange={e => field.onChange(e.target.value.replace(/[^0-9.]/g, ""))}
+                                data-testid="input-amount"
+                              />
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                          {amountValue > 0 && amountValue < minTransfer && (
+                            <p className="text-xs text-red-500 flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3" />
+                              {t.send.minAmount} {minTransfer.toLocaleString()} {senderCurrency}
+                            </p>
+                          )}
+                          {amountValue > 0 && amountValue > maxTransfer && (
+                            <p className="text-xs text-red-500 flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3" />
+                              {t.send.maxAmount} {maxTransfer.toLocaleString()} {senderCurrency}
+                            </p>
+                          )}
+                        </FormItem>
+                      )}
+                    />
+
+                    {/* Fee preview inline */}
+                    {amountValue > 0 && selectedOperator && (
+                      <div className="rounded-xl border border-border bg-muted/20 overflow-hidden divide-y divide-border text-sm">
+                        <div className="flex items-center justify-between px-4 py-2.5">
+                          <span className="text-muted-foreground">{t.send.summaryAmount}</span>
+                          <span className="font-semibold tabular-nums">{formatWalletBalance(amountValue, localCurrency)}</span>
+                        </div>
+                        <div className="flex items-center justify-between px-4 py-2.5">
+                          <span className="text-muted-foreground flex items-center gap-1.5">
+                            <TrendingDown className="w-3.5 h-3.5" />
+                            {t.send.summaryFee}
+                            {feePreview.isLoading ? <Loader2 className="w-3 h-3 animate-spin ml-1" /> : feePreview.feePercentage > 0 ? ` (${feePreview.feePercentage}%)` : ""}
+                          </span>
+                          <span className="font-semibold text-orange-500 tabular-nums">
+                            - {formatWalletBalance(feePreview.feeAmount, localCurrency)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between px-4 py-2.5 bg-muted/30">
+                          <span className="font-semibold">{t.send.summaryNet}</span>
+                          <span className="font-bold tabular-nums">{formatWalletBalance(amountValue - feePreview.feeAmount, localCurrency)}</span>
+                        </div>
+                        <div className="flex items-center justify-between px-4 py-2 text-xs text-muted-foreground">
+                          <span>{t.send.balanceAfter}</span>
+                          <span className={amountValue > balance ? "text-red-500 font-semibold" : ""}>
+                            {formatWalletBalance(Math.max(0, balance - amountValue), localCurrency)}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {amountValue > balance && (
+                      <Alert variant="destructive" className="rounded-xl">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>{t.send.insufficientBalance}</AlertDescription>
+                      </Alert>
+                    )}
+
+                    {currencyMismatch && (
+                      <Alert variant="destructive" className="rounded-xl">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>
+                          Compte sélectionné en <strong>{selectedWallet}</strong> mais {selectedCountry?.name} utilise <strong>{selectedCountry?.currency}</strong>.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
+                    {/* Recipient fields */}
+                    <div className="grid grid-cols-2 gap-3">
                       <FormField control={form.control} name="recipientName" render={({ field }) => (
                         <FormItem>
-                          <FormLabel>{t.send.recipientName}</FormLabel>
-                          <FormControl><Input placeholder="Jean Dupont" {...field} /></FormControl>
+                          <FormLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t.send.recipientName}</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Jean Dupont" {...field} className="h-11 rounded-xl" />
+                          </FormControl>
                           <FormMessage />
                         </FormItem>
                       )} />
                       <FormField control={form.control} name="recipientPhone" render={({ field }) => (
                         <FormItem>
-                          <FormLabel>{t.send.recipientPhone}</FormLabel>
-                      <FormControl><Input placeholder="XXXXXXXXX" inputMode="tel" {...field} /></FormControl>
+                          <FormLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t.send.recipientPhone}</FormLabel>
+                          <FormControl>
+                            <Input placeholder="XXXXXXXXX" inputMode="tel" {...field} className="h-11 rounded-xl" />
+                          </FormControl>
                           <FormMessage />
                         </FormItem>
                       )} />
                     </div>
 
-                    <FormField control={form.control} name="amount" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t.send.sendAmountLabel} ({selectedCountry?.currency || "XAF"})</FormLabel>
-                        <FormControl>
-                          <Input type="text" inputMode="decimal" placeholder="" className="text-xl h-12" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                        {amountValue > 0 && amountValue < minTransfer && (
-                          <p className="text-sm text-destructive flex items-center gap-1">
-                            <AlertCircle className="w-3 h-3" />
-                            {t.send.minAmount} {minTransfer.toLocaleString()} {senderCurrency}
-                          </p>
-                        )}
-                        {amountValue > 0 && amountValue > maxTransfer && (
-                          <p className="text-sm text-destructive flex items-center gap-1">
-                            <AlertCircle className="w-3 h-3" />
-                            {t.send.maxAmount} {maxTransfer.toLocaleString()} {senderCurrency}
-                          </p>
-                        )}
-                      </FormItem>
-                    )} />
-
-                    {currencyMismatch && (
-                      <Alert variant="destructive">
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertDescription>
-                          Transaction non autorisée — Le compte sélectionné est en <strong>{selectedWallet}</strong> mais {selectedCountry?.name} utilise <strong>{selectedCountry?.currency}</strong>. Veuillez choisir le bon compte.
-                        </AlertDescription>
-                      </Alert>
-                    )}
-
-                    <Button type="submit" className="w-full bg-[#F0B90B] hover:bg-[#D4A30A] text-black font-bold" size="lg" disabled={!canSubmitExternal}>
-                      {externalMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
-                      {t.send.sendButton} {amountValue > 0 ? formatCurrency(amountValue, localCurrency as SupportedCurrency) : ""}
+                    <Button
+                      type="submit"
+                      form="external-form"
+                      className="w-full h-12 bg-primary hover:bg-primary/90 text-black font-bold rounded-xl"
+                      size="lg"
+                      disabled={!canSubmitExternal}
+                    >
+                      {externalMutation.isPending
+                        ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Envoi...</>
+                        : <><Send className="w-4 h-4 mr-2" />{t.send.sendButton}{amountValue > 0 ? ` ${formatCurrency(amountValue, localCurrency as SupportedCurrency)}` : ""}</>
+                      }
                     </Button>
                   </form>
                 </Form>
               )}
-            </CardContent>
-          </Card>
 
-          <div className="space-y-4">
-            <Card className="bg-gradient-to-br from-blue-500/10 to-transparent border-blue-500/20">
-              <CardContent className="p-6">
-                <p className="text-sm text-muted-foreground mb-1">{t.send.yourBalance} ({localCurrency})</p>
-                <p className="text-2xl font-bold text-foreground">
-                  {formatWalletBalance(balance, localCurrency)}
-                </p>
-              </CardContent>
-            </Card>
-
-            {!isInternal && amountValue > 0 && selectedOperator && (
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">
-                  {t.send.summary} {feePreview.isLoading && <Loader2 className="inline w-3 h-3 ml-1 animate-spin" />}
-                </p>
-                <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
-                  <div className="flex items-center justify-between px-4 py-3.5">
-                    <span className="text-sm text-muted-foreground">{t.send.summaryAmount}</span>
-                    <span className="text-sm font-medium">{formatWalletBalance(amountValue, localCurrency)}</span>
-                  </div>
-                  <div className="flex items-center justify-between px-4 py-3.5">
-                    <span className="text-sm text-muted-foreground">{t.send.summaryFee} ({feePreview.feePercentage || selectedOperator.feePercentage}%)</span>
-                    <span className="text-sm font-medium text-orange-500">- {formatWalletBalance(feePreview.feeAmount, localCurrency)}</span>
-                  </div>
-                  <div className="flex items-center justify-between px-4 py-3.5 bg-muted/30">
-                    <span className="text-sm font-semibold text-foreground">{t.send.summaryNet}</span>
-                    <span className="text-sm font-bold text-foreground">{formatWalletBalance(amountValue - feePreview.feeAmount, localCurrency)}</span>
-                  </div>
-                  <div className="flex items-center justify-between px-4 py-3 text-xs text-muted-foreground">
-                    <span>{t.send.balanceAfter}</span>
-                    <span className={amountValue > balance ? "text-destructive font-medium" : ""}>
-                      {formatWalletBalance(Math.max(0, balance - amountValue), localCurrency)}
-                    </span>
-                  </div>
+              {!selectedCountry && (
+                <div className="py-8 text-center">
+                  <Globe className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+                  <p className="text-sm text-muted-foreground">{t.send.chooseDestFirst}</p>
                 </div>
-                {amountValue > balance && (
-                  <Alert variant="destructive" className="mt-2">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>{t.send.insufficientBalance}</AlertDescription>
-                  </Alert>
-                )}
-              </div>
-            )}
-
-            {isInternal && (
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">{t.send.advantages}</p>
-                <div className="rounded-xl border border-green-500/30 bg-green-50/50 dark:bg-green-950/10 overflow-hidden divide-y divide-green-500/20">
-                  <div className="flex items-center gap-3 px-4 py-3.5">
-                    <span className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center text-green-600 text-xs font-bold shrink-0">✓</span>
-                    <span className="text-sm text-muted-foreground">{t.send.advantageFree}</span>
-                  </div>
-                  <div className="flex items-center gap-3 px-4 py-3.5">
-                    <span className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center text-green-600 text-xs font-bold shrink-0">✓</span>
-                    <span className="text-sm text-muted-foreground">{t.send.advantageInstant}</span>
-                  </div>
-                  <div className="flex items-center gap-3 px-4 py-3.5">
-                    <span className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center text-green-600 text-xs font-bold shrink-0">✓</span>
-                    <span className="text-sm text-muted-foreground">{t.send.advantageSecure}</span>
-                  </div>
-                </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* Internal advantages */}
+        {isInternal && (
+          <div className="rounded-xl border border-green-500/20 bg-green-500/5 divide-y divide-green-500/10 overflow-hidden">
+            {[t.send.advantageFree, t.send.advantageInstant, t.send.advantageSecure].map((txt, i) => (
+              <div key={i} className="flex items-center gap-3 px-4 py-3">
+                <span className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center text-green-600 text-xs font-bold shrink-0">✓</span>
+                <span className="text-sm text-muted-foreground">{txt}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Dialog confirmation transfert interne */}
+      {/* Internal confirm */}
       <BottomSheet open={showInternalConfirmDialog} onOpenChange={setShowInternalConfirmDialog}>
         <BottomSheetContent>
           <BottomSheetHeader>
@@ -610,19 +663,17 @@ export default function SendMoneyPage() {
             </div>
             <div className="flex items-center justify-between px-4 py-3.5">
               <span className="text-sm text-muted-foreground">{t.send.confirmAmount}</span>
-              <span className="text-sm font-medium">{formatWalletBalance(parseFloat(internalAmount) || 0, selectedWallet)}</span>
+              <span className="text-sm font-bold tabular-nums">{formatWalletBalance(parseFloat(internalAmount) || 0, selectedWallet)}</span>
             </div>
-            <div className="flex items-center justify-between px-4 py-3.5 bg-muted/30">
-              <span className="text-sm font-semibold text-foreground">{t.send.confirmFee}</span>
+            <div className="flex items-center justify-between px-4 py-3.5 bg-green-500/5">
+              <span className="text-sm font-semibold">{t.send.confirmFee}</span>
               <span className="text-base font-bold text-green-500">{t.send.free}</span>
             </div>
           </div>
           <BottomSheetFooter>
-            <Button variant="outline" className="flex-1" onClick={() => setShowInternalConfirmDialog(false)}>
-              {t.send.back}
-            </Button>
+            <Button variant="outline" className="flex-1" onClick={() => setShowInternalConfirmDialog(false)}>{t.send.back}</Button>
             <Button
-              className="flex-1 bg-[#F0B90B] hover:bg-[#D4A30A] text-black font-bold"
+              className="flex-1 bg-primary hover:bg-primary/90 text-black font-bold"
               onClick={() => internalMutation.mutate()}
               disabled={internalMutation.isPending}
               data-testid="button-final-confirm-internal"
@@ -634,7 +685,7 @@ export default function SendMoneyPage() {
         </BottomSheetContent>
       </BottomSheet>
 
-      {/* Dialog confirmation transfert externe */}
+      {/* External confirm */}
       <BottomSheet open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
         <BottomSheetContent>
           <BottomSheetHeader>
@@ -655,25 +706,23 @@ export default function SendMoneyPage() {
             </div>
             <div className="flex items-center justify-between px-4 py-3.5">
               <span className="text-sm text-muted-foreground">{t.send.confirmSentAmount}</span>
-              <span className="text-sm font-medium">{formatWalletBalance(amountValue, selectedWallet)}</span>
+              <span className="text-sm font-bold tabular-nums">{formatWalletBalance(amountValue, selectedWallet)}</span>
             </div>
             {feePreview.feeAmount > 0 && (
               <div className="flex items-center justify-between px-4 py-3.5">
                 <span className="text-sm text-muted-foreground">{t.send.confirmFeePercent} ({feePreview.feePercentage}%)</span>
-                <span className="text-sm font-medium text-red-500">-{formatWalletBalance(feePreview.feeAmount, selectedWallet)}</span>
+                <span className="text-sm font-semibold text-red-500 tabular-nums">-{formatWalletBalance(feePreview.feeAmount, selectedWallet)}</span>
               </div>
             )}
-            <div className="flex items-center justify-between px-4 py-3.5 bg-muted/30">
-              <span className="text-sm font-semibold text-foreground">{t.send.confirmNetReceived}</span>
-              <span className="text-base font-bold text-green-500">{formatWalletBalance(amountValue - feePreview.feeAmount, selectedWallet)}</span>
+            <div className="flex items-center justify-between px-4 py-3.5 bg-green-500/5">
+              <span className="text-sm font-semibold">{t.send.confirmNetReceived}</span>
+              <span className="text-base font-bold text-green-500 tabular-nums">{formatWalletBalance(amountValue - feePreview.feeAmount, selectedWallet)}</span>
             </div>
           </div>
           <BottomSheetFooter>
-            <Button variant="outline" className="flex-1" onClick={() => setShowConfirmDialog(false)}>
-              {t.send.back}
-            </Button>
+            <Button variant="outline" className="flex-1" onClick={() => setShowConfirmDialog(false)}>{t.send.back}</Button>
             <Button
-              className="flex-1 bg-[#F0B90B] hover:bg-[#D4A30A] text-black font-bold"
+              className="flex-1 bg-primary hover:bg-primary/90 text-black font-bold"
               onClick={() => { if (pendingExternalData) externalMutation.mutate(pendingExternalData); }}
               disabled={externalMutation.isPending}
               data-testid="button-final-confirm-external"

@@ -1,6 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/dashboard-layout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -10,7 +9,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest, queryClient, getAuthHeaders } from "@/lib/queryClient";
 import type { User, SupportedCurrency } from "@shared/schema";
-import { CreditCard, Loader2, Globe, AlertCircle, Phone, CheckCircle, XCircle, ArrowLeft, ArrowRight, Smartphone, ExternalLink, Hash, Clock, Copy } from "lucide-react";
+import { CreditCard, Loader2, Globe, AlertCircle, Phone, CheckCircle, XCircle, ArrowLeft, ArrowRight, Smartphone, ExternalLink, Hash, Clock, Copy, TrendingDown } from "lucide-react";
 import { useLanguage } from "@/lib/language";
 import { BottomSheet, BottomSheetContent, BottomSheetHeader, BottomSheetTitle, BottomSheetFooter } from "@/components/ui/bottom-sheet";
 import { getOperatorLogo } from "@/lib/operator-logos";
@@ -19,7 +18,6 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { formatCurrency } from "@/lib/currency";
 import { getCountryFlagEmoji } from "@/lib/country-flags";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Progress } from "@/components/ui/progress";
 
 interface OperatorConfig {
   id: string;
@@ -57,6 +55,8 @@ const depositFormSchema = z.object({
 
 type DepositFormData = z.infer<typeof depositFormSchema>;
 
+const QUICK_AMOUNTS = [5000, 10000, 25000, 50000, 100000];
+
 export default function DepositPage() {
   const { toast } = useToast();
   const { t } = useLanguage();
@@ -83,21 +83,21 @@ export default function DepositPage() {
   const [isCancelling, setIsCancelling] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pendingDepositData, setPendingDepositData] = useState<DepositFormData | null>(null);
-  
+
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
-  
+
   const { data: countries, isLoading: isLoadingConfig } = useQuery<CountryConfig[]>({
     queryKey: ["/api/transfers/config?type=deposit"],
   });
 
   const form = useForm<DepositFormData>({
     resolver: zodResolver(depositFormSchema),
-    defaultValues: { 
+    defaultValues: {
       countryId: "",
       operatorId: "",
       phoneNumber: "",
-      amount: "", 
-      description: "" 
+      amount: "",
+      description: ""
     },
   });
 
@@ -106,7 +106,7 @@ export default function DepositPage() {
   const watchedAmount = form.watch("amount");
   const watchedPhoneNumber = form.watch("phoneNumber");
   const [prevCountryId, setPrevCountryId] = useState<string>("");
-  
+
   const selectedCountry = useMemo(() => {
     return countries?.find(c => c.id === watchedCountryId);
   }, [countries, watchedCountryId]);
@@ -346,25 +346,33 @@ export default function DepositPage() {
       .catch(() => toast({ title: t.deposit.refCopyFail, variant: "destructive" }));
   };
 
-  const progressPercentage = (currentStep / 3) * 100;
+  const amountNum = parseFloat(watchedAmount) || 0;
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="max-w-lg mx-auto space-y-4 pb-8">
+
+        {/* Header */}
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">{t.deposit.title}</h1>
-          <p className="text-muted-foreground">{t.deposit.subtitle}</p>
+          <h1 className="text-xl font-bold text-foreground">{t.deposit.title}</h1>
+          <p className="text-sm text-muted-foreground">{t.deposit.subtitle}</p>
         </div>
 
-        <Card className="bg-gradient-to-br from-green-500/10 to-transparent border-green-500/20">
-          <CardContent className="p-6">
-            <p className="text-sm text-muted-foreground mb-1">{t.deposit.currentBalance}</p>
-            <p className="text-3xl font-bold text-foreground">{formatCurrency(user?.balance || "0", (user?.preferredCurrency || "XAF") as SupportedCurrency)}</p>
-          </CardContent>
-        </Card>
+        {/* Balance bar */}
+        <div className="flex items-center gap-3 bg-gradient-to-r from-green-500/10 to-transparent border border-green-500/20 rounded-2xl px-4 py-3">
+          <div className="w-9 h-9 rounded-full bg-green-500/15 flex items-center justify-center shrink-0">
+            <CreditCard className="w-4 h-4 text-green-500" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-muted-foreground">{t.deposit.currentBalance}</p>
+            <p className="text-base font-bold text-foreground tabular-nums">
+              {formatCurrency(user?.balance || "0", (user?.preferredCurrency || "XAF") as SupportedCurrency)}
+            </p>
+          </div>
+        </div>
 
         {isLoadingConfig ? (
-          <div className="flex items-center justify-center py-12">
+          <div className="flex items-center justify-center py-20">
             <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
           </div>
         ) : !countries?.length ? (
@@ -373,39 +381,52 @@ export default function DepositPage() {
             <AlertDescription>{t.deposit.noCountry}</AlertDescription>
           </Alert>
         ) : (
-          <Card>
-            <CardHeader>
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{t.deposit.sectionLabel}</p>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <CreditCard className="w-4 h-4 text-muted-foreground" />
-                {t.deposit.cardTitle}
-              </CardTitle>
-              <CardDescription>{t.deposit.cardDesc}</CardDescription>
-              
-              {!showValidationMessage && (
-                <div className="pt-4">
-                  <div className="flex justify-between text-sm mb-2">
-                    {STEPS.map((step) => (
-                      <div key={step.id} className={`flex flex-col items-center ${step.id === currentStep ? "text-primary font-medium" : step.id < currentStep ? "text-green-500" : "text-muted-foreground"}`}>
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-1 ${step.id === currentStep ? "bg-primary text-primary-foreground" : step.id < currentStep ? "bg-green-500 text-white" : "bg-muted text-muted-foreground"}`}>
-                          {step.id < currentStep ? <CheckCircle className="w-4 h-4" /> : step.id}
-                        </div>
-                        <span className="text-xs hidden sm:block">{step.title}</span>
+          <div className="bg-card border border-border rounded-2xl overflow-hidden">
+
+            {/* Step indicator */}
+            {!showValidationMessage && (
+              <div className="px-6 pt-5 pb-2">
+                <div className="flex items-center justify-center">
+                  {[1, 2, 3].map((step, idx) => (
+                    <div key={step} className="flex items-center">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${
+                        step < currentStep
+                          ? "bg-green-500 text-white"
+                          : step === currentStep
+                          ? "bg-primary text-black"
+                          : "bg-muted text-muted-foreground"
+                      }`}>
+                        {step < currentStep ? <CheckCircle className="w-4 h-4" /> : step}
                       </div>
-                    ))}
-                  </div>
-                  <Progress value={progressPercentage} className="h-2" />
+                      {idx < 2 && (
+                        <div className={`h-px w-16 transition-all duration-300 ${step < currentStep ? "bg-green-500" : "bg-border"}`} />
+                      )}
+                    </div>
+                  ))}
                 </div>
-              )}
-            </CardHeader>
-            <CardContent>
+                <div className="flex justify-between mt-2">
+                  {STEPS.map((s) => (
+                    <span key={s.id} className={`text-[10px] font-semibold uppercase tracking-wide transition-colors ${
+                      s.id === currentStep ? "text-primary" : s.id < currentStep ? "text-green-500" : "text-muted-foreground/50"
+                    }`}>
+                      {s.title}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="px-6 pb-6 pt-4">
+              {/* STATUS SCREENS */}
               {showValidationMessage ? (
-                <div className="text-center py-8 space-y-4">
+                <div className="text-center py-4 space-y-5">
+
+                  {/* OTP required */}
                   {paymentStatus === "pending" && otpRequired && (
                     <>
-                      <div className="relative flex items-center justify-center pt-2">
-                        <div className="absolute w-24 h-24 rounded-full bg-amber-500/10 animate-pulse" />
-                        <div className="w-16 h-16 rounded-full overflow-hidden bg-white border-2 border-border shadow-md flex items-center justify-center relative z-10">
+                      <div className="relative flex items-center justify-center py-2">
+                        <div className="absolute w-20 h-20 rounded-full bg-amber-500/10 animate-pulse" />
+                        <div className="w-16 h-16 rounded-full overflow-hidden bg-white border-2 border-amber-200 shadow-lg flex items-center justify-center relative z-10">
                           {selectedOperator && getOperatorLogo(selectedOperator.name) ? (
                             <img src={getOperatorLogo(selectedOperator.name)!} alt={selectedOperator.name} className="w-full h-full object-cover" />
                           ) : (
@@ -414,118 +435,83 @@ export default function DepositPage() {
                         </div>
                       </div>
                       <div>
-                        <h3 className="text-xl font-bold text-foreground">{t.deposit.otpRequired}</h3>
-                        <p className="text-muted-foreground text-sm mt-1">
+                        <h3 className="text-lg font-bold text-foreground">{t.deposit.otpRequired}</h3>
+                        <p className="text-sm text-muted-foreground mt-1">
                           {otpType === "ussd" && otpUssdCode ? t.deposit.otpUssd : t.deposit.otpSms}
                         </p>
                       </div>
-                      <div className="w-full bg-amber-50 dark:bg-amber-950/20 rounded-xl border border-amber-200/50 dark:border-amber-800/30 px-6 py-4 text-center">
-                        <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
+                      <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3 text-center">
+                        <p className="text-xl font-bold text-amber-500 tabular-nums">
                           {watchedAmount ? formatCurrency(parseFloat(watchedAmount), (user?.preferredCurrency || "XAF") as SupportedCurrency) : "—"}
                         </p>
-                        {selectedOperator && <p className="text-sm text-muted-foreground mt-1">via {selectedOperator.name}</p>}
+                        {selectedOperator && <p className="text-xs text-muted-foreground mt-0.5">via {selectedOperator.name}</p>}
                       </div>
                       {otpType === "ussd" && otpUssdCode && (
-                        <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded-xl px-5 py-4 inline-block mx-auto">
+                        <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded-xl px-5 py-3 inline-block mx-auto">
                           <p className="text-2xl font-mono font-bold tracking-widest text-amber-700 dark:text-amber-300" data-testid="text-ussd-code">{otpUssdCode}</p>
                         </div>
                       )}
                       <div className="space-y-3 w-full max-w-xs mx-auto">
-                        <Input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={8} placeholder="Ex : 123456" value={otpCode} onChange={e => setOtpCode(e.target.value.replace(/\D/g, ""))} className="text-center text-2xl font-mono tracking-widest h-14" data-testid="input-otp-code" autoFocus />
+                        <Input
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          maxLength={8}
+                          placeholder="Ex : 123456"
+                          value={otpCode}
+                          onChange={e => setOtpCode(e.target.value.replace(/\D/g, ""))}
+                          className="text-center text-2xl font-mono tracking-widest h-14"
+                          data-testid="input-otp-code"
+                          autoFocus
+                        />
                         <Button className="w-full" size="lg" onClick={() => otpMutation.mutate()} disabled={otpCode.length < 4 || otpMutation.isPending} data-testid="button-confirm-otp">
                           {otpMutation.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{t.deposit.otpValidating}</> : t.deposit.otpConfirm}
                         </Button>
                       </div>
-                      <div className="flex items-center justify-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-bounce" style={{ animationDelay: "0ms" }} />
-                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-bounce" style={{ animationDelay: "150ms" }} />
-                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-bounce" style={{ animationDelay: "300ms" }} />
-                      </div>
-                      <div className="w-full space-y-1.5">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="flex items-center gap-1.5 text-muted-foreground"><Clock className="w-3.5 h-3.5" /> {t.deposit.expiration}</span>
-                          <span className="font-semibold tabular-nums text-foreground">{countdown}s</span>
-                        </div>
-                        <div className="h-2 bg-muted rounded-full overflow-hidden">
-                          <div className="h-full bg-amber-500 rounded-full transition-all duration-1000 ease-linear" style={{ width: `${(countdown / (8 * 60)) * 100}%` }} />
-                        </div>
-                      </div>
-                      {depositReference && (
-                        <div className="w-full bg-muted/30 rounded-lg p-3 text-left">
-                          <p className="text-xs text-muted-foreground">{t.deposit.reference}</p>
-                          <div className="flex items-center justify-between gap-2 mt-0.5">
-                            <p className="font-mono text-sm font-bold text-foreground">{depositReference}</p>
-                            <button onClick={copyRef} className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0" aria-label="Copier la référence" data-testid="button-copy-reference">
-                              <Copy className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      )}
+                      <CountdownBar countdown={countdown} max={8 * 60} color="amber" label={t.deposit.expiration} />
+                      <RefBadge ref_={depositReference} onCopy={copyRef} label={t.deposit.reference} />
                     </>
                   )}
 
+                  {/* Wave redirect */}
                   {paymentStatus === "pending" && !otpRequired && waveUrl && (
                     <>
-                      <div className="relative flex items-center justify-center pt-2">
-                        <div className="absolute w-24 h-24 rounded-full bg-blue-500/10 animate-pulse" />
-                        <div className="w-16 h-16 rounded-full overflow-hidden bg-white border-2 border-border shadow-md flex items-center justify-center relative z-10">
-                          <img src="https://wave.com/favicon.ico" alt="Wave" className="w-10 h-10 rounded-full" onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }} />
+                      <div className="relative flex items-center justify-center py-2">
+                        <div className="absolute w-20 h-20 rounded-full bg-blue-500/10 animate-pulse" />
+                        <div className="w-16 h-16 rounded-full overflow-hidden bg-white border-2 border-blue-200 shadow-lg flex items-center justify-center relative z-10">
+                          <img src="https://wave.com/favicon.ico" alt="Wave" className="w-10 h-10 rounded-full" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
                         </div>
                       </div>
                       <div>
-                        <h3 className="text-xl font-bold text-foreground">{t.deposit.waveTitle}</h3>
-                        <p className="text-muted-foreground text-sm mt-1">{t.deposit.waveDesc}</p>
+                        <h3 className="text-lg font-bold text-foreground">{t.deposit.waveTitle}</h3>
+                        <p className="text-sm text-muted-foreground mt-1">{t.deposit.waveDesc}</p>
                       </div>
-                      <div className="w-full bg-blue-50 dark:bg-blue-950/20 rounded-xl border border-blue-200/50 dark:border-blue-800/30 px-6 py-4 text-center">
-                        <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                      <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl px-4 py-3 text-center">
+                        <p className="text-xl font-bold text-blue-500 tabular-nums">
                           {watchedAmount ? formatCurrency(parseFloat(watchedAmount), (user?.preferredCurrency || "XAF") as SupportedCurrency) : "—"}
                         </p>
-                        <p className="text-sm text-muted-foreground mt-1">via Wave</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">via Wave</p>
                       </div>
                       <a href={waveUrl} target="_blank" rel="noopener noreferrer" data-testid="button-open-wave">
-                        <Button size="lg" className="bg-blue-600 hover:bg-blue-700 text-white gap-2 w-full max-w-xs">
-                          <ExternalLink className="w-5 h-5" />
+                        <Button size="lg" className="bg-blue-600 hover:bg-blue-700 text-white gap-2 w-full">
+                          <ExternalLink className="w-4 h-4" />
                           {t.deposit.waveButton}
                         </Button>
                       </a>
-                      <div className="flex items-center justify-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: "0ms" }} />
-                        <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: "150ms" }} />
-                        <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: "300ms" }} />
-                      </div>
-                      <div className="w-full space-y-1.5">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="flex items-center gap-1.5 text-muted-foreground"><Clock className="w-3.5 h-3.5" /> {t.deposit.expiration}</span>
-                          <span className="font-semibold tabular-nums text-foreground">{countdown}s</span>
-                        </div>
-                        <div className="h-2 bg-muted rounded-full overflow-hidden">
-                          <div className="h-full bg-blue-500 rounded-full transition-all duration-1000 ease-linear" style={{ width: `${(countdown / (8 * 60)) * 100}%` }} />
-                        </div>
-                      </div>
-                      <p className="text-xs text-muted-foreground">{t.deposit.txAutoCancel}</p>
-                      {depositReference && (
-                        <div className="w-full bg-muted/30 rounded-lg p-3 text-left">
-                          <p className="text-xs text-muted-foreground">{t.deposit.reference}</p>
-                          <div className="flex items-center justify-between gap-2 mt-0.5">
-                            <p className="font-mono text-sm font-bold text-foreground">{depositReference}</p>
-                            <button onClick={copyRef} className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0" aria-label="Copier la référence" data-testid="button-copy-reference">
-                              <Copy className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      )}
+                      <CountdownBar countdown={countdown} max={8 * 60} color="blue" label={t.deposit.expiration} />
+                      <RefBadge ref_={depositReference} onCopy={copyRef} label={t.deposit.reference} />
                       <Button variant="outline" size="sm" onClick={handleCancelDeposit} disabled={isCancelling} data-testid="button-cancel-deposit-wave" className="border-red-500/30 text-red-500 hover:bg-red-500/10">
-                        <XCircle className="w-4 h-4 mr-2" />
-                        {t.deposit.cancelPayment}
+                        <XCircle className="w-4 h-4 mr-2" />{t.deposit.cancelPayment}
                       </Button>
                     </>
                   )}
 
+                  {/* Pending (push notification) */}
                   {paymentStatus === "pending" && !otpRequired && !waveUrl && (
                     <>
-                      <div className="relative flex items-center justify-center pt-2">
-                        <div className="absolute w-24 h-24 rounded-full bg-blue-500/20 animate-ping" />
-                        <div className="w-16 h-16 rounded-full overflow-hidden bg-white border-2 border-border shadow-md flex items-center justify-center relative z-10">
+                      <div className="relative flex items-center justify-center py-2">
+                        <div className="absolute w-20 h-20 rounded-full bg-primary/10 animate-ping" style={{ animationDuration: "2s" }} />
+                        <div className="w-16 h-16 rounded-full overflow-hidden bg-white border-2 border-border shadow-lg flex items-center justify-center relative z-10">
                           {selectedOperator && getOperatorLogo(selectedOperator.name) ? (
                             <img src={getOperatorLogo(selectedOperator.name)!} alt={selectedOperator.name} className="w-full h-full object-cover" />
                           ) : (
@@ -534,87 +520,58 @@ export default function DepositPage() {
                         </div>
                       </div>
                       <div>
-                        <h3 className="text-xl font-bold text-foreground">{t.deposit.processingTitle}</h3>
-                        <p className="text-muted-foreground text-sm mt-1">{t.deposit.processingDesc}</p>
+                        <h3 className="text-lg font-bold text-foreground">{t.deposit.processingTitle}</h3>
+                        <p className="text-sm text-muted-foreground mt-1">{t.deposit.processingDesc}</p>
                       </div>
-                      <div className="w-full bg-blue-50 dark:bg-blue-950/20 rounded-xl border border-blue-200/50 dark:border-blue-800/30 px-6 py-4 text-center">
-                        <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                      <div className="bg-primary/10 border border-primary/20 rounded-xl px-4 py-3 text-center">
+                        <p className="text-xl font-bold text-primary tabular-nums">
                           {watchedAmount ? formatCurrency(parseFloat(watchedAmount), (user?.preferredCurrency || "XAF") as SupportedCurrency) : "—"}
                         </p>
-                        {selectedOperator && <p className="text-sm text-muted-foreground mt-1">via {selectedOperator.name}</p>}
+                        {selectedOperator && <p className="text-xs text-muted-foreground mt-0.5">via {selectedOperator.name}</p>}
                       </div>
-                      <div className="flex items-center justify-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: "0ms" }} />
-                        <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: "150ms" }} />
-                        <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: "300ms" }} />
+                      <div className="flex items-center justify-center gap-1.5">
+                        {[0, 150, 300].map((delay) => (
+                          <span key={delay} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${delay}ms` }} />
+                        ))}
                       </div>
-                      <div className="w-full space-y-1.5">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="flex items-center gap-1.5 text-muted-foreground"><Clock className="w-3.5 h-3.5" /> {t.deposit.expiration}</span>
-                          <span className="font-semibold tabular-nums text-foreground">{countdown}s</span>
-                        </div>
-                        <div className="h-2 bg-muted rounded-full overflow-hidden">
-                          <div className="h-full bg-blue-500 rounded-full transition-all duration-1000 ease-linear" style={{ width: `${(countdown / (8 * 60)) * 100}%` }} />
-                        </div>
-                      </div>
-                      <p className="text-xs text-muted-foreground">{t.deposit.txAutoCancel}</p>
-                      {depositReference && (
-                        <div className="bg-muted/30 rounded-lg p-3 w-full text-left">
-                          <p className="text-xs text-muted-foreground">{t.deposit.reference}</p>
-                          <div className="flex items-center justify-between gap-2 mt-0.5">
-                            <p className="font-mono text-sm font-bold text-foreground">{depositReference}</p>
-                            <button onClick={copyRef} className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0" aria-label="Copier la référence" data-testid="button-copy-reference">
-                              <Copy className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      )}
+                      <CountdownBar countdown={countdown} max={8 * 60} color="primary" label={t.deposit.expiration} />
+                      <RefBadge ref_={depositReference} onCopy={copyRef} label={t.deposit.reference} />
                       <Button variant="outline" size="sm" onClick={handleCancelDeposit} disabled={isCancelling} data-testid="button-cancel-deposit" className="border-red-500/30 text-red-500 hover:bg-red-500/10">
-                        <XCircle className="w-4 h-4 mr-2" />
-                        {t.deposit.cancelPayment}
+                        <XCircle className="w-4 h-4 mr-2" />{t.deposit.cancelPayment}
                       </Button>
                     </>
                   )}
-                  
+
+                  {/* Success */}
                   {paymentStatus === "success" && (
                     <>
-                      <div className="relative flex items-center justify-center">
+                      <div className="relative flex items-center justify-center py-4">
                         <div className="absolute w-28 h-28 rounded-full bg-green-500/10 animate-ping" style={{ animationDuration: "2s" }} />
-                        <div className="absolute w-24 h-24 rounded-full bg-green-500/15" />
                         <div className="w-20 h-20 rounded-full bg-green-500/20 flex items-center justify-center relative z-10">
                           <CheckCircle className="w-10 h-10 text-green-500" />
                         </div>
                       </div>
                       <div>
                         <h3 className="text-xl font-bold text-foreground">{t.deposit.successTitle}</h3>
-                        <p className="text-muted-foreground text-sm mt-1">{t.deposit.successDesc}</p>
+                        <p className="text-sm text-muted-foreground mt-1">{t.deposit.successDesc}</p>
                       </div>
-                      <div className="w-full bg-green-50 dark:bg-green-950/20 rounded-xl border border-green-200/50 dark:border-green-800/30 px-6 py-4 text-center">
-                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">{t.deposit.amountReceived}</p>
-                        <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                      <div className="bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-4 text-center">
+                        <p className="text-xs text-muted-foreground uppercase tracking-widest mb-1">{t.deposit.amountReceived}</p>
+                        <p className="text-3xl font-bold text-green-500 tabular-nums">
                           {watchedAmount ? formatCurrency(parseFloat(watchedAmount), (user?.preferredCurrency || "XAF") as SupportedCurrency) : "—"}
                         </p>
                       </div>
-                      {depositReference && (
-                        <div className="w-full bg-muted/30 rounded-lg p-3 text-left">
-                          <p className="text-xs text-muted-foreground">{t.deposit.txRef}</p>
-                          <div className="flex items-center justify-between gap-2 mt-0.5">
-                            <p className="font-mono text-sm font-bold text-foreground">{depositReference}</p>
-                            <button onClick={copyRef} className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0" aria-label="Copier la référence" data-testid="button-copy-reference">
-                              <Copy className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      )}
+                      <RefBadge ref_={depositReference} onCopy={copyRef} label={t.deposit.txRef} />
                       <Button size="lg" className="w-full" onClick={resetWizard} data-testid="button-new-deposit">
                         {t.deposit.newDeposit}
                       </Button>
                     </>
                   )}
-                  
+
+                  {/* Failed */}
                   {paymentStatus === "failed" && (
                     <>
-                      <div className="relative flex items-center justify-center">
+                      <div className="relative flex items-center justify-center py-4">
                         <div className="absolute w-24 h-24 rounded-full bg-red-500/10" />
                         <div className="w-20 h-20 rounded-full bg-red-500/15 flex items-center justify-center relative z-10">
                           <XCircle className="w-10 h-10 text-red-500" />
@@ -622,86 +579,122 @@ export default function DepositPage() {
                       </div>
                       <div>
                         <h3 className="text-xl font-bold text-foreground">{t.deposit.failedTitle}</h3>
-                        <p className="text-muted-foreground text-sm mt-1">
-                          {failureReason || t.deposit.failedDesc}
-                        </p>
+                        <p className="text-sm text-muted-foreground mt-1">{failureReason || t.deposit.failedDesc}</p>
                       </div>
-                      {depositReference && (
-                        <div className="w-full bg-muted/30 rounded-lg p-3 text-left">
-                          <p className="text-xs text-muted-foreground">{t.deposit.txRef}</p>
-                          <div className="flex items-center justify-between gap-2 mt-0.5">
-                            <p className="font-mono text-sm font-bold text-foreground">{depositReference}</p>
-                            <button onClick={copyRef} className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0" aria-label="Copier la référence" data-testid="button-copy-reference">
-                              <Copy className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                      <Button size="lg" className="w-full bg-red-500 hover:bg-red-600 text-white font-semibold" onClick={() => { setShowValidationMessage(false); setPaymentStatus("pending"); setDepositReference(""); }} data-testid="button-retry-deposit">
-                        <XCircle className="w-4 h-4 mr-2" />
+                      <RefBadge ref_={depositReference} onCopy={copyRef} label={t.deposit.txRef} />
+                      <Button size="lg" className="w-full" onClick={() => { setShowValidationMessage(false); setPaymentStatus("pending"); setDepositReference(""); }} data-testid="button-retry-deposit">
                         {t.deposit.retry}
                       </Button>
                     </>
                   )}
                 </div>
+
               ) : (
                 <Form {...form}>
                   <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+
+                    {/* STEP 1 — Amount */}
                     {currentStep === 1 && (
                       <div className="space-y-6 animate-in fade-in duration-300">
-                        <div className="text-center mb-6">
-                          <div className="w-16 h-16 mx-auto rounded-full bg-primary/10 flex items-center justify-center mb-4">
-                            <CreditCard className="w-8 h-8 text-primary" />
-                          </div>
-                          <h3 className="text-lg font-semibold">{t.deposit.step1Question}</h3>
+                        <div className="text-center space-y-1 pt-2">
+                          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">{t.deposit.step1Question}</p>
                           <p className="text-sm text-muted-foreground">{t.deposit.step1Hint}</p>
                         </div>
+
                         <FormField
                           control={form.control}
                           name="amount"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>{t.deposit.amountLabel} ({user?.preferredCurrency || "XAF"})</FormLabel>
                               <FormControl>
-                                <Input type="text" inputMode="decimal" placeholder="" className="text-2xl h-14 text-center" {...field} data-testid="input-deposit-amount" />
+                                <div className="relative flex flex-col items-center">
+                                  <div className="flex items-center justify-center gap-2 w-full border-b-2 border-primary/30 focus-within:border-primary pb-2 transition-colors">
+                                    <span className="text-2xl font-semibold text-muted-foreground shrink-0">
+                                      {user?.preferredCurrency || "XAF"}
+                                    </span>
+                                    <input
+                                      type="text"
+                                      inputMode="decimal"
+                                      placeholder="0"
+                                      className="text-5xl font-bold bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground/30 text-center w-full min-w-0"
+                                      {...field}
+                                      data-testid="input-deposit-amount"
+                                    />
+                                  </div>
+                                </div>
                               </FormControl>
-                              <FormMessage />
+                              <FormMessage className="text-center" />
                             </FormItem>
                           )}
                         />
-                        <Button type="button" className="w-full" size="lg" onClick={goToNextStep} disabled={!canProceedToStep2}>
+
+                        {/* Quick amount chips */}
+                        <div className="flex flex-wrap justify-center gap-2">
+                          {QUICK_AMOUNTS.map((amt) => (
+                            <button
+                              key={amt}
+                              type="button"
+                              onClick={() => form.setValue("amount", amt.toString())}
+                              className={`px-3 py-1.5 rounded-full text-sm font-semibold border transition-all ${
+                                amountNum === amt
+                                  ? "border-primary bg-primary text-black"
+                                  : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                              }`}
+                            >
+                              {amt >= 1000 ? `${amt / 1000}K` : amt}
+                            </button>
+                          ))}
+                        </div>
+
+                        <Button
+                          type="button"
+                          className="w-full h-12 font-bold rounded-xl"
+                          size="lg"
+                          onClick={goToNextStep}
+                          disabled={!canProceedToStep2}
+                        >
                           {t.deposit.continue}
                           <ArrowRight className="w-4 h-4 ml-2" />
                         </Button>
                       </div>
                     )}
 
+                    {/* STEP 2 — Country & Operator */}
                     {currentStep === 2 && (
-                      <div className="space-y-6 animate-in fade-in duration-300">
-                        <div className="text-center mb-6">
-                          <div className="w-16 h-16 mx-auto rounded-full bg-primary/10 flex items-center justify-center mb-4">
-                            <Globe className="w-8 h-8 text-primary" />
-                          </div>
-                          <h3 className="text-lg font-semibold">{t.deposit.step2Question}</h3>
+                      <div className="space-y-5 animate-in fade-in duration-300">
+                        <div className="text-center space-y-1 pt-2">
+                          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">{t.deposit.step2Question}</p>
                           <p className="text-sm text-muted-foreground">{t.deposit.step2Hint}</p>
                         </div>
+
+                        {/* Selected amount badge */}
+                        <div className="flex items-center justify-center">
+                          <div className="flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-full px-4 py-1.5">
+                            <span className="text-sm font-bold text-primary tabular-nums">
+                              {watchedAmount ? formatCurrency(parseFloat(watchedAmount), (user?.preferredCurrency || "XAF") as SupportedCurrency) : "—"}
+                            </span>
+                          </div>
+                        </div>
+
                         <FormField
                           control={form.control}
                           name="countryId"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>{t.deposit.chooseCountry}</FormLabel>
+                              <FormLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t.deposit.chooseCountry}</FormLabel>
                               <Select onValueChange={(val) => { field.onChange(val); form.setValue("operatorId", ""); }} value={field.value}>
                                 <FormControl>
-                                  <SelectTrigger data-testid="select-country" className="h-14">
+                                  <SelectTrigger data-testid="select-country" className="h-14 rounded-xl">
                                     {selectedCountry ? (
                                       <div className="flex items-center gap-3 flex-1 min-w-0">
-                                        <span className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-xl shrink-0">{getCountryFlagEmoji(selectedCountry.code)}</span>
+                                        <span className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-xl shrink-0">
+                                          {getCountryFlagEmoji(selectedCountry.code)}
+                                        </span>
                                         <span className="font-semibold truncate">{selectedCountry.name}</span>
                                         <span className="text-muted-foreground text-sm shrink-0">({selectedCountry.currency})</span>
                                       </div>
                                     ) : (
-                                      <span className="text-muted-foreground text-sm">{t.deposit.selectCountry}</span>
+                                      <span className="text-muted-foreground">{t.deposit.selectCountry}</span>
                                     )}
                                   </SelectTrigger>
                                 </FormControl>
@@ -721,27 +714,40 @@ export default function DepositPage() {
                             </FormItem>
                           )}
                         />
+
                         <FormField
                           control={form.control}
                           name="operatorId"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>{t.deposit.operatorMobileLabel}</FormLabel>
+                              <FormLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t.deposit.operatorMobileLabel}</FormLabel>
                               {!selectedCountry ? (
                                 <p className="text-sm text-muted-foreground py-2">{t.deposit.noCountrySelected}</p>
                               ) : selectedCountry.operators.length === 0 ? (
                                 <p className="text-sm text-muted-foreground py-2">{t.deposit.noOperator}</p>
                               ) : (
                                 <div className="w-full overflow-hidden">
-                                  <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
+                                  <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
                                     {selectedCountry.operators.map((op) => {
                                       const logo = getOperatorLogo(op.name);
                                       const isSelected = field.value === op.id;
                                       return (
-                                        <button key={op.id} type="button" data-testid={`button-operator-${op.id}`} onClick={() => field.onChange(op.id)}
-                                          className={`flex-shrink-0 flex flex-col items-center justify-center gap-2 w-28 h-24 rounded-xl border-2 transition-all cursor-pointer ${isSelected ? "border-primary bg-primary/10 shadow-sm" : "border-border bg-card hover:border-primary/40 hover:bg-muted/50"}`}>
-                                          {logo ? <img src={logo} alt={op.name} className="w-12 h-12 object-contain rounded-lg" /> : <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center"><Smartphone className="w-6 h-6 text-primary" /></div>}
-                                          <span className={`text-xs font-medium text-center leading-tight px-1 ${isSelected ? "text-primary" : "text-foreground"}`}>{op.name}</span>
+                                        <button
+                                          key={op.id}
+                                          type="button"
+                                          data-testid={`button-operator-${op.id}`}
+                                          onClick={() => field.onChange(op.id)}
+                                          className={`flex-shrink-0 flex flex-col items-center justify-center gap-2 w-28 h-24 rounded-2xl border-2 transition-all cursor-pointer ${
+                                            isSelected
+                                              ? "border-primary bg-primary/10 shadow-md"
+                                              : "border-border bg-card/50 hover:border-primary/40 hover:bg-muted/30"
+                                          }`}
+                                        >
+                                          {logo
+                                            ? <img src={logo} alt={op.name} className="w-12 h-12 object-contain rounded-xl" />
+                                            : <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center"><Smartphone className="w-6 h-6 text-primary" /></div>
+                                          }
+                                          <span className={`text-xs font-semibold text-center leading-tight px-1 ${isSelected ? "text-primary" : "text-foreground"}`}>{op.name}</span>
                                         </button>
                                       );
                                     })}
@@ -752,96 +758,136 @@ export default function DepositPage() {
                             </FormItem>
                           )}
                         />
-                        <div className="flex gap-3">
-                          <Button type="button" variant="outline" className="flex-1" size="md" onClick={goToPreviousStep}>
+
+                        <div className="flex gap-3 pt-1">
+                          <Button type="button" variant="outline" className="flex-1 rounded-xl" onClick={goToPreviousStep}>
                             <ArrowLeft className="w-4 h-4 mr-2" />{t.deposit.back}
                           </Button>
-                          <Button type="button" className="flex-1" size="md" onClick={goToNextStep} disabled={!canProceedToStep3}>
+                          <Button type="button" className="flex-1 rounded-xl font-bold" onClick={goToNextStep} disabled={!canProceedToStep3}>
                             {t.deposit.continue}<ArrowRight className="w-4 h-4 ml-2" />
                           </Button>
                         </div>
                       </div>
                     )}
 
+                    {/* STEP 3 — Phone & Confirm */}
                     {currentStep === 3 && (
-                      <div className="space-y-6 animate-in fade-in duration-300">
-                        <div className="text-center mb-6">
-                          <div className="w-16 h-16 mx-auto rounded-full bg-green-500/10 flex items-center justify-center mb-4">
-                            <CheckCircle className="w-8 h-8 text-green-500" />
-                          </div>
-                          <h3 className="text-lg font-semibold">{t.deposit.step3Question}</h3>
+                      <div className="space-y-5 animate-in fade-in duration-300">
+                        <div className="text-center space-y-1 pt-2">
+                          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">{t.deposit.step3Question}</p>
                           <p className="text-sm text-muted-foreground">{t.deposit.step3Hint}</p>
                         </div>
+
+                        {/* Summary chips */}
+                        <div className="flex items-center justify-center gap-2 flex-wrap">
+                          {selectedOperator && (
+                            <div className="flex items-center gap-1.5 bg-muted rounded-full px-3 py-1">
+                              {getOperatorLogo(selectedOperator.name)
+                                ? <img src={getOperatorLogo(selectedOperator.name)!} alt="" className="w-4 h-4 rounded" />
+                                : <Smartphone className="w-3.5 h-3.5 text-muted-foreground" />
+                              }
+                              <span className="text-xs font-semibold">{selectedOperator.name}</span>
+                            </div>
+                          )}
+                          {selectedCountry && (
+                            <div className="flex items-center gap-1.5 bg-muted rounded-full px-3 py-1">
+                              <span className="text-sm">{getCountryFlagEmoji(selectedCountry.code)}</span>
+                              <span className="text-xs font-semibold">{selectedCountry.name}</span>
+                            </div>
+                          )}
+                          <div className="flex items-center gap-1.5 bg-primary/10 border border-primary/20 rounded-full px-3 py-1">
+                            <span className="text-xs font-bold text-primary tabular-nums">
+                              {watchedAmount ? formatCurrency(parseFloat(watchedAmount), (selectedCountry?.currency || "XAF") as SupportedCurrency) : "—"}
+                            </span>
+                          </div>
+                        </div>
+
                         <FormField
                           control={form.control}
                           name="phoneNumber"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>{t.deposit.phoneMobileLabel}</FormLabel>
+                              <FormLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t.deposit.phoneMobileLabel}</FormLabel>
                               <FormControl>
                                 <div className="relative">
-                                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                                  <Input placeholder="XXX XXX XXX" className="pl-10" inputMode="tel" {...field} data-testid="input-phone-number" />
+                                  <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                                  <Input
+                                    placeholder="XXX XXX XXX"
+                                    className="pl-11 h-12 rounded-xl text-base"
+                                    inputMode="tel"
+                                    {...field}
+                                    data-testid="input-phone-number"
+                                  />
                                 </div>
                               </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
+
                         {isPixPayOtp && (
-                          <div className="rounded-lg border-2 border-orange-400 bg-orange-50 dark:bg-orange-950/30 p-4 space-y-3">
+                          <div className="rounded-xl border-2 border-orange-400 bg-orange-50 dark:bg-orange-950/30 p-4 space-y-3">
                             <div className="flex items-center gap-2 text-orange-700 dark:text-orange-300 font-semibold text-sm">
-                              <Hash className="h-4 w-4 shrink-0" />
-                              {t.deposit.otpOrangeLabel}
+                              <Hash className="h-4 w-4 shrink-0" />{t.deposit.otpOrangeLabel}
                             </div>
                             <p className="text-xs text-orange-600 dark:text-orange-400">
                               Composez <code className="font-mono bg-orange-200 dark:bg-orange-900 px-1 rounded font-bold">{selectedOperator?.otpUssdCode || "#144*82#"}</code> {t.deposit.otpOrangeInstruction}
                             </p>
-                            <Input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={8} placeholder={t.deposit.otpPlaceholder} value={pixpayOtpCode} onChange={e => setPixpayOtpCode(e.target.value.replace(/\D/g, ""))} className="text-center text-xl font-mono tracking-widest h-12 border-orange-300" data-testid="input-pixpay-otp" />
+                            <Input
+                              type="text"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              maxLength={8}
+                              placeholder={t.deposit.otpPlaceholder}
+                              value={pixpayOtpCode}
+                              onChange={e => setPixpayOtpCode(e.target.value.replace(/\D/g, ""))}
+                              className="text-center text-xl font-mono tracking-widest h-12 border-orange-300 rounded-xl"
+                              data-testid="input-pixpay-otp"
+                            />
                           </div>
                         )}
-                        <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">{t.deposit.confirmCountry}</span>
-                            <span className="font-medium">{selectedCountry?.name}</span>
-                          </div>
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">{t.deposit.confirmOperator}</span>
-                            <span className="font-medium">{selectedOperator?.name}</span>
-                          </div>
-                        </div>
+
+                        {/* Fee breakdown */}
                         {feeCalculation && (
-                          <div className="rounded-lg border bg-muted/30 p-4 space-y-3" data-testid="fee-calculator">
-                            <div className="flex items-center justify-between text-sm">
-                              <span className="text-muted-foreground">{t.deposit.amountEntered}</span>
-                              <span className="font-medium">{formatCurrency(feeCalculation.amount.toString(), (selectedCountry?.currency || "XAF") as SupportedCurrency)}</span>
+                          <div className="rounded-xl border border-border bg-muted/30 overflow-hidden" data-testid="fee-calculator">
+                            <div className="px-4 py-3 flex items-center justify-between border-b border-border">
+                              <span className="text-sm text-muted-foreground">{t.deposit.amountEntered}</span>
+                              <span className="text-sm font-semibold tabular-nums">
+                                {formatCurrency(feeCalculation.amount.toString(), (selectedCountry?.currency || "XAF") as SupportedCurrency)}
+                              </span>
                             </div>
-                            <div className="flex items-center justify-between text-sm">
-                              <span className="text-muted-foreground">
+                            <div className="px-4 py-3 flex items-center justify-between border-b border-border">
+                              <span className="text-sm text-muted-foreground flex items-center gap-1.5">
+                                <TrendingDown className="w-3.5 h-3.5" />
                                 {t.deposit.depositFeeLabel} {feeCalculation.feePercentage > 0 ? `(${feeCalculation.feePercentage}%)` : feeCalculation.fixedFee > 0 ? t.deposit.feeFixed : t.deposit.feeFree}
                               </span>
-                              <span className={`font-medium ${feeCalculation.fee > 0 ? "text-red-500" : "text-green-500"}`}>
-                                {feeCalculation.fee > 0 ? `-${formatCurrency(feeCalculation.fee.toString(), (selectedCountry?.currency || "XAF") as SupportedCurrency)}` : "0 XAF"}
+                              <span className={`text-sm font-semibold tabular-nums ${feeCalculation.fee > 0 ? "text-red-500" : "text-green-500"}`}>
+                                {feeCalculation.fee > 0 ? `-${formatCurrency(feeCalculation.fee.toString(), (selectedCountry?.currency || "XAF") as SupportedCurrency)}` : "Gratuit"}
                               </span>
                             </div>
-                            <div className="border-t pt-3 flex items-center justify-between">
-                              <span className="font-medium text-foreground">{t.deposit.creditedLabel}</span>
-                              <span className="text-xl font-bold text-green-500" data-testid="credited-amount">
+                            <div className="px-4 py-3 flex items-center justify-between bg-green-500/5">
+                              <span className="text-sm font-semibold text-foreground">{t.deposit.creditedLabel}</span>
+                              <span className="text-lg font-bold text-green-500 tabular-nums" data-testid="credited-amount">
                                 {formatCurrency(feeCalculation.creditedAmount.toString(), (selectedCountry?.currency || "XAF") as SupportedCurrency)}
                               </span>
                             </div>
                           </div>
                         )}
-                        <div className="flex gap-3">
-                          <Button type="button" variant="outline" className="flex-1" size="md" onClick={goToPreviousStep}>
+
+                        <div className="flex gap-3 pt-1">
+                          <Button type="button" variant="outline" className="flex-1 rounded-xl" onClick={goToPreviousStep}>
                             <ArrowLeft className="w-4 h-4 mr-2" />{t.deposit.back}
                           </Button>
-                          <Button type="submit" className="flex-1" size="md" disabled={depositMutation.isPending || (isPixPayOtp && pixpayOtpCode.length < 4)} data-testid="button-deposit-confirm">
-                            {depositMutation.isPending ? (
-                              <><Loader2 className="w-4 h-4 animate-spin mr-2" />{t.deposit.processing}</>
-                            ) : (
-                              <><CreditCard className="w-4 h-4 mr-2" />{t.deposit.confirmBtn}</>
-                            )}
+                          <Button
+                            type="submit"
+                            className="flex-1 rounded-xl font-bold"
+                            disabled={depositMutation.isPending || (isPixPayOtp && pixpayOtpCode.length < 4)}
+                            data-testid="button-deposit-confirm"
+                          >
+                            {depositMutation.isPending
+                              ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />{t.deposit.processing}</>
+                              : <><CreditCard className="w-4 h-4 mr-2" />{t.deposit.confirmBtn}</>
+                            }
                           </Button>
                         </div>
                       </div>
@@ -849,11 +895,12 @@ export default function DepositPage() {
                   </form>
                 </Form>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         )}
       </div>
 
+      {/* Confirm bottom sheet */}
       <BottomSheet open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
         <BottomSheetContent>
           <BottomSheetHeader>
@@ -874,7 +921,7 @@ export default function DepositPage() {
             </div>
             <div className="flex items-center justify-between px-4 py-3.5">
               <span className="text-sm text-muted-foreground">{t.deposit.amountEntered}</span>
-              <span className="text-sm font-medium">
+              <span className="text-sm font-semibold tabular-nums">
                 {feeCalculation ? formatCurrency(feeCalculation.amount.toString(), (selectedCountry?.currency || "XAF") as SupportedCurrency) : "—"}
               </span>
             </div>
@@ -883,21 +930,21 @@ export default function DepositPage() {
                 <span className="text-sm text-muted-foreground">
                   {t.deposit.confirmFee} {feeCalculation.feePercentage > 0 ? `(${feeCalculation.feePercentage}%)` : t.deposit.feeFixed}
                 </span>
-                <span className="text-sm font-medium text-red-500">
+                <span className="text-sm font-semibold text-red-500 tabular-nums">
                   -{formatCurrency(feeCalculation.fee.toString(), (selectedCountry?.currency || "XAF") as SupportedCurrency)}
                 </span>
               </div>
             )}
-            <div className="flex items-center justify-between px-4 py-3.5 bg-muted/30">
+            <div className="flex items-center justify-between px-4 py-3.5 bg-green-500/5">
               <span className="text-sm font-semibold text-foreground">{t.deposit.creditedLabel}</span>
-              <span className="text-base font-bold text-green-500">
+              <span className="text-base font-bold text-green-500 tabular-nums">
                 {feeCalculation ? formatCurrency(feeCalculation.creditedAmount.toString(), (selectedCountry?.currency || "XAF") as SupportedCurrency) : "—"}
               </span>
             </div>
           </div>
           <BottomSheetFooter>
             <Button variant="outline" className="flex-1" onClick={() => setShowConfirmDialog(false)}>{t.deposit.back}</Button>
-            <Button className="flex-1" onClick={handleConfirmDeposit} disabled={depositMutation.isPending} data-testid="button-final-confirm-deposit">
+            <Button className="flex-1 font-bold" onClick={handleConfirmDeposit} disabled={depositMutation.isPending} data-testid="button-final-confirm-deposit">
               {depositMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CreditCard className="w-4 h-4 mr-2" />}
               {t.deposit.confirmBtn}
             </Button>
@@ -905,5 +952,49 @@ export default function DepositPage() {
         </BottomSheetContent>
       </BottomSheet>
     </DashboardLayout>
+  );
+}
+
+function CountdownBar({ countdown, max, color, label }: { countdown: number; max: number; color: string; label: string }) {
+  const colorMap: Record<string, string> = {
+    amber: "bg-amber-500",
+    blue: "bg-blue-500",
+    primary: "bg-primary",
+  };
+  const pct = (countdown / max) * 100;
+  const mins = Math.floor(countdown / 60);
+  const secs = countdown % 60;
+  return (
+    <div className="w-full space-y-1.5">
+      <div className="flex items-center justify-between text-xs">
+        <span className="flex items-center gap-1 text-muted-foreground">
+          <Clock className="w-3 h-3" /> {label}
+        </span>
+        <span className="font-mono font-semibold tabular-nums text-foreground">
+          {mins}:{secs.toString().padStart(2, "0")}
+        </span>
+      </div>
+      <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all duration-1000 ease-linear ${colorMap[color] || "bg-primary"}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function RefBadge({ ref_, onCopy, label }: { ref_: string; onCopy: () => void; label: string }) {
+  if (!ref_) return null;
+  return (
+    <div className="w-full bg-muted/40 rounded-xl p-3 text-left">
+      <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="font-mono text-sm font-bold text-foreground truncate">{ref_}</p>
+        <button onClick={onCopy} className="text-muted-foreground hover:text-foreground transition-colors shrink-0" data-testid="button-copy-reference">
+          <Copy className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </div>
   );
 }
