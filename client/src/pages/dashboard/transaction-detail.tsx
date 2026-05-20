@@ -146,9 +146,19 @@ export default function TransactionDetailPage({ params }: { params: { id: string
   };
 
   const operatorInfo = tx.operatorId ? operatorMap[tx.operatorId] : null;
-  const feePercent = (tx.feeAmount && tx.totalAmount && parseFloat(tx.totalAmount) > 0)
-    ? ((parseFloat(tx.feeAmount) / parseFloat(tx.totalAmount)) * 100).toFixed(2)
+  const isOutgoing = ["transfer_out", "withdrawal"].includes(tx.type);
+
+  // Real total fee = gross debited - net credited to recipient
+  const realTotalAmount = tx.totalAmount ? parseFloat(tx.totalAmount) : 0;
+  const realNetAmount = parseFloat(tx.amount);
+  const realFee = (realTotalAmount > realNetAmount) ? (realTotalAmount - realNetAmount) : (tx.feeAmount ? parseFloat(tx.feeAmount) : 0);
+  const feeBase = realTotalAmount > 0 ? realTotalAmount : realNetAmount;
+  const feePercent = (realFee > 0 && feeBase > 0)
+    ? ((realFee / feeBase) * 100).toFixed(2)
     : null;
+
+  // For outgoing transactions, show the gross debited amount in the header
+  const headerAmount = (isOutgoing && realTotalAmount > 0) ? tx.totalAmount! : tx.amount;
 
   const payerPhone = tx.paymentIntent?.payerPhone;
   const payerCountry = tx.paymentIntent?.payerCountry || operatorInfo?.country;
@@ -178,7 +188,7 @@ export default function TransactionDetailPage({ params }: { params: { id: string
           <div className="text-center">
             {statusBadge()}
             <p className={`text-4xl font-bold mt-2 ${amountColor}`}>
-              {amountPrefix}{formatCurrency(tx.amount, txCurrency)}
+              {amountPrefix}{formatCurrency(headerAmount, txCurrency)}
             </p>
             <p className="text-sm text-muted-foreground mt-1">
               {formatDate(tx.createdAt)}
@@ -209,20 +219,20 @@ export default function TransactionDetailPage({ params }: { params: { id: string
           {(tx.totalAmount || tx.feeAmount) && (
             <>
               <SectionLabel>{td.detailSectionFinance}</SectionLabel>
-              {tx.totalAmount && parseFloat(tx.totalAmount) > 0 && (
+              {realTotalAmount > 0 && (
                 <Row
                   label={td.detailGross}
-                  value={<span>{formatCurrency(tx.totalAmount, txCurrency)}</span>}
+                  value={<span>{formatCurrency(tx.totalAmount!, txCurrency)}</span>}
                 />
               )}
-              {tx.feeAmount && parseFloat(tx.feeAmount) > 0 && (
+              {realFee > 0 && (
                 <Row
                   label={`${td.detailFee}${feePercent ? ` (${feePercent}%)` : ""}`}
-                  value={<span className="text-amber-500">{formatCurrency(tx.feeAmount, txCurrency)}</span>}
+                  value={<span className="text-amber-500">{formatCurrency(realFee.toFixed(2), txCurrency)}</span>}
                 />
               )}
               <Row
-                label={td.detailReceived}
+                label={isOutgoing ? td.detailSentToRecipient : td.detailReceived}
                 value={<span className="text-green-500">{formatCurrency(tx.amount, txCurrency)}</span>}
               />
             </>
