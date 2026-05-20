@@ -103,7 +103,7 @@ function now(): string {
   return new Date().toLocaleString("fr-FR", { timeZone: "Africa/Douala" });
 }
 
-// ─── DÉPÔTS ───────────────────────────────────────────────────────────────────
+// ─── DÉPÔTS ──────────────────
 
 export async function notifyNewDeposit(opts: {
   userName: string;
@@ -117,7 +117,7 @@ export async function notifyNewDeposit(opts: {
 }): Promise<void> {
   const msg =
     `🟡 <b>NOUVEAU DÉPÔT EN ATTENTE</b>\n` +
-    `─────────────────────────\n` +
+    `──────────────────\n` +
     `👤 Utilisateur : <b>${opts.userName}</b>\n` +
     `📧 Email : ${opts.userEmail}\n` +
     `💰 Montant : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
@@ -139,7 +139,7 @@ export async function notifyDepositConfirmed(opts: {
 }): Promise<void> {
   const msg =
     `✅ <b>PAIEMENT REÇU / DÉPÔT CONFIRMÉ</b>\n` +
-    `─────────────────────────\n` +
+    `──────────────────\n` +
     `👤 Utilisateur : <b>${opts.userName}</b>\n` +
     `📧 Email : ${opts.userEmail}\n` +
     `💰 Montant crédité : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
@@ -160,7 +160,7 @@ export async function notifyDepositFailed(opts: {
 }): Promise<void> {
   const msg =
     `❌ <b>ÉCHEC DE PAIEMENT (DÉPÔT)</b>\n` +
-    `─────────────────────────\n` +
+    `──────────────────\n` +
     `👤 Utilisateur : <b>${opts.userName}</b>\n` +
     `📧 Email : ${opts.userEmail}\n` +
     `💰 Montant : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
@@ -171,7 +171,7 @@ export async function notifyDepositFailed(opts: {
   await sendMessage(msg);
 }
 
-// ─── RETRAITS ─────────────────────────────────────────────────────────────────
+// ─── RETRAITS ──────────────────
 
 export async function notifyWithdrawalRequest(opts: {
   userName: string;
@@ -185,7 +185,7 @@ export async function notifyWithdrawalRequest(opts: {
 }): Promise<void> {
   const msg =
     `🔵 <b>DEMANDE DE RETRAIT</b>\n` +
-    `─────────────────────────\n` +
+    `──────────────────\n` +
     `👤 Utilisateur : <b>${opts.userName}</b>\n` +
     `📧 Email : ${opts.userEmail}\n` +
     `💰 Montant net : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
@@ -220,7 +220,7 @@ export async function notifyWithdrawalPendingManual(opts: {
 }): Promise<void> {
   const msg =
     `⏸ <b>RETRAIT EN ATTENTE MANUELLE</b>\n` +
-    `─────────────────────────\n` +
+    `──────────────────\n` +
     `👤 Utilisateur : <b>${opts.userName}</b>\n` +
     `📧 Email : ${opts.userEmail}\n` +
     `💰 Montant : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
@@ -250,7 +250,7 @@ export async function notifyWithdrawalAutoValidated(opts: {
 }): Promise<void> {
   const msg =
     `✅ <b>RETRAIT VALIDÉ AUTOMATIQUEMENT</b>\n` +
-    `─────────────────────────\n` +
+    `──────────────────\n` +
     `👤 Utilisateur : <b>${opts.userName}</b>\n` +
     `📧 Email : ${opts.userEmail}\n` +
     `💰 Montant : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
@@ -270,7 +270,7 @@ export async function notifyWithdrawalManuallyValidated(opts: {
 }): Promise<void> {
   const msg =
     `✅ <b>RETRAIT VALIDÉ MANUELLEMENT</b>\n` +
-    `─────────────────────────\n` +
+    `──────────────────\n` +
     `🛡️ Admin : <b>${opts.adminName}</b>\n` +
     `👤 Utilisateur : <b>${opts.userName}</b>\n` +
     `📧 Email : ${opts.userEmail}\n` +
@@ -291,7 +291,7 @@ export async function notifyWithdrawalFailed(opts: {
 }): Promise<void> {
   const msg =
     `❌ <b>ÉCHEC DE RETRAIT</b>\n` +
-    `─────────────────────────\n` +
+    `──────────────────\n` +
     `👤 Utilisateur : <b>${opts.userName}</b>\n` +
     `📧 Email : ${opts.userEmail}\n` +
     `💰 Montant : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
@@ -302,7 +302,7 @@ export async function notifyWithdrawalFailed(opts: {
   await sendMessage(msg);
 }
 
-// ─── SÉCURITÉ ─────────────────────────────────────────────────────────────────
+// ─── SÉCURITÉ ──────────────────
 
 export async function notifyLoginFailed(opts: {
   identifier: string;
@@ -313,7 +313,7 @@ export async function notifyLoginFailed(opts: {
   if (opts.blocked) {
     const msg =
       `🔴 <b>COMPTE BLOQUÉ — TROP DE TENTATIVES</b>\n` +
-      `─────────────────────────\n` +
+      `──────────────────\n` +
       `🔑 Identifiant : <code>${opts.identifier}</code>\n` +
       `🌐 IP : <code>${opts.ip}</code>\n` +
       `🚫 Accès bloqué pendant 7 minutes\n` +
@@ -322,7 +322,7 @@ export async function notifyLoginFailed(opts: {
   } else if (opts.attemptsLeft <= 2) {
     const msg =
       `⚠️ <b>TENTATIVE DE CONNEXION ÉCHOUÉE</b>\n` +
-      `─────────────────────────\n` +
+      `──────────────────\n` +
       `🔑 Identifiant : <code>${opts.identifier}</code>\n` +
       `🌐 IP : <code>${opts.ip}</code>\n` +
       `⏱ Tentatives restantes : ${opts.attemptsLeft}\n` +
@@ -338,7 +338,7 @@ export async function notifyAdminLogin(opts: {
 }): Promise<void> {
   const msg =
     `🛡️ <b>CONNEXION AU PANEL ADMIN</b>\n` +
-    `─────────────────────────\n` +
+    `──────────────────\n` +
     `👤 Admin : <b>${opts.adminName}</b>\n` +
     `📧 Email : ${opts.adminEmail}\n` +
     `🌐 IP : <code>${opts.ip}</code>\n` +
@@ -352,14 +352,14 @@ export async function notifyAdminLoginFailed(opts: {
 }): Promise<void> {
   const msg =
     `🔴 <b>TENTATIVE DE CONNEXION ADMIN ÉCHOUÉE</b>\n` +
-    `─────────────────────────\n` +
+    `──────────────────\n` +
     `🔑 Identifiant : <code>${opts.identifier}</code>\n` +
     `🌐 IP : <code>${opts.ip}</code>\n` +
     `🕐 Heure : ${now()}`;
   await sendMessage(msg);
 }
 
-// ─── ÉCHANGES / CONVERSIONS ───────────────────────────────────────────────────
+// ─── ÉCHANGES / CONVERSIONS ──────────────────
 
 export async function notifyConversion(opts: {
   userName: string;
@@ -379,7 +379,7 @@ export async function notifyConversion(opts: {
     : "";
   const msg =
     `🔄 <b>ÉCHANGE DE DEVISES${opts.byAdmin ? " (ADMIN)" : ""}</b>\n` +
-    `─────────────────────────\n` +
+    `──────────────────\n` +
     who +
     `👤 Utilisateur : <b>${opts.userName}</b>\n` +
     `📧 Email : ${opts.userEmail}\n` +
@@ -390,7 +390,7 @@ export async function notifyConversion(opts: {
   await sendMessage(msg);
 }
 
-// ─── TRANSFERTS ───────────────────────────────────────────────────────────────
+// ─── TRANSFERTS ──────────────────
 
 export async function notifyTransferSent(opts: {
   senderName: string;
@@ -402,7 +402,7 @@ export async function notifyTransferSent(opts: {
 }): Promise<void> {
   const msg =
     `💸 <b>TRANSFERT ENVOYÉ</b>\n` +
-    `─────────────────────────\n` +
+    `──────────────────\n` +
     `👤 Expéditeur : <b>${opts.senderName}</b> (${opts.senderEmail})\n` +
     `👥 Destinataire : <b>${opts.recipientName}</b>\n` +
     `💰 Montant : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
@@ -411,7 +411,7 @@ export async function notifyTransferSent(opts: {
   await sendMessage(msg);
 }
 
-// ─── KYC COMPLET AVEC PHOTOS + BOUTONS ────────────────────────────────────────
+// ─── KYC COMPLET AVEC PHOTOS + BOUTONS ──────────────────
 
 export async function notifyKycSubmittedFull(opts: {
   submissionId: string;
@@ -467,20 +467,20 @@ export async function notifyKycSubmittedFull(opts: {
   // 2. Info message + inline keyboard
   const infoText =
     `📋 <b>NOUVELLE DEMANDE DE VÉRIFICATION KYC</b>\n` +
-    `─────────────────────────────\n` +
+    `──────────────────\n` +
     `👤 <b>${opts.userName}</b>\n` +
     `📧 ${opts.userEmail}\n` +
     `🆔 ID : <code>#${opts.userId}</code>\n` +
-    `─────────────────────────────\n` +
+    `──────────────────\n` +
     `📄 Document : ${docTypeLabel[opts.documentType] ?? opts.documentType}\n` +
     `🔢 N° : <code>${opts.documentNumber}</code>\n` +
     (opts.country ? `🌍 Pays : ${opts.country}\n` : "") +
     (opts.city ? `🏙 Ville : ${opts.city}\n` : "") +
-    `─────────────────────────────\n` +
+    `──────────────────\n` +
     `🏷 Compte : ${businessTypeLabel[opts.businessType] ?? opts.businessType}\n` +
     `📂 Catégorie : ${opts.businessCategory}\n` +
     `📝 ${opts.businessDescription}\n` +
-    `─────────────────────────────\n` +
+    `──────────────────\n` +
     `🕐 ${now()}`;
 
   const id = opts.submissionId;
@@ -500,9 +500,9 @@ export async function notifyKycSubmittedFull(opts: {
   await sendMessageWithKeyboard(infoText, inline_keyboard);
 }
 
-// ─── GESTIONNAIRE DE WEBHOOK TELEGRAM ─────────────────────────────────────────
+// ─── GESTIONNAIRE DE WEBHOOK TELEGRAM ──────────────────
 
-// ─── Types stats bot ──────────────────────────────────────────────────────────
+// ─── Types stats bot ──────────────────
 export type BotStats = {
   period: string;
   totalUsers: number;
@@ -527,7 +527,7 @@ export type BotStats = {
   recentUsers: { username: string; email: string | null; createdAt: Date | null; kycStatus: string }[];
 };
 
-// ─── Menu & formatters ────────────────────────────────────────────────────────
+// ─── Menu & formatters ──────────────────
 
 const MAIN_MENU_KEYBOARD = [
   [{ text: "📊 Dashboard ce mois", callback_data: "cmd:stats_month" }],
@@ -550,7 +550,7 @@ async function sendMenu(chatId: string): Promise<void> {
     chat_id: chatId,
     text:
       `🏦 <b>AshTech Pay — Panel Bot</b>\n` +
-      `─────────────────────────────\n` +
+      `──────────────────\n` +
       `Choisissez une action :`,
     parse_mode: "HTML",
     reply_markup: { inline_keyboard: MAIN_MENU_KEYBOARD },
@@ -585,7 +585,7 @@ function formatDashboard(s: BotStats): string {
   const totalVol = parseFloat(s.depositVol) + parseFloat(s.withdrawalVol);
   return (
     `📊 <b>TABLEAU DE BORD — ${periodLabel(s.period).toUpperCase()}</b>\n` +
-    `─────────────────────────────\n` +
+    `──────────────────\n` +
     `👥 <b>Utilisateurs</b>\n` +
     `  Total : <b>${fmtNum(s.totalUsers)}</b> | Bannis : ${s.bannedUsers}\n` +
     `  KYC vérifiés : ${fmtNum(s.kycApproved)} | En attente : ${s.kycPending} | Rejetés : ${s.kycRejected}\n\n` +
@@ -600,7 +600,7 @@ function formatDashboard(s: BotStats): string {
     `  Total : <b>${fmtXAF(s.totalRevenue)}</b>\n\n` +
     `⏳ <b>En attente</b>\n` +
     `  Dépôts : ${s.pendingDeposits} | Retraits : ${s.pendingWithdrawals} | KYC : ${s.kycPending}\n` +
-    `─────────────────────────────\n` +
+    `──────────────────\n` +
     `🕐 ${now()}`
   );
 }
@@ -608,14 +608,14 @@ function formatDashboard(s: BotStats): string {
 function formatRevenue(s: BotStats): string {
   return (
     `💰 <b>REVENUS — ${periodLabel(s.period).toUpperCase()}</b>\n` +
-    `─────────────────────────────\n` +
+    `──────────────────\n` +
     `💵 Total commissions : <b>${fmtXAF(s.totalRevenue)}</b>\n\n` +
     `📋 Détail par type :\n` +
     `  • Dépôts (${fmtNum(s.depositCount)}) : ${fmtXAF(s.depositFees)}\n` +
     `  • Retraits (${fmtNum(s.withdrawalCount)}) : ${fmtXAF(s.withdrawalFees)}\n` +
     `  • Transferts (${fmtNum(s.transferCount)}) : ${fmtXAF(s.transferFees)}\n` +
     `  • Liens (${fmtNum(s.paymentLinkCount)}) : ${fmtXAF(s.paymentLinkFees)}\n` +
-    `─────────────────────────────\n` +
+    `──────────────────\n` +
     `🕐 ${now()}`
   );
 }
@@ -624,13 +624,13 @@ function formatPending(s: BotStats): string {
   const total = s.pendingDeposits + s.pendingWithdrawals + s.pendingTransfers + s.kycPending;
   return (
     `⏳ <b>ÉLÉMENTS EN ATTENTE</b>\n` +
-    `─────────────────────────────\n` +
+    `──────────────────\n` +
     `${total === 0 ? "✅ Aucun élément en attente !\n" : ""}` +
     (s.pendingDeposits > 0 ? `🟡 Dépôts : <b>${s.pendingDeposits}</b>\n` : "") +
     (s.pendingWithdrawals > 0 ? `🔵 Retraits : <b>${s.pendingWithdrawals}</b>\n` : "") +
     (s.pendingTransfers > 0 ? `🟣 Transferts : <b>${s.pendingTransfers}</b>\n` : "") +
     (s.kycPending > 0 ? `📋 Demandes KYC : <b>${s.kycPending}</b>\n` : "") +
-    `─────────────────────────────\n` +
+    `──────────────────\n` +
     `🕐 ${now()}`
   );
 }
@@ -640,13 +640,13 @@ function formatKyc(s: BotStats): string {
   const pct = total > 0 ? Math.round((s.kycApproved / total) * 100) : 0;
   return (
     `🔑 <b>VÉRIFICATIONS KYC</b>\n` +
-    `─────────────────────────────\n` +
+    `──────────────────\n` +
     `📊 Total soumis : <b>${fmtNum(total)}</b>\n` +
     `✅ Approuvés : <b>${fmtNum(s.kycApproved)}</b> (${pct}%)\n` +
     `⏳ En attente : <b>${fmtNum(s.kycPending)}</b>\n` +
     `❌ Rejetés : <b>${fmtNum(s.kycRejected)}</b>\n\n` +
     `👥 Utilisateurs vérifiés / Total : ${fmtNum(s.kycApproved)} / ${fmtNum(s.totalUsers)}\n` +
-    `─────────────────────────────\n` +
+    `──────────────────\n` +
     `🕐 ${now()}`
   );
 }
@@ -659,14 +659,14 @@ function formatRecentUsers(s: BotStats): string {
   });
   return (
     `👥 <b>DERNIERS INSCRITS</b>\n` +
-    `─────────────────────────────\n` +
+    `──────────────────\n` +
     `Total : <b>${fmtNum(s.totalUsers)}</b> utilisateurs\n\n` +
     (lines.join("\n\n") || "Aucun utilisateur") +
-    `\n─────────────────────────────\n🕐 ${now()}`
+    `\n──────────────────\n🕐 ${now()}`
   );
 }
 
-// ─── GESTIONNAIRE DE WEBHOOK TELEGRAM ─────────────────────────────────────────
+// ─── GESTIONNAIRE DE WEBHOOK TELEGRAM ──────────────────
 
 export async function handleTelegramUpdate(
   update: any,
@@ -924,13 +924,13 @@ export async function handleTelegramUpdate(
         `👤 <b>${info.userName}</b>\n` +
         `📧 ${info.email}\n` +
         `🌍 ${info.country ?? "—"} | 📅 Inscrit le ${date}\n` +
-        `─────────────────────────\n` +
+        `──────────────────\n` +
         `💰 Solde : <b>${fmt(info.balance, info.currency)}</b>\n` +
         (walletLines ? `🗂 Autres wallets :\n${walletLines}\n` : "") +
         `🔑 KYC : ${kycIcon} <b>${info.kycStatus}</b>\n` +
-        `─────────────────────────\n` +
+        `──────────────────\n` +
         `📋 Dernières transactions :\n${txLines}\n` +
-        `─────────────────────────\n` +
+        `──────────────────\n` +
         `🕐 ${now()}`;
       await callBotApi("sendMessage", { chat_id: chatId, text: msg, parse_mode: "HTML" });
       return;
@@ -947,11 +947,11 @@ export async function handleTelegramUpdate(
       const walletLines = info.wallets.map(w => `  ${w.currency}: ${fmt(w.balance, w.currency)}`).join("\n");
       const msg =
         `💰 <b>Solde de ${info.userName}</b>\n` +
-        `─────────────────────────\n` +
+        `──────────────────\n` +
         `📧 ${info.email}\n` +
         `💵 Principal : <b>${fmt(info.balance, info.currency)}</b>\n` +
         (walletLines ? `🗂 Autres wallets :\n${walletLines}\n` : "") +
-        `─────────────────────────\n` +
+        `──────────────────\n` +
         `🕐 ${now()}`;
       await callBotApi("sendMessage", { chat_id: chatId, text: msg, parse_mode: "HTML" });
       return;
@@ -1008,25 +1008,25 @@ export async function handleTelegramUpdate(
       const periodTitle = labelMap[period] ?? period.toUpperCase();
       const msg =
         `📊 <b>RAPPORT — ${periodTitle}</b>\n` +
-        `─────────────────────────\n` +
+        `──────────────────\n` +
         `👥 Utilisateurs : <b>${s.totalUsers.toLocaleString("fr-FR")}</b> (bannis : ${s.bannedUsers})\n` +
-        `─────────────────────────\n` +
+        `──────────────────\n` +
         `💸 <b>TRANSACTIONS</b>\n` +
         `  Total : <b>${totalTx.toLocaleString("fr-FR")}</b>\n` +
         `  📥 Dépôts : ${s.depositCount} — <b>${fmt(s.depositVol, "XAF")}</b>\n` +
         `  📤 Retraits : ${s.withdrawalCount} — <b>${fmt(s.withdrawalVol, "XAF")}</b>\n` +
         `  🔄 Transferts : ${s.transferCount}\n` +
         `  🔗 Liens paiement : ${s.paymentLinkCount}\n` +
-        `─────────────────────────\n` +
+        `──────────────────\n` +
         `💰 <b>REVENUS</b>\n` +
         `  Total commissions : <b>${fmt(s.totalRevenue, "XAF")}</b>\n` +
         `  Dépôts : ${fmt(s.depositFees, "XAF")} | Retraits : ${fmt(s.withdrawalFees, "XAF")}\n` +
         `  Transferts : ${fmt(s.transferFees, "XAF")} | Liens : ${fmt(s.paymentLinkFees, "XAF")}\n` +
-        `─────────────────────────\n` +
+        `──────────────────\n` +
         `⏳ <b>EN ATTENTE</b>\n` +
         `  Dépôts : ${s.pendingDeposits} | Retraits : ${s.pendingWithdrawals}\n` +
         `  KYC : ⏳${s.kycPending} ✅${s.kycApproved} ❌${s.kycRejected}\n` +
-        `─────────────────────────\n` +
+        `──────────────────\n` +
         `🕐 ${now()}`;
       await callBotApi("sendMessage", {
         chat_id: chatId, text: msg, parse_mode: "HTML",
@@ -1044,7 +1044,7 @@ export async function handleTelegramUpdate(
       ).join("\n\n");
       await callBotApi("sendMessage", {
         chat_id: chatId,
-        text: `🏆 <b>TOP 10 UTILISATEURS (solde)</b>\n─────────────────────────\n${lines || "Aucun utilisateur"}\n─────────────────────────\n🕐 ${now()}`,
+        text: `🏆 <b>TOP 10 UTILISATEURS (solde)</b>\n──────────────────\n${lines || "Aucun utilisateur"}\n──────────────────\n🕐 ${now()}`,
         parse_mode: "HTML",
         reply_markup: { inline_keyboard: [[{ text: "🔙 Menu", callback_data: "cmd:menu" }]] },
       });
@@ -1087,14 +1087,14 @@ export async function handleTelegramUpdate(
       const typeLabel: Record<string, string> = { deposit: "💰 Dépôt", withdrawal: "📤 Retrait", transfer: "🔄 Transfert", transfer_out: "📤 Transfert sortant", payment_link: "🔗 Lien de paiement" };
       const msg =
         `🔍 <b>TRANSACTION</b>\n` +
-        `─────────────────────────\n` +
+        `──────────────────\n` +
         `👤 ${tx.userName}\n` +
         `${typeLabel[tx.type] ?? tx.type} : <b>${fmt(tx.amount, tx.currency)}</b>\n` +
         `${statusIcon[tx.status] ?? "🔸"} Statut : <b>${tx.status}</b>\n` +
         `🔖 Réf : <code>${reference}</code>\n` +
         (tx.description ? `📝 ${tx.description}\n` : "") +
         `📅 ${tx.createdAt ? new Date(tx.createdAt).toLocaleString("fr-FR") : "—"}\n` +
-        `─────────────────────────\n` +
+        `──────────────────\n` +
         `🕐 ${now()}`;
       await callBotApi("sendMessage", { chat_id: chatId, text: msg, parse_mode: "HTML" });
       return;
@@ -1112,7 +1112,7 @@ export async function handleTelegramUpdate(
       ).join("\n\n");
       await callBotApi("sendMessage", {
         chat_id: chatId,
-        text: `📎 <b>LIENS ACTIFS AUJOURD'HUI (${links.length})</b>\n─────────────────────────\n${lines}\n─────────────────────────\n🕐 ${now()}`,
+        text: `📎 <b>LIENS ACTIFS AUJOURD'HUI (${links.length})</b>\n──────────────────\n${lines}\n──────────────────\n🕐 ${now()}`,
         parse_mode: "HTML",
       });
       return;
@@ -1125,11 +1125,11 @@ export async function handleTelegramUpdate(
         chat_id: chatId,
         text:
           `🏦 <b>SOLDE TOTAL ASHTECH PAY</b>\n` +
-          `─────────────────────────\n` +
+          `──────────────────\n` +
           `💰 En circulation : <b>${fmt(info.total, info.currency)}</b>\n` +
           `👥 Utilisateurs actifs : <b>${info.userCount}</b>\n` +
           `🗂 Wallets secondaires : <b>${info.walletCount}</b>\n` +
-          `─────────────────────────\n` +
+          `──────────────────\n` +
           `🕐 ${now()}`,
         parse_mode: "HTML",
       });
@@ -1177,7 +1177,7 @@ export async function handleTelegramUpdate(
           chat_id: chatId,
           text:
             `📖 <b>Commandes disponibles</b>\n` +
-            `─────────────────────────────\n` +
+            `──────────────────\n` +
             `<b>📊 Statistiques</b>\n` +
             `/menu — Menu principal\n` +
             `/stats — Dashboard ce mois\n` +
@@ -1188,7 +1188,7 @@ export async function handleTelegramUpdate(
             `/users — Derniers inscrits\n` +
             `/revenue — Revenus & commissions\n` +
             `/rapport [mois|semaine|today] — Rapport complet\n` +
-            `─────────────────────────────\n` +
+            `──────────────────\n` +
             `<b>👤 Utilisateurs</b>\n` +
             `/user email — Infos utilisateur\n` +
             `/solde email — Solde en temps réel\n` +
@@ -1196,17 +1196,17 @@ export async function handleTelegramUpdate(
             `/unban email — Débannir\n` +
             `/resetpw email — Envoyer reset mot de passe\n` +
             `/top — Top 10 par solde\n` +
-            `─────────────────────────────\n` +
+            `──────────────────\n` +
             `<b>💸 Transactions</b>\n` +
             `/verif REFERENCE — Vérifier une transaction\n` +
             `/liens — Liens actifs aujourd'hui\n` +
             `/soldeA — Solde total plateforme\n` +
-            `─────────────────────────────\n` +
+            `──────────────────\n` +
             `<b>⚙️ Administration</b>\n` +
             `/taux DEVISE TAUX — Modifier un taux FX\n` +
             `/pays — Activer/désactiver un pays\n` +
             `/broadcast Sujet;Corps — Email à tous\n` +
-            `─────────────────────────────\n` +
+            `──────────────────\n` +
             `🕐 ${now()}`,
           parse_mode: "HTML",
           reply_markup: { inline_keyboard: [[{ text: "🏠 Menu", callback_data: "cmd:menu" }]] },
@@ -1230,7 +1230,7 @@ export async function handleTelegramUpdate(
   }
 }
 
-// ─── ENREGISTREMENT DU WEBHOOK ────────────────────────────────────────────────
+// ─── ENREGISTREMENT DU WEBHOOK ──────────────────
 
 export async function registerTelegramWebhook(webhookUrl: string): Promise<void> {
   if (!BOT_API) return;
@@ -1251,7 +1251,7 @@ export async function registerTelegramWebhook(webhookUrl: string): Promise<void>
   }
 }
 
-// ─── KYC (version texte seul — fallback) ──────────────────────────────────────
+// ─── KYC (version texte seul — fallback) ──────────────────
 
 export async function notifyKycSubmitted(opts: {
   userName: string;
@@ -1280,20 +1280,20 @@ export async function notifyKycSubmitted(opts: {
 
   const msg =
     `📋 <b>NOUVELLE DEMANDE DE VÉRIFICATION KYC</b>\n` +
-    `─────────────────────────────\n` +
+    `──────────────────\n` +
     `👤 Utilisateur : <b>${opts.userName}</b>\n` +
     `📧 Email : ${opts.userEmail}\n` +
     `🆔 ID compte : <code>#${opts.userId}</code>\n` +
-    `─────────────────────────────\n` +
+    `──────────────────\n` +
     `📄 Document : ${docTypeLabel[opts.documentType] ?? opts.documentType}\n` +
     `🔢 N° Document : <code>${opts.documentNumber}</code>\n` +
     (opts.country ? `🌍 Pays : ${opts.country}\n` : "") +
     (opts.city ? `🏙 Ville : ${opts.city}\n` : "") +
-    `─────────────────────────────\n` +
+    `──────────────────\n` +
     `🏷 Type de compte : ${businessTypeLabel[opts.businessType] ?? opts.businessType}\n` +
     `📂 Catégorie : ${opts.businessCategory}\n` +
     `📝 Description : ${opts.businessDescription}\n` +
-    `─────────────────────────────\n` +
+    `──────────────────\n` +
     `⚡ <b>Action requise → Panel Admin › KYC</b>\n` +
     `🕐 Heure : ${now()}`;
   await sendMessage(msg);
@@ -1307,7 +1307,7 @@ export async function notifyKycApproved(opts: {
 }): Promise<void> {
   const msg =
     `✅ <b>KYC APPROUVÉ</b>\n` +
-    `─────────────────────────────\n` +
+    `──────────────────\n` +
     `👤 Utilisateur : <b>${opts.userName}</b>\n` +
     `📧 Email : ${opts.userEmail}\n` +
     `🆔 ID compte : <code>#${opts.userId}</code>\n` +
@@ -1325,7 +1325,7 @@ export async function notifyKycRejected(opts: {
 }): Promise<void> {
   const msg =
     `❌ <b>KYC REJETÉ</b>\n` +
-    `─────────────────────────────\n` +
+    `──────────────────\n` +
     `👤 Utilisateur : <b>${opts.userName}</b>\n` +
     `📧 Email : ${opts.userEmail}\n` +
     `🆔 ID compte : <code>#${opts.userId}</code>\n` +
@@ -1335,7 +1335,7 @@ export async function notifyKycRejected(opts: {
   await sendMessage(msg);
 }
 
-// ─── INSCRIPTION ──────────────────────────────────────────────────────────────
+// ─── INSCRIPTION ──────────────────
 
 export async function notifyNewUser(opts: {
   userName: string;
@@ -1344,7 +1344,7 @@ export async function notifyNewUser(opts: {
 }): Promise<void> {
   const msg =
     `🎉 <b>NOUVEL UTILISATEUR INSCRIT</b>\n` +
-    `─────────────────────────\n` +
+    `──────────────────\n` +
     `👤 Nom : <b>${opts.userName}</b>\n` +
     `📧 Email : ${opts.email}\n` +
     (opts.country ? `🌍 Pays : ${opts.country}\n` : "") +
