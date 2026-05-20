@@ -3040,8 +3040,9 @@ export async function registerRoutes(
         status: "pending",
         description: `Conversion ${parsedAmount.toFixed(2)} ${fromCurrency} → ${receivedAmount.toFixed(2)} ${toCurrency} (Frais: ${providerFeePercent}% fournisseur + ${ashtechFeePercent}% Ashtech = ${conversionFeePercent}%)`,
         reference: generateTransactionReference("CONV"),
-        feeAmount: ashtechFeeAmount.toFixed(2),
-        totalAmount: parsedAmount.toFixed(2),
+        feeAmount: totalFeeAmount.toFixed(2),
+        totalAmount: receivedAmount.toFixed(2),
+        recipientCountry: toCurrency,
       });
 
       // Conversion request en attente
@@ -3227,8 +3228,9 @@ export async function registerRoutes(
         status: "completed",
         description: `Conversion admin: ${parsedAmount.toFixed(2)} ${fromCurrency} → ${receivedAmount.toFixed(2)} ${toCurrency} (Frais: ${adminProviderFeePercent}% fournisseur + ${adminAshtechFeePercent}% Ashtech = ${conversionFeePercent}%)`,
         reference: generateTransactionReference("CONV"),
-        feeAmount: adminAshtechFeeAmount.toFixed(2),
-        totalAmount: parsedAmount.toFixed(2),
+        feeAmount: feeAmount.toFixed(2),
+        totalAmount: receivedAmount.toFixed(2),
+        recipientCountry: toCurrency,
       });
 
       // Debit source and credit target after transaction is created
@@ -3400,8 +3402,9 @@ export async function registerRoutes(
         status: "completed",
         description: `Conversion ${fromAmount.toFixed(2)} ${request.fromCurrency} → ${receivedAmount.toFixed(2)} ${request.toCurrency}`,
         reference: `conv_${id}`,
-        feeAmount: "0",
-        totalAmount: fromAmount.toFixed(2),
+        feeAmount: (fromAmount - receivedAmount).toFixed(2),
+        totalAmount: receivedAmount.toFixed(2),
+        recipientCountry: request.toCurrency,
       });
 
       // Notify user

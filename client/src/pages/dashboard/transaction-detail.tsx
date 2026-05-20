@@ -148,17 +148,27 @@ export default function TransactionDetailPage({ params }: { params: { id: string
   const operatorInfo = tx.operatorId ? operatorMap[tx.operatorId] : null;
   const isOutgoing = ["transfer_out", "withdrawal"].includes(tx.type);
 
-  // Real total fee = gross debited - net credited to recipient
+  // For conversions: amount = gross debited (e.g. 2000 XAF), totalAmount = received in target currency (e.g. 1880 XAFG)
+  // For outgoing: amount = net to recipient, totalAmount = gross debited from sender
   const realTotalAmount = tx.totalAmount ? parseFloat(tx.totalAmount) : 0;
   const realNetAmount = parseFloat(tx.amount);
-  const realFee = (realTotalAmount > realNetAmount) ? (realTotalAmount - realNetAmount) : (tx.feeAmount ? parseFloat(tx.feeAmount) : 0);
-  const feeBase = realTotalAmount > 0 ? realTotalAmount : realNetAmount;
+
+  // Fee: for conversions feeAmount stores the real total fee directly; for others derive from gross - net
+  const realFee = isConversion
+    ? (tx.feeAmount ? parseFloat(tx.feeAmount) : 0)
+    : (realTotalAmount > realNetAmount) ? (realTotalAmount - realNetAmount) : (tx.feeAmount ? parseFloat(tx.feeAmount) : 0);
+
+  // Fee base: for conversions use the gross debited (tx.amount); for others use the gross total
+  const feeBase = isConversion ? realNetAmount : (realTotalAmount > 0 ? realTotalAmount : realNetAmount);
   const feePercent = (realFee > 0 && feeBase > 0)
     ? ((realFee / feeBase) * 100).toFixed(2)
     : null;
 
   // For outgoing transactions, show the gross debited amount in the header
   const headerAmount = (isOutgoing && realTotalAmount > 0) ? tx.totalAmount! : tx.amount;
+
+  // Conversion target currency (stored in recipientCountry for conversion transactions)
+  const toCurrency = (isConversion && tx.recipientCountry) ? tx.recipientCountry as SupportedCurrency : null;
 
   const payerPhone = tx.paymentIntent?.payerPhone;
   const payerCountry = tx.paymentIntent?.payerCountry || operatorInfo?.country;
@@ -219,28 +229,59 @@ export default function TransactionDetailPage({ params }: { params: { id: string
           {(tx.totalAmount || tx.feeAmount) && (
             <>
               <SectionLabel>{td.detailSectionFinance}</SectionLabel>
-              {realTotalAmount > 0 && (
-                <Row
-                  label={td.detailGross}
-                  value={<span>{formatCurrency(tx.totalAmount!, txCurrency)}</span>}
-                />
+              {isConversion ? (
+                <>
+                  {/* Conversion: amount = gross debited, feeAmount = total fee, totalAmount = received in target currency */}
+                  <Row
+                    label={td.detailGross}
+                    value={<span>{formatCurrency(tx.amount, txCurrency)}</span>}
+                  />
+                  {realFee > 0 && (
+                    <Row
+                      label={`${td.detailFee}${feePercent ? ` (${feePercent}%)` : ""}`}
+                      value={<span className="text-amber-500">{formatCurrency(realFee.toFixed(2), txCurrency)}</span>}
+                    />
+                  )}
+                  {realTotalAmount > 0 && (
+                    <Row
+                      label={td.detailConverted}
+                      value={
+                        <span className="text-green-500">
+                          {formatCurrency(tx.totalAmount!, toCurrency || txCurrency)}
+                        </span>
+                      }
+                    />
+                  )}
+                </>
+              ) : (
+                <>
+                  {realTotalAmount > 0 && (
+                    <Row
+                      label={td.detailGross}
+                      value={<span>{formatCurrency(tx.totalAmount!, txCurrency)}</span>}
+                    />
+                  )}
+                  {realFee > 0 && (
+                    <Row
+                      label={`${td.detailFee}${feePercent ? ` (${feePercent}%)` : ""}`}
+                      value={<span className="text-amber-500">{formatCurrency(realFee.toFixed(2), txCurrency)}</span>}
+                    />
+                  )}
+                  <Row
+                    label={isOutgoing ? td.detailSentToRecipient : td.detailReceived}
+                    value={<span className="text-green-500">{formatCurrency(tx.amount, txCurrency)}</span>}
+                  />
+                </>
               )}
-              {realFee > 0 && (
-                <Row
-                  label={`${td.detailFee}${feePercent ? ` (${feePercent}%)` : ""}`}
-                  value={<span className="text-amber-500">{formatCurrency(realFee.toFixed(2), txCurrency)}</span>}
-                />
-              )}
-              <Row
-                label={isOutgoing ? td.detailSentToRecipient : td.detailReceived}
-                value={<span className="text-green-500">{formatCurrency(tx.amount, txCurrency)}</span>}
-              />
             </>
           )}
 
           <SectionLabel>{td.detailSectionInfo}</SectionLabel>
           <Row label={td.detailType} value={typeLabels[tx.type] || tx.type} />
-          <Row label={td.detailCurrency} value={tx.currency || "XAF"} />
+          <Row
+            label={td.detailCurrency}
+            value={isConversion && toCurrency ? `${tx.currency || "XAF"} → ${toCurrency}` : (tx.currency || "XAF")}
+          />
 
           {payerPhone && (
             <div className="flex items-center justify-between py-3 border-b border-border">
