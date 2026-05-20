@@ -80,6 +80,9 @@ export default function DepositPage() {
   const [pendingDepositData, setPendingDepositData] = useState<DepositFormData | null>(null);
 
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
+  const { data: wallets } = useQuery<{ id: string; currency: string; balance: string }[]>({
+    queryKey: ["/api/wallets"],
+  });
 
   const { data: countries, isLoading: isLoadingConfig } = useQuery<CountryConfig[]>({
     queryKey: ["/api/transfers/config?type=deposit"],
@@ -340,18 +343,31 @@ export default function DepositPage() {
           <p className="text-sm text-muted-foreground">{t.deposit.subtitle}</p>
         </div>
 
-        {/* Balance bar */}
-        <div className="flex items-center gap-3 bg-gradient-to-r from-green-500/10 to-transparent border border-green-500/20 rounded-2xl px-4 py-3">
-          <div className="w-9 h-9 rounded-full bg-green-500/15 flex items-center justify-center shrink-0">
-            <CreditCard className="w-4 h-4 text-green-500" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs text-muted-foreground">{t.deposit.currentBalance}</p>
-            <p className="text-base font-bold text-foreground tabular-nums">
-              {formatCurrency(user?.balance || "0", (user?.preferredCurrency || "XAF") as SupportedCurrency)}
-            </p>
-          </div>
-        </div>
+        {/* Balance bar — shows the wallet for the selected country */}
+        {(() => {
+          const displayCurrency = (selectedCountry?.currency || user?.preferredCurrency || "XAF") as SupportedCurrency;
+          const isPrimary = displayCurrency === (user?.preferredCurrency || "XAF");
+          const secondaryWallet = wallets?.find(w => w.currency === displayCurrency);
+          const displayBalance = isPrimary
+            ? (user?.balance || "0")
+            : (secondaryWallet?.balance || "0");
+          return (
+            <div className="flex items-center gap-3 bg-gradient-to-r from-green-500/10 to-transparent border border-green-500/20 rounded-2xl px-4 py-3">
+              <div className="w-9 h-9 rounded-full bg-green-500/15 flex items-center justify-center shrink-0">
+                <CreditCard className="w-4 h-4 text-green-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-muted-foreground">
+                  {t.deposit.currentBalance}
+                  {selectedCountry && ` (${displayCurrency})`}
+                </p>
+                <p className="text-base font-bold text-foreground tabular-nums">
+                  {formatCurrency(displayBalance, displayCurrency)}
+                </p>
+              </div>
+            </div>
+          );
+        })()}
 
         {isLoadingConfig ? (
           <div className="flex items-center justify-center py-20">
@@ -553,7 +569,7 @@ export default function DepositPage() {
                             <div className="relative flex flex-col items-center">
                               <div className="flex items-center justify-center gap-2 w-full border-b-2 border-primary/30 focus-within:border-primary pb-2 transition-colors">
                                 <span className="text-2xl font-semibold text-muted-foreground shrink-0">
-                                  {user?.preferredCurrency || "XAF"}
+                                  {selectedCountry?.currency || user?.preferredCurrency || "XAF"}
                                 </span>
                                 <input
                                   type="text"
