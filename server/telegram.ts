@@ -691,18 +691,49 @@ export type BotStats = {
 // ─── Menu & formatters ──────────────────
 
 const MAIN_MENU_KEYBOARD = [
-  [{ text: "📊 Dashboard ce mois", callback_data: "cmd:stats_month" }],
+  // ── Statistiques ──
   [
-    { text: "📅 Aujourd'hui", callback_data: "cmd:stats_today" },
-    { text: "📆 Cette semaine", callback_data: "cmd:stats_week" },
+    { text: "📊 Dashboard mois", callback_data: "cmd:stats_month" },
+    { text: "📅 Aujourd'hui",    callback_data: "cmd:stats_today" },
   ],
   [
-    { text: "⏳ En attente", callback_data: "cmd:pending" },
-    { text: "🔑 KYC", callback_data: "cmd:kyc" },
+    { text: "📆 Cette semaine",  callback_data: "cmd:stats_week" },
+    { text: "⏳ En attente",     callback_data: "cmd:pending" },
   ],
   [
-    { text: "👥 Derniers inscrits", callback_data: "cmd:users" },
-    { text: "💰 Revenus", callback_data: "cmd:revenue" },
+    { text: "🔑 KYC résumé",     callback_data: "cmd:kyc" },
+    { text: "👥 Inscrits récents", callback_data: "cmd:users" },
+  ],
+  [
+    { text: "💰 Revenus",        callback_data: "cmd:revenue" },
+    { text: "📋 Rapport complet", callback_data: "cmd:rapport" },
+  ],
+  // ── Plateforme ──
+  [
+    { text: "🏆 Top 10 soldes",  callback_data: "cmd:top" },
+    { text: "💳 Solde plateforme", callback_data: "cmd:soldeA" },
+  ],
+  [
+    { text: "🔗 Liens actifs",   callback_data: "cmd:liens" },
+    { text: "🌍 Pays actifs",    callback_data: "cmd:pays" },
+  ],
+  // ── Utilisateurs ──
+  [
+    { text: "👤 Info utilisateur", callback_data: "cmd:prompt_user" },
+    { text: "💵 Solde utilisateur", callback_data: "cmd:prompt_solde" },
+  ],
+  [
+    { text: "🚫 Bannir user",    callback_data: "cmd:prompt_ban" },
+    { text: "✅ Débannir user",  callback_data: "cmd:prompt_unban" },
+  ],
+  [
+    { text: "🔑 Reset password", callback_data: "cmd:prompt_resetpw" },
+    { text: "🔍 Vérifier tx",   callback_data: "cmd:prompt_verif" },
+  ],
+  // ── Administration ──
+  [
+    { text: "💱 Modifier taux FX", callback_data: "cmd:prompt_taux" },
+    { text: "📧 Broadcast email",  callback_data: "cmd:prompt_broadcast" },
   ],
 ];
 
@@ -710,9 +741,9 @@ async function sendMenu(chatId: string): Promise<void> {
   await callBotApi("sendMessage", {
     chat_id: chatId,
     text:
-      `🏦 <b>AshTech Pay — Panel Bot</b>\n` +
+      `🏦 <b>AshTech Pay — Panel Admin</b>\n` +
       `──────────────────\n` +
-      `Choisissez une action :`,
+      `Bienvenue ! Choisissez une action ci-dessous 👇`,
     parse_mode: "HTML",
     reply_markup: { inline_keyboard: MAIN_MENU_KEYBOARD },
   });
@@ -870,12 +901,15 @@ export async function handleTelegramUpdate(
     // ── Dashboard / stats commands ──
     if (data.startsWith("cmd:")) {
       const cmd = data.slice(4);
+      const backBtn = [[{ text: "🏠 Menu principal", callback_data: "cmd:menu" }]];
+
       if (cmd === "menu") { await sendMenu(chatId); return; }
 
+      // Stats / dashboard
       const periodMap: Record<string, string> = {
         stats_today: "today", stats_week: "this_week", stats_month: "this_month", revenue: "this_month",
       };
-      if (cmd in periodMap || cmd === "pending" || cmd === "kyc" || cmd === "users") {
+      if (cmd in periodMap || cmd === "pending" || cmd === "kyc" || cmd === "users" || cmd === "rapport") {
         const period = periodMap[cmd] ?? "this_month";
         const stats = await handlers.getStats(period);
         let text = "";
@@ -883,10 +917,90 @@ export async function handleTelegramUpdate(
         else if (cmd === "kyc") text = formatKyc(stats);
         else if (cmd === "users") text = formatRecentUsers(stats);
         else if (cmd === "revenue") text = formatRevenue(stats);
+        else if (cmd === "rapport") text = formatDashboard(stats) + "\n\n" + formatRevenue(stats) + "\n\n" + formatPending(stats);
         else text = formatDashboard(stats);
+        await callBotApi("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", reply_markup: { inline_keyboard: backBtn } });
+        return;
+      }
+
+      // Top 10
+      if (cmd === "top") {
+        const users = await handlers.getTopUsers();
+        const lines = users.map((u: any, i: number) =>
+          `${i + 1}. <b>${u.fullName || u.username}</b> — ${fmtXAF(u.balance)}`
+        ).join("\n");
         await callBotApi("sendMessage", {
-          chat_id: chatId, text, parse_mode: "HTML",
-          reply_markup: { inline_keyboard: [[{ text: "🔙 Menu", callback_data: "cmd:menu" }]] },
+          chat_id: chatId,
+          text: `🏆 <b>TOP 10 SOLDES</b>\n──────────────────\n${lines || "Aucun utilisateur"}\n🕐 ${now()}`,
+          parse_mode: "HTML", reply_markup: { inline_keyboard: backBtn },
+        });
+        return;
+      }
+
+      // Solde plateforme
+      if (cmd === "soldeA") {
+        const bal = await handlers.getPlatformBalance();
+        await callBotApi("sendMessage", {
+          chat_id: chatId,
+          text: `💳 <b>SOLDE TOTAL PLATEFORME</b>\n──────────────────\n${
+            Object.entries(bal).map(([k, v]) => `  • ${k} : <b>${fmtNum(v as number)}</b>`).join("\n")
+          }\n🕐 ${now()}`,
+          parse_mode: "HTML", reply_markup: { inline_keyboard: backBtn },
+        });
+        return;
+      }
+
+      // Liens actifs
+      if (cmd === "liens") {
+        const links = await handlers.getActiveLinks();
+        const lines = links.slice(0, 15).map((l: any) =>
+          `🔗 <b>${l.title}</b> — ${l.slug}\n   💰 ${fmtNum(l.totalCollected || 0)} XAF`
+        ).join("\n");
+        await callBotApi("sendMessage", {
+          chat_id: chatId,
+          text: `🔗 <b>LIENS ACTIFS (${links.length})</b>\n──────────────────\n${lines || "Aucun lien actif"}\n🕐 ${now()}`,
+          parse_mode: "HTML", reply_markup: { inline_keyboard: backBtn },
+        });
+        return;
+      }
+
+      // Pays actifs
+      if (cmd === "pays") {
+        const countries = await handlers.getCountries();
+        const lines = countries.map((c: any) =>
+          `${c.isActive ? "🟢" : "🔴"} ${countryDisplay(c.code) || c.name} (${c.currency})`
+        ).join("\n");
+        await callBotApi("sendMessage", {
+          chat_id: chatId,
+          text: `🌍 <b>PAYS CONFIGURÉS (${countries.length})</b>\n──────────────────\n${lines || "Aucun pays"}\n🕐 ${now()}`,
+          parse_mode: "HTML", reply_markup: { inline_keyboard: backBtn },
+        });
+        return;
+      }
+
+      // Prompts pour commandes interactives
+      const prompts: Record<string, { icon: string; title: string; usage: string; example: string }> = {
+        prompt_user:      { icon: "👤", title: "Info utilisateur",    usage: "/user email",               example: "/user jean@email.com" },
+        prompt_solde:     { icon: "💵", title: "Solde utilisateur",   usage: "/solde email",              example: "/solde jean@email.com" },
+        prompt_ban:       { icon: "🚫", title: "Bannir utilisateur",  usage: "/ban email [raison]",       example: "/ban jean@email.com Fraude détectée" },
+        prompt_unban:     { icon: "✅", title: "Débannir utilisateur",usage: "/unban email",              example: "/unban jean@email.com" },
+        prompt_resetpw:   { icon: "🔑", title: "Reset mot de passe",  usage: "/resetpw email",            example: "/resetpw jean@email.com" },
+        prompt_verif:     { icon: "🔍", title: "Vérifier transaction",usage: "/verif REFERENCE",          example: "/verif DEP-ABC123" },
+        prompt_taux:      { icon: "💱", title: "Modifier taux FX",    usage: "/taux DEVISE TAUX",         example: "/taux USD 650" },
+        prompt_broadcast: { icon: "📧", title: "Broadcast email",     usage: "/broadcast Sujet;Corps",    example: "/broadcast Maintenance;Site en maintenance ce soir" },
+      };
+      if (cmd in prompts) {
+        const p = prompts[cmd];
+        await callBotApi("sendMessage", {
+          chat_id: chatId,
+          text:
+            `${p.icon} <b>${p.title}</b>\n` +
+            `──────────────────\n` +
+            `📝 Usage : <code>${p.usage}</code>\n` +
+            `💡 Exemple : <code>${p.example}</code>\n\n` +
+            `Envoyez la commande directement dans ce chat.`,
+          parse_mode: "HTML",
+          reply_markup: { inline_keyboard: backBtn },
         });
         return;
       }
