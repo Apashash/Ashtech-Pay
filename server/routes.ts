@@ -574,6 +574,18 @@ export async function registerRoutes(
   const express = await import("express");
   app.use("/uploads", express.default.static(uploadsDir));
 
+  // ── IP block redirect: GET /login, /register → /blocked?until=X ─────────────
+  // Works server-side BEFORE React loads — any browser on a blocked IP gets
+  // redirected immediately, no JS needed.
+  app.get(["/login", "/register"], (req, res, next) => {
+    const ip = getClientIp(req);
+    const check = checkAuthRateLimit(ip);
+    if (check.blocked && check.retryAfter) {
+      return res.redirect(302, `/blocked?until=${check.retryAfter}`);
+    }
+    next();
+  });
+
   // Trust proxy (Replit uses reverse proxy in all environments)
   app.set("trust proxy", 1);
 
