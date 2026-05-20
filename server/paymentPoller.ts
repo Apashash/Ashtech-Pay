@@ -101,6 +101,7 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
         userName: (txUser as any)?.fullName || (txUser as any)?.username || "Utilisateur",
         userEmail: (txUser as any)?.email || "",
         amount: payment.amount,
+        grossAmount: (payment as any).totalAmount || payment.amount,
         currency: paymentCurrency,
         reference: payment.reference,
         provider: payment.provider,

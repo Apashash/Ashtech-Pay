@@ -214,15 +214,18 @@ export async function notifyNewDeposit(opts: {
   reference: string;
   provider?: string;
   country?: string;
+  grossAmount?: string | number;
 }): Promise<void> {
   const pays = opts.country ? countryDisplay(opts.country) : countryDisplay(opts.currency);
+  const hasGross = opts.grossAmount != null && String(opts.grossAmount) !== String(opts.amount);
   const msg =
     `🟡 <b>NOUVEAU DÉPÔT EN ATTENTE</b>\n` +
     `──────────────────\n` +
     `👤 Utilisateur : <b>${opts.userName}</b>\n` +
     `📧 Email : ${opts.userEmail}\n` +
     (pays ? `🌍 Pays : <b>${pays}</b>\n` : "") +
-    `💰 Montant : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
+    (hasGross ? `💰 Montant brut : <b>${fmt(opts.grossAmount!, opts.currency)}</b>\n` : "") +
+    `💳 Montant crédité : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
     `📱 Méthode : ${opts.method}\n` +
     (opts.phone ? `📞 Téléphone : ${opts.phone}\n` : "") +
     (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +
@@ -239,15 +242,18 @@ export async function notifyDepositConfirmed(opts: {
   reference: string;
   provider?: string;
   country?: string;
+  grossAmount?: string | number;
 }): Promise<void> {
   const pays = opts.country ? countryDisplay(opts.country) : countryDisplay(opts.currency);
+  const hasGross = opts.grossAmount != null && String(opts.grossAmount) !== String(opts.amount);
   const msg =
     `✅ <b>PAIEMENT REÇU / DÉPÔT CONFIRMÉ</b>\n` +
     `──────────────────\n` +
     `👤 Utilisateur : <b>${opts.userName}</b>\n` +
     `📧 Email : ${opts.userEmail}\n` +
     (pays ? `🌍 Pays : <b>${pays}</b>\n` : "") +
-    `💰 Montant crédité : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
+    (hasGross ? `💰 Montant brut : <b>${fmt(opts.grossAmount!, opts.currency)}</b>\n` : "") +
+    `💳 Montant crédité : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
     (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +
     `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
     `🕐 Heure : ${now()}`;
@@ -292,10 +298,12 @@ export async function notifyWithdrawalRequest(opts: {
   provider?: string;
   senderCountry?: string;
   recipientCountry?: string;
+  grossAmount?: string | number;
 }): Promise<void> {
   const senderPays = countryDisplay(opts.senderCountry || opts.currency);
   const recipientPays = countryDisplay(opts.recipientCountry || opts.currency);
   const sameCountry = senderPays === recipientPays;
+  const hasGross = opts.grossAmount != null && String(opts.grossAmount) !== String(opts.amount);
   const msg =
     `🔵 <b>DEMANDE DE RETRAIT</b>\n` +
     `──────────────────\n` +
@@ -305,7 +313,8 @@ export async function notifyWithdrawalRequest(opts: {
       ? (senderPays ? `🌍 Pays : <b>${senderPays}</b>\n` : "")
       : `🌍 Expéditeur : <b>${senderPays || "—"}</b>\n` +
         `📍 Destinataire : <b>${recipientPays || "—"}</b>\n`) +
-    `💰 Montant net : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
+    (hasGross ? `💰 Montant brut : <b>${fmt(opts.grossAmount!, opts.currency)}</b>\n` : "") +
+    `💳 Montant net : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
     `📱 Numéro : ${opts.phone}\n` +
     (opts.operator ? `📡 Opérateur : ${opts.operator}\n` : "") +
     (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +
@@ -336,10 +345,12 @@ export async function notifyWithdrawalPendingManual(opts: {
   reference: string;
   senderCountry?: string;
   recipientCountry?: string;
+  grossAmount?: string | number;
 }): Promise<void> {
   const senderPays = countryDisplay(opts.senderCountry || opts.currency);
   const recipientPays = countryDisplay(opts.recipientCountry || opts.currency);
   const sameCountry = senderPays === recipientPays;
+  const hasGross = opts.grossAmount != null && String(opts.grossAmount) !== String(opts.amount);
   const msg =
     `⏸ <b>RETRAIT EN ATTENTE MANUELLE</b>\n` +
     `──────────────────\n` +
@@ -349,7 +360,8 @@ export async function notifyWithdrawalPendingManual(opts: {
       ? (senderPays ? `🌍 Pays : <b>${senderPays}</b>\n` : "")
       : `🌍 Expéditeur : <b>${senderPays || "—"}</b>\n` +
         `📍 Destinataire : <b>${recipientPays || "—"}</b>\n`) +
-    `💰 Montant : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
+    (hasGross ? `💰 Montant brut : <b>${fmt(opts.grossAmount!, opts.currency)}</b>\n` : "") +
+    `💳 Montant net : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
     `📱 Numéro : ${opts.phone}\n` +
     `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
     `⚠️ <b>Validation manuelle requise !</b>\n` +
@@ -373,13 +385,16 @@ export async function notifyWithdrawalAutoValidated(opts: {
   currency: string;
   reference: string;
   provider?: string;
+  grossAmount?: string | number;
 }): Promise<void> {
+  const hasGross = opts.grossAmount != null && String(opts.grossAmount) !== String(opts.amount);
   const msg =
     `✅ <b>RETRAIT VALIDÉ AUTOMATIQUEMENT</b>\n` +
     `──────────────────\n` +
     `👤 Utilisateur : <b>${opts.userName}</b>\n` +
     `📧 Email : ${opts.userEmail}\n` +
-    `💰 Montant : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
+    (hasGross ? `💰 Montant brut : <b>${fmt(opts.grossAmount!, opts.currency)}</b>\n` : "") +
+    `💳 Montant net : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
     (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +
     `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
     `🕐 Heure : ${now()}`;
@@ -393,14 +408,17 @@ export async function notifyWithdrawalManuallyValidated(opts: {
   amount: string | number;
   currency: string;
   reference: string;
+  grossAmount?: string | number;
 }): Promise<void> {
+  const hasGross = opts.grossAmount != null && String(opts.grossAmount) !== String(opts.amount);
   const msg =
     `✅ <b>RETRAIT VALIDÉ MANUELLEMENT</b>\n` +
     `──────────────────\n` +
     `🛡️ Admin : <b>${opts.adminName}</b>\n` +
     `👤 Utilisateur : <b>${opts.userName}</b>\n` +
     `📧 Email : ${opts.userEmail}\n` +
-    `💰 Montant : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
+    (hasGross ? `💰 Montant brut : <b>${fmt(opts.grossAmount!, opts.currency)}</b>\n` : "") +
+    `💳 Montant net : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
     `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
     `🕐 Heure : ${now()}`;
   await sendMessage(msg);
@@ -414,13 +432,16 @@ export async function notifyWithdrawalFailed(opts: {
   reference: string;
   reason?: string;
   provider?: string;
+  grossAmount?: string | number;
 }): Promise<void> {
+  const hasGross = opts.grossAmount != null && String(opts.grossAmount) !== String(opts.amount);
   const msg =
     `❌ <b>ÉCHEC DE RETRAIT</b>\n` +
     `──────────────────\n` +
     `👤 Utilisateur : <b>${opts.userName}</b>\n` +
     `📧 Email : ${opts.userEmail}\n` +
-    `💰 Montant : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
+    (hasGross ? `💰 Montant brut : <b>${fmt(opts.grossAmount!, opts.currency)}</b>\n` : "") +
+    `💳 Montant net : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
     (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +
     (opts.reason ? `⚠️ Raison : ${opts.reason}\n` : "") +
     `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
