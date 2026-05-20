@@ -243,8 +243,8 @@ function GlobalSSEWatcher() {
     queryKey: ["/api/user"],
     queryFn: getQueryFn({ on401: "returnNull" }),
     retry: false,
-    staleTime: Infinity,
-    refetchOnWindowFocus: false,
+    staleTime: 30000,
+    refetchOnWindowFocus: "always",
   });
 
   // Filet de sécurité : vérifie le statut IP toutes les 30s pour les utilisateurs connectés.

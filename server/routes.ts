@@ -209,6 +209,22 @@ function getUserIdFromToken(token: string): string | null {
   }
 }
 
+// Extrait le userId d'un token sans vérifier la révocation (pour détecter les kicks single-device)
+function getTokenUserIdIgnoreRevocation(token: string): string | null {
+  try {
+    const decoded = Buffer.from(token, "base64url").toString();
+    const parts = decoded.split(".");
+    if (parts.length !== 3) return null;
+    const [userId, timestamp, sig] = parts;
+    const expectedSig = crypto.createHmac("sha256", getTokenSecret()).update(`${userId}.${timestamp}`).digest("hex");
+    if (sig !== expectedSig) return null;
+    if (Date.now() - parseInt(timestamp) > TOKEN_EXPIRY_MS) return null;
+    return userId;
+  } catch {
+    return null;
+  }
+}
+
 function removeAuthToken(_token: string): void {
 }
 
@@ -257,7 +273,17 @@ function extractUserId(req: Request, _res: Response, next: NextFunction) {
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
       const id = getUserIdFromToken(token);
-      if (id) userId = id;
+      if (id) {
+        userId = id;
+      } else {
+        // Token invalide — vérifier si c'est à cause d'une révocation single-device
+        // (token valide en signature/expiration mais révoqué via revokedTokensBefore)
+        const rawId = getTokenUserIdIgnoreRevocation(token);
+        if (rawId && revokedTokensBefore.has(rawId)) {
+          req.singleDeviceKick = true;
+          return next();
+        }
+      }
     }
   }
 
