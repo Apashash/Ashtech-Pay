@@ -27,7 +27,12 @@ export const globalLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: getIp,
   validate: sharedValidate,
-  skip: (req) => !req.path.startsWith("/api"),
+  skip: (req) => {
+    if (!req.path.startsWith("/api")) return true;
+    if (req.path === "/api/auth/ping") return true;
+    if (req.path === "/api/sse") return true;
+    return false;
+  },
   handler: (_req, res) =>
     reject(res, "Trop de requêtes. Réessayez dans une minute.", 60),
 });
