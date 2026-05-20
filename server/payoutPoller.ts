@@ -3,6 +3,7 @@ import { checkSwychrPayoutStatus } from "./swychrPayout";
 import { checkAfribaPayStatus } from "./afribapay";
 import { checkPixPayStatus } from "./pixpay";
 import { sendWithdrawalApprovedEmail } from "./email";
+import { notifyWithdrawalAutoValidated, notifyWithdrawalFailed } from "./telegram";
 
 const POLL_INTERVAL  = 6_000; // 6 seconds
 const MAX_ATTEMPTS   = 600;    // 600 × 6s = 60 minutes max
@@ -115,6 +116,15 @@ async function processPayout(payout: PendingPayout, apiStatus: string) {
       });
       console.log(`[PayoutPoller] ✅ Payout success: ${payout.reference} (${payout.provider})`);
 
+      notifyWithdrawalAutoValidated({
+        userName: (txUser as any)?.fullName || (txUser as any)?.username || "Utilisateur",
+        userEmail: (txUser as any)?.email || "",
+        amount: payout.amount,
+        currency,
+        reference: payout.reference,
+        provider: payout.provider,
+      }).catch(() => {});
+
     } else {
       await storage.updateTransactionStatus(payout.transactionId, "failed");
       const refundAmount = parseFloat(payout.totalDebited || payout.amount);
@@ -128,6 +138,17 @@ async function processPayout(payout: PendingPayout, apiStatus: string) {
         isRead:        false,
       });
       console.log(`[PayoutPoller] ❌ Payout failed (${apiStatus}): ${payout.reference} — refunded ${refundAmount} ${currency}`);
+
+      const failedUser = await storage.getUser(payout.userId).catch(() => null);
+      notifyWithdrawalFailed({
+        userName: (failedUser as any)?.fullName || (failedUser as any)?.username || "Utilisateur",
+        userEmail: (failedUser as any)?.email || "",
+        amount: payout.amount,
+        currency,
+        reference: payout.reference,
+        reason: apiStatus,
+        provider: payout.provider,
+      }).catch(() => {});
     }
 
     removePendingPayout(payout.reference);

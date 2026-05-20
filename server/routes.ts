@@ -49,6 +49,17 @@ import { createSwychrPayout, formatInternationalPhone, detectMethodFromPhone, fi
 import { addPendingPayout, removePendingPayout } from "./payoutPoller";
 import { addSSEClient, removeSSEClient, setActiveTicket, isUserOnline, getOnlineUserIds, getAdminViewingTicket, getUserViewingTicket, notifyUser, notifyAdmins, broadcastOnlineStatus } from "./sse";
 import {
+  notifyNewDeposit,
+  notifyWithdrawalRequest,
+  notifyWithdrawalPendingManual,
+  notifyWithdrawalManuallyValidated,
+  notifyLoginFailed,
+  notifyAdminLogin,
+  notifyAdminLoginFailed,
+  notifyNewUser,
+  notifyTransferSent,
+} from "./telegram";
+import {
   sendWelcomeEmail,
   sendPasswordResetEmail,
   sendCampaignEmail,
@@ -727,6 +738,8 @@ export async function registerRoutes(
         sendWelcomeEmail(user.email, user.fullName || user.username).catch(() => {});
       }
 
+      notifyNewUser({ userName: user.fullName || user.username, email: user.email || "", country: data.country }).catch(() => {});
+
       // Generate auth token for token-based auth (works in iframes where cookies fail)
       const authToken = storeAuthToken(user.id);
       
@@ -779,6 +792,10 @@ export async function registerRoutes(
         const msg = failure.blocked
           ? "Trop de tentatives incorrectes. Accès bloqué pendant 7 minutes."
           : `Email/téléphone ou mot de passe incorrect. ${remaining} tentative(s) restante(s).`;
+        notifyLoginFailed({ identifier: data.identifier, ip, attemptsLeft: remaining, blocked: !!failure.blocked }).catch(() => {});
+        if (user?.role === "admin") {
+          notifyAdminLoginFailed({ identifier: data.identifier, ip }).catch(() => {});
+        }
         return res.status(failure.blocked ? 429 : 401).json({
           message: msg,
           blocked: failure.blocked,
@@ -794,6 +811,10 @@ export async function registerRoutes(
       }
 
       clearAuthAttempts(ip);
+
+      if (user.role === "admin") {
+        notifyAdminLogin({ adminName: user.fullName || user.username, adminEmail: user.email || "", ip }).catch(() => {});
+      }
 
       // Generate auth token for token-based auth (works in iframes where cookies fail)
       const authToken = storeAuthToken(user.id);
@@ -1879,6 +1900,17 @@ export async function registerRoutes(
         recipientPhone: data.phoneNumber || null,
       });
 
+      notifyNewDeposit({
+        userName: user.fullName || user.username,
+        userEmail: user.email || "",
+        amount: totalAmount,
+        currency: countryCurrency,
+        method: data.paymentMethod === "mobile_money" ? `Mobile Money (${operatorName})` : data.paymentMethod,
+        phone: data.phoneNumber || undefined,
+        reference: depositRef,
+        provider: paymentProvider,
+      }).catch(() => {});
+
       // Call payment gateway for mobile money deposits
       if (data.paymentMethod === "mobile_money" && data.phoneNumber) {
         try {
@@ -2368,6 +2400,17 @@ export async function registerRoutes(
 
       console.log(`[Withdrawal] Created withdrawal ${withdrawalRef} for ${creditedAmount} — calling payout gateway`);
 
+      notifyWithdrawalRequest({
+        userName: user.fullName || user.username,
+        userEmail: user.email || "",
+        amount: creditedAmount,
+        currency: withdrawalCurrency,
+        phone: data.accountDetails,
+        operator: (withdrawalOperator as any)?.name || undefined,
+        reference: withdrawalRef,
+        provider: withdrawalProvider,
+      }).catch(() => {});
+
       // Call payout API immediately — choose provider based on operator config
       try {
         const operator = withdrawalOperator;
@@ -2496,6 +2539,14 @@ export async function registerRoutes(
               transactionId: transaction.id,
               isRead: false,
             });
+            notifyWithdrawalPendingManual({
+              userName: user.fullName || user.username,
+              userEmail: user.email || "",
+              amount: creditedAmount,
+              currency: withdrawalCurrency,
+              phone: data.accountDetails,
+              reference: withdrawalRef,
+            }).catch(() => {});
           } else {
             console.error(`[Withdrawal] Payout failed for ${withdrawalRef} (${paymentProvider}): ${payoutResult.message}`);
             await storage.updateTransactionStatus(transaction.id, "failed");
@@ -6473,6 +6524,15 @@ export async function registerRoutes(
         transactionId: tx.id,
         isRead: false,
       });
+      const adminUser = await storage.getUser(req.userId!).catch(() => null);
+      notifyWithdrawalManuallyValidated({
+        adminName: (adminUser as any)?.fullName || (adminUser as any)?.username || "Admin",
+        userName: (txUser as any)?.fullName || (txUser as any)?.username || "Inconnu",
+        userEmail: (txUser as any)?.email || "",
+        amount: tx.amount,
+        currency: tx.currency || "XAF",
+        reference: tx.reference || tx.id,
+      }).catch(() => {});
       await storage.createAdminLog({
         adminId: req.userId!,
         action: "confirm_pending_payout",

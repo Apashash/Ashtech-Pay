@@ -4,6 +4,7 @@ import { checkAfribaPayStatus } from "./afribapay";
 import { checkPixPayStatus } from "./pixpay";
 import { creditUserWallet } from "./walletHelper";
 import { sendPayerConfirmationEmail } from "./email";
+import { notifyDepositConfirmed, notifyDepositFailed } from "./telegram";
 
 const POLL_INTERVAL = 3000;
 const MAX_POLL_DURATION_MS = 7 * 60 * 1000; // 7 minutes — auto-reject if no success/failure received
@@ -95,6 +96,16 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
       });
       console.log(`[PaymentPoller] ✓ Payment COMPLETED for ${payment.reference} (${payment.provider || "swychr"}) → credited ${payment.amount} ${paymentCurrency}`);
 
+      const txUser = await storage.getUser(payment.userId).catch(() => null);
+      notifyDepositConfirmed({
+        userName: (txUser as any)?.fullName || (txUser as any)?.username || "Utilisateur",
+        userEmail: (txUser as any)?.email || "",
+        amount: payment.amount,
+        currency: paymentCurrency,
+        reference: payment.reference,
+        provider: payment.provider,
+      }).catch(() => {});
+
       if (payment.paymentIntentId) {
         await storage.updatePaymentIntentStatus(payment.paymentIntentId, "completed");
       }
@@ -130,6 +141,16 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
         await storage.updatePaymentIntentStatus(payment.paymentIntentId, "failed");
       }
       console.log(`[PaymentPoller] ✗ Payment FAILED/CANCELLED for ${payment.reference} (${payment.provider || "swychr"})`);
+
+      const txUserFailed = await storage.getUser(payment.userId).catch(() => null);
+      notifyDepositFailed({
+        userName: (txUserFailed as any)?.fullName || (txUserFailed as any)?.username || "Utilisateur",
+        userEmail: (txUserFailed as any)?.email || "",
+        amount: payment.amount,
+        currency: transaction.currency || "XAF",
+        reference: payment.reference,
+        provider: payment.provider,
+      }).catch(() => {});
     }
 
     // ── Merchant webhook notification (SDK + Hosted Page) ────────────────────
