@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
-import { ShieldAlert, Clock, Home, LogIn, UserPlus } from "lucide-react";
+import { ShieldAlert, Clock, Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+const RATE_LIMIT_KEY = "ashtech_rate_limit_until";
+
 function useCountdown(retryAfter: number | null) {
-  // Initialiser directement avec le temps restant réel pour éviter un
-  // faux `remaining === 0` au montage qui déclencherait une redirection immédiate
   const [remaining, setRemaining] = useState<number>(() => {
     if (!retryAfter) return 0;
     return Math.max(0, Math.ceil((retryAfter - Date.now()) / 1000));
@@ -42,34 +42,49 @@ export default function BlockedPage() {
     return v ? parseInt(v, 10) : null;
   })();
 
-  const countdown = useCountdown(until);
+  // Persist until in localStorage so BlockGuard can intercept future navigations
+  useEffect(() => {
+    if (until && until > Date.now()) {
+      try { localStorage.setItem(RATE_LIMIT_KEY, String(until)); } catch {}
+    }
+  }, [until]);
 
+  const countdown = useCountdown(until);
   const minutes = Math.floor(countdown / 60);
   const seconds = countdown % 60;
 
   useEffect(() => {
     if (countdown === 0 && until !== null) {
+      try { localStorage.removeItem(RATE_LIMIT_KEY); } catch {}
       setLocation("/login");
     }
   }, [countdown, until, setLocation]);
 
   return (
-    <div className="min-h-screen bg-[#0B0E11] flex items-center justify-center p-4">
-      <div className="w-full max-w-sm flex flex-col">
-        <div className="bg-[#1E2329] border border-red-500/20 rounded-2xl p-8 flex flex-col items-center gap-6 shadow-2xl">
-          <div className="w-20 h-20 rounded-full bg-red-500/10 border-2 border-red-500/30 flex items-center justify-center">
-            <ShieldAlert className="w-10 h-10 text-red-500" />
+    <div className="min-h-screen bg-muted flex items-center justify-center p-4">
+      <div className="w-full max-w-sm">
+        <div className="flex flex-col items-center gap-3 mb-8">
+          <Link href="/">
+            <div className="flex items-center gap-2 cursor-pointer">
+              <img src="/logo.png" alt="AshTech Pay" className="h-28 w-auto" />
+            </div>
+          </Link>
+        </div>
+
+        <div className="bg-card border border-border rounded-2xl p-8 flex flex-col items-center gap-6">
+          <div className="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center">
+            <ShieldAlert className="w-8 h-8 text-red-500" />
           </div>
 
           <div className="text-center space-y-2">
-            <h1 className="text-xl font-bold text-white">Accès temporairement bloqué</h1>
-            <p className="text-sm text-gray-400 leading-relaxed">
+            <h1 className="text-xl font-bold text-foreground">Accès temporairement bloqué</h1>
+            <p className="text-sm text-muted-foreground leading-relaxed">
               Trop de tentatives de connexion incorrectes ont été détectées depuis votre adresse IP.
             </p>
           </div>
 
           <div className="w-full bg-red-500/5 border border-red-500/20 rounded-xl p-6 flex flex-col items-center gap-3">
-            <div className="flex items-center gap-2 text-gray-400 text-sm">
+            <div className="flex items-center gap-2 text-muted-foreground text-sm">
               <Clock className="w-4 h-4" />
               <span>Réessayez dans</span>
             </div>
@@ -82,7 +97,7 @@ export default function BlockedPage() {
                 >
                   {String(minutes).padStart(2, "0")}
                 </span>
-                <span className="text-xs text-gray-500 mt-1 uppercase tracking-wider">min</span>
+                <span className="text-xs text-muted-foreground mt-1 uppercase tracking-wider">min</span>
               </div>
               <span className="text-4xl font-bold text-red-400/60 mb-3">:</span>
               <div className="flex flex-col items-center">
@@ -92,38 +107,24 @@ export default function BlockedPage() {
                 >
                   {String(seconds).padStart(2, "0")}
                 </span>
-                <span className="text-xs text-gray-500 mt-1 uppercase tracking-wider">sec</span>
+                <span className="text-xs text-muted-foreground mt-1 uppercase tracking-wider">sec</span>
               </div>
             </div>
           </div>
 
-          <p className="text-xs text-gray-500 text-center leading-relaxed">
+          <p className="text-xs text-muted-foreground text-center leading-relaxed">
             Pour votre sécurité, l'accès est bloqué après 4 tentatives incorrectes.
             Vous serez automatiquement redirigé vers la connexion à l'expiration du délai.
           </p>
         </div>
 
-        <div className="mt-5 flex items-center justify-between px-1">
+        <div className="mt-5 flex justify-center px-1">
           <Link href="/">
-            <Button variant="ghost" size="sm" className="gap-1.5 text-gray-400 hover:text-white">
+            <Button variant="ghost" size="sm" className="gap-1.5" data-testid="button-blocked-home">
               <Home className="w-3.5 h-3.5" />
-              Accueil
+              Retour à l'accueil
             </Button>
           </Link>
-          <div className="flex items-center gap-1">
-            <Link href="/login">
-              <Button variant="ghost" size="sm" className="gap-1.5 text-gray-400 hover:text-white" data-testid="link-blocked-login">
-                <LogIn className="w-3.5 h-3.5" />
-                Connexion
-              </Button>
-            </Link>
-            <Link href="/register">
-              <Button variant="ghost" size="sm" className="gap-1.5 text-gray-400 hover:text-white" data-testid="link-blocked-register">
-                <UserPlus className="w-3.5 h-3.5" />
-                S'inscrire
-              </Button>
-            </Link>
-          </div>
         </div>
       </div>
     </div>

@@ -1,7 +1,7 @@
-import { Switch, Route, useLocation, Redirect } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
 import { queryClient, removeAuthToken, getQueryFn, getAuthHeaders } from "./lib/queryClient";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect } from "react";
 import { useSSE } from "@/hooks/use-sse";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -98,11 +98,18 @@ function getBlockedUntil(): number | null {
 }
 
 // Redirige immédiatement vers /blocked si l'IP est bloquée (vérif. localStorage)
+// useLayoutEffect + return null = aucun flash de la page login/register
 function BlockGuard({ children }: { children: React.ReactNode }) {
+  const [, navigate] = useLocation();
   const blockedUntil = getBlockedUntil();
-  if (blockedUntil !== null) {
-    return <Redirect to={`/blocked?until=${blockedUntil}`} />;
-  }
+
+  useLayoutEffect(() => {
+    if (blockedUntil !== null) {
+      navigate(`/blocked?until=${blockedUntil}`, { replace: true });
+    }
+  }, [blockedUntil]);
+
+  if (blockedUntil !== null) return null;
   return <>{children}</>;
 }
 
