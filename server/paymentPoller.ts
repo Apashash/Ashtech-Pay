@@ -116,6 +116,7 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
         paymentMethod: transaction.paymentMethod || undefined,
         phone: transaction.recipientPhone || undefined,
         operator: (txOperator as any)?.name || undefined,
+        source: (transaction as any).source || undefined,
         ...(isLink && {
           payerName: transaction.payerName || undefined,
           payerEmail: transaction.payerEmail || undefined,
@@ -179,6 +180,7 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
         paymentMethod: transaction.paymentMethod || undefined,
         phone: transaction.recipientPhone || undefined,
         operator: (txOperatorFailed as any)?.name || undefined,
+        source: (transaction as any).source || undefined,
       }).catch(() => {});
     }
 

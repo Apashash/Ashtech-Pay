@@ -1813,6 +1813,7 @@ export async function registerRoutes(
           paymentMethod: transaction.paymentMethod || undefined,
           phone: transaction.recipientPhone || undefined,
           operator: (txOp as any)?.name || undefined,
+          source: (transaction as any).source || undefined,
         }).catch(() => {});
       }).catch(() => {});
       res.json({ success: true, status: "failed" });
@@ -8204,6 +8205,7 @@ export async function registerRoutes(
             paymentMethod: transaction.paymentMethod || undefined,
             phone: transaction.recipientPhone || undefined,
             operator: (txOp as any)?.name || undefined,
+            source: (transaction as any).source || undefined,
           }).catch(() => {});
         }).catch(() => {});
         console.log("[Swychr Webhook] Payment FAILED for:", transaction.id);
@@ -8322,6 +8324,7 @@ export async function registerRoutes(
               paymentMethod: transaction.paymentMethod || undefined,
               phone: transaction.recipientPhone || undefined,
               operator: (txOp as any)?.name || undefined,
+              source: (transaction as any).source || undefined,
               ...(isPaymentLink && {
                 payerName: transaction.payerName || undefined,
                 payerEmail: transaction.payerEmail || undefined,
@@ -8399,6 +8402,7 @@ export async function registerRoutes(
               paymentMethod: transaction.paymentMethod || undefined,
               phone: transaction.recipientPhone || undefined,
               operator: (txOp as any)?.name || undefined,
+              source: (transaction as any).source || undefined,
             }).catch(() => {});
           }).catch(() => {});
           console.log(`[AfribaPay Webhook] ✗ Deposit FAILED/CANCELLED: ${transaction.id}`);
@@ -8505,6 +8509,7 @@ export async function registerRoutes(
               paymentMethod: transaction.paymentMethod || undefined,
               phone: transaction.recipientPhone || undefined,
               operator: (txOp as any)?.name || undefined,
+              source: (transaction as any).source || undefined,
               ...(isPaymentLink && {
                 payerName: transaction.payerName || undefined,
                 payerEmail: transaction.payerEmail || undefined,
@@ -8584,6 +8589,7 @@ export async function registerRoutes(
               paymentMethod: transaction.paymentMethod || undefined,
               phone: transaction.recipientPhone || undefined,
               operator: (txOp as any)?.name || undefined,
+              source: (transaction as any).source || undefined,
             }).catch(() => {});
           }).catch(() => {});
           console.log(`[PixPay Webhook] ✗ Deposit FAILED: ${transaction.id} — ${providerMessage}`);

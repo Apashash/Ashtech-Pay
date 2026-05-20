@@ -217,12 +217,15 @@ export async function notifyNewDeposit(opts: {
   provider?: string;
   country?: string;
   grossAmount?: string | number;
+  source?: string;
 }): Promise<void> {
   const pays = opts.country ? countryDisplay(opts.country) : countryDisplay(opts.currency);
   const hasGross = opts.grossAmount != null && String(opts.grossAmount) !== String(opts.amount);
+  const sourceLabel = opts.source === "api" ? "🔌 <b>Paiement via API</b>\n" : opts.source === "hosted_page" ? "🖥️ <b>Page de paiement hébergée (API)</b>\n" : "";
   const msg =
     `🟡 <b>NOUVEAU DÉPÔT EN ATTENTE</b>\n` +
     `──────────────────\n` +
+    (sourceLabel ? sourceLabel : "") +
     `👤 Utilisateur : <b>${opts.userName}</b>\n` +
     `📧 Email : ${opts.userEmail}\n` +
     (pays ? `🌍 Pays : <b>${pays}</b>\n` : "") +
@@ -258,16 +261,19 @@ export async function notifyDepositConfirmed(opts: {
   beneficiaryPhone?: string;
   creditedCurrency?: string;
   linkTitle?: string;
+  source?: string;
 }): Promise<void> {
   const pays = opts.country ? countryDisplay(opts.country) : countryDisplay(opts.currency);
   const hasGross = opts.grossAmount != null && String(opts.grossAmount) !== String(opts.amount);
   const isLink = opts.depositType === "payment_link";
   const typeLabel = isLink ? "Lien de paiement" : "Dépôt normal";
   const methodLabel = opts.paymentMethod === "mobile_money" ? "Mobile Money" : opts.paymentMethod || "";
+  const sourceLabel = opts.source === "api" ? "🔌 <b>Paiement via API</b>\n" : opts.source === "hosted_page" ? "🖥️ <b>Page de paiement hébergée (API)</b>\n" : "";
 
   let msg =
     `✅ <b>PAIEMENT REÇU / DÉPÔT CONFIRMÉ</b>\n` +
     `──────────────────\n` +
+    (sourceLabel ? sourceLabel : "") +
     `👤 Utilisateur : <b>${opts.userName}</b>\n` +
     `📧 Email : ${opts.userEmail}\n` +
     (pays ? `🌍 Pays : <b>${pays}</b>\n` : "") +
@@ -313,13 +319,16 @@ export async function notifyDepositFailed(opts: {
   paymentMethod?: string;
   phone?: string;
   operator?: string;
+  source?: string;
 }): Promise<void> {
   const pays = opts.country ? countryDisplay(opts.country) : countryDisplay(opts.currency);
   const typeLabel = opts.depositType === "payment_link" ? "Lien de paiement" : "Dépôt normal";
   const methodLabel = opts.paymentMethod === "mobile_money" ? "Mobile Money" : opts.paymentMethod || "";
+  const sourceLabel = opts.source === "api" ? "🔌 <b>Paiement via API</b>\n" : opts.source === "hosted_page" ? "🖥️ <b>Page de paiement hébergée (API)</b>\n" : "";
   const msg =
     `❌ <b>ÉCHEC DE PAIEMENT (DÉPÔT)</b>\n` +
     `──────────────────\n` +
+    (sourceLabel ? sourceLabel : "") +
     `👤 Utilisateur : <b>${opts.userName}</b>\n` +
     `📧 Email : ${opts.userEmail}\n` +
     (pays ? `🌍 Pays : <b>${pays}</b>\n` : "") +
