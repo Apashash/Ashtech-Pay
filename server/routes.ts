@@ -2,6 +2,12 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import {
+  checkAuthRateLimit,
+  recordAuthFailure,
+  clearAuthAttempts,
+  getBlockedIps,
+} from "./ipBlocker";
+import {
   loginLimiter,
   registerLimiter,
   withdrawalLimiter,
@@ -373,11 +379,6 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000); // Clean expired entries every 5 min
 
-// ─── Auth Rate Limiter ────────────────────────────────────────────────────────
-const authAttempts = new Map<string, { count: number; blockedUntil?: number; identifier?: string; blockedAt?: number }>();
-const MAX_AUTH_ATTEMPTS = 4;
-const AUTH_BLOCK_DURATION_MS = 7 * 60 * 1000; // 7 minutes
-
 // ─── Forced-logout map : userId → blockedUntil timestamp ─────────────────────
 const forcedLogoutMap = new Map<string, number>();
 // Map sessionId → expiresAt : sessions individuellement révoquées (ex : changement d'IP)
@@ -435,59 +436,6 @@ function getClientIp(req: Request): string {
   return req.ip || "unknown";
 }
 
-function checkAuthRateLimit(ip: string): { blocked: boolean; retryAfter?: number } {
-  const now = Date.now();
-  const record = authAttempts.get(ip);
-  if (record?.blockedUntil) {
-    if (now < record.blockedUntil) return { blocked: true, retryAfter: record.blockedUntil };
-    authAttempts.delete(ip);
-  }
-  return { blocked: false };
-}
-
-function recordAuthFailure(ip: string, identifier?: string): { blocked: boolean; retryAfter?: number; attemptsLeft: number } {
-  const now = Date.now();
-  const existing = authAttempts.get(ip);
-  if (existing?.blockedUntil && now >= existing.blockedUntil) {
-    authAttempts.set(ip, { count: 1, identifier });
-    return { blocked: false, attemptsLeft: MAX_AUTH_ATTEMPTS - 1 };
-  }
-  const newCount = (existing?.count || 0) + 1;
-  if (newCount >= MAX_AUTH_ATTEMPTS) {
-    const blockedUntil = now + AUTH_BLOCK_DURATION_MS;
-    authAttempts.set(ip, { count: newCount, blockedUntil, identifier: identifier || existing?.identifier, blockedAt: now });
-    return { blocked: true, retryAfter: blockedUntil, attemptsLeft: 0 };
-  }
-  authAttempts.set(ip, { count: newCount, identifier: identifier || existing?.identifier });
-  return { blocked: false, attemptsLeft: MAX_AUTH_ATTEMPTS - newCount };
-}
-
-function clearAuthAttempts(ip: string): void {
-  authAttempts.delete(ip);
-}
-
-function getBlockedIps(): { ip: string; identifier: string; blockedUntil: number; blockedAt: number }[] {
-  const now = Date.now();
-  const result: { ip: string; identifier: string; blockedUntil: number; blockedAt: number }[] = [];
-  for (const [ip, record] of authAttempts.entries()) {
-    if (record.blockedUntil && now < record.blockedUntil) {
-      result.push({
-        ip,
-        identifier: record.identifier || "inconnu",
-        blockedUntil: record.blockedUntil,
-        blockedAt: record.blockedAt || record.blockedUntil - AUTH_BLOCK_DURATION_MS,
-      });
-    }
-  }
-  return result.sort((a, b) => b.blockedAt - a.blockedAt);
-}
-
-setInterval(() => {
-  const now = Date.now();
-  for (const [ip, record] of authAttempts.entries()) {
-    if (!record.blockedUntil || now > record.blockedUntil + 60000) authAttempts.delete(ip);
-  }
-}, 10 * 60 * 1000);
 
 // ─── African Country Codes ────────────────────────────────────────────────────
 const AFRICAN_COUNTRY_CODES = new Set([
@@ -851,12 +799,9 @@ export async function registerRoutes(
   });
 
   // Admin — débloquer manuellement une IP
-  app.delete("/api/admin/blocked-ips/:ip", requireAuth, requireAdmin, (req, res) => {
+  app.delete("/api/admin/blocked-ips/:ip", requireAuth, requireAdmin, async (req, res) => {
     const ip = decodeURIComponent(req.params.ip);
-    authAttempts.delete(ip);
-    forcedLogoutMap.forEach((_until, uid) => {
-      // We can't map IP→userId easily so just clean the entry by IP
-    });
+    await clearAuthAttempts(ip);
     res.json({ ok: true, message: `IP ${ip} débloquée.` });
   });
 
@@ -893,13 +838,13 @@ export async function registerRoutes(
 
       const existingEmail = await storage.getUserByEmail(data.email);
       if (existingEmail) {
-        recordAuthFailure(ip);
+        await recordAuthFailure(ip);
         return res.status(400).json({ message: "Cet email est déjà utilisé" });
       }
 
       const existingUsername = await storage.getUserByUsername(data.username);
       if (existingUsername) {
-        recordAuthFailure(ip);
+        await recordAuthFailure(ip);
         return res.status(400).json({ message: "Ce nom d'utilisateur est déjà pris" });
       }
 
@@ -918,7 +863,7 @@ export async function registerRoutes(
         registrationIp: ip,
       });
 
-      clearAuthAttempts(ip);
+      await clearAuthAttempts(ip);
 
       // Send welcome email asynchronously (non-blocking)
       if (user.email) {
@@ -974,7 +919,7 @@ export async function registerRoutes(
 
       const user = await storage.getUserByEmailOrPhone(data.identifier);
       if (!user || !(await verifyPassword(data.password, user.password))) {
-        const failure = recordAuthFailure(ip, data.identifier);
+        const failure = await recordAuthFailure(ip, data.identifier);
         const remaining = failure.attemptsLeft;
         const msg = failure.blocked
           ? "Trop de tentatives incorrectes. Accès bloqué pendant 7 minutes."
@@ -1002,7 +947,7 @@ export async function registerRoutes(
         });
       }
 
-      clearAuthAttempts(ip);
+      await clearAuthAttempts(ip);
 
       if (user.role === "admin") {
         notifyAdminLogin({ adminName: user.fullName || user.username, adminEmail: user.email || "", ip }).catch(() => {});

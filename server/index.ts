@@ -10,6 +10,7 @@ import { startPayoutPoller, recoverPendingPayouts } from "./payoutPoller";
 import { seedWithdrawalTransferFees } from "./seedWithdrawalTransferFees";
 import { startCleanupScheduler } from "./cleanup";
 import { startDailyReportScheduler } from "./dailyReport";
+import { hydrateIpBlocker } from "./ipBlocker";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 
@@ -240,6 +241,9 @@ app.use((req, res, next) => {
       );
       startCleanupScheduler();
       startDailyReportScheduler();
+      hydrateIpBlocker().catch(err =>
+        console.error("[IpBlocker] Hydration error:", err)
+      );
     },
   );
 })();
