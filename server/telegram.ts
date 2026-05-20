@@ -1526,37 +1526,42 @@ export async function handleTelegramUpdate(
         await callBotApi("sendMessage", {
           chat_id: chatId,
           text:
-            `📖 <b>Commandes disponibles</b>\n` +
+            `📖 <b>TOUTES LES COMMANDES</b>\n` +
             `──────────────────\n` +
             `<b>📊 Statistiques</b>\n` +
-            `/menu — Menu principal\n` +
+            `/menu — Menu principal interactif\n` +
             `/stats — Dashboard ce mois\n` +
+            `/mois — Dashboard ce mois (alias)\n` +
             `/today — Stats aujourd'hui\n` +
             `/week — Stats cette semaine\n` +
-            `/pending — Éléments en attente\n` +
-            `/kyc — Résumé KYC\n` +
+            `/pending — Dépôts/retraits en attente\n` +
+            `/kyc — Résumé vérifications KYC\n` +
             `/users — Derniers inscrits\n` +
             `/revenue — Revenus & commissions\n` +
-            `/rapport [mois|semaine|today] — Rapport complet\n` +
+            `/rapport [mois|semaine|today|all] — Rapport complet\n` +
             `──────────────────\n` +
             `<b>👤 Utilisateurs</b>\n` +
             `/search query — Rechercher par email partiel\n` +
-            `/user email — Infos utilisateur\n` +
+            `/user email — Infos complètes utilisateur\n` +
             `/solde email — Solde en temps réel\n` +
+            `/top — Top 10 utilisateurs par solde\n` +
             `/ban email [raison] — Bannir un utilisateur\n` +
-            `/unban email — Débannir\n` +
+            `/unban email — Débannir un utilisateur\n` +
             `/resetpw email — Envoyer reset mot de passe\n` +
-            `/top — Top 10 par solde\n` +
             `──────────────────\n` +
-            `<b>💸 Transactions</b>\n` +
-            `/verif REFERENCE — Vérifier une transaction\n` +
-            `/liens — Liens actifs aujourd'hui\n` +
-            `/soldeA — Solde total plateforme\n` +
+            `<b>💸 Transactions & Paiements</b>\n` +
+            `/verif REFERENCE — Vérifier statut d'une transaction\n` +
+            `/liens — Liens de paiement actifs aujourd'hui\n` +
+            `/soldeA — Solde total plateforme + revenus\n` +
             `──────────────────\n` +
             `<b>⚙️ Administration</b>\n` +
-            `/taux DEVISE TAUX — Modifier un taux FX\n` +
-            `/pays — Activer/désactiver un pays\n` +
-            `/broadcast Sujet;Corps — Email à tous\n` +
+            `/taux DEVISE TAUX — Modifier un taux de change FX\n` +
+            `/pays — Activer/désactiver des pays\n` +
+            `/broadcast Sujet;Corps — Email groupé à tous les utilisateurs\n` +
+            `──────────────────\n` +
+            `<b>❓ Aide</b>\n` +
+            `/aide — Afficher cette liste\n` +
+            `/help — Afficher cette liste (alias)\n` +
             `──────────────────\n` +
             `🕐 ${now()}`,
           parse_mode: "HTML",

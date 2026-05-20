@@ -482,37 +482,42 @@ Usage : <code>/search jean</code>`,parse_mode:"HTML"});return}let l=await e.sear
 ${h}
 \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 <i>Utilisez /user email pour plus de d\xE9tails</i>`,parse_mode:"HTML",reply_markup:{inline_keyboard:[[{text:"\u{1F3E0} Menu",callback_data:"cmd:menu"}]]}});return}if(n.startsWith("/resetpw ")){let c=n.slice(9).trim(),l=await e.resetUserPassword(c);await Pe("sendMessage",{chat_id:r,text:l?`\u2705 Lien de r\xE9initialisation envoy\xE9 \xE0 <b>${l.userName}</b> (<code>${c}</code>).
-\u{1F550} ${Ae()}`:`\u26A0\uFE0F Utilisateur introuvable : <code>${c}</code>`,parse_mode:"HTML"});return}let s={"/start":{type:"menu"},"/menu":{type:"menu"},"/stats":{type:"dash",period:"this_month"},"/today":{type:"dash",period:"today"},"/week":{type:"dash",period:"this_week"},"/mois":{type:"dash",period:"this_month"},"/pending":{type:"pending",period:"this_month"},"/kyc":{type:"kyc",period:"this_month"},"/users":{type:"users",period:"this_month"},"/revenue":{type:"revenue",period:"this_month"},"/aide":{type:"help"},"/help":{type:"help"}},o=Object.keys(s).find(c=>n===c||n.startsWith(c+" ")||n.startsWith(c+"@"));if(o){let{type:c,period:l="this_month"}=s[o];if(c==="menu"){await nW(r);return}if(c==="help"){await Pe("sendMessage",{chat_id:r,text:`\u{1F4D6} <b>Commandes disponibles</b>
+\u{1F550} ${Ae()}`:`\u26A0\uFE0F Utilisateur introuvable : <code>${c}</code>`,parse_mode:"HTML"});return}let s={"/start":{type:"menu"},"/menu":{type:"menu"},"/stats":{type:"dash",period:"this_month"},"/today":{type:"dash",period:"today"},"/week":{type:"dash",period:"this_week"},"/mois":{type:"dash",period:"this_month"},"/pending":{type:"pending",period:"this_month"},"/kyc":{type:"kyc",period:"this_month"},"/users":{type:"users",period:"this_month"},"/revenue":{type:"revenue",period:"this_month"},"/aide":{type:"help"},"/help":{type:"help"}},o=Object.keys(s).find(c=>n===c||n.startsWith(c+" ")||n.startsWith(c+"@"));if(o){let{type:c,period:l="this_month"}=s[o];if(c==="menu"){await nW(r);return}if(c==="help"){await Pe("sendMessage",{chat_id:r,text:`\u{1F4D6} <b>TOUTES LES COMMANDES</b>
 \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 <b>\u{1F4CA} Statistiques</b>
-/menu \u2014 Menu principal
+/menu \u2014 Menu principal interactif
 /stats \u2014 Dashboard ce mois
+/mois \u2014 Dashboard ce mois (alias)
 /today \u2014 Stats aujourd'hui
 /week \u2014 Stats cette semaine
-/pending \u2014 \xC9l\xE9ments en attente
-/kyc \u2014 R\xE9sum\xE9 KYC
+/pending \u2014 D\xE9p\xF4ts/retraits en attente
+/kyc \u2014 R\xE9sum\xE9 v\xE9rifications KYC
 /users \u2014 Derniers inscrits
 /revenue \u2014 Revenus & commissions
-/rapport [mois|semaine|today] \u2014 Rapport complet
+/rapport [mois|semaine|today|all] \u2014 Rapport complet
 \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 <b>\u{1F464} Utilisateurs</b>
 /search query \u2014 Rechercher par email partiel
-/user email \u2014 Infos utilisateur
+/user email \u2014 Infos compl\xE8tes utilisateur
 /solde email \u2014 Solde en temps r\xE9el
+/top \u2014 Top 10 utilisateurs par solde
 /ban email [raison] \u2014 Bannir un utilisateur
-/unban email \u2014 D\xE9bannir
+/unban email \u2014 D\xE9bannir un utilisateur
 /resetpw email \u2014 Envoyer reset mot de passe
-/top \u2014 Top 10 par solde
 \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-<b>\u{1F4B8} Transactions</b>
-/verif REFERENCE \u2014 V\xE9rifier une transaction
-/liens \u2014 Liens actifs aujourd'hui
-/soldeA \u2014 Solde total plateforme
+<b>\u{1F4B8} Transactions & Paiements</b>
+/verif REFERENCE \u2014 V\xE9rifier statut d'une transaction
+/liens \u2014 Liens de paiement actifs aujourd'hui
+/soldeA \u2014 Solde total plateforme + revenus
 \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 <b>\u2699\uFE0F Administration</b>
-/taux DEVISE TAUX \u2014 Modifier un taux FX
-/pays \u2014 Activer/d\xE9sactiver un pays
-/broadcast Sujet;Corps \u2014 Email \xE0 tous
+/taux DEVISE TAUX \u2014 Modifier un taux de change FX
+/pays \u2014 Activer/d\xE9sactiver des pays
+/broadcast Sujet;Corps \u2014 Email group\xE9 \xE0 tous les utilisateurs
+\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+<b>\u2753 Aide</b>
+/aide \u2014 Afficher cette liste
+/help \u2014 Afficher cette liste (alias)
 \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 \u{1F550} ${Ae()}`,parse_mode:"HTML",reply_markup:{inline_keyboard:[[{text:"\u{1F3E0} Menu",callback_data:"cmd:menu"}]]}});return}let p=await e.getStats(l),h="";c==="pending"?h=CP(p):c==="kyc"?h=iW(p):c==="users"?h=aW(p):c==="revenue"?h=TP(p):h=AP(p),await Pe("sendMessage",{chat_id:r,text:h,parse_mode:"HTML",reply_markup:{inline_keyboard:[[{text:"\u{1F519} Menu",callback_data:"cmd:menu"}]]}});return}n.startsWith("/")&&await Pe("sendMessage",{chat_id:r,text:`\u2753 <b>Commande inexistante</b> : <code>${n.split(" ")[0]}</code>
 
