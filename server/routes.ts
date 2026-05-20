@@ -53,6 +53,8 @@ import {
   notifyWithdrawalRequest,
   notifyWithdrawalPendingManual,
   notifyWithdrawalManuallyValidated,
+  notifyWithdrawalAutoValidated,
+  notifyWithdrawalFailed,
   notifyLoginFailed,
   notifyAdminLogin,
   notifyAdminLoginFailed,
@@ -7539,6 +7541,16 @@ export async function registerRoutes(
               : `Votre retrait de ${transaction.amount} ${txCurrency} a été envoyé avec succès.`,
             transactionId: transaction.id,
           });
+          storage.getUser(transaction.userId).then(txUser => {
+            notifyWithdrawalAutoValidated({
+              userName: txUser?.fullName || txUser?.username || "Utilisateur",
+              userEmail: txUser?.email || "",
+              amount: transaction.amount,
+              currency: txCurrency,
+              reference: transaction.reference || String(transaction.id),
+              provider: "AfribaPay",
+            }).catch(() => {});
+          }).catch(() => {});
           console.log(`[AfribaPay Webhook] ✓ Payout SUCCESS: ${transaction.id} (${transaction.type})`);
           forwardMerchantWebhook(transaction, "completed").catch(() => {});
         } else {
@@ -7557,6 +7569,17 @@ export async function registerRoutes(
           if (transaction.paymentIntentId) {
             await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "completed");
           }
+          storage.getUser(transaction.userId).then(txUser => {
+            notifyDepositConfirmed({
+              userName: txUser?.fullName || txUser?.username || "Utilisateur",
+              userEmail: txUser?.email || "",
+              amount: transaction.amount,
+              currency: txCurrency,
+              reference: transaction.reference || String(transaction.id),
+              provider: "AfribaPay",
+              country: txUser?.country || "",
+            }).catch(() => {});
+          }).catch(() => {});
           console.log(`[AfribaPay Webhook] ✓ Deposit SUCCESS: ${transaction.id} → credited ${transaction.amount} ${txCurrency}`);
           forwardMerchantWebhook(transaction, "completed").catch(() => {});
         }
@@ -7578,6 +7601,17 @@ export async function registerRoutes(
               : `Votre retrait de ${transaction.amount} ${txCurrency} a échoué. Le montant a été recrédité sur votre compte.`,
             transactionId: transaction.id,
           });
+          storage.getUser(transaction.userId).then(txUser => {
+            notifyWithdrawalFailed({
+              userName: txUser?.fullName || txUser?.username || "Utilisateur",
+              userEmail: txUser?.email || "",
+              amount: transaction.amount,
+              currency: txCurrency,
+              reference: transaction.reference || String(transaction.id),
+              reason: `Échec ${transaction.type === "transfer_out" ? "transfert" : "retrait"} (AfribaPay)`,
+              provider: "AfribaPay",
+            }).catch(() => {});
+          }).catch(() => {});
           console.log(`[AfribaPay Webhook] ✗ Payout FAILED: ${transaction.id} — refunded ${refundAmount} ${txCurrency}`);
           forwardMerchantWebhook(transaction, "failed").catch(() => {});
         } else {
@@ -7594,6 +7628,18 @@ export async function registerRoutes(
               : "Votre dépôt a été annulé. Aucun montant n'a été débité.",
             transactionId: transaction.id,
           });
+          storage.getUser(transaction.userId).then(txUser => {
+            notifyDepositFailed({
+              userName: txUser?.fullName || txUser?.username || "Utilisateur",
+              userEmail: txUser?.email || "",
+              amount: transaction.totalAmount || transaction.amount,
+              currency: txCurrency,
+              reference: transaction.reference || String(transaction.id),
+              reason: isPaymentLink ? "Paiement lien échoué (AfribaPay)" : "Dépôt annulé/échoué (AfribaPay)",
+              provider: "AfribaPay",
+              country: txUser?.country || "",
+            }).catch(() => {});
+          }).catch(() => {});
           console.log(`[AfribaPay Webhook] ✗ Deposit FAILED/CANCELLED: ${transaction.id}`);
           forwardMerchantWebhook(transaction, "failed").catch(() => {});
         }
@@ -7651,6 +7697,16 @@ export async function registerRoutes(
               : `Votre retrait de ${transaction.amount} ${txCurrency} a été envoyé avec succès.`,
             transactionId: transaction.id,
           });
+          storage.getUser(transaction.userId).then(txUser => {
+            notifyWithdrawalAutoValidated({
+              userName: txUser?.fullName || txUser?.username || "Utilisateur",
+              userEmail: txUser?.email || "",
+              amount: transaction.amount,
+              currency: txCurrency,
+              reference: transaction.reference || String(transaction.id),
+              provider: "PixPay",
+            }).catch(() => {});
+          }).catch(() => {});
           console.log(`[PixPay Webhook] ✓ Payout SUCCESS: ${transaction.id} (${transaction.type})`);
           forwardMerchantWebhook(transaction, "completed").catch(() => {});
         } else {
@@ -7669,6 +7725,17 @@ export async function registerRoutes(
           if (transaction.paymentIntentId) {
             await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "completed");
           }
+          storage.getUser(transaction.userId).then(txUser => {
+            notifyDepositConfirmed({
+              userName: txUser?.fullName || txUser?.username || "Utilisateur",
+              userEmail: txUser?.email || "",
+              amount: transaction.amount,
+              currency: txCurrency,
+              reference: transaction.reference || String(transaction.id),
+              provider: "PixPay",
+              country: txUser?.country || "",
+            }).catch(() => {});
+          }).catch(() => {});
           console.log(`[PixPay Webhook] ✓ Deposit SUCCESS: ${transaction.id} → ${transaction.amount} ${txCurrency}`);
           forwardMerchantWebhook(transaction, "completed").catch(() => {});
         }
@@ -7690,6 +7757,17 @@ export async function registerRoutes(
               : `Votre retrait de ${transaction.amount} ${txCurrency} a échoué. Le montant a été recrédité sur votre compte.${providerMessage ? ` (${providerMessage})` : ""}`,
             transactionId: transaction.id,
           });
+          storage.getUser(transaction.userId).then(txUser => {
+            notifyWithdrawalFailed({
+              userName: txUser?.fullName || txUser?.username || "Utilisateur",
+              userEmail: txUser?.email || "",
+              amount: transaction.amount,
+              currency: txCurrency,
+              reference: transaction.reference || String(transaction.id),
+              reason: `${providerMessage || "Échec"} — ${transaction.type === "transfer_out" ? "transfert" : "retrait"} (PixPay)`,
+              provider: "PixPay",
+            }).catch(() => {});
+          }).catch(() => {});
           console.log(`[PixPay Webhook] ✗ Payout FAILED: ${transaction.id} — refunded ${refundAmount} ${txCurrency}`);
           forwardMerchantWebhook(transaction, "failed").catch(() => {});
         } else {
@@ -7706,6 +7784,20 @@ export async function registerRoutes(
               : `Votre dépôt a été annulé.${providerMessage ? ` (${providerMessage})` : ""}`,
             transactionId: transaction.id,
           });
+          storage.getUser(transaction.userId).then(txUser => {
+            notifyDepositFailed({
+              userName: txUser?.fullName || txUser?.username || "Utilisateur",
+              userEmail: txUser?.email || "",
+              amount: transaction.totalAmount || transaction.amount,
+              currency: txCurrency,
+              reference: transaction.reference || String(transaction.id),
+              reason: isPaymentLink
+                ? `Paiement lien échoué (PixPay)${providerMessage ? ` — ${providerMessage}` : ""}`
+                : `Dépôt annulé/échoué (PixPay)${providerMessage ? ` — ${providerMessage}` : ""}`,
+              provider: "PixPay",
+              country: txUser?.country || "",
+            }).catch(() => {});
+          }).catch(() => {});
           console.log(`[PixPay Webhook] ✗ Deposit FAILED: ${transaction.id} — ${providerMessage}`);
           forwardMerchantWebhook(transaction, "failed").catch(() => {});
         }
