@@ -62,6 +62,28 @@ async function sendPhoto(photoUrl: string, caption?: string): Promise<void> {
   });
 }
 
+async function sendWithBanner(
+  chatId: string,
+  bannerType: string,
+  text: string,
+  replyMarkup?: any
+): Promise<void> {
+  if (!BOT_API) return;
+  const appUrl = process.env.APP_URL || "";
+  const extra = replyMarkup ? { reply_markup: replyMarkup } : {};
+  if (!appUrl) {
+    await callBotApi("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", ...extra });
+    return;
+  }
+  const photoUrl = `${appUrl}/api/bot/banner/${bannerType}`;
+  if (text.length <= 1024) {
+    await callBotApi("sendPhoto", { chat_id: chatId, photo: photoUrl, caption: text, parse_mode: "HTML", ...extra });
+  } else {
+    await callBotApi("sendPhoto", { chat_id: chatId, photo: photoUrl });
+    await callBotApi("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", ...extra });
+  }
+}
+
 async function answerCallbackQuery(callbackQueryId: string, text?: string): Promise<void> {
   await callBotApi("answerCallbackQuery", {
     callback_query_id: callbackQueryId,
@@ -925,7 +947,8 @@ export async function handleTelegramUpdate(
         else if (cmd === "revenue") text = formatRevenue(stats);
         else if (cmd === "rapport") text = formatDashboard(stats) + "\n\n" + formatRevenue(stats) + "\n\n" + formatPending(stats);
         else text = formatDashboard(stats);
-        await callBotApi("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", reply_markup: { inline_keyboard: backBtn } });
+        const bannerMap: Record<string, string> = { pending: "pending", kyc: "kyc", users: "users", revenue: "revenue", rapport: "rapport" };
+        await sendWithBanner(chatId, bannerMap[cmd] ?? "stats", text, { inline_keyboard: backBtn });
         return;
       }
 
@@ -935,11 +958,11 @@ export async function handleTelegramUpdate(
         const lines = users.map((u: any, i: number) =>
           `${i + 1}. <b>${u.fullName || u.username}</b> — ${fmtXAF(u.balance)}`
         ).join("\n");
-        await callBotApi("sendMessage", {
-          chat_id: chatId,
-          text: `🏆 <b>TOP 10 SOLDES</b>\n──────────────────\n${lines || "Aucun utilisateur"}\n🕐 ${now()}`,
-          parse_mode: "HTML", reply_markup: { inline_keyboard: backBtn },
-        });
+        await sendWithBanner(
+          chatId, "top",
+          `🏆 <b>TOP 10 SOLDES</b>\n──────────────────\n${lines || "Aucun utilisateur"}\n🕐 ${now()}`,
+          { inline_keyboard: backBtn }
+        );
         return;
       }
 
@@ -950,26 +973,25 @@ export async function handleTelegramUpdate(
           `  • ${currency} : <b>${fmtNum(balance)}</b>`
         ).join("\n") || "  Aucun solde";
         const rev = bal.revenue;
-        await callBotApi("sendMessage", {
-          chat_id: chatId,
-          text:
-            `💳 <b>SOLDE TOTAL PLATEFORME</b>\n` +
-            `──────────────────\n` +
-            `${currLines}\n` +
-            `💰 <b>Total ≈ ${fmtNum(bal.totalXAF)} XAF</b>\n` +
-            `👥 Utilisateurs actifs : <b>${bal.userCount}</b>\n` +
-            `──────────────────\n` +
-            `📊 <b>REVENUS (marges)</b>\n` +
-            `  • Dépôts : <b>${fmtNum(rev.deposits)} XAF</b>\n` +
-            `  • Retraits : <b>${fmtNum(rev.withdrawals)} XAF</b>\n` +
-            `  • Envois : <b>${fmtNum(rev.transfers)} XAF</b>\n` +
-            `  • Liens paiement : <b>${fmtNum(rev.paymentLinks)} XAF</b>\n` +
-            `  • Conversions : <b>${fmtNum(rev.conversions)} XAF</b>\n` +
-            `💵 <b>Total revenus : ${fmtNum(rev.total)} XAF</b>\n` +
-            `──────────────────\n` +
-            `🕐 ${now()}`,
-          parse_mode: "HTML", reply_markup: { inline_keyboard: backBtn },
-        });
+        await sendWithBanner(
+          chatId, "wallet",
+          `💳 <b>SOLDE TOTAL PLATEFORME</b>\n` +
+          `──────────────────\n` +
+          `${currLines}\n` +
+          `💰 <b>Total ≈ ${fmtNum(bal.totalXAF)} XAF</b>\n` +
+          `👥 Utilisateurs actifs : <b>${bal.userCount}</b>\n` +
+          `──────────────────\n` +
+          `📊 <b>REVENUS (marges)</b>\n` +
+          `  • Dépôts : <b>${fmtNum(rev.deposits)} XAF</b>\n` +
+          `  • Retraits : <b>${fmtNum(rev.withdrawals)} XAF</b>\n` +
+          `  • Envois : <b>${fmtNum(rev.transfers)} XAF</b>\n` +
+          `  • Liens paiement : <b>${fmtNum(rev.paymentLinks)} XAF</b>\n` +
+          `  • Conversions : <b>${fmtNum(rev.conversions)} XAF</b>\n` +
+          `💵 <b>Total revenus : ${fmtNum(rev.total)} XAF</b>\n` +
+          `──────────────────\n` +
+          `🕐 ${now()}`,
+          { inline_keyboard: backBtn }
+        );
         return;
       }
 
@@ -979,11 +1001,11 @@ export async function handleTelegramUpdate(
         const lines = links.slice(0, 15).map((l: any) =>
           `🔗 <b>${l.title}</b> — ${l.slug}\n   💰 ${fmtNum(l.totalCollected || 0)} XAF`
         ).join("\n");
-        await callBotApi("sendMessage", {
-          chat_id: chatId,
-          text: `🔗 <b>LIENS ACTIFS (${links.length})</b>\n──────────────────\n${lines || "Aucun lien actif"}\n🕐 ${now()}`,
-          parse_mode: "HTML", reply_markup: { inline_keyboard: backBtn },
-        });
+        await sendWithBanner(
+          chatId, "liens",
+          `🔗 <b>LIENS ACTIFS (${links.length})</b>\n──────────────────\n${lines || "Aucun lien actif"}\n🕐 ${now()}`,
+          { inline_keyboard: backBtn }
+        );
         return;
       }
 
@@ -993,11 +1015,11 @@ export async function handleTelegramUpdate(
         const lines = countries.map((c: any) =>
           `${c.isActive ? "🟢" : "🔴"} ${countryDisplay(c.code) || c.name} (${c.currency})`
         ).join("\n");
-        await callBotApi("sendMessage", {
-          chat_id: chatId,
-          text: `🌍 <b>PAYS CONFIGURÉS (${countries.length})</b>\n──────────────────\n${lines || "Aucun pays"}\n🕐 ${now()}`,
-          parse_mode: "HTML", reply_markup: { inline_keyboard: backBtn },
-        });
+        await sendWithBanner(
+          chatId, "pays",
+          `🌍 <b>PAYS CONFIGURÉS (${countries.length})</b>\n──────────────────\n${lines || "Aucun pays"}\n🕐 ${now()}`,
+          { inline_keyboard: backBtn }
+        );
         return;
       }
 
@@ -1326,10 +1348,7 @@ export async function handleTelegramUpdate(
         `  KYC : ⏳${s.kycPending} ✅${s.kycApproved} ❌${s.kycRejected}\n` +
         `──────────────────\n` +
         `🕐 ${now()}`;
-      await callBotApi("sendMessage", {
-        chat_id: chatId, text: msg, parse_mode: "HTML",
-        reply_markup: { inline_keyboard: [[{ text: "🔙 Menu", callback_data: "cmd:menu" }]] },
-      });
+      await sendWithBanner(chatId, "rapport", msg, { inline_keyboard: [[{ text: "🔙 Menu", callback_data: "cmd:menu" }]] });
       return;
     }
 
@@ -1340,12 +1359,11 @@ export async function handleTelegramUpdate(
       const lines = topUsers.map((u, i) =>
         `${medals[i] ?? `${i + 1}.`} <b>${u.userName}</b> — <b>${fmt(u.balance, u.currency)}</b>\n   📧 ${u.email}`
       ).join("\n\n");
-      await callBotApi("sendMessage", {
-        chat_id: chatId,
-        text: `🏆 <b>TOP 10 UTILISATEURS (solde)</b>\n──────────────────\n${lines || "Aucun utilisateur"}\n──────────────────\n🕐 ${now()}`,
-        parse_mode: "HTML",
-        reply_markup: { inline_keyboard: [[{ text: "🔙 Menu", callback_data: "cmd:menu" }]] },
-      });
+      await sendWithBanner(
+        chatId, "top",
+        `🏆 <b>TOP 10 UTILISATEURS (solde)</b>\n──────────────────\n${lines || "Aucun utilisateur"}\n──────────────────\n🕐 ${now()}`,
+        { inline_keyboard: [[{ text: "🔙 Menu", callback_data: "cmd:menu" }]] }
+      );
       return;
     }
 
@@ -1394,7 +1412,7 @@ export async function handleTelegramUpdate(
         `📅 ${tx.createdAt ? new Date(tx.createdAt).toLocaleString("fr-FR") : "—"}\n` +
         `──────────────────\n` +
         `🕐 ${now()}`;
-      await callBotApi("sendMessage", { chat_id: chatId, text: msg, parse_mode: "HTML" });
+      await sendWithBanner(chatId, "verif", msg);
       return;
     }
 
@@ -1408,11 +1426,10 @@ export async function handleTelegramUpdate(
       const lines = links.slice(0, 15).map((l, i) =>
         `${i + 1}. <b>${l.title}</b> — ${fmt(l.amount, l.currency)}\n   👤 ${l.userName} | 🔗 /pay/${l.slug}`
       ).join("\n\n");
-      await callBotApi("sendMessage", {
-        chat_id: chatId,
-        text: `📎 <b>LIENS ACTIFS AUJOURD'HUI (${links.length})</b>\n──────────────────\n${lines}\n──────────────────\n🕐 ${now()}`,
-        parse_mode: "HTML",
-      });
+      await sendWithBanner(
+        chatId, "liens",
+        `📎 <b>LIENS ACTIFS AUJOURD'HUI (${links.length})</b>\n──────────────────\n${lines}\n──────────────────\n🕐 ${now()}`
+      );
       return;
     }
 
@@ -1423,26 +1440,24 @@ export async function handleTelegramUpdate(
         `  • ${currency} : <b>${fmtNum(balance)}</b>`
       ).join("\n") || "  Aucun solde";
       const rev = info.revenue;
-      await callBotApi("sendMessage", {
-        chat_id: chatId,
-        text:
-          `🏦 <b>SOLDE TOTAL ASHTECH PAY</b>\n` +
-          `──────────────────\n` +
-          `${currLines}\n` +
-          `💰 <b>Total ≈ ${fmtNum(info.totalXAF)} XAF</b>\n` +
-          `👥 Utilisateurs actifs : <b>${info.userCount}</b>\n` +
-          `──────────────────\n` +
-          `📊 <b>REVENUS (marges)</b>\n` +
-          `  • Dépôts : <b>${fmtNum(rev.deposits)} XAF</b>\n` +
-          `  • Retraits : <b>${fmtNum(rev.withdrawals)} XAF</b>\n` +
-          `  • Envois : <b>${fmtNum(rev.transfers)} XAF</b>\n` +
-          `  • Liens paiement : <b>${fmtNum(rev.paymentLinks)} XAF</b>\n` +
-          `  • Conversions : <b>${fmtNum(rev.conversions)} XAF</b>\n` +
-          `💵 <b>Total revenus : ${fmtNum(rev.total)} XAF</b>\n` +
-          `──────────────────\n` +
-          `🕐 ${now()}`,
-        parse_mode: "HTML",
-      });
+      await sendWithBanner(
+        chatId, "wallet",
+        `🏦 <b>SOLDE TOTAL ASHTECH PAY</b>\n` +
+        `──────────────────\n` +
+        `${currLines}\n` +
+        `💰 <b>Total ≈ ${fmtNum(info.totalXAF)} XAF</b>\n` +
+        `👥 Utilisateurs actifs : <b>${info.userCount}</b>\n` +
+        `──────────────────\n` +
+        `📊 <b>REVENUS (marges)</b>\n` +
+        `  • Dépôts : <b>${fmtNum(rev.deposits)} XAF</b>\n` +
+        `  • Retraits : <b>${fmtNum(rev.withdrawals)} XAF</b>\n` +
+        `  • Envois : <b>${fmtNum(rev.transfers)} XAF</b>\n` +
+        `  • Liens paiement : <b>${fmtNum(rev.paymentLinks)} XAF</b>\n` +
+        `  • Conversions : <b>${fmtNum(rev.conversions)} XAF</b>\n` +
+        `💵 <b>Total revenus : ${fmtNum(rev.total)} XAF</b>\n` +
+        `──────────────────\n` +
+        `🕐 ${now()}`
+      );
       return;
     }
 
@@ -1474,15 +1489,13 @@ export async function handleTelegramUpdate(
         `   💰 ${fmt(u.balance, u.currency)} | KYC ${kycIcon(u.kycStatus)}` +
         (u.country ? ` | 🌍 ${u.country}` : "")
       ).join("\n\n");
-      await callBotApi("sendMessage", {
-        chat_id: chatId,
-        text:
-          `🔍 <b>${results.length} résultat(s) pour « ${query} »</b>\n` +
-          `──────────────────\n${lines}\n──────────────────\n` +
-          `<i>Utilisez /user email pour plus de détails</i>`,
-        parse_mode: "HTML",
-        reply_markup: { inline_keyboard: [[{ text: "🏠 Menu", callback_data: "cmd:menu" }]] },
-      });
+      await sendWithBanner(
+        chatId, "search",
+        `🔍 <b>${results.length} résultat(s) pour « ${query} »</b>\n` +
+        `──────────────────\n${lines}\n──────────────────\n` +
+        `<i>Utilisez /user email pour plus de détails</i>`,
+        { inline_keyboard: [[{ text: "🏠 Menu", callback_data: "cmd:menu" }]] }
+      );
       return;
     }
 
@@ -1578,10 +1591,8 @@ export async function handleTelegramUpdate(
       else if (type === "revenue") msgText = formatRevenue(stats);
       else msgText = formatDashboard(stats);
 
-      await callBotApi("sendMessage", {
-        chat_id: chatId, text: msgText, parse_mode: "HTML",
-        reply_markup: { inline_keyboard: [[{ text: "🔙 Menu", callback_data: "cmd:menu" }]] },
-      });
+      const txtBannerMap: Record<string, string> = { pending: "pending", kyc: "kyc", users: "users", revenue: "revenue" };
+      await sendWithBanner(chatId, txtBannerMap[type] ?? "stats", msgText, { inline_keyboard: [[{ text: "🔙 Menu", callback_data: "cmd:menu" }]] });
       return;
     }
 

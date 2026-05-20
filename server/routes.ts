@@ -9057,6 +9057,19 @@ export async function registerRoutes(
     }
   });
 
+  // ─── Bot Banner Images ──────────────────────────────────────────────────────
+  app.get("/api/bot/banner/:type", async (req, res) => {
+    try {
+      const { generateBanner } = await import("./bannerGenerator");
+      const png = await generateBanner(req.params.type as any);
+      res.set("Content-Type", "image/png");
+      res.set("Cache-Control", "public, max-age=86400");
+      res.send(png);
+    } catch {
+      res.status(404).json({ error: "Banner not found" });
+    }
+  });
+
   // ─── Telegram Webhook ────────────────────────────────────────────────────────
   app.post("/api/telegram/webhook", async (req, res) => {
     res.json({ ok: true }); // answer Telegram immediately
