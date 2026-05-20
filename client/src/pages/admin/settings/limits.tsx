@@ -86,7 +86,7 @@ export default function AdminSettingsLimits() {
               <div className="space-y-2">
                 <Label>Montant minimum</Label>
                 <Input
-                  type="number"
+                  type="text"
                   inputMode="decimal"
                   value={settings.min_transfer}
                   onChange={(e) => setSettings({ ...settings, min_transfer: e.target.value })}
@@ -104,7 +104,7 @@ export default function AdminSettingsLimits() {
               <div className="space-y-2">
                 <Label>Montant maximum</Label>
                 <Input
-                  type="number"
+                  type="text"
                   inputMode="decimal"
                   value={settings.max_transfer}
                   onChange={(e) => setSettings({ ...settings, max_transfer: e.target.value })}
@@ -133,7 +133,7 @@ export default function AdminSettingsLimits() {
               <div className="space-y-2">
                 <Label>Montant minimum</Label>
                 <Input
-                  type="number"
+                  type="text"
                   inputMode="decimal"
                   value={settings.min_withdrawal}
                   onChange={(e) => setSettings({ ...settings, min_withdrawal: e.target.value })}
@@ -151,7 +151,7 @@ export default function AdminSettingsLimits() {
               <div className="space-y-2">
                 <Label>Montant maximum</Label>
                 <Input
-                  type="number"
+                  type="text"
                   inputMode="decimal"
                   value={settings.max_withdrawal}
                   onChange={(e) => setSettings({ ...settings, max_withdrawal: e.target.value })}

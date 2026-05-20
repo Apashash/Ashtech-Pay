@@ -1081,7 +1081,7 @@ export default function PaymentPage() {
                 <Label htmlFor="amount">Montant à payer ({CURRENCY_SYMBOLS[selectedDisplayCurrency]}) *</Label>
                 <Input
                   id="amount"
-                  type="number"
+                  type="text"
                   inputMode="decimal"
                   placeholder="Entrez le montant"
                   value={customAmount}

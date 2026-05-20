@@ -464,7 +464,7 @@ export default function AdminFeesTransfers() {
                     <div className="space-y-2">
                       <Label>Frais AfribaPay (%)</Label>
                       <Input
-                        type="number" step="0.01" min="0" max="20" inputMode="decimal"
+                        type="text" inputMode="decimal"
                         value={afribapayFee}
                         onChange={(e) => { setAfribapayFee(e.target.value); sticky.current.afribapayFee = e.target.value; }}
                         placeholder="3.00"
@@ -475,7 +475,7 @@ export default function AdminFeesTransfers() {
                     <div className="space-y-2">
                       <Label>Frais PixPay (%)</Label>
                       <Input
-                        type="number" step="0.01" min="0" max="20" inputMode="decimal"
+                        type="text" inputMode="decimal"
                         value={pixpayFee}
                         onChange={(e) => { setPixpayFee(e.target.value); sticky.current.pixpayFee = e.target.value; }}
                         placeholder="3.00"
@@ -495,7 +495,7 @@ export default function AdminFeesTransfers() {
                   <div className="space-y-2">
                     <Label>Marge Ashtech Pay (%)</Label>
                     <Input
-                      type="number" step="0.01" min="0" max="20" inputMode="decimal"
+                      type="text" inputMode="decimal"
                       value={ashtechMargin}
                       onChange={(e) => {
                         setAshtechMargin(e.target.value);
@@ -511,7 +511,7 @@ export default function AdminFeesTransfers() {
                   <div className="space-y-2">
                     <Label>Minimum de charge ({currency})</Label>
                     <Input
-                      type="number" step="1" min="0" inputMode="decimal"
+                      type="text" inputMode="decimal"
                       value={minFee}
                       onChange={(e) => setMinFee(e.target.value)}
                       placeholder="550"

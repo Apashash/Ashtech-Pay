@@ -281,7 +281,7 @@ function SendMoneyDialog({ open, onClose }: { open: boolean; onClose: () => void
                 <FormItem>
                   <FormLabel>Montant (XAF)</FormLabel>
                   <FormControl>
-                    <Input type="number" inputMode="decimal" placeholder="10000" data-testid="input-amount" {...field} />
+                    <Input type="text" inputMode="decimal" placeholder="10000" data-testid="input-amount" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -369,7 +369,7 @@ function DepositDialog({ open, onClose }: { open: boolean; onClose: () => void }
                 <FormItem>
                   <FormLabel>Montant (XAF)</FormLabel>
                   <FormControl>
-                    <Input type="number" inputMode="decimal" placeholder="50000" data-testid="input-deposit-amount" {...field} />
+                    <Input type="text" inputMode="decimal" placeholder="50000" data-testid="input-deposit-amount" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -466,7 +466,7 @@ function WithdrawDialog({ open, onClose }: { open: boolean; onClose: () => void 
                 <FormItem>
                   <FormLabel>Montant (XAF)</FormLabel>
                   <FormControl>
-                    <Input type="number" inputMode="decimal" placeholder="25000" data-testid="input-withdraw-amount" {...field} />
+                    <Input type="text" inputMode="decimal" placeholder="25000" data-testid="input-withdraw-amount" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -590,7 +590,7 @@ function CreatePaymentLinkDialog({ open, onClose }: { open: boolean; onClose: ()
                 <FormItem>
                   <FormLabel>Montant (XAF)</FormLabel>
                   <FormControl>
-                    <Input type="number" inputMode="decimal" placeholder="15000" data-testid="input-link-amount" {...field} />
+                    <Input type="text" inputMode="decimal" placeholder="15000" data-testid="input-link-amount" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

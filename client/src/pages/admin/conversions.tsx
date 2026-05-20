@@ -163,7 +163,7 @@ export default function AdminConversionsPage() {
                     <Percent className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
                       id={p.key}
-                      type="number"
+                      type="text"
                       inputMode="decimal"
                       value={fees[p.key]}
                       onChange={(e) => setFees(prev => ({ ...prev, [p.key]: e.target.value }))}

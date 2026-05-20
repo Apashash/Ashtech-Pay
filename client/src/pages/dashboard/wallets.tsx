@@ -365,13 +365,12 @@ export default function WalletsPage() {
               <div className="space-y-2">
                 <Label>{t.wallets.convertAmountLabel} ({fromCurrency})</Label>
                 <Input
-                  type="number"
+                  type="text"
                   inputMode="decimal"
+                  pattern="[0-9.]*"
                   placeholder="0"
                   value={convertAmount}
-                  onChange={(e) => setConvertAmount(e.target.value)}
-                  min="1"
-                  max={sourceParsedBalance}
+                  onChange={(e) => setConvertAmount(e.target.value.replace(/[^0-9.]/g, ""))}
                   data-testid="input-convert-amount"
                 />
                 {convertAmount && parsedAmount > 0 && !hasSufficientBalance && (

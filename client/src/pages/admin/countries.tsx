@@ -446,8 +446,7 @@ export default function AdminCountries() {
                 <div className="space-y-2">
                   <Label>Taux de change (vers XAF)</Label>
                   <Input
-                    type="number"
-                    step="0.0001"
+                    type="text"
                     inputMode="decimal"
                     value={countryForm.exchangeRate}
                     onChange={(e) => setCountryForm({ ...countryForm, exchangeRate: e.target.value })}
@@ -461,7 +460,7 @@ export default function AdminCountries() {
                 <div className="space-y-2">
                   <Label>Dépôt min</Label>
                   <Input
-                    type="number"
+                    type="text"
                     inputMode="decimal"
                     value={countryForm.minDeposit}
                     onChange={(e) => setCountryForm({ ...countryForm, minDeposit: e.target.value })}
@@ -471,7 +470,7 @@ export default function AdminCountries() {
                 <div className="space-y-2">
                   <Label>Dépôt max</Label>
                   <Input
-                    type="number"
+                    type="text"
                     inputMode="decimal"
                     value={countryForm.maxDeposit}
                     onChange={(e) => setCountryForm({ ...countryForm, maxDeposit: e.target.value })}
@@ -481,7 +480,7 @@ export default function AdminCountries() {
                 <div className="space-y-2">
                   <Label>Retrait min</Label>
                   <Input
-                    type="number"
+                    type="text"
                     inputMode="decimal"
                     value={countryForm.minWithdrawal}
                     onChange={(e) => setCountryForm({ ...countryForm, minWithdrawal: e.target.value })}
@@ -491,7 +490,7 @@ export default function AdminCountries() {
                 <div className="space-y-2">
                   <Label>Retrait max</Label>
                   <Input
-                    type="number"
+                    type="text"
                     inputMode="decimal"
                     value={countryForm.maxWithdrawal}
                     onChange={(e) => setCountryForm({ ...countryForm, maxWithdrawal: e.target.value })}

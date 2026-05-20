@@ -663,7 +663,7 @@ export default function DepositPage() {
                             <FormItem>
                               <FormLabel>{t.deposit.amountLabel} ({user?.preferredCurrency || "XAF"})</FormLabel>
                               <FormControl>
-                                <Input type="number" inputMode="decimal" placeholder="" className="text-2xl h-14 text-center" {...field} data-testid="input-deposit-amount" />
+                                <Input type="text" inputMode="decimal" placeholder="" className="text-2xl h-14 text-center" {...field} data-testid="input-deposit-amount" />
                               </FormControl>
                               <FormMessage />
                             </FormItem>

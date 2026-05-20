@@ -322,8 +322,7 @@ export default function AdminFees() {
                 <div className="space-y-2">
                   <Label>Valeur</Label>
                   <Input
-                    type="number"
-                    step="0.01"
+                    type="text"
                     inputMode="decimal"
                     value={formData.feeValue}
                     onChange={(e) => setFormData({ ...formData, feeValue: e.target.value })}
@@ -334,7 +333,7 @@ export default function AdminFees() {
                 <div className="space-y-2">
                   <Label>Min (optionnel)</Label>
                   <Input
-                    type="number"
+                    type="text"
                     inputMode="decimal"
                     value={formData.minFee}
                     onChange={(e) => setFormData({ ...formData, minFee: e.target.value })}
@@ -345,7 +344,7 @@ export default function AdminFees() {
                 <div className="space-y-2">
                   <Label>Max (optionnel)</Label>
                   <Input
-                    type="number"
+                    type="text"
                     inputMode="decimal"
                     value={formData.maxFee}
                     onChange={(e) => setFormData({ ...formData, maxFee: e.target.value })}

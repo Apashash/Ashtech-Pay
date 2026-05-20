@@ -489,7 +489,7 @@ export default function SendMoneyPage() {
                       <FormItem>
                         <FormLabel>{t.send.sendAmountLabel} ({selectedCountry?.currency || "XAF"})</FormLabel>
                         <FormControl>
-                          <Input type="number" inputMode="decimal" placeholder="" className="text-xl h-12" {...field} />
+                          <Input type="text" inputMode="decimal" placeholder="" className="text-xl h-12" {...field} />
                         </FormControl>
                         <FormMessage />
                         {amountValue > 0 && amountValue < minTransfer && (

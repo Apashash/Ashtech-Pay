@@ -133,7 +133,7 @@ export default function TransferPage() {
                         <FormLabel>Montant (XAF)</FormLabel>
                         <FormControl>
                           <Input 
-                            type="number"
+                            type="text"
                             inputMode="decimal"
                             placeholder="10000" 
                             className="text-2xl h-14"

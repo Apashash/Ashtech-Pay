@@ -319,7 +319,7 @@ function DepositDialog({ open, onClose }: { open: boolean; onClose: () => void }
             <FormField control={form.control} name="amount" render={({ field }) => (
               <FormItem>
                 <FormLabel>Montant ({user?.preferredCurrency || "XAF"})</FormLabel>
-                <FormControl><Input type="number" inputMode="decimal" placeholder="10000" {...field} data-testid="input-deposit-amount" /></FormControl>
+                <FormControl><Input type="text" inputMode="decimal" placeholder="10000" {...field} data-testid="input-deposit-amount" /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
@@ -386,7 +386,7 @@ function WithdrawDialog({ open, onClose }: { open: boolean; onClose: () => void 
             <FormField control={form.control} name="amount" render={({ field }) => (
               <FormItem>
                 <FormLabel>Montant ({user?.preferredCurrency || "XAF"})</FormLabel>
-                <FormControl><Input type="number" inputMode="decimal" placeholder="10000" {...field} data-testid="input-withdraw-amount" /></FormControl>
+                <FormControl><Input type="text" inputMode="decimal" placeholder="10000" {...field} data-testid="input-withdraw-amount" /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
@@ -498,7 +498,7 @@ function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => voi
             <FormField control={form.control} name="amount" render={({ field }) => (
               <FormItem>
                 <FormLabel>Montant ({user?.preferredCurrency || "XAF"})</FormLabel>
-                <FormControl><Input type="number" inputMode="decimal" placeholder="10000" {...field} data-testid="input-link-amount" /></FormControl>
+                <FormControl><Input type="text" inputMode="decimal" placeholder="10000" {...field} data-testid="input-link-amount" /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />

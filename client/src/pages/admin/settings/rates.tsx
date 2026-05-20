@@ -114,8 +114,7 @@ export default function AdminSettingsRates() {
                 <div key={currency.code} className="space-y-2 p-3 border rounded-lg">
                   <Label className="font-semibold">{currency.code} ({currency.name})</Label>
                   <Input
-                    type="number"
-                    step="0.01"
+                    type="text"
                     inputMode="decimal"
                     value={fxRates[`fx_rate_${currency.code}`] || ""}
                     onChange={(e) => handleFxRateChange(currency.code, e.target.value)}

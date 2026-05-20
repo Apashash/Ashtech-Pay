@@ -492,7 +492,7 @@ export default function LinkEditPage() {
                       <FormItem>
                         <FormLabel>{lk.formAmount} ({user?.preferredCurrency || "XAF"}) *</FormLabel>
                         <FormControl>
-                          <Input type="number" inputMode="decimal" placeholder="10000" {...field} data-testid="input-edit-amount" />
+                          <Input type="text" inputMode="decimal" placeholder="10000" {...field} data-testid="input-edit-amount" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>

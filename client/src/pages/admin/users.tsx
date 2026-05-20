@@ -974,7 +974,7 @@ export default function AdminUsers() {
                     <div className="space-y-1">
                       <Label>Montant ({balanceCurrency})</Label>
                       <Input
-                        type="number" step="0.01" inputMode="decimal" value={newBalance}
+                        type="text" inputMode="decimal" value={newBalance}
                         onChange={(e) => setNewBalance(e.target.value)}
                         placeholder="0.00"
                       />
@@ -1045,7 +1045,7 @@ export default function AdminUsers() {
                 <div className="space-y-1">
                   <Label>Montant à convertir {convFrom ? `(${convFrom})` : ""}</Label>
                   <Input
-                    type="number" step="0.01" inputMode="decimal" value={convAmount}
+                    type="text" inputMode="decimal" value={convAmount}
                     onChange={(e) => setConvAmount(e.target.value)}
                     placeholder="0.00"
                   />
