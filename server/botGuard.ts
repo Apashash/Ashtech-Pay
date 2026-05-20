@@ -172,6 +172,7 @@ const API_UA_EXEMPT_PATHS = [
   "/api/pixpay/webhook",
   "/api/pay/",
   "/api/v1/hosted-payment",
+  "/api/telegram/webhook",
 ];
 
 // ─── Fichiers publics: jamais bloqués (même si l'IP est bannie) ───────────

@@ -8884,6 +8884,47 @@ export async function registerRoutes(
     res.json({ ok: true }); // answer Telegram immediately
     try {
       await handleTelegramUpdate(req.body, {
+        getStats: async (period: string) => {
+          const [adminStats, allUsers, kycPending, kycApproved, kycRejected] = await Promise.all([
+            storage.getAdminStats(period),
+            storage.getAllUsers(),
+            storage.countKycByStatus("pending"),
+            storage.countKycByStatus("approved"),
+            storage.countKycByStatus("rejected"),
+          ]);
+          const recentUsers = [...allUsers]
+            .sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime())
+            .slice(0, 5)
+            .map(u => ({
+              username: u.fullName || u.username,
+              email: u.email ?? null,
+              createdAt: u.createdAt ?? null,
+              kycStatus: u.kycStatus ?? "not_submitted",
+            }));
+          return {
+            period,
+            totalUsers: adminStats.totalUsers,
+            bannedUsers: adminStats.bannedUsers,
+            depositCount: adminStats.depositCount,
+            depositVol: adminStats.totalDeposits,
+            withdrawalCount: adminStats.withdrawalCount,
+            withdrawalVol: adminStats.totalWithdrawals,
+            transferCount: adminStats.transferCount,
+            paymentLinkCount: adminStats.paymentLinkCount,
+            totalRevenue: adminStats.totalRevenue,
+            depositFees: adminStats.depositFees,
+            withdrawalFees: adminStats.withdrawalFees,
+            transferFees: adminStats.transferFees,
+            paymentLinkFees: adminStats.paymentLinkFees,
+            pendingDeposits: adminStats.pendingDeposits,
+            pendingWithdrawals: adminStats.pendingWithdrawals,
+            pendingTransfers: adminStats.pendingTransfers,
+            kycPending,
+            kycApproved,
+            kycRejected,
+            recentUsers,
+          };
+        },
         approveKyc: async (submissionId) => {
           // Find first admin to use as reviewer
           const allUsers = await storage.getAllUsers();

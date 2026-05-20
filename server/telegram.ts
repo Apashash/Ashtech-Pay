@@ -447,11 +447,178 @@ export async function notifyKycSubmittedFull(opts: {
 
 // ─── GESTIONNAIRE DE WEBHOOK TELEGRAM ─────────────────────────────────────────
 
+// ─── Types stats bot ──────────────────────────────────────────────────────────
+export type BotStats = {
+  period: string;
+  totalUsers: number;
+  bannedUsers: number;
+  depositCount: number;
+  depositVol: string;
+  withdrawalCount: number;
+  withdrawalVol: string;
+  transferCount: number;
+  paymentLinkCount: number;
+  totalRevenue: string;
+  depositFees: string;
+  withdrawalFees: string;
+  transferFees: string;
+  paymentLinkFees: string;
+  pendingDeposits: number;
+  pendingWithdrawals: number;
+  pendingTransfers: number;
+  kycPending: number;
+  kycApproved: number;
+  kycRejected: number;
+  recentUsers: { username: string; email: string | null; createdAt: Date | null; kycStatus: string }[];
+};
+
+// ─── Menu & formatters ────────────────────────────────────────────────────────
+
+const MAIN_MENU_KEYBOARD = [
+  [{ text: "📊 Dashboard ce mois", callback_data: "cmd:stats_month" }],
+  [
+    { text: "📅 Aujourd'hui", callback_data: "cmd:stats_today" },
+    { text: "📆 Cette semaine", callback_data: "cmd:stats_week" },
+  ],
+  [
+    { text: "⏳ En attente", callback_data: "cmd:pending" },
+    { text: "🔑 KYC", callback_data: "cmd:kyc" },
+  ],
+  [
+    { text: "👥 Derniers inscrits", callback_data: "cmd:users" },
+    { text: "💰 Revenus", callback_data: "cmd:revenue" },
+  ],
+];
+
+async function sendMenu(chatId: string): Promise<void> {
+  await callBotApi("sendMessage", {
+    chat_id: chatId,
+    text:
+      `🏦 <b>AshTech Pay — Panel Bot</b>\n` +
+      `─────────────────────────────\n` +
+      `Choisissez une action :`,
+    parse_mode: "HTML",
+    reply_markup: { inline_keyboard: MAIN_MENU_KEYBOARD },
+  });
+}
+
+function fmtNum(n: number | string): string {
+  return Number(n).toLocaleString("fr-FR");
+}
+
+function fmtXAF(n: number | string): string {
+  const v = parseFloat(String(n));
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(2)} M XAF`;
+  if (v >= 1_000) return `${(v / 1_000).toFixed(1)} k XAF`;
+  return `${fmtNum(v)} XAF`;
+}
+
+function periodLabel(period: string): string {
+  const map: Record<string, string> = {
+    today: "Aujourd'hui",
+    this_week: "Cette semaine",
+    this_month: "Ce mois",
+    last_month: "Mois dernier",
+    this_year: "Cette année",
+    all: "Tout",
+  };
+  return map[period] ?? period;
+}
+
+function formatDashboard(s: BotStats): string {
+  const totalTx = s.depositCount + s.withdrawalCount + s.transferCount + s.paymentLinkCount;
+  const totalVol = parseFloat(s.depositVol) + parseFloat(s.withdrawalVol);
+  return (
+    `📊 <b>TABLEAU DE BORD — ${periodLabel(s.period).toUpperCase()}</b>\n` +
+    `─────────────────────────────\n` +
+    `👥 <b>Utilisateurs</b>\n` +
+    `  Total : <b>${fmtNum(s.totalUsers)}</b> | Bannis : ${s.bannedUsers}\n` +
+    `  KYC vérifiés : ${fmtNum(s.kycApproved)} | En attente : ${s.kycPending} | Rejetés : ${s.kycRejected}\n\n` +
+    `💸 <b>Transactions (${periodLabel(s.period)})</b>\n` +
+    `  Total : <b>${fmtNum(totalTx)}</b>\n` +
+    `  Dépôts : ${fmtNum(s.depositCount)} — ${fmtXAF(s.depositVol)}\n` +
+    `  Retraits : ${fmtNum(s.withdrawalCount)} — ${fmtXAF(s.withdrawalVol)}\n` +
+    `  Transferts : ${fmtNum(s.transferCount)}\n` +
+    `  Liens paiement : ${fmtNum(s.paymentLinkCount)}\n` +
+    `  Volume total : <b>${fmtXAF(totalVol)}</b>\n\n` +
+    `💰 <b>Revenus (${periodLabel(s.period)})</b>\n` +
+    `  Total : <b>${fmtXAF(s.totalRevenue)}</b>\n\n` +
+    `⏳ <b>En attente</b>\n` +
+    `  Dépôts : ${s.pendingDeposits} | Retraits : ${s.pendingWithdrawals} | KYC : ${s.kycPending}\n` +
+    `─────────────────────────────\n` +
+    `🕐 ${now()}`
+  );
+}
+
+function formatRevenue(s: BotStats): string {
+  return (
+    `💰 <b>REVENUS — ${periodLabel(s.period).toUpperCase()}</b>\n` +
+    `─────────────────────────────\n` +
+    `💵 Total commissions : <b>${fmtXAF(s.totalRevenue)}</b>\n\n` +
+    `📋 Détail par type :\n` +
+    `  • Dépôts (${fmtNum(s.depositCount)}) : ${fmtXAF(s.depositFees)}\n` +
+    `  • Retraits (${fmtNum(s.withdrawalCount)}) : ${fmtXAF(s.withdrawalFees)}\n` +
+    `  • Transferts (${fmtNum(s.transferCount)}) : ${fmtXAF(s.transferFees)}\n` +
+    `  • Liens (${fmtNum(s.paymentLinkCount)}) : ${fmtXAF(s.paymentLinkFees)}\n` +
+    `─────────────────────────────\n` +
+    `🕐 ${now()}`
+  );
+}
+
+function formatPending(s: BotStats): string {
+  const total = s.pendingDeposits + s.pendingWithdrawals + s.pendingTransfers + s.kycPending;
+  return (
+    `⏳ <b>ÉLÉMENTS EN ATTENTE</b>\n` +
+    `─────────────────────────────\n` +
+    `${total === 0 ? "✅ Aucun élément en attente !\n" : ""}` +
+    (s.pendingDeposits > 0 ? `🟡 Dépôts : <b>${s.pendingDeposits}</b>\n` : "") +
+    (s.pendingWithdrawals > 0 ? `🔵 Retraits : <b>${s.pendingWithdrawals}</b>\n` : "") +
+    (s.pendingTransfers > 0 ? `🟣 Transferts : <b>${s.pendingTransfers}</b>\n` : "") +
+    (s.kycPending > 0 ? `📋 Demandes KYC : <b>${s.kycPending}</b>\n` : "") +
+    `─────────────────────────────\n` +
+    `🕐 ${now()}`
+  );
+}
+
+function formatKyc(s: BotStats): string {
+  const total = s.kycApproved + s.kycPending + s.kycRejected;
+  const pct = total > 0 ? Math.round((s.kycApproved / total) * 100) : 0;
+  return (
+    `🔑 <b>VÉRIFICATIONS KYC</b>\n` +
+    `─────────────────────────────\n` +
+    `📊 Total soumis : <b>${fmtNum(total)}</b>\n` +
+    `✅ Approuvés : <b>${fmtNum(s.kycApproved)}</b> (${pct}%)\n` +
+    `⏳ En attente : <b>${fmtNum(s.kycPending)}</b>\n` +
+    `❌ Rejetés : <b>${fmtNum(s.kycRejected)}</b>\n\n` +
+    `👥 Utilisateurs vérifiés / Total : ${fmtNum(s.kycApproved)} / ${fmtNum(s.totalUsers)}\n` +
+    `─────────────────────────────\n` +
+    `🕐 ${now()}`
+  );
+}
+
+function formatRecentUsers(s: BotStats): string {
+  const lines = s.recentUsers.map((u, i) => {
+    const kycIcon = u.kycStatus === "verified" ? "✅" : u.kycStatus === "pending" ? "⏳" : "⬜";
+    const date = u.createdAt ? new Date(u.createdAt).toLocaleDateString("fr-FR") : "—";
+    return `${i + 1}. <b>${u.username}</b> ${kycIcon}\n   📧 ${u.email ?? "—"}  📅 ${date}`;
+  });
+  return (
+    `👥 <b>DERNIERS INSCRITS</b>\n` +
+    `─────────────────────────────\n` +
+    `Total : <b>${fmtNum(s.totalUsers)}</b> utilisateurs\n\n` +
+    (lines.join("\n\n") || "Aucun utilisateur") +
+    `\n─────────────────────────────\n🕐 ${now()}`
+  );
+}
+
+// ─── GESTIONNAIRE DE WEBHOOK TELEGRAM ─────────────────────────────────────────
+
 export async function handleTelegramUpdate(
   update: any,
   handlers: {
     approveKyc: (submissionId: string) => Promise<{ userName: string; userEmail: string } | null>;
     rejectKyc: (submissionId: string, reason: string) => Promise<{ userName: string; userEmail: string } | null>;
+    getStats: (period: string) => Promise<BotStats>;
   }
 ): Promise<void> {
   // ── Callback query (button press) ──
@@ -463,7 +630,46 @@ export async function handleTelegramUpdate(
 
     await answerCallbackQuery(cq.id);
 
-    // Approve
+    // ── Dashboard / stats commands ──
+    if (data.startsWith("cmd:")) {
+      const cmd = data.slice(4);
+
+      if (cmd === "menu") {
+        await sendMenu(chatId);
+        return;
+      }
+
+      const periodMap: Record<string, string> = {
+        stats_today: "today",
+        stats_week: "this_week",
+        stats_month: "this_month",
+        revenue: "this_month",
+      };
+
+      if (cmd in periodMap || cmd === "pending" || cmd === "kyc" || cmd === "users") {
+        const period = periodMap[cmd] ?? "this_month";
+        const stats = await handlers.getStats(period);
+
+        let text = "";
+        if (cmd === "pending") text = formatPending(stats);
+        else if (cmd === "kyc") text = formatKyc(stats);
+        else if (cmd === "users") text = formatRecentUsers(stats);
+        else if (cmd === "revenue") text = formatRevenue(stats);
+        else text = formatDashboard(stats);
+
+        await callBotApi("sendMessage", {
+          chat_id: chatId,
+          text,
+          parse_mode: "HTML",
+          reply_markup: {
+            inline_keyboard: [[{ text: "🔙 Menu", callback_data: "cmd:menu" }]],
+          },
+        });
+        return;
+      }
+    }
+
+    // ── Approve KYC ──
     if (data.startsWith("ka:")) {
       const submissionId = data.slice(3);
       const result = await handlers.approveKyc(submissionId);
@@ -477,7 +683,7 @@ export async function handleTelegramUpdate(
       return;
     }
 
-    // Reject with preset reason
+    // ── Reject with preset reason ──
     if (data.startsWith("kr:")) {
       const parts = data.split(":");
       const submissionId = parts[1];
@@ -500,7 +706,7 @@ export async function handleTelegramUpdate(
       return;
     }
 
-    // Custom rejection — ask for reason
+    // ── Custom rejection — ask for reason ──
     if (data.startsWith("krc:")) {
       const submissionId = data.slice(4);
       pendingCustomRejections.set(chatId, { submissionId, messageId });
@@ -514,13 +720,14 @@ export async function handleTelegramUpdate(
     }
   }
 
-  // ── Text message (custom rejection reason reply) ──
+  // ── Text message / commands ──
   if (update.message?.text) {
     const chatId = String(update.message.chat?.id ?? "");
-    const text: string = update.message.text;
+    const text: string = update.message.text.trim();
 
+    // ── Check pending custom rejection first ──
     const pending = pendingCustomRejections.get(chatId);
-    if (pending) {
+    if (pending && !text.startsWith("/")) {
       pendingCustomRejections.delete(chatId);
       const result = await handlers.rejectKyc(pending.submissionId, text);
       if (result) {
@@ -539,6 +746,69 @@ export async function handleTelegramUpdate(
           parse_mode: "HTML",
         });
       }
+      return;
+    }
+
+    // ── Bot commands ──
+    const cmdMap: Record<string, { period?: string; type: string }> = {
+      "/start":  { type: "menu" },
+      "/menu":   { type: "menu" },
+      "/stats":  { type: "dash", period: "this_month" },
+      "/today":  { type: "dash", period: "today" },
+      "/week":   { type: "dash", period: "this_week" },
+      "/mois":   { type: "dash", period: "this_month" },
+      "/pending":{ type: "pending", period: "this_month" },
+      "/kyc":    { type: "kyc", period: "this_month" },
+      "/users":  { type: "users", period: "this_month" },
+      "/revenue":{ type: "revenue", period: "this_month" },
+      "/aide":   { type: "help" },
+      "/help":   { type: "help" },
+    };
+
+    const matched = Object.keys(cmdMap).find(k => text === k || text.startsWith(k + " ") || text.startsWith(k + "@"));
+    if (matched) {
+      const { type, period = "this_month" } = cmdMap[matched];
+
+      if (type === "menu") {
+        await sendMenu(chatId);
+        return;
+      }
+
+      if (type === "help") {
+        await callBotApi("sendMessage", {
+          chat_id: chatId,
+          text:
+            `📖 <b>Commandes disponibles</b>\n` +
+            `─────────────────────────────\n` +
+            `/menu — Afficher le menu\n` +
+            `/stats — Dashboard ce mois\n` +
+            `/today — Stats d'aujourd'hui\n` +
+            `/week — Stats cette semaine\n` +
+            `/pending — Éléments en attente\n` +
+            `/kyc — Résumé des KYC\n` +
+            `/users — Derniers inscrits\n` +
+            `/revenue — Revenus & commissions\n` +
+            `/aide — Afficher ce message`,
+          parse_mode: "HTML",
+          reply_markup: { inline_keyboard: [[{ text: "🏠 Menu", callback_data: "cmd:menu" }]] },
+        });
+        return;
+      }
+
+      const stats = await handlers.getStats(period);
+      let msgText = "";
+      if (type === "pending") msgText = formatPending(stats);
+      else if (type === "kyc") msgText = formatKyc(stats);
+      else if (type === "users") msgText = formatRecentUsers(stats);
+      else if (type === "revenue") msgText = formatRevenue(stats);
+      else msgText = formatDashboard(stats);
+
+      await callBotApi("sendMessage", {
+        chat_id: chatId,
+        text: msgText,
+        parse_mode: "HTML",
+        reply_markup: { inline_keyboard: [[{ text: "🔙 Menu", callback_data: "cmd:menu" }]] },
+      });
     }
   }
 }
