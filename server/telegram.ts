@@ -335,6 +335,37 @@ export async function notifyAdminLoginFailed(opts: {
   await sendMessage(msg);
 }
 
+// ─── ÉCHANGES / CONVERSIONS ───────────────────────────────────────────────────
+
+export async function notifyConversion(opts: {
+  userName: string;
+  userEmail: string;
+  fromAmount: string | number;
+  fromCurrency: string;
+  toAmount: string | number;
+  toCurrency: string;
+  feeAmount: string | number;
+  feePercent: string | number;
+  reference: string;
+  byAdmin?: boolean;
+  adminName?: string;
+}): Promise<void> {
+  const who = opts.byAdmin && opts.adminName
+    ? `🛡️ Admin : <b>${opts.adminName}</b>\n`
+    : "";
+  const msg =
+    `🔄 <b>ÉCHANGE DE DEVISES${opts.byAdmin ? " (ADMIN)" : ""}</b>\n` +
+    `─────────────────────────\n` +
+    who +
+    `👤 Utilisateur : <b>${opts.userName}</b>\n` +
+    `📧 Email : ${opts.userEmail}\n` +
+    `💱 <b>${fmt(opts.fromAmount, opts.fromCurrency)} → ${fmt(opts.toAmount, opts.toCurrency)}</b>\n` +
+    `💸 Frais : ${fmt(opts.feeAmount, opts.fromCurrency)} (${opts.feePercent}%)\n` +
+    `🔖 Référence : <code>${opts.reference}</code>\n` +
+    `🕐 Heure : ${now()}`;
+  await sendMessage(msg);
+}
+
 // ─── TRANSFERTS ───────────────────────────────────────────────────────────────
 
 export async function notifyTransferSent(opts: {

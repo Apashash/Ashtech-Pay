@@ -57,6 +57,7 @@ import {
   notifyAdminLogin,
   notifyAdminLoginFailed,
   notifyNewUser,
+  notifyConversion,
   notifyTransferSent,
   notifyKycSubmitted,
   notifyKycApproved,
@@ -2827,6 +2828,19 @@ export async function registerRoutes(
         type: "success",
       });
 
+      // Notify admin via Telegram
+      notifyConversion({
+        userName: user.fullName || user.username,
+        userEmail: user.email || "",
+        fromAmount: parsedAmount.toFixed(2),
+        fromCurrency,
+        toAmount: receivedAmount.toFixed(2),
+        toCurrency,
+        feeAmount: totalFeeAmount.toFixed(2),
+        feePercent: conversionFeePercent,
+        reference: transaction.reference || "",
+      }).catch(() => {});
+
       return res.json({
         success: true,
         fromAmount: parsedAmount,
@@ -2931,6 +2945,22 @@ export async function registerRoutes(
         transactionId: transaction.id,
         type: "success",
       });
+
+      // Notify admin via Telegram
+      const adminUser = await storage.getUser(req.userId!).catch(() => null);
+      notifyConversion({
+        userName: user.fullName || user.username,
+        userEmail: user.email || "",
+        fromAmount: parsedAmount.toFixed(2),
+        fromCurrency,
+        toAmount: receivedAmount.toFixed(2),
+        toCurrency,
+        feeAmount: feeAmount.toFixed(2),
+        feePercent: conversionFeePercent,
+        reference: transaction.reference || "",
+        byAdmin: true,
+        adminName: adminUser?.fullName || adminUser?.username || "Admin",
+      }).catch(() => {});
 
       return res.json({
         success: true,
