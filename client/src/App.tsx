@@ -114,26 +114,54 @@ function BlockGuard({ children }: { children: React.ReactNode }) {
 }
 
 const GEO_BYPASS_PATHS = ["/pay/", "/hpay/", "/checkout/", "/admin"];
+const GEO_CACHE_KEY = "ashtech_geo_cache";
+const GEO_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
+function getGeoCache(): { country: string; countryName: string; isAfrica: boolean } | null {
+  try {
+    const raw = localStorage.getItem(GEO_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (Date.now() - parsed.ts > GEO_CACHE_TTL) {
+      localStorage.removeItem(GEO_CACHE_KEY);
+      return null;
+    }
+    return parsed.data;
+  } catch {
+    return null;
+  }
+}
+
+function setGeoCache(data: { country: string; countryName: string; isAfrica: boolean }) {
+  try {
+    localStorage.setItem(GEO_CACHE_KEY, JSON.stringify({ ts: Date.now(), data }));
+  } catch {}
+}
 
 function GeoGuard({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
 
   const isBypass = GEO_BYPASS_PATHS.some((p) => location.startsWith(p));
 
-  const { data, isLoading } = useQuery<{ country: string; countryName: string; isAfrica: boolean }>({
+  const cachedGeo = isBypass ? null : getGeoCache();
+
+  const { data } = useQuery<{ country: string; countryName: string; isAfrica: boolean }>({
     queryKey: ["/api/public/geo"],
     queryFn: async () => {
       const res = await fetch("/api/public/geo");
       if (!res.ok) return { country: "XX", countryName: "Unknown", isAfrica: true };
-      return res.json();
+      const result = await res.json();
+      setGeoCache(result);
+      return result;
     },
     staleTime: 5 * 60 * 1000,
     retry: false,
     enabled: !isBypass,
+    initialData: cachedGeo ?? undefined,
   });
 
   if (isBypass) return <>{children}</>;
-  if (isLoading) return null;
+  // Render optimistically — only block if we have confirmed data saying isAfrica === false
   if (data && data.isAfrica === false) return <CountryBlockedPage />;
   return <>{children}</>;
 }
