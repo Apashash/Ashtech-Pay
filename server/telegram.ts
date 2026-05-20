@@ -1004,30 +1004,38 @@ const REPLY_KEYBOARD_MAP: Record<string, string> = {
   "📧 Broadcast email":   "prompt:broadcast",
 };
 
+const INLINE_MENU: { text: string; callback_data: string }[][] = [
+  [{ text: "📊 Dashboard mois",    callback_data: "cmd:stats_month"     }, { text: "📅 Aujourd'hui",       callback_data: "cmd:stats_today"    }],
+  [{ text: "📆 Cette semaine",     callback_data: "cmd:stats_week"      }, { text: "⏳ En attente",         callback_data: "cmd:pending"        }],
+  [{ text: "🔑 KYC résumé",        callback_data: "cmd:kyc"             }, { text: "👥 Inscrits récents",   callback_data: "cmd:users"          }],
+  [{ text: "💰 Revenus",           callback_data: "cmd:revenue"         }, { text: "📋 Rapport complet",    callback_data: "cmd:rapport"        }],
+  [{ text: "🏆 Top 10 soldes",     callback_data: "cmd:top"             }, { text: "💳 Solde plateforme",   callback_data: "cmd:soldeA"         }],
+  [{ text: "🔗 Liens actifs",      callback_data: "cmd:liens"           }, { text: "🌍 Pays actifs",        callback_data: "cmd:pays"           }],
+  [{ text: "👤 Info utilisateur",  callback_data: "cmd:prompt_user"     }, { text: "💵 Solde utilisateur",  callback_data: "cmd:prompt_solde"   }],
+  [{ text: "🚫 Bannir user",       callback_data: "cmd:prompt_ban"      }, { text: "✅ Débannir user",      callback_data: "cmd:prompt_unban"   }],
+  [{ text: "🔐 Reset password",    callback_data: "cmd:prompt_resetpw"  }, { text: "🔍 Vérifier tx",        callback_data: "cmd:prompt_verif"   }],
+  [{ text: "💱 Modifier taux FX",  callback_data: "cmd:prompt_taux"     }, { text: "📧 Broadcast email",    callback_data: "cmd:prompt_broadcast"}],
+  [{ text: "🛡️ IPs bloquées",      callback_data: "cmd:ipb"             }, { text: "📖 Aide",               callback_data: "cmd:aide"           }],
+];
+
 async function sendMenu(chatId: string): Promise<void> {
+  // First remove any existing reply keyboard silently
+  await callBotApi("sendMessage", {
+    chat_id: chatId,
+    text: "​",
+    reply_markup: { remove_keyboard: true },
+    disable_notification: true,
+  });
+
   await callBotApi("sendMessage", {
     chat_id: chatId,
     text:
       `🏦 <b>AshTech Pay — Panel Admin</b>\n` +
       `──────────────────\n` +
-      `Bienvenue ! Choisissez une action ci-dessous 👇`,
+      `Choisissez une action 👇`,
     parse_mode: "HTML",
-    reply_markup: {
-      keyboard: REPLY_KEYBOARD,
-      resize_keyboard: true,
-      is_persistent: false,
-    },
+    reply_markup: { inline_keyboard: INLINE_MENU },
   });
-
-  // Supprime automatiquement les boutons après 7 secondes
-  setTimeout(async () => {
-    await callBotApi("sendMessage", {
-      chat_id: chatId,
-      text: "⌨️",
-      reply_markup: { remove_keyboard: true },
-      disable_notification: true,
-    });
-  }, 7000);
 }
 
 function fmtNum(n: number | string): string {
@@ -1283,6 +1291,57 @@ export async function handleTelegramUpdate(
           `🌍 <b>PAYS CONFIGURÉS (${countries.length})</b>\n──────────────────\n${lines || "Aucun pays"}\n🕐 ${now()}`,
           { inline_keyboard: backBtn }
         );
+        return;
+      }
+
+      // IPs bloquées
+      if (cmd === "ipb") {
+        const backBtn = [[{ text: "🏠 Menu principal", callback_data: "cmd:menu" }]];
+        const blocked = handlers.getBlockedIps();
+        if (blocked.length === 0) {
+          await callBotApi("sendMessage", {
+            chat_id: chatId,
+            text: `🛡️ <b>IPs BLOQUÉES</b>\n──────────────────\n✅ Aucune IP actuellement bloquée.\n🕐 ${now()}`,
+            parse_mode: "HTML",
+            reply_markup: { inline_keyboard: backBtn },
+          });
+          return;
+        }
+        const lines = blocked.map(b => {
+          const remaining = Math.max(0, Math.ceil((b.blockedUntil - Date.now()) / 1000));
+          const min = Math.floor(remaining / 60);
+          const sec = remaining % 60;
+          return `🔴 <code>${b.ip}</code>\n👤 <code>${b.identifier}</code>\n⏱️ ${String(min).padStart(2, "0")}:${String(sec).padStart(2, "0")} restant`;
+        }).join("\n──────────────────\n");
+        await callBotApi("sendMessage", {
+          chat_id: chatId,
+          text: `🛡️ <b>IPs BLOQUÉES (${blocked.length})</b>\n──────────────────\n${lines}\n──────────────────\n🕐 ${now()}`,
+          parse_mode: "HTML",
+          reply_markup: { inline_keyboard: backBtn },
+        });
+        return;
+      }
+
+      // Aide
+      if (cmd === "aide") {
+        const backBtn = [[{ text: "🏠 Menu principal", callback_data: "cmd:menu" }]];
+        await callBotApi("sendMessage", {
+          chat_id: chatId,
+          text:
+            `📖 <b>TOUTES LES COMMANDES</b>\n──────────────────\n` +
+            `/stats — Dashboard ce mois\n/today — Stats aujourd'hui\n/week — Stats cette semaine\n` +
+            `/pending — En attente\n/kyc — Résumé KYC\n/users — Derniers inscrits\n` +
+            `/revenue — Revenus\n/rapport — Rapport complet\n/top — Top 10 soldes\n` +
+            `/soldeA — Solde total plateforme\n/liens — Liens actifs\n/pays — Pays\n` +
+            `/user email — Infos utilisateur\n/solde email — Solde utilisateur\n` +
+            `/ban email [raison] — Bannir\n/unban email — Débannir\n` +
+            `/resetpw email — Reset mot de passe\n/verif REF — Vérifier transaction\n` +
+            `/taux DEVISE TAUX — Modifier taux FX\n/broadcast Sujet;Corps — Email groupé\n` +
+            `/ipb — IPs bloquées\n/dip email(numero) — Débloquer une IP\n` +
+            `──────────────────\n🕐 ${now()}`,
+          parse_mode: "HTML",
+          reply_markup: { inline_keyboard: backBtn },
+        });
         return;
       }
 
