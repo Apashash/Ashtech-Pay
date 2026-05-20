@@ -1,7 +1,8 @@
 import { Switch, Route, useLocation } from "wouter";
-import { queryClient, removeAuthToken } from "./lib/queryClient";
+import { queryClient, removeAuthToken, getQueryFn, getAuthHeaders } from "./lib/queryClient";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
+import { useSSE } from "@/hooks/use-sse";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -192,6 +193,30 @@ function Router() {
   );
 }
 
+// Connexion SSE globale — expulse l'ancien navigateur en temps réel quand un nouveau login arrive
+function SSEForceLogoutListener() {
+  useSSE((event) => {
+    if (event.type === "force_logout") {
+      queryClient.clear();
+      removeAuthToken();
+      window.dispatchEvent(new CustomEvent("force-logout", { detail: event.data }));
+    }
+  });
+  return null;
+}
+
+function GlobalSSEWatcher() {
+  const { data: user } = useQuery({
+    queryKey: ["/api/auth/me"],
+    queryFn: getQueryFn({ on401: "returnNull" }),
+    retry: false,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+  });
+  if (!user) return null;
+  return <SSEForceLogoutListener />;
+}
+
 function VpnDisconnectGuard() {
   const [, setLocation] = useLocation();
 
@@ -240,6 +265,7 @@ function App() {
             <Toaster />
             <VpnDisconnectGuard />
             <ForceLogoutGuard />
+            <GlobalSSEWatcher />
             <GeoGuard>
               <Router />
             </GeoGuard>

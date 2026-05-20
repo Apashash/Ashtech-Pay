@@ -25,8 +25,17 @@ export function useSSE(onEvent?: (event: SSEEvent) => void) {
       } catch {}
     };
 
-    const events = ["new_message", "typing", "messages_read", "online_status"];
+    const events = ["new_message", "typing", "messages_read", "online_status", "force_logout"];
     events.forEach((ev) => es.addEventListener(ev, handle(ev)));
+
+    // Gérer l'expulsion immédiate (1 session active par compte)
+    const handleForceLogout = (e: MessageEvent) => {
+      try {
+        const data = JSON.parse(e.data);
+        window.dispatchEvent(new CustomEvent("force-logout", { detail: data }));
+      } catch {}
+    };
+    es.addEventListener("force_logout", handleForceLogout);
 
     es.onerror = () => {
       // SSE will auto-reconnect
@@ -34,6 +43,7 @@ export function useSSE(onEvent?: (event: SSEEvent) => void) {
 
     return () => {
       events.forEach((ev) => es.removeEventListener(ev, handle(ev) as EventListener));
+      es.removeEventListener("force_logout", handleForceLogout);
       es.close();
       esRef.current = null;
     };

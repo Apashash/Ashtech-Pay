@@ -81,3 +81,11 @@ export function broadcastOnlineStatus() {
     sendEvent(client.res, "online_status", { onlineIds });
   }
 }
+
+export function notifyUserForceLogout(userId: string) {
+  for (const client of clients.values()) {
+    if (client.userId === userId) {
+      sendEvent(client.res, "force_logout", { reason: "new_device_login" });
+    }
+  }
+}

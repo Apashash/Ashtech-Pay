@@ -52,7 +52,7 @@ import { addPendingPayment, removePendingPayment } from "./paymentPoller";
 import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, cleanupEmptyWallets } from "./walletHelper";
 import { createSwychrPayout, formatInternationalPhone, detectMethodFromPhone, fiatToPusd, pusdToFiatRate, getConversionRate, convertFiatToPusd, getPayoutToken, COUNTRY_CURRENCY } from "./swychrPayout";
 import { addPendingPayout, removePendingPayout } from "./payoutPoller";
-import { addSSEClient, removeSSEClient, setActiveTicket, isUserOnline, getOnlineUserIds, getAdminViewingTicket, getUserViewingTicket, notifyUser, notifyAdmins, broadcastOnlineStatus } from "./sse";
+import { addSSEClient, removeSSEClient, setActiveTicket, isUserOnline, getOnlineUserIds, getAdminViewingTicket, getUserViewingTicket, notifyUser, notifyAdmins, broadcastOnlineStatus, notifyUserForceLogout } from "./sse";
 import {
   notifyNewDeposit,
   notifyWithdrawalRequest,
@@ -437,6 +437,9 @@ async function revokeOtherSessionsForSingleDevice(userId: string): Promise<void>
     for (const row of result.rows as { sid: string }[]) {
       singleDeviceKicks.add(row.sid);
     }
+    // Pousser l'événement SSE en temps réel AVANT de supprimer les sessions
+    // → l'ancien navigateur reçoit force_logout immédiatement via la connexion SSE ouverte
+    notifyUserForceLogout(userId);
     await db.execute(sql`DELETE FROM session WHERE sess->>'userId' = ${userId}`);
     revokedTokensBefore.set(userId, Date.now());
     console.log(`[Auth] Single-device — ${(result.rows as any[]).length} session(s) révoquée(s) pour userId=${userId}`);
