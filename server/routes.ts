@@ -2154,7 +2154,6 @@ export async function registerRoutes(
         await storage.updateUserBalance(senderId, -totalAmount);
       } else {
         await storage.upsertWallet(senderId, txCurrency, -totalAmount);
-        await cleanupEmptyWallets(senderId);
       }
 
       // Create pending transaction
@@ -3030,7 +3029,6 @@ export async function registerRoutes(
         await storage.updateUserBalance(userId, -actualDeduction);
       } else {
         await storage.upsertWallet(userId, withdrawalCurrency, -amount);
-        await cleanupEmptyWallets(userId);
       }
 
       console.log(`[Withdrawal] User=${userId}, RequestedAmount=${amount}, Fee=${feeAmount}, NetToUser=${creditedAmount} (${withdrawalCurrency})`);
@@ -3472,7 +3470,6 @@ export async function registerRoutes(
           } else {
             await storage.upsertWallet(userId, toCurrency, receivedAmount);
           }
-          await cleanupEmptyWallets(userId);
 
           // Compléter transaction et conversion request
           await storage.updateTransactionStatus(transaction.id, "completed");
@@ -3617,7 +3614,6 @@ export async function registerRoutes(
       } else {
         await storage.upsertWallet(userId, toCurrency, receivedAmount);
       }
-      await cleanupEmptyWallets(userId);
 
       await storage.createConversionRequest({
         userId,

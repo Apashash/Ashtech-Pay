@@ -186,7 +186,4 @@ export async function creditUserWallet(
   // e.g. XOFT for Togo, XAFG for Gabon — each country has its own wallet
   console.log(`[walletHelper] Crediting secondary wallet ${paymentCurrency} for user ${userId}: +${amount}`);
   await storage.upsertWallet(userId, paymentCurrency, amount);
-
-  // Cleanup zero-balance secondary wallets (only removes empty ones)
-  await cleanupEmptyWallets(userId);
 }
