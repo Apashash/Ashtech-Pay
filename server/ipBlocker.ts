@@ -3,7 +3,7 @@ import { platformSettings } from "@shared/schema";
 import { like, eq } from "drizzle-orm";
 
 const MAX_AUTH_ATTEMPTS = 4;
-const AUTH_BLOCK_DURATION_MS = 7 * 60 * 1000;
+const AUTH_BLOCK_DURATION_MS = 30 * 60 * 1000;
 const KEY_PREFIX = "ipblock:";
 
 interface IpRecord {

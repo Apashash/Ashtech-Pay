@@ -217,14 +217,21 @@ declare global {
     interface Request {
       userId?: string;
       forceLogoutRetryAfter?: number;
+      singleDeviceKick?: boolean;
     }
   }
 }
 
 // Middleware to extract userId from either session or Bearer token
 function extractUserId(req: Request, _res: Response, next: NextFunction) {
-  // Vérifier si cette session spécifique a été révoquée (changement d'IP)
   if (req.sessionID) {
+    // Vérifier si cette session a été kické pour connexion sur autre appareil
+    if (singleDeviceKicks.has(req.sessionID)) {
+      singleDeviceKicks.delete(req.sessionID);
+      req.singleDeviceKick = true;
+      return next();
+    }
+    // Vérifier si cette session a été révoquée (blocage IP / changement d'IP)
     const revokedUntil = revokedSessions.get(req.sessionID);
     if (revokedUntil) {
       if (Date.now() < revokedUntil) {
@@ -262,6 +269,12 @@ function extractUserId(req: Request, _res: Response, next: NextFunction) {
 }
 
 function requireAuth(req: Request, res: Response, next: NextFunction) {
+  if (req.singleDeviceKick) {
+    return res.status(401).json({
+      message: "Votre compte a été connecté sur un autre appareil ou navigateur. Reconnectez-vous.",
+      sessionRevoked: true,
+    });
+  }
   if (req.forceLogoutRetryAfter) {
     return res.status(401).json({
       message: "Session terminée pour raison de sécurité.",
@@ -381,8 +394,10 @@ setInterval(() => {
 
 // ─── Forced-logout map : userId → blockedUntil timestamp ─────────────────────
 const forcedLogoutMap = new Map<string, number>();
-// Map sessionId → expiresAt : sessions individuellement révoquées (ex : changement d'IP)
+// Map sessionId → expiresAt : sessions révoquées (ex : blocage IP)
 const revokedSessions = new Map<string, number>();
+// Set sessionId : sessions kické pour connexion sur autre appareil (1 session max)
+const singleDeviceKicks = new Set<string>();
 // Map userId → timestamp : les Bearer tokens émis AVANT ce moment sont invalides
 const revokedTokensBefore = new Map<string, number>();
 // Map userId → dernière IP de connexion connue
@@ -402,7 +417,7 @@ async function destroyUserSessions(userId: string, blockedUntil: number): Promis
 async function revokeSessionsForIpChange(userId: string): Promise<void> {
   try {
     const result = await db.execute(sql`SELECT sid FROM session WHERE sess->>'userId' = ${userId}`);
-    const expiresAt = Date.now() + 30 * 60 * 1000; // 30 min de fenêtre de révocation
+    const expiresAt = Date.now() + 30 * 60 * 1000;
     for (const row of result.rows as { sid: string }[]) {
       revokedSessions.set(row.sid, expiresAt);
     }
@@ -411,6 +426,22 @@ async function revokeSessionsForIpChange(userId: string): Promise<void> {
     console.log(`[Auth] IP change — sessions révoquées pour userId=${userId}`);
   } catch (err: any) {
     console.error("[Auth] revokeSessionsForIpChange failed:", err?.message);
+  }
+}
+
+// Révocation des autres sessions pour la règle "1 session active max par compte"
+// Les sessions expulsées reçoivent sessionRevoked:true sans retryAfter → redirigées vers /login
+async function revokeOtherSessionsForSingleDevice(userId: string): Promise<void> {
+  try {
+    const result = await db.execute(sql`SELECT sid FROM session WHERE sess->>'userId' = ${userId}`);
+    for (const row of result.rows as { sid: string }[]) {
+      singleDeviceKicks.add(row.sid);
+    }
+    await db.execute(sql`DELETE FROM session WHERE sess->>'userId' = ${userId}`);
+    revokedTokensBefore.set(userId, Date.now());
+    console.log(`[Auth] Single-device — ${(result.rows as any[]).length} session(s) révoquée(s) pour userId=${userId}`);
+  } catch (err: any) {
+    console.error("[Auth] revokeOtherSessionsForSingleDevice failed:", err?.message);
   }
 }
 
@@ -425,6 +456,9 @@ setInterval(() => {
   for (const [uid, ts] of revokedTokensBefore.entries()) {
     if (now - ts > TOKEN_EXPIRY_MS) revokedTokensBefore.delete(uid);
   }
+  // singleDeviceKicks : vider les sessions non réclamées après 10 min
+  // (cas rare où le navigateur ne refait jamais de requête)
+  if (singleDeviceKicks.size > 500) singleDeviceKicks.clear();
 }, 5 * 60 * 1000);
 
 function getClientIp(req: Request): string {
@@ -922,7 +956,7 @@ export async function registerRoutes(
         const failure = await recordAuthFailure(ip, data.identifier);
         const remaining = failure.attemptsLeft;
         const msg = failure.blocked
-          ? "Trop de tentatives incorrectes. Accès bloqué pendant 7 minutes."
+          ? "Trop de tentatives incorrectes. Accès bloqué pendant 30 minutes."
           : `Email/téléphone ou mot de passe incorrect. ${remaining} tentative(s) restante(s).`;
         notifyLoginFailed({ identifier: data.identifier, ip, attemptsLeft: remaining, blocked: !!failure.blocked }).catch(() => {});
         if (user?.role === "admin") {
@@ -953,12 +987,8 @@ export async function registerRoutes(
         notifyAdminLogin({ adminName: user.fullName || user.username, adminEmail: user.email || "", ip }).catch(() => {});
       }
 
-      // Vérifier si l'IP a changé → révoquer les anciennes sessions
-      const knownIp = activeIpRegistry.get(user.id);
-      if (knownIp && knownIp !== ip) {
-        console.log(`[Auth] Changement d'IP pour ${user.email} : ${knownIp} → ${ip}. Révocation des sessions existantes.`);
-        await revokeSessionsForIpChange(user.id);
-      }
+      // Toujours révoquer les autres sessions (1 session active max par compte)
+      await revokeOtherSessionsForSingleDevice(user.id);
       activeIpRegistry.set(user.id, ip);
 
       // Generate auth token for token-based auth (works in iframes where cookies fail)
