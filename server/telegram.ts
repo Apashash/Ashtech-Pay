@@ -204,7 +204,7 @@ export async function notifyNewDeposit(opts: {
     `📱 Méthode : ${opts.method}\n` +
     (opts.phone ? `📞 Téléphone : ${opts.phone}\n` : "") +
     (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +
-    `🔖 Référence : <code>${opts.reference}</code>\n` +
+    `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
     `🕐 Heure : ${now()}`;
   await sendMessage(msg);
 }
@@ -227,7 +227,7 @@ export async function notifyDepositConfirmed(opts: {
     (pays ? `🌍 Pays : <b>${pays}</b>\n` : "") +
     `💰 Montant crédité : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
     (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +
-    `🔖 Référence : <code>${opts.reference}</code>\n` +
+    `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
     `🕐 Heure : ${now()}`;
   await sendMessage(msg);
 }
@@ -252,7 +252,7 @@ export async function notifyDepositFailed(opts: {
     `💰 Montant : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
     (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +
     (opts.reason ? `⚠️ Raison : ${opts.reason}\n` : "") +
-    `🔖 Référence : <code>${opts.reference}</code>\n` +
+    `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
     `🕐 Heure : ${now()}`;
   await sendMessage(msg);
 }
@@ -287,7 +287,7 @@ export async function notifyWithdrawalRequest(opts: {
     `📱 Numéro : ${opts.phone}\n` +
     (opts.operator ? `📡 Opérateur : ${opts.operator}\n` : "") +
     (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +
-    `🔖 Référence : <code>${opts.reference}</code>\n` +
+    `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
     `🕐 Heure : ${now()}`;
   const ref = opts.reference;
   await sendMessageWithKeyboard(msg, [
@@ -329,7 +329,7 @@ export async function notifyWithdrawalPendingManual(opts: {
         `📍 Destinataire : <b>${recipientPays || "—"}</b>\n`) +
     `💰 Montant : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
     `📱 Numéro : ${opts.phone}\n` +
-    `🔖 Référence : <code>${opts.reference}</code>\n` +
+    `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
     `⚠️ <b>Validation manuelle requise !</b>\n` +
     `🕐 Heure : ${now()}`;
   const ref = opts.reference;
@@ -359,7 +359,7 @@ export async function notifyWithdrawalAutoValidated(opts: {
     `📧 Email : ${opts.userEmail}\n` +
     `💰 Montant : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
     (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +
-    `🔖 Référence : <code>${opts.reference}</code>\n` +
+    `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
     `🕐 Heure : ${now()}`;
   await sendMessage(msg);
 }
@@ -379,7 +379,7 @@ export async function notifyWithdrawalManuallyValidated(opts: {
     `👤 Utilisateur : <b>${opts.userName}</b>\n` +
     `📧 Email : ${opts.userEmail}\n` +
     `💰 Montant : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
-    `🔖 Référence : <code>${opts.reference}</code>\n` +
+    `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
     `🕐 Heure : ${now()}`;
   await sendMessage(msg);
 }
@@ -401,7 +401,7 @@ export async function notifyWithdrawalFailed(opts: {
     `💰 Montant : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
     (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +
     (opts.reason ? `⚠️ Raison : ${opts.reason}\n` : "") +
-    `🔖 Référence : <code>${opts.reference}</code>\n` +
+    `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
     `🕐 Heure : ${now()}`;
   await sendMessage(msg);
 }
@@ -500,7 +500,7 @@ export async function notifyConversion(opts: {
         `📥 Vers : <b>${toPays || opts.toCurrency}</b>\n`) +
     `💱 <b>${fmt(opts.fromAmount, opts.fromCurrency)} → ${fmt(opts.toAmount, opts.toCurrency)}</b>\n` +
     `💸 Frais : ${fmt(opts.feeAmount, opts.fromCurrency)} (${opts.feePercent}%)\n` +
-    `🔖 Référence : <code>${opts.reference}</code>\n` +
+    `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
     `🕐 Heure : ${now()}`;
   await sendMessage(msg);
 }
@@ -521,7 +521,7 @@ export async function notifyTransferSent(opts: {
     `👤 Expéditeur : <b>${opts.senderName}</b> (${opts.senderEmail})\n` +
     `👥 Destinataire : <b>${opts.recipientName}</b>\n` +
     `💰 Montant : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
-    `🔖 Référence : <code>${opts.reference}</code>\n` +
+    `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
     `🕐 Heure : ${now()}`;
   await sendMessage(msg);
 }
