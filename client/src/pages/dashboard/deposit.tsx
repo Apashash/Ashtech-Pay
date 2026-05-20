@@ -3,13 +3,14 @@ import { DashboardLayout } from "@/components/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest, queryClient, getAuthHeaders } from "@/lib/queryClient";
 import type { User, SupportedCurrency } from "@shared/schema";
 import { CreditCard, Loader2, AlertCircle, Phone, CheckCircle, XCircle, Smartphone, ExternalLink, Hash, Clock, Copy, TrendingDown } from "lucide-react";
+import { SearchableSelectContent } from "@/components/ui/searchable-select-content";
 import { useLanguage } from "@/lib/language";
 import { BottomSheet, BottomSheetContent, BottomSheetHeader, BottomSheetTitle, BottomSheetFooter } from "@/components/ui/bottom-sheet";
 import { getOperatorLogo } from "@/lib/operator-logos";
@@ -611,17 +612,14 @@ export default function DepositPage() {
                                 )}
                               </SelectTrigger>
                             </FormControl>
-                            <SelectContent>
-                              {countries.map((country) => (
-                                <SelectItem key={country.id} value={country.id}>
-                                  <span className="flex items-center gap-2">
-                                    <span>{getCountryFlagEmoji(country.code)}</span>
-                                    <span>{country.name}</span>
-                                    <span className="text-muted-foreground text-xs">({country.currency})</span>
-                                  </span>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
+                            <SearchableSelectContent
+                              options={countries.map(c => ({
+                                value: c.id,
+                                label: c.name,
+                                flag: getCountryFlagEmoji(c.code),
+                                sub: c.currency,
+                              }))}
+                            />
                           </Select>
                           <FormMessage />
                         </FormItem>

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelectContent } from "@/components/ui/searchable-select-content";
 import { useToast } from "@/hooks/use-toast";
 import { Shield, Globe, CheckCircle2, XCircle, Loader2, Phone, AlertCircle } from "lucide-react";
 
@@ -307,13 +308,14 @@ export default function HPayPage() {
                         <SelectTrigger id="country" data-testid="select-country">
                           <SelectValue placeholder="Sélectionnez votre pays" />
                         </SelectTrigger>
-                        <SelectContent>
-                          {matchingCountries.map((c) => (
-                            <SelectItem key={c.id} value={c.id} data-testid={`country-option-${c.code}`}>
-                              {c.flag} {c.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
+                        <SearchableSelectContent
+                          options={matchingCountries.map(c => ({
+                            value: c.id,
+                            label: c.name,
+                            flag: c.flag,
+                            testId: `country-option-${c.code}`,
+                          }))}
+                        />
                       </Select>
                     </div>
 

@@ -6,7 +6,8 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelectContent } from "@/components/ui/searchable-select-content";
 import { useToast } from "@/hooks/use-toast";
 import { registerSchema } from "@shared/schema";
 import { apiRequest, queryClient, setAuthToken } from "@/lib/queryClient";
@@ -291,17 +292,14 @@ export default function RegisterPage() {
                                 ) : <span className="text-muted-foreground">{t.register.country}</span>}
                               </SelectValue>
                             </SelectTrigger>
-                            <SelectContent>
-                              {countries.map((country) => (
-                                <SelectItem key={country.code} value={country.code}>
-                                  <span className="flex items-center gap-2">
-                                    <span>{country.flag}</span>
-                                    <span>{country.name}</span>
-                                    <span className="text-muted-foreground">{country.dialCode}</span>
-                                  </span>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
+                            <SearchableSelectContent
+                              options={countries.map(c => ({
+                                value: c.code,
+                                label: c.name,
+                                flag: c.flag,
+                                sub: c.dialCode,
+                              }))}
+                            />
                           </Select>
                           <div className="relative flex-1">
                             <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />

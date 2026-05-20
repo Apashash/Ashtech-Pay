@@ -10,6 +10,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User, SupportedCurrency, Wallet } from "@shared/schema";
 import { Send, Globe, Loader2, ArrowRight, AlertCircle, Shield, CheckCircle2, Smartphone, TrendingDown, Wallet as WalletIcon } from "lucide-react";
+import { SearchableSelectContent } from "@/components/ui/searchable-select-content";
 import { useLanguage } from "@/lib/language";
 import { BottomSheet, BottomSheetContent, BottomSheetHeader, BottomSheetTitle, BottomSheetFooter } from "@/components/ui/bottom-sheet";
 import { getOperatorLogo } from "@/lib/operator-logos";
@@ -422,20 +423,20 @@ export default function SendMoneyPage() {
                       <span className="text-muted-foreground text-sm">{t.send.selectDestination}</span>
                     )}
                   </SelectTrigger>
-                  <SelectContent>
-                    {isLoadingConfig
-                      ? <SelectItem value="__loading__" disabled>{t.send.loading}</SelectItem>
-                      : (countries ?? []).map(country => (
-                        <SelectItem key={country.id} value={country.id}>
-                          <span className="flex items-center gap-2">
-                            <span>{COUNTRY_FLAGS[country.name] || "🌍"}</span>
-                            <span>{country.name}</span>
-                            <span className="text-muted-foreground text-xs">({country.currency})</span>
-                          </span>
-                        </SelectItem>
-                      ))
-                    }
-                  </SelectContent>
+                  {isLoadingConfig ? (
+                    <SelectContent>
+                      <SelectItem value="__loading__" disabled>{t.send.loading}</SelectItem>
+                    </SelectContent>
+                  ) : (
+                    <SearchableSelectContent
+                      options={(countries ?? []).map(c => ({
+                        value: c.id,
+                        label: c.name,
+                        flag: COUNTRY_FLAGS[c.name] || "🌍",
+                        sub: c.currency,
+                      }))}
+                    />
+                  )}
                 </Select>
               </div>
 

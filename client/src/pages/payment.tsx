@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelectContent } from "@/components/ui/searchable-select-content";
 import { useToast } from "@/hooks/use-toast";
 import type { PaymentLink, SupportedCurrency } from "@shared/schema";
 import { CURRENCY_SYMBOLS, SUPPORTED_CURRENCIES } from "@shared/schema";
@@ -952,17 +953,14 @@ export default function PaymentPage() {
                     <span className="text-muted-foreground text-sm">Sélectionnez votre pays</span>
                   )}
                 </SelectTrigger>
-                <SelectContent>
-                  {depositConfig.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      <span className="flex items-center gap-2">
-                        <span>{c.flag}</span>
-                        <span>{c.name}</span>
-                        <span className="text-muted-foreground text-xs">({c.currency})</span>
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
+                <SearchableSelectContent
+                  options={depositConfig.map(c => ({
+                    value: c.id,
+                    label: c.name,
+                    flag: c.flag,
+                    sub: c.currency,
+                  }))}
+                />
               </Select>
               {errors.country && <p className="text-xs text-red-500">{errors.country}</p>}
             </div>
