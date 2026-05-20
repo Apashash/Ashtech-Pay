@@ -1,4 +1,4 @@
-import { Switch, Route, useLocation } from "wouter";
+import { Switch, Route, useLocation, Redirect } from "wouter";
 import { queryClient, removeAuthToken, getQueryFn, getAuthHeaders } from "./lib/queryClient";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
@@ -84,6 +84,28 @@ import FAQPage from "@/pages/faq";
 import CountryBlockedPage from "@/pages/country-blocked";
 import BlockedPage from "@/pages/blocked";
 
+const RATE_LIMIT_KEY = "ashtech_rate_limit_until";
+
+function getBlockedUntil(): number | null {
+  try {
+    const v = localStorage.getItem(RATE_LIMIT_KEY);
+    if (!v) return null;
+    const ts = parseInt(v, 10);
+    if (ts > Date.now()) return ts;
+    localStorage.removeItem(RATE_LIMIT_KEY);
+  } catch {}
+  return null;
+}
+
+// Redirige immédiatement vers /blocked si l'IP est bloquée (vérif. localStorage)
+function BlockGuard({ children }: { children: React.ReactNode }) {
+  const blockedUntil = getBlockedUntil();
+  if (blockedUntil !== null) {
+    return <Redirect to={`/blocked?until=${blockedUntil}`} />;
+  }
+  return <>{children}</>;
+}
+
 const GEO_BYPASS_PATHS = ["/pay/", "/hpay/", "/checkout/", "/admin"];
 
 function GeoGuard({ children }: { children: React.ReactNode }) {
@@ -116,8 +138,12 @@ function Router() {
       <Route path="/docs/api" component={() => <DeveloperPage publicMode />} />
       <Route path="/docs/hosted-page" component={() => <HostedPageDocs publicMode />} />
       <Route path="/blocked" component={BlockedPage} />
-      <Route path="/login" component={LoginPage} />
-      <Route path="/register" component={RegisterPage} />
+      <Route path="/login">
+        <BlockGuard><LoginPage /></BlockGuard>
+      </Route>
+      <Route path="/register">
+        <BlockGuard><RegisterPage /></BlockGuard>
+      </Route>
       <Route path="/forgot-password" component={ForgotPasswordPage} />
       <Route path="/reset-password" component={ResetPasswordPage} />
       <Route path="/dashboard" component={DashboardHome} />
