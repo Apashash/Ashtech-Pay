@@ -7,13 +7,14 @@ interface SSEClient {
   isAdmin: boolean;
   res: Response;
   activeTicketId: string | null;
+  sessionId?: string;
 }
 
 const clients = new Map<string, SSEClient>();
 
-export function addSSEClient(userId: string, isAdmin: boolean, res: Response): string {
+export function addSSEClient(userId: string, isAdmin: boolean, res: Response, sessionId?: string): string {
   const connectionId = uuidv4();
-  clients.set(connectionId, { id: connectionId, userId, isAdmin, res, activeTicketId: null });
+  clients.set(connectionId, { id: connectionId, userId, isAdmin, res, activeTicketId: null, sessionId });
   return connectionId;
 }
 
@@ -87,6 +88,14 @@ export function notifyUserForceLogout(userId: string, retryAfter?: number, reaso
   for (const client of clients.values()) {
     if (client.userId === userId) {
       sendEvent(client.res, "force_logout", { reason: reason ?? "ip_blocked", retryAfter });
+    }
+  }
+}
+
+export function notifyOtherSessionsForceLogout(userId: string, excludeSessionId: string) {
+  for (const client of clients.values()) {
+    if (client.userId === userId && client.sessionId !== excludeSessionId) {
+      sendEvent(client.res, "force_logout", { reason: "new_device" });
     }
   }
 }

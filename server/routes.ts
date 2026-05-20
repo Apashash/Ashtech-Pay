@@ -52,7 +52,7 @@ import { addPendingPayment, removePendingPayment } from "./paymentPoller";
 import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, cleanupEmptyWallets, sameCfaFamily } from "./walletHelper";
 import { createSwychrPayout, formatInternationalPhone, detectMethodFromPhone, fiatToPusd, pusdToFiatRate, getConversionRate, convertFiatToPusd, getPayoutToken, COUNTRY_CURRENCY } from "./swychrPayout";
 import { addPendingPayout, removePendingPayout } from "./payoutPoller";
-import { addSSEClient, removeSSEClient, setActiveTicket, isUserOnline, getOnlineUserIds, getAdminViewingTicket, getUserViewingTicket, notifyUser, notifyAdmins, broadcastOnlineStatus, notifyUserForceLogout } from "./sse";
+import { addSSEClient, removeSSEClient, setActiveTicket, isUserOnline, getOnlineUserIds, getAdminViewingTicket, getUserViewingTicket, notifyUser, notifyAdmins, broadcastOnlineStatus, notifyUserForceLogout, notifyOtherSessionsForceLogout } from "./sse";
 import {
   notifyNewDeposit,
   notifyWithdrawalRequest,
@@ -169,6 +169,8 @@ declare module "express-session" {
     userId: string;
     adminOtpVerified?: boolean;
     clientIp?: string;
+    userAgent?: string;
+    loginAt?: string;
   }
 }
 
@@ -1077,6 +1079,8 @@ export async function registerRoutes(
       
       req.session.userId = user.id;
       req.session.clientIp = ip;
+      req.session.userAgent = req.headers["user-agent"] || "";
+      req.session.loginAt = new Date().toISOString();
 
       // Explicitly save session before responding
       req.session.save((err) => {
@@ -1167,8 +1171,6 @@ export async function registerRoutes(
         notifyAdminLogin({ adminName: user.fullName || user.username, adminEmail: user.email || "", ip }).catch(() => {});
       }
 
-      // Toujours révoquer les autres sessions (1 session active max par compte)
-      await revokeOtherSessionsForSingleDevice(user.id);
       activeIpRegistry.set(user.id, ip);
 
       // Generate auth token for token-based auth (works in iframes where cookies fail)
@@ -1176,6 +1178,8 @@ export async function registerRoutes(
       
       req.session.userId = user.id;
       req.session.clientIp = ip;
+      req.session.userAgent = req.headers["user-agent"] || "";
+      req.session.loginAt = new Date().toISOString();
 
       // Explicitly save session before responding
       req.session.save((err) => {
@@ -1329,6 +1333,86 @@ export async function registerRoutes(
       });
     } catch (error) {
       console.error("Get user stats error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // ─── Sessions / appareils connectés ──────────────────────────────────────────
+
+  function parseDeviceFromUA(ua: string): { device: string; browser: string } {
+    const isMobile = /Mobile|Android|iPhone|iPad|iPod/i.test(ua);
+    const isTablet = /iPad|Tablet/i.test(ua);
+    let device = isMobile ? (isTablet ? "Tablette" : "Mobile") : "Ordinateur";
+    let browser = "Navigateur inconnu";
+    if (/Chrome\/(\d+)/.test(ua) && !/Chromium|Edg|OPR/.test(ua)) browser = "Chrome";
+    else if (/Firefox\/(\d+)/.test(ua)) browser = "Firefox";
+    else if (/Safari\/(\d+)/.test(ua) && !/Chrome/.test(ua)) browser = "Safari";
+    else if (/Edg\/(\d+)/.test(ua)) browser = "Edge";
+    else if (/OPR\/(\d+)/.test(ua)) browser = "Opera";
+    else if (/SamsungBrowser\/(\d+)/.test(ua)) browser = "Samsung Internet";
+    return { device, browser };
+  }
+
+  app.get("/api/user/sessions", requireAuth, async (req, res) => {
+    try {
+      const result = await db.execute(
+        sql`SELECT sid, sess, expire FROM session WHERE sess->>'userId' = ${req.userId} ORDER BY expire DESC`
+      );
+      const sessions = (result.rows as any[]).map((row) => {
+        const sess = row.sess || {};
+        const ua = sess.userAgent || "";
+        const { device, browser } = parseDeviceFromUA(ua);
+        return {
+          id: row.sid,
+          isCurrent: row.sid === req.sessionID,
+          ip: sess.clientIp || "Inconnu",
+          device,
+          browser,
+          loginAt: sess.loginAt || null,
+          expire: row.expire,
+        };
+      });
+      res.json(sessions);
+    } catch (error) {
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  app.delete("/api/user/sessions/others", requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId!;
+      const currentSid = req.sessionID;
+
+      // Count other sessions
+      const countResult = await db.execute(
+        sql`SELECT COUNT(*) as cnt FROM session WHERE sess->>'userId' = ${userId} AND sid != ${currentSid}`
+      );
+      const count = parseInt((countResult.rows[0] as any)?.cnt || "0", 10);
+
+      // Add them to in-memory kicks so pending requests get sessionRevoked
+      const othersResult = await db.execute(
+        sql`SELECT sid FROM session WHERE sess->>'userId' = ${userId} AND sid != ${currentSid}`
+      );
+      for (const row of othersResult.rows as { sid: string }[]) {
+        singleDeviceKicks.add(row.sid);
+      }
+
+      // Send SSE force_logout to other browsers in real-time (not current)
+      notifyOtherSessionsForceLogout(userId, currentSid);
+
+      // Delete other sessions from DB
+      await db.execute(
+        sql`DELETE FROM session WHERE sess->>'userId' = ${userId} AND sid != ${currentSid}`
+      );
+
+      // Revoke old bearer tokens and issue a fresh one for current user
+      const revokedAt = Date.now();
+      revokedTokensBefore.set(userId, revokedAt);
+      await db.execute(sql`UPDATE users SET token_revoked_before = ${revokedAt} WHERE id = ${userId}`);
+      const newToken = storeAuthToken(userId);
+
+      res.json({ ok: true, count, token: newToken });
+    } catch (error) {
       res.status(500).json({ message: "Erreur serveur" });
     }
   });
@@ -6656,7 +6740,7 @@ export async function registerRoutes(
 
     const user = await storage.getUser(req.userId!);
     const isAdmin = user?.role === "admin" || user?.role === "support";
-    const connId = addSSEClient(req.userId!, !!isAdmin, res);
+    const connId = addSSEClient(req.userId!, !!isAdmin, res, req.sessionID);
 
     // Update last seen
     await storage.updateUserLastSeen(req.userId!);

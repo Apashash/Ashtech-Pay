@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/collapsible";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, setAuthToken } from "@/lib/queryClient";
 import type { User } from "@shared/schema";
 import {
   User as UserIcon,
@@ -36,6 +36,11 @@ import {
   Pencil,
   X,
   Check,
+  Monitor,
+  Tablet,
+  LogOut,
+  MapPin,
+  Clock,
 } from "lucide-react";
 import { Link } from "wouter";
 import { useState, useEffect } from "react";
@@ -93,6 +98,121 @@ function SettingsCard({ children }: { children: React.ReactNode }) {
     <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
       {children}
     </div>
+  );
+}
+
+interface DeviceSession {
+  id: string;
+  isCurrent: boolean;
+  ip: string;
+  device: string;
+  browser: string;
+  loginAt: string | null;
+  expire: string;
+}
+
+function DeviceIcon({ device }: { device: string }) {
+  if (device === "Mobile") return <Smartphone className="w-5 h-5 text-muted-foreground" />;
+  if (device === "Tablette") return <Tablet className="w-5 h-5 text-muted-foreground" />;
+  return <Monitor className="w-5 h-5 text-muted-foreground" />;
+}
+
+function formatRelativeTime(dateStr: string | null): string {
+  if (!dateStr) return "Heure inconnue";
+  const date = new Date(dateStr);
+  const now = Date.now();
+  const diff = Math.floor((now - date.getTime()) / 1000);
+  if (diff < 60) return "À l'instant";
+  if (diff < 3600) return `Il y a ${Math.floor(diff / 60)} min`;
+  if (diff < 86400) return `Il y a ${Math.floor(diff / 3600)} h`;
+  return `Il y a ${Math.floor(diff / 86400)} j`;
+}
+
+function ConnectedDevicesSection() {
+  const { toast } = useToast();
+  const { data: sessions, isLoading, refetch } = useQuery<DeviceSession[]>({
+    queryKey: ["/api/user/sessions"],
+    refetchOnWindowFocus: true,
+  });
+
+  const disconnectMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("DELETE", "/api/user/sessions/others");
+      return res.json();
+    },
+    onSuccess: (data) => {
+      if (data.token) setAuthToken(data.token);
+      refetch();
+      toast({
+        title: "Appareils déconnectés",
+        description: data.count > 0
+          ? `${data.count} autre(s) appareil(s) déconnecté(s).`
+          : "Aucun autre appareil connecté.",
+      });
+    },
+    onError: () => {
+      toast({ title: "Erreur", description: "Impossible de déconnecter les appareils.", variant: "destructive" });
+    },
+  });
+
+  const otherCount = (sessions || []).filter(s => !s.isCurrent).length;
+
+  return (
+    <>
+      <SectionLabel>Appareils connectés</SectionLabel>
+      <SettingsCard>
+        {isLoading ? (
+          <div className="flex items-center justify-center py-6">
+            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : !sessions || sessions.length === 0 ? (
+          <div className="px-4 py-4 text-sm text-muted-foreground">Aucune session active trouvée.</div>
+        ) : (
+          <div className="divide-y divide-border">
+            {sessions.map((s) => (
+              <div key={s.id} className="flex items-center gap-3 px-4 py-3.5">
+                <DeviceIcon device={s.device} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm font-medium text-foreground">
+                      {s.device} · {s.browser}
+                    </p>
+                    {s.isCurrent && (
+                      <span className="text-[10px] font-semibold bg-green-500/15 text-green-600 dark:text-green-400 rounded-full px-2 py-0.5">
+                        Cet appareil
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 mt-0.5">
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <MapPin className="w-3 h-3" /> {s.ip}
+                    </span>
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <Clock className="w-3 h-3" /> {formatRelativeTime(s.loginAt)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {otherCount > 0 && (
+              <div className="px-4 py-3">
+                <button
+                  className="flex items-center gap-2 text-sm font-medium text-red-500 hover:text-red-600 transition-colors disabled:opacity-50"
+                  onClick={() => disconnectMutation.mutate()}
+                  disabled={disconnectMutation.isPending}
+                  data-testid="button-disconnect-others"
+                >
+                  {disconnectMutation.isPending
+                    ? <Loader2 className="w-4 h-4 animate-spin" />
+                    : <LogOut className="w-4 h-4" />}
+                  Déconnecter tous les autres appareils ({otherCount})
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </SettingsCard>
+    </>
   );
 }
 
@@ -379,6 +499,9 @@ export default function SettingsPage() {
             data-testid="row-api-keys"
           />
         </SettingsCard>
+
+        {/* APPAREILS CONNECTÉS */}
+        <ConnectedDevicesSection />
 
         {/* DANGER ZONE */}
         <SectionLabel>{t.settings.dangerSection}</SectionLabel>
