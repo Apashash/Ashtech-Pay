@@ -171,6 +171,7 @@ declare module "express-session" {
     clientIp?: string;
     userAgent?: string;
     loginAt?: string;
+    tokenIssuedAt?: number;
   }
 }
 
@@ -193,6 +194,16 @@ function storeAuthToken(userId: string): string {
   return Buffer.from(`${payload}.${sig}`).toString("base64url");
 }
 
+function extractTokenTimestamp(token: string): number | null {
+  try {
+    const decoded = Buffer.from(token, "base64url").toString();
+    const parts = decoded.split(".");
+    if (parts.length !== 3) return null;
+    const ts = parseInt(parts[1]);
+    return isNaN(ts) ? null : ts;
+  } catch { return null; }
+}
+
 function getUserIdFromToken(token: string): string | null {
   try {
     const decoded = Buffer.from(token, "base64url").toString();
@@ -202,9 +213,13 @@ function getUserIdFromToken(token: string): string | null {
     const expectedSig = crypto.createHmac("sha256", getTokenSecret()).update(`${userId}.${timestamp}`).digest("hex");
     if (sig !== expectedSig) return null;
     if (Date.now() - parseInt(timestamp) > TOKEN_EXPIRY_MS) return null;
+    const ts = parseInt(timestamp);
     // Token révoqué suite à un changement d'IP (Bearer token ancien)
     const revokedBefore = revokedTokensBefore.get(userId);
-    if (revokedBefore && parseInt(timestamp) < revokedBefore) return null;
+    if (revokedBefore && ts < revokedBefore) return null;
+    // Token révoqué pour un appareil spécifique (déconnexion par l'utilisateur)
+    const revokedSet = revokedSpecificTokenTs.get(userId);
+    if (revokedSet && revokedSet.has(ts)) return null;
     return userId;
   } catch {
     return null;
@@ -466,6 +481,8 @@ const revokedSessions = new Map<string, number>();
 const singleDeviceKicks = new Set<string>();
 // Map userId → timestamp : les Bearer tokens émis AVANT ce moment sont invalides
 const revokedTokensBefore = new Map<string, number>();
+// Map userId → Set<tokenIssuedAt> : tokens d'appareils spécifiques révoqués (déconnexion par appareil)
+const revokedSpecificTokenTs = new Map<string, Set<number>>();
 // Map userId → dernière IP de connexion connue
 const activeIpRegistry = new Map<string, string>();
 
@@ -594,6 +611,13 @@ setInterval(() => {
   }
   for (const [uid, ts] of revokedTokensBefore.entries()) {
     if (now - ts > TOKEN_EXPIRY_MS) revokedTokensBefore.delete(uid);
+  }
+  // revokedSpecificTokenTs : nettoyer les timestamps expirés (> 3 jours)
+  for (const [uid, tsSet] of revokedSpecificTokenTs.entries()) {
+    for (const ts of tsSet) {
+      if (now - ts > TOKEN_EXPIRY_MS) tsSet.delete(ts);
+    }
+    if (tsSet.size === 0) revokedSpecificTokenTs.delete(uid);
   }
   // singleDeviceKicks : vider les sessions non réclamées après 10 min
   // (cas rare où le navigateur ne refait jamais de requête)
@@ -1091,6 +1115,7 @@ export async function registerRoutes(
       req.session.clientIp = ip;
       req.session.userAgent = req.headers["user-agent"] || "";
       req.session.loginAt = new Date().toISOString();
+      req.session.tokenIssuedAt = extractTokenTimestamp(authToken);
 
       // Explicitly save session before responding
       req.session.save((err) => {
@@ -1190,6 +1215,7 @@ export async function registerRoutes(
       req.session.clientIp = ip;
       req.session.userAgent = req.headers["user-agent"] || "";
       req.session.loginAt = new Date().toISOString();
+      req.session.tokenIssuedAt = extractTokenTimestamp(authToken);
 
       // Explicitly save session before responding
       req.session.save((err) => {
@@ -1411,13 +1437,20 @@ export async function registerRoutes(
       }
 
       try {
-        // Vérifier que la session appartient bien à cet utilisateur
+        // Vérifier que la session appartient bien à cet utilisateur, et lire tokenIssuedAt
         const check = await sessionPool.query(
-          `SELECT sid FROM session WHERE sid = $1 AND sess->>'userId' = $2`,
+          `SELECT sid, (sess->>'tokenIssuedAt')::bigint AS token_ts FROM session WHERE sid = $1 AND sess->>'userId' = $2`,
           [targetSid, userId]
         );
         if (check.rows.length === 0) {
           return res.status(404).json({ message: "Session introuvable." });
+        }
+
+        // Révoquer le Bearer token spécifique à cet appareil
+        const tokenTs = check.rows[0]?.token_ts;
+        if (tokenTs) {
+          if (!revokedSpecificTokenTs.has(userId)) revokedSpecificTokenTs.set(userId, new Set());
+          revokedSpecificTokenTs.get(userId)!.add(Number(tokenTs));
         }
 
         singleDeviceKicks.add(targetSid);
