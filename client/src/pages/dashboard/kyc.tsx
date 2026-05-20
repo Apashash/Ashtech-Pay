@@ -517,6 +517,7 @@ export default function KYCPage() {
                       value={postalCode}
                       onChange={(e) => setPostalCode(e.target.value)}
                       placeholder={t.kyc.postalCodePlaceholder}
+                      inputMode="numeric"
                       data-testid="input-postal-code"
                     />
                   </div>
