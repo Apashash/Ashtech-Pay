@@ -1019,13 +1019,17 @@ const INLINE_MENU: { text: string; callback_data: string }[][] = [
 ];
 
 async function sendMenu(chatId: string): Promise<void> {
-  // First remove any existing reply keyboard silently
-  await callBotApi("sendMessage", {
+  // Remove existing reply keyboard then delete the cleanup message
+  const cleanupRes = await callBotApi("sendMessage", {
     chat_id: chatId,
-    text: "​",
+    text: ".",
     reply_markup: { remove_keyboard: true },
     disable_notification: true,
   });
+  const cleanupMsgId = cleanupRes?.result?.message_id;
+  if (cleanupMsgId) {
+    await callBotApi("deleteMessage", { chat_id: chatId, message_id: cleanupMsgId });
+  }
 
   await callBotApi("sendMessage", {
     chat_id: chatId,
