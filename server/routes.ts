@@ -735,6 +735,78 @@ export async function registerRoutes(
     next();
   });
 
+  // ── Blocked page — served as standalone HTML (no React dependency) ────────
+  // Explicit Content-Type prevents Safari from downloading the page as a file.
+  app.get("/blocked", (req, res) => {
+    const until = parseInt(String(req.query.until ?? "0"), 10) || 0;
+    res.set("Content-Type", "text/html; charset=utf-8").send(`<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Accès bloqué — AshTech Pay</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{min-height:100vh;background:#0B0E11;display:flex;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:1rem}
+    .card{background:#1E2329;border:1px solid #2B3139;border-radius:16px;padding:2rem;max-width:360px;width:100%;text-align:center}
+    .logo{margin-bottom:1.5rem}
+    .logo img{height:64px;width:auto}
+    .icon{width:64px;height:64px;background:rgba(220,53,69,.1);border:1px solid rgba(220,53,69,.3);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 1.5rem}
+    .icon svg{width:32px;height:32px;color:#dc3545;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+    h1{color:#EAECEF;font-size:1.25rem;margin-bottom:.5rem}
+    p{color:#848E9C;font-size:.875rem;line-height:1.5;margin-bottom:1.5rem}
+    .timer-box{background:rgba(220,53,69,.05);border:1px solid rgba(220,53,69,.2);border-radius:12px;padding:1.5rem;margin-bottom:1.5rem}
+    .timer-label{color:#848E9C;font-size:.75rem;margin-bottom:.75rem;display:flex;align-items:center;justify-content:center;gap:.4rem}
+    .timer{display:flex;align-items:center;gap:1rem;justify-content:center}
+    .time-block{display:flex;flex-direction:column;align-items:center}
+    .time-val{font-size:3rem;font-weight:700;color:#f47c7c;font-variant-numeric:tabular-nums;line-height:1}
+    .time-unit{font-size:.65rem;color:#848E9C;text-transform:uppercase;letter-spacing:.1em;margin-top:.25rem}
+    .colon{font-size:2.5rem;font-weight:700;color:rgba(244,124,124,.5);margin-bottom:1rem}
+    .note{color:#848E9C;font-size:.7rem;line-height:1.5;margin-bottom:1.5rem}
+    .home-btn{display:inline-flex;align-items:center;gap:.4rem;color:#848E9C;font-size:.8rem;text-decoration:none;padding:.5rem 1rem;border-radius:8px;border:1px solid #2B3139;transition:background .2s}
+    .home-btn:hover{background:#2B3139;color:#EAECEF}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo"><img src="/logo.png" alt="AshTech Pay" onerror="this.style.display='none'" /></div>
+    <div class="icon">
+      <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+    </div>
+    <h1>Accès temporairement bloqué</h1>
+    <p>Trop de tentatives incorrectes ont été détectées depuis votre adresse IP.</p>
+    <div class="timer-box">
+      <div class="timer-label">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Réessayez dans
+      </div>
+      <div class="timer">
+        <div class="time-block"><span class="time-val" id="min">--</span><span class="time-unit">min</span></div>
+        <span class="colon">:</span>
+        <div class="time-block"><span class="time-val" id="sec">--</span><span class="time-unit">sec</span></div>
+      </div>
+    </div>
+    <p class="note">Pour votre sécurité, l'accès est bloqué après 4 tentatives incorrectes. Vous serez redirigé automatiquement à l'expiration du délai.</p>
+    <a href="/" class="home-btn">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      Retour à l'accueil
+    </a>
+  </div>
+  <script>
+    var until = ${until};
+    function tick() {
+      var remaining = Math.max(0, Math.ceil((until - Date.now()) / 1000));
+      document.getElementById('min').textContent = String(Math.floor(remaining / 60)).padStart(2, '0');
+      document.getElementById('sec').textContent = String(remaining % 60).padStart(2, '0');
+      if (remaining <= 0) { clearInterval(timer); window.location.href = '/login'; }
+    }
+    tick();
+    var timer = setInterval(tick, 1000);
+  </script>
+</body>
+</html>`);
+  });
+
   // Trust proxy (Replit uses reverse proxy in all environments)
   app.set("trust proxy", 1);
 
