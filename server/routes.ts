@@ -10066,25 +10066,40 @@ export async function registerRoutes(
 
         // ── Top 10 users ─────────────────────────────────────────────────────
         getTopUsers: async () => {
-          const top = await db
-            .select({
-              fullName: usersTable.fullName,
-              username: usersTable.username,
-              email: usersTable.email,
-              balance: usersTable.balance,
-              preferredCurrency: usersTable.preferredCurrency,
-            })
-            .from(usersTable)
-            .where(drizzleSql`${usersTable.isBanned} = false`)
-            .orderBy(desc(drizzleSql`CAST(${usersTable.balance} AS NUMERIC)`))
-            .limit(10)
-            .catch(() => [] as any[]);
-          return top.map((u: any) => ({
-            userName: u.fullName || u.username,
-            email: u.email || "",
-            balance: parseFloat(u.balance ?? "0"),
-            currency: u.preferredCurrency || "XAF",
-          }));
+          const { loadFxRates, convertToXAF } = await import("./walletHelper");
+          const [allUsers, fxRates] = await Promise.all([
+            storage.getAllUsers().catch(() => [] as any[]),
+            loadFxRates().catch(() => ({} as Record<string, number>)),
+          ]);
+          const nonBanned = allUsers.filter((u: any) => !u.isBanned);
+          const userIds = nonBanned.map((u: any) => u.id);
+          const allWallets = await storage.getWalletsByUserIds(userIds).catch(() => [] as any[]);
+
+          // Group secondary wallets by userId
+          const walletsByUser: Record<string, any[]> = {};
+          for (const w of allWallets) {
+            if (!walletsByUser[w.userId]) walletsByUser[w.userId] = [];
+            walletsByUser[w.userId].push(w);
+          }
+
+          // Compute total XAF equivalent for each user
+          const ranked = nonBanned.map((u: any) => {
+            const primaryXAF = convertToXAF(parseFloat(u.balance ?? "0"), u.preferredCurrency || "XAF", fxRates);
+            const secondaryXAF = (walletsByUser[u.id] || []).reduce((sum: number, w: any) => {
+              return sum + convertToXAF(parseFloat(w.balance ?? "0"), w.currency, fxRates);
+            }, 0);
+            const totalXAF = primaryXAF + secondaryXAF;
+            return {
+              userName: u.fullName || u.username,
+              email: u.email || "",
+              balance: Math.round(totalXAF),
+              currency: "XAF",
+            };
+          });
+
+          return ranked
+            .sort((a: any, b: any) => b.balance - a.balance)
+            .slice(0, 10);
         },
 
         // ── Broadcast email ──────────────────────────────────────────────────
