@@ -10066,16 +10066,25 @@ export async function registerRoutes(
 
         // ── Top 10 users ─────────────────────────────────────────────────────
         getTopUsers: async () => {
-          const allUsers = await storage.getAllUsers().catch(() => [] as any[]);
-          return [...allUsers]
-            .sort((a: any, b: any) => parseFloat(b.balance ?? "0") - parseFloat(a.balance ?? "0"))
-            .slice(0, 10)
-            .map((u: any) => ({
-              userName: u.fullName || u.username,
-              email: u.email || "",
-              balance: parseFloat(u.balance ?? "0"),
-              currency: u.preferredCurrency || "XAF",
-            }));
+          const top = await db
+            .select({
+              fullName: usersTable.fullName,
+              username: usersTable.username,
+              email: usersTable.email,
+              balance: usersTable.balance,
+              preferredCurrency: usersTable.preferredCurrency,
+            })
+            .from(usersTable)
+            .where(drizzleSql`${usersTable.isBanned} = false`)
+            .orderBy(desc(drizzleSql`CAST(${usersTable.balance} AS NUMERIC)`))
+            .limit(10)
+            .catch(() => [] as any[]);
+          return top.map((u: any) => ({
+            userName: u.fullName || u.username,
+            email: u.email || "",
+            balance: parseFloat(u.balance ?? "0"),
+            currency: u.preferredCurrency || "XAF",
+          }));
         },
 
         // ── Broadcast email ──────────────────────────────────────────────────
