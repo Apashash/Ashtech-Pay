@@ -15,8 +15,30 @@ import { z } from "zod";
 
 type LoginFormData = z.infer<typeof loginSchema>;
 
+const RATE_LIMIT_KEY = "ashtech_rate_limit_until";
+
+function saveRateLimit(retryAfter: number) {
+  try { localStorage.setItem(RATE_LIMIT_KEY, String(retryAfter)); } catch {}
+}
+function loadRateLimit(): number | null {
+  try {
+    const v = localStorage.getItem(RATE_LIMIT_KEY);
+    if (!v) return null;
+    const ts = parseInt(v, 10);
+    if (ts > Date.now()) return ts;
+    localStorage.removeItem(RATE_LIMIT_KEY);
+  } catch {}
+  return null;
+}
+function clearRateLimit() {
+  try { localStorage.removeItem(RATE_LIMIT_KEY); } catch {}
+}
+
 function useCountdown(retryAfter: number | null) {
-  const [remaining, setRemaining] = useState(0);
+  const [remaining, setRemaining] = useState<number>(() => {
+    if (!retryAfter) return 0;
+    return Math.max(0, Math.ceil((retryAfter - Date.now()) / 1000));
+  });
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -51,7 +73,7 @@ export default function LoginPage() {
   const { toast } = useToast();
   const { t } = useLanguage();
   const [showPassword, setShowPassword] = useState(false);
-  const [blockedUntil, setBlockedUntil] = useState<number | null>(null);
+  const [blockedUntil, setBlockedUntil] = useState<number | null>(() => loadRateLimit());
   const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
   // Auto-show VPN screen if redirected from a VPN-triggered disconnect (?vpn=1)
   const [vpnDetected, setVpnDetected] = useState(() => {
@@ -66,22 +88,11 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (countdown === 0 && blockedUntil !== null) {
+      clearRateLimit();
       setBlockedUntil(null);
       setAttemptsLeft(null);
     }
   }, [countdown, blockedUntil]);
-
-  // Redirect to blocked page if IP is already blocked on mount
-  useEffect(() => {
-    fetch("/api/auth/ip-status")
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.blocked && data.retryAfter) {
-          setLocation(`/blocked?until=${data.retryAfter}`);
-        }
-      })
-      .catch(() => {});
-  }, [setLocation]);
 
   const form = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -107,6 +118,7 @@ export default function LoginPage() {
         return;
       }
       if (error.blocked && error.retryAfter) {
+        saveRateLimit(error.retryAfter);
         setBlockedUntil(error.retryAfter);
       } else if (error.attemptsLeft !== undefined) {
         setAttemptsLeft(error.attemptsLeft);

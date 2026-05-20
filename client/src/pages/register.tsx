@@ -28,8 +28,30 @@ const fallbackCountries: CountryData[] = [
   { code: "CM", name: "Cameroun", flag: "🇨🇲", dialCode: "+237", currency: "XAF", exchangeRate: "1" },
 ];
 
+const RATE_LIMIT_KEY = "ashtech_rate_limit_until";
+
+function loadRateLimit(): number | null {
+  try {
+    const v = localStorage.getItem(RATE_LIMIT_KEY);
+    if (!v) return null;
+    const ts = parseInt(v, 10);
+    if (ts > Date.now()) return ts;
+    localStorage.removeItem(RATE_LIMIT_KEY);
+  } catch {}
+  return null;
+}
+function saveRateLimit(retryAfter: number) {
+  try { localStorage.setItem(RATE_LIMIT_KEY, String(retryAfter)); } catch {}
+}
+function clearRateLimit() {
+  try { localStorage.removeItem(RATE_LIMIT_KEY); } catch {}
+}
+
 function useCountdown(retryAfter: number | null) {
-  const [remaining, setRemaining] = useState(0);
+  const [remaining, setRemaining] = useState<number>(() => {
+    if (!retryAfter) return 0;
+    return Math.max(0, Math.ceil((retryAfter - Date.now()) / 1000));
+  });
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -66,7 +88,7 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState<CountryData | null>(null);
-  const [blockedUntil, setBlockedUntil] = useState<number | null>(null);
+  const [blockedUntil, setBlockedUntil] = useState<number | null>(() => loadRateLimit());
   const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
   const [vpnDetected, setVpnDetected] = useState(false);
 
@@ -75,22 +97,11 @@ export default function RegisterPage() {
 
   useEffect(() => {
     if (countdown === 0 && blockedUntil !== null) {
+      clearRateLimit();
       setBlockedUntil(null);
       setAttemptsLeft(null);
     }
   }, [countdown, blockedUntil]);
-
-  // Redirect to blocked page if IP is already blocked on mount
-  useEffect(() => {
-    fetch("/api/auth/ip-status")
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.blocked && data.retryAfter) {
-          setLocation(`/blocked?until=${data.retryAfter}`);
-        }
-      })
-      .catch(() => {});
-  }, [setLocation]);
 
   const extendedRegisterSchema = registerSchema.extend({
     confirmPassword: z.string().min(6, t.register.passwordMinError),
@@ -141,6 +152,7 @@ export default function RegisterPage() {
         return;
       }
       if (error.blocked && error.retryAfter) {
+        saveRateLimit(error.retryAfter);
         setBlockedUntil(error.retryAfter);
       } else if (error.attemptsLeft !== undefined) {
         setAttemptsLeft(error.attemptsLeft);
