@@ -61,6 +61,9 @@ import {
   notifyKycSubmitted,
   notifyKycApproved,
   notifyKycRejected,
+  notifyKycSubmittedFull,
+  handleTelegramUpdate,
+  registerTelegramWebhook,
 } from "./telegram";
 import {
   sendWelcomeEmail,
@@ -436,6 +439,27 @@ setInterval(() => {
     if (now - entry.ts > VPN_CACHE_TTL_MS) vpnCache.delete(ip);
   }
 }, 10 * 60 * 1000);
+
+// ─── Helper : résoudre le chemin d'un fichier en URL publique ────────────────
+async function resolveFileUrl(filePath: string): Promise<string | null> {
+  if (!filePath) return null;
+  // Already a full URL (Supabase public/signed URL)
+  if (filePath.startsWith("http")) return filePath;
+  // Local /uploads/ path
+  if (filePath.startsWith("/uploads/")) {
+    const domain = process.env.REPLIT_DEV_DOMAIN;
+    return domain ? `https://${domain}${filePath}` : null;
+  }
+  // Supabase storage path (e.g. "kyc/timestamp-file.jpg")
+  try {
+    const { getSignedImageUrl } = await import("./supabase");
+    const signed = await getSignedImageUrl(filePath, 3600);
+    if (signed) return signed;
+  } catch {}
+  // Fallback: treat as local uploads
+  const domain = process.env.REPLIT_DEV_DOMAIN;
+  return domain ? `https://${domain}/uploads/${filePath}` : null;
+}
 
 export async function registerRoutes(
   httpServer: Server,
@@ -6952,20 +6976,28 @@ export async function registerRoutes(
         businessDescription,
       });
 
-      // Notify via Telegram
+      // Notify via Telegram (with photos + inline buttons)
       const kycSubmitter = await storage.getUser(userId).catch(() => null);
       if (kycSubmitter) {
-        notifyKycSubmitted({
-          userName: kycSubmitter.fullName || kycSubmitter.username,
-          userEmail: kycSubmitter.email || "",
-          userId: kycSubmitter.id,
-          documentType,
-          documentNumber,
-          country: country || undefined,
-          city: city || undefined,
-          businessType,
-          businessCategory,
-          businessDescription,
+        Promise.all([
+          resolveFileUrl(documentFrontPath),
+          resolveFileUrl(documentBackPath),
+          resolveFileUrl(selfiePath),
+        ]).then(([frontUrl, backUrl, selfieUrl]) => {
+          notifyKycSubmittedFull({
+            submissionId: submission.id,
+            userName: kycSubmitter.fullName || kycSubmitter.username,
+            userEmail: kycSubmitter.email || "",
+            userId: kycSubmitter.id,
+            documentType,
+            documentNumber,
+            country: country || undefined,
+            city: city || undefined,
+            businessType,
+            businessCategory,
+            businessDescription,
+            photoUrls: { front: frontUrl, back: backUrl, selfie: selfieUrl },
+          });
         }).catch(() => {});
       }
 
@@ -8844,6 +8876,105 @@ export async function registerRoutes(
     } catch (e: any) {
       console.error("[EmailCampaign]", e);
       res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // ─── Telegram Webhook ────────────────────────────────────────────────────────
+  app.post("/api/telegram/webhook", async (req, res) => {
+    res.json({ ok: true }); // answer Telegram immediately
+    try {
+      await handleTelegramUpdate(req.body, {
+        approveKyc: async (submissionId) => {
+          // Find first admin to use as reviewer
+          const allUsers = await storage.getAllUsers();
+          const adminUser = allUsers.find(u => u.role === "admin");
+          if (!adminUser) return null;
+
+          const submission = await storage.approveKycSubmission(submissionId, adminUser.id, "Approuvé via Telegram").catch(() => null);
+          if (!submission) return null;
+
+          const kycUser = await storage.getUser(submission.userId).catch(() => null);
+          if (!kycUser) return null;
+
+          // Notify user in-app
+          await storage.createUserNotification({
+            userId: submission.userId,
+            type: "kyc_approved",
+            title: "Compte vérifié",
+            message: "Félicitations ! Votre vérification KYC a été approuvée.",
+            transactionId: null,
+          }).catch(() => {});
+
+          // Telegram confirm + log
+          notifyKycApproved({
+            adminName: adminUser.fullName || adminUser.username,
+            userName: kycUser.fullName || kycUser.username,
+            userEmail: kycUser.email || "",
+            userId: Number(kycUser.id),
+          }).catch(() => {});
+
+          await storage.createAdminLog({
+            adminId: adminUser.id,
+            action: "approve_kyc",
+            targetType: "kyc_submission",
+            targetId: submissionId,
+            details: JSON.stringify({ via: "telegram_bot" }),
+            ipAddress: "telegram",
+          }).catch(() => {});
+
+          return { userName: kycUser.fullName || kycUser.username, userEmail: kycUser.email || "" };
+        },
+
+        rejectKyc: async (submissionId, reason) => {
+          const allUsers = await storage.getAllUsers();
+          const adminUser = allUsers.find(u => u.role === "admin");
+          if (!adminUser) return null;
+
+          const submission = await storage.rejectKycSubmission(submissionId, adminUser.id, reason).catch(() => null);
+          if (!submission) return null;
+
+          const kycUser = await storage.getUser(submission.userId).catch(() => null);
+          if (!kycUser) return null;
+
+          // Notify user in-app
+          await storage.createUserNotification({
+            userId: submission.userId,
+            type: "kyc_rejected",
+            title: "Vérification rejetée",
+            message: `Votre vérification KYC a été rejetée. Raison : ${reason}. Veuillez soumettre de nouveaux documents.`,
+            transactionId: null,
+          }).catch(() => {});
+
+          notifyKycRejected({
+            adminName: adminUser.fullName || adminUser.username,
+            userName: kycUser.fullName || kycUser.username,
+            userEmail: kycUser.email || "",
+            userId: Number(kycUser.id),
+            reason,
+          }).catch(() => {});
+
+          await storage.createAdminLog({
+            adminId: adminUser.id,
+            action: "reject_kyc",
+            targetType: "kyc_submission",
+            targetId: submissionId,
+            details: JSON.stringify({ via: "telegram_bot", note: reason }),
+            ipAddress: "telegram",
+          }).catch(() => {});
+
+          return { userName: kycUser.fullName || kycUser.username, userEmail: kycUser.email || "" };
+        },
+      });
+    } catch (err: any) {
+      console.error("[TelegramWebhook] Error:", err?.message);
+    }
+  });
+
+  // Register Telegram webhook after all routes are set up
+  setImmediate(async () => {
+    const domain = process.env.REPLIT_DEV_DOMAIN;
+    if (domain) {
+      await registerTelegramWebhook(`https://${domain}/api/telegram/webhook`);
     }
   });
 
