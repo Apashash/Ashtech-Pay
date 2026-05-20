@@ -9,6 +9,7 @@ import { startPaymentPoller, recoverPendingDeposits } from "./paymentPoller";
 import { startPayoutPoller, recoverPendingPayouts } from "./payoutPoller";
 import { seedWithdrawalTransferFees } from "./seedWithdrawalTransferFees";
 import { startCleanupScheduler } from "./cleanup";
+import { startDailyReportScheduler } from "./dailyReport";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 
@@ -238,6 +239,7 @@ app.use((req, res, next) => {
         console.error("[FeesSeed] Error during fee seeding:", err)
       );
       startCleanupScheduler();
+      startDailyReportScheduler();
     },
   );
 })();

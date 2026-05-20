@@ -30,7 +30,7 @@ async function callBotApi(method: string, body: Record<string, any>): Promise<an
   }
 }
 
-async function sendMessage(text: string): Promise<void> {
+export async function sendMessage(text: string): Promise<void> {
   if (!isConfigured()) return;
   await callBotApi("sendMessage", {
     chat_id: CHAT_ID,
