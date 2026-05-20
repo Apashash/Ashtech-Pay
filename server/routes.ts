@@ -279,9 +279,18 @@ function extractUserId(req: Request, _res: Response, next: NextFunction) {
         // Token invalide — vérifier si c'est à cause d'une révocation single-device
         // (token valide en signature/expiration mais révoqué via revokedTokensBefore)
         const rawId = getTokenUserIdIgnoreRevocation(token);
-        if (rawId && revokedTokensBefore.has(rawId)) {
-          req.singleDeviceKick = true;
-          return next();
+        if (rawId) {
+          const revokedBefore = revokedTokensBefore.get(rawId);
+          if (revokedBefore) {
+            try {
+              const decoded = Buffer.from(token, "base64url").toString();
+              const tokenTs = parseInt(decoded.split(".")[1]);
+              if (!isNaN(tokenTs) && tokenTs < revokedBefore) {
+                req.singleDeviceKick = true;
+                return next();
+              }
+            } catch {}
+          }
         }
       }
     }
@@ -974,6 +983,14 @@ export async function registerRoutes(
       return res.json({ blocked: true, retryAfter: check.retryAfter });
     }
     return res.json({ blocked: false });
+  });
+
+  // Endpoint léger pour vérifier la validité de session (polling client toutes les 10s)
+  // Passe par requireAuth → retourne sessionRevoked:true si la session est révoquée (kick single-device)
+  app.get("/api/auth/ping", requireAuth, (req, res) => {
+    const ip = getClientIp(req);
+    const ipCheck = checkAuthRateLimit(ip);
+    res.json({ ok: true, blocked: ipCheck.blocked, retryAfter: ipCheck.retryAfter });
   });
 
   // Admin — liste des IPs bloquées (temps réel)

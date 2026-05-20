@@ -247,26 +247,43 @@ function GlobalSSEWatcher() {
     refetchOnWindowFocus: "always",
   });
 
-  // Filet de sécurité : vérifie le statut IP toutes les 30s pour les utilisateurs connectés.
-  // Déclenche force-logout si l'IP est bloquée même sans requête React Query en cours.
+  // Filet de sécurité : vérifie la validité de session toutes les 10s via /api/auth/ping.
+  // Passe par requireAuth → détecte les kicks single-device et les IPs bloquées.
   useEffect(() => {
     if (!user) return;
     const check = async () => {
       try {
-        const res = await fetch("/api/auth/ip-status", {
+        const res = await fetch("/api/auth/ping", {
           credentials: "include",
           headers: getAuthHeaders(),
         });
-        const data = await res.json();
-        if (data.blocked && data.retryAfter) {
-          try { localStorage.setItem("ashtech_rate_limit_until", String(data.retryAfter)); } catch {}
+        if (res.status === 401) {
+          try {
+            const body = await res.json();
+            if (body.sessionRevoked) {
+              queryClient.clear();
+              removeAuthToken();
+              window.dispatchEvent(new CustomEvent("force-logout", { detail: { retryAfter: body.retryAfter } }));
+              return;
+            }
+          } catch {}
           queryClient.clear();
           removeAuthToken();
-          window.dispatchEvent(new CustomEvent("force-logout", { detail: { retryAfter: data.retryAfter } }));
+          window.dispatchEvent(new CustomEvent("force-logout", { detail: {} }));
+          return;
+        }
+        if (res.ok) {
+          const data = await res.json();
+          if (data.blocked && data.retryAfter) {
+            try { localStorage.setItem("ashtech_rate_limit_until", String(data.retryAfter)); } catch {}
+            queryClient.clear();
+            removeAuthToken();
+            window.dispatchEvent(new CustomEvent("force-logout", { detail: { retryAfter: data.retryAfter } }));
+          }
         }
       } catch {}
     };
-    const interval = setInterval(check, 30000);
+    const interval = setInterval(check, 10000);
     return () => clearInterval(interval);
   }, [user]);
 
