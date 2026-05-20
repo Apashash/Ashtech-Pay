@@ -354,6 +354,7 @@ export default function LinkCreatePage() {
                           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">{currency}</span>
                           <Input
                             type="number"
+                            inputMode="decimal"
                             placeholder="0"
                             className="h-11 rounded-xl border-border/60 focus:border-primary bg-background pl-14 text-lg font-semibold"
                             {...field}

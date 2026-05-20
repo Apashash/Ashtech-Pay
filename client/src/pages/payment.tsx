@@ -1082,6 +1082,7 @@ export default function PaymentPage() {
                 <Input
                   id="amount"
                   type="number"
+                  inputMode="decimal"
                   placeholder="Entrez le montant"
                   value={customAmount}
                   onChange={(e) => { setCustomAmount(e.target.value); setErrors(p => ({...p, amount: undefined as any})); }}

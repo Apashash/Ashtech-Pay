@@ -107,6 +107,7 @@ export default function AdminSettingsPublicInfo() {
                 value={settings.contact_whatsapp}
                 onChange={(e) => setSettings({ ...settings, contact_whatsapp: e.target.value })}
                 placeholder="+237 6XX XXX XXX"
+                inputMode="tel"
                 data-testid="input-contact-whatsapp"
               />
               <Button 

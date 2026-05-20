@@ -723,7 +723,8 @@ export function AdminLayout({ children }: AdminLayoutProps) {
             <div className="space-y-2">
               <Label>Montant Fiat</Label>
               <Input 
-                type="number" 
+                type="number"
+                inputMode="decimal"
                 placeholder="Ex: 5000" 
                 value={pusdAmount}
                 onChange={(e) => setPusdAmount(e.target.value)}

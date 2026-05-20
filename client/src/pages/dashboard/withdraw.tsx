@@ -298,6 +298,7 @@ export default function WithdrawPage() {
                       <div className="flex items-center gap-3">
                         <input
                           type="number"
+                          inputMode="decimal"
                           placeholder="0"
                           className="flex-1 text-4xl font-bold bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground/40 w-0"
                           {...field}

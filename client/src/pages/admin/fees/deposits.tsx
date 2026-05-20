@@ -480,6 +480,7 @@ export default function AdminFeesDeposits() {
                       step="0.01"
                       min="0"
                       max="20"
+                      inputMode="decimal"
                       value={afribapayFee}
                       onChange={(e) => { setAfribapayFee(e.target.value); sticky.current.afribapayFee = e.target.value; }}
                       placeholder="3.00"
@@ -495,6 +496,7 @@ export default function AdminFeesDeposits() {
                       step="0.01"
                       min="0"
                       max="20"
+                      inputMode="decimal"
                       value={pixpayFee}
                       onChange={(e) => { setPixpayFee(e.target.value); sticky.current.pixpayFee = e.target.value; }}
                       placeholder="3.00"
@@ -521,6 +523,7 @@ export default function AdminFeesDeposits() {
                     step="0.01"
                     min="0"
                     max="20"
+                    inputMode="decimal"
                     value={ashtechMargin}
                     onChange={(e) => {
                       setAshtechMargin(e.target.value);

@@ -164,6 +164,7 @@ export default function AdminConversionsPage() {
                     <Input
                       id={p.key}
                       type="number"
+                      inputMode="decimal"
                       value={fees[p.key]}
                       onChange={(e) => setFees(prev => ({ ...prev, [p.key]: e.target.value }))}
                       className="pl-9"

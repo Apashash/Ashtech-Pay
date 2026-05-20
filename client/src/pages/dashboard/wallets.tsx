@@ -366,6 +366,7 @@ export default function WalletsPage() {
                 <Label>{t.wallets.convertAmountLabel} ({fromCurrency})</Label>
                 <Input
                   type="number"
+                  inputMode="decimal"
                   placeholder="0"
                   value={convertAmount}
                   onChange={(e) => setConvertAmount(e.target.value)}

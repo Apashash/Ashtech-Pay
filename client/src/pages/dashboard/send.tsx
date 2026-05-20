@@ -479,7 +479,7 @@ export default function SendMoneyPage() {
                       <FormField control={form.control} name="recipientPhone" render={({ field }) => (
                         <FormItem>
                           <FormLabel>{t.send.recipientPhone}</FormLabel>
-                      <FormControl><Input placeholder="XXXXXXXXX" {...field} /></FormControl>
+                      <FormControl><Input placeholder="XXXXXXXXX" inputMode="tel" {...field} /></FormControl>
                           <FormMessage />
                         </FormItem>
                       )} />
@@ -489,7 +489,7 @@ export default function SendMoneyPage() {
                       <FormItem>
                         <FormLabel>{t.send.sendAmountLabel} ({selectedCountry?.currency || "XAF"})</FormLabel>
                         <FormControl>
-                          <Input type="number" placeholder="" className="text-xl h-12" {...field} />
+                          <Input type="number" inputMode="decimal" placeholder="" className="text-xl h-12" {...field} />
                         </FormControl>
                         <FormMessage />
                         {amountValue > 0 && amountValue < minTransfer && (

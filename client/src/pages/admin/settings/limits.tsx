@@ -87,6 +87,7 @@ export default function AdminSettingsLimits() {
                 <Label>Montant minimum</Label>
                 <Input
                   type="number"
+                  inputMode="decimal"
                   value={settings.min_transfer}
                   onChange={(e) => setSettings({ ...settings, min_transfer: e.target.value })}
                   data-testid="input-min-transfer"
@@ -104,6 +105,7 @@ export default function AdminSettingsLimits() {
                 <Label>Montant maximum</Label>
                 <Input
                   type="number"
+                  inputMode="decimal"
                   value={settings.max_transfer}
                   onChange={(e) => setSettings({ ...settings, max_transfer: e.target.value })}
                   data-testid="input-max-transfer"
@@ -132,6 +134,7 @@ export default function AdminSettingsLimits() {
                 <Label>Montant minimum</Label>
                 <Input
                   type="number"
+                  inputMode="decimal"
                   value={settings.min_withdrawal}
                   onChange={(e) => setSettings({ ...settings, min_withdrawal: e.target.value })}
                   data-testid="input-min-withdrawal"
@@ -149,6 +152,7 @@ export default function AdminSettingsLimits() {
                 <Label>Montant maximum</Label>
                 <Input
                   type="number"
+                  inputMode="decimal"
                   value={settings.max_withdrawal}
                   onChange={(e) => setSettings({ ...settings, max_withdrawal: e.target.value })}
                   data-testid="input-max-withdrawal"

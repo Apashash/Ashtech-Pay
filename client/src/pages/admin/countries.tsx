@@ -448,6 +448,7 @@ export default function AdminCountries() {
                   <Input
                     type="number"
                     step="0.0001"
+                    inputMode="decimal"
                     value={countryForm.exchangeRate}
                     onChange={(e) => setCountryForm({ ...countryForm, exchangeRate: e.target.value })}
                     placeholder="1"
@@ -461,6 +462,7 @@ export default function AdminCountries() {
                   <Label>Dépôt min</Label>
                   <Input
                     type="number"
+                    inputMode="decimal"
                     value={countryForm.minDeposit}
                     onChange={(e) => setCountryForm({ ...countryForm, minDeposit: e.target.value })}
                     data-testid="input-min-deposit"
@@ -470,6 +472,7 @@ export default function AdminCountries() {
                   <Label>Dépôt max</Label>
                   <Input
                     type="number"
+                    inputMode="decimal"
                     value={countryForm.maxDeposit}
                     onChange={(e) => setCountryForm({ ...countryForm, maxDeposit: e.target.value })}
                     data-testid="input-max-deposit"
@@ -479,6 +482,7 @@ export default function AdminCountries() {
                   <Label>Retrait min</Label>
                   <Input
                     type="number"
+                    inputMode="decimal"
                     value={countryForm.minWithdrawal}
                     onChange={(e) => setCountryForm({ ...countryForm, minWithdrawal: e.target.value })}
                     data-testid="input-min-withdrawal"
@@ -488,6 +492,7 @@ export default function AdminCountries() {
                   <Label>Retrait max</Label>
                   <Input
                     type="number"
+                    inputMode="decimal"
                     value={countryForm.maxWithdrawal}
                     onChange={(e) => setCountryForm({ ...countryForm, maxWithdrawal: e.target.value })}
                     data-testid="input-max-withdrawal"
@@ -609,6 +614,7 @@ export default function AdminCountries() {
                 <Label>Limite journalière</Label>
                 <Input
                   type="number"
+                  inputMode="decimal"
                   value={operatorForm.dailyLimit}
                   onChange={(e) => setOperatorForm({ ...operatorForm, dailyLimit: e.target.value })}
                   data-testid="input-operator-limit"

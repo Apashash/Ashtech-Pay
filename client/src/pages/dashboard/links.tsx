@@ -330,7 +330,7 @@ function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => voi
                     <FormItem>
                       <FormLabel>{t.links.formAmount} ({user?.preferredCurrency || "XAF"}) *</FormLabel>
                       <FormControl>
-                        <Input type="number" placeholder="10000" {...field} data-testid="input-link-amount" />
+                        <Input type="number" inputMode="decimal" placeholder="10000" {...field} data-testid="input-link-amount" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -709,7 +709,7 @@ function EditLinkDialog({ link, onClose, userCurrency }: {
                     <FormItem>
                       <FormLabel>{t.links.formAmount} ({userCurrency}) *</FormLabel>
                       <FormControl>
-                        <Input type="number" placeholder="10000" {...field} data-testid="input-edit-amount" />
+                        <Input type="number" inputMode="decimal" placeholder="10000" {...field} data-testid="input-edit-amount" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

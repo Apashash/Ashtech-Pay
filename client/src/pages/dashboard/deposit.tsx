@@ -663,7 +663,7 @@ export default function DepositPage() {
                             <FormItem>
                               <FormLabel>{t.deposit.amountLabel} ({user?.preferredCurrency || "XAF"})</FormLabel>
                               <FormControl>
-                                <Input type="number" placeholder="" className="text-2xl h-14 text-center" {...field} data-testid="input-deposit-amount" />
+                                <Input type="number" inputMode="decimal" placeholder="" className="text-2xl h-14 text-center" {...field} data-testid="input-deposit-amount" />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -781,7 +781,7 @@ export default function DepositPage() {
                               <FormControl>
                                 <div className="relative">
                                   <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                                  <Input placeholder="XXX XXX XXX" className="pl-10" {...field} data-testid="input-phone-number" />
+                                  <Input placeholder="XXX XXX XXX" className="pl-10" inputMode="tel" {...field} data-testid="input-phone-number" />
                                 </div>
                               </FormControl>
                               <FormMessage />

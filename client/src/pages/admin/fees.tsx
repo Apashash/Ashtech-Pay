@@ -324,6 +324,7 @@ export default function AdminFees() {
                   <Input
                     type="number"
                     step="0.01"
+                    inputMode="decimal"
                     value={formData.feeValue}
                     onChange={(e) => setFormData({ ...formData, feeValue: e.target.value })}
                     placeholder={formData.feeType === "percentage" ? "2.5" : "100"}
@@ -334,6 +335,7 @@ export default function AdminFees() {
                   <Label>Min (optionnel)</Label>
                   <Input
                     type="number"
+                    inputMode="decimal"
                     value={formData.minFee}
                     onChange={(e) => setFormData({ ...formData, minFee: e.target.value })}
                     placeholder="50"
@@ -344,6 +346,7 @@ export default function AdminFees() {
                   <Label>Max (optionnel)</Label>
                   <Input
                     type="number"
+                    inputMode="decimal"
                     value={formData.maxFee}
                     onChange={(e) => setFormData({ ...formData, maxFee: e.target.value })}
                     placeholder="5000"

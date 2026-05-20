@@ -114,6 +114,7 @@ export default function TransferPage() {
                             <Input 
                               placeholder="XXXXXXXXX"
                               className="pl-10"
+                              inputMode="tel"
                               {...field} 
                               data-testid="input-recipient"
                             />
@@ -132,7 +133,8 @@ export default function TransferPage() {
                         <FormLabel>Montant (XAF)</FormLabel>
                         <FormControl>
                           <Input 
-                            type="number" 
+                            type="number"
+                            inputMode="decimal"
                             placeholder="10000" 
                             className="text-2xl h-14"
                             {...field} 

@@ -116,6 +116,7 @@ export default function AdminSettingsRates() {
                   <Input
                     type="number"
                     step="0.01"
+                    inputMode="decimal"
                     value={fxRates[`fx_rate_${currency.code}`] || ""}
                     onChange={(e) => handleFxRateChange(currency.code, e.target.value)}
                     data-testid={`input-fx-rate-${currency.code}`}
