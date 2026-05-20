@@ -240,7 +240,7 @@ function SSEForceLogoutListener() {
 
 function GlobalSSEWatcher() {
   const { data: user } = useQuery({
-    queryKey: ["/api/auth/me"],
+    queryKey: ["/api/user"],
     queryFn: getQueryFn({ on401: "returnNull" }),
     retry: false,
     staleTime: Infinity,
