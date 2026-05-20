@@ -92,6 +92,8 @@ async function editMessageText(messageId: number, text: string): Promise<void> {
 
 // State: waiting for custom rejection reason (chatId → submissionId + messageId)
 const pendingCustomRejections = new Map<string, { submissionId: string; messageId: number }>();
+// State: waiting for withdrawal rejection reason (chatId → reference + messageId)
+const pendingWithdrawalRejections = new Map<string, { reference: string; messageId: number }>();
 
 function fmt(amount: string | number, currency: string): string {
   return `${parseFloat(String(amount)).toLocaleString("fr-FR")} ${currency}`;
@@ -192,7 +194,20 @@ export async function notifyWithdrawalRequest(opts: {
     (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +
     `🔖 Référence : <code>${opts.reference}</code>\n` +
     `🕐 Heure : ${now()}`;
-  await sendMessage(msg);
+  const ref = opts.reference;
+  await sendMessageWithKeyboard(msg, [
+    [
+      { text: "✅ Approuver", callback_data: `wa:${ref}` },
+      { text: "❌ Rejeter", callback_data: `wrd:${ref}:can` },
+    ],
+    [
+      { text: "💸 Solde insuffisant", callback_data: `wrd:${ref}:ins` },
+      { text: "⚠️ Activité suspecte", callback_data: `wrd:${ref}:frau` },
+    ],
+    [
+      { text: "✍️ Raison personnalisée", callback_data: `wrc:${ref}` },
+    ],
+  ]);
 }
 
 export async function notifyWithdrawalPendingManual(opts: {
@@ -204,16 +219,25 @@ export async function notifyWithdrawalPendingManual(opts: {
   reference: string;
 }): Promise<void> {
   const msg =
-    `⏳ <b>RETRAIT EN ATTENTE (MANUEL)</b>\n` +
+    `⏸ <b>RETRAIT EN ATTENTE MANUELLE</b>\n` +
     `─────────────────────────\n` +
     `👤 Utilisateur : <b>${opts.userName}</b>\n` +
     `📧 Email : ${opts.userEmail}\n` +
     `💰 Montant : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
     `📱 Numéro : ${opts.phone}\n` +
     `🔖 Référence : <code>${opts.reference}</code>\n` +
-    `⚠️ <b>Action requise dans le panel admin !</b>\n` +
+    `⚠️ <b>Validation manuelle requise !</b>\n` +
     `🕐 Heure : ${now()}`;
-  await sendMessage(msg);
+  const ref = opts.reference;
+  await sendMessageWithKeyboard(msg, [
+    [
+      { text: "✅ Approuver & Envoyer", callback_data: `wa:${ref}` },
+      { text: "❌ Annuler & Rembourser", callback_data: `wrd:${ref}:can` },
+    ],
+    [
+      { text: "✍️ Raison personnalisée", callback_data: `wrc:${ref}` },
+    ],
+  ]);
 }
 
 export async function notifyWithdrawalAutoValidated(opts: {
@@ -650,6 +674,27 @@ export async function handleTelegramUpdate(
     approveKyc: (submissionId: string) => Promise<{ userName: string; userEmail: string } | null>;
     rejectKyc: (submissionId: string, reason: string) => Promise<{ userName: string; userEmail: string } | null>;
     getStats: (period: string) => Promise<BotStats>;
+    banUser: (email: string, reason: string, unban?: boolean) => Promise<{ userName: string; banned: boolean } | null>;
+    getUserInfo: (email: string) => Promise<{
+      userName: string; email: string; balance: number; currency: string;
+      kycStatus: string; country?: string; createdAt: Date | string | null;
+      recentTx: { type: string; amount: string; currency: string; status: string; createdAt: Date | string | null }[];
+      wallets: { currency: string; balance: number }[];
+    } | null>;
+    setFxRate: (currency: string, rate: number) => Promise<boolean>;
+    getCountries: () => Promise<{ id: string; code: string; name: string; isActive: boolean }[]>;
+    toggleCountry: (id: string) => Promise<{ name: string; isActive: boolean } | null>;
+    getTopUsers: () => Promise<{ userName: string; email: string; balance: number; currency: string }[]>;
+    broadcastEmail: (subject: string, body: string) => Promise<{ count: number }>;
+    verifyTransaction: (reference: string) => Promise<{
+      type: string; amount: string; currency: string; status: string;
+      userName: string; createdAt: Date | string | null; description?: string;
+    } | null>;
+    getActiveLinks: () => Promise<{ title: string; slug: string; amount: string; currency: string; userName: string }[]>;
+    getPlatformBalance: () => Promise<{ total: number; currency: string; userCount: number; walletCount: number }>;
+    resetUserPassword: (email: string) => Promise<{ userName: string; found: boolean } | null>;
+    approveWithdrawal: (reference: string) => Promise<{ userName: string; amount: string; currency: string } | null>;
+    rejectWithdrawal: (reference: string, reason: string) => Promise<{ userName: string } | null>;
   }
 ): Promise<void> {
   // ── Callback query (button press) ──
@@ -664,37 +709,23 @@ export async function handleTelegramUpdate(
     // ── Dashboard / stats commands ──
     if (data.startsWith("cmd:")) {
       const cmd = data.slice(4);
-
-      if (cmd === "menu") {
-        await sendMenu(chatId);
-        return;
-      }
+      if (cmd === "menu") { await sendMenu(chatId); return; }
 
       const periodMap: Record<string, string> = {
-        stats_today: "today",
-        stats_week: "this_week",
-        stats_month: "this_month",
-        revenue: "this_month",
+        stats_today: "today", stats_week: "this_week", stats_month: "this_month", revenue: "this_month",
       };
-
       if (cmd in periodMap || cmd === "pending" || cmd === "kyc" || cmd === "users") {
         const period = periodMap[cmd] ?? "this_month";
         const stats = await handlers.getStats(period);
-
         let text = "";
         if (cmd === "pending") text = formatPending(stats);
         else if (cmd === "kyc") text = formatKyc(stats);
         else if (cmd === "users") text = formatRecentUsers(stats);
         else if (cmd === "revenue") text = formatRevenue(stats);
         else text = formatDashboard(stats);
-
         await callBotApi("sendMessage", {
-          chat_id: chatId,
-          text,
-          parse_mode: "HTML",
-          reply_markup: {
-            inline_keyboard: [[{ text: "🔙 Menu", callback_data: "cmd:menu" }]],
-          },
+          chat_id: chatId, text, parse_mode: "HTML",
+          reply_markup: { inline_keyboard: [[{ text: "🔙 Menu", callback_data: "cmd:menu" }]] },
         });
         return;
       }
@@ -705,16 +736,14 @@ export async function handleTelegramUpdate(
       const submissionId = data.slice(3);
       const result = await handlers.approveKyc(submissionId);
       if (result) {
-        await editMessageText(messageId,
-          `✅ <b>KYC APPROUVÉ</b>\n\n👤 ${result.userName}\n📧 ${result.userEmail}\n🕐 ${now()}`
-        );
+        await editMessageText(messageId, `✅ <b>KYC APPROUVÉ</b>\n\n👤 ${result.userName}\n📧 ${result.userEmail}\n🕐 ${now()}`);
       } else {
         await editMessageText(messageId, `⚠️ Impossible d'approuver — soumission introuvable.`);
       }
       return;
     }
 
-    // ── Reject with preset reason ──
+    // ── Reject KYC with preset reason ──
     if (data.startsWith("kr:")) {
       const parts = data.split(":");
       const submissionId = parts[1];
@@ -729,15 +758,14 @@ export async function handleTelegramUpdate(
       const result = await handlers.rejectKyc(submissionId, reason);
       if (result) {
         await editMessageText(messageId,
-          `❌ <b>KYC REJETÉ</b>\n\n👤 ${result.userName}\n📧 ${result.userEmail}\n⚠️ ${reason}\n🕐 ${now()}`
-        );
+          `❌ <b>KYC REJETÉ</b>\n\n👤 ${result.userName}\n📧 ${result.userEmail}\n⚠️ ${reason}\n🕐 ${now()}`);
       } else {
         await editMessageText(messageId, `⚠️ Impossible de rejeter — soumission introuvable.`);
       }
       return;
     }
 
-    // ── Custom rejection — ask for reason ──
+    // ── Custom KYC rejection — ask for reason ──
     if (data.startsWith("krc:")) {
       const submissionId = data.slice(4);
       pendingCustomRejections.set(chatId, { submissionId, messageId });
@@ -749,6 +777,67 @@ export async function handleTelegramUpdate(
       });
       return;
     }
+
+    // ── Approve withdrawal ──
+    if (data.startsWith("wa:")) {
+      const reference = data.slice(3);
+      const result = await handlers.approveWithdrawal(reference);
+      if (result) {
+        await editMessageText(messageId,
+          `✅ <b>RETRAIT APPROUVÉ</b>\n\n👤 ${result.userName}\n💰 ${fmt(result.amount, result.currency)}\n🔖 <code>${reference}</code>\n🕐 ${now()}`);
+      } else {
+        await editMessageText(messageId, `⚠️ Impossible d'approuver — transaction introuvable ou déjà traitée.`);
+      }
+      return;
+    }
+
+    // ── Reject withdrawal with preset reason ──
+    if (data.startsWith("wrd:")) {
+      const parts = data.split(":");
+      const reference = parts[1];
+      const code = parts[2];
+      const reasonMap: Record<string, string> = {
+        ins: "Solde insuffisant sur le compte source",
+        can: "Demande annulée par l'administrateur",
+        frau: "Activité suspecte détectée",
+        inv: "Informations de retrait invalides ou incorrectes",
+      };
+      const reason = reasonMap[code] ?? "Demande non conforme";
+      const result = await handlers.rejectWithdrawal(reference, reason);
+      if (result) {
+        await editMessageText(messageId,
+          `❌ <b>RETRAIT REJETÉ</b>\n\n👤 ${result.userName}\n🔖 <code>${reference}</code>\n⚠️ ${reason}\n🕐 ${now()}`);
+      } else {
+        await editMessageText(messageId, `⚠️ Impossible de rejeter — transaction introuvable.`);
+      }
+      return;
+    }
+
+    // ── Custom withdrawal rejection — ask for reason ──
+    if (data.startsWith("wrc:")) {
+      const reference = data.slice(4);
+      pendingWithdrawalRejections.set(chatId, { reference, messageId });
+      await callBotApi("sendMessage", {
+        chat_id: chatId,
+        text: `✍️ Envoyez la raison du rejet pour le retrait <code>${reference}</code> :`,
+        parse_mode: "HTML",
+        reply_markup: { force_reply: true, selective: true },
+      });
+      return;
+    }
+
+    // ── Toggle country ──
+    if (data.startsWith("ct:")) {
+      const countryId = data.slice(3);
+      const result = await handlers.toggleCountry(countryId);
+      if (result) {
+        await editMessageText(messageId,
+          `${result.isActive ? "✅" : "🔴"} Pays <b>${result.name}</b> ${result.isActive ? "activé" : "désactivé"}.\n🕐 ${now()}`);
+      } else {
+        await editMessageText(messageId, `⚠️ Pays introuvable.`);
+      }
+      return;
+    }
   }
 
   // ── Text message / commands ──
@@ -756,54 +845,332 @@ export async function handleTelegramUpdate(
     const chatId = String(update.message.chat?.id ?? "");
     const text: string = update.message.text.trim();
 
-    // ── Check pending custom rejection first ──
+    // ── Check pending custom KYC rejection first ──
     const pending = pendingCustomRejections.get(chatId);
     if (pending && !text.startsWith("/")) {
       pendingCustomRejections.delete(chatId);
       const result = await handlers.rejectKyc(pending.submissionId, text);
       if (result) {
         await editMessageText(pending.messageId,
-          `❌ <b>KYC REJETÉ</b>\n\n👤 ${result.userName}\n📧 ${result.userEmail}\n⚠️ ${text}\n🕐 ${now()}`
-        );
-        await callBotApi("sendMessage", {
-          chat_id: chatId,
-          text: `✅ Rejet enregistré : <i>${text}</i>`,
-          parse_mode: "HTML",
-        });
+          `❌ <b>KYC REJETÉ</b>\n\n👤 ${result.userName}\n📧 ${result.userEmail}\n⚠️ ${text}\n🕐 ${now()}`);
+        await callBotApi("sendMessage", { chat_id: chatId, text: `✅ Rejet KYC enregistré : <i>${text}</i>`, parse_mode: "HTML" });
       } else {
-        await callBotApi("sendMessage", {
-          chat_id: chatId,
-          text: `⚠️ Soumission KYC introuvable ou déjà traitée.`,
-          parse_mode: "HTML",
-        });
+        await callBotApi("sendMessage", { chat_id: chatId, text: `⚠️ Soumission KYC introuvable ou déjà traitée.`, parse_mode: "HTML" });
       }
       return;
     }
 
-    // ── Bot commands ──
+    // ── Check pending withdrawal rejection ──
+    const pendingWdr = pendingWithdrawalRejections.get(chatId);
+    if (pendingWdr && !text.startsWith("/")) {
+      pendingWithdrawalRejections.delete(chatId);
+      const result = await handlers.rejectWithdrawal(pendingWdr.reference, text);
+      if (result) {
+        await editMessageText(pendingWdr.messageId,
+          `❌ <b>RETRAIT REJETÉ</b>\n\n👤 ${result.userName}\n🔖 <code>${pendingWdr.reference}</code>\n⚠️ ${text}\n🕐 ${now()}`);
+        await callBotApi("sendMessage", { chat_id: chatId, text: `✅ Rejet retrait enregistré : <i>${text}</i>`, parse_mode: "HTML" });
+      } else {
+        await callBotApi("sendMessage", { chat_id: chatId, text: `⚠️ Transaction introuvable ou déjà traitée.`, parse_mode: "HTML" });
+      }
+      return;
+    }
+
+    // ── /ban email [reason] ──
+    if (text.startsWith("/ban ")) {
+      const parts = text.slice(5).trim().split(/\s+/);
+      const email = parts[0];
+      const reason = parts.slice(1).join(" ") || "Banni via Telegram bot";
+      const result = await handlers.banUser(email, reason, false);
+      await callBotApi("sendMessage", {
+        chat_id: chatId,
+        text: result
+          ? `🚫 <b>${result.userName}</b> banni.\n📧 ${email}\n⚠️ Raison : ${reason}`
+          : `⚠️ Utilisateur introuvable : <code>${email}</code>`,
+        parse_mode: "HTML",
+      });
+      return;
+    }
+
+    // ── /unban email ──
+    if (text.startsWith("/unban ")) {
+      const email = text.slice(7).trim();
+      const result = await handlers.banUser(email, "", true);
+      await callBotApi("sendMessage", {
+        chat_id: chatId,
+        text: result
+          ? `✅ <b>${result.userName}</b> débanni.\n📧 ${email}`
+          : `⚠️ Utilisateur introuvable : <code>${email}</code>`,
+        parse_mode: "HTML",
+      });
+      return;
+    }
+
+    // ── /user email ──
+    if (text.startsWith("/user ")) {
+      const email = text.slice(6).trim();
+      const info = await handlers.getUserInfo(email);
+      if (!info) {
+        await callBotApi("sendMessage", { chat_id: chatId, text: `⚠️ Utilisateur introuvable : <code>${email}</code>`, parse_mode: "HTML" });
+        return;
+      }
+      const kycIcon = info.kycStatus === "verified" ? "✅" : info.kycStatus === "pending" ? "⏳" : "❌";
+      const typeLabel: Record<string, string> = { deposit: "Dépôt", withdrawal: "Retrait", transfer: "Transfert", transfer_out: "Transfert", payment_link: "Lien" };
+      const txLines = info.recentTx.slice(0, 3).map(t =>
+        `  • ${typeLabel[t.type] ?? t.type} ${fmt(t.amount, t.currency)} — ${t.status}`
+      ).join("\n") || "  Aucune transaction";
+      const walletLines = info.wallets.map(w => `  ${w.currency}: ${fmt(w.balance, w.currency)}`).join("\n");
+      const date = info.createdAt ? new Date(info.createdAt).toLocaleDateString("fr-FR") : "—";
+      const msg =
+        `👤 <b>${info.userName}</b>\n` +
+        `📧 ${info.email}\n` +
+        `🌍 ${info.country ?? "—"} | 📅 Inscrit le ${date}\n` +
+        `─────────────────────────\n` +
+        `💰 Solde : <b>${fmt(info.balance, info.currency)}</b>\n` +
+        (walletLines ? `🗂 Autres wallets :\n${walletLines}\n` : "") +
+        `🔑 KYC : ${kycIcon} <b>${info.kycStatus}</b>\n` +
+        `─────────────────────────\n` +
+        `📋 Dernières transactions :\n${txLines}\n` +
+        `─────────────────────────\n` +
+        `🕐 ${now()}`;
+      await callBotApi("sendMessage", { chat_id: chatId, text: msg, parse_mode: "HTML" });
+      return;
+    }
+
+    // ── /solde email ──
+    if (text.startsWith("/solde ")) {
+      const email = text.slice(7).trim();
+      const info = await handlers.getUserInfo(email);
+      if (!info) {
+        await callBotApi("sendMessage", { chat_id: chatId, text: `⚠️ Utilisateur introuvable : <code>${email}</code>`, parse_mode: "HTML" });
+        return;
+      }
+      const walletLines = info.wallets.map(w => `  ${w.currency}: ${fmt(w.balance, w.currency)}`).join("\n");
+      const msg =
+        `💰 <b>Solde de ${info.userName}</b>\n` +
+        `─────────────────────────\n` +
+        `📧 ${info.email}\n` +
+        `💵 Principal : <b>${fmt(info.balance, info.currency)}</b>\n` +
+        (walletLines ? `🗂 Autres wallets :\n${walletLines}\n` : "") +
+        `─────────────────────────\n` +
+        `🕐 ${now()}`;
+      await callBotApi("sendMessage", { chat_id: chatId, text: msg, parse_mode: "HTML" });
+      return;
+    }
+
+    // ── /taux CURRENCY RATE ──
+    if (text.startsWith("/taux ")) {
+      const parts = text.slice(6).trim().split(/\s+/);
+      if (parts.length < 2) {
+        await callBotApi("sendMessage", { chat_id: chatId, text: `⚠️ Usage : <code>/taux XAF 655</code>`, parse_mode: "HTML" });
+        return;
+      }
+      const currency = parts[0].toUpperCase();
+      const rate = parseFloat(parts[1]);
+      if (isNaN(rate) || rate <= 0) {
+        await callBotApi("sendMessage", { chat_id: chatId, text: `⚠️ Taux invalide. Exemple : <code>/taux XAF 655</code>`, parse_mode: "HTML" });
+        return;
+      }
+      const ok = await handlers.setFxRate(currency, rate);
+      await callBotApi("sendMessage", {
+        chat_id: chatId,
+        text: ok
+          ? `✅ Taux <b>1 ${currency} = ${rate} XAF</b> mis à jour.\n🕐 ${now()}`
+          : `❌ Impossible de mettre à jour le taux pour <b>${currency}</b>.`,
+        parse_mode: "HTML",
+      });
+      return;
+    }
+
+    // ── /pays — list countries with toggle buttons ──
+    if (text === "/pays") {
+      const countries = await handlers.getCountries();
+      const inline_keyboard = countries.slice(0, 20).map(c => ([{
+        text: `${c.isActive ? "✅" : "🔴"} ${c.name} (${c.code})`,
+        callback_data: `ct:${c.id}`,
+      }]));
+      await callBotApi("sendMessage", {
+        chat_id: chatId,
+        text: `🌍 <b>GESTION DES PAYS (${countries.length})</b>\nCliquez pour activer/désactiver un marché :`,
+        parse_mode: "HTML",
+        reply_markup: { inline_keyboard: [...inline_keyboard, [{ text: "🏠 Menu", callback_data: "cmd:menu" }]] },
+      });
+      return;
+    }
+
+    // ── /rapport [period] ──
+    if (text.startsWith("/rapport") || text === "/rapport") {
+      const arg = text.split(/\s+/)[1];
+      const periodMap: Record<string, string> = { mois: "this_month", semaine: "this_week", today: "today", all: "all" };
+      const period = (arg && periodMap[arg]) ? periodMap[arg] : "this_month";
+      const s = await handlers.getStats(period);
+      const totalTx = s.depositCount + s.withdrawalCount + s.transferCount + s.paymentLinkCount;
+      const labelMap: Record<string, string> = { today: "AUJOURD'HUI", this_week: "CETTE SEMAINE", this_month: "CE MOIS", all: "TOTAL" };
+      const periodTitle = labelMap[period] ?? period.toUpperCase();
+      const msg =
+        `📊 <b>RAPPORT — ${periodTitle}</b>\n` +
+        `─────────────────────────\n` +
+        `👥 Utilisateurs : <b>${s.totalUsers.toLocaleString("fr-FR")}</b> (bannis : ${s.bannedUsers})\n` +
+        `─────────────────────────\n` +
+        `💸 <b>TRANSACTIONS</b>\n` +
+        `  Total : <b>${totalTx.toLocaleString("fr-FR")}</b>\n` +
+        `  📥 Dépôts : ${s.depositCount} — <b>${fmt(s.depositVol, "XAF")}</b>\n` +
+        `  📤 Retraits : ${s.withdrawalCount} — <b>${fmt(s.withdrawalVol, "XAF")}</b>\n` +
+        `  🔄 Transferts : ${s.transferCount}\n` +
+        `  🔗 Liens paiement : ${s.paymentLinkCount}\n` +
+        `─────────────────────────\n` +
+        `💰 <b>REVENUS</b>\n` +
+        `  Total commissions : <b>${fmt(s.totalRevenue, "XAF")}</b>\n` +
+        `  Dépôts : ${fmt(s.depositFees, "XAF")} | Retraits : ${fmt(s.withdrawalFees, "XAF")}\n` +
+        `  Transferts : ${fmt(s.transferFees, "XAF")} | Liens : ${fmt(s.paymentLinkFees, "XAF")}\n` +
+        `─────────────────────────\n` +
+        `⏳ <b>EN ATTENTE</b>\n` +
+        `  Dépôts : ${s.pendingDeposits} | Retraits : ${s.pendingWithdrawals}\n` +
+        `  KYC : ⏳${s.kycPending} ✅${s.kycApproved} ❌${s.kycRejected}\n` +
+        `─────────────────────────\n` +
+        `🕐 ${now()}`;
+      await callBotApi("sendMessage", {
+        chat_id: chatId, text: msg, parse_mode: "HTML",
+        reply_markup: { inline_keyboard: [[{ text: "🔙 Menu", callback_data: "cmd:menu" }]] },
+      });
+      return;
+    }
+
+    // ── /top — top 10 users by balance ──
+    if (text === "/top") {
+      const topUsers = await handlers.getTopUsers();
+      const medals = ["🥇", "🥈", "🥉"];
+      const lines = topUsers.map((u, i) =>
+        `${medals[i] ?? `${i + 1}.`} <b>${u.userName}</b> — <b>${fmt(u.balance, u.currency)}</b>\n   📧 ${u.email}`
+      ).join("\n\n");
+      await callBotApi("sendMessage", {
+        chat_id: chatId,
+        text: `🏆 <b>TOP 10 UTILISATEURS (solde)</b>\n─────────────────────────\n${lines || "Aucun utilisateur"}\n─────────────────────────\n🕐 ${now()}`,
+        parse_mode: "HTML",
+        reply_markup: { inline_keyboard: [[{ text: "🔙 Menu", callback_data: "cmd:menu" }]] },
+      });
+      return;
+    }
+
+    // ── /broadcast Sujet;Corps ──
+    if (text.startsWith("/broadcast ")) {
+      const content = text.slice(11).trim();
+      const sep = content.indexOf(";");
+      if (sep === -1) {
+        await callBotApi("sendMessage", {
+          chat_id: chatId,
+          text: `📢 <b>Broadcast Email</b>\n\nUsage : <code>/broadcast Sujet;Corps du message</code>\n\nExemple :\n<code>/broadcast Offre spéciale;Bonjour {prenom}, nous avons une offre pour vous !</code>`,
+          parse_mode: "HTML",
+        });
+        return;
+      }
+      const subject = content.slice(0, sep).trim();
+      const body = content.slice(sep + 1).trim();
+      await callBotApi("sendMessage", { chat_id: chatId, text: `⏳ Envoi du broadcast en cours...`, parse_mode: "HTML" });
+      const result = await handlers.broadcastEmail(subject, body);
+      await callBotApi("sendMessage", {
+        chat_id: chatId,
+        text: `✅ <b>Broadcast envoyé !</b>\n📧 Destinataires : <b>${result.count}</b>\n📋 Sujet : <i>${subject}</i>\n🕐 ${now()}`,
+        parse_mode: "HTML",
+      });
+      return;
+    }
+
+    // ── /verif REFERENCE ──
+    if (text.startsWith("/verif ")) {
+      const reference = text.slice(7).trim();
+      const tx = await handlers.verifyTransaction(reference);
+      if (!tx) {
+        await callBotApi("sendMessage", { chat_id: chatId, text: `⚠️ Transaction introuvable : <code>${reference}</code>`, parse_mode: "HTML" });
+        return;
+      }
+      const statusIcon: Record<string, string> = { completed: "✅", pending: "⏳", failed: "❌", processing: "🔄", pending_manual: "⏸" };
+      const typeLabel: Record<string, string> = { deposit: "💰 Dépôt", withdrawal: "📤 Retrait", transfer: "🔄 Transfert", transfer_out: "📤 Transfert sortant", payment_link: "🔗 Lien de paiement" };
+      const msg =
+        `🔍 <b>TRANSACTION</b>\n` +
+        `─────────────────────────\n` +
+        `👤 ${tx.userName}\n` +
+        `${typeLabel[tx.type] ?? tx.type} : <b>${fmt(tx.amount, tx.currency)}</b>\n` +
+        `${statusIcon[tx.status] ?? "🔸"} Statut : <b>${tx.status}</b>\n` +
+        `🔖 Réf : <code>${reference}</code>\n` +
+        (tx.description ? `📝 ${tx.description}\n` : "") +
+        `📅 ${tx.createdAt ? new Date(tx.createdAt).toLocaleString("fr-FR") : "—"}\n` +
+        `─────────────────────────\n` +
+        `🕐 ${now()}`;
+      await callBotApi("sendMessage", { chat_id: chatId, text: msg, parse_mode: "HTML" });
+      return;
+    }
+
+    // ── /liens — active payment links today ──
+    if (text === "/liens") {
+      const links = await handlers.getActiveLinks();
+      if (links.length === 0) {
+        await callBotApi("sendMessage", { chat_id: chatId, text: `📎 Aucun lien de paiement créé aujourd'hui.`, parse_mode: "HTML" });
+        return;
+      }
+      const lines = links.slice(0, 15).map((l, i) =>
+        `${i + 1}. <b>${l.title}</b> — ${fmt(l.amount, l.currency)}\n   👤 ${l.userName} | 🔗 /pay/${l.slug}`
+      ).join("\n\n");
+      await callBotApi("sendMessage", {
+        chat_id: chatId,
+        text: `📎 <b>LIENS ACTIFS AUJOURD'HUI (${links.length})</b>\n─────────────────────────\n${lines}\n─────────────────────────\n🕐 ${now()}`,
+        parse_mode: "HTML",
+      });
+      return;
+    }
+
+    // ── /soldeA — platform total balance ──
+    if (text === "/soldeA" || text === "/soldea" || text === "/SOLDEA") {
+      const info = await handlers.getPlatformBalance();
+      await callBotApi("sendMessage", {
+        chat_id: chatId,
+        text:
+          `🏦 <b>SOLDE TOTAL ASHTECH PAY</b>\n` +
+          `─────────────────────────\n` +
+          `💰 En circulation : <b>${fmt(info.total, info.currency)}</b>\n` +
+          `👥 Utilisateurs actifs : <b>${info.userCount}</b>\n` +
+          `🗂 Wallets secondaires : <b>${info.walletCount}</b>\n` +
+          `─────────────────────────\n` +
+          `🕐 ${now()}`,
+        parse_mode: "HTML",
+      });
+      return;
+    }
+
+    // ── /resetpw email ──
+    if (text.startsWith("/resetpw ")) {
+      const email = text.slice(9).trim();
+      const result = await handlers.resetUserPassword(email);
+      await callBotApi("sendMessage", {
+        chat_id: chatId,
+        text: result
+          ? `✅ Lien de réinitialisation envoyé à <b>${result.userName}</b> (<code>${email}</code>).\n🕐 ${now()}`
+          : `⚠️ Utilisateur introuvable : <code>${email}</code>`,
+        parse_mode: "HTML",
+      });
+      return;
+    }
+
+    // ── Standard command map ──
     const cmdMap: Record<string, { period?: string; type: string }> = {
-      "/start":  { type: "menu" },
-      "/menu":   { type: "menu" },
-      "/stats":  { type: "dash", period: "this_month" },
-      "/today":  { type: "dash", period: "today" },
-      "/week":   { type: "dash", period: "this_week" },
-      "/mois":   { type: "dash", period: "this_month" },
-      "/pending":{ type: "pending", period: "this_month" },
-      "/kyc":    { type: "kyc", period: "this_month" },
-      "/users":  { type: "users", period: "this_month" },
-      "/revenue":{ type: "revenue", period: "this_month" },
-      "/aide":   { type: "help" },
-      "/help":   { type: "help" },
+      "/start":   { type: "menu" },
+      "/menu":    { type: "menu" },
+      "/stats":   { type: "dash", period: "this_month" },
+      "/today":   { type: "dash", period: "today" },
+      "/week":    { type: "dash", period: "this_week" },
+      "/mois":    { type: "dash", period: "this_month" },
+      "/pending": { type: "pending", period: "this_month" },
+      "/kyc":     { type: "kyc", period: "this_month" },
+      "/users":   { type: "users", period: "this_month" },
+      "/revenue": { type: "revenue", period: "this_month" },
+      "/aide":    { type: "help" },
+      "/help":    { type: "help" },
     };
 
     const matched = Object.keys(cmdMap).find(k => text === k || text.startsWith(k + " ") || text.startsWith(k + "@"));
     if (matched) {
       const { type, period = "this_month" } = cmdMap[matched];
 
-      if (type === "menu") {
-        await sendMenu(chatId);
-        return;
-      }
+      if (type === "menu") { await sendMenu(chatId); return; }
 
       if (type === "help") {
         await callBotApi("sendMessage", {
@@ -811,15 +1178,36 @@ export async function handleTelegramUpdate(
           text:
             `📖 <b>Commandes disponibles</b>\n` +
             `─────────────────────────────\n` +
-            `/menu — Afficher le menu\n` +
+            `<b>📊 Statistiques</b>\n` +
+            `/menu — Menu principal\n` +
             `/stats — Dashboard ce mois\n` +
-            `/today — Stats d'aujourd'hui\n` +
+            `/today — Stats aujourd'hui\n` +
             `/week — Stats cette semaine\n` +
             `/pending — Éléments en attente\n` +
-            `/kyc — Résumé des KYC\n` +
+            `/kyc — Résumé KYC\n` +
             `/users — Derniers inscrits\n` +
             `/revenue — Revenus & commissions\n` +
-            `/aide — Afficher ce message`,
+            `/rapport [mois|semaine|today] — Rapport complet\n` +
+            `─────────────────────────────\n` +
+            `<b>👤 Utilisateurs</b>\n` +
+            `/user email — Infos utilisateur\n` +
+            `/solde email — Solde en temps réel\n` +
+            `/ban email [raison] — Bannir un utilisateur\n` +
+            `/unban email — Débannir\n` +
+            `/resetpw email — Envoyer reset mot de passe\n` +
+            `/top — Top 10 par solde\n` +
+            `─────────────────────────────\n` +
+            `<b>💸 Transactions</b>\n` +
+            `/verif REFERENCE — Vérifier une transaction\n` +
+            `/liens — Liens actifs aujourd'hui\n` +
+            `/soldeA — Solde total plateforme\n` +
+            `─────────────────────────────\n` +
+            `<b>⚙️ Administration</b>\n` +
+            `/taux DEVISE TAUX — Modifier un taux FX\n` +
+            `/pays — Activer/désactiver un pays\n` +
+            `/broadcast Sujet;Corps — Email à tous\n` +
+            `─────────────────────────────\n` +
+            `🕐 ${now()}`,
           parse_mode: "HTML",
           reply_markup: { inline_keyboard: [[{ text: "🏠 Menu", callback_data: "cmd:menu" }]] },
         });
@@ -835,9 +1223,7 @@ export async function handleTelegramUpdate(
       else msgText = formatDashboard(stats);
 
       await callBotApi("sendMessage", {
-        chat_id: chatId,
-        text: msgText,
-        parse_mode: "HTML",
+        chat_id: chatId, text: msgText, parse_mode: "HTML",
         reply_markup: { inline_keyboard: [[{ text: "🔙 Menu", callback_data: "cmd:menu" }]] },
       });
     }

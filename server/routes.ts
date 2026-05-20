@@ -8955,8 +8955,8 @@ export async function registerRoutes(
             recentUsers,
           };
         },
+
         approveKyc: async (submissionId) => {
-          // Find first admin to use as reviewer
           const allUsers = await storage.getAllUsers();
           const adminUser = allUsers.find(u => u.role === "admin");
           if (!adminUser) return null;
@@ -8967,7 +8967,6 @@ export async function registerRoutes(
           const kycUser = await storage.getUser(submission.userId).catch(() => null);
           if (!kycUser) return null;
 
-          // Notify user in-app
           await storage.createUserNotification({
             userId: submission.userId,
             type: "kyc_approved",
@@ -8976,7 +8975,6 @@ export async function registerRoutes(
             transactionId: null,
           }).catch(() => {});
 
-          // Telegram confirm + log
           notifyKycApproved({
             adminName: adminUser.fullName || adminUser.username,
             userName: kycUser.fullName || kycUser.username,
@@ -9007,7 +9005,6 @@ export async function registerRoutes(
           const kycUser = await storage.getUser(submission.userId).catch(() => null);
           if (!kycUser) return null;
 
-          // Notify user in-app
           await storage.createUserNotification({
             userId: submission.userId,
             type: "kyc_rejected",
@@ -9034,6 +9031,260 @@ export async function registerRoutes(
           }).catch(() => {});
 
           return { userName: kycUser.fullName || kycUser.username, userEmail: kycUser.email || "" };
+        },
+
+        // ── Ban / Unban ──────────────────────────────────────────────────────
+        banUser: async (email, reason, unban = false) => {
+          const user = await storage.getUserByEmail(email).catch(() => null);
+          if (!user) return null;
+          if (unban) {
+            await storage.unbanUser(user.id);
+          } else {
+            await storage.banUser(user.id, reason);
+          }
+          return { userName: user.fullName || user.username, banned: !unban };
+        },
+
+        // ── User info ────────────────────────────────────────────────────────
+        getUserInfo: async (email) => {
+          const user = await storage.getUserByEmail(email).catch(() => null);
+          if (!user) return null;
+          const [txList, walletList] = await Promise.all([
+            storage.getTransactionsByUserId(user.id).catch(() => [] as any[]),
+            storage.getWalletsByUserIds([user.id]).catch(() => [] as any[]),
+          ]);
+          const recentTx = [...txList]
+            .sort((a: any, b: any) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime())
+            .slice(0, 5)
+            .map((t: any) => ({
+              type: t.type,
+              amount: t.amount,
+              currency: t.currency || "XAF",
+              status: t.status,
+              createdAt: t.createdAt ?? null,
+            }));
+          const wallets = walletList
+            .filter((w: any) => parseFloat(w.balance) > 0)
+            .map((w: any) => ({ currency: w.currency, balance: parseFloat(w.balance) }));
+          return {
+            userName: user.fullName || user.username,
+            email: user.email || "",
+            balance: parseFloat(user.balance ?? "0"),
+            currency: user.preferredCurrency || "XAF",
+            kycStatus: user.kycStatus || "not_submitted",
+            country: user.country ?? undefined,
+            createdAt: user.createdAt ?? null,
+            recentTx,
+            wallets,
+          };
+        },
+
+        // ── Set FX rate ──────────────────────────────────────────────────────
+        setFxRate: async (currency, rate) => {
+          try {
+            await storage.upsertSetting(`fx_rate_${currency}`, String(rate), `Taux de change ${currency}/XAF`);
+            return true;
+          } catch {
+            return false;
+          }
+        },
+
+        // ── Countries ────────────────────────────────────────────────────────
+        getCountries: async () => {
+          const countries = await storage.getAllCountries().catch(() => [] as any[]);
+          return countries.map((c: any) => ({
+            id: String(c.id),
+            code: c.code || "",
+            name: c.name || c.code || "",
+            isActive: c.isActive !== false,
+          }));
+        },
+
+        toggleCountry: async (id) => {
+          const country = await storage.getCountry(id).catch(() => null);
+          if (!country) return null;
+          const newActive = !((country as any).isActive !== false);
+          await storage.updateCountry(id, { isActive: newActive } as any);
+          return { name: (country as any).name || (country as any).code || id, isActive: newActive };
+        },
+
+        // ── Top 10 users ─────────────────────────────────────────────────────
+        getTopUsers: async () => {
+          const allUsers = await storage.getAllUsers().catch(() => [] as any[]);
+          return [...allUsers]
+            .sort((a: any, b: any) => parseFloat(b.balance ?? "0") - parseFloat(a.balance ?? "0"))
+            .slice(0, 10)
+            .map((u: any) => ({
+              userName: u.fullName || u.username,
+              email: u.email || "",
+              balance: parseFloat(u.balance ?? "0"),
+              currency: u.preferredCurrency || "XAF",
+            }));
+        },
+
+        // ── Broadcast email ──────────────────────────────────────────────────
+        broadcastEmail: async (subject, body) => {
+          const allUsers = await storage.getAllUsers().catch(() => [] as any[]);
+          const eligible = allUsers.filter((u: any) => u.email && !u.isBanned);
+          let count = 0;
+          for (const u of eligible) {
+            try {
+              await sendCampaignEmail({
+                to: u.email!,
+                subject,
+                preheader: subject,
+                headline: subject,
+                bodyHtml: body.replace(/\{prenom\}/gi, u.fullName || u.username || ""),
+                ctaText: "Accéder à mon compte",
+                ctaUrl: `https://${process.env.REPLIT_DEV_DOMAIN || "ashtechpay.com"}/dashboard`,
+              });
+              count++;
+            } catch { /* skip failed */ }
+          }
+          return { count };
+        },
+
+        // ── Verify transaction ───────────────────────────────────────────────
+        verifyTransaction: async (reference) => {
+          const tx = await storage.getTransactionByReference(reference).catch(() => null);
+          if (!tx) return null;
+          const txUser = await storage.getUser(tx.userId).catch(() => null);
+          return {
+            type: tx.type,
+            amount: tx.amount,
+            currency: tx.currency || "XAF",
+            status: tx.status,
+            userName: txUser ? (txUser.fullName || txUser.username) : "—",
+            createdAt: tx.createdAt ?? null,
+            description: tx.description ?? undefined,
+          };
+        },
+
+        // ── Active payment links today ───────────────────────────────────────
+        getActiveLinks: async () => {
+          const allLinks = await storage.getAllPaymentLinks().catch(() => [] as any[]);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const todayLinks = allLinks.filter((l: any) => {
+            const created = l.createdAt ? new Date(l.createdAt) : null;
+            return created && created >= today;
+          });
+          const allUsers = await storage.getAllUsers().catch(() => [] as any[]);
+          const userMap = new Map(allUsers.map((u: any) => [u.id, u.fullName || u.username]));
+          return todayLinks.map((l: any) => ({
+            title: l.title || l.name || "Sans titre",
+            slug: l.slug || l.id,
+            amount: l.amount || "0",
+            currency: l.currency || "XAF",
+            userName: userMap.get(l.userId) || "—",
+          }));
+        },
+
+        // ── Platform total balance ───────────────────────────────────────────
+        getPlatformBalance: async () => {
+          const allUsers = await storage.getAllUsers().catch(() => [] as any[]);
+          const activeUsers = allUsers.filter((u: any) => !u.isBanned);
+          const totalPrimary = activeUsers.reduce((sum: number, u: any) => sum + parseFloat(u.balance ?? "0"), 0);
+          const wallets = await storage.getWalletsByUserIds(activeUsers.map((u: any) => u.id)).catch(() => [] as any[]);
+          return {
+            total: totalPrimary,
+            currency: "XAF",
+            userCount: activeUsers.length,
+            walletCount: wallets.filter((w: any) => parseFloat(w.balance) > 0).length,
+          };
+        },
+
+        // ── Reset user password ──────────────────────────────────────────────
+        resetUserPassword: async (email) => {
+          const user = await storage.getUserByEmail(email).catch(() => null);
+          if (!user || !user.email) return null;
+          const resetToken = crypto.randomBytes(32).toString("hex");
+          const expiry = new Date(Date.now() + 3600000);
+          await storage.setResetToken(user.id, resetToken, expiry).catch(() => {});
+          sendPasswordResetEmail(user.email, user.fullName || user.username, resetToken).catch(() => {});
+          return { userName: user.fullName || user.username, found: true };
+        },
+
+        // ── Approve withdrawal ───────────────────────────────────────────────
+        approveWithdrawal: async (reference) => {
+          const tx = await storage.getTransactionByReference(reference).catch(() => null);
+          if (!tx || !["pending", "pending_manual"].includes(tx.status)) return null;
+          const txUser = await storage.getUser(tx.userId).catch(() => null);
+          if (!txUser) return null;
+
+          let countryCode = "CM";
+          if (tx.recipientCountry) {
+            const rc = tx.recipientCountry.trim();
+            if (rc.length === 2) {
+              countryCode = rc.toUpperCase();
+            } else {
+              const countries = await storage.getAllCountries().catch(() => [] as any[]);
+              const c = countries.find((c: any) => c.name?.toLowerCase() === rc.toLowerCase());
+              if (c?.code) countryCode = c.code;
+            }
+          }
+
+          try {
+            const operatorId = tx.operatorId;
+            const operator = operatorId ? await storage.getOperator(operatorId) : null;
+            const operatorName = ((operator as any)?.name || "").toUpperCase();
+            const finalPaymentMethod = resolvePaymentMethod(operatorName, countryCode);
+
+            const payoutResult = await createSwychrPayout({
+              country_code: countryCode,
+              beneficiary_name: tx.recipientName || txUser.fullName || txUser.username,
+              mobile_no: formatInternationalPhone(tx.recipientPhone || "", countryCode),
+              amount: parseFloat(tx.amount),
+              transaction_id: tx.reference || tx.id,
+              payment_method: finalPaymentMethod as any,
+              remarks: `Ashtech Pay Telegram - ${tx.reference}`,
+            });
+
+            if (payoutResult.success) {
+              const extTxId = payoutResult.transaction_id || tx.reference || tx.id;
+              await storage.updateTransactionStatus(tx.id, "processing");
+              addPendingPayout({
+                transactionId: tx.id,
+                reference: extTxId,
+                userId: tx.userId,
+                amount: tx.amount,
+                totalDebited: tx.totalAmount || tx.amount,
+                provider: ((operator as any)?.paymentProvider || "swychr") as "swychr" | "afribapay" | "pixpay",
+                countryCode,
+                txType: tx.type,
+                txCurrency: tx.currency || "XAF",
+              });
+            } else {
+              await storage.updateTransactionStatus(tx.id, "completed");
+            }
+          } catch {
+            await storage.updateTransactionStatus(tx.id, "completed");
+          }
+
+          return { userName: txUser.fullName || txUser.username, amount: tx.amount, currency: tx.currency || "XAF" };
+        },
+
+        // ── Reject withdrawal ────────────────────────────────────────────────
+        rejectWithdrawal: async (reference, reason) => {
+          const tx = await storage.getTransactionByReference(reference).catch(() => null);
+          if (!tx || !["pending", "pending_manual", "processing"].includes(tx.status)) return null;
+          const txUser = await storage.getUser(tx.userId).catch(() => null);
+          if (!txUser) return null;
+
+          await storage.updateTransactionStatus(tx.id, "failed");
+          const totalDebited = parseFloat(tx.totalAmount || tx.amount);
+          await storage.updateUserBalance(tx.userId, totalDebited);
+
+          await storage.createUserNotification({
+            userId: tx.userId,
+            type: "withdrawal_failed",
+            title: "Retrait annulé",
+            message: `Votre retrait de ${tx.amount} ${tx.currency} a été annulé. Raison : ${reason}. Votre solde a été remboursé.`,
+            transactionId: tx.id,
+            isRead: false,
+          }).catch(() => {});
+
+          return { userName: txUser.fullName || txUser.username };
         },
       });
     } catch (err: any) {
