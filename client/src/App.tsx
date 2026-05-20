@@ -80,6 +80,7 @@ import HelpPage from "@/pages/help";
 import ContactPage from "@/pages/contact";
 import FAQPage from "@/pages/faq";
 import CountryBlockedPage from "@/pages/country-blocked";
+import BlockedPage from "@/pages/blocked";
 
 const GEO_BYPASS_PATHS = ["/pay/", "/hpay/", "/checkout/", "/admin"];
 
@@ -112,6 +113,7 @@ function Router() {
       <Route path="/" component={LandingPage} />
       <Route path="/docs/api" component={() => <DeveloperPage publicMode />} />
       <Route path="/docs/hosted-page" component={() => <HostedPageDocs publicMode />} />
+      <Route path="/blocked" component={BlockedPage} />
       <Route path="/login" component={LoginPage} />
       <Route path="/register" component={RegisterPage} />
       <Route path="/forgot-password" component={ForgotPasswordPage} />

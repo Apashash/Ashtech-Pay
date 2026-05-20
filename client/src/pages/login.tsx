@@ -71,6 +71,18 @@ export default function LoginPage() {
     }
   }, [countdown, blockedUntil]);
 
+  // Redirect to blocked page if IP is already blocked on mount
+  useEffect(() => {
+    fetch("/api/auth/ip-status")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.blocked && data.retryAfter) {
+          setLocation(`/blocked?until=${data.retryAfter}`);
+        }
+      })
+      .catch(() => {});
+  }, [setLocation]);
+
   const form = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
     defaultValues: { identifier: "", password: "" },

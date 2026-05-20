@@ -80,6 +80,18 @@ export default function RegisterPage() {
     }
   }, [countdown, blockedUntil]);
 
+  // Redirect to blocked page if IP is already blocked on mount
+  useEffect(() => {
+    fetch("/api/auth/ip-status")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.blocked && data.retryAfter) {
+          setLocation(`/blocked?until=${data.retryAfter}`);
+        }
+      })
+      .catch(() => {});
+  }, [setLocation]);
+
   const extendedRegisterSchema = registerSchema.extend({
     confirmPassword: z.string().min(6, t.register.passwordMinError),
   }).refine((data) => data.password === data.confirmPassword, {

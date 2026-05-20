@@ -728,7 +728,16 @@ export async function registerRoutes(
     }
   });
 
-  // Auth routes
+  // Auth routes — check IP block status (public, no auth)
+  app.get("/api/auth/ip-status", (req, res) => {
+    const ip = getClientIp(req);
+    const check = checkAuthRateLimit(ip);
+    if (check.blocked) {
+      return res.json({ blocked: true, retryAfter: check.retryAfter });
+    }
+    return res.json({ blocked: false });
+  });
+
   app.post("/api/auth/register", registerLimiter, async (req, res) => {
     try {
       const ip = getClientIp(req);
