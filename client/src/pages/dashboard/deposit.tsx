@@ -9,7 +9,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest, queryClient, getAuthHeaders } from "@/lib/queryClient";
 import type { User, SupportedCurrency } from "@shared/schema";
-import { CreditCard, Loader2, Globe, AlertCircle, Phone, CheckCircle, XCircle, ArrowLeft, ArrowRight, Smartphone, ExternalLink, Hash, Clock, Copy, TrendingDown } from "lucide-react";
+import { CreditCard, Loader2, AlertCircle, Phone, CheckCircle, XCircle, Smartphone, ExternalLink, Hash, Clock, Copy, TrendingDown } from "lucide-react";
 import { useLanguage } from "@/lib/language";
 import { BottomSheet, BottomSheetContent, BottomSheetHeader, BottomSheetTitle, BottomSheetFooter } from "@/components/ui/bottom-sheet";
 import { getOperatorLogo } from "@/lib/operator-logos";
@@ -61,12 +61,6 @@ export default function DepositPage() {
   const { toast } = useToast();
   const { t } = useLanguage();
 
-  const STEPS = [
-    { id: 1, title: t.deposit.stepAmount, description: t.deposit.stepAmountDesc },
-    { id: 2, title: t.deposit.stepCountry, description: t.deposit.stepCountryDesc },
-    { id: 3, title: t.deposit.stepConfirm, description: t.deposit.stepConfirmDesc },
-  ];
-  const [currentStep, setCurrentStep] = useState(1);
   const [showValidationMessage, setShowValidationMessage] = useState(false);
   const [depositReference, setDepositReference] = useState("");
   const [paymentStatus, setPaymentStatus] = useState<"pending" | "success" | "failed">("pending");
@@ -310,24 +304,11 @@ export default function DepositPage() {
     depositMutation.mutate(pendingDepositData);
   };
 
-  const canProceedToStep2 = useMemo(() => (parseFloat(watchedAmount) || 0) > 0, [watchedAmount]);
-
-  const canProceedToStep3 = useMemo(() => {
-    if (!watchedCountryId || !watchedOperatorId) return false;
-    if (selectedCountry && selectedCountry.operators.length === 0) return false;
-    return true;
-  }, [watchedCountryId, watchedOperatorId, selectedCountry]);
-
-  const goToNextStep = async () => {
-    if (currentStep === 1) { const isValid = await form.trigger(["amount"]); if (!isValid) return; }
-    if (currentStep === 2) { const isValid = await form.trigger(["countryId", "operatorId"]); if (!isValid) return; }
-    if (currentStep < 3) setCurrentStep(currentStep + 1);
-  };
-
-  const goToPreviousStep = () => { if (currentStep > 1) setCurrentStep(currentStep - 1); };
+  const canSubmit = useMemo(() => {
+    return (parseFloat(watchedAmount) || 0) > 0 && !!watchedCountryId && !!watchedOperatorId && watchedPhoneNumber.length >= 8;
+  }, [watchedAmount, watchedCountryId, watchedOperatorId, watchedPhoneNumber]);
 
   const resetWizard = () => {
-    setCurrentStep(1);
     setShowValidationMessage(false);
     setPaymentStatus("pending");
     setDepositReference("");
@@ -383,38 +364,6 @@ export default function DepositPage() {
         ) : (
           <div className="bg-card border border-border rounded-2xl overflow-hidden">
 
-            {/* Step indicator */}
-            {!showValidationMessage && (
-              <div className="px-6 pt-5 pb-2">
-                <div className="flex items-center justify-center">
-                  {[1, 2, 3].map((step, idx) => (
-                    <div key={step} className="flex items-center">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${
-                        step < currentStep
-                          ? "bg-green-500 text-white"
-                          : step === currentStep
-                          ? "bg-primary text-black"
-                          : "bg-muted text-muted-foreground"
-                      }`}>
-                        {step < currentStep ? <CheckCircle className="w-4 h-4" /> : step}
-                      </div>
-                      {idx < 2 && (
-                        <div className={`h-px w-16 transition-all duration-300 ${step < currentStep ? "bg-green-500" : "bg-border"}`} />
-                      )}
-                    </div>
-                  ))}
-                </div>
-                <div className="flex justify-between mt-2">
-                  {STEPS.map((s) => (
-                    <span key={s.id} className={`text-[10px] font-semibold uppercase tracking-wide transition-colors ${
-                      s.id === currentStep ? "text-primary" : s.id < currentStep ? "text-green-500" : "text-muted-foreground/50"
-                    }`}>
-                      {s.title}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
 
             <div className="px-6 pb-6 pt-4">
               {/* STATUS SCREENS */}
@@ -591,307 +540,224 @@ export default function DepositPage() {
 
               ) : (
                 <Form {...form}>
-                  <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+                  <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-5 animate-in fade-in duration-300">
 
-                    {/* STEP 1 — Amount */}
-                    {currentStep === 1 && (
-                      <div className="space-y-6 animate-in fade-in duration-300">
-                        <div className="text-center space-y-1 pt-2">
-                          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">{t.deposit.step1Question}</p>
-                          <p className="text-sm text-muted-foreground">{t.deposit.step1Hint}</p>
-                        </div>
+                    {/* Amount */}
+                    <FormField
+                      control={form.control}
+                      name="amount"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
+                            <div className="relative flex flex-col items-center">
+                              <div className="flex items-center justify-center gap-2 w-full border-b-2 border-primary/30 focus-within:border-primary pb-2 transition-colors">
+                                <span className="text-2xl font-semibold text-muted-foreground shrink-0">
+                                  {user?.preferredCurrency || "XAF"}
+                                </span>
+                                <input
+                                  type="text"
+                                  inputMode="decimal"
+                                  placeholder="0"
+                                  className="text-5xl font-bold bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground/30 text-center w-full min-w-0"
+                                  {...field}
+                                  data-testid="input-deposit-amount"
+                                />
+                              </div>
+                            </div>
+                          </FormControl>
+                          <FormMessage className="text-center" />
+                        </FormItem>
+                      )}
+                    />
 
-                        <FormField
-                          control={form.control}
-                          name="amount"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormControl>
-                                <div className="relative flex flex-col items-center">
-                                  <div className="flex items-center justify-center gap-2 w-full border-b-2 border-primary/30 focus-within:border-primary pb-2 transition-colors">
-                                    <span className="text-2xl font-semibold text-muted-foreground shrink-0">
-                                      {user?.preferredCurrency || "XAF"}
-                                    </span>
-                                    <input
-                                      type="text"
-                                      inputMode="decimal"
-                                      placeholder="0"
-                                      className="text-5xl font-bold bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground/30 text-center w-full min-w-0"
-                                      {...field}
-                                      data-testid="input-deposit-amount"
-                                    />
-                                  </div>
-                                </div>
-                              </FormControl>
-                              <FormMessage className="text-center" />
-                            </FormItem>
-                          )}
-                        />
-
-                        {/* Quick amount chips */}
-                        <div className="flex flex-wrap justify-center gap-2">
-                          {QUICK_AMOUNTS.map((amt) => (
-                            <button
-                              key={amt}
-                              type="button"
-                              onClick={() => form.setValue("amount", amt.toString())}
-                              className={`px-3 py-1.5 rounded-full text-sm font-semibold border transition-all ${
-                                amountNum === amt
-                                  ? "border-primary bg-primary text-black"
-                                  : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
-                              }`}
-                            >
-                              {amt >= 1000 ? `${amt / 1000}K` : amt}
-                            </button>
-                          ))}
-                        </div>
-
-                        <Button
+                    {/* Quick amount chips */}
+                    <div className="flex flex-wrap justify-center gap-2">
+                      {QUICK_AMOUNTS.map((amt) => (
+                        <button
+                          key={amt}
                           type="button"
-                          className="w-full h-12 font-bold rounded-xl"
-                          size="lg"
-                          onClick={goToNextStep}
-                          disabled={!canProceedToStep2}
+                          onClick={() => form.setValue("amount", amt.toString())}
+                          className={`px-3 py-1.5 rounded-full text-sm font-semibold border transition-all ${
+                            amountNum === amt
+                              ? "border-primary bg-primary text-black"
+                              : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                          }`}
                         >
-                          {t.deposit.continue}
-                          <ArrowRight className="w-4 h-4 ml-2" />
-                        </Button>
-                      </div>
-                    )}
+                          {amt >= 1000 ? `${amt / 1000}K` : amt}
+                        </button>
+                      ))}
+                    </div>
 
-                    {/* STEP 2 — Country & Operator */}
-                    {currentStep === 2 && (
-                      <div className="space-y-5 animate-in fade-in duration-300">
-                        <div className="text-center space-y-1 pt-2">
-                          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">{t.deposit.step2Question}</p>
-                          <p className="text-sm text-muted-foreground">{t.deposit.step2Hint}</p>
-                        </div>
-
-                        {/* Selected amount badge */}
-                        <div className="flex items-center justify-center">
-                          <div className="flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-full px-4 py-1.5">
-                            <span className="text-sm font-bold text-primary tabular-nums">
-                              {watchedAmount ? formatCurrency(parseFloat(watchedAmount), (user?.preferredCurrency || "XAF") as SupportedCurrency) : "—"}
-                            </span>
-                          </div>
-                        </div>
-
-                        <FormField
-                          control={form.control}
-                          name="countryId"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t.deposit.chooseCountry}</FormLabel>
-                              <Select onValueChange={(val) => { field.onChange(val); form.setValue("operatorId", ""); }} value={field.value}>
-                                <FormControl>
-                                  <SelectTrigger data-testid="select-country" className="h-14 rounded-xl">
-                                    {selectedCountry ? (
-                                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                                        <span className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-xl shrink-0">
-                                          {getCountryFlagEmoji(selectedCountry.code)}
-                                        </span>
-                                        <span className="font-semibold truncate">{selectedCountry.name}</span>
-                                        <span className="text-muted-foreground text-sm shrink-0">({selectedCountry.currency})</span>
-                                      </div>
-                                    ) : (
-                                      <span className="text-muted-foreground">{t.deposit.selectCountry}</span>
-                                    )}
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  {countries.map((country) => (
-                                    <SelectItem key={country.id} value={country.id}>
-                                      <span className="flex items-center gap-2">
-                                        <span>{getCountryFlagEmoji(country.code)}</span>
-                                        <span>{country.name}</span>
-                                        <span className="text-muted-foreground text-xs">({country.currency})</span>
-                                      </span>
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name="operatorId"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t.deposit.operatorMobileLabel}</FormLabel>
-                              {!selectedCountry ? (
-                                <p className="text-sm text-muted-foreground py-2">{t.deposit.noCountrySelected}</p>
-                              ) : selectedCountry.operators.length === 0 ? (
-                                <p className="text-sm text-muted-foreground py-2">{t.deposit.noOperator}</p>
-                              ) : (
-                                <div className="w-full overflow-hidden">
-                                  <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
-                                    {selectedCountry.operators.map((op) => {
-                                      const logo = getOperatorLogo(op.name);
-                                      const isSelected = field.value === op.id;
-                                      return (
-                                        <button
-                                          key={op.id}
-                                          type="button"
-                                          data-testid={`button-operator-${op.id}`}
-                                          onClick={() => field.onChange(op.id)}
-                                          className={`flex-shrink-0 flex flex-col items-center justify-center gap-2 w-28 h-24 rounded-2xl border-2 transition-all cursor-pointer ${
-                                            isSelected
-                                              ? "border-primary bg-primary/10 shadow-md"
-                                              : "border-border bg-card/50 hover:border-primary/40 hover:bg-muted/30"
-                                          }`}
-                                        >
-                                          {logo
-                                            ? <img src={logo} alt={op.name} className="w-12 h-12 object-contain rounded-xl" />
-                                            : <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center"><Smartphone className="w-6 h-6 text-primary" /></div>
-                                          }
-                                          <span className={`text-xs font-semibold text-center leading-tight px-1 ${isSelected ? "text-primary" : "text-foreground"}`}>{op.name}</span>
-                                        </button>
-                                      );
-                                    })}
+                    {/* Country */}
+                    <FormField
+                      control={form.control}
+                      name="countryId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t.deposit.chooseCountry}</FormLabel>
+                          <Select onValueChange={(val) => { field.onChange(val); form.setValue("operatorId", ""); }} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger data-testid="select-country" className="h-14 rounded-xl">
+                                {selectedCountry ? (
+                                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                                    <span className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-xl shrink-0">
+                                      {getCountryFlagEmoji(selectedCountry.code)}
+                                    </span>
+                                    <span className="font-semibold truncate">{selectedCountry.name}</span>
+                                    <span className="text-muted-foreground text-sm shrink-0">({selectedCountry.currency})</span>
                                   </div>
-                                </div>
-                              )}
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
+                                ) : (
+                                  <span className="text-muted-foreground">{t.deposit.selectCountry}</span>
+                                )}
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {countries.map((country) => (
+                                <SelectItem key={country.id} value={country.id}>
+                                  <span className="flex items-center gap-2">
+                                    <span>{getCountryFlagEmoji(country.code)}</span>
+                                    <span>{country.name}</span>
+                                    <span className="text-muted-foreground text-xs">({country.currency})</span>
+                                  </span>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                        <div className="flex gap-3 pt-1">
-                          <Button type="button" variant="outline" className="flex-1 rounded-xl" onClick={goToPreviousStep}>
-                            <ArrowLeft className="w-4 h-4 mr-2" />{t.deposit.back}
-                          </Button>
-                          <Button type="button" className="flex-1 rounded-xl font-bold" onClick={goToNextStep} disabled={!canProceedToStep3}>
-                            {t.deposit.continue}<ArrowRight className="w-4 h-4 ml-2" />
-                          </Button>
+                    {/* Operator */}
+                    <FormField
+                      control={form.control}
+                      name="operatorId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t.deposit.operatorMobileLabel}</FormLabel>
+                          {!selectedCountry ? (
+                            <p className="text-sm text-muted-foreground py-2">{t.deposit.noCountrySelected}</p>
+                          ) : selectedCountry.operators.length === 0 ? (
+                            <p className="text-sm text-muted-foreground py-2">{t.deposit.noOperator}</p>
+                          ) : (
+                            <div className="w-full overflow-hidden">
+                              <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
+                                {selectedCountry.operators.map((op) => {
+                                  const logo = getOperatorLogo(op.name);
+                                  const isSelected = field.value === op.id;
+                                  return (
+                                    <button
+                                      key={op.id}
+                                      type="button"
+                                      data-testid={`button-operator-${op.id}`}
+                                      onClick={() => field.onChange(op.id)}
+                                      className={`flex-shrink-0 flex flex-col items-center justify-center gap-2 w-28 h-24 rounded-2xl border-2 transition-all cursor-pointer ${
+                                        isSelected
+                                          ? "border-primary bg-primary/10 shadow-md"
+                                          : "border-border bg-card/50 hover:border-primary/40 hover:bg-muted/30"
+                                      }`}
+                                    >
+                                      {logo
+                                        ? <img src={logo} alt={op.name} className="w-12 h-12 object-contain rounded-xl" />
+                                        : <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center"><Smartphone className="w-6 h-6 text-primary" /></div>
+                                      }
+                                      <span className={`text-xs font-semibold text-center leading-tight px-1 ${isSelected ? "text-primary" : "text-foreground"}`}>{op.name}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    {/* Phone number */}
+                    <FormField
+                      control={form.control}
+                      name="phoneNumber"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t.deposit.phoneMobileLabel}</FormLabel>
+                          <FormControl>
+                            <div className="relative">
+                              <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                              <Input
+                                placeholder="XXX XXX XXX"
+                                className="pl-11 h-12 rounded-xl text-base"
+                                inputMode="tel"
+                                {...field}
+                                data-testid="input-phone-number"
+                              />
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    {isPixPayOtp && (
+                      <div className="rounded-xl border-2 border-orange-400 bg-orange-50 dark:bg-orange-950/30 p-4 space-y-3">
+                        <div className="flex items-center gap-2 text-orange-700 dark:text-orange-300 font-semibold text-sm">
+                          <Hash className="h-4 w-4 shrink-0" />{t.deposit.otpOrangeLabel}
+                        </div>
+                        <p className="text-xs text-orange-600 dark:text-orange-400">
+                          Composez <code className="font-mono bg-orange-200 dark:bg-orange-900 px-1 rounded font-bold">{selectedOperator?.otpUssdCode || "#144*82#"}</code> {t.deposit.otpOrangeInstruction}
+                        </p>
+                        <Input
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          maxLength={8}
+                          placeholder={t.deposit.otpPlaceholder}
+                          value={pixpayOtpCode}
+                          onChange={e => setPixpayOtpCode(e.target.value.replace(/\D/g, ""))}
+                          className="text-center text-xl font-mono tracking-widest h-12 border-orange-300 rounded-xl"
+                          data-testid="input-pixpay-otp"
+                        />
+                      </div>
+                    )}
+
+                    {/* Fee breakdown */}
+                    {feeCalculation && (
+                      <div className="rounded-xl border border-border bg-muted/30 overflow-hidden" data-testid="fee-calculator">
+                        <div className="px-4 py-3 flex items-center justify-between border-b border-border">
+                          <span className="text-sm text-muted-foreground">{t.deposit.amountEntered}</span>
+                          <span className="text-sm font-semibold tabular-nums">
+                            {formatCurrency(feeCalculation.amount.toString(), (selectedCountry?.currency || "XAF") as SupportedCurrency)}
+                          </span>
+                        </div>
+                        <div className="px-4 py-3 flex items-center justify-between border-b border-border">
+                          <span className="text-sm text-muted-foreground flex items-center gap-1.5">
+                            <TrendingDown className="w-3.5 h-3.5" />
+                            {t.deposit.depositFeeLabel} {feeCalculation.feePercentage > 0 ? `(${feeCalculation.feePercentage}%)` : feeCalculation.fixedFee > 0 ? t.deposit.feeFixed : t.deposit.feeFree}
+                          </span>
+                          <span className={`text-sm font-semibold tabular-nums ${feeCalculation.fee > 0 ? "text-red-500" : "text-green-500"}`}>
+                            {feeCalculation.fee > 0 ? `-${formatCurrency(feeCalculation.fee.toString(), (selectedCountry?.currency || "XAF") as SupportedCurrency)}` : "Gratuit"}
+                          </span>
+                        </div>
+                        <div className="px-4 py-3 flex items-center justify-between bg-green-500/5">
+                          <span className="text-sm font-semibold text-foreground">{t.deposit.creditedLabel}</span>
+                          <span className="text-lg font-bold text-green-500 tabular-nums" data-testid="credited-amount">
+                            {formatCurrency(feeCalculation.creditedAmount.toString(), (selectedCountry?.currency || "XAF") as SupportedCurrency)}
+                          </span>
                         </div>
                       </div>
                     )}
 
-                    {/* STEP 3 — Phone & Confirm */}
-                    {currentStep === 3 && (
-                      <div className="space-y-5 animate-in fade-in duration-300">
-                        <div className="text-center space-y-1 pt-2">
-                          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">{t.deposit.step3Question}</p>
-                          <p className="text-sm text-muted-foreground">{t.deposit.step3Hint}</p>
-                        </div>
-
-                        {/* Summary chips */}
-                        <div className="flex items-center justify-center gap-2 flex-wrap">
-                          {selectedOperator && (
-                            <div className="flex items-center gap-1.5 bg-muted rounded-full px-3 py-1">
-                              {getOperatorLogo(selectedOperator.name)
-                                ? <img src={getOperatorLogo(selectedOperator.name)!} alt="" className="w-4 h-4 rounded" />
-                                : <Smartphone className="w-3.5 h-3.5 text-muted-foreground" />
-                              }
-                              <span className="text-xs font-semibold">{selectedOperator.name}</span>
-                            </div>
-                          )}
-                          {selectedCountry && (
-                            <div className="flex items-center gap-1.5 bg-muted rounded-full px-3 py-1">
-                              <span className="text-sm">{getCountryFlagEmoji(selectedCountry.code)}</span>
-                              <span className="text-xs font-semibold">{selectedCountry.name}</span>
-                            </div>
-                          )}
-                          <div className="flex items-center gap-1.5 bg-primary/10 border border-primary/20 rounded-full px-3 py-1">
-                            <span className="text-xs font-bold text-primary tabular-nums">
-                              {watchedAmount ? formatCurrency(parseFloat(watchedAmount), (selectedCountry?.currency || "XAF") as SupportedCurrency) : "—"}
-                            </span>
-                          </div>
-                        </div>
-
-                        <FormField
-                          control={form.control}
-                          name="phoneNumber"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t.deposit.phoneMobileLabel}</FormLabel>
-                              <FormControl>
-                                <div className="relative">
-                                  <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                                  <Input
-                                    placeholder="XXX XXX XXX"
-                                    className="pl-11 h-12 rounded-xl text-base"
-                                    inputMode="tel"
-                                    {...field}
-                                    data-testid="input-phone-number"
-                                  />
-                                </div>
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        {isPixPayOtp && (
-                          <div className="rounded-xl border-2 border-orange-400 bg-orange-50 dark:bg-orange-950/30 p-4 space-y-3">
-                            <div className="flex items-center gap-2 text-orange-700 dark:text-orange-300 font-semibold text-sm">
-                              <Hash className="h-4 w-4 shrink-0" />{t.deposit.otpOrangeLabel}
-                            </div>
-                            <p className="text-xs text-orange-600 dark:text-orange-400">
-                              Composez <code className="font-mono bg-orange-200 dark:bg-orange-900 px-1 rounded font-bold">{selectedOperator?.otpUssdCode || "#144*82#"}</code> {t.deposit.otpOrangeInstruction}
-                            </p>
-                            <Input
-                              type="text"
-                              inputMode="numeric"
-                              pattern="[0-9]*"
-                              maxLength={8}
-                              placeholder={t.deposit.otpPlaceholder}
-                              value={pixpayOtpCode}
-                              onChange={e => setPixpayOtpCode(e.target.value.replace(/\D/g, ""))}
-                              className="text-center text-xl font-mono tracking-widest h-12 border-orange-300 rounded-xl"
-                              data-testid="input-pixpay-otp"
-                            />
-                          </div>
-                        )}
-
-                        {/* Fee breakdown */}
-                        {feeCalculation && (
-                          <div className="rounded-xl border border-border bg-muted/30 overflow-hidden" data-testid="fee-calculator">
-                            <div className="px-4 py-3 flex items-center justify-between border-b border-border">
-                              <span className="text-sm text-muted-foreground">{t.deposit.amountEntered}</span>
-                              <span className="text-sm font-semibold tabular-nums">
-                                {formatCurrency(feeCalculation.amount.toString(), (selectedCountry?.currency || "XAF") as SupportedCurrency)}
-                              </span>
-                            </div>
-                            <div className="px-4 py-3 flex items-center justify-between border-b border-border">
-                              <span className="text-sm text-muted-foreground flex items-center gap-1.5">
-                                <TrendingDown className="w-3.5 h-3.5" />
-                                {t.deposit.depositFeeLabel} {feeCalculation.feePercentage > 0 ? `(${feeCalculation.feePercentage}%)` : feeCalculation.fixedFee > 0 ? t.deposit.feeFixed : t.deposit.feeFree}
-                              </span>
-                              <span className={`text-sm font-semibold tabular-nums ${feeCalculation.fee > 0 ? "text-red-500" : "text-green-500"}`}>
-                                {feeCalculation.fee > 0 ? `-${formatCurrency(feeCalculation.fee.toString(), (selectedCountry?.currency || "XAF") as SupportedCurrency)}` : "Gratuit"}
-                              </span>
-                            </div>
-                            <div className="px-4 py-3 flex items-center justify-between bg-green-500/5">
-                              <span className="text-sm font-semibold text-foreground">{t.deposit.creditedLabel}</span>
-                              <span className="text-lg font-bold text-green-500 tabular-nums" data-testid="credited-amount">
-                                {formatCurrency(feeCalculation.creditedAmount.toString(), (selectedCountry?.currency || "XAF") as SupportedCurrency)}
-                              </span>
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="flex gap-3 pt-1">
-                          <Button type="button" variant="outline" className="flex-1 rounded-xl" onClick={goToPreviousStep}>
-                            <ArrowLeft className="w-4 h-4 mr-2" />{t.deposit.back}
-                          </Button>
-                          <Button
-                            type="submit"
-                            className="flex-1 rounded-xl font-bold"
-                            disabled={depositMutation.isPending || (isPixPayOtp && pixpayOtpCode.length < 4)}
-                            data-testid="button-deposit-confirm"
-                          >
-                            {depositMutation.isPending
-                              ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />{t.deposit.processing}</>
-                              : <><CreditCard className="w-4 h-4 mr-2" />{t.deposit.confirmBtn}</>
-                            }
-                          </Button>
-                        </div>
-                      </div>
-                    )}
+                    <Button
+                      type="submit"
+                      className="w-full h-12 rounded-xl font-bold"
+                      size="lg"
+                      disabled={!canSubmit || depositMutation.isPending || (isPixPayOtp && pixpayOtpCode.length < 4)}
+                      data-testid="button-deposit-confirm"
+                    >
+                      {depositMutation.isPending
+                        ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />{t.deposit.processing}</>
+                        : <><CreditCard className="w-4 h-4 mr-2" />{t.deposit.confirmBtn}</>
+                      }
+                    </Button>
                   </form>
                 </Form>
               )}
