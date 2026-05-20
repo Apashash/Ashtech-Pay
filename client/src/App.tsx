@@ -310,8 +310,6 @@ function VpnDisconnectGuard() {
 }
 
 function ForceLogoutGuard() {
-  const [, setLocation] = useLocation();
-
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail;
@@ -321,16 +319,16 @@ function ForceLogoutGuard() {
       const reason = detail?.reason;
       if (retryAfter) {
         try { localStorage.setItem("ashtech_rate_limit_until", String(retryAfter)); } catch {}
-        setLocation(`/blocked?until=${retryAfter}`);
+        window.location.href = `/blocked?until=${retryAfter}`;
       } else if (reason === "new_device") {
-        setLocation("/login?kicked=1");
+        window.location.href = "/login?kicked=1";
       } else {
-        setLocation("/login");
+        window.location.href = "/login";
       }
     };
     window.addEventListener("force-logout", handler);
     return () => window.removeEventListener("force-logout", handler);
-  }, [setLocation]);
+  }, []);
 
   return null;
 }
