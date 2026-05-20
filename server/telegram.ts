@@ -297,6 +297,90 @@ export async function notifyTransferSent(opts: {
   await sendMessage(msg);
 }
 
+// ─── KYC ──────────────────────────────────────────────────────────────────────
+
+export async function notifyKycSubmitted(opts: {
+  userName: string;
+  userEmail: string;
+  userId: number;
+  documentType: string;
+  documentNumber: string;
+  country?: string;
+  city?: string;
+  businessType: string;
+  businessCategory: string;
+  businessDescription: string;
+}): Promise<void> {
+  const docTypeLabel: Record<string, string> = {
+    passport: "🛂 Passeport",
+    national_id: "🪪 Carte Nationale d'Identité",
+    drivers_license: "🚗 Permis de conduire",
+    residence_permit: "🏠 Titre de séjour",
+  };
+  const businessTypeLabel: Record<string, string> = {
+    individual: "👤 Particulier",
+    company: "🏢 Entreprise",
+    freelancer: "💼 Freelance",
+    ngo: "🌍 ONG",
+  };
+
+  const msg =
+    `📋 <b>NOUVELLE DEMANDE DE VÉRIFICATION KYC</b>\n` +
+    `─────────────────────────────\n` +
+    `👤 Utilisateur : <b>${opts.userName}</b>\n` +
+    `📧 Email : ${opts.userEmail}\n` +
+    `🆔 ID compte : <code>#${opts.userId}</code>\n` +
+    `─────────────────────────────\n` +
+    `📄 Document : ${docTypeLabel[opts.documentType] ?? opts.documentType}\n` +
+    `🔢 N° Document : <code>${opts.documentNumber}</code>\n` +
+    (opts.country ? `🌍 Pays : ${opts.country}\n` : "") +
+    (opts.city ? `🏙 Ville : ${opts.city}\n` : "") +
+    `─────────────────────────────\n` +
+    `🏷 Type de compte : ${businessTypeLabel[opts.businessType] ?? opts.businessType}\n` +
+    `📂 Catégorie : ${opts.businessCategory}\n` +
+    `📝 Description : ${opts.businessDescription}\n` +
+    `─────────────────────────────\n` +
+    `⚡ <b>Action requise → Panel Admin › KYC</b>\n` +
+    `🕐 Heure : ${now()}`;
+  await sendMessage(msg);
+}
+
+export async function notifyKycApproved(opts: {
+  adminName: string;
+  userName: string;
+  userEmail: string;
+  userId: number;
+}): Promise<void> {
+  const msg =
+    `✅ <b>KYC APPROUVÉ</b>\n` +
+    `─────────────────────────────\n` +
+    `👤 Utilisateur : <b>${opts.userName}</b>\n` +
+    `📧 Email : ${opts.userEmail}\n` +
+    `🆔 ID compte : <code>#${opts.userId}</code>\n` +
+    `🛡️ Approuvé par : <b>${opts.adminName}</b>\n` +
+    `🕐 Heure : ${now()}`;
+  await sendMessage(msg);
+}
+
+export async function notifyKycRejected(opts: {
+  adminName: string;
+  userName: string;
+  userEmail: string;
+  userId: number;
+  reason: string;
+}): Promise<void> {
+  const msg =
+    `❌ <b>KYC REJETÉ</b>\n` +
+    `─────────────────────────────\n` +
+    `👤 Utilisateur : <b>${opts.userName}</b>\n` +
+    `📧 Email : ${opts.userEmail}\n` +
+    `🆔 ID compte : <code>#${opts.userId}</code>\n` +
+    `🛡️ Rejeté par : <b>${opts.adminName}</b>\n` +
+    `⚠️ Raison : ${opts.reason}\n` +
+    `🕐 Heure : ${now()}`;
+  await sendMessage(msg);
+}
+
 // ─── INSCRIPTION ──────────────────────────────────────────────────────────────
 
 export async function notifyNewUser(opts: {

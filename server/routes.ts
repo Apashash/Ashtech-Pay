@@ -58,6 +58,9 @@ import {
   notifyAdminLoginFailed,
   notifyNewUser,
   notifyTransferSent,
+  notifyKycSubmitted,
+  notifyKycApproved,
+  notifyKycRejected,
 } from "./telegram";
 import {
   sendWelcomeEmail,
@@ -6948,7 +6951,24 @@ export async function registerRoutes(
         businessCategory,
         businessDescription,
       });
-      
+
+      // Notify via Telegram
+      const kycSubmitter = await storage.getUser(userId).catch(() => null);
+      if (kycSubmitter) {
+        notifyKycSubmitted({
+          userName: kycSubmitter.fullName || kycSubmitter.username,
+          userEmail: kycSubmitter.email || "",
+          userId: kycSubmitter.id,
+          documentType,
+          documentNumber,
+          country: country || undefined,
+          city: city || undefined,
+          businessType,
+          businessCategory,
+          businessDescription,
+        }).catch(() => {});
+      }
+
       res.json(submission);
     } catch (error) {
       console.error("Submit KYC error:", error);
@@ -7078,10 +7098,19 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Soumission KYC non trouvée" });
       }
       
-      // Send KYC approved email
+      // Send KYC approved email + Telegram
       const kycUser = await storage.getUser(submission.userId).catch(() => null);
       if (kycUser?.email) {
         sendKycApprovedEmail(kycUser.email, kycUser.fullName || kycUser.username).catch(() => {});
+      }
+      if (kycUser) {
+        const adminUser = await storage.getUser(req.userId!).catch(() => null);
+        notifyKycApproved({
+          adminName: adminUser?.fullName || adminUser?.username || "Admin",
+          userName: kycUser.fullName || kycUser.username,
+          userEmail: kycUser.email || "",
+          userId: kycUser.id,
+        }).catch(() => {});
       }
 
       // Create notification for user
@@ -7127,7 +7156,20 @@ export async function registerRoutes(
       if (!submission) {
         return res.status(404).json({ message: "Soumission KYC non trouvée" });
       }
-      
+
+      // Notify via Telegram
+      const rejectedUser = await storage.getUser(submission.userId).catch(() => null);
+      if (rejectedUser) {
+        const rejectAdmin = await storage.getUser(req.userId!).catch(() => null);
+        notifyKycRejected({
+          adminName: rejectAdmin?.fullName || rejectAdmin?.username || "Admin",
+          userName: rejectedUser.fullName || rejectedUser.username,
+          userEmail: rejectedUser.email || "",
+          userId: rejectedUser.id,
+          reason: note,
+        }).catch(() => {});
+      }
+
       // Create notification for user
       await storage.createUserNotification({
         userId: submission.userId,
