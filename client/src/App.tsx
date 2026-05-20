@@ -70,6 +70,7 @@ import AdminPixPay from "@/pages/admin/pixpay";
 import AdminEmailCampaigns from "@/pages/admin/email-campaigns";
 import AdminApiManagement from "@/pages/admin/api-management";
 import AdminMerchants from "@/pages/admin/merchants";
+import AdminBlockedIps from "@/pages/admin/blocked-ips";
 import TermsPage from "@/pages/terms";
 import PrivacyPage from "@/pages/privacy";
 import LegalPage from "@/pages/legal";
@@ -176,6 +177,7 @@ function Router() {
       <Route path="/admin/email-campaigns" component={AdminEmailCampaigns} />
       <Route path="/admin/api-management" component={AdminApiManagement} />
       <Route path="/admin/merchants" component={AdminMerchants} />
+      <Route path="/admin/blocked-ips" component={AdminBlockedIps} />
       <Route path="/terms" component={TermsPage} />
       <Route path="/privacy" component={PrivacyPage} />
       <Route path="/legal" component={LegalPage} />

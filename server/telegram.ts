@@ -1135,6 +1135,7 @@ export async function handleTelegramUpdate(
     searchUsers: (query: string) => Promise<{ userName: string; email: string; balance: number; currency: string; kycStatus: string; country?: string; banned: boolean }[]>;
     approveWithdrawalNumberChange: (changeId: string) => Promise<{ userName: string; userEmail: string; newPhone: string; action: string } | null>;
     rejectWithdrawalNumberChange: (changeId: string, reason: string) => Promise<{ userName: string; userEmail: string } | null>;
+    getBlockedIps: () => { ip: string; identifier: string; blockedUntil: number; blockedAt: number }[];
   }
 ): Promise<void> {
   // ── Callback query (button press) ──
@@ -1550,6 +1551,7 @@ export async function handleTelegramUpdate(
             `/verif REF — Vérifier transaction\n` +
             `/taux DEVISE TAUX — Modifier taux FX\n` +
             `/broadcast Sujet;Corps — Email groupé\n` +
+            `/ipb — IPs actuellement bloquées\n` +
             `──────────────────\n🕐 ${now()}`,
           parse_mode: "HTML",
         });
@@ -1972,6 +1974,34 @@ export async function handleTelegramUpdate(
       return;
     }
 
+    // ── /ipb — IPs bloquées ──
+    if (text === "/ipb") {
+      const blocked = handlers.getBlockedIps();
+      if (blocked.length === 0) {
+        await callBotApi("sendMessage", {
+          chat_id: chatId,
+          text: `🛡️ <b>IPs BLOQUÉES</b>\n──────────────────\n✅ Aucune IP actuellement bloquée.\n🕐 ${now()}`,
+          parse_mode: "HTML",
+          reply_markup: { inline_keyboard: [[{ text: "🏠 Menu", callback_data: "cmd:menu" }]] },
+        });
+        return;
+      }
+      const lines = blocked.map(b => {
+        const remaining = Math.max(0, Math.ceil((b.blockedUntil - Date.now()) / 1000));
+        const min = Math.floor(remaining / 60);
+        const sec = remaining % 60;
+        const time = `${String(min).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+        return `🔴 <code>${b.ip}</code>\n👤 <code>${b.identifier}</code>\n⏱️ ${time} restant`;
+      }).join("\n──────────────────\n");
+      await callBotApi("sendMessage", {
+        chat_id: chatId,
+        text: `🛡️ <b>IPs BLOQUÉES (${blocked.length})</b>\n──────────────────\n${lines}\n──────────────────\n🕐 ${now()}`,
+        parse_mode: "HTML",
+        reply_markup: { inline_keyboard: [[{ text: "🏠 Menu", callback_data: "cmd:menu" }]] },
+      });
+      return;
+    }
+
     // ── Standard command map ──
     const cmdMap: Record<string, { period?: string; type: string }> = {
       "/start":   { type: "menu" },
@@ -2030,6 +2060,7 @@ export async function handleTelegramUpdate(
             `/taux DEVISE TAUX — Modifier un taux de change FX\n` +
             `/pays — Activer/désactiver des pays\n` +
             `/broadcast Sujet;Corps — Email groupé à tous les utilisateurs\n` +
+            `/ipb — IPs actuellement bloquées\n` +
             `──────────────────\n` +
             `<b>❓ Aide</b>\n` +
             `/aide — Afficher cette liste\n` +

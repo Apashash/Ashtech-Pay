@@ -32,6 +32,7 @@ import {
   KeyRound,
   Loader2,
   MailCheck,
+  ShieldBan,
 } from "lucide-react";
 import { 
   Dialog, 
@@ -122,6 +123,7 @@ const menuItems: MenuItem[] = [
   { icon: Link2, label: "Liens de paiement", href: "/admin/links" },
   { icon: MessageSquare, label: "Message Global", href: "/admin/global-messages" },
   { icon: MessageSquare, label: "Support", href: "/admin/support" },
+  { icon: ShieldBan, label: "IPs Bloquées", href: "/admin/blocked-ips" },
   { icon: Shield, label: "Logs & Sécurité", href: "/admin/logs" },
   { icon: Settings, label: "Paramètres", href: "/admin/settings" },
 ];

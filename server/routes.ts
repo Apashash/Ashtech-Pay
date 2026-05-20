@@ -359,7 +359,7 @@ setInterval(() => {
 }, 5 * 60 * 1000); // Clean expired entries every 5 min
 
 // ─── Auth Rate Limiter ────────────────────────────────────────────────────────
-const authAttempts = new Map<string, { count: number; blockedUntil?: number }>();
+const authAttempts = new Map<string, { count: number; blockedUntil?: number; identifier?: string; blockedAt?: number }>();
 const MAX_AUTH_ATTEMPTS = 4;
 const AUTH_BLOCK_DURATION_MS = 7 * 60 * 1000; // 7 minutes
 
@@ -401,25 +401,41 @@ function checkAuthRateLimit(ip: string): { blocked: boolean; retryAfter?: number
   return { blocked: false };
 }
 
-function recordAuthFailure(ip: string): { blocked: boolean; retryAfter?: number; attemptsLeft: number } {
+function recordAuthFailure(ip: string, identifier?: string): { blocked: boolean; retryAfter?: number; attemptsLeft: number } {
   const now = Date.now();
   const existing = authAttempts.get(ip);
   if (existing?.blockedUntil && now >= existing.blockedUntil) {
-    authAttempts.set(ip, { count: 1 });
+    authAttempts.set(ip, { count: 1, identifier });
     return { blocked: false, attemptsLeft: MAX_AUTH_ATTEMPTS - 1 };
   }
   const newCount = (existing?.count || 0) + 1;
   if (newCount >= MAX_AUTH_ATTEMPTS) {
     const blockedUntil = now + AUTH_BLOCK_DURATION_MS;
-    authAttempts.set(ip, { count: newCount, blockedUntil });
+    authAttempts.set(ip, { count: newCount, blockedUntil, identifier: identifier || existing?.identifier, blockedAt: now });
     return { blocked: true, retryAfter: blockedUntil, attemptsLeft: 0 };
   }
-  authAttempts.set(ip, { count: newCount });
+  authAttempts.set(ip, { count: newCount, identifier: identifier || existing?.identifier });
   return { blocked: false, attemptsLeft: MAX_AUTH_ATTEMPTS - newCount };
 }
 
 function clearAuthAttempts(ip: string): void {
   authAttempts.delete(ip);
+}
+
+function getBlockedIps(): { ip: string; identifier: string; blockedUntil: number; blockedAt: number }[] {
+  const now = Date.now();
+  const result: { ip: string; identifier: string; blockedUntil: number; blockedAt: number }[] = [];
+  for (const [ip, record] of authAttempts.entries()) {
+    if (record.blockedUntil && now < record.blockedUntil) {
+      result.push({
+        ip,
+        identifier: record.identifier || "inconnu",
+        blockedUntil: record.blockedUntil,
+        blockedAt: record.blockedAt || record.blockedUntil - AUTH_BLOCK_DURATION_MS,
+      });
+    }
+  }
+  return result.sort((a, b) => b.blockedAt - a.blockedAt);
 }
 
 setInterval(() => {
@@ -773,6 +789,21 @@ export async function registerRoutes(
     return res.json({ blocked: false });
   });
 
+  // Admin — liste des IPs bloquées (temps réel)
+  app.get("/api/admin/blocked-ips", requireAuth, requireAdmin, (_req, res) => {
+    res.json(getBlockedIps());
+  });
+
+  // Admin — débloquer manuellement une IP
+  app.delete("/api/admin/blocked-ips/:ip", requireAuth, requireAdmin, (req, res) => {
+    const ip = decodeURIComponent(req.params.ip);
+    authAttempts.delete(ip);
+    forcedLogoutMap.forEach((_until, uid) => {
+      // We can't map IP→userId easily so just clean the entry by IP
+    });
+    res.json({ ok: true, message: `IP ${ip} débloquée.` });
+  });
+
   app.post("/api/auth/register", registerLimiter, async (req, res) => {
     try {
       const ip = getClientIp(req);
@@ -877,7 +908,7 @@ export async function registerRoutes(
 
       const user = await storage.getUserByEmailOrPhone(data.identifier);
       if (!user || !(await verifyPassword(data.password, user.password))) {
-        const failure = recordAuthFailure(ip);
+        const failure = recordAuthFailure(ip, data.identifier);
         const remaining = failure.attemptsLeft;
         const msg = failure.blocked
           ? "Trop de tentatives incorrectes. Accès bloqué pendant 7 minutes."
@@ -890,6 +921,7 @@ export async function registerRoutes(
         if (failure.blocked && user && failure.retryAfter) {
           destroyUserSessions(user.id, failure.retryAfter).catch(() => {});
         }
+
         return res.status(failure.blocked ? 429 : 401).json({
           message: msg,
           blocked: failure.blocked,
@@ -9806,6 +9838,7 @@ export async function registerRoutes(
             userEmail: wnUser.email || "",
           };
         },
+        getBlockedIps: () => getBlockedIps(),
       });
     } catch (err: any) {
       console.error("[TelegramWebhook] Error:", err?.message);
