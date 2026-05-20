@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { Button } from "@/components/ui/button";
@@ -5,13 +6,16 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { WithdrawalNumber, WithdrawalNumberChange } from "@shared/schema";
-import { Phone, Plus, Loader2, Edit, Trash2, Clock, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
+import { Phone, Plus, Loader2, Edit, Trash2, Clock, CheckCircle2, XCircle, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { Link } from "wouter";
 import { useLanguage } from "@/lib/language";
+
+const HISTORY_PAGE_SIZE = 5;
 
 export default function WithdrawalNumbersPage() {
   const { toast } = useToast();
   const { t } = useLanguage();
+  const [historyPage, setHistoryPage] = useState(1);
 
   const { data: withdrawalNumbers = [], isLoading: numbersLoading } = useQuery<WithdrawalNumber[]>({
     queryKey: ["/api/withdrawal-numbers"],
@@ -157,25 +161,61 @@ export default function WithdrawalNumbersPage() {
           </div>
         )}
 
-        {changeRequests.filter(r => r.status !== "pending").length > 0 && (
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">{t.withdrawalNumbers.requestHistory}</p>
-            <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
-              {changeRequests.filter(r => r.status !== "pending").map((request) => (
-                <div key={request.id} className="flex items-center gap-3 px-4 py-3.5">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Badge variant="outline" className="text-xs">{getActionText(request.action)}</Badge>
-                      {getStatusBadge(request.status)}
+        {(() => {
+          const history = changeRequests.filter(r => r.status !== "pending");
+          if (history.length === 0) return null;
+          const totalPages = Math.ceil(history.length / HISTORY_PAGE_SIZE);
+          const paginated = history.slice((historyPage - 1) * HISTORY_PAGE_SIZE, historyPage * HISTORY_PAGE_SIZE);
+          return (
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">{t.withdrawalNumbers.requestHistory}</p>
+              <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
+                {paginated.map((request) => (
+                  <div key={request.id} className="flex items-center gap-3 px-4 py-3.5">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge variant="outline" className="text-xs">{getActionText(request.action)}</Badge>
+                        {getStatusBadge(request.status)}
+                      </div>
+                      {request.newPhoneNumber && <p className="text-xs text-muted-foreground mt-0.5">{request.newPhoneNumber}</p>}
+                      {request.adminNote && <p className="text-xs text-muted-foreground">{t.withdrawalNumbers.noteLabel} {request.adminNote}</p>}
                     </div>
-                    {request.newPhoneNumber && <p className="text-xs text-muted-foreground mt-0.5">{request.newPhoneNumber}</p>}
-                    {request.adminNote && <p className="text-xs text-muted-foreground">{t.withdrawalNumbers.noteLabel} {request.adminNote}</p>}
+                  </div>
+                ))}
+              </div>
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between mt-3">
+                  <p className="text-xs text-muted-foreground">
+                    {(historyPage - 1) * HISTORY_PAGE_SIZE + 1}–{Math.min(historyPage * HISTORY_PAGE_SIZE, history.length)} / {history.length}
+                  </p>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
+                      disabled={historyPage === 1}
+                      data-testid="button-history-prev"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                    </Button>
+                    <span className="text-xs text-muted-foreground px-2">{historyPage} / {totalPages}</span>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => setHistoryPage(p => Math.min(totalPages, p + 1))}
+                      disabled={historyPage === totalPages}
+                      data-testid="button-history-next"
+                    >
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </Button>
                   </div>
                 </div>
-              ))}
+              )}
             </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
     </DashboardLayout>
   );
