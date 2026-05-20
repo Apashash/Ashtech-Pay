@@ -70,7 +70,7 @@ export default function SendMoneyPage() {
 
   const primaryCurrency = user?.preferredCurrency || "XAF";
   const [selectedWallet, setSelectedWallet] = useState<string>(primaryCurrency);
-  const [destination, setDestination] = useState<string>(INTERNAL_KEY);
+  const [destination, setDestination] = useState<string>("");
   const [internalIdentifier, setInternalIdentifier] = useState("");
   const [internalAmount, setInternalAmount] = useState("");
 
@@ -293,20 +293,8 @@ export default function SendMoneyPage() {
           )}
         </div>
 
-        {/* Tab switcher: Internal vs External */}
+        {/* Tab switcher: Mobile Money first, Internal second */}
         <div className="flex gap-2 p-1 bg-muted rounded-xl">
-          <button
-            type="button"
-            onClick={() => setDestination(INTERNAL_KEY)}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-              isInternal
-                ? "bg-card shadow text-foreground"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <span className="text-base">🏦</span>
-            {t.send.internalTransfer}
-          </button>
           <button
             type="button"
             onClick={() => { if (isInternal) setDestination(""); }}
@@ -318,6 +306,17 @@ export default function SendMoneyPage() {
           >
             <Globe className="w-4 h-4" />
             Mobile Money
+          </button>
+          <button
+            type="button"
+            onClick={() => setDestination(INTERNAL_KEY)}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+              isInternal
+                ? "bg-card shadow text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {t.send.internalTransfer}
           </button>
         </div>
 
