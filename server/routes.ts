@@ -67,6 +67,7 @@ import {
   sendWithdrawalApprovedEmail,
   sendWithdrawalNumberApprovedEmail,
   sendAccountDeletedEmail,
+  sendAdminOtpEmail,
 } from "./email";
 
 // ─── AfribaPay: country → ISO currency (authoritative, from AfribaPay API) ───
@@ -144,7 +145,15 @@ const SessionStore = connectPgSimple(session);
 declare module "express-session" {
   interface SessionData {
     userId: string;
+    adminOtpVerified?: boolean;
   }
+}
+
+// ─── Admin OTP store (in-memory, per-session) ─────────────────────────────────
+const adminOtpStore = new Map<string, { code: string; expiresAt: number }>();
+
+function generateAdminOtp(): string {
+  return Math.floor(1000 + Math.random() * 9000).toString();
 }
 
 const TOKEN_EXPIRY_MS = 5 * 24 * 60 * 60 * 1000;
@@ -4564,6 +4573,88 @@ export async function registerRoutes(
   });
 
   // ============= ADMIN ROUTES =============
+
+  // ─── Admin OTP Routes ─────────────────────────────────────────────────────────
+
+  // GET /api/admin/otp-status — check if current session has verified the admin OTP
+  app.get("/api/admin/otp-status", requireAuth, async (req, res) => {
+    const user = await storage.getUser(req.userId!).catch(() => null);
+    if (!user || !["admin", "support", "finance"].includes(user.role)) {
+      return res.status(403).json({ message: "Accès refusé" });
+    }
+    res.json({ verified: !!(req.session as any).adminOtpVerified });
+  });
+
+  // POST /api/admin/request-otp — generate & send 4-digit code to admin email
+  app.post("/api/admin/request-otp", requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.userId!);
+      if (!user || !["admin", "support", "finance"].includes(user.role)) {
+        return res.status(403).json({ message: "Accès refusé" });
+      }
+      if (!user.email) {
+        return res.status(400).json({ message: "Aucun email configuré pour ce compte admin" });
+      }
+      const code = generateAdminOtp();
+      adminOtpStore.set(req.userId!, { code, expiresAt: Date.now() + 5 * 60 * 1000 });
+      await sendAdminOtpEmail(user.email, user.fullName || user.username, code);
+      // Also send via Telegram as backup
+      const { notifyAdminLogin: _unused, ...tg } = await import("./telegram").catch(() => ({} as any));
+      const { sendMessage: tgSend } = await import("./telegram").catch(() => ({ sendMessage: null } as any));
+      // Send code via Telegram too (direct raw call to avoid circular issues)
+      const botToken = process.env.TELEGRAM_BOT_TOKEN;
+      const chatId = process.env.TELEGRAM_CHAT_ID;
+      if (botToken && chatId) {
+        fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: `🔐 <b>Code Admin Panel</b>\n\nCode : <code>${code}</code>\n⏱ Expire dans 5 minutes`,
+            parse_mode: "HTML",
+          }),
+        }).catch(() => {});
+      }
+      console.log(`[AdminOTP] Code sent to ${user.email} (code: ${code})`);
+      res.json({ sent: true, email: user.email.replace(/(.{2}).+(@.+)/, "$1***$2") });
+    } catch (error: any) {
+      console.error("Admin OTP request error:", error.message);
+      res.status(500).json({ message: "Erreur lors de l'envoi du code" });
+    }
+  });
+
+  // POST /api/admin/verify-otp — verify 4-digit code and mark session
+  app.post("/api/admin/verify-otp", requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.userId!);
+      if (!user || !["admin", "support", "finance"].includes(user.role)) {
+        return res.status(403).json({ message: "Accès refusé" });
+      }
+      const { code } = req.body as { code: string };
+      if (!code || typeof code !== "string") {
+        return res.status(400).json({ message: "Code requis" });
+      }
+      const stored = adminOtpStore.get(req.userId!);
+      if (!stored) {
+        return res.status(400).json({ message: "Aucun code demandé. Veuillez demander un nouveau code." });
+      }
+      if (Date.now() > stored.expiresAt) {
+        adminOtpStore.delete(req.userId!);
+        return res.status(400).json({ message: "Code expiré. Veuillez demander un nouveau code." });
+      }
+      if (stored.code !== code.trim()) {
+        return res.status(400).json({ message: "Code incorrect." });
+      }
+      adminOtpStore.delete(req.userId!);
+      (req.session as any).adminOtpVerified = true;
+      req.session.save(() => {});
+      console.log(`[AdminOTP] Admin ${user.email} verified successfully`);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Admin OTP verify error:", error.message);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
 
   // Admin: Get dashboard stats
   app.get("/api/admin/stats", requireAdmin, async (req, res) => {

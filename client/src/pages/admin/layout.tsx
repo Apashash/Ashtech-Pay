@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import { 
   LayoutDashboard, 
   Users, 
@@ -28,6 +29,9 @@ import {
   Zap,
   Code2,
   Mail,
+  KeyRound,
+  Loader2,
+  MailCheck,
 } from "lucide-react";
 import { 
   Dialog, 
@@ -40,8 +44,6 @@ import {
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useMutation } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -141,6 +143,83 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   const { data: user, isLoading } = useQuery<User>({
     queryKey: ["/api/user"],
   });
+
+  // ─── Admin OTP Gate ─────────────────────────────────────────────────────────
+  const [otpCode, setOtpCode] = useState(["", "", "", ""]);
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpEmail, setOtpEmail] = useState("");
+  const [otpError, setOtpError] = useState("");
+  const otpRef0 = useRef<HTMLInputElement>(null);
+  const otpRef1 = useRef<HTMLInputElement>(null);
+  const otpRef2 = useRef<HTMLInputElement>(null);
+  const otpRef3 = useRef<HTMLInputElement>(null);
+  const otpRefs = [otpRef0, otpRef1, otpRef2, otpRef3];
+
+  const { data: otpStatus, isLoading: otpLoading, refetch: refetchOtp } = useQuery<{ verified: boolean }>({
+    queryKey: ["/api/admin/otp-status"],
+    enabled: !!user && ["admin", "support", "finance"].includes((user as any).role),
+    retry: false,
+  });
+
+  const requestOtpMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/request-otp", {});
+      return res as { sent: boolean; email: string };
+    },
+    onSuccess: (data) => {
+      setOtpSent(true);
+      setOtpEmail(data.email);
+      setOtpError("");
+      setOtpCode(["", "", "", ""]);
+      setTimeout(() => otpRefs[0].current?.focus(), 100);
+    },
+    onError: (error: Error) => {
+      setOtpError(error.message || "Erreur lors de l'envoi du code");
+    },
+  });
+
+  const verifyOtpMutation = useMutation({
+    mutationFn: async (code: string) => {
+      await apiRequest("POST", "/api/admin/verify-otp", { code });
+    },
+    onSuccess: () => {
+      refetchOtp();
+      setOtpError("");
+    },
+    onError: (error: Error) => {
+      setOtpError(error.message || "Code incorrect");
+      setOtpCode(["", "", "", ""]);
+      setTimeout(() => otpRefs[0].current?.focus(), 100);
+    },
+  });
+
+  // Auto-request OTP when admin user is confirmed and not yet verified
+  useEffect(() => {
+    if (user && ["admin", "support", "finance"].includes((user as any).role) && otpStatus && !otpStatus.verified && !otpSent && !requestOtpMutation.isPending) {
+      requestOtpMutation.mutate();
+    }
+  }, [user, otpStatus]);
+
+  function handleOtpInput(idx: number, val: string) {
+    const digit = val.replace(/\D/g, "").slice(-1);
+    const newCode = [...otpCode];
+    newCode[idx] = digit;
+    setOtpCode(newCode);
+    setOtpError("");
+    if (digit && idx < 3) {
+      otpRefs[idx + 1].current?.focus();
+    }
+    if (newCode.every(d => d !== "")) {
+      verifyOtpMutation.mutate(newCode.join(""));
+    }
+  }
+
+  function handleOtpKeyDown(idx: number, e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Backspace" && !otpCode[idx] && idx > 0) {
+      otpRefs[idx - 1].current?.focus();
+    }
+  }
+  // ────────────────────────────────────────────────────────────────────────────
 
   const { toast } = useToast();
   const [showPusdConvert, setShowPusdConvert] = useState(false);
@@ -247,6 +326,97 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       </div>
     );
   }
+
+  // ─── OTP Gate ──────────────────────────────────────────────────────────────
+  if (otpLoading || (!otpStatus?.verified)) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="w-full max-w-sm">
+          <div className="bg-card border border-border rounded-2xl p-8 shadow-xl space-y-6">
+            {/* Header */}
+            <div className="text-center space-y-2">
+              <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
+                <KeyRound className="w-8 h-8 text-primary" />
+              </div>
+              <h1 className="text-xl font-bold">Vérification Admin</h1>
+              <p className="text-sm text-muted-foreground">
+                {otpLoading || requestOtpMutation.isPending
+                  ? "Envoi du code en cours…"
+                  : otpSent
+                  ? <>Code envoyé à <strong>{otpEmail}</strong></>
+                  : "Préparation…"}
+              </p>
+            </div>
+
+            {/* Spinner while sending */}
+            {(otpLoading || requestOtpMutation.isPending) && (
+              <div className="flex justify-center py-4">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              </div>
+            )}
+
+            {/* OTP input */}
+            {otpSent && !requestOtpMutation.isPending && (
+              <div className="space-y-4">
+                <div className="flex justify-center gap-3">
+                  {otpRefs.map((ref, i) => (
+                    <input
+                      key={i}
+                      ref={ref}
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={1}
+                      value={otpCode[i]}
+                      onChange={e => handleOtpInput(i, e.target.value)}
+                      onKeyDown={e => handleOtpKeyDown(i, e)}
+                      disabled={verifyOtpMutation.isPending}
+                      className="w-14 h-14 text-center text-2xl font-bold border-2 border-border rounded-xl bg-background focus:outline-none focus:border-primary transition-colors disabled:opacity-50"
+                    />
+                  ))}
+                </div>
+
+                {verifyOtpMutation.isPending && (
+                  <div className="flex justify-center">
+                    <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                  </div>
+                )}
+
+                {otpError && (
+                  <p className="text-center text-sm text-destructive font-medium">{otpError}</p>
+                )}
+
+                <div className="text-center">
+                  <button
+                    onClick={() => requestOtpMutation.mutate()}
+                    disabled={requestOtpMutation.isPending}
+                    className="text-sm text-primary hover:underline disabled:opacity-50"
+                  >
+                    Renvoyer le code
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Error sending */}
+            {!otpSent && !requestOtpMutation.isPending && otpError && (
+              <div className="space-y-3">
+                <p className="text-center text-sm text-destructive">{otpError}</p>
+                <Button onClick={() => requestOtpMutation.mutate()} className="w-full">
+                  Réessayer
+                </Button>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 rounded-lg p-3">
+              <MailCheck className="w-4 h-4 shrink-0" />
+              <span>Le code à 4 chiffres expire dans 5 minutes.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  // ───────────────────────────────────────────────────────────────────────────
 
   return (
     <div className="flex h-dvh bg-background">

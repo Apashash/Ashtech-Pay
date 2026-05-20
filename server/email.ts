@@ -514,3 +514,37 @@ export async function sendCampaignEmail(opts: CampaignEmailOptions): Promise<voi
   const html = emailBase(subject, bodyRows);
   await sendEmail(to, subject, html, "campaign");
 }
+
+// ─── Admin OTP ────────────────────────────────────────────────────────────────
+export async function sendAdminOtpEmail(to: string, adminName: string, code: string): Promise<void> {
+  const bodyRows = `
+  <tr>
+    <td style="padding:36px 40px 8px;">
+      <p style="margin:0 0 16px;font-size:15px;color:${TEXT};line-height:1.7;">
+        Bonjour <strong>${adminName}</strong>,
+      </p>
+      <p style="margin:0 0 24px;font-size:15px;color:${TEXT};line-height:1.7;">
+        Une tentative de connexion au <strong>panel administrateur</strong> a été détectée.
+        Utilisez le code ci-dessous pour confirmer votre accès :
+      </p>
+      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px;">
+        <tr>
+          <td align="center">
+            <div style="display:inline-block;background:#1E3A8A;color:#FFFFFF;font-size:40px;font-weight:900;letter-spacing:16px;padding:20px 36px;border-radius:10px;font-family:monospace;">
+              ${code}
+            </div>
+          </td>
+        </tr>
+      </table>
+      <p style="margin:0 0 8px;font-size:13px;color:${MUTED};line-height:1.6;">
+        ⏱ Ce code expire dans <strong>5 minutes</strong>.
+      </p>
+      <p style="margin:0 0 24px;font-size:13px;color:${MUTED};line-height:1.6;">
+        Si vous n'êtes pas à l'origine de cette tentative, veuillez sécuriser votre compte immédiatement.
+      </p>
+      ${supportNote()}
+    </td>
+  </tr>`;
+  const html = emailBase("Code d'accès Admin", bodyRows);
+  await sendEmail(to, "🔐 Code d'accès Panel Admin — Ashtech Pay", html, "admin-otp");
+}
