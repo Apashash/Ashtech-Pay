@@ -247,12 +247,22 @@ export async function notifyDepositConfirmed(opts: {
   paymentMethod?: string;
   phone?: string;
   operator?: string;
+  // Payment link specific — payer info
+  payerName?: string;
+  payerEmail?: string;
+  payerPhone?: string;
+  // Payment link specific — beneficiary info
+  beneficiaryUsername?: string;
+  beneficiaryPhone?: string;
+  creditedCurrency?: string;
 }): Promise<void> {
   const pays = opts.country ? countryDisplay(opts.country) : countryDisplay(opts.currency);
   const hasGross = opts.grossAmount != null && String(opts.grossAmount) !== String(opts.amount);
-  const typeLabel = opts.depositType === "payment_link" ? "Lien de paiement" : "Dépôt normal";
+  const isLink = opts.depositType === "payment_link";
+  const typeLabel = isLink ? "Lien de paiement" : "Dépôt normal";
   const methodLabel = opts.paymentMethod === "mobile_money" ? "Mobile Money" : opts.paymentMethod || "";
-  const msg =
+
+  let msg =
     `✅ <b>PAIEMENT REÇU / DÉPÔT CONFIRMÉ</b>\n` +
     `──────────────────\n` +
     `👤 Utilisateur : <b>${opts.userName}</b>\n` +
@@ -264,9 +274,25 @@ export async function notifyDepositConfirmed(opts: {
     (opts.phone ? `📞 Numéro : ${opts.phone}\n` : "") +
     (hasGross ? `💰 Montant brut : <b>${fmt(opts.grossAmount!, opts.currency)}</b>\n` : "") +
     `💳 Montant crédité : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
+    (opts.creditedCurrency ? `💱 Compte crédité : <b>${opts.creditedCurrency}</b>\n` : "") +
     (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +
     `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
     `🕐 Heure : ${now()}`;
+
+  if (isLink) {
+    msg +=
+      `\n──── 💳 PAYEUR ────\n` +
+      (opts.payerName ? `👤 Nom : <b>${opts.payerName}</b>\n` : "") +
+      (opts.payerEmail ? `📧 Email : ${opts.payerEmail}\n` : "") +
+      (opts.payerPhone ? `📞 Téléphone : ${opts.payerPhone}\n` : "") +
+      `──── 🏦 BÉNÉFICIAIRE ────\n` +
+      `👤 Nom : <b>${opts.userName}</b>\n` +
+      `📧 Email : ${opts.userEmail}\n` +
+      (opts.beneficiaryUsername ? `🔑 Username : ${opts.beneficiaryUsername}\n` : "") +
+      (opts.beneficiaryPhone ? `📞 Téléphone : ${opts.beneficiaryPhone}\n` : "") +
+      (opts.creditedCurrency ? `💱 Compte crédité : <b>${opts.creditedCurrency}</b>\n` : "");
+  }
+
   await sendMessage(msg);
 }
 

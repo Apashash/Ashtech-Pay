@@ -7652,7 +7652,8 @@ export async function registerRoutes(
           Promise.all([
             storage.getUser(transaction.userId).catch(() => null),
             transaction.operatorId ? storage.getOperator(transaction.operatorId).catch(() => null) : Promise.resolve(null),
-          ]).then(([txUser, txOp]) => {
+            transaction.paymentIntentId ? storage.getPaymentIntentById(transaction.paymentIntentId).catch(() => null) : Promise.resolve(null),
+          ]).then(([txUser, txOp, txIntent]) => {
             notifyDepositConfirmed({
               userName: txUser?.fullName || txUser?.username || "Utilisateur",
               userEmail: txUser?.email || "",
@@ -7666,6 +7667,14 @@ export async function registerRoutes(
               paymentMethod: transaction.paymentMethod || undefined,
               phone: transaction.recipientPhone || undefined,
               operator: (txOp as any)?.name || undefined,
+              ...(isPaymentLink && {
+                payerName: transaction.payerName || undefined,
+                payerEmail: transaction.payerEmail || undefined,
+                payerPhone: (txIntent as any)?.payerPhone || undefined,
+                beneficiaryUsername: txUser?.username || undefined,
+                beneficiaryPhone: txUser?.phone || undefined,
+                creditedCurrency: txCurrency,
+              }),
             }).catch(() => {});
           }).catch(() => {});
           console.log(`[AfribaPay Webhook] ✓ Deposit SUCCESS: ${transaction.id} → credited ${transaction.amount} ${txCurrency}`);
@@ -7824,7 +7833,8 @@ export async function registerRoutes(
           Promise.all([
             storage.getUser(transaction.userId).catch(() => null),
             transaction.operatorId ? storage.getOperator(transaction.operatorId).catch(() => null) : Promise.resolve(null),
-          ]).then(([txUser, txOp]) => {
+            transaction.paymentIntentId ? storage.getPaymentIntentById(transaction.paymentIntentId).catch(() => null) : Promise.resolve(null),
+          ]).then(([txUser, txOp, txIntent]) => {
             notifyDepositConfirmed({
               userName: txUser?.fullName || txUser?.username || "Utilisateur",
               userEmail: txUser?.email || "",
@@ -7838,6 +7848,14 @@ export async function registerRoutes(
               paymentMethod: transaction.paymentMethod || undefined,
               phone: transaction.recipientPhone || undefined,
               operator: (txOp as any)?.name || undefined,
+              ...(isPaymentLink && {
+                payerName: transaction.payerName || undefined,
+                payerEmail: transaction.payerEmail || undefined,
+                payerPhone: (txIntent as any)?.payerPhone || undefined,
+                beneficiaryUsername: txUser?.username || undefined,
+                beneficiaryPhone: txUser?.phone || undefined,
+                creditedCurrency: txCurrency,
+              }),
             }).catch(() => {});
           }).catch(() => {});
           console.log(`[PixPay Webhook] ✓ Deposit SUCCESS: ${transaction.id} → ${transaction.amount} ${txCurrency}`);
