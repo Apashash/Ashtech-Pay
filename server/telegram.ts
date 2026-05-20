@@ -116,6 +116,8 @@ async function editMessageText(messageId: number, text: string): Promise<void> {
 const pendingCustomRejections = new Map<string, { submissionId: string; messageId: number }>();
 // State: waiting for withdrawal rejection reason (chatId → reference + messageId)
 const pendingWithdrawalRejections = new Map<string, { reference: string; messageId: number }>();
+// State: waiting for withdrawal number change rejection reason (chatId → changeId + messageId)
+const pendingWncRejections = new Map<string, { changeId: string; messageId: number }>();
 
 function fmt(amount: string | number, currency: string): string {
   return `${parseFloat(String(amount)).toLocaleString("fr-FR")} ${currency}`;
@@ -331,6 +333,74 @@ export async function notifyDepositFailed(opts: {
     `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
     `🕐 Heure : ${now()}`;
   await sendMessage(msg);
+}
+
+// ─── MODIFICATION NUMÉRO DE RETRAIT ──────────────────
+
+export async function notifyWithdrawalNumberChangeRequest(opts: {
+  changeId: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  userPhone?: string;
+  userCountry?: string;
+  userBalance?: string | number;
+  userCurrency?: string;
+  userKyc?: string;
+  action: "add" | "update" | "delete";
+  newPhoneNumber?: string;
+  newOperatorName?: string;
+  newLabel?: string;
+  oldPhoneNumber?: string;
+  oldOperatorName?: string;
+}): Promise<void> {
+  const actionLabel =
+    opts.action === "add" ? "➕ AJOUT" :
+    opts.action === "update" ? "✏️ MODIFICATION" : "🗑️ SUPPRESSION";
+
+  const pays = opts.userCountry ? countryDisplay(opts.userCountry) : "";
+  const kycIcon =
+    opts.userKyc === "verified" ? "✅ Vérifié" :
+    opts.userKyc === "pending" ? "⏳ En attente" : "❌ Non vérifié";
+
+  let msg =
+    `📱 <b>DEMANDE DE ${actionLabel} — NUMÉRO DE RETRAIT</b>\n` +
+    `──────────────────\n` +
+    `👤 <b>Utilisateur</b>\n` +
+    `  Nom : <b>${opts.userName}</b>\n` +
+    `  Email : ${opts.userEmail}\n` +
+    (opts.userPhone ? `  Tél. : ${opts.userPhone}\n` : "") +
+    (pays ? `  Pays : <b>${pays}</b>\n` : "") +
+    `  KYC : ${kycIcon}\n` +
+    (opts.userBalance != null ? `  Solde : <b>${fmt(opts.userBalance, opts.userCurrency || "XAF")}</b>\n` : "") +
+    `──────────────────\n` +
+    `📋 <b>Demande</b>\n` +
+    `  Action : <b>${actionLabel}</b>\n`;
+
+  if (opts.action === "update" && opts.oldPhoneNumber) {
+    msg += `  Ancien numéro : <code>${opts.oldPhoneNumber}</code>\n`;
+    if (opts.oldOperatorName) msg += `  Ancien opérateur : ${opts.oldOperatorName}\n`;
+    msg += `  ──\n`;
+  }
+  if (opts.newPhoneNumber) msg += `  Nouveau numéro : <b><code>${opts.newPhoneNumber}</code></b>\n`;
+  if (opts.newOperatorName) msg += `  Opérateur : <b>${opts.newOperatorName}</b>\n`;
+  if (opts.newLabel) msg += `  Libellé : ${opts.newLabel}\n`;
+  msg += `  ID demande : <code>${opts.changeId}</code>\n`;
+  msg += `🕐 Heure : ${now()}`;
+
+  await sendMessageWithKeyboard(msg, [
+    [
+      { text: "✅ Approuver", callback_data: `wnca:${opts.changeId}` },
+      { text: "❌ Rejeter", callback_data: `wncr:${opts.changeId}:can` },
+    ],
+    [
+      { text: "⚠️ Numéro invalide", callback_data: `wncr:${opts.changeId}:inv` },
+      { text: "🚫 Activité suspecte", callback_data: `wncr:${opts.changeId}:frau` },
+    ],
+    [
+      { text: "✍️ Raison personnalisée", callback_data: `wncc:${opts.changeId}` },
+    ],
+  ]);
 }
 
 // ─── RETRAITS ──────────────────
@@ -1063,6 +1133,8 @@ export async function handleTelegramUpdate(
     approveWithdrawal: (reference: string) => Promise<{ userName: string; amount: string; currency: string } | null>;
     rejectWithdrawal: (reference: string, reason: string) => Promise<{ userName: string } | null>;
     searchUsers: (query: string) => Promise<{ userName: string; email: string; balance: number; currency: string; kycStatus: string; country?: string; banned: boolean }[]>;
+    approveWithdrawalNumberChange: (changeId: string) => Promise<{ userName: string; userEmail: string; newPhone: string; action: string } | null>;
+    rejectWithdrawalNumberChange: (changeId: string, reason: string) => Promise<{ userName: string; userEmail: string } | null>;
   }
 ): Promise<void> {
   // ── Callback query (button press) ──
@@ -1294,6 +1366,64 @@ export async function handleTelegramUpdate(
       return;
     }
 
+    // ── Approve withdrawal number change ──
+    if (data.startsWith("wnca:")) {
+      const changeId = data.slice(5);
+      const result = await handlers.approveWithdrawalNumberChange(changeId);
+      if (result) {
+        const actionLabel = result.action === "add" ? "ajouté" : result.action === "update" ? "modifié" : "supprimé";
+        await editMessageText(messageId,
+          `✅ <b>NUMÉRO DE RETRAIT ${actionLabel.toUpperCase()}</b>\n\n` +
+          `👤 ${result.userName}\n` +
+          `📧 ${result.userEmail}\n` +
+          (result.newPhone ? `📱 Numéro : <b><code>${result.newPhone}</code></b>\n` : "") +
+          `🕐 ${now()}`
+        );
+      } else {
+        await editMessageText(messageId, `⚠️ Impossible d'approuver — demande introuvable ou déjà traitée.`);
+      }
+      return;
+    }
+
+    // ── Reject withdrawal number change with preset reason ──
+    if (data.startsWith("wncr:")) {
+      const parts = data.split(":");
+      const changeId = parts[1];
+      const code = parts[2];
+      const reasonMap: Record<string, string> = {
+        can: "Demande annulée par l'administrateur",
+        inv: "Numéro de téléphone invalide ou non reconnu",
+        frau: "Activité suspecte détectée sur ce compte",
+      };
+      const reason = reasonMap[code] ?? "Demande non conforme";
+      const result = await handlers.rejectWithdrawalNumberChange(changeId, reason);
+      if (result) {
+        await editMessageText(messageId,
+          `❌ <b>DEMANDE NUMÉRO RETRAIT REJETÉE</b>\n\n` +
+          `👤 ${result.userName}\n` +
+          `📧 ${result.userEmail}\n` +
+          `⚠️ Raison : ${reason}\n` +
+          `🕐 ${now()}`
+        );
+      } else {
+        await editMessageText(messageId, `⚠️ Impossible de rejeter — demande introuvable ou déjà traitée.`);
+      }
+      return;
+    }
+
+    // ── Custom withdrawal number change rejection — ask for reason ──
+    if (data.startsWith("wncc:")) {
+      const changeId = data.slice(5);
+      pendingWncRejections.set(chatId, { changeId, messageId });
+      await callBotApi("sendMessage", {
+        chat_id: chatId,
+        text: `✍️ Envoyez la raison du rejet pour la demande de numéro <code>${changeId}</code> :`,
+        parse_mode: "HTML",
+        reply_markup: { force_reply: true, selective: true },
+      });
+      return;
+    }
+
     // ── Toggle country ──
     if (data.startsWith("ct:")) {
       const countryId = data.slice(3);
@@ -1339,6 +1469,21 @@ export async function handleTelegramUpdate(
         await callBotApi("sendMessage", { chat_id: chatId, text: `✅ Rejet retrait enregistré : <i>${text}</i>`, parse_mode: "HTML" });
       } else {
         await callBotApi("sendMessage", { chat_id: chatId, text: `⚠️ Transaction introuvable ou déjà traitée.`, parse_mode: "HTML" });
+      }
+      return;
+    }
+
+    // ── Check pending withdrawal number change rejection ──
+    const pendingWnc = pendingWncRejections.get(chatId);
+    if (pendingWnc && !text.startsWith("/") && !REPLY_KEYBOARD_MAP[text]) {
+      pendingWncRejections.delete(chatId);
+      const result = await handlers.rejectWithdrawalNumberChange(pendingWnc.changeId, text);
+      if (result) {
+        await editMessageText(pendingWnc.messageId,
+          `❌ <b>DEMANDE NUMÉRO RETRAIT REJETÉE</b>\n\n👤 ${result.userName}\n📧 ${result.userEmail}\n⚠️ Raison : ${text}\n🕐 ${now()}`);
+        await callBotApi("sendMessage", { chat_id: chatId, text: `✅ Rejet enregistré : <i>${text}</i>`, parse_mode: "HTML" });
+      } else {
+        await callBotApi("sendMessage", { chat_id: chatId, text: `⚠️ Demande introuvable ou déjà traitée.`, parse_mode: "HTML" });
       }
       return;
     }

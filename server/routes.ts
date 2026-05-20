@@ -73,6 +73,7 @@ import {
   notifyDepositConfirmed,
   handleTelegramUpdate,
   registerTelegramWebhook,
+  notifyWithdrawalNumberChangeRequest,
 } from "./telegram";
 import {
   sendWelcomeEmail,
@@ -3405,6 +3406,28 @@ export async function registerRoutes(
         status: "pending",
       });
 
+      // Notify admin via Telegram
+      storage.getUser(userId).then(user => {
+        if (!user) return;
+        notifyWithdrawalNumberChangeRequest({
+          changeId: changeRequest.id,
+          userId,
+          userName: user.fullName || user.username,
+          userEmail: user.email || "",
+          userPhone: user.phone || undefined,
+          userCountry: user.country || undefined,
+          userBalance: user.balance ?? undefined,
+          userCurrency: user.preferredCurrency || "XAF",
+          userKyc: user.kycStatus || undefined,
+          action: "update",
+          newPhoneNumber: phoneNumber,
+          newOperatorName: operatorName,
+          newLabel: label || undefined,
+          oldPhoneNumber: existingNumber.phoneNumber,
+          oldOperatorName: existingNumber.operatorName || undefined,
+        }).catch(() => {});
+      }).catch(() => {});
+
       res.json({ 
         changeRequest, 
         message: "Demande de modification envoyée. Un administrateur doit approuver le changement." 
@@ -3442,6 +3465,25 @@ export async function registerRoutes(
         action: "delete",
         status: "pending",
       });
+
+      // Notify admin via Telegram
+      storage.getUser(userId).then(user => {
+        if (!user) return;
+        notifyWithdrawalNumberChangeRequest({
+          changeId: changeRequest.id,
+          userId,
+          userName: user.fullName || user.username,
+          userEmail: user.email || "",
+          userPhone: user.phone || undefined,
+          userCountry: user.country || undefined,
+          userBalance: user.balance ?? undefined,
+          userCurrency: user.preferredCurrency || "XAF",
+          userKyc: user.kycStatus || undefined,
+          action: "delete",
+          oldPhoneNumber: existingNumber.phoneNumber,
+          oldOperatorName: existingNumber.operatorName || undefined,
+        }).catch(() => {});
+      }).catch(() => {});
 
       res.json({ 
         changeRequest, 
@@ -9626,6 +9668,95 @@ export async function registerRoutes(
             country: u.country ?? undefined,
             banned: !!u.banned,
           }));
+        },
+
+        // ── Approve withdrawal number change ─────────────────────────────────
+        approveWithdrawalNumberChange: async (changeId) => {
+          const allUsers = await storage.getAllUsers();
+          const adminUser = allUsers.find(u => u.role === "admin");
+          if (!adminUser) return null;
+
+          const change = await storage.approveWithdrawalNumberChange(changeId, adminUser.id, "Approuvé via Telegram").catch(() => null);
+          if (!change) return null;
+
+          const wnUser = await storage.getUser(change.userId).catch(() => null);
+          if (!wnUser) return null;
+
+          // Notify user in-app
+          await storage.createUserNotification({
+            userId: change.userId,
+            type: "withdrawal_number_approved",
+            title: "Numéro de retrait approuvé",
+            message: change.action === "delete"
+              ? "Votre demande de suppression du numéro de retrait a été approuvée."
+              : `Votre numéro de retrait ${change.newPhoneNumber || ""} a été approuvé et est maintenant actif.`,
+            transactionId: null,
+          }).catch(() => {});
+
+          // Send email notification
+          if (wnUser.email) {
+            const { sendWithdrawalNumberApprovedEmail } = await import("./email").catch(() => ({ sendWithdrawalNumberApprovedEmail: null } as any));
+            if (sendWithdrawalNumberApprovedEmail) {
+              sendWithdrawalNumberApprovedEmail(
+                wnUser.email,
+                wnUser.fullName || wnUser.username,
+                change.newPhoneNumber || "",
+                change.newOperatorName || undefined
+              ).catch(() => {});
+            }
+          }
+
+          await storage.createAdminLog({
+            adminId: adminUser.id,
+            action: "approve_withdrawal_number_change",
+            targetType: "withdrawal_number_change",
+            targetId: changeId,
+            details: JSON.stringify({ via: "telegram_bot" }),
+            ipAddress: "telegram",
+          }).catch(() => {});
+
+          return {
+            userName: wnUser.fullName || wnUser.username,
+            userEmail: wnUser.email || "",
+            newPhone: change.newPhoneNumber || "",
+            action: change.action,
+          };
+        },
+
+        // ── Reject withdrawal number change ──────────────────────────────────
+        rejectWithdrawalNumberChange: async (changeId, reason) => {
+          const allUsers = await storage.getAllUsers();
+          const adminUser = allUsers.find(u => u.role === "admin");
+          if (!adminUser) return null;
+
+          const change = await storage.rejectWithdrawalNumberChange(changeId, adminUser.id, reason).catch(() => null);
+          if (!change) return null;
+
+          const wnUser = await storage.getUser(change.userId).catch(() => null);
+          if (!wnUser) return null;
+
+          // Notify user in-app
+          await storage.createUserNotification({
+            userId: change.userId,
+            type: "withdrawal_number_rejected",
+            title: "Demande de numéro refusée",
+            message: `Votre demande de modification du numéro de retrait a été refusée. Raison : ${reason}`,
+            transactionId: null,
+          }).catch(() => {});
+
+          await storage.createAdminLog({
+            adminId: adminUser.id,
+            action: "reject_withdrawal_number_change",
+            targetType: "withdrawal_number_change",
+            targetId: changeId,
+            details: JSON.stringify({ via: "telegram_bot", note: reason }),
+            ipAddress: "telegram",
+          }).catch(() => {});
+
+          return {
+            userName: wnUser.fullName || wnUser.username,
+            userEmail: wnUser.email || "",
+          };
         },
       });
     } catch (err: any) {
