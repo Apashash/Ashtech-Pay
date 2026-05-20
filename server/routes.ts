@@ -6,6 +6,7 @@ import {
   recordAuthFailure,
   clearAuthAttempts,
   getBlockedIps,
+  unblockByIdentifier,
 } from "./ipBlocker";
 import {
   registerLimiter,
@@ -10377,6 +10378,7 @@ export async function registerRoutes(
           };
         },
         getBlockedIps: () => getBlockedIps(),
+        unblockIpByIdentifier: (identifier: string) => unblockByIdentifier(identifier),
       });
     } catch (err: any) {
       console.error("[TelegramWebhook] Error:", err?.message);

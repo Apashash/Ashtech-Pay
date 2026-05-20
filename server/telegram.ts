@@ -1167,6 +1167,7 @@ export async function handleTelegramUpdate(
     approveWithdrawalNumberChange: (changeId: string) => Promise<{ userName: string; userEmail: string; newPhone: string; action: string } | null>;
     rejectWithdrawalNumberChange: (changeId: string, reason: string) => Promise<{ userName: string; userEmail: string } | null>;
     getBlockedIps: () => { ip: string; identifier: string; blockedUntil: number; blockedAt: number }[];
+    unblockIpByIdentifier: (identifier: string) => Promise<{ unblocked: number; ips: string[] }>;
   }
 ): Promise<void> {
   // ── Callback query (button press) ──
@@ -1583,6 +1584,7 @@ export async function handleTelegramUpdate(
             `/taux DEVISE TAUX — Modifier taux FX\n` +
             `/broadcast Sujet;Corps — Email groupé\n` +
             `/ipb — IPs actuellement bloquées\n` +
+            `/dip email(numero) — Débloquer une IP\n` +
             `──────────────────\n🕐 ${now()}`,
           parse_mode: "HTML",
         });
@@ -2005,6 +2007,41 @@ export async function handleTelegramUpdate(
       return;
     }
 
+    // ── /dip email|numero — Débloquer une IP par identifiant ──
+    if (text.startsWith("/dip ")) {
+      const identifier = text.slice(5).trim();
+      if (!identifier) {
+        await callBotApi("sendMessage", {
+          chat_id: chatId,
+          text: `⚠️ Usage : <code>/dip email</code> ou <code>/dip numero</code>\nExemple : <code>/dip jean@email.com</code>`,
+          parse_mode: "HTML",
+        });
+        return;
+      }
+      const result = await handlers.unblockIpByIdentifier(identifier);
+      if (result.unblocked === 0) {
+        await callBotApi("sendMessage", {
+          chat_id: chatId,
+          text: `ℹ️ <b>Aucune IP bloquée</b> trouvée pour <code>${identifier}</code>.\nL'IP est peut-être déjà débloquée ou l'identifiant ne correspond à aucun blocage actif.`,
+          parse_mode: "HTML",
+          reply_markup: { inline_keyboard: [[{ text: "🛡️ Voir IPs bloquées", callback_data: "cmd:ipb" }, { text: "🏠 Menu", callback_data: "cmd:menu" }]] },
+        });
+        return;
+      }
+      const ipLines = result.ips.map(ip => `  ✅ <code>${ip}</code>`).join("\n");
+      await callBotApi("sendMessage", {
+        chat_id: chatId,
+        text:
+          `🔓 <b>IP DÉBLOQUÉE</b>\n──────────────────\n` +
+          `👤 Identifiant : <code>${identifier}</code>\n` +
+          `📍 IP(s) libérée(s) : ${result.unblocked}\n${ipLines}\n` +
+          `──────────────────\n🕐 ${now()}`,
+        parse_mode: "HTML",
+        reply_markup: { inline_keyboard: [[{ text: "🛡️ Voir IPs bloquées", callback_data: "cmd:ipb" }, { text: "🏠 Menu", callback_data: "cmd:menu" }]] },
+      });
+      return;
+    }
+
     // ── /ipb — IPs bloquées ──
     if (text === "/ipb") {
       const blocked = handlers.getBlockedIps();
@@ -2092,6 +2129,7 @@ export async function handleTelegramUpdate(
             `/pays — Activer/désactiver des pays\n` +
             `/broadcast Sujet;Corps — Email groupé à tous les utilisateurs\n` +
             `/ipb — IPs actuellement bloquées\n` +
+            `/dip email(numero) — Débloquer une IP\n` +
             `──────────────────\n` +
             `<b>❓ Aide</b>\n` +
             `/aide — Afficher cette liste\n` +

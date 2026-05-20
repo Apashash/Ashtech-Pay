@@ -131,6 +131,24 @@ export async function clearAuthAttempts(ip: string): Promise<void> {
   await remove(ip).catch(() => {});
 }
 
+export async function unblockByIdentifier(identifier: string): Promise<{ unblocked: number; ips: string[] }> {
+  const normalized = identifier.trim().toLowerCase();
+  const toUnblock: string[] = [];
+  const now = Date.now();
+  for (const [ip, record] of cache.entries()) {
+    if (!record.blockedUntil || now >= record.blockedUntil) continue;
+    const id = (record.identifier || "").toLowerCase();
+    if (id === normalized || id.includes(normalized) || normalized.includes(id)) {
+      toUnblock.push(ip);
+    }
+  }
+  for (const ip of toUnblock) {
+    cache.delete(ip);
+    await remove(ip).catch(() => {});
+  }
+  return { unblocked: toUnblock.length, ips: toUnblock };
+}
+
 export function getBlockedIps(): { ip: string; identifier: string; blockedUntil: number; blockedAt: number }[] {
   const now = Date.now();
   const result: { ip: string; identifier: string; blockedUntil: number; blockedAt: number }[] = [];
