@@ -96,7 +96,10 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
       });
       console.log(`[PaymentPoller] ✓ Payment COMPLETED for ${payment.reference} (${payment.provider || "swychr"}) → credited ${payment.amount} ${paymentCurrency}`);
 
-      const txUser = await storage.getUser(payment.userId).catch(() => null);
+      const [txUser, txOperator] = await Promise.all([
+        storage.getUser(payment.userId).catch(() => null),
+        transaction.operatorId ? storage.getOperator(transaction.operatorId).catch(() => null) : Promise.resolve(null),
+      ]);
       notifyDepositConfirmed({
         userName: (txUser as any)?.fullName || (txUser as any)?.username || "Utilisateur",
         userEmail: (txUser as any)?.email || "",
@@ -106,6 +109,10 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
         reference: payment.reference,
         provider: payment.provider,
         country: (txUser as any)?.country || "",
+        depositType: payment.type,
+        paymentMethod: transaction.paymentMethod || undefined,
+        phone: transaction.recipientPhone || undefined,
+        operator: (txOperator as any)?.name || undefined,
       }).catch(() => {});
 
       if (payment.paymentIntentId) {
@@ -144,7 +151,10 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
       }
       console.log(`[PaymentPoller] ✗ Payment FAILED/CANCELLED for ${payment.reference} (${payment.provider || "swychr"})`);
 
-      const txUserFailed = await storage.getUser(payment.userId).catch(() => null);
+      const [txUserFailed, txOperatorFailed] = await Promise.all([
+        storage.getUser(payment.userId).catch(() => null),
+        transaction.operatorId ? storage.getOperator(transaction.operatorId).catch(() => null) : Promise.resolve(null),
+      ]);
       notifyDepositFailed({
         userName: (txUserFailed as any)?.fullName || (txUserFailed as any)?.username || "Utilisateur",
         userEmail: (txUserFailed as any)?.email || "",
@@ -153,6 +163,10 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
         reference: payment.reference,
         provider: payment.provider,
         country: (txUserFailed as any)?.country || "",
+        depositType: payment.type,
+        paymentMethod: transaction.paymentMethod || undefined,
+        phone: transaction.recipientPhone || undefined,
+        operator: (txOperatorFailed as any)?.name || undefined,
       }).catch(() => {});
     }
 
@@ -252,7 +266,10 @@ export async function recoverPendingDeposits() {
             isRead: false,
           });
           // Notify admin via Telegram
-          storage.getUser(tx.userId).then(txUser => {
+          Promise.all([
+            storage.getUser(tx.userId).catch(() => null),
+            tx.operatorId ? storage.getOperator(tx.operatorId).catch(() => null) : Promise.resolve(null),
+          ]).then(([txUser, txOp]) => {
             notifyDepositFailed({
               userName: txUser?.fullName || (txUser as any)?.username || "Utilisateur",
               userEmail: txUser?.email || "",
@@ -261,6 +278,10 @@ export async function recoverPendingDeposits() {
               reference: tx.reference || tx.id,
               reason: "Délai expiré — annulé automatiquement",
               country: (txUser as any)?.country || "",
+              depositType: tx.type,
+              paymentMethod: tx.paymentMethod || undefined,
+              phone: tx.recipientPhone || undefined,
+              operator: (txOp as any)?.name || undefined,
             }).catch(() => {});
           }).catch(() => {});
         }

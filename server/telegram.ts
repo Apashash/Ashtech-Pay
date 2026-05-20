@@ -243,15 +243,25 @@ export async function notifyDepositConfirmed(opts: {
   provider?: string;
   country?: string;
   grossAmount?: string | number;
+  depositType?: string;
+  paymentMethod?: string;
+  phone?: string;
+  operator?: string;
 }): Promise<void> {
   const pays = opts.country ? countryDisplay(opts.country) : countryDisplay(opts.currency);
   const hasGross = opts.grossAmount != null && String(opts.grossAmount) !== String(opts.amount);
+  const typeLabel = opts.depositType === "payment_link" ? "Lien de paiement" : "Dépôt normal";
+  const methodLabel = opts.paymentMethod === "mobile_money" ? "Mobile Money" : opts.paymentMethod || "";
   const msg =
     `✅ <b>PAIEMENT REÇU / DÉPÔT CONFIRMÉ</b>\n` +
     `──────────────────\n` +
     `👤 Utilisateur : <b>${opts.userName}</b>\n` +
     `📧 Email : ${opts.userEmail}\n` +
     (pays ? `🌍 Pays : <b>${pays}</b>\n` : "") +
+    `📋 Type : <b>${typeLabel}</b>\n` +
+    (methodLabel ? `📱 Méthode : ${methodLabel}\n` : "") +
+    (opts.operator ? `📡 Opérateur : <b>${opts.operator}</b>\n` : "") +
+    (opts.phone ? `📞 Numéro : ${opts.phone}\n` : "") +
     (hasGross ? `💰 Montant brut : <b>${fmt(opts.grossAmount!, opts.currency)}</b>\n` : "") +
     `💳 Montant crédité : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
     (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +
@@ -269,14 +279,24 @@ export async function notifyDepositFailed(opts: {
   reason?: string;
   provider?: string;
   country?: string;
+  depositType?: string;
+  paymentMethod?: string;
+  phone?: string;
+  operator?: string;
 }): Promise<void> {
   const pays = opts.country ? countryDisplay(opts.country) : countryDisplay(opts.currency);
+  const typeLabel = opts.depositType === "payment_link" ? "Lien de paiement" : "Dépôt normal";
+  const methodLabel = opts.paymentMethod === "mobile_money" ? "Mobile Money" : opts.paymentMethod || "";
   const msg =
     `❌ <b>ÉCHEC DE PAIEMENT (DÉPÔT)</b>\n` +
     `──────────────────\n` +
     `👤 Utilisateur : <b>${opts.userName}</b>\n` +
     `📧 Email : ${opts.userEmail}\n` +
     (pays ? `🌍 Pays : <b>${pays}</b>\n` : "") +
+    `📋 Type : <b>${typeLabel}</b>\n` +
+    (methodLabel ? `📱 Méthode : ${methodLabel}\n` : "") +
+    (opts.operator ? `📡 Opérateur : <b>${opts.operator}</b>\n` : "") +
+    (opts.phone ? `📞 Numéro : ${opts.phone}\n` : "") +
     `💰 Montant : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
     (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +
     (opts.reason ? `⚠️ Raison : ${opts.reason}\n` : "") +

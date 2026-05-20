@@ -1300,7 +1300,10 @@ export async function registerRoutes(
       removePendingPayment(req.params.reference);
       console.log(`[Cancel] Transaction ${req.params.reference} cancelled by user ${req.userId}`);
       // Notify admin via Telegram
-      storage.getUser(transaction.userId).then(txUser => {
+      Promise.all([
+        storage.getUser(transaction.userId).catch(() => null),
+        transaction.operatorId ? storage.getOperator(transaction.operatorId).catch(() => null) : Promise.resolve(null),
+      ]).then(([txUser, txOp]) => {
         notifyDepositFailed({
           userName: txUser?.fullName || txUser?.username || "Utilisateur",
           userEmail: txUser?.email || "",
@@ -1309,6 +1312,10 @@ export async function registerRoutes(
           reference: transaction.reference || req.params.reference,
           reason: "Annulé par l'utilisateur",
           country: txUser?.country || "",
+          depositType: transaction.type,
+          paymentMethod: transaction.paymentMethod || undefined,
+          phone: transaction.recipientPhone || undefined,
+          operator: (txOp as any)?.name || undefined,
         }).catch(() => {});
       }).catch(() => {});
       res.json({ success: true, status: "failed" });
@@ -7527,7 +7534,10 @@ export async function registerRoutes(
           transactionId: transaction.id,
         });
         // Notify admin via Telegram
-        storage.getUser(transaction.userId).then(txUser => {
+        Promise.all([
+          storage.getUser(transaction.userId).catch(() => null),
+          transaction.operatorId ? storage.getOperator(transaction.operatorId).catch(() => null) : Promise.resolve(null),
+        ]).then(([txUser, txOp]) => {
           notifyDepositFailed({
             userName: txUser?.fullName || txUser?.username || "Utilisateur",
             userEmail: txUser?.email || "",
@@ -7536,6 +7546,10 @@ export async function registerRoutes(
             reference: transaction.reference || transaction.id,
             reason: isPaymentLink ? "Paiement lien échoué (Swychr)" : "Dépôt échoué (Swychr webhook)",
             country: txUser?.country || "",
+            depositType: transaction.type,
+            paymentMethod: transaction.paymentMethod || undefined,
+            phone: transaction.recipientPhone || undefined,
+            operator: (txOp as any)?.name || undefined,
           }).catch(() => {});
         }).catch(() => {});
         console.log("[Swychr Webhook] Payment FAILED for:", transaction.id);
@@ -7635,7 +7649,10 @@ export async function registerRoutes(
           if (transaction.paymentIntentId) {
             await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "completed");
           }
-          storage.getUser(transaction.userId).then(txUser => {
+          Promise.all([
+            storage.getUser(transaction.userId).catch(() => null),
+            transaction.operatorId ? storage.getOperator(transaction.operatorId).catch(() => null) : Promise.resolve(null),
+          ]).then(([txUser, txOp]) => {
             notifyDepositConfirmed({
               userName: txUser?.fullName || txUser?.username || "Utilisateur",
               userEmail: txUser?.email || "",
@@ -7645,6 +7662,10 @@ export async function registerRoutes(
               reference: transaction.reference || String(transaction.id),
               provider: "AfribaPay",
               country: txUser?.country || "",
+              depositType: isPaymentLink ? "payment_link" : "deposit",
+              paymentMethod: transaction.paymentMethod || undefined,
+              phone: transaction.recipientPhone || undefined,
+              operator: (txOp as any)?.name || undefined,
             }).catch(() => {});
           }).catch(() => {});
           console.log(`[AfribaPay Webhook] ✓ Deposit SUCCESS: ${transaction.id} → credited ${transaction.amount} ${txCurrency}`);
@@ -7696,7 +7717,10 @@ export async function registerRoutes(
               : "Votre dépôt a été annulé. Aucun montant n'a été débité.",
             transactionId: transaction.id,
           });
-          storage.getUser(transaction.userId).then(txUser => {
+          Promise.all([
+            storage.getUser(transaction.userId).catch(() => null),
+            transaction.operatorId ? storage.getOperator(transaction.operatorId).catch(() => null) : Promise.resolve(null),
+          ]).then(([txUser, txOp]) => {
             notifyDepositFailed({
               userName: txUser?.fullName || txUser?.username || "Utilisateur",
               userEmail: txUser?.email || "",
@@ -7706,6 +7730,10 @@ export async function registerRoutes(
               reason: isPaymentLink ? "Paiement lien échoué (AfribaPay)" : "Dépôt annulé/échoué (AfribaPay)",
               provider: "AfribaPay",
               country: txUser?.country || "",
+              depositType: isPaymentLink ? "payment_link" : "deposit",
+              paymentMethod: transaction.paymentMethod || undefined,
+              phone: transaction.recipientPhone || undefined,
+              operator: (txOp as any)?.name || undefined,
             }).catch(() => {});
           }).catch(() => {});
           console.log(`[AfribaPay Webhook] ✗ Deposit FAILED/CANCELLED: ${transaction.id}`);
@@ -7793,7 +7821,10 @@ export async function registerRoutes(
           if (transaction.paymentIntentId) {
             await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "completed");
           }
-          storage.getUser(transaction.userId).then(txUser => {
+          Promise.all([
+            storage.getUser(transaction.userId).catch(() => null),
+            transaction.operatorId ? storage.getOperator(transaction.operatorId).catch(() => null) : Promise.resolve(null),
+          ]).then(([txUser, txOp]) => {
             notifyDepositConfirmed({
               userName: txUser?.fullName || txUser?.username || "Utilisateur",
               userEmail: txUser?.email || "",
@@ -7803,6 +7834,10 @@ export async function registerRoutes(
               reference: transaction.reference || String(transaction.id),
               provider: "PixPay",
               country: txUser?.country || "",
+              depositType: isPaymentLink ? "payment_link" : "deposit",
+              paymentMethod: transaction.paymentMethod || undefined,
+              phone: transaction.recipientPhone || undefined,
+              operator: (txOp as any)?.name || undefined,
             }).catch(() => {});
           }).catch(() => {});
           console.log(`[PixPay Webhook] ✓ Deposit SUCCESS: ${transaction.id} → ${transaction.amount} ${txCurrency}`);
@@ -7854,7 +7889,10 @@ export async function registerRoutes(
               : `Votre dépôt a été annulé.${providerMessage ? ` (${providerMessage})` : ""}`,
             transactionId: transaction.id,
           });
-          storage.getUser(transaction.userId).then(txUser => {
+          Promise.all([
+            storage.getUser(transaction.userId).catch(() => null),
+            transaction.operatorId ? storage.getOperator(transaction.operatorId).catch(() => null) : Promise.resolve(null),
+          ]).then(([txUser, txOp]) => {
             notifyDepositFailed({
               userName: txUser?.fullName || txUser?.username || "Utilisateur",
               userEmail: txUser?.email || "",
@@ -7866,6 +7904,10 @@ export async function registerRoutes(
                 : `Dépôt annulé/échoué (PixPay)${providerMessage ? ` — ${providerMessage}` : ""}`,
               provider: "PixPay",
               country: txUser?.country || "",
+              depositType: isPaymentLink ? "payment_link" : "deposit",
+              paymentMethod: transaction.paymentMethod || undefined,
+              phone: transaction.recipientPhone || undefined,
+              operator: (txOp as any)?.name || undefined,
             }).catch(() => {});
           }).catch(() => {});
           console.log(`[PixPay Webhook] ✗ Deposit FAILED: ${transaction.id} — ${providerMessage}`);
