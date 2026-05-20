@@ -1705,15 +1705,6 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Utilisateur non trouvé" });
       }
 
-      const txCurrency = sourceCurrency || sender.preferredCurrency || "XAF";
-      const fxRates = await loadFxRates();
-      const minTransferSetting = await storage.getSetting("min_transfer");
-      const minTransferXAF = minTransferSetting ? parseFloat(minTransferSetting.value) : 150;
-      const minTransfer = Math.ceil(convertFromXAF(minTransferXAF, txCurrency, fxRates));
-      if (parsedAmount < minTransfer) {
-        return res.status(400).json({ message: `Le montant minimum de transfert est de ${minTransfer.toLocaleString()} ${txCurrency}` });
-      }
-
       const operator = await storage.getOperator(operatorId);
       if (!operator) {
         return res.status(404).json({ message: "Opérateur non trouvé" });
@@ -1724,8 +1715,16 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Pays non trouvé" });
       }
 
-      if (sourceCurrency && sourceCurrency !== country.currency) {
-        return res.status(403).json({ message: `Transaction non autorisée — Le compte sélectionné est en ${sourceCurrency} mais ${country.name} utilise ${country.currency}` });
+      // Source wallet = automatically the destination country's currency
+      // (XAF for Cameroon, XAFG for Gabon, XOFT for Togo, etc. — no user choice)
+      const txCurrency = country.currency || sender.preferredCurrency || "XAF";
+
+      const fxRates = await loadFxRates();
+      const minTransferSetting = await storage.getSetting("min_transfer");
+      const minTransferXAF = minTransferSetting ? parseFloat(minTransferSetting.value) : 150;
+      const minTransfer = Math.ceil(convertFromXAF(minTransferXAF, txCurrency, fxRates));
+      if (parsedAmount < minTransfer) {
+        return res.status(400).json({ message: `Le montant minimum de transfert est de ${minTransfer.toLocaleString()} ${txCurrency}` });
       }
 
       const transferProvider = ((operator as any).paymentProvider || "swychr") as string;
@@ -1777,18 +1776,19 @@ export async function registerRoutes(
       // Determine if debiting primary wallet or secondary wallet
       const isPrimaryTransfer = (txCurrency === (sender.preferredCurrency || "XAF"));
 
-      // Check balance in the correct wallet
+      // Check balance in the correct wallet (determined by destination country)
       if (isPrimaryTransfer) {
         if (parseFloat(sender.balance) < totalAmount) {
           return res.status(400).json({
-            message: `Solde insuffisant. Vous avez besoin de ${totalAmount.toFixed(2)} ${txCurrency}`,
+            message: `Solde insuffisant dans votre compte ${txCurrency}. Vous avez ${parseFloat(sender.balance).toFixed(0)} ${txCurrency} — besoin de ${totalAmount.toFixed(0)} ${txCurrency}`,
           });
         }
       } else {
         const wallet = await storage.getWallet(senderId, txCurrency);
-        if (!wallet || parseFloat(wallet.balance) < totalAmount) {
+        const walletBalance = wallet ? parseFloat(wallet.balance) : 0;
+        if (walletBalance < totalAmount) {
           return res.status(400).json({
-            message: `Solde insuffisant dans votre compte ${txCurrency}. Besoin de ${totalAmount.toFixed(2)} ${txCurrency}`,
+            message: `Solde insuffisant dans votre compte ${txCurrency}. Vous avez ${walletBalance.toFixed(0)} ${txCurrency} — besoin de ${totalAmount.toFixed(0)} ${txCurrency}`,
           });
         }
       }
@@ -2643,21 +2643,40 @@ export async function registerRoutes(
       const creditedAmount = amount - feeAmount;
       const totalAmount = amount;
 
-      // Check primary wallet balance BEFORE any deduction
-      // Round balance to match display: integer for non-decimal currencies (XAF, XOF, etc.),
-      // 2 decimal places for USD/EUR, to avoid floating-point comparison mismatches.
-      const isDecimalCurrency = userCurrency === "USD" || userCurrency === "EUR";
-      const availableBalance = isDecimalCurrency
-        ? Math.floor(parseFloat(user.balance) * 100) / 100
-        : Math.round(parseFloat(user.balance));
-      if (availableBalance < amount) {
-        return res.status(400).json({ message: `Solde insuffisant dans votre compte principal (${amount.toFixed(0)} ${userCurrency} requis)` });
+      // Determine the wallet to debit: always the destination country's currency
+      // XAF for Cameroon, XAFG for Gabon, XOFT for Togo, etc.
+      const isPrimaryWithdrawal = (withdrawalCurrency === userCurrency);
+
+      // Check balance in the correct wallet BEFORE any deduction
+      if (isPrimaryWithdrawal) {
+        const isDecimalCurrency = userCurrency === "USD" || userCurrency === "EUR";
+        const availableBalance = isDecimalCurrency
+          ? Math.floor(parseFloat(user.balance) * 100) / 100
+          : Math.round(parseFloat(user.balance));
+        if (availableBalance < amount) {
+          return res.status(400).json({
+            message: `Solde insuffisant dans votre compte ${withdrawalCurrency}. Vous avez ${availableBalance.toLocaleString()} ${withdrawalCurrency} — besoin de ${amount.toLocaleString()} ${withdrawalCurrency}`,
+          });
+        }
+      } else {
+        const secondaryWallet = await storage.getWallet(userId, withdrawalCurrency);
+        const walletBalance = secondaryWallet ? parseFloat(secondaryWallet.balance) : 0;
+        if (walletBalance < amount) {
+          return res.status(400).json({
+            message: `Solde insuffisant dans votre compte ${withdrawalCurrency}. Vous avez ${walletBalance.toLocaleString()} ${withdrawalCurrency} — besoin de ${amount.toLocaleString()} ${withdrawalCurrency}`,
+          });
+        }
       }
 
-      // Debit primary wallet — cap deduction to actual DB balance to avoid -0.01 float artifacts
-      const actualBalance = parseFloat(user.balance);
-      const actualDeduction = amount > actualBalance ? actualBalance : amount;
-      await storage.updateUserBalance(userId, -actualDeduction);
+      // Debit the correct wallet
+      if (isPrimaryWithdrawal) {
+        const actualBalance = parseFloat(user.balance);
+        const actualDeduction = amount > actualBalance ? actualBalance : amount;
+        await storage.updateUserBalance(userId, -actualDeduction);
+      } else {
+        await storage.upsertWallet(userId, withdrawalCurrency, -amount);
+        await cleanupEmptyWallets(userId);
+      }
 
       console.log(`[Withdrawal] User=${userId}, RequestedAmount=${amount}, Fee=${feeAmount}, NetToUser=${creditedAmount} (${withdrawalCurrency})`);
 

@@ -160,6 +160,8 @@ app.use((req, res, next) => {
     console.log("[Migration] Performance indexes ready");
 
     try {
+      // Each country currency keeps its own distinct wallet (XAFG for Gabon, XOFT for Togo, etc.)
+      // No same-family CFA wallet merging — removed intentionally
       const fixTogo = await db.execute(sql`
         UPDATE users SET preferred_currency = 'XOFT'
         WHERE country = 'Togo' AND preferred_currency = 'XOF'
@@ -167,33 +169,8 @@ app.use((req, res, next) => {
       `);
       const fixedTogo = (fixTogo as any).rowCount ?? (fixTogo as any).rows?.length ?? 0;
       if (fixedTogo > 0) console.log(`[Migration] Normalized ${fixedTogo} Togo user(s) preferred_currency XOF → XOFT`);
-
-      const dupRows: any = await db.execute(sql`
-        SELECT w.id AS wallet_id, w.user_id, w.currency, w.balance, u.preferred_currency
-        FROM wallets w JOIN users u ON u.id = w.user_id
-        WHERE
-          w.currency = u.preferred_currency
-          OR (
-            u.preferred_currency IN ('XOF','XOFC','XOFF','XOFN','XOFB','XOFT','XOFS','XOFM')
-            AND w.currency IN ('XOF','XOFC','XOFF','XOFN','XOFB','XOFT','XOFS','XOFM')
-          )
-          OR (
-            u.preferred_currency IN ('XAF','XAFC','XAFG')
-            AND w.currency IN ('XAF','XAFC','XAFG')
-          )
-      `);
-      const dupList = (dupRows as any).rows || [];
-      for (const row of dupList) {
-        const bal = parseFloat(row.balance || "0");
-        if (bal > 0) {
-          await db.execute(sql`UPDATE users SET balance = balance + ${bal} WHERE id = ${row.user_id}`);
-        }
-        await db.execute(sql`DELETE FROM wallets WHERE id = ${row.wallet_id}`);
-        console.log(`[Migration] Merged wallet ${row.currency} (${bal}) → primary ${row.preferred_currency} for user ${row.user_id}`);
-      }
-      if (dupList.length > 0) console.log(`[Migration] Merged ${dupList.length} duplicate same-family CFA wallet(s)`);
     } catch (mErr: any) {
-      console.warn("[Migration] CFA wallet cleanup warning:", mErr?.message);
+      console.warn("[Migration] Togo normalization warning:", mErr?.message);
     }
   } catch (err: any) {
     if (!err?.message?.includes("already exists")) {
