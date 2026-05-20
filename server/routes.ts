@@ -429,6 +429,36 @@ async function revokeSessionsForIpChange(userId: string): Promise<void> {
   }
 }
 
+// Révocation de toutes les sessions actives provenant d'une IP bloquée.
+// Appelée dès qu'une IP est bloquée (auto ou manuel) pour déconnecter immédiatement
+// tous les utilisateurs connectés depuis cette IP, quel que soit leur navigateur.
+async function revokeSessionsByIp(ip: string, blockedUntil: number): Promise<void> {
+  const affected: string[] = [];
+  for (const [userId, userIp] of activeIpRegistry.entries()) {
+    if (userIp === ip) {
+      affected.push(userId);
+    }
+  }
+  if (affected.length === 0) return;
+  console.log(`[Auth] IP blocked (${ip}) — révocation des sessions de ${affected.length} utilisateur(s) connecté(s)`);
+  for (const userId of affected) {
+    try {
+      const result = await db.execute(sql`SELECT sid FROM session WHERE sess->>'userId' = ${userId}`);
+      const expiresAt = blockedUntil;
+      for (const row of result.rows as { sid: string }[]) {
+        revokedSessions.set(row.sid, expiresAt);
+      }
+      notifyUserForceLogout(userId);
+      await db.execute(sql`DELETE FROM session WHERE sess->>'userId' = ${userId}`);
+      revokedTokensBefore.set(userId, Date.now());
+      forcedLogoutMap.set(userId, blockedUntil);
+      console.log(`[Auth] IP block — sessions révoquées pour userId=${userId}`);
+    } catch (err: any) {
+      console.error("[Auth] revokeSessionsByIp failed for userId:", userId, err?.message);
+    }
+  }
+}
+
 // Révocation des autres sessions pour la règle "1 session active max par compte"
 // Les sessions expulsées reçoivent sessionRevoked:true sans retryAfter → redirigées vers /login
 async function revokeOtherSessionsForSingleDevice(userId: string): Promise<void> {
@@ -973,9 +1003,14 @@ export async function registerRoutes(
         if (user?.role === "admin") {
           notifyAdminLoginFailed({ identifier: data.identifier, ip }).catch(() => {});
         }
-        // Si l'IP est bloquée et que le compte existe → détruire toutes ses sessions actives
-        if (failure.blocked && user && failure.retryAfter) {
-          destroyUserSessions(user.id, failure.retryAfter).catch(() => {});
+        // Si l'IP est bloquée → déconnecter TOUS les utilisateurs connectés depuis cette IP
+        // (y compris ceux déjà connectés dans d'autres navigateurs/onglets)
+        if (failure.blocked && failure.retryAfter) {
+          revokeSessionsByIp(ip, failure.retryAfter).catch(() => {});
+          // Également détruire les sessions de l'utilisateur ciblé si connu
+          if (user) {
+            destroyUserSessions(user.id, failure.retryAfter).catch(() => {});
+          }
         }
 
         return res.status(failure.blocked ? 429 : 401).json({
