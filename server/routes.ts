@@ -9434,6 +9434,20 @@ export async function registerRoutes(
 
           return { userName: txUser.fullName || txUser.username };
         },
+
+        // ── Search users by partial email ────────────────────────────────────
+        searchUsers: async (query) => {
+          const found = await storage.searchUsersByEmail(query);
+          return found.map(u => ({
+            userName: u.fullName || u.username,
+            email: u.email ?? "",
+            balance: parseFloat(u.balance ?? "0"),
+            currency: u.preferredCurrency ?? "XAF",
+            kycStatus: u.kycStatus ?? "not_submitted",
+            country: u.country ?? undefined,
+            banned: !!u.banned,
+          }));
+        },
       });
     } catch (err: any) {
       console.error("[TelegramWebhook] Error:", err?.message);

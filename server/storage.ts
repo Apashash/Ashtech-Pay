@@ -61,13 +61,14 @@ import {
   type HostedPaymentSession,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, sql, and, or, like, count, inArray } from "drizzle-orm";
+import { eq, desc, sql, and, or, like, ilike, count, inArray } from "drizzle-orm";
 
 export interface IStorage {
   // User operations
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
+  searchUsersByEmail(query: string, limit?: number): Promise<User[]>;
   getUserByPhone(phone: string): Promise<User | undefined>;
   getUserByEmailOrPhone(identifier: string): Promise<User | undefined>;
   getUserByResetToken(token: string): Promise<User | undefined>;
@@ -601,6 +602,15 @@ export class DatabaseStorage implements IStorage {
       .where(eq(paymentIntents.id, id))
       .returning();
     return intent || undefined;
+  }
+
+  async searchUsersByEmail(query: string, limit = 8): Promise<User[]> {
+    return await db
+      .select()
+      .from(users)
+      .where(ilike(users.email, `%${query}%`))
+      .orderBy(desc(users.createdAt))
+      .limit(limit);
   }
 
   // Admin: User management

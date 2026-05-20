@@ -887,6 +887,7 @@ export async function handleTelegramUpdate(
     resetUserPassword: (email: string) => Promise<{ userName: string; found: boolean } | null>;
     approveWithdrawal: (reference: string) => Promise<{ userName: string; amount: string; currency: string } | null>;
     rejectWithdrawal: (reference: string, reason: string) => Promise<{ userName: string } | null>;
+    searchUsers: (query: string) => Promise<{ userName: string; email: string; balance: number; currency: string; kycStatus: string; country?: string; banned: boolean }[]>;
   }
 ): Promise<void> {
   // ── Callback query (button press) ──
@@ -1411,6 +1412,46 @@ export async function handleTelegramUpdate(
       return;
     }
 
+    // ── /search query ──
+    if (text.startsWith("/search ")) {
+      const query = text.slice(8).trim();
+      if (!query || query.length < 2) {
+        await callBotApi("sendMessage", {
+          chat_id: chatId,
+          text: `⚠️ Saisissez au moins 2 caractères.\nUsage : <code>/search jean</code>`,
+          parse_mode: "HTML",
+        });
+        return;
+      }
+      const results = await handlers.searchUsers(query);
+      if (results.length === 0) {
+        await callBotApi("sendMessage", {
+          chat_id: chatId,
+          text: `🔍 Aucun utilisateur trouvé pour <code>${query}</code>`,
+          parse_mode: "HTML",
+        });
+        return;
+      }
+      const kycIcon = (s: string) => s === "verified" ? "✅" : s === "pending" ? "⏳" : "❌";
+      const lines = results.map((u, i) =>
+        `${i + 1}. ${u.banned ? "🚫 " : ""}` +
+        `<b>${u.userName}</b>\n` +
+        `   📧 <code>${u.email}</code>\n` +
+        `   💰 ${fmt(u.balance, u.currency)} | KYC ${kycIcon(u.kycStatus)}` +
+        (u.country ? ` | 🌍 ${u.country}` : "")
+      ).join("\n\n");
+      await callBotApi("sendMessage", {
+        chat_id: chatId,
+        text:
+          `🔍 <b>${results.length} résultat(s) pour « ${query} »</b>\n` +
+          `──────────────────\n${lines}\n──────────────────\n` +
+          `<i>Utilisez /user email pour plus de détails</i>`,
+        parse_mode: "HTML",
+        reply_markup: { inline_keyboard: [[{ text: "🏠 Menu", callback_data: "cmd:menu" }]] },
+      });
+      return;
+    }
+
     // ── /resetpw email ──
     if (text.startsWith("/resetpw ")) {
       const email = text.slice(9).trim();
@@ -1465,6 +1506,7 @@ export async function handleTelegramUpdate(
             `/rapport [mois|semaine|today] — Rapport complet\n` +
             `──────────────────\n` +
             `<b>👤 Utilisateurs</b>\n` +
+            `/search query — Rechercher par email partiel\n` +
             `/user email — Infos utilisateur\n` +
             `/solde email — Solde en temps réel\n` +
             `/ban email [raison] — Bannir un utilisateur\n` +
