@@ -3004,20 +3004,20 @@ export async function registerRoutes(
         if (txOperator) conversionProvider = (txOperator as any).paymentProvider || "swychr";
       }
 
-      const feeKey = conversionProvider === "pixpay"
-        ? "conversion_fee_percent_pixpay"
-        : conversionProvider === "afribapay"
-          ? "conversion_fee_percent_afribapay"
-          : "conversion_fee_percent_swychr";
-      const conversionFeePercentSetting = await storage.getSetting(feeKey);
-      const fallbackSetting = await storage.getSetting("conversion_fee_percent");
-      const conversionFeePercent = conversionFeePercentSetting
-        ? parseFloat(conversionFeePercentSetting.value)
-        : fallbackSetting ? parseFloat(fallbackSetting.value) : 6;
+      // Frais fournisseur + marge Ashtech — admin configure les deux séparément
+      const providerFeeKey = `conversion_provider_fee_${conversionProvider}`;
+      const ashtechFeeKey = `conversion_ashtech_fee_${conversionProvider}`;
+      const [providerFeeSetting, ashtechFeeSetting] = await Promise.all([
+        storage.getSetting(providerFeeKey),
+        storage.getSetting(ashtechFeeKey),
+      ]);
+      const providerFeePercent = providerFeeSetting ? parseFloat(providerFeeSetting.value) : 4;
+      const ashtechFeePercent = ashtechFeeSetting ? parseFloat(ashtechFeeSetting.value) : 2;
+      const conversionFeePercent = providerFeePercent + ashtechFeePercent;
 
-      const totalFeeAmount = (parsedAmount * conversionFeePercent) / 100;
-      const ashtechMarginPercent = 2;
-      const ashtechFeeAmount = (parsedAmount * ashtechMarginPercent) / 100;
+      const providerFeeAmount = (parsedAmount * providerFeePercent) / 100;
+      const ashtechFeeAmount = (parsedAmount * ashtechFeePercent) / 100;
+      const totalFeeAmount = providerFeeAmount + ashtechFeeAmount;
       const amountAfterFee = parsedAmount - totalFeeAmount;
 
       const convFxRates = await loadFxRates();
@@ -3038,7 +3038,7 @@ export async function registerRoutes(
         amount: parsedAmount.toFixed(2),
         currency: fromCurrency,
         status: "pending",
-        description: `Conversion ${parsedAmount.toFixed(2)} ${fromCurrency} → ${receivedAmount.toFixed(2)} ${toCurrency} (Frais: ${conversionFeePercent}%)`,
+        description: `Conversion ${parsedAmount.toFixed(2)} ${fromCurrency} → ${receivedAmount.toFixed(2)} ${toCurrency} (Frais: ${providerFeePercent}% fournisseur + ${ashtechFeePercent}% Ashtech = ${conversionFeePercent}%)`,
         reference: generateTransactionReference("CONV"),
         feeAmount: ashtechFeeAmount.toFixed(2),
         totalAmount: parsedAmount.toFixed(2),
@@ -3052,7 +3052,7 @@ export async function registerRoutes(
         fromAmount: parsedAmount.toFixed(2),
         toAmount: receivedAmount.toFixed(2),
         status: "pending",
-        notes: `Conversion automatique Ashtech Pay. Frais: ${totalFeeAmount.toFixed(2)} ${fromCurrency} (${conversionFeePercent}%)`,
+        notes: `Frais: ${totalFeeAmount.toFixed(2)} ${fromCurrency} (${providerFeePercent}% fournisseur + ${ashtechFeePercent}% Ashtech = ${conversionFeePercent}%)`,
       });
 
       // Notification "en cours"
@@ -3198,11 +3198,18 @@ export async function registerRoutes(
         return res.status(400).json({ message: `Solde insuffisant en ${fromCurrency} (disponible: ${sourceBalance.toFixed(2)})` });
       }
 
-      // Apply same conversion fee as user-facing flow
-      const conversionFeePercentSetting = await storage.getSetting("conversion_fee_percent");
-      const conversionFeePercent = conversionFeePercentSetting ? parseFloat(conversionFeePercentSetting.value) : 6;
-      const feeAmount = (parsedAmount * conversionFeePercent) / 100;
-      const adminAshtechFeeAmount = (parsedAmount * 2) / 100;
+      // Frais fournisseur + marge Ashtech (même logique que le flux utilisateur)
+      // Pour les conversions admin on utilise "swychr" comme fournisseur par défaut
+      const [adminProviderFeeSetting, adminAshtechFeeSetting] = await Promise.all([
+        storage.getSetting("conversion_provider_fee_swychr"),
+        storage.getSetting("conversion_ashtech_fee_swychr"),
+      ]);
+      const adminProviderFeePercent = adminProviderFeeSetting ? parseFloat(adminProviderFeeSetting.value) : 4;
+      const adminAshtechFeePercent = adminAshtechFeeSetting ? parseFloat(adminAshtechFeeSetting.value) : 2;
+      const conversionFeePercent = adminProviderFeePercent + adminAshtechFeePercent;
+      const adminProviderFeeAmount = (parsedAmount * adminProviderFeePercent) / 100;
+      const adminAshtechFeeAmount = (parsedAmount * adminAshtechFeePercent) / 100;
+      const feeAmount = adminProviderFeeAmount + adminAshtechFeeAmount;
       const amountAfterFee = parsedAmount - feeAmount;
 
       const convFxRates = await loadFxRates();
@@ -3216,7 +3223,7 @@ export async function registerRoutes(
         amount: parsedAmount.toFixed(2),
         currency: fromCurrency,
         status: "completed",
-        description: `Conversion admin: ${parsedAmount.toFixed(2)} ${fromCurrency} → ${receivedAmount.toFixed(2)} ${toCurrency} (Frais: ${conversionFeePercent}%)`,
+        description: `Conversion admin: ${parsedAmount.toFixed(2)} ${fromCurrency} → ${receivedAmount.toFixed(2)} ${toCurrency} (Frais: ${adminProviderFeePercent}% fournisseur + ${adminAshtechFeePercent}% Ashtech = ${conversionFeePercent}%)`,
         reference: generateTransactionReference("CONV"),
         feeAmount: adminAshtechFeeAmount.toFixed(2),
         totalAmount: parsedAmount.toFixed(2),
@@ -4042,14 +4049,25 @@ export async function registerRoutes(
       const conversionFeePercent = parseFloat(settings.find(s => s.key === "conversion_fee_percent")?.value || "6");
       const depositFeePercent = parseFloat(settings.find(s => s.key === "deposit_fee_percent")?.value || "0");
       const paymentLinkFeePercent = parseFloat(settings.find(s => s.key === "payment_link_fee_percent")?.value || "2");
-      const conversionFeePercentSwychr = parseFloat(settings.find(s => s.key === "conversion_fee_percent_swychr")?.value || String(conversionFeePercent));
-      const conversionFeePercentPixpay = parseFloat(settings.find(s => s.key === "conversion_fee_percent_pixpay")?.value || String(conversionFeePercent));
-      const conversionFeePercentAfribapay = parseFloat(settings.find(s => s.key === "conversion_fee_percent_afribapay")?.value || String(conversionFeePercent));
+      // Nouveau système à deux frais par fournisseur
+      const convProviderFeeSwychr = parseFloat(settings.find(s => s.key === "conversion_provider_fee_swychr")?.value || "4");
+      const convAshtechFeeSwychr = parseFloat(settings.find(s => s.key === "conversion_ashtech_fee_swychr")?.value || "2");
+      const convProviderFeePixpay = parseFloat(settings.find(s => s.key === "conversion_provider_fee_pixpay")?.value || "4");
+      const convAshtechFeePixpay = parseFloat(settings.find(s => s.key === "conversion_ashtech_fee_pixpay")?.value || "2");
+      const convProviderFeeAfribapay = parseFloat(settings.find(s => s.key === "conversion_provider_fee_afribapay")?.value || "4");
+      const convAshtechFeeAfribapay = parseFloat(settings.find(s => s.key === "conversion_ashtech_fee_afribapay")?.value || "2");
+      // Totaux calculés (rétro-compatibilité)
+      const conversionFeePercentSwychr = convProviderFeeSwychr + convAshtechFeeSwychr;
+      const conversionFeePercentPixpay = convProviderFeePixpay + convAshtechFeePixpay;
+      const conversionFeePercentAfribapay = convProviderFeeAfribapay + convAshtechFeeAfribapay;
       res.json({
         conversionFeePercent,
         conversionFeePercentSwychr,
         conversionFeePercentPixpay,
         conversionFeePercentAfribapay,
+        convProviderFeeSwychr, convAshtechFeeSwychr,
+        convProviderFeePixpay, convAshtechFeePixpay,
+        convProviderFeeAfribapay, convAshtechFeeAfribapay,
         depositFeePercent,
         paymentLinkFeePercent,
       });

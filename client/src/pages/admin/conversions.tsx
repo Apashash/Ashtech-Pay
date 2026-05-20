@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { ArrowLeftRight, CheckCircle, Clock, RefreshCw, Loader2, User, Calendar, Settings, Percent, Save } from "lucide-react";
+import { ArrowLeftRight, CheckCircle, Clock, RefreshCw, Loader2, User, Calendar, Settings, Percent, Save, Equal } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 
@@ -38,84 +38,93 @@ const CURRENCY_FLAGS: Record<string, string> = {
   RWF: "🇷🇼", TZS: "🇹🇿", UGX: "🇺🇬", CDF: "🇨🇩", GNF: "🇬🇳",
 };
 
-const PROVIDER_LABELS: { key: string; label: string; description: string; color: string }[] = [
+interface ProviderFeeConfig {
+  key: string;
+  label: string;
+  color: string;
+  providerFeeSettingKey: string;
+  ashtechFeeSettingKey: string;
+}
+
+const PROVIDERS: ProviderFeeConfig[] = [
   {
-    key: "conversion_fee_percent_swychr",
+    key: "swychr",
     label: "Swychr",
-    description: "Frais appliqués pour les wallets alimentés via Swychr",
     color: "text-blue-600 dark:text-blue-400",
+    providerFeeSettingKey: "conversion_provider_fee_swychr",
+    ashtechFeeSettingKey: "conversion_ashtech_fee_swychr",
   },
   {
-    key: "conversion_fee_percent_pixpay",
+    key: "pixpay",
     label: "PixPay",
-    description: "Frais appliqués pour les wallets alimentés via PixPay",
     color: "text-purple-600 dark:text-purple-400",
+    providerFeeSettingKey: "conversion_provider_fee_pixpay",
+    ashtechFeeSettingKey: "conversion_ashtech_fee_pixpay",
   },
   {
-    key: "conversion_fee_percent_afribapay",
+    key: "afribapay",
     label: "AfribaPay",
-    description: "Frais appliqués pour les wallets alimentés via AfribaPay",
     color: "text-orange-600 dark:text-orange-400",
+    providerFeeSettingKey: "conversion_provider_fee_afribapay",
+    ashtechFeeSettingKey: "conversion_ashtech_fee_afribapay",
   },
 ];
 
+type FeeState = Record<string, string>;
+
+const DEFAULT_FEES: FeeState = {
+  conversion_provider_fee_swychr: "4",
+  conversion_ashtech_fee_swychr: "2",
+  conversion_provider_fee_pixpay: "4",
+  conversion_ashtech_fee_pixpay: "2",
+  conversion_provider_fee_afribapay: "4",
+  conversion_ashtech_fee_afribapay: "2",
+};
+
 export default function AdminConversionsPage() {
   const { toast } = useToast();
-  const [fees, setFees] = useState<Record<string, string>>({
-    conversion_fee_percent_swychr: "6",
-    conversion_fee_percent_pixpay: "6",
-    conversion_fee_percent_afribapay: "6",
-  });
+  const [fees, setFees] = useState<FeeState>(DEFAULT_FEES);
 
-  // Load each provider fee
-  const { data: swychrSetting } = useQuery<{ value: string }>({
-    queryKey: ["/api/admin/settings/conversion_fee_percent_swychr"],
+  const { data: feeSettings } = useQuery<{
+    convProviderFeeSwychr: number; convAshtechFeeSwychr: number;
+    convProviderFeePixpay: number; convAshtechFeePixpay: number;
+    convProviderFeeAfribapay: number; convAshtechFeeAfribapay: number;
+  }>({
+    queryKey: ["/api/public/fee-settings"],
     queryFn: async () => {
-      const res = await apiRequest("GET", "/api/admin/settings/conversion_fee_percent_swychr");
-      return res.json();
-    },
-  });
-  const { data: pixpaySetting } = useQuery<{ value: string }>({
-    queryKey: ["/api/admin/settings/conversion_fee_percent_pixpay"],
-    queryFn: async () => {
-      const res = await apiRequest("GET", "/api/admin/settings/conversion_fee_percent_pixpay");
-      return res.json();
-    },
-  });
-  const { data: afribaSetting } = useQuery<{ value: string }>({
-    queryKey: ["/api/admin/settings/conversion_fee_percent_afribapay"],
-    queryFn: async () => {
-      const res = await apiRequest("GET", "/api/admin/settings/conversion_fee_percent_afribapay");
+      const res = await apiRequest("GET", "/api/public/fee-settings");
       return res.json();
     },
   });
 
   useEffect(() => {
-    setFees(prev => ({
-      ...prev,
-      conversion_fee_percent_swychr: swychrSetting?.value ?? prev.conversion_fee_percent_swychr,
-      conversion_fee_percent_pixpay: pixpaySetting?.value ?? prev.conversion_fee_percent_pixpay,
-      conversion_fee_percent_afribapay: afribaSetting?.value ?? prev.conversion_fee_percent_afribapay,
-    }));
-  }, [swychrSetting, pixpaySetting, afribaSetting]);
+    if (!feeSettings) return;
+    setFees({
+      conversion_provider_fee_swychr: String(feeSettings.convProviderFeeSwychr ?? 4),
+      conversion_ashtech_fee_swychr: String(feeSettings.convAshtechFeeSwychr ?? 2),
+      conversion_provider_fee_pixpay: String(feeSettings.convProviderFeePixpay ?? 4),
+      conversion_ashtech_fee_pixpay: String(feeSettings.convAshtechFeePixpay ?? 2),
+      conversion_provider_fee_afribapay: String(feeSettings.convProviderFeeAfribapay ?? 4),
+      conversion_ashtech_fee_afribapay: String(feeSettings.convAshtechFeeAfribapay ?? 2),
+    });
+  }, [feeSettings]);
 
   const saveFeeMutation = useMutation({
     mutationFn: async () => {
+      const allKeys = Object.keys(fees);
       await Promise.all(
-        PROVIDER_LABELS.map(p =>
+        allKeys.map(key =>
           apiRequest("POST", "/api/admin/settings", {
-            key: p.key,
-            value: fees[p.key],
-            description: p.description,
+            key,
+            value: fees[key],
+            description: `Frais de conversion — ${key}`,
           })
         )
       );
     },
     onSuccess: () => {
-      PROVIDER_LABELS.forEach(p =>
-        queryClient.invalidateQueries({ queryKey: [`/api/admin/settings/${p.key}`] })
-      );
-      toast({ title: "Frais mis à jour", description: "Les frais de conversion par fournisseur ont été enregistrés." });
+      queryClient.invalidateQueries({ queryKey: ["/api/public/fee-settings"] });
+      toast({ title: "Frais enregistrés", description: "Les frais de conversion par fournisseur ont été mis à jour." });
     },
     onError: (error: Error) => {
       toast({ title: "Erreur", description: error.message, variant: "destructive" });
@@ -129,6 +138,12 @@ export default function AdminConversionsPage() {
       return res.json();
     },
   });
+
+  const getTotal = (p: ProviderFeeConfig) => {
+    const provider = parseFloat(fees[p.providerFeeSettingKey] || "0") || 0;
+    const ashtech = parseFloat(fees[p.ashtechFeeSettingKey] || "0") || 0;
+    return (provider + ashtech).toFixed(2);
+  };
 
   return (
     <AdminLayout>
@@ -151,33 +166,72 @@ export default function AdminConversionsPage() {
               <Settings className="w-4 h-4 text-muted-foreground" />
               Frais de conversion par fournisseur
             </CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Pour chaque fournisseur : configurez le frais du fournisseur et la marge Ashtech Pay séparément.
+              Le frais total prélevé à l'utilisateur est la somme des deux.
+            </p>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-3">
-              {PROVIDER_LABELS.map(p => (
-                <div key={p.key} className="space-y-2 p-4 rounded-lg border bg-muted/20">
-                  <Label htmlFor={p.key} className={`text-sm font-semibold ${p.color}`}>
-                    {p.label}
-                  </Label>
-                  <div className="relative">
-                    <Percent className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      id={p.key}
-                      type="text"
-                      inputMode="decimal"
-                      value={fees[p.key]}
-                      onChange={(e) => setFees(prev => ({ ...prev, [p.key]: e.target.value }))}
-                      className="pl-9"
-                      step="0.1"
-                      min="0"
-                      max="100"
-                    />
+          <CardContent className="space-y-6">
+            <div className="grid gap-5 sm:grid-cols-3">
+              {PROVIDERS.map(p => {
+                const total = getTotal(p);
+                return (
+                  <div key={p.key} className="space-y-3 p-4 rounded-xl border bg-muted/20">
+                    <p className={`text-sm font-bold ${p.color}`}>{p.label}</p>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor={p.providerFeeSettingKey} className="text-xs text-muted-foreground font-medium">
+                        Frais fournisseur
+                      </Label>
+                      <div className="relative">
+                        <Percent className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                        <Input
+                          id={p.providerFeeSettingKey}
+                          type="number"
+                          inputMode="decimal"
+                          step="0.1"
+                          min="0"
+                          max="100"
+                          value={fees[p.providerFeeSettingKey]}
+                          onChange={e => setFees(prev => ({ ...prev, [p.providerFeeSettingKey]: e.target.value }))}
+                          className="pl-8 h-8 text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor={p.ashtechFeeSettingKey} className="text-xs text-muted-foreground font-medium">
+                        Frais Ashtech Pay
+                      </Label>
+                      <div className="relative">
+                        <Percent className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                        <Input
+                          id={p.ashtechFeeSettingKey}
+                          type="number"
+                          inputMode="decimal"
+                          step="0.1"
+                          min="0"
+                          max="100"
+                          value={fees[p.ashtechFeeSettingKey]}
+                          onChange={e => setFees(prev => ({ ...prev, [p.ashtechFeeSettingKey]: e.target.value }))}
+                          className="pl-8 h-8 text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1 border-t border-border/50">
+                      <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Equal className="w-3 h-3" />
+                        Total prélevé
+                      </span>
+                      <span className={`text-sm font-bold ${p.color}`}>{total}%</span>
+                    </div>
                   </div>
-                  <p className="text-xs text-muted-foreground">{p.description}</p>
-                </div>
-              ))}
+                );
+              })}
             </div>
-            <div className="flex items-center gap-3 pt-2">
+
+            <div className="flex items-center gap-3 pt-1">
               <Button
                 onClick={() => saveFeeMutation.mutate()}
                 disabled={saveFeeMutation.isPending}
@@ -190,7 +244,7 @@ export default function AdminConversionsPage() {
                 Enregistrer les frais
               </Button>
               <p className="text-xs text-muted-foreground">
-                Ces frais sont appliqués automatiquement selon le fournisseur qui a alimenté le wallet source de la conversion.
+                Les frais sont appliqués selon le fournisseur de la dernière transaction entrante de l'utilisateur.
               </p>
             </div>
           </CardContent>
@@ -198,7 +252,7 @@ export default function AdminConversionsPage() {
 
         <div className="space-y-4">
           <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Historique des conversions</p>
-          
+
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
@@ -236,7 +290,9 @@ export default function AdminConversionsPage() {
                             <Clock className="w-3 h-3" />
                             {req.createdAt ? format(new Date(req.createdAt), "dd/MM/yyyy HH:mm", { locale: fr }) : "-"}
                           </span>
-                          {req.notes && <span className="text-xs italic bg-muted px-2 py-0.5 rounded">{req.notes}</span>}
+                          {req.notes && (
+                            <span className="text-xs italic bg-muted px-2 py-0.5 rounded">{req.notes}</span>
+                          )}
                         </div>
                       </div>
                     </div>
