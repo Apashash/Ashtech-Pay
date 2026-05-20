@@ -146,7 +146,7 @@ const XOF_FAMILY = new Set(["XOF", "XOFC", "XOFF", "XOFN", "XOFB", "XOFT", "XOFS
 // Central African CFA family (BEAC) — XAF and country-specific variants are 1:1
 const XAF_FAMILY = new Set(["XAF", "XAFC", "XAFG"]);
 
-function sameCfaFamily(a: string, b: string): boolean {
+export function sameCfaFamily(a: string, b: string): boolean {
   if (XOF_FAMILY.has(a) && XOF_FAMILY.has(b)) return true;
   if (XAF_FAMILY.has(a) && XAF_FAMILY.has(b)) return true;
   return false;

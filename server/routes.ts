@@ -49,7 +49,7 @@ import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, f
 import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, getAfribaPayOtpInfo, confirmAfribaPayOtp } from "./afribapay";
 import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, initiatePixPayPayout, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType, getPixPayServiceId, PIXPAY_OTP_USSD_CODES } from "./pixpay";
 import { addPendingPayment, removePendingPayment } from "./paymentPoller";
-import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, cleanupEmptyWallets } from "./walletHelper";
+import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, cleanupEmptyWallets, sameCfaFamily } from "./walletHelper";
 import { createSwychrPayout, formatInternationalPhone, detectMethodFromPhone, fiatToPusd, pusdToFiatRate, getConversionRate, convertFiatToPusd, getPayoutToken, COUNTRY_CURRENCY } from "./swychrPayout";
 import { addPendingPayout, removePendingPayout } from "./payoutPoller";
 import { addSSEClient, removeSSEClient, setActiveTicket, isUserOnline, getOnlineUserIds, getAdminViewingTicket, getUserViewingTicket, notifyUser, notifyAdmins, broadcastOnlineStatus, notifyUserForceLogout } from "./sse";
@@ -3091,7 +3091,9 @@ export async function registerRoutes(
           const elapsedSeconds = Math.round((Date.now() - startTime) / 1000);
 
           // Crédit du wallet cible
-          if (toCurrency === userPrimary) {
+          // Si toCurrency est dans la même famille CFA que la devise principale, créditer le solde principal
+          // pour éviter la création d'un wallet secondaire qui serait nettoyé automatiquement ensuite
+          if (toCurrency === userPrimary || sameCfaFamily(toCurrency, userPrimary)) {
             await storage.updateUserBalance(userId, receivedAmount);
           } else {
             await storage.upsertWallet(userId, toCurrency, receivedAmount);
@@ -3235,7 +3237,7 @@ export async function registerRoutes(
       } else {
         await storage.upsertWallet(userId, fromCurrency, -parsedAmount);
       }
-      if (toCurrency === primaryCurrency) {
+      if (toCurrency === primaryCurrency || sameCfaFamily(toCurrency, primaryCurrency)) {
         await storage.updateUserBalance(userId, receivedAmount);
       } else {
         await storage.upsertWallet(userId, toCurrency, receivedAmount);
@@ -3372,11 +3374,12 @@ export async function registerRoutes(
       }
       const receivedAmount = convResult.targetAmount;
 
-      // Credit target wallet
-      if (request.toCurrency === "XAF") {
+      // Credit target wallet — use primary balance if same CFA family as user's primary currency
+      const requestUser = await storage.getUser(request.userId);
+      const requestUserPrimary = requestUser?.preferredCurrency || "XAF";
+      if (request.toCurrency === requestUserPrimary || sameCfaFamily(request.toCurrency, requestUserPrimary)) {
         await storage.updateUserBalance(request.userId, receivedAmount);
       } else {
-        // Ensure target wallet exists
         await storage.upsertWallet(request.userId, request.toCurrency, receivedAmount);
       }
 
