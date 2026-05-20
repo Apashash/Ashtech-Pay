@@ -12,12 +12,19 @@ if (!databaseUrl) {
   );
 }
 
-const isProd = process.env.NODE_ENV === "production";
-
 export const pool = new Pool({
   connectionString: databaseUrl,
-  // En production : vérification SSL stricte (rejectUnauthorized: true)
-  // En développement : désactivé pour compatibilité locale / Supabase pooler
   ssl: { rejectUnauthorized: false },
 });
 export const db = drizzle(pool, { schema });
+
+// Pool dédié au session store — utilise DIRECT_DATABASE_URL si disponible
+// (connexion directe Supabase port 5432, pas le pooler PgBouncer port 6543)
+// Sur Plesk : définir DIRECT_DATABASE_URL avec l'URL directe Supabase pour éviter
+// les incompatibilités entre connect-pg-simple et PgBouncer en mode "transaction".
+const sessionDatabaseUrl = process.env.DIRECT_DATABASE_URL || databaseUrl;
+export const sessionPool = new Pool({
+  connectionString: sessionDatabaseUrl,
+  ssl: { rejectUnauthorized: false },
+  max: 5,
+});

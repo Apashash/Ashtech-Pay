@@ -37,7 +37,7 @@ import crypto from "crypto";
 import { z } from "zod";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
-import { pool, db } from "./db";
+import { pool, db, sessionPool } from "./db";
 import { transactions as transactionsTable, users as usersTable, wallets as walletsTable } from "@shared/schema";
 import { desc, eq, sql as drizzleSql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
@@ -759,8 +759,9 @@ export async function registerRoutes(
       resave: false,
       saveUninitialized: false,
       store: new SessionStore({
-        pool,
+        pool: sessionPool,
         tableName: "session",
+        errorLog: (err: Error) => console.error("[SessionStore]", err.message),
       }),
       proxy: isSecureProxy,
       cookie: {
@@ -1364,11 +1365,20 @@ export async function registerRoutes(
 
   app.get("/api/user/sessions", requireAuth, async (req, res) => {
     try {
-      const result = await db.execute(
-        sql`SELECT sid, sess, expire FROM session WHERE sess->>'userId' = ${req.userId} ORDER BY expire DESC`
-      );
-      const sessions = (result.rows as any[]).map((row) => {
-        const sess = row.sess || {};
+      let rows: any[] = [];
+      try {
+        const result = await sessionPool.query(
+          `SELECT sid, sess, expire FROM session WHERE sess->>'userId' = $1 ORDER BY expire DESC`,
+          [req.userId]
+        );
+        rows = result.rows || [];
+      } catch (dbErr: any) {
+        console.error("[Sessions] Impossible de lire la table session:", dbErr?.message);
+        return res.json([]);
+      }
+
+      const sessions = rows.map((row) => {
+        const sess = typeof row.sess === "string" ? JSON.parse(row.sess) : (row.sess || {});
         const ua = sess.userAgent || "";
         const { device, browser } = parseDeviceFromUA(ua);
         return {
@@ -1383,7 +1393,8 @@ export async function registerRoutes(
       });
       res.json(sessions);
     } catch (error) {
-      res.status(500).json({ message: "Erreur serveur" });
+      console.error("[Sessions] Erreur:", error);
+      res.json([]);
     }
   });
 
@@ -1392,36 +1403,48 @@ export async function registerRoutes(
       const userId = req.userId!;
       const currentSid = req.sessionID;
 
-      // Count other sessions
-      const countResult = await db.execute(
-        sql`SELECT COUNT(*) as cnt FROM session WHERE sess->>'userId' = ${userId} AND sid != ${currentSid}`
-      );
-      const count = parseInt((countResult.rows[0] as any)?.cnt || "0", 10);
+      let count = 0;
+      try {
+        // Count other sessions
+        const countResult = await sessionPool.query(
+          `SELECT COUNT(*) as cnt FROM session WHERE sess->>'userId' = $1 AND sid != $2`,
+          [userId, currentSid]
+        );
+        count = parseInt(countResult.rows[0]?.cnt || "0", 10);
 
-      // Add them to in-memory kicks so pending requests get sessionRevoked
-      const othersResult = await db.execute(
-        sql`SELECT sid FROM session WHERE sess->>'userId' = ${userId} AND sid != ${currentSid}`
-      );
-      for (const row of othersResult.rows as { sid: string }[]) {
-        singleDeviceKicks.add(row.sid);
+        // Add them to in-memory kicks so pending requests get sessionRevoked
+        const othersResult = await sessionPool.query(
+          `SELECT sid FROM session WHERE sess->>'userId' = $1 AND sid != $2`,
+          [userId, currentSid]
+        );
+        for (const row of othersResult.rows as { sid: string }[]) {
+          singleDeviceKicks.add(row.sid);
+        }
+
+        // Send SSE force_logout to other browsers in real-time (not current)
+        notifyOtherSessionsForceLogout(userId, currentSid);
+
+        // Delete other sessions from DB
+        await sessionPool.query(
+          `DELETE FROM session WHERE sess->>'userId' = $1 AND sid != $2`,
+          [userId, currentSid]
+        );
+      } catch (sessErr: any) {
+        console.error("[Sessions] Erreur opérations session:", sessErr?.message);
+        // Continue — revoke tokens even if session table is unavailable
       }
-
-      // Send SSE force_logout to other browsers in real-time (not current)
-      notifyOtherSessionsForceLogout(userId, currentSid);
-
-      // Delete other sessions from DB
-      await db.execute(
-        sql`DELETE FROM session WHERE sess->>'userId' = ${userId} AND sid != ${currentSid}`
-      );
 
       // Revoke old bearer tokens and issue a fresh one for current user
       const revokedAt = Date.now();
       revokedTokensBefore.set(userId, revokedAt);
-      await db.execute(sql`UPDATE users SET token_revoked_before = ${revokedAt} WHERE id = ${userId}`);
+      try {
+        await db.execute(sql`UPDATE users SET token_revoked_before = ${revokedAt} WHERE id = ${userId}`);
+      } catch {}
       const newToken = storeAuthToken(userId);
 
       res.json({ ok: true, count, token: newToken });
     } catch (error) {
+      console.error("[Sessions] Déconnexion autres appareils erreur:", error);
       res.status(500).json({ message: "Erreur serveur" });
     }
   });
@@ -6870,25 +6893,36 @@ export async function registerRoutes(
       const adminId = req.userId!;
       const adminSid = req.sessionID;
 
-      // Compter les sessions avant suppression (hors admin courant)
-      const countResult = await db.execute(
-        sql`SELECT COUNT(*) as cnt FROM session WHERE sid != ${adminSid}`
-      );
-      const count = parseInt((countResult.rows[0] as any)?.cnt || "0", 10);
+      let count = 0;
 
-      // Ajouter toutes les autres sessions à singleDeviceKicks
-      const othersResult = await db.execute(
-        sql`SELECT sid FROM session WHERE sid != ${adminSid}`
-      );
-      for (const row of othersResult.rows as { sid: string }[]) {
-        singleDeviceKicks.add(row.sid);
+      // Opérations sur la table session via sessionPool (connexion directe, pas pooler)
+      try {
+        // Compter les sessions avant suppression (hors admin courant)
+        const countResult = await sessionPool.query(
+          `SELECT COUNT(*) as cnt FROM session WHERE sid != $1`,
+          [adminSid]
+        );
+        count = parseInt(countResult.rows[0]?.cnt || "0", 10);
+
+        // Ajouter toutes les autres sessions à singleDeviceKicks
+        const othersResult = await sessionPool.query(
+          `SELECT sid FROM session WHERE sid != $1`,
+          [adminSid]
+        );
+        for (const row of othersResult.rows as { sid: string }[]) {
+          singleDeviceKicks.add(row.sid);
+        }
+
+        // SSE force_logout en temps réel sur tous les clients connectés sauf l'admin courant
+        notifyAllUsersForceLogout("admin_disconnect");
+
+        // Supprimer toutes les sessions sauf la session admin courante
+        await sessionPool.query(`DELETE FROM session WHERE sid != $1`, [adminSid]);
+      } catch (sessErr: any) {
+        console.error("[Admin] Erreur opérations session:", sessErr?.message);
+        // Continue même si la table session est inaccessible — révoquer les tokens quand même
+        notifyAllUsersForceLogout("admin_disconnect");
       }
-
-      // SSE force_logout en temps réel sur tous les clients connectés sauf l'admin courant
-      notifyAllUsersForceLogout("admin_disconnect");
-
-      // Supprimer toutes les sessions sauf la session admin courante
-      await db.execute(sql`DELETE FROM session WHERE sid != ${adminSid}`);
 
       // Révoquer tous les tokens bearer (colonne optionnelle — ne pas bloquer si absente)
       const revokedAt = Date.now();
@@ -6900,7 +6934,7 @@ export async function registerRoutes(
           revokedTokensBefore.set(row.id, revokedAt);
         }
       } catch (tokenErr) {
-        console.warn("[Admin] token_revoked_before update skipped (column may not exist):", (tokenErr as Error).message);
+        console.warn("[Admin] token_revoked_before update skipped:", (tokenErr as Error).message);
       }
 
       try {
