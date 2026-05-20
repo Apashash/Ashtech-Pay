@@ -705,6 +705,25 @@ export async function registerRoutes(
 
   // Middleware to extract userId from either session or Bearer token
   app.use(async (req, res, next) => {
+    // Check if this session was kicked for single-device rule
+    if (req.sessionID && singleDeviceKicks.has(req.sessionID)) {
+      singleDeviceKicks.delete(req.sessionID);
+      req.singleDeviceKick = true;
+      return next();
+    }
+
+    // Check if this session was revoked (IP block / IP change)
+    if (req.sessionID) {
+      const revokedUntil = revokedSessions.get(req.sessionID);
+      if (revokedUntil) {
+        if (Date.now() < revokedUntil) {
+          req.forceLogoutRetryAfter = revokedUntil;
+          return next();
+        }
+        revokedSessions.delete(req.sessionID);
+      }
+    }
+
     // First check session
     let userId = req.session?.userId;
     
@@ -712,7 +731,15 @@ export async function registerRoutes(
     const authHeader = req.headers.authorization;
     if (!userId && authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
-      userId = getUserIdFromToken(token);
+      const resolvedId = getUserIdFromToken(token);
+      if (resolvedId) {
+        userId = resolvedId;
+      } else {
+        // Token present but invalid/revoked → signal single-device kick
+        // so requireAuth returns sessionRevoked:true and the frontend redirects to login
+        req.singleDeviceKick = true;
+        return next();
+      }
     }
 
     if (userId) {
