@@ -1139,7 +1139,8 @@ export default function PaymentPage() {
                 <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   id="phone"
-                  type="tel"
+                  type="text"
+                  inputMode="numeric"
                   placeholder="XXXX XXX XXX"
                   value={phone}
                   onChange={(e) => { setPhone(e.target.value); setErrors(p => ({...p, phone: undefined as any})); }}
