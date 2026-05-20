@@ -509,10 +509,32 @@ async function revokeOtherSessionsForSingleDevice(userId: string): Promise<void>
     // → l'ancien navigateur reçoit force_logout immédiatement via la connexion SSE ouverte
     notifyUserForceLogout(userId);
     await db.execute(sql`DELETE FROM session WHERE sess->>'userId' = ${userId}`);
-    revokedTokensBefore.set(userId, Date.now());
+    const revokedAt = Date.now();
+    revokedTokensBefore.set(userId, revokedAt);
+    // Persister en DB pour survivre aux redémarrages du serveur
+    await db.execute(sql`UPDATE users SET token_revoked_before = ${revokedAt} WHERE id = ${userId}`);
     console.log(`[Auth] Single-device — ${(result.rows as any[]).length} session(s) révoquée(s) pour userId=${userId}`);
   } catch (err: any) {
     console.error("[Auth] revokeOtherSessionsForSingleDevice failed:", err?.message);
+  }
+}
+
+// Charge les révocations de tokens depuis la DB au démarrage pour les restaurer en mémoire
+async function loadTokenRevocationsFromDb(): Promise<void> {
+  try {
+    const result = await db.execute(
+      drizzleSql`SELECT id, token_revoked_before FROM users WHERE token_revoked_before IS NOT NULL AND token_revoked_before > 0`
+    );
+    let count = 0;
+    for (const row of result.rows as { id: string; token_revoked_before: number }[]) {
+      if (row.token_revoked_before > 0) {
+        revokedTokensBefore.set(row.id, Number(row.token_revoked_before));
+        count++;
+      }
+    }
+    if (count > 0) console.log(`[Auth] Restauré ${count} révocation(s) de tokens depuis la DB`);
+  } catch (err: any) {
+    console.warn("[Auth] Impossible de charger les révocations depuis la DB:", err?.message);
   }
 }
 
@@ -623,6 +645,9 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  // Restaurer les révocations de tokens depuis la DB (persistance après redémarrage)
+  await loadTokenRevocationsFromDb();
+
   // Serve uploaded files statically
   const express = await import("express");
   app.use("/uploads", express.default.static(uploadsDir));
