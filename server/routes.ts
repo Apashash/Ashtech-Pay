@@ -52,7 +52,7 @@ import { addPendingPayment, removePendingPayment } from "./paymentPoller";
 import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, cleanupEmptyWallets, sameCfaFamily } from "./walletHelper";
 import { createSwychrPayout, formatInternationalPhone, detectMethodFromPhone, fiatToPusd, pusdToFiatRate, getConversionRate, convertFiatToPusd, getPayoutToken, COUNTRY_CURRENCY } from "./swychrPayout";
 import { addPendingPayout, removePendingPayout } from "./payoutPoller";
-import { addSSEClient, removeSSEClient, setActiveTicket, isUserOnline, getOnlineUserIds, getAdminViewingTicket, getUserViewingTicket, notifyUser, notifyAdmins, broadcastOnlineStatus, notifyUserForceLogout, notifyOtherSessionsForceLogout } from "./sse";
+import { addSSEClient, removeSSEClient, setActiveTicket, isUserOnline, getOnlineUserIds, getAdminViewingTicket, getUserViewingTicket, notifyUser, notifyAdmins, broadcastOnlineStatus, notifyUserForceLogout, notifyOtherSessionsForceLogout, notifyAllUsersForceLogout } from "./sse";
 import {
   notifyNewDeposit,
   notifyWithdrawalRequest,
@@ -6851,6 +6851,52 @@ export async function registerRoutes(
       res.json(logs);
     } catch (error) {
       console.error("Admin get logs error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // Admin: Déconnecter TOUS les utilisateurs
+  app.delete("/api/admin/sessions/all", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const adminId = req.userId!;
+      const adminSid = req.sessionID;
+
+      // Compter les sessions avant suppression (hors admin courant)
+      const countResult = await db.execute(
+        sql`SELECT COUNT(*) as cnt FROM session WHERE sid != ${adminSid}`
+      );
+      const count = parseInt((countResult.rows[0] as any)?.cnt || "0", 10);
+
+      // Ajouter toutes les autres sessions à singleDeviceKicks
+      const othersResult = await db.execute(
+        sql`SELECT sid FROM session WHERE sid != ${adminSid}`
+      );
+      for (const row of othersResult.rows as { sid: string }[]) {
+        singleDeviceKicks.add(row.sid);
+      }
+
+      // SSE force_logout en temps réel sur tous les clients connectés sauf l'admin courant
+      notifyAllUsersForceLogout("admin_disconnect");
+
+      // Supprimer toutes les sessions sauf la session admin courante
+      await db.execute(sql`DELETE FROM session WHERE sid != ${adminSid}`);
+
+      // Révoquer tous les tokens bearer
+      const revokedAt = Date.now();
+      await db.execute(sql`UPDATE users SET token_revoked_before = ${revokedAt} WHERE id != ${adminId}`);
+
+      await storage.createAdminLog({
+        adminId,
+        action: "disconnect_all_sessions",
+        targetType: "system",
+        targetId: null,
+        details: JSON.stringify({ sessionsRevoked: count }),
+        ipAddress: req.ip || null,
+      });
+
+      res.json({ ok: true, count });
+    } catch (error) {
+      console.error("Admin disconnect all sessions error:", error);
       res.status(500).json({ message: "Erreur serveur" });
     }
   });

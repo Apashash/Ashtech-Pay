@@ -1,9 +1,21 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { AdminLayout } from "./layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { 
   Table, 
   TableBody, 
@@ -28,18 +40,42 @@ import {
   Settings,
   MessageSquare,
   DollarSign,
-  Link2
+  Link2,
+  LogOut,
+  Loader2,
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import type { AdminLog } from "@shared/schema";
 
 export default function AdminLogs() {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
+  const { toast } = useToast();
 
   const { data: logs, isLoading } = useQuery<AdminLog[]>({
     queryKey: ["/api/admin/logs"],
+  });
+
+  const disconnectAllMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("DELETE", "/api/admin/sessions/all");
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/logs"] });
+      toast({
+        title: "Déconnexion globale effectuée",
+        description: data.count > 0
+          ? `${data.count} session(s) révoquée(s).`
+          : "Aucune session active trouvée.",
+      });
+    },
+    onError: () => {
+      toast({ title: "Erreur", description: "Impossible de déconnecter les utilisateurs.", variant: "destructive" });
+    },
   });
 
   const filteredLogs = logs?.filter(log => {
@@ -95,11 +131,40 @@ export default function AdminLogs() {
   return (
     <AdminLayout>
       <div className="p-6 space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
             <h1 className="text-2xl font-bold">Logs & Sécurité</h1>
             <p className="text-muted-foreground">Historique des actions administratives</p>
           </div>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" className="flex items-center gap-2" data-testid="button-disconnect-all-users">
+                <LogOut className="w-4 h-4" />
+                Déconnecter tous les utilisateurs
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Déconnexion globale</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Cette action va immédiatement déconnecter <strong>tous les utilisateurs connectés</strong> sur la plateforme (sauf vous). Leurs sessions seront supprimées et leurs tokens révoqués. Ils seront redirigés vers la page de connexion.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Annuler</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                  onClick={() => disconnectAllMutation.mutate()}
+                  disabled={disconnectAllMutation.isPending}
+                  data-testid="button-confirm-disconnect-all"
+                >
+                  {disconnectAllMutation.isPending ? (
+                    <><Loader2 className="w-4 h-4 animate-spin mr-2" />Déconnexion...</>
+                  ) : "Oui, déconnecter tout le monde"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
 
         <Card>

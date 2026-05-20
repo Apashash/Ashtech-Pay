@@ -99,3 +99,9 @@ export function notifyOtherSessionsForceLogout(userId: string, excludeSessionId:
     }
   }
 }
+
+export function notifyAllUsersForceLogout(reason = "admin_disconnect") {
+  for (const client of clients.values()) {
+    sendEvent(client.res, "force_logout", { reason });
+  }
+}
