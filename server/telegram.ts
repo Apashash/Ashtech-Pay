@@ -727,52 +727,46 @@ export type BotStats = {
 
 // ─── Menu & formatters ──────────────────
 
-const MAIN_MENU_KEYBOARD = [
-  // ── Statistiques ──
-  [
-    { text: "📊 Dashboard mois", callback_data: "cmd:stats_month" },
-    { text: "📅 Aujourd'hui",    callback_data: "cmd:stats_today" },
-  ],
-  [
-    { text: "📆 Cette semaine",  callback_data: "cmd:stats_week" },
-    { text: "⏳ En attente",     callback_data: "cmd:pending" },
-  ],
-  [
-    { text: "🔑 KYC résumé",     callback_data: "cmd:kyc" },
-    { text: "👥 Inscrits récents", callback_data: "cmd:users" },
-  ],
-  [
-    { text: "💰 Revenus",        callback_data: "cmd:revenue" },
-    { text: "📋 Rapport complet", callback_data: "cmd:rapport" },
-  ],
-  // ── Plateforme ──
-  [
-    { text: "🏆 Top 10 soldes",  callback_data: "cmd:top" },
-    { text: "💳 Solde plateforme", callback_data: "cmd:soldeA" },
-  ],
-  [
-    { text: "🔗 Liens actifs",   callback_data: "cmd:liens" },
-    { text: "🌍 Pays actifs",    callback_data: "cmd:pays" },
-  ],
-  // ── Utilisateurs ──
-  [
-    { text: "👤 Info utilisateur", callback_data: "cmd:prompt_user" },
-    { text: "💵 Solde utilisateur", callback_data: "cmd:prompt_solde" },
-  ],
-  [
-    { text: "🚫 Bannir user",    callback_data: "cmd:prompt_ban" },
-    { text: "✅ Débannir user",  callback_data: "cmd:prompt_unban" },
-  ],
-  [
-    { text: "🔑 Reset password", callback_data: "cmd:prompt_resetpw" },
-    { text: "🔍 Vérifier tx",   callback_data: "cmd:prompt_verif" },
-  ],
-  // ── Administration ──
-  [
-    { text: "💱 Modifier taux FX", callback_data: "cmd:prompt_taux" },
-    { text: "📧 Broadcast email",  callback_data: "cmd:prompt_broadcast" },
-  ],
+// ReplyKeyboard : chaque clic envoie un message visible de ton côté
+// et la conversation défile automatiquement vers la réponse du bot.
+const REPLY_KEYBOARD = [
+  ["📊 Dashboard mois",   "📅 Aujourd'hui"],
+  ["📆 Cette semaine",    "⏳ En attente"],
+  ["🔑 KYC résumé",       "👥 Inscrits récents"],
+  ["💰 Revenus",          "📋 Rapport complet"],
+  ["🏆 Top 10 soldes",    "💳 Solde plateforme"],
+  ["🔗 Liens actifs",     "🌍 Pays actifs"],
+  ["👤 Info utilisateur", "💵 Solde utilisateur"],
+  ["🚫 Bannir user",      "✅ Débannir user"],
+  ["🔐 Reset password",   "🔍 Vérifier tx"],
+  ["💱 Modifier taux FX", "📧 Broadcast email"],
+  ["📖 Aide"],
 ];
+
+// Mapping bouton → commande interne
+const REPLY_KEYBOARD_MAP: Record<string, string> = {
+  "📊 Dashboard mois":    "/stats",
+  "📅 Aujourd'hui":       "/today",
+  "📆 Cette semaine":     "/week",
+  "⏳ En attente":        "/pending",
+  "🔑 KYC résumé":        "/kyc",
+  "👥 Inscrits récents":  "/users",
+  "💰 Revenus":           "/revenue",
+  "📋 Rapport complet":   "/rapport",
+  "🏆 Top 10 soldes":     "/top",
+  "💳 Solde plateforme":  "/soldeA",
+  "🔗 Liens actifs":      "/liens",
+  "🌍 Pays actifs":       "/pays",
+  "📖 Aide":              "/aide",
+  "👤 Info utilisateur":  "prompt:user",
+  "💵 Solde utilisateur": "prompt:solde",
+  "🚫 Bannir user":       "prompt:ban",
+  "✅ Débannir user":     "prompt:unban",
+  "🔐 Reset password":    "prompt:resetpw",
+  "🔍 Vérifier tx":       "prompt:verif",
+  "💱 Modifier taux FX":  "prompt:taux",
+  "📧 Broadcast email":   "prompt:broadcast",
+};
 
 async function sendMenu(chatId: string): Promise<void> {
   await callBotApi("sendMessage", {
@@ -782,7 +776,11 @@ async function sendMenu(chatId: string): Promise<void> {
       `──────────────────\n` +
       `Bienvenue ! Choisissez une action ci-dessous 👇`,
     parse_mode: "HTML",
-    reply_markup: { inline_keyboard: MAIN_MENU_KEYBOARD },
+    reply_markup: {
+      keyboard: REPLY_KEYBOARD,
+      resize_keyboard: true,
+      is_persistent: true,
+    },
   });
 }
 
@@ -1182,7 +1180,7 @@ export async function handleTelegramUpdate(
 
     // ── Check pending custom KYC rejection first ──
     const pending = pendingCustomRejections.get(chatId);
-    if (pending && !text.startsWith("/")) {
+    if (pending && !text.startsWith("/") && !REPLY_KEYBOARD_MAP[text]) {
       pendingCustomRejections.delete(chatId);
       const result = await handlers.rejectKyc(pending.submissionId, text);
       if (result) {
@@ -1197,7 +1195,7 @@ export async function handleTelegramUpdate(
 
     // ── Check pending withdrawal rejection ──
     const pendingWdr = pendingWithdrawalRejections.get(chatId);
-    if (pendingWdr && !text.startsWith("/")) {
+    if (pendingWdr && !text.startsWith("/") && !REPLY_KEYBOARD_MAP[text]) {
       pendingWithdrawalRejections.delete(chatId);
       const result = await handlers.rejectWithdrawal(pendingWdr.reference, text);
       if (result) {
@@ -1206,6 +1204,172 @@ export async function handleTelegramUpdate(
         await callBotApi("sendMessage", { chat_id: chatId, text: `✅ Rejet retrait enregistré : <i>${text}</i>`, parse_mode: "HTML" });
       } else {
         await callBotApi("sendMessage", { chat_id: chatId, text: `⚠️ Transaction introuvable ou déjà traitée.`, parse_mode: "HTML" });
+      }
+      return;
+    }
+
+    // ── ReplyKeyboard button → route to the matching command or prompt ──
+    const mappedAction = REPLY_KEYBOARD_MAP[text];
+    if (mappedAction) {
+      if (mappedAction.startsWith("prompt:")) {
+        const promptKey = `prompt_${mappedAction.slice(7)}`;
+        const prompts: Record<string, { icon: string; title: string; usage: string; example: string }> = {
+          prompt_user:      { icon: "👤", title: "Info utilisateur",     usage: "/user email",            example: "/user jean@email.com" },
+          prompt_solde:     { icon: "💵", title: "Solde utilisateur",    usage: "/solde email",           example: "/solde jean@email.com" },
+          prompt_ban:       { icon: "🚫", title: "Bannir utilisateur",   usage: "/ban email [raison]",    example: "/ban jean@email.com Fraude" },
+          prompt_unban:     { icon: "✅", title: "Débannir utilisateur", usage: "/unban email",           example: "/unban jean@email.com" },
+          prompt_resetpw:   { icon: "🔐", title: "Reset mot de passe",   usage: "/resetpw email",         example: "/resetpw jean@email.com" },
+          prompt_verif:     { icon: "🔍", title: "Vérifier transaction", usage: "/verif REFERENCE",       example: "/verif DEP-ABC123" },
+          prompt_taux:      { icon: "💱", title: "Modifier taux FX",     usage: "/taux DEVISE TAUX",      example: "/taux USD 650" },
+          prompt_broadcast: { icon: "📧", title: "Broadcast email",      usage: "/broadcast Sujet;Corps", example: "/broadcast Maintenance;Site en maintenance ce soir" },
+        };
+        const p = prompts[promptKey];
+        if (p) {
+          await callBotApi("sendMessage", {
+            chat_id: chatId,
+            text:
+              `${p.icon} <b>${p.title}</b>\n` +
+              `──────────────────\n` +
+              `📝 Usage : <code>${p.usage}</code>\n` +
+              `💡 Exemple : <code>${p.example}</code>\n\n` +
+              `Envoyez la commande directement dans ce chat.`,
+            parse_mode: "HTML",
+          });
+        }
+        return;
+      }
+      // Redirect to the equivalent slash command by reusing the text handler below
+      // We replace text with the mapped command so the existing logic picks it up
+      // (We reassign and fall through — use a goto-like approach via a helper flag)
+      const remappedText = mappedAction;
+      // Handle the remapped command inline:
+      if (remappedText === "/start" || remappedText === "/menu") { await sendMenu(chatId); return; }
+      if (remappedText === "/aide" || remappedText === "/help") {
+        await callBotApi("sendMessage", {
+          chat_id: chatId,
+          text:
+            `📖 <b>TOUTES LES COMMANDES</b>\n` +
+            `──────────────────\n` +
+            `/stats — Dashboard ce mois\n` +
+            `/today — Stats aujourd'hui\n` +
+            `/week — Stats cette semaine\n` +
+            `/pending — Éléments en attente\n` +
+            `/kyc — Résumé vérifications KYC\n` +
+            `/users — Derniers inscrits\n` +
+            `/revenue — Revenus & commissions\n` +
+            `/rapport — Rapport complet\n` +
+            `/top — Top 10 soldes\n` +
+            `/soldeA — Solde total plateforme\n` +
+            `/liens — Liens actifs aujourd'hui\n` +
+            `/pays — Gestion des pays\n` +
+            `/user email — Infos utilisateur\n` +
+            `/solde email — Solde utilisateur\n` +
+            `/ban email [raison] — Bannir\n` +
+            `/unban email — Débannir\n` +
+            `/resetpw email — Reset mot de passe\n` +
+            `/verif REF — Vérifier transaction\n` +
+            `/taux DEVISE TAUX — Modifier taux FX\n` +
+            `/broadcast Sujet;Corps — Email groupé\n` +
+            `──────────────────\n🕐 ${now()}`,
+          parse_mode: "HTML",
+        });
+        return;
+      }
+      if (remappedText === "/top") {
+        const topUsers = await handlers.getTopUsers();
+        const medals = ["🥇", "🥈", "🥉"];
+        const lines = topUsers.map((u, i) =>
+          `${medals[i] ?? `${i + 1}.`} <b>${u.userName}</b> — <b>${fmt(u.balance, u.currency)}</b>\n   📧 ${u.email}`
+        ).join("\n\n");
+        await sendWithBanner(chatId, "top",
+          `🏆 <b>TOP 10 UTILISATEURS (solde)</b>\n──────────────────\n${lines || "Aucun utilisateur"}\n──────────────────\n🕐 ${now()}`);
+        return;
+      }
+      if (remappedText === "/soldeA") {
+        const info = await handlers.getPlatformBalance();
+        const currLines = info.byCurrency.map(({ currency, balance }) =>
+          `  • ${currency} : <b>${fmtNum(balance)}</b>`
+        ).join("\n") || "  Aucun solde";
+        const rev = info.revenue;
+        await sendWithBanner(chatId, "wallet",
+          `🏦 <b>SOLDE TOTAL ASHTECH PAY</b>\n──────────────────\n${currLines}\n` +
+          `💰 <b>Total ≈ ${fmtNum(info.totalXAF)} XAF</b>\n👥 Utilisateurs : <b>${info.userCount}</b>\n` +
+          `──────────────────\n📊 <b>REVENUS</b>\n` +
+          `  • Dépôts : <b>${fmtNum(rev.deposits)} XAF</b>\n` +
+          `  • Retraits : <b>${fmtNum(rev.withdrawals)} XAF</b>\n` +
+          `  • Envois : <b>${fmtNum(rev.transfers)} XAF</b>\n` +
+          `  • Liens : <b>${fmtNum(rev.paymentLinks)} XAF</b>\n` +
+          `  • Conversions : <b>${fmtNum(rev.conversions)} XAF</b>\n` +
+          `💵 <b>Total : ${fmtNum(rev.total)} XAF</b>\n──────────────────\n🕐 ${now()}`);
+        return;
+      }
+      if (remappedText === "/liens") {
+        const links = await handlers.getActiveLinks();
+        if (links.length === 0) {
+          await callBotApi("sendMessage", { chat_id: chatId, text: `📎 Aucun lien de paiement créé aujourd'hui.`, parse_mode: "HTML" });
+          return;
+        }
+        const lines = links.slice(0, 15).map((l, i) =>
+          `${i + 1}. <b>${l.title}</b> — ${fmt(l.amount, l.currency)}\n   👤 ${l.userName} | 🔗 /pay/${l.slug}`
+        ).join("\n\n");
+        await sendWithBanner(chatId, "liens",
+          `📎 <b>LIENS ACTIFS AUJOURD'HUI (${links.length})</b>\n──────────────────\n${lines}\n──────────────────\n🕐 ${now()}`);
+        return;
+      }
+      if (remappedText === "/pays") {
+        const countries = await handlers.getCountries();
+        const inline_keyboard = countries.slice(0, 20).map(c => ([{
+          text: `${c.isActive ? "✅" : "🔴"} ${c.name} (${c.code})`,
+          callback_data: `ct:${c.id}`,
+        }]));
+        await callBotApi("sendMessage", {
+          chat_id: chatId,
+          text: `🌍 <b>GESTION DES PAYS (${countries.length})</b>\nCliquez pour activer/désactiver un marché :`,
+          parse_mode: "HTML",
+          reply_markup: { inline_keyboard },
+        });
+        return;
+      }
+      if (remappedText === "/rapport") {
+        const s = await handlers.getStats("this_month");
+        const totalTx = s.depositCount + s.withdrawalCount + s.transferCount + s.paymentLinkCount;
+        const msg =
+          `📊 <b>RAPPORT — CE MOIS</b>\n──────────────────\n` +
+          `👥 Utilisateurs : <b>${s.totalUsers.toLocaleString("fr-FR")}</b> (bannis : ${s.bannedUsers})\n──────────────────\n` +
+          `💸 <b>TRANSACTIONS</b>\n  Total : <b>${totalTx.toLocaleString("fr-FR")}</b>\n` +
+          `  📥 Dépôts : ${s.depositCount} — <b>${fmt(s.depositVol, "XAF")}</b>\n` +
+          `  📤 Retraits : ${s.withdrawalCount} — <b>${fmt(s.withdrawalVol, "XAF")}</b>\n` +
+          `  🔄 Transferts : ${s.transferCount}\n  🔗 Liens : ${s.paymentLinkCount}\n──────────────────\n` +
+          `💰 <b>REVENUS</b>\n  Total : <b>${fmt(s.totalRevenue, "XAF")}</b>\n──────────────────\n` +
+          `⏳ <b>EN ATTENTE</b>\n  Dépôts : ${s.pendingDeposits} | Retraits : ${s.pendingWithdrawals} | KYC : ${s.kycPending}\n` +
+          `──────────────────\n🕐 ${now()}`;
+        await sendWithBanner(chatId, "rapport", msg);
+        return;
+      }
+      // For /stats, /today, /week, /pending, /kyc, /users, /revenue → fall through to cmdMap below
+      // by overriding text variable — we do this by re-entering with a fake cmdMap lookup
+      const cmdMapDirect: Record<string, { period?: string; type: string }> = {
+        "/stats":   { type: "dash", period: "this_month" },
+        "/today":   { type: "dash", period: "today" },
+        "/week":    { type: "dash", period: "this_week" },
+        "/pending": { type: "pending", period: "this_month" },
+        "/kyc":     { type: "kyc", period: "this_month" },
+        "/users":   { type: "users", period: "this_month" },
+        "/revenue": { type: "revenue", period: "this_month" },
+      };
+      const directEntry = cmdMapDirect[remappedText];
+      if (directEntry) {
+        const { type, period = "this_month" } = directEntry;
+        const stats = await handlers.getStats(period);
+        let msgText = "";
+        if (type === "pending") msgText = formatPending(stats);
+        else if (type === "kyc") msgText = formatKyc(stats);
+        else if (type === "users") msgText = formatRecentUsers(stats);
+        else if (type === "revenue") msgText = formatRevenue(stats);
+        else msgText = formatDashboard(stats);
+        const txtBannerMap: Record<string, string> = { pending: "pending", kyc: "kyc", users: "users", revenue: "revenue" };
+        await sendWithBanner(chatId, txtBannerMap[type] ?? "stats", msgText);
+        return;
       }
       return;
     }
