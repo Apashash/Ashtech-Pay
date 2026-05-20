@@ -135,7 +135,28 @@ function ConnectedDevicesSection() {
     refetchOnWindowFocus: true,
   });
 
-  const disconnectMutation = useMutation({
+  const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
+
+  const disconnectOneMutation = useMutation({
+    mutationFn: async (sid: string) => {
+      const res = await apiRequest("DELETE", `/api/user/sessions/${sid}`);
+      return res.json();
+    },
+    onSuccess: (_data, sid) => {
+      setDisconnectingId(null);
+      refetch();
+      toast({
+        title: "Appareil déconnecté",
+        description: "L'appareil a été déconnecté avec succès.",
+      });
+    },
+    onError: () => {
+      setDisconnectingId(null);
+      toast({ title: "Erreur", description: "Impossible de déconnecter cet appareil.", variant: "destructive" });
+    },
+  });
+
+  const disconnectAllMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("DELETE", "/api/user/sessions/others");
       return res.json();
@@ -192,17 +213,33 @@ function ConnectedDevicesSection() {
                     </span>
                   </div>
                 </div>
+                {!s.isCurrent && (
+                  <button
+                    className="flex-shrink-0 p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors disabled:opacity-40"
+                    onClick={() => {
+                      setDisconnectingId(s.id);
+                      disconnectOneMutation.mutate(s.id);
+                    }}
+                    disabled={disconnectingId === s.id || disconnectAllMutation.isPending}
+                    title="Déconnecter cet appareil"
+                    data-testid={`button-disconnect-device-${s.id}`}
+                  >
+                    {disconnectingId === s.id
+                      ? <Loader2 className="w-4 h-4 animate-spin" />
+                      : <LogOut className="w-4 h-4" />}
+                  </button>
+                )}
               </div>
             ))}
             {otherCount > 0 && (
               <div className="px-4 py-3">
                 <button
                   className="flex items-center gap-2 text-sm font-medium text-red-500 hover:text-red-600 transition-colors disabled:opacity-50"
-                  onClick={() => disconnectMutation.mutate()}
-                  disabled={disconnectMutation.isPending}
+                  onClick={() => disconnectAllMutation.mutate()}
+                  disabled={disconnectAllMutation.isPending || disconnectingId !== null}
                   data-testid="button-disconnect-others"
                 >
-                  {disconnectMutation.isPending
+                  {disconnectAllMutation.isPending
                     ? <Loader2 className="w-4 h-4 animate-spin" />
                     : <LogOut className="w-4 h-4" />}
                   Déconnecter tous les autres appareils ({otherCount})

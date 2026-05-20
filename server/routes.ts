@@ -52,7 +52,7 @@ import { addPendingPayment, removePendingPayment } from "./paymentPoller";
 import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, cleanupEmptyWallets, sameCfaFamily } from "./walletHelper";
 import { createSwychrPayout, formatInternationalPhone, detectMethodFromPhone, fiatToPusd, pusdToFiatRate, getConversionRate, convertFiatToPusd, getPayoutToken, COUNTRY_CURRENCY } from "./swychrPayout";
 import { addPendingPayout, removePendingPayout } from "./payoutPoller";
-import { addSSEClient, removeSSEClient, setActiveTicket, isUserOnline, getOnlineUserIds, getAdminViewingTicket, getUserViewingTicket, notifyUser, notifyAdmins, broadcastOnlineStatus, notifyUserForceLogout, notifyOtherSessionsForceLogout, notifyAllUsersForceLogout } from "./sse";
+import { addSSEClient, removeSSEClient, setActiveTicket, isUserOnline, getOnlineUserIds, getAdminViewingTicket, getUserViewingTicket, notifyUser, notifyAdmins, broadcastOnlineStatus, notifyUserForceLogout, notifyOtherSessionsForceLogout, notifyAllUsersForceLogout, notifySpecificSessionForceLogout } from "./sse";
 import {
   notifyNewDeposit,
   notifyWithdrawalRequest,
@@ -1395,6 +1395,43 @@ export async function registerRoutes(
     } catch (error) {
       console.error("[Sessions] Erreur:", error);
       res.json([]);
+    }
+  });
+
+  // Déconnecter un appareil spécifique par son session ID
+  app.delete("/api/user/sessions/:sid", requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId!;
+      const currentSid = req.sessionID;
+      const targetSid = req.params.sid;
+
+      // Empêcher de se déconnecter soi-même via cet endpoint
+      if (targetSid === currentSid) {
+        return res.status(400).json({ message: "Utilisez /logout pour vous déconnecter." });
+      }
+
+      try {
+        // Vérifier que la session appartient bien à cet utilisateur
+        const check = await sessionPool.query(
+          `SELECT sid FROM session WHERE sid = $1 AND sess->>'userId' = $2`,
+          [targetSid, userId]
+        );
+        if (check.rows.length === 0) {
+          return res.status(404).json({ message: "Session introuvable." });
+        }
+
+        singleDeviceKicks.add(targetSid);
+        notifySpecificSessionForceLogout(targetSid);
+        await sessionPool.query(`DELETE FROM session WHERE sid = $1`, [targetSid]);
+      } catch (sessErr: any) {
+        console.error("[Sessions] Erreur déconnexion appareil:", sessErr?.message);
+        return res.status(500).json({ message: "Erreur serveur" });
+      }
+
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("[Sessions] Déconnexion appareil erreur:", error);
+      res.status(500).json({ message: "Erreur serveur" });
     }
   });
 
