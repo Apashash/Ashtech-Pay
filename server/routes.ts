@@ -193,6 +193,9 @@ function getUserIdFromToken(token: string): string | null {
     const expectedSig = crypto.createHmac("sha256", getTokenSecret()).update(`${userId}.${timestamp}`).digest("hex");
     if (sig !== expectedSig) return null;
     if (Date.now() - parseInt(timestamp) > TOKEN_EXPIRY_MS) return null;
+    // Token révoqué suite à un changement d'IP (Bearer token ancien)
+    const revokedBefore = revokedTokensBefore.get(userId);
+    if (revokedBefore && parseInt(timestamp) < revokedBefore) return null;
     return userId;
   } catch {
     return null;
@@ -214,6 +217,18 @@ declare global {
 
 // Middleware to extract userId from either session or Bearer token
 function extractUserId(req: Request, _res: Response, next: NextFunction) {
+  // Vérifier si cette session spécifique a été révoquée (changement d'IP)
+  if (req.sessionID) {
+    const revokedUntil = revokedSessions.get(req.sessionID);
+    if (revokedUntil) {
+      if (Date.now() < revokedUntil) {
+        req.forceLogoutRetryAfter = revokedUntil;
+        return next();
+      }
+      revokedSessions.delete(req.sessionID);
+    }
+  }
+
   let userId: string | undefined;
 
   if (req.session?.userId) {
@@ -365,6 +380,12 @@ const AUTH_BLOCK_DURATION_MS = 7 * 60 * 1000; // 7 minutes
 
 // ─── Forced-logout map : userId → blockedUntil timestamp ─────────────────────
 const forcedLogoutMap = new Map<string, number>();
+// Map sessionId → expiresAt : sessions individuellement révoquées (ex : changement d'IP)
+const revokedSessions = new Map<string, number>();
+// Map userId → timestamp : les Bearer tokens émis AVANT ce moment sont invalides
+const revokedTokensBefore = new Map<string, number>();
+// Map userId → dernière IP de connexion connue
+const activeIpRegistry = new Map<string, string>();
 
 async function destroyUserSessions(userId: string, blockedUntil: number): Promise<void> {
   try {
@@ -375,10 +396,33 @@ async function destroyUserSessions(userId: string, blockedUntil: number): Promis
   }
 }
 
+// Révocation de sessions lors d'un changement d'IP : marque les anciennes sessions
+// individuellement pour qu'elles reçoivent sessionRevoked:true, puis les supprime.
+async function revokeSessionsForIpChange(userId: string): Promise<void> {
+  try {
+    const result = await db.execute(sql`SELECT sid FROM session WHERE sess->>'userId' = ${userId}`);
+    const expiresAt = Date.now() + 30 * 60 * 1000; // 30 min de fenêtre de révocation
+    for (const row of result.rows as { sid: string }[]) {
+      revokedSessions.set(row.sid, expiresAt);
+    }
+    await db.execute(sql`DELETE FROM session WHERE sess->>'userId' = ${userId}`);
+    revokedTokensBefore.set(userId, Date.now());
+    console.log(`[Auth] IP change — sessions révoquées pour userId=${userId}`);
+  } catch (err: any) {
+    console.error("[Auth] revokeSessionsForIpChange failed:", err?.message);
+  }
+}
+
 setInterval(() => {
   const now = Date.now();
   for (const [uid, until] of forcedLogoutMap.entries()) {
     if (now > until) forcedLogoutMap.delete(uid);
+  }
+  for (const [sid, until] of revokedSessions.entries()) {
+    if (now > until) revokedSessions.delete(sid);
+  }
+  for (const [uid, ts] of revokedTokensBefore.entries()) {
+    if (now - ts > TOKEN_EXPIRY_MS) revokedTokensBefore.delete(uid);
   }
 }, 5 * 60 * 1000);
 
@@ -951,6 +995,14 @@ export async function registerRoutes(
       if (user.role === "admin") {
         notifyAdminLogin({ adminName: user.fullName || user.username, adminEmail: user.email || "", ip }).catch(() => {});
       }
+
+      // Vérifier si l'IP a changé → révoquer les anciennes sessions
+      const knownIp = activeIpRegistry.get(user.id);
+      if (knownIp && knownIp !== ip) {
+        console.log(`[Auth] Changement d'IP pour ${user.email} : ${knownIp} → ${ip}. Révocation des sessions existantes.`);
+        await revokeSessionsForIpChange(user.id);
+      }
+      activeIpRegistry.set(user.id, ip);
 
       // Generate auth token for token-based auth (works in iframes where cookies fail)
       const authToken = storeAuthToken(user.id);
