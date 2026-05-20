@@ -103,6 +103,83 @@ function now(): string {
   return new Date().toLocaleString("fr-FR", { timeZone: "Africa/Douala" });
 }
 
+// ─── DRAPEAUX & PAYS ──────────────────
+const COUNTRY_INFO: Record<string, { flag: string; name: string }> = {
+  CM: { flag: "🇨🇲", name: "Cameroun" },
+  SN: { flag: "🇸🇳", name: "Sénégal" },
+  CI: { flag: "🇨🇮", name: "Côte d'Ivoire" },
+  BF: { flag: "🇧🇫", name: "Burkina Faso" },
+  ML: { flag: "🇲🇱", name: "Mali" },
+  BJ: { flag: "🇧🇯", name: "Bénin" },
+  TG: { flag: "🇹🇬", name: "Togo" },
+  NE: { flag: "🇳🇪", name: "Niger" },
+  GN: { flag: "🇬🇳", name: "Guinée" },
+  GA: { flag: "🇬🇦", name: "Gabon" },
+  CG: { flag: "🇨🇬", name: "Congo" },
+  CF: { flag: "🇨🇫", name: "Centrafrique" },
+  TD: { flag: "🇹🇩", name: "Tchad" },
+  CD: { flag: "🇨🇩", name: "RD Congo" },
+  NG: { flag: "🇳🇬", name: "Nigeria" },
+  GH: { flag: "🇬🇭", name: "Ghana" },
+  KE: { flag: "🇰🇪", name: "Kenya" },
+  TZ: { flag: "🇹🇿", name: "Tanzanie" },
+  UG: { flag: "🇺🇬", name: "Ouganda" },
+  RW: { flag: "🇷🇼", name: "Rwanda" },
+  MG: { flag: "🇲🇬", name: "Madagascar" },
+  MZ: { flag: "🇲🇿", name: "Mozambique" },
+  ZM: { flag: "🇿🇲", name: "Zambie" },
+  ZW: { flag: "🇿🇼", name: "Zimbabwe" },
+  TN: { flag: "🇹🇳", name: "Tunisie" },
+  MA: { flag: "🇲🇦", name: "Maroc" },
+  DZ: { flag: "🇩🇿", name: "Algérie" },
+  EG: { flag: "🇪🇬", name: "Égypte" },
+  US: { flag: "🇺🇸", name: "États-Unis" },
+  GB: { flag: "🇬🇧", name: "Royaume-Uni" },
+  FR: { flag: "🇫🇷", name: "France" },
+  DE: { flag: "🇩🇪", name: "Allemagne" },
+  CN: { flag: "🇨🇳", name: "Chine" },
+  IN: { flag: "🇮🇳", name: "Inde" },
+  JP: { flag: "🇯🇵", name: "Japon" },
+  EU: { flag: "🇪🇺", name: "Europe" },
+  GQ: { flag: "🇬🇶", name: "Guinée Équatoriale" },
+};
+
+const CURRENCY_TO_COUNTRY: Record<string, string> = {
+  XAF: "CM", XAFC: "CM", XAFG: "GA",
+  XOF: "SN", XOFB: "BJ", XOFC: "CI", XOFF: "BF", XOFT: "TG", XOFS: "SN",
+  NGN: "NG", GHS: "GH", KES: "KE", TZS: "TZ", UGX: "UG", RWF: "RW",
+  USD: "US", EUR: "EU", GBP: "GB", CNY: "CN", CDF: "CD",
+};
+
+const COUNTRY_NAME_TO_CODE: Record<string, string> = {
+  cameroun: "CM", "côte d'ivoire": "CI", "cote d'ivoire": "CI",
+  sénégal: "SN", senegal: "SN", bénin: "BJ", benin: "BJ",
+  togo: "TG", mali: "ML", niger: "NE", "burkina faso": "BF",
+  guinée: "GN", guinee: "GN", gabon: "GA", congo: "CG",
+  "rd congo": "CD", "rdc": "CD", nigeria: "NG", ghana: "GH",
+  kenya: "KE", tanzanie: "TZ", tanzania: "TZ", ouganda: "UG", uganda: "UG",
+  rwanda: "RW", madagascar: "MG", "états-unis": "US", france: "FR",
+  "royaume-uni": "GB", europe: "EU", tchad: "TD", centrafrique: "CF",
+  "guinée équatoriale": "GQ",
+};
+
+/** Retourne "🇨🇲 Cameroun" à partir d'un code pays, d'un nom ou d'un code devise */
+function countryDisplay(input: string | null | undefined): string {
+  if (!input) return "";
+  const trimmed = input.trim();
+  const upper = trimmed.toUpperCase();
+  if (COUNTRY_INFO[upper]) return `${COUNTRY_INFO[upper].flag} ${COUNTRY_INFO[upper].name}`;
+  const fromCurrency = CURRENCY_TO_COUNTRY[upper];
+  if (fromCurrency && COUNTRY_INFO[fromCurrency]) return `${COUNTRY_INFO[fromCurrency].flag} ${COUNTRY_INFO[fromCurrency].name}`;
+  const fromName = COUNTRY_NAME_TO_CODE[trimmed.toLowerCase()];
+  if (fromName && COUNTRY_INFO[fromName]) return `${COUNTRY_INFO[fromName].flag} ${COUNTRY_INFO[fromName].name}`;
+  if (upper.length === 2 && /^[A-Z]+$/.test(upper)) {
+    const flag = upper.split("").map(c => String.fromCodePoint(0x1F1E6 + c.charCodeAt(0) - 65)).join("");
+    return `${flag} ${trimmed}`;
+  }
+  return trimmed;
+}
+
 // ─── DÉPÔTS ──────────────────
 
 export async function notifyNewDeposit(opts: {
@@ -114,12 +191,15 @@ export async function notifyNewDeposit(opts: {
   phone?: string;
   reference: string;
   provider?: string;
+  country?: string;
 }): Promise<void> {
+  const pays = opts.country ? countryDisplay(opts.country) : countryDisplay(opts.currency);
   const msg =
     `🟡 <b>NOUVEAU DÉPÔT EN ATTENTE</b>\n` +
     `──────────────────\n` +
     `👤 Utilisateur : <b>${opts.userName}</b>\n` +
     `📧 Email : ${opts.userEmail}\n` +
+    (pays ? `🌍 Pays : <b>${pays}</b>\n` : "") +
     `💰 Montant : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
     `📱 Méthode : ${opts.method}\n` +
     (opts.phone ? `📞 Téléphone : ${opts.phone}\n` : "") +
@@ -136,12 +216,15 @@ export async function notifyDepositConfirmed(opts: {
   currency: string;
   reference: string;
   provider?: string;
+  country?: string;
 }): Promise<void> {
+  const pays = opts.country ? countryDisplay(opts.country) : countryDisplay(opts.currency);
   const msg =
     `✅ <b>PAIEMENT REÇU / DÉPÔT CONFIRMÉ</b>\n` +
     `──────────────────\n` +
     `👤 Utilisateur : <b>${opts.userName}</b>\n` +
     `📧 Email : ${opts.userEmail}\n` +
+    (pays ? `🌍 Pays : <b>${pays}</b>\n` : "") +
     `💰 Montant crédité : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
     (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +
     `🔖 Référence : <code>${opts.reference}</code>\n` +
@@ -157,12 +240,15 @@ export async function notifyDepositFailed(opts: {
   reference: string;
   reason?: string;
   provider?: string;
+  country?: string;
 }): Promise<void> {
+  const pays = opts.country ? countryDisplay(opts.country) : countryDisplay(opts.currency);
   const msg =
     `❌ <b>ÉCHEC DE PAIEMENT (DÉPÔT)</b>\n` +
     `──────────────────\n` +
     `👤 Utilisateur : <b>${opts.userName}</b>\n` +
     `📧 Email : ${opts.userEmail}\n` +
+    (pays ? `🌍 Pays : <b>${pays}</b>\n` : "") +
     `💰 Montant : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
     (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +
     (opts.reason ? `⚠️ Raison : ${opts.reason}\n` : "") +
@@ -182,12 +268,21 @@ export async function notifyWithdrawalRequest(opts: {
   operator?: string;
   reference: string;
   provider?: string;
+  senderCountry?: string;
+  recipientCountry?: string;
 }): Promise<void> {
+  const senderPays = countryDisplay(opts.senderCountry || opts.currency);
+  const recipientPays = countryDisplay(opts.recipientCountry || opts.currency);
+  const sameCountry = senderPays === recipientPays;
   const msg =
     `🔵 <b>DEMANDE DE RETRAIT</b>\n` +
     `──────────────────\n` +
     `👤 Utilisateur : <b>${opts.userName}</b>\n` +
     `📧 Email : ${opts.userEmail}\n` +
+    (sameCountry
+      ? (senderPays ? `🌍 Pays : <b>${senderPays}</b>\n` : "")
+      : `🌍 Expéditeur : <b>${senderPays || "—"}</b>\n` +
+        `📍 Destinataire : <b>${recipientPays || "—"}</b>\n`) +
     `💰 Montant net : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
     `📱 Numéro : ${opts.phone}\n` +
     (opts.operator ? `📡 Opérateur : ${opts.operator}\n` : "") +
@@ -217,12 +312,21 @@ export async function notifyWithdrawalPendingManual(opts: {
   currency: string;
   phone: string;
   reference: string;
+  senderCountry?: string;
+  recipientCountry?: string;
 }): Promise<void> {
+  const senderPays = countryDisplay(opts.senderCountry || opts.currency);
+  const recipientPays = countryDisplay(opts.recipientCountry || opts.currency);
+  const sameCountry = senderPays === recipientPays;
   const msg =
     `⏸ <b>RETRAIT EN ATTENTE MANUELLE</b>\n` +
     `──────────────────\n` +
     `👤 Utilisateur : <b>${opts.userName}</b>\n` +
     `📧 Email : ${opts.userEmail}\n` +
+    (sameCountry
+      ? (senderPays ? `🌍 Pays : <b>${senderPays}</b>\n` : "")
+      : `🌍 Expéditeur : <b>${senderPays || "—"}</b>\n` +
+        `📍 Destinataire : <b>${recipientPays || "—"}</b>\n`) +
     `💰 Montant : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
     `📱 Numéro : ${opts.phone}\n` +
     `🔖 Référence : <code>${opts.reference}</code>\n` +
@@ -373,16 +477,27 @@ export async function notifyConversion(opts: {
   reference: string;
   byAdmin?: boolean;
   adminName?: string;
+  userCountry?: string;
 }): Promise<void> {
   const who = opts.byAdmin && opts.adminName
     ? `🛡️ Admin : <b>${opts.adminName}</b>\n`
     : "";
+  const fromPays = countryDisplay(opts.fromCurrency);
+  const toPays = countryDisplay(opts.toCurrency);
+  const userPays = opts.userCountry ? countryDisplay(opts.userCountry) : "";
+  const sameZone = fromPays === toPays;
   const msg =
     `🔄 <b>ÉCHANGE DE DEVISES${opts.byAdmin ? " (ADMIN)" : ""}</b>\n` +
     `──────────────────\n` +
     who +
     `👤 Utilisateur : <b>${opts.userName}</b>\n` +
     `📧 Email : ${opts.userEmail}\n` +
+    (userPays ? `🌍 Pays : <b>${userPays}</b>\n` : "") +
+    `──────────────────\n` +
+    (sameZone
+      ? (fromPays ? `🌐 Zone : <b>${fromPays}</b>\n` : "")
+      : `📤 De : <b>${fromPays || opts.fromCurrency}</b>\n` +
+        `📥 Vers : <b>${toPays || opts.toCurrency}</b>\n`) +
     `💱 <b>${fmt(opts.fromAmount, opts.fromCurrency)} → ${fmt(opts.toAmount, opts.toCurrency)}</b>\n` +
     `💸 Frais : ${fmt(opts.feeAmount, opts.fromCurrency)} (${opts.feePercent}%)\n` +
     `🔖 Référence : <code>${opts.reference}</code>\n` +

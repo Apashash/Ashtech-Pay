@@ -104,6 +104,7 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
         currency: paymentCurrency,
         reference: payment.reference,
         provider: payment.provider,
+        country: (txUser as any)?.country || "",
       }).catch(() => {});
 
       if (payment.paymentIntentId) {
@@ -150,6 +151,7 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
         currency: transaction.currency || "XAF",
         reference: payment.reference,
         provider: payment.provider,
+        country: (txUserFailed as any)?.country || "",
       }).catch(() => {});
     }
 

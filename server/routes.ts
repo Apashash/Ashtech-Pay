@@ -1946,6 +1946,7 @@ export async function registerRoutes(
         phone: data.phoneNumber || undefined,
         reference: depositRef,
         provider: paymentProvider,
+        country: countryCode,
       }).catch(() => {});
 
       // Call payment gateway for mobile money deposits
@@ -2446,6 +2447,8 @@ export async function registerRoutes(
         operator: (withdrawalOperator as any)?.name || undefined,
         reference: withdrawalRef,
         provider: withdrawalProvider,
+        senderCountry: user.country || "",
+        recipientCountry: withdrawalCountryCode || "",
       }).catch(() => {});
 
       // Call payout API immediately — choose provider based on operator config
@@ -2583,6 +2586,8 @@ export async function registerRoutes(
               currency: withdrawalCurrency,
               phone: data.accountDetails,
               reference: withdrawalRef,
+              senderCountry: user.country || "",
+              recipientCountry: withdrawalCountryCode || "",
             }).catch(() => {});
           } else {
             console.error(`[Withdrawal] Payout failed for ${withdrawalRef} (${paymentProvider}): ${payoutResult.message}`);
@@ -2839,6 +2844,7 @@ export async function registerRoutes(
         feeAmount: totalFeeAmount.toFixed(2),
         feePercent: conversionFeePercent,
         reference: transaction.reference || "",
+        userCountry: user.country || "",
       }).catch(() => {});
 
       return res.json({
@@ -2960,6 +2966,7 @@ export async function registerRoutes(
         reference: transaction.reference || "",
         byAdmin: true,
         adminName: adminUser?.fullName || adminUser?.username || "Admin",
+        userCountry: user.country || "",
       }).catch(() => {});
 
       return res.json({
