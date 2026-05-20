@@ -542,6 +542,72 @@ export async function notifyConversion(opts: {
   await sendMessage(msg);
 }
 
+export async function notifyConversionStarted(opts: {
+  userName: string;
+  userEmail: string;
+  fromAmount: string | number;
+  fromCurrency: string;
+  toAmount: string | number;
+  toCurrency: string;
+  feeAmount: string | number;
+  feePercent: string | number;
+  reference: string;
+  userCountry?: string;
+  estimatedSeconds: number;
+}): Promise<void> {
+  const fromPays = countryDisplay(opts.fromCurrency);
+  const toPays = countryDisplay(opts.toCurrency);
+  const userPays = opts.userCountry ? countryDisplay(opts.userCountry) : "";
+  const msg =
+    `⏳ <b>CONVERSION EN COURS</b>\n` +
+    `──────────────────\n` +
+    `👤 Utilisateur : <b>${opts.userName}</b>\n` +
+    `📧 Email : ${opts.userEmail}\n` +
+    (userPays ? `🌍 Pays : <b>${userPays}</b>\n` : "") +
+    `──────────────────\n` +
+    `📤 De : <b>${fromPays || opts.fromCurrency}</b>\n` +
+    `📥 Vers : <b>${toPays || opts.toCurrency}</b>\n` +
+    `💱 <b>${fmt(opts.fromAmount, opts.fromCurrency)} → ${fmt(opts.toAmount, opts.toCurrency)}</b>\n` +
+    `💸 Frais : ${fmt(opts.feeAmount, opts.fromCurrency)} (${opts.feePercent}%)\n` +
+    `🔖 Réf. : <code>${opts.reference}</code>\n` +
+    `⏱️ Durée estimée : ~${opts.estimatedSeconds}s\n` +
+    `🕐 Heure : ${now()}`;
+  await sendMessage(msg);
+}
+
+export async function notifyConversionCompleted(opts: {
+  userName: string;
+  userEmail: string;
+  fromAmount: string | number;
+  fromCurrency: string;
+  toAmount: string | number;
+  toCurrency: string;
+  feeAmount: string | number;
+  feePercent: string | number;
+  reference: string;
+  userCountry?: string;
+  elapsedSeconds: number;
+}): Promise<void> {
+  const fromPays = countryDisplay(opts.fromCurrency);
+  const toPays = countryDisplay(opts.toCurrency);
+  const userPays = opts.userCountry ? countryDisplay(opts.userCountry) : "";
+  const msg =
+    `✅ <b>CONVERSION TERMINÉE AVEC SUCCÈS</b>\n` +
+    `──────────────────\n` +
+    `👤 Utilisateur : <b>${opts.userName}</b>\n` +
+    `📧 Email : ${opts.userEmail}\n` +
+    (userPays ? `🌍 Pays : <b>${userPays}</b>\n` : "") +
+    `──────────────────\n` +
+    `📤 De : <b>${fromPays || opts.fromCurrency}</b>\n` +
+    `📥 Vers : <b>${toPays || opts.toCurrency}</b>\n` +
+    `💱 <b>${fmt(opts.fromAmount, opts.fromCurrency)} → ${fmt(opts.toAmount, opts.toCurrency)}</b>\n` +
+    `💸 Frais : ${fmt(opts.feeAmount, opts.fromCurrency)} (${opts.feePercent}%)\n` +
+    `🔖 Réf. : <code>${opts.reference}</code>\n` +
+    `⏱️ Temps d'échange : <b>${opts.elapsedSeconds} secondes</b>\n` +
+    `🕐 Heure : ${now()}`;
+  await sendMessage(msg);
+}
+
 // ─── TRANSFERTS ──────────────────
 
 export async function notifyTransferSent(opts: {

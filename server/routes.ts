@@ -61,6 +61,8 @@ import {
   notifyAdminLoginFailed,
   notifyNewUser,
   notifyConversion,
+  notifyConversionStarted,
+  notifyConversionCompleted,
   notifyTransferSent,
   notifyKycSubmitted,
   notifyKycApproved,
@@ -2734,7 +2736,7 @@ export async function registerRoutes(
     }
   });
 
-  // POST /api/wallets/convert — submit a conversion request (saved as pending, admin executes it)
+  // POST /api/wallets/convert — soumet une conversion (débit immédiat, crédit après délai 15-70s)
   app.post("/api/wallets/convert", requireAuth, async (req, res) => {
     try {
       const userId = req.userId!;
@@ -2769,7 +2771,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: `Solde insuffisant en ${fromCurrency} (disponible: ${sourceBalance.toFixed(2)})` });
       }
 
-      // Determine which provider funded the source wallet (from last deposit/payment_link transaction)
+      // Determine provider fee
       let conversionProvider = "swychr";
       const lastIncomingTx = await storage.getLastIncomingTransactionByCurrency(userId, fromCurrency);
       if (lastIncomingTx?.operatorId) {
@@ -2777,82 +2779,74 @@ export async function registerRoutes(
         if (txOperator) conversionProvider = (txOperator as any).paymentProvider || "swychr";
       }
 
-      // Use provider-specific conversion fee configured by admin
       const feeKey = conversionProvider === "pixpay"
         ? "conversion_fee_percent_pixpay"
         : conversionProvider === "afribapay"
           ? "conversion_fee_percent_afribapay"
           : "conversion_fee_percent_swychr";
       const conversionFeePercentSetting = await storage.getSetting(feeKey);
-      // Fallback to legacy key if provider-specific not set
       const fallbackSetting = await storage.getSetting("conversion_fee_percent");
       const conversionFeePercent = conversionFeePercentSetting
         ? parseFloat(conversionFeePercentSetting.value)
         : fallbackSetting ? parseFloat(fallbackSetting.value) : 6;
-      console.log(`[Conversion] fromCurrency=${fromCurrency} provider=${conversionProvider} feeKey=${feeKey} fee=${conversionFeePercent}%`);
-      const totalFeeAmount = (parsedAmount * conversionFeePercent) / 100;
 
-      // Ashtech margin for conversion is strictly 2% as per user request
+      const totalFeeAmount = (parsedAmount * conversionFeePercent) / 100;
       const ashtechMarginPercent = 2;
       const ashtechFeeAmount = (parsedAmount * ashtechMarginPercent) / 100;
-
       const amountAfterFee = parsedAmount - totalFeeAmount;
 
-      // Use admin "Devises & Taux de change" rates for conversion
       const convFxRates = await loadFxRates();
       const amountInXAF = convertToXAF(amountAfterFee, fromCurrency, convFxRates);
       const receivedAmount = convertFromXAF(amountInXAF, toCurrency, convFxRates);
 
-      // Record transaction BEFORE moving money
+      // Débit immédiat de la source
+      if (fromCurrency === userPrimary) {
+        await storage.updateUserBalance(userId, -parsedAmount);
+      } else {
+        await storage.upsertWallet(userId, fromCurrency, -parsedAmount);
+      }
+
+      // Transaction en attente
       const transaction = await storage.createTransaction({
         userId,
         type: "conversion",
         amount: parsedAmount.toFixed(2),
         currency: fromCurrency,
-        status: "completed",
+        status: "pending",
         description: `Conversion ${parsedAmount.toFixed(2)} ${fromCurrency} → ${receivedAmount.toFixed(2)} ${toCurrency} (Frais: ${conversionFeePercent}%)`,
         reference: generateTransactionReference("CONV"),
         feeAmount: ashtechFeeAmount.toFixed(2),
         totalAmount: parsedAmount.toFixed(2),
       });
 
-      // Debit source and credit target after transaction is created
-      if (fromCurrency === userPrimary) {
-        await storage.updateUserBalance(userId, -parsedAmount);
-      } else {
-        await storage.upsertWallet(userId, fromCurrency, -parsedAmount);
-      }
-      if (toCurrency === userPrimary) {
-        await storage.updateUserBalance(userId, receivedAmount);
-      } else {
-        await storage.upsertWallet(userId, toCurrency, receivedAmount);
-      }
-      await cleanupEmptyWallets(userId);
-
-      // Save as a completed conversion request for admin record (manual Swychr sync)
-      await storage.createConversionRequest({
+      // Conversion request en attente
+      const convReq = await storage.createConversionRequest({
         userId,
         fromCurrency,
         toCurrency,
         fromAmount: parsedAmount.toFixed(2),
         toAmount: receivedAmount.toFixed(2),
-        status: "completed",
-        notes: `Conversion automatique sur Ashtech Pay. À synchroniser manuellement sur Swychr. Frais: ${totalFeeAmount.toFixed(2)} ${fromCurrency} (${conversionFeePercent}%)`,
-        executedAt: new Date(),
-        executedById: userId,
+        status: "pending",
+        notes: `Conversion automatique Ashtech Pay. Frais: ${totalFeeAmount.toFixed(2)} ${fromCurrency} (${conversionFeePercent}%)`,
       });
 
-      // Notify user
+      // Notification "en cours"
       await storage.createUserNotification({
         userId,
-        title: "Conversion effectuée",
-        message: `Votre conversion de ${parsedAmount.toFixed(2)} ${fromCurrency} → ${receivedAmount.toFixed(2)} ${toCurrency} a été effectuée. Frais appliqués: ${totalFeeAmount.toFixed(2)} ${fromCurrency}.`,
+        title: "Conversion en cours...",
+        message: `Votre conversion de ${parsedAmount.toFixed(2)} ${fromCurrency} → ${receivedAmount.toFixed(2)} ${toCurrency} est en cours de traitement.`,
         transactionId: transaction.id,
-        type: "success",
+        type: "info",
       });
 
-      // Notify admin via Telegram
-      notifyConversion({
+      // Délai aléatoire entre 15 et 70 secondes
+      const delaySeconds = Math.floor(Math.random() * (70 - 15 + 1)) + 15;
+      const startTime = Date.now();
+
+      console.log(`[Conversion] ${transaction.reference} — débit ${parsedAmount} ${fromCurrency}, crédit ${receivedAmount.toFixed(2)} ${toCurrency} dans ${delaySeconds}s`);
+
+      // Telegram #1 — conversion démarrée
+      notifyConversionStarted({
         userName: user.fullName || user.username,
         userEmail: user.email || "",
         fromAmount: parsedAmount.toFixed(2),
@@ -2863,20 +2857,86 @@ export async function registerRoutes(
         feePercent: conversionFeePercent,
         reference: transaction.reference || "",
         userCountry: user.country || "",
+        estimatedSeconds: delaySeconds,
       }).catch(() => {});
 
+      // Exécution différée
+      setTimeout(async () => {
+        try {
+          const elapsedSeconds = Math.round((Date.now() - startTime) / 1000);
+
+          // Crédit du wallet cible
+          if (toCurrency === userPrimary) {
+            await storage.updateUserBalance(userId, receivedAmount);
+          } else {
+            await storage.upsertWallet(userId, toCurrency, receivedAmount);
+          }
+          await cleanupEmptyWallets(userId);
+
+          // Compléter transaction et conversion request
+          await storage.updateTransactionStatus(transaction.id, "completed");
+          await storage.updateConversionRequest(convReq.id, {
+            status: "completed",
+            executedAt: new Date(),
+            executedById: userId,
+          });
+
+          // Notification de succès
+          await storage.createUserNotification({
+            userId,
+            title: "Conversion réussie ✅",
+            message: `Votre conversion de ${parsedAmount.toFixed(2)} ${fromCurrency} → ${receivedAmount.toFixed(2)} ${toCurrency} est terminée. Frais: ${totalFeeAmount.toFixed(2)} ${fromCurrency}.`,
+            transactionId: transaction.id,
+            type: "success",
+          });
+
+          // Telegram #2 — conversion terminée
+          notifyConversionCompleted({
+            userName: user.fullName || user.username,
+            userEmail: user.email || "",
+            fromAmount: parsedAmount.toFixed(2),
+            fromCurrency,
+            toAmount: receivedAmount.toFixed(2),
+            toCurrency,
+            feeAmount: totalFeeAmount.toFixed(2),
+            feePercent: conversionFeePercent,
+            reference: transaction.reference || "",
+            userCountry: user.country || "",
+            elapsedSeconds,
+          }).catch(() => {});
+
+          console.log(`[Conversion] ${transaction.reference} — terminée en ${elapsedSeconds}s`);
+        } catch (err) {
+          console.error("[Conversion] Erreur lors de la finalisation:", err);
+        }
+      }, delaySeconds * 1000);
+
       return res.json({
-        success: true,
+        pending: true,
+        conversionId: convReq.id,
         fromAmount: parsedAmount,
         fromCurrency,
         toAmount: receivedAmount,
         toCurrency,
         feeAmount: totalFeeAmount,
-        message: `Conversion effectuée avec succès sur votre compte Ashtech Pay.`,
+        estimatedSeconds: delaySeconds,
       });
     } catch (error) {
       console.error("Convert wallet error:", error);
       res.status(500).json({ message: "Erreur serveur lors de la conversion" });
+    }
+  });
+
+  // GET /api/wallets/conversion-status/:id — statut d'une conversion en attente
+  app.get("/api/wallets/conversion-status/:id", requireAuth, async (req, res) => {
+    try {
+      const convReq = await storage.getConversionRequest(req.params.id);
+      if (!convReq || convReq.userId !== req.userId) {
+        return res.status(404).json({ message: "Conversion introuvable" });
+      }
+      return res.json({ status: convReq.status, conversionId: convReq.id });
+    } catch (error) {
+      res.status(500).json({ message: "Erreur serveur" });
     }
   });
 

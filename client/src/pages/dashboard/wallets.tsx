@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { Button } from "@/components/ui/button";
@@ -46,7 +46,9 @@ export default function WalletsPage() {
   const { t } = useLanguage();
   const [convertOpen, setConvertOpen] = useState(false);
   const [addWalletOpen, setAddWalletOpen] = useState(false);
-  const [pendingSuccess, setPendingSuccess] = useState<{ fromCurrency: string; toCurrency: string; fromAmount: number } | null>(null);
+  const [pendingSuccess, setPendingSuccess] = useState<{ fromCurrency: string; toCurrency: string; fromAmount: number; toAmount: number } | null>(null);
+  const [conversionPending, setConversionPending] = useState<{ conversionId: string; fromCurrency: string; toCurrency: string; fromAmount: number; toAmount: number } | null>(null);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [walletToDelete, setWalletToDelete] = useState<WalletEntry | null>(null);
 
   const [fromCurrency, setFromCurrency] = useState("XAF");
@@ -116,13 +118,47 @@ export default function WalletsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/wallets"] });
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       setConvertOpen(false);
-      setPendingSuccess({ fromCurrency: data.fromCurrency, toCurrency: data.toCurrency, fromAmount: data.fromAmount });
       setConvertAmount("");
+      setPendingSuccess(null);
+      setConversionPending({
+        conversionId: data.conversionId,
+        fromCurrency: data.fromCurrency,
+        toCurrency: data.toCurrency,
+        fromAmount: data.fromAmount,
+        toAmount: data.toAmount,
+      });
     },
     onError: (error: Error) => {
       toast({ title: t.wallets.toastError, description: error.message, variant: "destructive" });
     },
   });
+
+  // Polling: vérifie le statut de la conversion toutes les 3s
+  useEffect(() => {
+    if (!conversionPending) {
+      if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; }
+      return;
+    }
+    const { conversionId, fromCurrency: fc, toCurrency: tc, fromAmount: fa, toAmount: ta } = conversionPending;
+    pollingRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/wallets/conversion-status/${conversionId}`, { credentials: "include" });
+        if (!res.ok) return;
+        const json = await res.json();
+        if (json.status === "completed") {
+          clearInterval(pollingRef.current!);
+          pollingRef.current = null;
+          setConversionPending(null);
+          setPendingSuccess({ fromCurrency: fc, toCurrency: tc, fromAmount: fa, toAmount: ta });
+          queryClient.invalidateQueries({ queryKey: ["/api/wallets"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
+        }
+      } catch { /* ignore network errors */ }
+    }, 3000);
+    return () => { if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; } };
+  }, [conversionPending]);
 
   const openConvert = (wallet: WalletEntry) => {
     setFromCurrency(wallet.currency);
@@ -247,18 +283,38 @@ export default function WalletsPage() {
           </div>
         </div>
 
-        {/* Success banner */}
+        {/* Bannière "conversion en cours" */}
+        {conversionPending && (
+          <div className="flex items-start gap-3 bg-yellow-500/10 border border-yellow-500/20 rounded-2xl px-4 py-3">
+            <Loader2 className="w-5 h-5 text-yellow-500 shrink-0 mt-0.5 animate-spin" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-yellow-500">Conversion en cours...</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                <strong>{conversionPending.fromAmount.toLocaleString("fr-FR")} {conversionPending.fromCurrency}</strong>
+                {" "}→{" "}
+                <strong>{conversionPending.toAmount.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {conversionPending.toCurrency}</strong>
+                {" "}— traitement en cours, veuillez patienter.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Bannière "conversion réussie" */}
         {pendingSuccess && (
           <div className="flex items-start gap-3 bg-green-500/10 border border-green-500/20 rounded-2xl px-4 py-3">
             <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
-            <div>
+            <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-green-500">{t.wallets.conversionDone}</p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {t.wallets.conversionDoneDescPre}
                 <strong>{pendingSuccess.fromAmount.toLocaleString("fr-FR")} {pendingSuccess.fromCurrency}</strong>
-                {t.wallets.conversionDoneDescMid}<strong>{pendingSuccess.toCurrency}</strong>{t.wallets.conversionDoneDescSuf}
+                {" "}→{" "}
+                <strong>{pendingSuccess.toAmount.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {pendingSuccess.toCurrency}</strong>
+                {" "}crédité avec succès.
               </p>
             </div>
+            <button onClick={() => setPendingSuccess(null)} className="text-muted-foreground hover:text-foreground shrink-0">
+              <X className="w-4 h-4" />
+            </button>
           </div>
         )}
 
