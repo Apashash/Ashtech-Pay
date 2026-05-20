@@ -277,6 +277,15 @@ function extractUserId(req: Request, _res: Response, next: NextFunction) {
       const id = getUserIdFromToken(token);
       if (id) {
         userId = id;
+        // Persister le userId dans la session si absent (bearer token sur nouvel appareil)
+        // → l'appareil apparaîtra dans la liste des sessions connectées
+        if (req.session && !req.session.userId) {
+          req.session.userId = id;
+          if (!req.session.clientIp) req.session.clientIp = getClientIp(req);
+          if (!req.session.userAgent) req.session.userAgent = req.headers["user-agent"] || "";
+          if (!req.session.loginAt) req.session.loginAt = new Date().toISOString();
+          req.session.save(() => {});
+        }
       } else {
         // Token invalide — vérifier si c'est à cause d'une révocation single-device
         // (token valide en signature/expiration mais révoqué via revokedTokensBefore)
@@ -6881,18 +6890,31 @@ export async function registerRoutes(
       // Supprimer toutes les sessions sauf la session admin courante
       await db.execute(sql`DELETE FROM session WHERE sid != ${adminSid}`);
 
-      // Révoquer tous les tokens bearer
+      // Révoquer tous les tokens bearer (colonne optionnelle — ne pas bloquer si absente)
       const revokedAt = Date.now();
-      await db.execute(sql`UPDATE users SET token_revoked_before = ${revokedAt} WHERE id != ${adminId}`);
+      try {
+        await db.execute(sql`UPDATE users SET token_revoked_before = ${revokedAt} WHERE id != ${adminId}`);
+        // Mettre aussi à jour le cache in-memory
+        const allUsers = await db.execute(sql`SELECT id FROM users WHERE id != ${adminId}`);
+        for (const row of allUsers.rows as { id: string }[]) {
+          revokedTokensBefore.set(row.id, revokedAt);
+        }
+      } catch (tokenErr) {
+        console.warn("[Admin] token_revoked_before update skipped (column may not exist):", (tokenErr as Error).message);
+      }
 
-      await storage.createAdminLog({
-        adminId,
-        action: "disconnect_all_sessions",
-        targetType: "system",
-        targetId: null,
-        details: JSON.stringify({ sessionsRevoked: count }),
-        ipAddress: req.ip || null,
-      });
+      try {
+        await storage.createAdminLog({
+          adminId,
+          action: "disconnect_all_sessions",
+          targetType: "system",
+          targetId: null,
+          details: JSON.stringify({ sessionsRevoked: count }),
+          ipAddress: req.ip || null,
+        });
+      } catch (logErr) {
+        console.warn("[Admin] createAdminLog skipped:", (logErr as Error).message);
+      }
 
       res.json({ ok: true, count });
     } catch (error) {
