@@ -63,6 +63,7 @@ import {
   notifyKycApproved,
   notifyKycRejected,
   notifyKycSubmittedFull,
+  notifyPaymentLinkCreated,
   handleTelegramUpdate,
   registerTelegramWebhook,
 } from "./telegram";
@@ -3437,6 +3438,28 @@ export async function registerRoutes(
       });
 
       res.json(paymentLink);
+
+      // Notify admin via Telegram (fire & forget)
+      storage.getUser(userId).then(linkUser => {
+        const host = req.get("host") || "ashtech.replit.app";
+        const proto = req.headers["x-forwarded-proto"] || req.protocol || "https";
+        const linkUrl = `${proto}://${host}/pay/${slug}`;
+        notifyPaymentLinkCreated({
+          userName: linkUser?.fullName || linkUser?.username || "Utilisateur",
+          userEmail: linkUser?.email || "",
+          title: data.title,
+          description: data.description || null,
+          amount: data.isFixedAmount ? (data.amount || "0") : "0",
+          currency: "XAF",
+          isFixedAmount: data.isFixedAmount ?? false,
+          slug,
+          linkUrl,
+          expiresAt: data.expiresAt ? new Date(data.expiresAt) : null,
+          allowedCountries: (data.allowedCountries && data.allowedCountries.length > 0) ? data.allowedCountries : null,
+          hasPdfDelivery: data.hasPdfDelivery || false,
+          redirectUrl: data.redirectUrl || null,
+        }).catch(() => {});
+      }).catch(() => {});
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: error.errors[0].message });

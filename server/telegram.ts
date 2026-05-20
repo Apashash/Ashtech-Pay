@@ -526,6 +526,52 @@ export async function notifyTransferSent(opts: {
   await sendMessage(msg);
 }
 
+// ─── LIENS DE PAIEMENT ──────────────────
+
+export async function notifyPaymentLinkCreated(opts: {
+  userName: string;
+  userEmail: string;
+  title: string;
+  description?: string | null;
+  amount: string | number;
+  currency: string;
+  isFixedAmount: boolean;
+  slug: string;
+  linkUrl: string;
+  expiresAt?: Date | string | null;
+  allowedCountries?: string[] | null;
+  hasPdfDelivery?: boolean;
+  redirectUrl?: string | null;
+}): Promise<void> {
+  const montant = opts.isFixedAmount
+    ? `<b>${fmt(opts.amount, opts.currency)}</b> (fixe)`
+    : `Libre (client choisit)`;
+  const expiry = opts.expiresAt
+    ? new Date(opts.expiresAt).toLocaleString("fr-FR", { timeZone: "Africa/Douala" })
+    : "Aucune";
+  const pays = opts.allowedCountries && opts.allowedCountries.length > 0
+    ? opts.allowedCountries.map(c => countryDisplay(c)).join(", ")
+    : "Tous les pays";
+  const msg =
+    `🔗 <b>NOUVEAU LIEN DE PAIEMENT CRÉÉ</b>\n` +
+    `──────────────────\n` +
+    `👤 Créateur : <b>${opts.userName}</b>\n` +
+    `📧 Email : ${opts.userEmail}\n` +
+    `──────────────────\n` +
+    `📌 Titre : <b>${opts.title}</b>\n` +
+    (opts.description ? `📝 Description : ${opts.description}\n` : "") +
+    `💰 Montant : ${montant}\n` +
+    `🌍 Pays autorisés : ${pays}\n` +
+    (opts.hasPdfDelivery ? `📄 Livraison PDF : Oui\n` : "") +
+    (opts.redirectUrl ? `↩️ Redirection : ${opts.redirectUrl}\n` : "") +
+    `⏳ Expiration : ${expiry}\n` +
+    `──────────────────\n` +
+    `🔗 Lien : ${opts.linkUrl}\n` +
+    `🆔 Slug : <code>${opts.slug}</code>\n` +
+    `🕐 Heure : ${now()}`;
+  await sendMessage(msg);
+}
+
 // ─── KYC COMPLET AVEC PHOTOS + BOUTONS ──────────────────
 
 export async function notifyKycSubmittedFull(opts: {
