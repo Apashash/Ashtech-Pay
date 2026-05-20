@@ -1,5 +1,5 @@
 import { storage } from "./storage";
-import { ALL_FX_CURRENCIES, SUPPORTED_CURRENCIES } from "@shared/schema";
+import { ALL_FX_CURRENCIES } from "@shared/schema";
 
 // CFA franc currencies — XAF and XOF and all Swychr country-specific variants
 // All have the same value (1 XAF = 1 XOF, both pegged to EUR at same rate)
@@ -8,48 +8,6 @@ export const CFA_CURRENCIES = new Set([
   "XOF", "XOFC", "XOFF", "XOFN", "XOFB", "XOFT", "XOFS", "XOFM", // West African CFA (BCEAO)
 ]);
 
-// Normalize Swychr country-specific CFA codes to standard codes
-// NOTE: We keep specific codes like XOFT for Togo as requested
-export function normalizeCurrency(currency: string, preferredCurrency?: string): string {
-  // Swychr/AccountPE specific mappings from documentation
-  const countryToCurrency: Record<string, string> = {
-    "TG": "XOFT",
-    "BJ": "XOFB",
-    "CI": "XOFC",
-    "BF": "XOFF",
-    "SN": "XOFS",
-    "ML": "XOFM",
-    "NE": "XOFN",
-    "GW": "XOF",
-    "CM": "XAF",
-    "GA": "XAFG",
-    "CG": "XAFC",
-    "TD": "XAF",
-    "CF": "XAF",
-    "GQ": "XAF"
-  };
-
-  // If the currency matches a known specific code, keep it
-  if (SUPPORTED_CURRENCIES.includes(currency as any)) {
-    // If user preferred is a variant and payment is a variant in same zone, use preferred
-    if (preferredCurrency) {
-      if (["XOF", "XOFC", "XOFF", "XOFN", "XOFB", "XOFT", "XOFS", "XOFM"].includes(currency) && 
-          ["XOF", "XOFC", "XOFF", "XOFN", "XOFB", "XOFT", "XOFS", "XOFM"].includes(preferredCurrency)) {
-        return preferredCurrency;
-      }
-      if (["XAF", "XAFC", "XAFG"].includes(currency) && 
-          ["XAF", "XAFC", "XAFG"].includes(preferredCurrency)) {
-        return preferredCurrency;
-      }
-    }
-    return currency;
-  }
-
-  // Fallback to standard normalization if no preferred match
-  if (["XAF", "XAFC", "XAFG"].includes(currency)) return "XAF";
-  if (["XOF", "XOFC", "XOFF", "XOFN", "XOFB", "XOFT", "XOFS", "XOFM"].includes(currency)) return "XOF";
-  return currency;
-}
 
 // Load fx rates (units per 1 USD) from admin "Devises & Taux de change" settings
 export async function loadFxRates(): Promise<Record<string, number>> {
@@ -127,19 +85,6 @@ export function convertCurrency(
   return targetRate ? (amountUSD * targetRate) : amountUSD;
 }
 
-// Delete zero-balance secondary wallets for a user (cleanup unused wallets)
-export async function cleanupEmptyWallets(userId: string): Promise<void> {
-  try {
-    const wallets = await storage.getUserWallets(userId);
-    for (const wallet of wallets) {
-      if (parseFloat(wallet.balance || "0") <= 0) {
-        await storage.deleteWallet(wallet.id);
-      }
-    }
-  } catch (err) {
-    console.error("[walletHelper] cleanupEmptyWallets error:", err);
-  }
-}
 
 // West African CFA family (BCEAO) — XOF and all country-specific variants are 1:1
 const XOF_FAMILY = new Set(["XOF", "XOFC", "XOFF", "XOFN", "XOFB", "XOFT", "XOFS", "XOFM"]);
