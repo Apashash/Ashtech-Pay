@@ -4,27 +4,28 @@ import * as schema from "@shared/schema";
 
 const { Pool } = pg;
 
-const databaseUrl = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
+const databaseUrl = process.env.DATABASE_URL || process.env.SUPABASE_DATABASE_URL;
 
 if (!databaseUrl) {
   throw new Error(
-    "SUPABASE_DATABASE_URL or DATABASE_URL must be set.",
+    "DATABASE_URL must be set.",
   );
 }
 
+// Replit's managed PostgreSQL does not require SSL
+const sslConfig = databaseUrl.includes("localhost") || databaseUrl.includes("127.0.0.1")
+  ? undefined
+  : { rejectUnauthorized: false };
+
 export const pool = new Pool({
   connectionString: databaseUrl,
-  ssl: { rejectUnauthorized: false },
+  ssl: sslConfig,
 });
 export const db = drizzle(pool, { schema });
 
-// Pool dédié au session store — utilise DIRECT_DATABASE_URL si disponible
-// (connexion directe Supabase port 5432, pas le pooler PgBouncer port 6543)
-// Sur Plesk : définir DIRECT_DATABASE_URL avec l'URL directe Supabase pour éviter
-// les incompatibilités entre connect-pg-simple et PgBouncer en mode "transaction".
 const sessionDatabaseUrl = process.env.DIRECT_DATABASE_URL || databaseUrl;
 export const sessionPool = new Pool({
   connectionString: sessionDatabaseUrl,
-  ssl: { rejectUnauthorized: false },
+  ssl: sslConfig,
   max: 5,
 });
