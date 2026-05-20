@@ -168,6 +168,7 @@ declare module "express-session" {
   interface SessionData {
     userId: string;
     adminOtpVerified?: boolean;
+    clientIp?: string;
   }
 }
 
@@ -430,32 +431,40 @@ async function revokeSessionsForIpChange(userId: string): Promise<void> {
 }
 
 // Révocation de toutes les sessions actives provenant d'une IP bloquée.
-// Appelée dès qu'une IP est bloquée (auto ou manuel) pour déconnecter immédiatement
-// tous les utilisateurs connectés depuis cette IP, quel que soit leur navigateur.
+// Interroge directement la table session PostgreSQL (champ clientIp persisté au login)
+// → fonctionne même après un redémarrage serveur.
 async function revokeSessionsByIp(ip: string, blockedUntil: number): Promise<void> {
-  const affected: string[] = [];
-  for (const [userId, userIp] of activeIpRegistry.entries()) {
-    if (userIp === ip) {
-      affected.push(userId);
+  try {
+    // Cherche toutes les sessions dont l'IP stockée correspond à l'IP bloquée
+    const result = await db.execute(
+      sql`SELECT sid, sess->>'userId' as user_id FROM session WHERE sess->>'clientIp' = ${ip}`
+    );
+    const rows = result.rows as { sid: string; user_id: string }[];
+    if (rows.length === 0) return;
+
+    // Déduplique les userIds
+    const userIds = [...new Set(rows.map(r => r.user_id).filter(Boolean))];
+    console.log(`[Auth] IP blocked (${ip}) — révocation de ${rows.length} session(s) pour ${userIds.length} utilisateur(s)`);
+
+    // Marque chaque session comme révoquée (réponse sessionRevoked:true au prochain appel)
+    for (const row of rows) {
+      revokedSessions.set(row.sid, blockedUntil);
     }
-  }
-  if (affected.length === 0) return;
-  console.log(`[Auth] IP blocked (${ip}) — révocation des sessions de ${affected.length} utilisateur(s) connecté(s)`);
-  for (const userId of affected) {
-    try {
-      const result = await db.execute(sql`SELECT sid FROM session WHERE sess->>'userId' = ${userId}`);
-      const expiresAt = blockedUntil;
-      for (const row of result.rows as { sid: string }[]) {
-        revokedSessions.set(row.sid, expiresAt);
-      }
+
+    // Notifie via SSE pour déconnexion immédiate dans les onglets ouverts
+    for (const userId of userIds) {
       notifyUserForceLogout(userId);
-      await db.execute(sql`DELETE FROM session WHERE sess->>'userId' = ${userId}`);
-      revokedTokensBefore.set(userId, Date.now());
       forcedLogoutMap.set(userId, blockedUntil);
-      console.log(`[Auth] IP block — sessions révoquées pour userId=${userId}`);
-    } catch (err: any) {
-      console.error("[Auth] revokeSessionsByIp failed for userId:", userId, err?.message);
+      revokedTokensBefore.set(userId, Date.now());
     }
+
+    // Supprime les sessions de la DB
+    await db.execute(
+      sql`DELETE FROM session WHERE sess->>'clientIp' = ${ip}`
+    );
+    console.log(`[Auth] IP block — sessions supprimées pour IP=${ip}`);
+  } catch (err: any) {
+    console.error("[Auth] revokeSessionsByIp failed:", err?.message);
   }
 }
 
@@ -943,6 +952,7 @@ export async function registerRoutes(
       const authToken = storeAuthToken(user.id);
       
       req.session.userId = user.id;
+      req.session.clientIp = ip;
 
       // Explicitly save session before responding
       req.session.save((err) => {
@@ -1041,6 +1051,7 @@ export async function registerRoutes(
       const authToken = storeAuthToken(user.id);
       
       req.session.userId = user.id;
+      req.session.clientIp = ip;
 
       // Explicitly save session before responding
       req.session.save((err) => {
