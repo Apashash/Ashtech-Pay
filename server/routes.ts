@@ -57,6 +57,7 @@ import {
   notifyWithdrawalFailed,
   notifyLoginFailed,
   notifyAdminLogin,
+  notifyAdminLoginSuccess,
   notifyAdminLoginFailed,
   notifyNewUser,
   notifyConversion,
@@ -4752,6 +4753,8 @@ export async function registerRoutes(
       (req.session as any).adminOtpVerified = true;
       req.session.save(() => {});
       console.log(`[AdminOTP] Admin ${user.email} verified successfully`);
+      const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "inconnue";
+      notifyAdminLoginSuccess({ adminName: user.fullName || user.username, adminEmail: user.email || "", ip }).catch(() => {});
       res.json({ success: true });
     } catch (error: any) {
       console.error("Admin OTP verify error:", error.message);

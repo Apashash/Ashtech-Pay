@@ -472,6 +472,21 @@ export async function notifyAdminLogin(opts: {
   await sendMessage(msg);
 }
 
+export async function notifyAdminLoginSuccess(opts: {
+  adminName: string;
+  adminEmail: string;
+  ip: string;
+}): Promise<void> {
+  const msg =
+    `✅ <b>ADMIN CONNECTÉ AVEC SUCCÈS</b>\n` +
+    `──────────────────\n` +
+    `👤 Admin : <b>${opts.adminName}</b>\n` +
+    `📧 Email : ${opts.adminEmail}\n` +
+    `🌐 IP : <code>${opts.ip}</code>\n` +
+    `🕐 Heure : ${now()}`;
+  await sendMessage(msg);
+}
+
 export async function notifyAdminLoginFailed(opts: {
   identifier: string;
   ip: string;
