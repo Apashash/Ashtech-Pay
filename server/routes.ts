@@ -824,6 +824,15 @@ export async function registerRoutes(
         });
       }
 
+      // Bloquer si une adresse IP a déjà créé un compte
+      const existingIpUser = await storage.getUserByRegistrationIp(ip);
+      if (existingIpUser) {
+        return res.status(403).json({
+          message: "Un compte a déjà été créé depuis cette adresse IP. Une seule inscription par adresse IP est autorisée.",
+          ipBlocked: true,
+        });
+      }
+
       const data = registerSchema.parse(req.body);
 
       const existingEmail = await storage.getUserByEmail(data.email);
@@ -850,6 +859,7 @@ export async function registerRoutes(
         ...data,
         password: hashedPassword,
         preferredCurrency,
+        registrationIp: ip,
       });
 
       clearAuthAttempts(ip);

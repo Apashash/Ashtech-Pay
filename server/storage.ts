@@ -72,6 +72,7 @@ export interface IStorage {
   getUserByPhone(phone: string): Promise<User | undefined>;
   getUserByEmailOrPhone(identifier: string): Promise<User | undefined>;
   getUserByResetToken(token: string): Promise<User | undefined>;
+  getUserByRegistrationIp(ip: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUserBalance(id: string, amount: number): Promise<User | undefined>;
   refundToOriginalWallet(userId: string, txType: string, txCurrency: string, amount: number): Promise<void>;
@@ -312,6 +313,11 @@ export class DatabaseStorage implements IStorage {
     if (!user) {
       user = await this.getUserByPhone(identifier);
     }
+    return user;
+  }
+
+  async getUserByRegistrationIp(ip: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.registrationIp, ip)).limit(1);
     return user;
   }
 

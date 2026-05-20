@@ -24,6 +24,7 @@ export const users = pgTable("users", {
   resetTokenExpiry: timestamp("reset_token_expiry"),
   apiKey: text("api_key").unique(),
   apiEnabled: boolean("api_enabled").default(false),
+  registrationIp: text("registration_ip"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
