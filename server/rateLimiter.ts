@@ -1,7 +1,7 @@
 import rateLimit from "express-rate-limit";
 import type { Request, Response } from "express";
 
-// ─── Helper: extract real client IP (handles proxies / Apache / Nginx) ────────
+// ─── Helper: extract real client IP (handles proxies / Apache / Nginx / IPv6) ─
 function getIp(req: Request): string {
   const fwd = req.headers["x-forwarded-for"];
   if (fwd) {
@@ -16,6 +16,9 @@ function reject(res: Response, msg: string, retryAfterSec = 60) {
   res.status(429).json({ message: msg });
 }
 
+// validate: keyGeneratorIpFallback désactivé car on gère déjà l'IPv6 via X-Forwarded-For
+const sharedValidate = { keyGeneratorIpFallback: false };
+
 // ─── 1. Global : 50 requêtes / minute / IP ───────────────────────────────────
 export const globalLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -23,33 +26,20 @@ export const globalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: getIp,
+  validate: sharedValidate,
   skip: (req) => !req.path.startsWith("/api"),
   handler: (_req, res) =>
     reject(res, "Trop de requêtes. Réessayez dans une minute.", 60),
 });
 
-// ─── 2. Login : 20 tentatives / 30 minutes / IP (aligné sur le blocage IP custom 30 min) ───
-export const loginLimiter = rateLimit({
-  windowMs: 30 * 60 * 1000,
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: getIp,
-  handler: (_req, res) =>
-    reject(
-      res,
-      "Trop de tentatives de connexion. Réessayez dans 30 minutes.",
-      30 * 60
-    ),
-});
-
-// ─── 3. Register : 5 créations de compte / minute / IP ──────────────────────
+// ─── 2. Register : 5 créations de compte / minute / IP ──────────────────────
 export const registerLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: getIp,
+  validate: sharedValidate,
   handler: (_req, res) =>
     reject(
       res,
@@ -58,13 +48,14 @@ export const registerLimiter = rateLimit({
     ),
 });
 
-// ─── 4. Retraits : 10 requêtes / minute / IP ────────────────────────────────
+// ─── 3. Retraits : 10 requêtes / minute / IP ────────────────────────────────
 export const withdrawalLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: getIp,
+  validate: sharedValidate,
   handler: (_req, res) =>
     reject(
       res,
@@ -73,24 +64,26 @@ export const withdrawalLimiter = rateLimit({
     ),
 });
 
-// ─── 5. Dépôts / liens de paiement : 20 / minute / IP ───────────────────────
+// ─── 4. Dépôts / liens de paiement : 20 / minute / IP ───────────────────────
 export const depositLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: getIp,
+  validate: sharedValidate,
   handler: (_req, res) =>
     reject(res, "Trop de demandes de dépôt. Réessayez dans une minute.", 60),
 });
 
-// ─── 6. Transferts : 15 / minute / IP ───────────────────────────────────────
+// ─── 5. Transferts : 15 / minute / IP ───────────────────────────────────────
 export const transferLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 15,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: getIp,
+  validate: sharedValidate,
   handler: (_req, res) =>
     reject(
       res,
@@ -99,13 +92,14 @@ export const transferLimiter = rateLimit({
     ),
 });
 
-// ─── 7. Mot de passe oublié : 5 / 15 minutes / IP ───────────────────────────
+// ─── 6. Mot de passe oublié : 5 / 15 minutes / IP ───────────────────────────
 export const passwordResetLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: getIp,
+  validate: sharedValidate,
   handler: (_req, res) =>
     reject(
       res,
@@ -114,13 +108,14 @@ export const passwordResetLimiter = rateLimit({
     ),
 });
 
-// ─── 8. API publique (liens de paiement, checkout) : 30 / minute / IP ────────
+// ─── 7. API publique (liens de paiement, checkout) : 30 / minute / IP ────────
 export const publicPayLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 30,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: getIp,
+  validate: sharedValidate,
   handler: (_req, res) =>
     reject(res, "Trop de requêtes. Réessayez dans une minute.", 60),
 });

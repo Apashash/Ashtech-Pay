@@ -8,7 +8,6 @@ import {
   getBlockedIps,
 } from "./ipBlocker";
 import {
-  loginLimiter,
   registerLimiter,
   withdrawalLimiter,
   depositLimiter,
@@ -929,7 +928,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/auth/login", loginLimiter, async (req, res) => {
+  app.post("/api/auth/login", async (req, res) => {
     try {
       const ip = getClientIp(req);
       const rateCheck = checkAuthRateLimit(ip);

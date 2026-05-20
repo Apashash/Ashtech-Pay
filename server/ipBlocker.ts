@@ -121,7 +121,8 @@ export async function recordAuthFailure(
 
   const record: IpRecord = { count: newCount, identifier: identifier || existing?.identifier };
   cache.set(ip, record);
-  // Only persist when actually blocked (avoid DB write on every failed attempt)
+  // Persist chaque tentative en DB → le compteur survit aux redémarrages serveur
+  await persist(ip, record);
   return { blocked: false, attemptsLeft: MAX_AUTH_ATTEMPTS - newCount };
 }
 
