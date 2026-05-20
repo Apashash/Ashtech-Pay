@@ -56,6 +56,7 @@ export function getUserViewingTicket(userId: string, ticketId: string): boolean 
 function sendEvent(res: Response, event: string, data: object) {
   try {
     res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    (res as any).flush?.();
   } catch {}
 }
 

@@ -284,7 +284,7 @@ function GlobalSSEWatcher() {
         }
       } catch {}
     };
-    const interval = setInterval(check, 10000);
+    const interval = setInterval(check, 2000);
     return () => clearInterval(interval);
   }, [user]);
 

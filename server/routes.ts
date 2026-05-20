@@ -6651,6 +6651,7 @@ export async function registerRoutes(
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
     res.flushHeaders();
 
     const user = await storage.getUser(req.userId!);
@@ -6665,7 +6666,10 @@ export async function registerRoutes(
 
     // Ping every 25s to keep connection alive
     const pingInterval = setInterval(() => {
-      try { res.write(":ping\n\n"); } catch {}
+      try {
+        res.write(":ping\n\n");
+        (res as any).flush?.();
+      } catch {}
     }, 25000);
 
     req.on("close", async () => {
