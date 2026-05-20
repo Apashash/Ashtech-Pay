@@ -2,7 +2,9 @@ import { storage } from "./storage";
 import { sendMessage } from "./telegram";
 
 const REPORT_HOUR = 8;
+const REPORT_MINUTE = 30;
 const TIMEZONE = "Africa/Douala";
+const SETTING_KEY = "daily_report_last_sent";
 
 function fmtNum(n: number | string): string {
   return Number(n).toLocaleString("fr-FR");
@@ -19,13 +21,41 @@ function nowDouala(): Date {
   return new Date(new Date().toLocaleString("en-US", { timeZone: TIMEZONE }));
 }
 
+function todayDateStr(): string {
+  const d = nowDouala();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function yesterdayLabel(): string {
   const d = nowDouala();
   d.setDate(d.getDate() - 1);
   return d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 }
 
+async function alreadySentToday(): Promise<boolean> {
+  try {
+    const setting = await storage.getSetting(SETTING_KEY);
+    return setting?.value === todayDateStr();
+  } catch {
+    return false;
+  }
+}
+
+async function markSentToday(): Promise<void> {
+  try {
+    await storage.upsertSetting(SETTING_KEY, todayDateStr(), "Date du dernier rapport quotidien envoyé (YYYY-MM-DD)");
+  } catch (err: any) {
+    console.error("[DailyReport] Failed to persist sent date:", err.message);
+  }
+}
+
 async function sendDailyReport(): Promise<void> {
+  // Guard: skip if already sent today (survives restarts)
+  if (await alreadySentToday()) {
+    console.log("[DailyReport] Already sent today, skipping.");
+    return;
+  }
+
   try {
     console.log("[DailyReport] Generating daily report for yesterday...");
 
@@ -80,6 +110,7 @@ async function sendDailyReport(): Promise<void> {
       `🕐 Envoyé à ${nowDouala().toLocaleTimeString("fr-FR")} (Douala)`;
 
     await sendMessage(msg);
+    await markSentToday();
     console.log("[DailyReport] Report sent successfully.");
   } catch (err: any) {
     console.error("[DailyReport] Failed to send daily report:", err.message);
@@ -87,23 +118,19 @@ async function sendDailyReport(): Promise<void> {
 }
 
 let reportInterval: NodeJS.Timeout | null = null;
-let lastReportDay = -1;
 
 export function startDailyReportScheduler(): void {
   if (reportInterval) return;
 
-  console.log(`[DailyReport] Scheduler started — will send report every day at ${REPORT_HOUR}:00 (${TIMEZONE})`);
+  console.log(`[DailyReport] Scheduler started — will send report every day at ${REPORT_HOUR}:${String(REPORT_MINUTE).padStart(2, "0")} (${TIMEZONE})`);
 
-  reportInterval = setInterval(() => {
+  reportInterval = setInterval(async () => {
     const now = nowDouala();
-    const hour = now.getHours();
-    const day  = now.getDate();
+    const hour   = now.getHours();
+    const minute = now.getMinutes();
 
-    if (hour === REPORT_HOUR && day !== lastReportDay) {
-      lastReportDay = day;
-      sendDailyReport().catch(err =>
-        console.error("[DailyReport] Scheduled report error:", err.message)
-      );
+    if (hour === REPORT_HOUR && minute === REPORT_MINUTE) {
+      await sendDailyReport();
     }
   }, 60 * 1000);
 }
