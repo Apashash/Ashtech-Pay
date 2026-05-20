@@ -9199,7 +9199,7 @@ export async function registerRoutes(
 
         // ── Ban / Unban ──────────────────────────────────────────────────────
         banUser: async (email, reason, unban = false) => {
-          const user = await storage.getUserByEmail(email).catch(() => null);
+          const user = await storage.getUserByEmailOrPhone(email.trim()).catch(() => null);
           if (!user) return null;
           if (unban) {
             await storage.unbanUser(user.id);
@@ -9211,7 +9211,7 @@ export async function registerRoutes(
 
         // ── User info ────────────────────────────────────────────────────────
         getUserInfo: async (email) => {
-          const user = await storage.getUserByEmail(email).catch(() => null);
+          const user = await storage.getUserByEmailOrPhone(email.trim()).catch(() => null);
           if (!user) return null;
           const [txList, walletList] = await Promise.all([
             storage.getTransactionsByUserId(user.id).catch(() => [] as any[]),
@@ -9392,7 +9392,7 @@ export async function registerRoutes(
 
         // ── Reset user password ──────────────────────────────────────────────
         resetUserPassword: async (email) => {
-          const user = await storage.getUserByEmail(email).catch(() => null);
+          const user = await storage.getUserByEmailOrPhone(email.trim()).catch(() => null);
           if (!user || !user.email) return null;
           const resetToken = crypto.randomBytes(32).toString("hex");
           const expiry = new Date(Date.now() + 3600000);
