@@ -3091,10 +3091,9 @@ export async function registerRoutes(
         try {
           const elapsedSeconds = Math.round((Date.now() - startTime) / 1000);
 
-          // Crédit du wallet cible
-          // Si toCurrency est dans la même famille CFA que la devise principale, créditer le solde principal
-          // pour éviter la création d'un wallet secondaire qui serait nettoyé automatiquement ensuite
-          if (toCurrency === userPrimary || sameCfaFamily(toCurrency, userPrimary)) {
+          // Crédit du wallet cible — chaque devise-pays a son propre wallet
+          // Ex: XAF→XAFG crédite le wallet XAFG (Gabon), XAF→XOFT crédite le wallet XOFT (Togo)
+          if (toCurrency === userPrimary) {
             await storage.updateUserBalance(userId, receivedAmount);
           } else {
             await storage.upsertWallet(userId, toCurrency, receivedAmount);
@@ -3239,7 +3238,7 @@ export async function registerRoutes(
       } else {
         await storage.upsertWallet(userId, fromCurrency, -parsedAmount);
       }
-      if (toCurrency === primaryCurrency || sameCfaFamily(toCurrency, primaryCurrency)) {
+      if (toCurrency === primaryCurrency) {
         await storage.updateUserBalance(userId, receivedAmount);
       } else {
         await storage.upsertWallet(userId, toCurrency, receivedAmount);
@@ -3376,10 +3375,10 @@ export async function registerRoutes(
       }
       const receivedAmount = convResult.targetAmount;
 
-      // Credit target wallet — use primary balance if same CFA family as user's primary currency
+      // Credit target wallet — each country currency has its own wallet
       const requestUser = await storage.getUser(request.userId);
       const requestUserPrimary = requestUser?.preferredCurrency || "XAF";
-      if (request.toCurrency === requestUserPrimary || sameCfaFamily(request.toCurrency, requestUserPrimary)) {
+      if (request.toCurrency === requestUserPrimary) {
         await storage.updateUserBalance(request.userId, receivedAmount);
       } else {
         await storage.upsertWallet(request.userId, request.toCurrency, receivedAmount);
