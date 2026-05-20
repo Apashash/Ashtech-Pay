@@ -181,7 +181,7 @@ function generateAdminOtp(): string {
   return Math.floor(1000 + Math.random() * 9000).toString();
 }
 
-const TOKEN_EXPIRY_MS = 5 * 24 * 60 * 60 * 1000;
+const TOKEN_EXPIRY_MS = 3 * 24 * 60 * 60 * 1000;
 
 function getTokenSecret(): string {
   return process.env.SESSION_SECRET || "ashtech-fallback-secret-key";
@@ -758,7 +758,7 @@ export async function registerRoutes(
         secure: cookieSecure,
         httpOnly: true,
         sameSite: cookieSameSite,
-        maxAge: 5 * 24 * 60 * 60 * 1000,
+        maxAge: 3 * 24 * 60 * 60 * 1000,
       },
     })
   );
