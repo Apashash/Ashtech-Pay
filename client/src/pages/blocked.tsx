@@ -3,7 +3,12 @@ import { useLocation } from "wouter";
 import { ShieldAlert, Clock } from "lucide-react";
 
 function useCountdown(retryAfter: number | null) {
-  const [remaining, setRemaining] = useState(0);
+  // Initialiser directement avec le temps restant réel pour éviter un
+  // faux `remaining === 0` au montage qui déclencherait une redirection immédiate
+  const [remaining, setRemaining] = useState<number>(() => {
+    if (!retryAfter) return 0;
+    return Math.max(0, Math.ceil((retryAfter - Date.now()) / 1000));
+  });
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {

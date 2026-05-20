@@ -96,6 +96,13 @@ export default function LoginPage() {
       .finally(() => setChecking(false));
   }, []);
 
+  // Rediriger vers la page de compte à rebours dès que l'IP est bloquée
+  useEffect(() => {
+    if (isBlocked && blockedUntil !== null) {
+      setLocation(`/blocked?until=${blockedUntil}`);
+    }
+  }, [isBlocked, blockedUntil, setLocation]);
+
   useEffect(() => {
     if (countdown === 0 && blockedUntil !== null) {
       clearRateLimit();
