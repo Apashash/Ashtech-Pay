@@ -420,7 +420,7 @@ async function destroyUserSessions(userId: string, blockedUntil: number): Promis
     forcedLogoutMap.set(userId, blockedUntil);
     revokedTokensBefore.set(userId, Date.now());
     // Pousse la déconnexion immédiatement via SSE (sans attendre la prochaine requête)
-    notifyUserForceLogout(userId);
+    notifyUserForceLogout(userId, blockedUntil);
     await db.execute(sql`DELETE FROM session WHERE sess->>'userId' = ${userId}`);
     console.log(`[Auth] destroyUserSessions — userId=${userId} déconnecté immédiatement`);
   } catch (err: any) {
@@ -468,7 +468,7 @@ async function revokeSessionsByIp(ip: string, blockedUntil: number): Promise<voi
 
     // Notifie via SSE pour déconnexion immédiate dans les onglets ouverts
     for (const userId of userIds) {
-      notifyUserForceLogout(userId);
+      notifyUserForceLogout(userId, blockedUntil);
       forcedLogoutMap.set(userId, blockedUntil);
       revokedTokensBefore.set(userId, Date.now());
     }

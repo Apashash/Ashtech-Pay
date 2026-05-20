@@ -277,6 +277,8 @@ function ForceLogoutGuard() {
       removeAuthToken();
       const retryAfter = detail?.retryAfter;
       if (retryAfter) {
+        // Persiste en localStorage pour que BlockGuard bloque les prochaines navigations
+        try { localStorage.setItem("ashtech_rate_limit_until", String(retryAfter)); } catch {}
         setLocation(`/blocked?until=${retryAfter}`);
       } else {
         setLocation("/login");

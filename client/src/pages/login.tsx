@@ -89,19 +89,14 @@ export default function LoginPage() {
       .then(data => {
         if (data.blocked && data.retryAfter) {
           saveRateLimit(data.retryAfter);
-          setBlockedUntil(data.retryAfter);
+          // Redirection directe — pas de dépendance à isBlocked/countdown qui peut être 0
+          setLocation(`/blocked?until=${data.retryAfter}`);
+          return;
         }
+        setChecking(false);
       })
-      .catch(() => {})
-      .finally(() => setChecking(false));
+      .catch(() => setChecking(false));
   }, []);
-
-  // Rediriger vers la page de compte à rebours dès que l'IP est bloquée
-  useEffect(() => {
-    if (isBlocked && blockedUntil !== null) {
-      setLocation(`/blocked?until=${blockedUntil}`);
-    }
-  }, [isBlocked, blockedUntil, setLocation]);
 
   useEffect(() => {
     if (countdown === 0 && blockedUntil !== null) {
@@ -133,8 +128,9 @@ export default function LoginPage() {
       if (error.vpnDetected) { setVpnDetected(true); return; }
       if (error.blocked && error.retryAfter) {
         saveRateLimit(error.retryAfter);
-        setBlockedUntil(error.retryAfter);
-        return; // no toast, blocked screen replaces form
+        // Redirection directe vers /blocked — pas de dépendance à isBlocked/countdown
+        setLocation(`/blocked?until=${error.retryAfter}`);
+        return;
       } else if (error.attemptsLeft !== undefined) {
         setAttemptsLeft(error.attemptsLeft);
       }
