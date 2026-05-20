@@ -305,7 +305,7 @@ export default function RegisterPage() {
                           </Select>
                           <div className="relative flex-1">
                             <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                            <Input placeholder="6XX XXX XXX" className="pl-10" inputMode="tel" data-testid="input-phone" {...field} value={field.value || ""} />
+                            <Input placeholder="6XX XXX XXX" className="pl-10" inputMode="numeric" data-testid="input-phone" {...field} value={field.value || ""} />
                           </div>
                         </div>
                       </FormControl>
