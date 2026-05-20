@@ -64,6 +64,8 @@ import {
   notifyKycRejected,
   notifyKycSubmittedFull,
   notifyPaymentLinkCreated,
+  notifyDepositFailed,
+  notifyDepositConfirmed,
   handleTelegramUpdate,
   registerTelegramWebhook,
 } from "./telegram";
@@ -1292,6 +1294,18 @@ export async function registerRoutes(
       await storage.updateTransactionStatus(transaction.id, "failed");
       removePendingPayment(req.params.reference);
       console.log(`[Cancel] Transaction ${req.params.reference} cancelled by user ${req.userId}`);
+      // Notify admin via Telegram
+      storage.getUser(transaction.userId).then(txUser => {
+        notifyDepositFailed({
+          userName: txUser?.fullName || txUser?.username || "Utilisateur",
+          userEmail: txUser?.email || "",
+          amount: transaction.totalAmount || transaction.amount,
+          currency: transaction.currency || "XAF",
+          reference: transaction.reference || req.params.reference,
+          reason: "Annulé par l'utilisateur",
+          country: txUser?.country || "",
+        }).catch(() => {});
+      }).catch(() => {});
       res.json({ success: true, status: "failed" });
     } catch (error) {
       console.error("Cancel transaction error:", error);
@@ -7444,6 +7458,18 @@ export async function registerRoutes(
             : `Votre dépôt de ${transaction.totalAmount || transaction.amount} a échoué.`,
           transactionId: transaction.id,
         });
+        // Notify admin via Telegram
+        storage.getUser(transaction.userId).then(txUser => {
+          notifyDepositFailed({
+            userName: txUser?.fullName || txUser?.username || "Utilisateur",
+            userEmail: txUser?.email || "",
+            amount: transaction.totalAmount || transaction.amount,
+            currency: transaction.currency || "XAF",
+            reference: transaction.reference || transaction.id,
+            reason: isPaymentLink ? "Paiement lien échoué (Swychr)" : "Dépôt échoué (Swychr webhook)",
+            country: txUser?.country || "",
+          }).catch(() => {});
+        }).catch(() => {});
         console.log("[Swychr Webhook] Payment FAILED for:", transaction.id);
         forwardMerchantWebhook(transaction, "failed").catch(() => {});
       } else {

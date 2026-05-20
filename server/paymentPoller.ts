@@ -250,6 +250,18 @@ export async function recoverPendingDeposits() {
             transactionId: tx.id,
             isRead: false,
           });
+          // Notify admin via Telegram
+          storage.getUser(tx.userId).then(txUser => {
+            notifyDepositFailed({
+              userName: txUser?.fullName || (txUser as any)?.username || "Utilisateur",
+              userEmail: txUser?.email || "",
+              amount: tx.totalAmount || tx.amount,
+              currency: tx.currency || "XAF",
+              reference: tx.reference || tx.id,
+              reason: "Délai expiré — annulé automatiquement",
+              country: (txUser as any)?.country || "",
+            }).catch(() => {});
+          }).catch(() => {});
         }
         autoFailed++;
       } else {
