@@ -246,6 +246,30 @@ function GlobalSSEWatcher() {
     staleTime: Infinity,
     refetchOnWindowFocus: false,
   });
+
+  // Filet de sécurité : vérifie le statut IP toutes les 30s pour les utilisateurs connectés.
+  // Déclenche force-logout si l'IP est bloquée même sans requête React Query en cours.
+  useEffect(() => {
+    if (!user) return;
+    const check = async () => {
+      try {
+        const res = await fetch("/api/auth/ip-status", {
+          credentials: "include",
+          headers: getAuthHeaders(),
+        });
+        const data = await res.json();
+        if (data.blocked && data.retryAfter) {
+          try { localStorage.setItem("ashtech_rate_limit_until", String(data.retryAfter)); } catch {}
+          queryClient.clear();
+          removeAuthToken();
+          window.dispatchEvent(new CustomEvent("force-logout", { detail: { retryAfter: data.retryAfter } }));
+        }
+      } catch {}
+    };
+    const interval = setInterval(check, 30000);
+    return () => clearInterval(interval);
+  }, [user]);
+
   if (!user) return null;
   return <SSEForceLogoutListener />;
 }

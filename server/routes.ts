@@ -281,6 +281,20 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
       sessionRevoked: true,
     });
   }
+
+  // Vérification IP bloquée sur CHAQUE requête authentifiée.
+  // Couvre le cas où clientIp n'est pas encore stocké en session (sessions existantes).
+  // Dès que l'IP est bloquée → 401 sessionRevoked → force-logout côté client.
+  const ip = getClientIp(req);
+  const ipCheck = checkAuthRateLimit(ip);
+  if (ipCheck.blocked && ipCheck.retryAfter) {
+    return res.status(401).json({
+      message: "Votre adresse IP est temporairement bloquée.",
+      sessionRevoked: true,
+      retryAfter: ipCheck.retryAfter,
+    });
+  }
+
   if (req.forceLogoutRetryAfter) {
     return res.status(401).json({
       message: "Session terminée pour raison de sécurité.",
