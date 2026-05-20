@@ -1501,6 +1501,19 @@ export async function handleTelegramUpdate(
         chat_id: chatId, text: msgText, parse_mode: "HTML",
         reply_markup: { inline_keyboard: [[{ text: "🔙 Menu", callback_data: "cmd:menu" }]] },
       });
+      return;
+    }
+
+    // ── Commande inconnue ──
+    if (text.startsWith("/")) {
+      await callBotApi("sendMessage", {
+        chat_id: chatId,
+        text:
+          `❓ <b>Commande inexistante</b> : <code>${text.split(" ")[0]}</code>\n\n` +
+          `Tapez /aide pour voir toutes les commandes disponibles.`,
+        parse_mode: "HTML",
+        reply_markup: { inline_keyboard: [[{ text: "📖 Voir l'aide", callback_data: "cmd:menu" }]] },
+      });
     }
   }
 }
