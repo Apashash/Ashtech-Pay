@@ -1015,9 +1015,19 @@ async function sendMenu(chatId: string): Promise<void> {
     reply_markup: {
       keyboard: REPLY_KEYBOARD,
       resize_keyboard: true,
-      is_persistent: true,
+      is_persistent: false,
     },
   });
+
+  // Supprime automatiquement les boutons après 7 secondes
+  setTimeout(async () => {
+    await callBotApi("sendMessage", {
+      chat_id: chatId,
+      text: "⌨️",
+      reply_markup: { remove_keyboard: true },
+      disable_notification: true,
+    });
+  }, 7000);
 }
 
 function fmtNum(n: number | string): string {
