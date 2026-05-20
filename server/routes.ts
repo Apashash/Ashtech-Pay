@@ -207,31 +207,47 @@ declare global {
   namespace Express {
     interface Request {
       userId?: string;
+      forceLogoutRetryAfter?: number;
     }
   }
 }
 
 // Middleware to extract userId from either session or Bearer token
 function extractUserId(req: Request, _res: Response, next: NextFunction) {
-  // First check session
+  let userId: string | undefined;
+
   if (req.session?.userId) {
-    req.userId = req.session.userId;
-    return next();
+    userId = req.session.userId;
+  } else {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      const id = getUserIdFromToken(token);
+      if (id) userId = id;
+    }
   }
-  
-  // Then check Bearer token
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.substring(7);
-    const userId = getUserIdFromToken(token);
-    if (userId) {
+
+  if (userId) {
+    const until = forcedLogoutMap.get(userId);
+    if (until && Date.now() < until) {
+      req.forceLogoutRetryAfter = until;
+    } else {
+      if (until) forcedLogoutMap.delete(userId);
       req.userId = userId;
     }
   }
+
   next();
 }
 
 function requireAuth(req: Request, res: Response, next: NextFunction) {
+  if (req.forceLogoutRetryAfter) {
+    return res.status(401).json({
+      message: "Session terminée pour raison de sécurité.",
+      sessionRevoked: true,
+      retryAfter: req.forceLogoutRetryAfter,
+    });
+  }
   if (!req.userId) {
     console.log("Auth failed - No userId. Session ID:", req.sessionID, "Cookies:", req.headers.cookie ? "present" : "none", "Auth header:", req.headers.authorization ? "present" : "none");
     return res.status(401).json({ message: "Non autorisé" });
@@ -346,6 +362,25 @@ setInterval(() => {
 const authAttempts = new Map<string, { count: number; blockedUntil?: number }>();
 const MAX_AUTH_ATTEMPTS = 4;
 const AUTH_BLOCK_DURATION_MS = 7 * 60 * 1000; // 7 minutes
+
+// ─── Forced-logout map : userId → blockedUntil timestamp ─────────────────────
+const forcedLogoutMap = new Map<string, number>();
+
+async function destroyUserSessions(userId: string, blockedUntil: number): Promise<void> {
+  try {
+    forcedLogoutMap.set(userId, blockedUntil);
+    await db.execute(sql`DELETE FROM session WHERE sess->>'userId' = ${userId}`);
+  } catch (err: any) {
+    console.error("[Auth] Failed to destroy sessions for user:", userId, err?.message);
+  }
+}
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [uid, until] of forcedLogoutMap.entries()) {
+    if (now > until) forcedLogoutMap.delete(uid);
+  }
+}, 5 * 60 * 1000);
 
 function getClientIp(req: Request): string {
   const forwarded = req.headers["x-forwarded-for"];
@@ -850,6 +885,10 @@ export async function registerRoutes(
         notifyLoginFailed({ identifier: data.identifier, ip, attemptsLeft: remaining, blocked: !!failure.blocked }).catch(() => {});
         if (user?.role === "admin") {
           notifyAdminLoginFailed({ identifier: data.identifier, ip }).catch(() => {});
+        }
+        // Si l'IP est bloquée et que le compte existe → détruire toutes ses sessions actives
+        if (failure.blocked && user && failure.retryAfter) {
+          destroyUserSessions(user.id, failure.retryAfter).catch(() => {});
         }
         return res.status(failure.blocked ? 429 : 401).json({
           message: msg,

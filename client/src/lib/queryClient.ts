@@ -28,11 +28,13 @@ async function throwIfResNotOk(res: Response) {
     const text = (await res.text()) || res.statusText;
     try {
       const json = JSON.parse(text);
-      // If VPN was detected and user was logged in, clear local auth and redirect
       if (json.vpnDetected && res.status === 403) {
         removeAuthToken();
-        // Dispatch a custom event so the app can react (redirect to login with vpn flag)
         window.dispatchEvent(new CustomEvent("vpn-disconnect", { detail: { message: json.message } }));
+      }
+      if (json.sessionRevoked && res.status === 401) {
+        removeAuthToken();
+        window.dispatchEvent(new CustomEvent("force-logout", { detail: { retryAfter: json.retryAfter } }));
       }
       throw Object.assign(new Error(json.message || text), json);
     } catch (e) {
@@ -76,8 +78,15 @@ export const getQueryFn: <T>(options: {
       headers: getAuthHeaders(),
     });
 
-    if (unauthorizedBehavior === "returnNull" && res.status === 401) {
-      return null;
+    if (res.status === 401) {
+      try {
+        const body = await res.clone().json();
+        if (body.sessionRevoked) {
+          removeAuthToken();
+          window.dispatchEvent(new CustomEvent("force-logout", { detail: { retryAfter: body.retryAfter } }));
+        }
+      } catch {}
+      if (unauthorizedBehavior === "returnNull") return null;
     }
 
     await throwIfResNotOk(res);

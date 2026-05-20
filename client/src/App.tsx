@@ -196,14 +196,34 @@ function VpnDisconnectGuard() {
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail;
-      // Clear all cached query data so the user is fully signed out
       queryClient.clear();
       removeAuthToken();
-      // Redirect to login with VPN flag in query string
       setLocation("/login?vpn=1");
     };
     window.addEventListener("vpn-disconnect", handler);
     return () => window.removeEventListener("vpn-disconnect", handler);
+  }, [setLocation]);
+
+  return null;
+}
+
+function ForceLogoutGuard() {
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      queryClient.clear();
+      removeAuthToken();
+      const retryAfter = detail?.retryAfter;
+      if (retryAfter) {
+        setLocation(`/blocked?until=${retryAfter}`);
+      } else {
+        setLocation("/login");
+      }
+    };
+    window.addEventListener("force-logout", handler);
+    return () => window.removeEventListener("force-logout", handler);
   }, [setLocation]);
 
   return null;
@@ -217,6 +237,7 @@ function App() {
           <TooltipProvider>
             <Toaster />
             <VpnDisconnectGuard />
+            <ForceLogoutGuard />
             <GeoGuard>
               <Router />
             </GeoGuard>
