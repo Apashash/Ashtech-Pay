@@ -27,17 +27,17 @@ export const globalLimiter = rateLimit({
     reject(res, "Trop de requêtes. Réessayez dans une minute.", 60),
 });
 
-// ─── 2. Login : 5 tentatives / minute / IP ───────────────────────────────────
+// ─── 2. Login : 20 tentatives / 7 minutes / IP (aligné sur le blocage custom 7 min) ───
 export const loginLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 5,
+  windowMs: 7 * 60 * 1000,
+  max: 20,
   standardHeaders: true,
   legacyHeaders: false,
   handler: (_req, res) =>
     reject(
       res,
-      "Trop de tentatives de connexion. Réessayez dans une minute.",
-      60
+      "Trop de tentatives de connexion. Réessayez dans 7 minutes.",
+      7 * 60
     ),
 });
 
