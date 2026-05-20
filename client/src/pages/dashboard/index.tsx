@@ -682,7 +682,7 @@ export default function DashboardHome() {
                     data-testid="button-wallets"
                   >
                     <Wallet className="w-4 h-4" />
-                    {t.dashboard.accounts}
+                    Conversion
                   </button>
                   <div className="hidden sm:block">
                     <img
