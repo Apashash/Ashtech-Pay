@@ -550,35 +550,37 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-80 p-0" align="end">
-                  <div className="p-3 border-b border-border flex items-center justify-between">
-                    <h4 className="font-semibold flex items-center gap-2">
+                  <div className="p-3 border-b border-border flex items-center justify-between gap-2">
+                    <h4 className="font-semibold flex items-center gap-2 shrink-0">
                       <Bell className="w-4 h-4 text-primary" />
                       {t.notifications.title}
                     </h4>
-                    {(notificationData?.unreadCount || 0) > 0 && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => markAllReadMutation.mutate()}
-                        className="text-xs"
-                        data-testid="button-mark-all-read"
-                      >
-                        <CheckCheck className="w-3 h-3 mr-1" />
-                        {t.notifications.markAllRead}
-                      </Button>
-                    )}
-                    {(notificationData?.notifications && notificationData.notifications.length > 0) && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => deleteAllNotificationsMutation.mutate()}
-                        className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                        title="Tout supprimer"
-                        data-testid="button-delete-all-notifications"
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
-                    )}
+                    <div className="flex items-center gap-1 shrink-0">
+                      {(notificationData?.unreadCount || 0) > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => markAllReadMutation.mutate()}
+                          className="text-xs h-8 px-2"
+                          data-testid="button-mark-all-read"
+                        >
+                          <CheckCheck className="w-3 h-3 mr-1" />
+                          {t.notifications.markAllRead}
+                        </Button>
+                      )}
+                      {(notificationData?.notifications && notificationData.notifications.length > 0) && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => deleteAllNotificationsMutation.mutate()}
+                          className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
+                          title="Tout supprimer"
+                          data-testid="button-delete-all-notifications"
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
                   <ScrollArea className="max-h-80">
                     {(!notificationData?.notifications || notificationData.notifications.length === 0) ? (
