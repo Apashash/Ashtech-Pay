@@ -56,7 +56,7 @@ PORT = "5000"
 TRUST_PROXY = "true"
 COOKIE_SECURE = "false"
 COOKIE_SAMESITE = "lax"
-VITE_TURNSTILE_SITE_KEY = "0x4AAAAAADTo7vKx4yeNgrUt"
+VITE_TURNSTILE_SITE_KEY = "0x4AAAAAADT2_WmTcr9hCLw1Y4jESBProjA"
 
 [userenv.development]
 APP_URL = "https://f96a6379-f341-4944-8f17-8e8a1d157003-00-rvqhzlc1jkpk.worf.replit.dev"
