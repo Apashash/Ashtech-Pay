@@ -2,7 +2,7 @@ import pg from 'pg';
 const { Pool } = pg;
 
 const pool = new Pool({
-  connectionString: process.env.SUPABASE_DATABASE_URL,
+  connectionString: process.env.DATABASE_URL || process.env.SUPABASE_DATABASE_URL,
 });
 
 // Swychr fee structure per country (from official tariff table)
