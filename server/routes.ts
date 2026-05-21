@@ -5557,35 +5557,6 @@ export async function registerRoutes(
   // Fix user currencies based on country
   app.post("/api/admin/fix-currencies", requireAdmin, async (req, res) => {
     try {
-      const COUNTRY_CURRENCIES: Record<string, string> = {
-        "Cameroun": "XAF",
-        "Sénégal": "XOF",
-        "Côte d'Ivoire": "XOF",
-        "Togo": "XOF",
-        "Bénin": "XOF",
-        "Burkina Faso": "XOF",
-        "Mali": "XOF",
-        "Niger": "XOF",
-        "Gabon": "XAF",
-        "Congo Brazzaville": "XAF",
-        "Tchad": "XAF",
-        "République Centrafricaine": "XAF",
-        "Guinée Équatoriale": "XAF",
-        "Nigeria": "NGN",
-        "Ghana": "GHS",
-        "Kenya": "KES",
-        "Ouganda": "UGX",
-        "Rwanda": "RWF",
-        "Tanzanie": "TZS",
-        "RDC": "CDF",
-        "RD Congo": "CDF",
-        "Congo Kinshasa": "CDF",
-        "Congo": "XAF",
-        "Benin": "XOF",
-        "Ivory Coast": "XOF",
-        "Burkina": "XOF"
-      };
-
       const usersResult = await storage.getAllUsers();
       let updatedCount = 0;
 

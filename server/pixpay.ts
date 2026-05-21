@@ -494,6 +494,6 @@ export const PIXPAY_SUPPORTED_COUNTRIES = [
   { code: "NE", name: "Niger",             currency: "XOF", flag: "🇳🇪" },
   { code: "SN", name: "Sénégal",           currency: "XOF", flag: "🇸🇳" },
   { code: "TG", name: "Togo",              currency: "XOF", flag: "🇹🇬" },
-  { code: "GN", name: "Guinée Conakry",    currency: "XOF", flag: "🇬🇳" },
+  { code: "GN", name: "Guinée Conakry",    currency: "GNF", flag: "🇬🇳" },
   { code: "CD", name: "RD Congo",          currency: "CDF", flag: "🇨🇩" },
 ];

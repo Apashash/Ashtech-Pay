@@ -52,42 +52,58 @@ export const SUPPORTED_CURRENCIES = [
 export type SupportedCurrency = typeof SUPPORTED_CURRENCIES[number];
 
 export const COUNTRY_CURRENCIES: Record<string, SupportedCurrency> = {
+  // ── Zone BEAC (XAF) ──────────────────────────────────────────────────────
   "Cameroun": "XAF",
   "Cameroon": "XAF",
   "Centrafrique": "XAF",
+  "République Centrafricaine": "XAF",
   "Central African Republic": "XAF",
   "Guinée équatoriale": "XAF",
+  "Guinée Équatoriale": "XAF",
   "Equatorial Guinea": "XAF",
   "Tchad": "XAF",
   "Chad": "XAF",
+  // ── Gabon (XAFG) ─────────────────────────────────────────────────────────
+  "Gabon": "XAFG",
+  // ── Congo Brazzaville (XAFC) ─────────────────────────────────────────────
   "Congo": "XAFC",
   "Congo Brazzaville": "XAFC",
   "Republic of the Congo": "XAFC",
-  "Gabon": "XAFG",
+  // ── RD Congo (CDF) ───────────────────────────────────────────────────────
   "RD Congo": "CDF",
+  "RDC": "CDF",
+  "Congo Kinshasa": "CDF",
   "Congo DRC": "CDF",
+  "Democratic Republic of the Congo": "CDF",
+  // ── Zone BCEAO ───────────────────────────────────────────────────────────
   "Sénégal": "XOFS",
   "Senegal": "XOFS",
   "Côte d'Ivoire": "XOFC",
+  "Ivory Coast": "XOFC",
   "Mali": "XOF",
   "Burkina Faso": "XOFF",
+  "Burkina": "XOFF",
   "Niger": "XOFN",
   "Togo": "XOFT",
   "Bénin": "XOFB",
   "Benin": "XOFB",
   "Guinée-Bissau": "XOF",
   "Guinea-Bissau": "XOF",
+  // ── Afrique de l'Ouest hors CFA ──────────────────────────────────────────
   "Nigeria": "NGN",
   "Nigéria": "NGN",
   "Ghana": "GHS",
+  "Guinée Conakry": "GNF",
+  "Guinée": "GNF",
+  "Guinea": "GNF",
+  // ── Afrique de l'Est ─────────────────────────────────────────────────────
   "Kenya": "KES",
   "Rwanda": "RWF",
   "Tanzania": "TZS",
   "Tanzanie": "TZS",
   "Uganda": "UGX",
   "Ouganda": "UGX",
-  "Guinée Conakry": "GNF",
-  "Guinea": "GNF",
+  // ── Asie / Autres ────────────────────────────────────────────────────────
   "India": "INR",
   "Inde": "INR",
   "United States": "USD",

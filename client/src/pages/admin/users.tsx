@@ -60,7 +60,7 @@ import { fr } from "date-fns/locale";
 import { formatCurrency } from "@/lib/currency";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { ALL_FX_CURRENCIES } from "@shared/schema";
+import { ALL_FX_CURRENCIES, COUNTRY_CURRENCIES as SHARED_COUNTRY_CURRENCIES } from "@shared/schema";
 
 interface User {
   id: string;
@@ -362,45 +362,10 @@ export default function AdminUsers() {
   };
 
   const getDisplayCurrency = (user: User) => {
-    const COUNTRY_CURRENCIES: Record<string, string> = {
-      "Cameroun": "XAF",
-      "Sénégal": "XOF",
-      "Côte d'Ivoire": "XOF",
-      "Togo": "XOF",
-      "Bénin": "XOF",
-      "Burkina Faso": "XOF",
-      "Mali": "XOF",
-      "Niger": "XOF",
-      "Gabon": "XAF",
-      "Congo Brazzaville": "XAF",
-      "Congo": "XAF",
-      "Tchad": "XAF",
-      "République Centrafricaine": "XAF",
-      "Guinée Équatoriale": "XAF",
-      "Nigeria": "NGN",
-      "Ghana": "GHS",
-      "Kenya": "KES",
-      "Ouganda": "UGX",
-      "Rwanda": "RWF",
-      "Tanzanie": "TZS",
-      "RDC": "CDF",
-      "RD Congo": "CDF"
-    };
-
-    // Special cases for specific labels seen in database/UI
+    if (user.preferredCurrency) return user.preferredCurrency;
     const country = user.country?.trim();
-    if (country === "Togo") return "XOF";
-    if (country === "RD Congo" || country === "RDC" || country === "Congo Kinshasa") return "CDF";
-    if (country === "Sénégal") return "XOF";
-    if (country === "Benin" || country === "Bénin") return "XOF";
-    if (country === "Ivory Coast" || country === "Côte d'Ivoire") return "XOF";
-    if (country === "Burkina Faso" || country === "Burkina") return "XOF";
-
-    if (user.preferredCurrency && user.preferredCurrency !== "XAF") {
-      return user.preferredCurrency;
-    }
-    if (country && COUNTRY_CURRENCIES[country]) {
-      return COUNTRY_CURRENCIES[country];
+    if (country && SHARED_COUNTRY_CURRENCIES[country]) {
+      return SHARED_COUNTRY_CURRENCIES[country];
     }
     return "XAF";
   };
