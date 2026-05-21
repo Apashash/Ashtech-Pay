@@ -42,9 +42,32 @@ async function processPendingConversions() {
           continue;
         }
 
-        const receivedAmount = parseFloat(req.toAmount || meta.toAmount || "0");
+        // Parse receivedAmount — guard against "NaN" string (truthy but not numeric) and 0
+        const rawToAmount = req.toAmount ?? meta.toAmount ?? "0";
+        const receivedAmount = parseFloat(String(rawToAmount));
+
+        if (!isFinite(receivedAmount) || receivedAmount <= 0) {
+          // toAmount invalide — refund source wallet and cancel
+          console.error(`[ConversionPoller] Invalid toAmount "${rawToAmount}" for conversion ${req.id} — refunding source`);
+          const user2 = await storage.getUser(req.userId);
+          const primary2 = user2?.preferredCurrency || "XAF";
+          const refundAmount = parseFloat(req.fromAmount || "0");
+          if (isFinite(refundAmount) && refundAmount > 0) {
+            if (req.fromCurrency === primary2) {
+              await storage.updateUserBalance(req.userId, refundAmount);
+            } else {
+              await storage.upsertWallet(req.userId, req.fromCurrency, refundAmount);
+            }
+            console.log(`[ConversionPoller] Refunded ${refundAmount} ${req.fromCurrency} to user ${req.userId}`);
+          }
+          await storage.updateConversionRequest(req.id, { status: "cancelled" });
+          if (meta.txId) await storage.updateTransactionStatus(meta.txId, "failed");
+          continue;
+        }
+
         const userPrimary = user.preferredCurrency || "XAF";
 
+        // Credit the correct wallet: exact match → primary balance, any other → secondary wallet
         if (req.toCurrency === userPrimary) {
           await storage.updateUserBalance(req.userId, receivedAmount);
         } else {

@@ -3428,20 +3428,20 @@ export async function registerRoutes(
 
       const convFxRates = await loadFxRates();
       const amountInXAF = convertToXAF(amountAfterFee, fromCurrency, convFxRates);
-      const receivedAmount = convertFromXAF(amountInXAF, toCurrency, convFxRates);
+      const receivedAmountRaw = convertFromXAF(amountInXAF, toCurrency, convFxRates);
 
-      // Débit immédiat de la source
-      if (fromCurrency === userPrimary) {
-        await storage.updateUserBalance(userId, -parsedAmount);
-      } else {
-        await storage.upsertWallet(userId, fromCurrency, -parsedAmount);
+      // Guard: receivedAmount must be a finite positive number — never NaN/Infinity
+      if (!isFinite(receivedAmountRaw) || receivedAmountRaw <= 0) {
+        return res.status(400).json({ message: `Impossible de calculer le montant reçu en ${toCurrency}. Vérifiez les taux de change.` });
       }
+      const receivedAmount = receivedAmountRaw;
 
       // Délai aléatoire entre 15 et 70 secondes — persisté en base pour survie aux redémarrages
       const delaySeconds = Math.floor(Math.random() * (70 - 15 + 1)) + 15;
       const executeAt = Date.now() + delaySeconds * 1000;
 
-      // Transaction en attente
+      // Créer d'abord la transaction et la demande de conversion (avant tout débit)
+      // Si la création échoue, aucun argent n'est débité.
       const transaction = await storage.createTransaction({
         userId,
         type: "conversion",
@@ -3455,7 +3455,7 @@ export async function registerRoutes(
         recipientCountry: toCurrency,
       });
 
-      // Conversion request persistée — le conversionPoller prendra en charge le crédit wallet
+      // Conversion request persistée AVANT le débit — le conversionPoller crédite le wallet cible
       const convReq = await storage.createConversionRequest({
         userId,
         fromCurrency,
@@ -3472,6 +3472,22 @@ export async function registerRoutes(
           toAmount: receivedAmount.toFixed(2),
         }),
       });
+
+      // Débit de la source APRÈS que la demande est sauvegardée en base
+      // Ainsi, si le débit échoue, la demande peut être annulée sans perte d'argent
+      try {
+        if (fromCurrency === userPrimary) {
+          await storage.updateUserBalance(userId, -parsedAmount);
+        } else {
+          await storage.upsertWallet(userId, fromCurrency, -parsedAmount);
+        }
+      } catch (debitErr: any) {
+        // Rollback: annuler la demande et la transaction si le débit échoue
+        await storage.updateConversionRequest(convReq.id, { status: "cancelled" }).catch(() => {});
+        await storage.updateTransactionStatus(transaction.id, "failed").catch(() => {});
+        console.error(`[Conversion] Debit failed for user ${userId}, rolled back conversion ${convReq.id}:`, debitErr.message);
+        return res.status(500).json({ message: "Erreur lors du débit de votre compte. Aucun argent n'a été prélevé." });
+      }
 
       // Notification "en cours"
       await storage.createUserNotification({
