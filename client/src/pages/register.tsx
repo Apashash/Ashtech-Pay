@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -13,6 +13,7 @@ import { registerSchema } from "@shared/schema";
 import { apiRequest, queryClient, setAuthToken } from "@/lib/queryClient";
 import { Mail, Lock, User, Phone, Loader2, Eye, EyeOff, Home, Clock, ShieldAlert, WifiOff } from "lucide-react";
 import { useLanguage } from "@/lib/language";
+import { TurnstileWidget } from "@/components/ui/turnstile";
 import { z } from "zod";
 
 interface CountryData {
@@ -92,18 +93,29 @@ export default function RegisterPage() {
   const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
   const [vpnDetected, setVpnDetected] = useState(false);
   const [checking, setChecking] = useState(true);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [turnstileKey, setTurnstileKey] = useState(0);
 
   const countdown = useCountdown(blockedUntil);
   const isBlocked = blockedUntil !== null && countdown > 0;
 
-  // Server-side IP check on mount — works for ANY browser/device on blocked IP
+  const { data: turnstileConfig } = useQuery<{ siteKey: string }>({
+    queryKey: ["/api/public/turnstile-key"],
+    queryFn: async () => {
+      const res = await fetch("/api/public/turnstile-key");
+      return res.json();
+    },
+    staleTime: Infinity,
+  });
+
+  const siteKey = turnstileConfig?.siteKey || "";
+
   useEffect(() => {
     fetch("/api/auth/ip-status")
       .then(r => r.json())
       .then(data => {
         if (data.blocked && data.retryAfter) {
           saveRateLimit(data.retryAfter);
-          // Redirection directe — pas de dépendance à isBlocked/countdown qui peut être 0
           setLocation(`/blocked?until=${data.retryAfter}`);
           return;
         }
@@ -149,10 +161,22 @@ export default function RegisterPage() {
     defaultValues: { fullName: "", username: "", email: "", password: "", confirmPassword: "", phone: "" },
   });
 
+  const handleTurnstileSuccess = useCallback((token: string) => {
+    setTurnstileToken(token);
+  }, []);
+
+  const handleTurnstileExpire = useCallback(() => {
+    setTurnstileToken(null);
+  }, []);
+
   const registerMutation = useMutation({
     mutationFn: async (data: RegisterFormData) => {
       const { confirmPassword, ...submitData } = data;
-      const res = await apiRequest("POST", "/api/auth/register", { ...submitData, country: selectedCountry?.name || "" });
+      const res = await apiRequest("POST", "/api/auth/register", {
+        ...submitData,
+        country: selectedCountry?.name || "",
+        turnstileToken: turnstileToken || undefined,
+      });
       const json = await res.json();
       if (!res.ok) throw Object.assign(new Error(json.message || "Erreur"), json);
       return json;
@@ -164,13 +188,14 @@ export default function RegisterPage() {
       setLocation("/dashboard");
     },
     onError: (error: any) => {
+      setTurnstileToken(null);
+      setTurnstileKey(k => k + 1);
       if (error.vpnDetected) {
         setVpnDetected(true);
         return;
       }
       if (error.blocked && error.retryAfter) {
         saveRateLimit(error.retryAfter);
-        // Redirection directe vers /blocked — pas de dépendance à isBlocked/countdown
         setLocation(`/blocked?until=${error.retryAfter}`);
         return;
       } else if (error.attemptsLeft !== undefined) {
@@ -198,6 +223,8 @@ export default function RegisterPage() {
       }
     }
   };
+
+  const canSubmit = !siteKey || !!turnstileToken;
 
   return (
     <div className="min-h-screen bg-muted flex items-center justify-center p-4 py-8">
@@ -399,7 +426,23 @@ export default function RegisterPage() {
                   )}
                 />
 
-                <Button type="submit" className="w-full font-bold text-base h-11 mt-2" disabled={registerMutation.isPending || loadingCountries || !selectedCountry} data-testid="button-register">
+                {siteKey && (
+                  <div className="py-1">
+                    <TurnstileWidget
+                      key={turnstileKey}
+                      siteKey={siteKey}
+                      onSuccess={handleTurnstileSuccess}
+                      onExpire={handleTurnstileExpire}
+                    />
+                  </div>
+                )}
+
+                <Button
+                  type="submit"
+                  className="w-full font-bold text-base h-11 mt-2"
+                  disabled={registerMutation.isPending || loadingCountries || !selectedCountry || !canSubmit}
+                  data-testid="button-register"
+                >
                   {registerMutation.isPending ? (
                     <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{t.register.submitting}</>
                   ) : t.register.submit}

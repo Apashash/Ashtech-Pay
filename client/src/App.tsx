@@ -1,7 +1,7 @@
+import React, { useEffect, useLayoutEffect } from "react";
 import { Switch, Route, useLocation } from "wouter";
 import { queryClient, removeAuthToken, getQueryFn, getAuthHeaders } from "./lib/queryClient";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
-import { useEffect, useLayoutEffect } from "react";
 import { useSSE } from "@/hooks/use-sse";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -83,19 +83,7 @@ import ContactPage from "@/pages/contact";
 import FAQPage from "@/pages/faq";
 import CountryBlockedPage from "@/pages/country-blocked";
 import BlockedPage from "@/pages/blocked";
-
-const RATE_LIMIT_KEY = "ashtech_rate_limit_until";
-
-function getBlockedUntil(): number | null {
-  try {
-    const v = localStorage.getItem(RATE_LIMIT_KEY);
-    if (!v) return null;
-    const ts = parseInt(v, 10);
-    if (ts > Date.now()) return ts;
-    localStorage.removeItem(RATE_LIMIT_KEY);
-  } catch {}
-  return null;
-}
+import { getBlockedUntil, getGeoCache, setGeoCache, GEO_BYPASS_PATHS, GEO_CACHE_KEY } from "@/lib/appUtils";
 
 // Redirige immédiatement vers /blocked si l'IP est bloquée (vérif. localStorage)
 // useLayoutEffect + return null = aucun flash de la page login/register
@@ -113,30 +101,6 @@ function BlockGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-const GEO_BYPASS_PATHS = ["/pay/", "/hpay/", "/checkout/", "/admin"];
-const GEO_CACHE_KEY = "ashtech_geo_cache";
-const GEO_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
-
-function getGeoCache(): { country: string; countryName: string; isAfrica: boolean } | null {
-  try {
-    const raw = localStorage.getItem(GEO_CACHE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (Date.now() - parsed.ts > GEO_CACHE_TTL) {
-      localStorage.removeItem(GEO_CACHE_KEY);
-      return null;
-    }
-    return parsed.data;
-  } catch {
-    return null;
-  }
-}
-
-function setGeoCache(data: { country: string; countryName: string; isAfrica: boolean }) {
-  try {
-    localStorage.setItem(GEO_CACHE_KEY, JSON.stringify({ ts: Date.now(), data }));
-  } catch {}
-}
 
 function GeoGuard({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();

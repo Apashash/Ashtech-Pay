@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -11,6 +11,7 @@ import { loginSchema } from "@shared/schema";
 import { apiRequest, queryClient, setAuthToken } from "@/lib/queryClient";
 import { Mail, Lock, Loader2, Eye, EyeOff, Home, Clock, ShieldAlert, WifiOff, MonitorSmartphone } from "lucide-react";
 import { useLanguage } from "@/lib/language";
+import { TurnstileWidget } from "@/components/ui/turnstile";
 import { z } from "zod";
 
 type LoginFormData = z.infer<typeof loginSchema>;
@@ -74,28 +75,38 @@ export default function LoginPage() {
     return false;
   });
 
-  // Start with localStorage value for instant render, then confirm with server
   const [blockedUntil, setBlockedUntil] = useState<number | null>(() => loadRateLimit());
   const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
-  const [checking, setChecking] = useState(true); // loading while server check runs
+  const [checking, setChecking] = useState(true);
   const [vpnDetected, setVpnDetected] = useState(() => {
     if (typeof window !== "undefined") {
       return new URLSearchParams(window.location.search).get("vpn") === "1";
     }
     return false;
   });
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [turnstileKey, setTurnstileKey] = useState(0);
 
   const countdown = useCountdown(blockedUntil);
   const isBlocked = blockedUntil !== null && countdown > 0;
 
-  // Server-side IP check on mount — works for ANY browser/device on blocked IP
+  const { data: turnstileConfig } = useQuery<{ siteKey: string }>({
+    queryKey: ["/api/public/turnstile-key"],
+    queryFn: async () => {
+      const res = await fetch("/api/public/turnstile-key");
+      return res.json();
+    },
+    staleTime: Infinity,
+  });
+
+  const siteKey = turnstileConfig?.siteKey || "";
+
   useEffect(() => {
     fetch("/api/auth/ip-status")
       .then(r => r.json())
       .then(data => {
         if (data.blocked && data.retryAfter) {
           saveRateLimit(data.retryAfter);
-          // Redirection directe — pas de dépendance à isBlocked/countdown qui peut être 0
           setLocation(`/blocked?until=${data.retryAfter}`);
           return;
         }
@@ -117,9 +128,20 @@ export default function LoginPage() {
     defaultValues: { identifier: "", password: "" },
   });
 
+  const handleTurnstileSuccess = useCallback((token: string) => {
+    setTurnstileToken(token);
+  }, []);
+
+  const handleTurnstileExpire = useCallback(() => {
+    setTurnstileToken(null);
+  }, []);
+
   const loginMutation = useMutation({
     mutationFn: async (data: LoginFormData) => {
-      const res = await apiRequest("POST", "/api/auth/login", data);
+      const res = await apiRequest("POST", "/api/auth/login", {
+        ...data,
+        turnstileToken: turnstileToken || undefined,
+      });
       const json = await res.json();
       if (!res.ok) throw Object.assign(new Error(json.message || "Erreur"), json);
       return json;
@@ -131,10 +153,11 @@ export default function LoginPage() {
       setLocation("/dashboard");
     },
     onError: (error: any) => {
+      setTurnstileToken(null);
+      setTurnstileKey(k => k + 1);
       if (error.vpnDetected) { setVpnDetected(true); return; }
       if (error.blocked && error.retryAfter) {
         saveRateLimit(error.retryAfter);
-        // Redirection directe vers /blocked — pas de dépendance à isBlocked/countdown
         setLocation(`/blocked?until=${error.retryAfter}`);
         return;
       } else if (error.attemptsLeft !== undefined) {
@@ -143,6 +166,8 @@ export default function LoginPage() {
       toast({ title: t.login.toastError, description: error.message || t.login.toastErrorDesc, variant: "destructive" });
     },
   });
+
+  const canSubmit = !siteKey || !!turnstileToken;
 
   return (
     <div className="min-h-screen bg-muted flex items-center justify-center p-4">
@@ -159,7 +184,6 @@ export default function LoginPage() {
         </div>
 
         <div className="bg-card border border-border rounded-2xl p-8">
-          {/* Kicked: account connected on another device */}
           {kicked && !checking && !isBlocked && !vpnDetected && (
             <div className="flex items-start gap-3 bg-blue-500/10 border border-blue-500/25 rounded-xl px-4 py-3 mb-5">
               <MonitorSmartphone className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
@@ -172,7 +196,6 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* Loading while server checks IP */}
           {checking ? (
             <div className="flex flex-col items-center gap-4 py-8">
               <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
@@ -289,7 +312,23 @@ export default function LoginPage() {
                   </Link>
                 </div>
 
-                <Button type="submit" className="w-full font-bold text-base h-11" disabled={loginMutation.isPending} data-testid="button-login">
+                {siteKey && (
+                  <div className="py-1">
+                    <TurnstileWidget
+                      key={turnstileKey}
+                      siteKey={siteKey}
+                      onSuccess={handleTurnstileSuccess}
+                      onExpire={handleTurnstileExpire}
+                    />
+                  </div>
+                )}
+
+                <Button
+                  type="submit"
+                  className="w-full font-bold text-base h-11"
+                  disabled={loginMutation.isPending || !canSubmit}
+                  data-testid="button-login"
+                >
                   {loginMutation.isPending ? (
                     <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{t.login.submitting}</>
                   ) : t.login.submit}
