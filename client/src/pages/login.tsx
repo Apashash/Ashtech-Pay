@@ -86,6 +86,7 @@ export default function LoginPage() {
   });
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [turnstileKey, setTurnstileKey] = useState(0);
+  const [turnstileError, setTurnstileError] = useState(false);
 
   const countdown = useCountdown(blockedUntil);
   const isBlocked = blockedUntil !== null && countdown > 0;
@@ -136,6 +137,10 @@ export default function LoginPage() {
     setTurnstileToken(null);
   }, []);
 
+  const handleTurnstileError = useCallback(() => {
+    setTurnstileError(true);
+  }, []);
+
   const loginMutation = useMutation({
     mutationFn: async (data: LoginFormData) => {
       const res = await apiRequest("POST", "/api/auth/login", {
@@ -167,7 +172,7 @@ export default function LoginPage() {
     },
   });
 
-  const canSubmit = !siteKey || !!turnstileToken;
+  const canSubmit = !siteKey || !!turnstileToken || turnstileError;
 
   return (
     <div className="min-h-screen bg-muted flex items-center justify-center p-4">
@@ -319,6 +324,7 @@ export default function LoginPage() {
                       siteKey={siteKey}
                       onSuccess={handleTurnstileSuccess}
                       onExpire={handleTurnstileExpire}
+                      onError={handleTurnstileError}
                     />
                   </div>
                 )}

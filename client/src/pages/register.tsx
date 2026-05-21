@@ -95,6 +95,7 @@ export default function RegisterPage() {
   const [checking, setChecking] = useState(true);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [turnstileKey, setTurnstileKey] = useState(0);
+  const [turnstileError, setTurnstileError] = useState(false);
 
   const countdown = useCountdown(blockedUntil);
   const isBlocked = blockedUntil !== null && countdown > 0;
@@ -169,6 +170,10 @@ export default function RegisterPage() {
     setTurnstileToken(null);
   }, []);
 
+  const handleTurnstileError = useCallback(() => {
+    setTurnstileError(true);
+  }, []);
+
   const registerMutation = useMutation({
     mutationFn: async (data: RegisterFormData) => {
       const { confirmPassword, ...submitData } = data;
@@ -224,7 +229,7 @@ export default function RegisterPage() {
     }
   };
 
-  const canSubmit = !siteKey || !!turnstileToken;
+  const canSubmit = !siteKey || !!turnstileToken || turnstileError;
 
   return (
     <div className="min-h-screen bg-muted flex items-center justify-center p-4 py-8">
@@ -433,6 +438,7 @@ export default function RegisterPage() {
                       siteKey={siteKey}
                       onSuccess={handleTurnstileSuccess}
                       onExpire={handleTurnstileExpire}
+                      onError={handleTurnstileError}
                     />
                   </div>
                 )}
