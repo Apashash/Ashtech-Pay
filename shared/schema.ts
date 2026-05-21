@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, decimal, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, decimal, boolean, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -947,7 +947,9 @@ export const wallets = pgTable("wallets", {
   currency: text("currency").notNull(), // XOF, GHS, NGN, KES, CDF, etc.
   balance: decimal("balance", { precision: 15, scale: 2 }).default("0.00").notNull(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (t) => ({
+  userCurrencyUnique: uniqueIndex("wallets_user_currency_unique").on(t.userId, t.currency),
+}));
 
 export const insertWalletSchema = createInsertSchema(wallets).omit({ id: true, updatedAt: true });
 export type Wallet = typeof wallets.$inferSelect;

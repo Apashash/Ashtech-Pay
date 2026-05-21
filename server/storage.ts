@@ -1618,21 +1618,26 @@ export class DatabaseStorage implements IStorage {
   }
 
   async upsertWallet(userId: string, currency: string, balanceDelta: number): Promise<Wallet> {
-    const existing = await this.getWallet(userId, currency);
-    if (existing) {
-      const newBalance = Math.max(0, parseFloat(existing.balance) + balanceDelta);
-      const [updated] = await db.update(wallets)
-        .set({ balance: newBalance.toFixed(2), updatedAt: new Date() })
-        .where(and(eq(wallets.userId, userId), eq(wallets.currency, currency)))
-        .returning();
-      return updated;
-    } else {
-      const initialBalance = Math.max(0, balanceDelta);
-      const [created] = await db.insert(wallets)
-        .values({ userId, currency, balance: initialBalance.toFixed(2) })
-        .returning();
-      return created;
-    }
+    // Atomic upsert: INSERT ... ON CONFLICT DO UPDATE using PostgreSQL raw SQL.
+    // This prevents race conditions where two concurrent operations (e.g. deposit + conversion)
+    // could both read "no wallet exists" and then create duplicates or silently lose balance.
+    // GREATEST(0, ...) ensures balance never goes negative at the DB level.
+    const result = await db.execute(sql`
+      INSERT INTO wallets (id, user_id, currency, balance, updated_at)
+      VALUES (gen_random_uuid(), ${userId}, ${currency}, GREATEST(0, ${balanceDelta}::numeric), NOW())
+      ON CONFLICT (user_id, currency) DO UPDATE
+        SET balance    = GREATEST(0, wallets.balance::numeric + ${balanceDelta}::numeric),
+            updated_at = NOW()
+      RETURNING *
+    `);
+    const row = result.rows[0] as any;
+    return {
+      id: row.id,
+      userId: row.user_id,
+      currency: row.currency,
+      balance: row.balance,
+      updatedAt: row.updated_at,
+    };
   }
 
   async setWalletBalance(userId: string, currency: string, newBalance: number): Promise<Wallet> {
