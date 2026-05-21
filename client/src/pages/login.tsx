@@ -168,7 +168,7 @@ export default function LoginPage() {
     },
   });
 
-  const canSubmit = !siteKey || !!turnstileToken || turnstileFallback;
+  const canSubmit = !siteKey || !!turnstileToken || turnstileFallback || turnstileError;
 
   return (
     <div className="min-h-screen bg-muted flex items-center justify-center p-4">
