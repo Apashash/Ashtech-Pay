@@ -347,13 +347,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async refundToOriginalWallet(userId: string, txType: string, txCurrency: string, amount: number): Promise<void> {
-    // Withdrawals always debit users.balance (the primary wallet)
-    // Transfers debit users.balance only if currency matches user's preferredCurrency, otherwise the specific wallet
-    if (txType === "withdrawal") {
-      await this.updateUserBalance(userId, amount);
-      return;
-    }
-    // For transfer_out: check against the user's preferred currency
+    // Always refund to the exact wallet the transaction was debited from.
+    // Use the user's preferredCurrency to determine primary vs secondary wallet.
     const user = await this.getUser(userId);
     const userPrimary = user?.preferredCurrency || "XAF";
     if (txCurrency === userPrimary) {

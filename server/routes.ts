@@ -3117,7 +3117,7 @@ export async function registerRoutes(
           if (!cashOutServiceId) {
             console.error(`[Withdrawal] PixPay: no cash_in service_id for ${operator?.name} in ${countryCode}`);
             await storage.updateTransactionStatus(transaction.id, "failed");
-            await storage.updateUserBalance(userId, totalAmount);
+            await storage.refundToOriginalWallet(userId, "withdrawal", withdrawalCurrency, totalAmount);
             return res.status(400).json({
               message: `Retrait PixPay non supporté pour cet opérateur (${operator?.name}) dans ce pays`,
             });
@@ -3209,7 +3209,7 @@ export async function registerRoutes(
           } else {
             console.error(`[Withdrawal] Payout failed for ${withdrawalRef} (${paymentProvider}): ${payoutResult.message}`);
             await storage.updateTransactionStatus(transaction.id, "failed");
-            await storage.updateUserBalance(userId, totalAmount);
+            await storage.refundToOriginalWallet(userId, "withdrawal", withdrawalCurrency, totalAmount);
             return res.status(400).json({
               message: `Le retrait a échoué: ${payoutResult.message}`,
             });
@@ -10353,7 +10353,7 @@ export async function registerRoutes(
 
           await storage.updateTransactionStatus(tx.id, "failed");
           const totalDebited = parseFloat(tx.totalAmount || tx.amount);
-          await storage.updateUserBalance(tx.userId, totalDebited);
+          await storage.refundToOriginalWallet(tx.userId, tx.type, tx.currency || "XAF", totalDebited);
 
           await storage.createUserNotification({
             userId: tx.userId,
