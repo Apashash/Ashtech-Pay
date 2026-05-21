@@ -96,6 +96,7 @@ export default function RegisterPage() {
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [turnstileKey, setTurnstileKey] = useState(0);
   const [turnstileError, setTurnstileError] = useState(false);
+  const [turnstileFallback, setTurnstileFallback] = useState(false);
 
   const countdown = useCountdown(blockedUntil);
   const isBlocked = blockedUntil !== null && countdown > 0;
@@ -174,6 +175,10 @@ export default function RegisterPage() {
     setTurnstileError(true);
   }, []);
 
+  const handleTurnstileFallback = useCallback(() => {
+    setTurnstileFallback(true);
+  }, []);
+
   const registerMutation = useMutation({
     mutationFn: async (data: RegisterFormData) => {
       const { confirmPassword, ...submitData } = data;
@@ -229,7 +234,7 @@ export default function RegisterPage() {
     }
   };
 
-  const canSubmit = !siteKey || !!turnstileToken || turnstileError;
+  const canSubmit = !siteKey || !!turnstileToken || turnstileFallback;
 
   return (
     <div className="min-h-screen bg-muted flex items-center justify-center p-4 py-8">
@@ -439,20 +444,28 @@ export default function RegisterPage() {
                       onSuccess={handleTurnstileSuccess}
                       onExpire={handleTurnstileExpire}
                       onError={handleTurnstileError}
+                      onFallback={handleTurnstileFallback}
                     />
+                    {turnstileError && !turnstileFallback && (
+                      <p className="text-xs text-destructive text-center mt-2">
+                        Vérification impossible. <button type="button" className="underline" onClick={() => { setTurnstileError(false); setTurnstileKey(k => k + 1); }}>Réessayer</button>
+                      </p>
+                    )}
                   </div>
                 )}
 
+                {canSubmit && (
                 <Button
                   type="submit"
                   className="w-full font-bold text-base h-11 mt-2"
-                  disabled={registerMutation.isPending || loadingCountries || !selectedCountry || !canSubmit}
+                  disabled={registerMutation.isPending || loadingCountries || !selectedCountry}
                   data-testid="button-register"
                 >
                   {registerMutation.isPending ? (
                     <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{t.register.submitting}</>
                   ) : t.register.submit}
                 </Button>
+                )}
               </form>
             </Form>
           )}

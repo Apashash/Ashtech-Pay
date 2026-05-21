@@ -6,7 +6,7 @@ declare global {
       render: (container: string | HTMLElement, options: TurnstileOptions) => string;
       reset: (widgetId: string) => void;
       remove: (widgetId: string) => void;
-      execute: (widgetId: string, options?: { callback?: (token: string) => void }) => void;
+      execute: (widgetId: string) => void;
     };
     onTurnstileLoad?: () => void;
   }
@@ -20,8 +20,6 @@ interface TurnstileOptions {
   theme?: "light" | "dark" | "auto";
   size?: "normal" | "compact";
   language?: string;
-  execution?: "render" | "execute";
-  appearance?: "always" | "execute" | "interaction-only";
 }
 
 interface TurnstileWidgetProps {
@@ -29,10 +27,11 @@ interface TurnstileWidgetProps {
   onSuccess: (token: string) => void;
   onExpire?: () => void;
   onError?: () => void;
+  onFallback?: () => void;
   theme?: "light" | "dark" | "auto";
 }
 
-const FALLBACK_TIMEOUT_MS = 8000;
+const FALLBACK_TIMEOUT_MS = 10000;
 
 let scriptLoaded = false;
 let scriptLoading = false;
@@ -55,7 +54,6 @@ function loadTurnstileScript(onLoad: () => void) {
   script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onTurnstileLoad&render=explicit";
   script.async = true;
   script.defer = true;
-  // If the script fails to load (network error, blocked, etc.), trigger fallback
   script.onerror = () => {
     scriptLoading = false;
     callbacks.forEach(cb => cb());
@@ -64,7 +62,7 @@ function loadTurnstileScript(onLoad: () => void) {
   document.head.appendChild(script);
 }
 
-export function TurnstileWidget({ siteKey, onSuccess, onExpire, onError, theme = "auto" }: TurnstileWidgetProps) {
+export function TurnstileWidget({ siteKey, onSuccess, onExpire, onError, onFallback, theme = "auto" }: TurnstileWidgetProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
   const resolvedRef = useRef(false);
@@ -84,7 +82,6 @@ export function TurnstileWidget({ siteKey, onSuccess, onExpire, onError, theme =
   }, [onSuccess, clearFallback]);
 
   const handleError = useCallback(() => {
-    resolvedRef.current = true;
     clearFallback();
     onError?.();
   }, [onError, clearFallback]);
@@ -95,14 +92,8 @@ export function TurnstileWidget({ siteKey, onSuccess, onExpire, onError, theme =
   }, [onExpire]);
 
   const renderWidget = useCallback(() => {
-    if (!containerRef.current) {
-      // Script loaded but container gone — treat as error to unblock form
-      if (!resolvedRef.current) handleError();
-      return;
-    }
-    if (!window.turnstile) {
-      // Script failed to load
-      if (!resolvedRef.current) handleError();
+    if (!containerRef.current || !window.turnstile) {
+      if (!resolvedRef.current) onFallback?.();
       return;
     }
 
@@ -118,21 +109,15 @@ export function TurnstileWidget({ siteKey, onSuccess, onExpire, onError, theme =
       "error-callback": handleError,
       theme,
       language: "fr",
-      execution: "render",
     });
 
-    // For invisible widgets, explicitly call execute()
-    if (widgetIdRef.current && window.turnstile.execute) {
-      try { window.turnstile.execute(widgetIdRef.current); } catch {}
-    }
-
-    // Fallback: if neither success nor error fires within timeout, unblock the form
+    // Start fallback timer — if no success after timeout, unblock form silently
     fallbackTimerRef.current = setTimeout(() => {
       if (!resolvedRef.current) {
-        handleError();
+        onFallback?.();
       }
     }, FALLBACK_TIMEOUT_MS);
-  }, [siteKey, handleSuccess, handleExpire, handleError, theme]);
+  }, [siteKey, handleSuccess, handleExpire, handleError, onFallback, theme]);
 
   useEffect(() => {
     resolvedRef.current = false;

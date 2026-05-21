@@ -87,6 +87,7 @@ export default function LoginPage() {
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [turnstileKey, setTurnstileKey] = useState(0);
   const [turnstileError, setTurnstileError] = useState(false);
+  const [turnstileFallback, setTurnstileFallback] = useState(false);
 
   const countdown = useCountdown(blockedUntil);
   const isBlocked = blockedUntil !== null && countdown > 0;
@@ -141,6 +142,10 @@ export default function LoginPage() {
     setTurnstileError(true);
   }, []);
 
+  const handleTurnstileFallback = useCallback(() => {
+    setTurnstileFallback(true);
+  }, []);
+
   const loginMutation = useMutation({
     mutationFn: async (data: LoginFormData) => {
       const res = await apiRequest("POST", "/api/auth/login", {
@@ -172,7 +177,7 @@ export default function LoginPage() {
     },
   });
 
-  const canSubmit = !siteKey || !!turnstileToken || turnstileError;
+  const canSubmit = !siteKey || !!turnstileToken || turnstileFallback;
 
   return (
     <div className="min-h-screen bg-muted flex items-center justify-center p-4">
@@ -325,20 +330,28 @@ export default function LoginPage() {
                       onSuccess={handleTurnstileSuccess}
                       onExpire={handleTurnstileExpire}
                       onError={handleTurnstileError}
+                      onFallback={handleTurnstileFallback}
                     />
+                    {turnstileError && !turnstileFallback && (
+                      <p className="text-xs text-destructive text-center mt-2">
+                        Vérification impossible. <button type="button" className="underline" onClick={() => { setTurnstileError(false); setTurnstileKey(k => k + 1); }}>Réessayer</button>
+                      </p>
+                    )}
                   </div>
                 )}
 
+                {canSubmit && (
                 <Button
                   type="submit"
                   className="w-full font-bold text-base h-11"
-                  disabled={loginMutation.isPending || !canSubmit}
+                  disabled={loginMutation.isPending}
                   data-testid="button-login"
                 >
                   {loginMutation.isPending ? (
                     <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{t.login.submitting}</>
                   ) : t.login.submit}
                 </Button>
+                )}
               </form>
             </Form>
           )}
