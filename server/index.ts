@@ -7,6 +7,7 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import { startPaymentPoller, recoverPendingDeposits } from "./paymentPoller";
 import { startPayoutPoller, recoverPendingPayouts } from "./payoutPoller";
+import { startConversionPoller } from "./conversionPoller";
 import { seedWithdrawalTransferFees } from "./seedWithdrawalTransferFees";
 import { startCleanupScheduler } from "./cleanup";
 import { startDailyReportScheduler } from "./dailyReport";
@@ -214,6 +215,7 @@ app.use((req, res, next) => {
       recoverPendingPayouts().catch(err =>
         console.error("[PayoutPoller] Recovery error:", err)
       );
+      startConversionPoller();
       seedWithdrawalTransferFees().catch(err =>
         console.error("[FeesSeed] Error during fee seeding:", err)
       );

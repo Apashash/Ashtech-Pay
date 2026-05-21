@@ -3403,6 +3403,10 @@ export async function registerRoutes(
         await storage.upsertWallet(userId, fromCurrency, -parsedAmount);
       }
 
+      // Délai aléatoire entre 15 et 70 secondes — persisté en base pour survie aux redémarrages
+      const delaySeconds = Math.floor(Math.random() * (70 - 15 + 1)) + 15;
+      const executeAt = Date.now() + delaySeconds * 1000;
+
       // Transaction en attente
       const transaction = await storage.createTransaction({
         userId,
@@ -3417,7 +3421,7 @@ export async function registerRoutes(
         recipientCountry: toCurrency,
       });
 
-      // Conversion request en attente
+      // Conversion request persistée — le conversionPoller prendra en charge le crédit wallet
       const convReq = await storage.createConversionRequest({
         userId,
         fromCurrency,
@@ -3425,7 +3429,14 @@ export async function registerRoutes(
         fromAmount: parsedAmount.toFixed(2),
         toAmount: receivedAmount.toFixed(2),
         status: "pending",
-        notes: `Frais: ${totalFeeAmount.toFixed(2)} ${fromCurrency} (${providerFeePercent}% fournisseur + ${ashtechFeePercent}% Ashtech = ${conversionFeePercent}%)`,
+        notes: JSON.stringify({
+          executeAt,
+          txId: transaction.id,
+          feeAmount: totalFeeAmount.toFixed(2),
+          feePercent: `${providerFeePercent}% fournisseur + ${ashtechFeePercent}% Ashtech = ${conversionFeePercent}`,
+          fromAmount: parsedAmount.toFixed(2),
+          toAmount: receivedAmount.toFixed(2),
+        }),
       });
 
       // Notification "en cours"
@@ -3437,11 +3448,7 @@ export async function registerRoutes(
         type: "info",
       });
 
-      // Délai aléatoire entre 15 et 70 secondes
-      const delaySeconds = Math.floor(Math.random() * (70 - 15 + 1)) + 15;
-      const startTime = Date.now();
-
-      console.log(`[Conversion] ${transaction.reference} — débit ${parsedAmount} ${fromCurrency}, crédit ${receivedAmount.toFixed(2)} ${toCurrency} dans ${delaySeconds}s`);
+      console.log(`[Conversion] ${transaction.reference} — débit ${parsedAmount} ${fromCurrency}, crédit ${receivedAmount.toFixed(2)} ${toCurrency} dans ${delaySeconds}s (job=${convReq.id})`);
 
       // Telegram #1 — conversion démarrée
       notifyConversionStarted({
@@ -3456,58 +3463,7 @@ export async function registerRoutes(
         reference: transaction.reference || "",
         userCountry: user.country || "",
         estimatedSeconds: delaySeconds,
-      }).catch(() => {});
-
-      // Exécution différée
-      setTimeout(async () => {
-        try {
-          const elapsedSeconds = Math.round((Date.now() - startTime) / 1000);
-
-          // Crédit du wallet cible — chaque devise-pays a son propre wallet
-          // Ex: XAF→XAFG crédite le wallet XAFG (Gabon), XAF→XOFT crédite le wallet XOFT (Togo)
-          if (toCurrency === userPrimary) {
-            await storage.updateUserBalance(userId, receivedAmount);
-          } else {
-            await storage.upsertWallet(userId, toCurrency, receivedAmount);
-          }
-
-          // Compléter transaction et conversion request
-          await storage.updateTransactionStatus(transaction.id, "completed");
-          await storage.updateConversionRequest(convReq.id, {
-            status: "completed",
-            executedAt: new Date(),
-            executedById: userId,
-          });
-
-          // Notification de succès
-          await storage.createUserNotification({
-            userId,
-            title: "Conversion réussie ✅",
-            message: `Votre conversion de ${parsedAmount.toFixed(2)} ${fromCurrency} → ${receivedAmount.toFixed(2)} ${toCurrency} est terminée. Frais: ${totalFeeAmount.toFixed(2)} ${fromCurrency}.`,
-            transactionId: transaction.id,
-            type: "success",
-          });
-
-          // Telegram #2 — conversion terminée
-          notifyConversionCompleted({
-            userName: user.fullName || user.username,
-            userEmail: user.email || "",
-            fromAmount: parsedAmount.toFixed(2),
-            fromCurrency,
-            toAmount: receivedAmount.toFixed(2),
-            toCurrency,
-            feeAmount: totalFeeAmount.toFixed(2),
-            feePercent: `${providerFeePercent}% fournisseur + ${ashtechFeePercent}% Ashtech = ${conversionFeePercent}`,
-            reference: transaction.reference || "",
-            userCountry: user.country || "",
-            elapsedSeconds,
-          }).catch(() => {});
-
-          console.log(`[Conversion] ${transaction.reference} — terminée en ${elapsedSeconds}s`);
-        } catch (err) {
-          console.error("[Conversion] Erreur lors de la finalisation:", err);
-        }
-      }, delaySeconds * 1000);
+      }).catch(() => {})
 
       return res.json({
         pending: true,
