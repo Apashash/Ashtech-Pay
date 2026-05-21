@@ -20,6 +20,8 @@ interface TurnstileOptions {
   theme?: "light" | "dark" | "auto";
   size?: "normal" | "compact";
   language?: string;
+  appearance?: "always" | "execute" | "interaction-only";
+  execution?: "render" | "execute";
 }
 
 interface TurnstileWidgetProps {
@@ -109,9 +111,11 @@ export function TurnstileWidget({ siteKey, onSuccess, onExpire, onError, onFallb
       "error-callback": handleError,
       theme,
       language: "fr",
+      appearance: "always",
+      execution: "render",
+      size: "normal",
     });
 
-    // Start fallback timer — if no success after timeout, unblock form silently
     fallbackTimerRef.current = setTimeout(() => {
       if (!resolvedRef.current) {
         onFallback?.();
