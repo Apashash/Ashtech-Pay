@@ -101,16 +101,7 @@ export default function RegisterPage() {
   const countdown = useCountdown(blockedUntil);
   const isBlocked = blockedUntil !== null && countdown > 0;
 
-  const { data: turnstileConfig } = useQuery<{ siteKey: string }>({
-    queryKey: ["/api/public/turnstile-key"],
-    queryFn: async () => {
-      const res = await fetch("/api/public/turnstile-key");
-      return res.json();
-    },
-    staleTime: Infinity,
-  });
-
-  const siteKey = turnstileConfig?.siteKey || "";
+  const siteKey = "0x4AAAAAADTo7vKx4yeNgrUt";
 
   useEffect(() => {
     fetch("/api/auth/ip-status")
