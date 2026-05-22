@@ -198,19 +198,21 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
 
     if (notifyUrl && (txSource === "api" || txSource === "hosted_page" || transaction.paymentLinkId)) {
       try {
+        const isPayout = transaction.type === "withdrawal" || transaction.type === "transfer_out";
+        const eventPrefix = isPayout ? "payout" : "payment";
         const payload = {
-          event: status === "completed" ? "payment.success" : "payment.failed",
+          event: status === "completed" ? `${eventPrefix}.completed` : `${eventPrefix}.failed`,
           transaction_id: transaction.id,
           reference: transaction.reference,
-          status: status === "completed" ? "success" : "failed",
-          source: txSource || "payment_link",
-          amount: parseFloat(transaction.totalAmount || transaction.amount),
-          credited_amount: parseFloat(transaction.amount),
+          status,
+          amount: parseFloat(transaction.amount),
+          total_amount: parseFloat(transaction.totalAmount || transaction.amount),
           fee_amount: parseFloat(transaction.feeAmount || "0"),
           currency: transaction.currency,
+          type: transaction.type || "deposit",
           phone: transaction.recipientPhone,
           payment_link_id: transaction.paymentLinkId || null,
-          confirmed_at: status === "completed" ? new Date().toISOString() : null,
+          timestamp: new Date().toISOString(),
         };
         const wRes = await fetch(notifyUrl, {
           method: "POST",
