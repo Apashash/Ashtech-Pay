@@ -3440,8 +3440,8 @@ export async function registerRoutes(
       }
       const receivedAmount = receivedAmountRaw;
 
-      // Délai aléatoire entre 15 et 70 secondes — persisté en base pour survie aux redémarrages
-      const delaySeconds = Math.floor(Math.random() * (70 - 15 + 1)) + 15;
+      // Délai aléatoire entre 5 et 15 secondes — persisté en base pour survie aux redémarrages
+      const delaySeconds = Math.floor(Math.random() * (15 - 5 + 1)) + 5;
       const executeAt = Date.now() + delaySeconds * 1000;
 
       // Créer d'abord la transaction et la demande de conversion (avant tout débit)
