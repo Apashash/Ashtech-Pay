@@ -96,7 +96,7 @@ export default function LoginPage() {
     queryKey: ["/api/public/turnstile-key"],
     staleTime: Infinity,
   });
-  const siteKey = turnstileConfig?.siteKey || "";
+  const siteKey = turnstileConfig?.siteKey || import.meta.env.VITE_TURNSTILE_SITE_KEY || "";
 
   useEffect(() => {
     fetch("/api/auth/ip-status")
