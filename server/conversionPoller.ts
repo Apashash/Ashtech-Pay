@@ -42,13 +42,16 @@ async function processPendingConversions() {
           continue;
         }
 
-        // Parse receivedAmount — guard against "NaN" string (truthy but not numeric) and 0
-        const rawToAmount = req.toAmount ?? meta.toAmount ?? "0";
-        const receivedAmount = parseFloat(String(rawToAmount));
+        // Parse receivedAmount — prefer meta.toAmount (computed at conversion creation time)
+        // over req.toAmount from DB which can be stored as "0.00" (truthy but numerically 0)
+        // causing false cancellation. Use whichever is a valid positive number.
+        const metaAmount = parseFloat(String(meta.toAmount ?? "0"));
+        const dbAmount = parseFloat(String(req.toAmount ?? "0"));
+        const receivedAmount = metaAmount > 0 ? metaAmount : dbAmount;
 
         if (!isFinite(receivedAmount) || receivedAmount <= 0) {
           // toAmount invalide — refund source wallet and cancel
-          console.error(`[ConversionPoller] Invalid toAmount "${rawToAmount}" for conversion ${req.id} — refunding source`);
+          console.error(`[ConversionPoller] Invalid toAmount (meta=${meta.toAmount}, db=${req.toAmount}) for conversion ${req.id} — refunding source`);
           const user2 = await storage.getUser(req.userId);
           const primary2 = user2?.preferredCurrency || "XAF";
           const refundAmount = parseFloat(req.fromAmount || "0");

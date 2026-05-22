@@ -6253,14 +6253,18 @@ export async function registerRoutes(
         }
       }
       
-      await storage.createAdminLog({
-        adminId: req.userId!,
-        action: "update_transaction",
-        targetType: "transaction",
-        targetId: id,
-        details: JSON.stringify({ status, balanceUpdated: wasNotCompleted && isNowCompleted }),
-        ipAddress: req.ip || null,
-      });
+      try {
+        await storage.createAdminLog({
+          adminId: req.userId!,
+          action: "update_transaction",
+          targetType: "transaction",
+          targetId: id,
+          details: JSON.stringify({ status, balanceUpdated: wasNotCompleted && isNowCompleted }),
+          ipAddress: req.ip || null,
+        });
+      } catch (logErr: any) {
+        console.error("[Admin] Failed to write admin log (non-fatal):", logErr?.message);
+      }
       
       res.json(transaction);
     } catch (error) {
