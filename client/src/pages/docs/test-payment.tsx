@@ -98,7 +98,7 @@ function JsonBlock({ data }: { data: unknown }) {
 
 // ─── SDK Mode ─────────────────────────────────────────────────────────────────
 function SDKForm() {
-  const [apiKey, setApiKey] = useState("ak_47de95f89624017ba9f815ea5cc17ea054833c0b05daad09");
+  const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [countryCode, setCountryCode] = useState("");
   const [operator, setOperator] = useState("");
@@ -179,9 +179,10 @@ function SDKForm() {
           <div className="relative">
             <Input
               type={showKey ? "text" : "password"}
+              placeholder="ak_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
               value={apiKey}
               onChange={e => setApiKey(e.target.value)}
-              className="bg-[#161b22] border-white/10 text-zinc-200 pr-10 font-mono text-xs"
+              className="bg-[#161b22] border-white/10 text-zinc-200 pr-10 font-mono text-xs placeholder:text-zinc-700"
               data-testid="input-sdk-api-key"
             />
             <button type="button" onClick={() => setShowKey(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300">
@@ -331,7 +332,7 @@ function SDKForm() {
 
 // ─── Hosted Page Mode ─────────────────────────────────────────────────────────
 function HostedPageForm() {
-  const [hpKey, setHpKey] = useState("hp_live_aee12fec4b2aab5aa567618432c80f7b85a2d101");
+  const [hpKey, setHpKey] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [countryCode, setCountryCode] = useState("");
   const [amount, setAmount] = useState("");
@@ -392,9 +393,10 @@ function HostedPageForm() {
           <div className="relative">
             <Input
               type={showKey ? "text" : "password"}
+              placeholder="hp_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
               value={hpKey}
               onChange={e => setHpKey(e.target.value)}
-              className="bg-[#161b22] border-white/10 text-zinc-200 pr-10 font-mono text-xs"
+              className="bg-[#161b22] border-white/10 text-zinc-200 pr-10 font-mono text-xs placeholder:text-zinc-700"
               data-testid="input-hp-key"
             />
             <button type="button" onClick={() => setShowKey(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300">
