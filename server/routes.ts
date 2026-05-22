@@ -3776,26 +3776,21 @@ export async function registerRoutes(
         executedById: adminId,
       });
 
-      // Record transaction
-      await storage.createTransaction({
-        userId: request.userId,
-        type: "conversion",
-        amount: fromAmount.toFixed(2),
-        currency: request.fromCurrency,
-        status: "completed",
-        description: `Conversion ${fromAmount.toFixed(2)} ${request.fromCurrency} → ${receivedAmount.toFixed(2)} ${request.toCurrency}`,
-        reference: `conv_${id}`,
-        feeAmount: (fromAmount - receivedAmount).toFixed(2),
-        totalAmount: receivedAmount.toFixed(2),
-        recipientCountry: request.toCurrency,
-      });
+      // Mark the original transaction as completed (created when user initiated the conversion)
+      const execNotes = (() => { try { return JSON.parse(request.notes || "{}"); } catch { return {}; } })();
+      if (execNotes.txId) {
+        await storage.updateTransactionStatus(execNotes.txId, "completed").catch(() => {});
+      }
 
       // Notify user
+      const execTxId = execNotes.txId || null;
       await storage.createUserNotification({
         userId: request.userId,
         title: "Conversion effectuée",
         message: `Votre conversion de ${fromAmount.toFixed(2)} ${request.fromCurrency} → ${receivedAmount.toFixed(2)} ${request.toCurrency} a été effectuée avec succès.`,
         type: "success",
+        transactionId: execTxId,
+        isRead: false,
       });
 
       res.json({
@@ -3824,27 +3819,39 @@ export async function registerRoutes(
 
       const fromAmount = parseFloat(request.fromAmount);
 
-      // Refund source wallet
-      if (request.fromCurrency === "XAF") {
+      // Refund source wallet — check user's primary currency, not hardcoded XAF
+      const cancelUser = await storage.getUser(request.userId);
+      const cancelUserPrimary = cancelUser?.preferredCurrency || "XAF";
+      if (request.fromCurrency === cancelUserPrimary) {
         await storage.updateUserBalance(request.userId, fromAmount);
       } else {
         await storage.upsertWallet(request.userId, request.fromCurrency, fromAmount);
       }
 
-      // Update request
+      // Mark the original transaction as failed (preserve original notes, store cancel reason separately)
+      const cancelNotes = (() => { try { return JSON.parse(request.notes || "{}"); } catch { return {}; } })();
+      if (cancelNotes.txId) {
+        await storage.updateTransactionStatus(cancelNotes.txId, "failed").catch(() => {});
+      }
+
+      // Update request status — preserve original notes, append cancel reason
+      const updatedNotes = JSON.stringify({ ...cancelNotes, cancelReason: reason || "Annulé par l'administration" });
       await storage.updateConversionRequest(id, {
         status: "cancelled",
-        notes: reason || "Annulé par l'administration",
+        notes: updatedNotes,
         executedAt: new Date(),
         executedById: adminId,
       });
 
       // Notify user
+      const cancelTxId = cancelNotes.txId || null;
       await storage.createUserNotification({
         userId: request.userId,
         title: "Conversion annulée",
         message: `Votre demande de conversion de ${fromAmount.toFixed(2)} ${request.fromCurrency} → ${request.toCurrency} a été annulée. Le montant a été remboursé sur votre compte.`,
         type: "warning",
+        transactionId: cancelTxId,
+        isRead: false,
       });
 
       res.json({ success: true, message: "Demande annulée et remboursée" });
