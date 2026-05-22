@@ -537,7 +537,7 @@ export default function ApiKeysPage() {
               </CardHeader>
               <CardContent>
                 <pre className="text-xs bg-muted/60 rounded-lg p-4 overflow-x-auto max-w-full text-foreground/90 leading-relaxed">
-{`fetch("https://api.ashtechpay.top/v1/collect", {
+{`fetch("https://ashtechpay.top/v1/collect", {
   method: "POST",
   headers: {
     "Authorization": "Bearer ${showKey && apiKey ? apiKey : "<VOTRE_CLÉ_API>"}",

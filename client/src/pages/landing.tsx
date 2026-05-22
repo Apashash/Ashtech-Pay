@@ -33,6 +33,7 @@ import {
   BookOpen,
   Code2,
   Terminal,
+  FlaskConical,
   FileText as Terms,
   ShieldCheck,
   Scale,
@@ -108,6 +109,7 @@ function Navbar() {
         { label: t.nav.contact, href: "/contact", icon: Mail },
         { label: t.nav.apiDocs, href: "/docs/api", icon: Terminal },
         { label: t.nav.hostedDocs, href: "/docs/hosted-page", icon: Code2 },
+        { label: t.nav.testApi, href: "/docs/test-pay", icon: FlaskConical },
       ],
     },
     {

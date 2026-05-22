@@ -36,6 +36,7 @@ import ApiKeysPage from "@/pages/dashboard/api-keys";
 import DeveloperPage from "@/pages/dashboard/developer";
 import HostedPageDashboard from "@/pages/dashboard/hosted-page";
 import HostedPageDocs from "@/pages/dashboard/hosted-page-docs";
+import TestPaymentPage from "@/pages/docs/test-payment";
 import HPayPage from "@/pages/hpay";
 import SettingsPage from "@/pages/dashboard/settings";
 import PaymentPage from "@/pages/payment";
@@ -137,6 +138,7 @@ function Router() {
       <Route path="/" component={LandingPage} />
       <Route path="/docs/api" component={() => <DeveloperPage publicMode />} />
       <Route path="/docs/hosted-page" component={() => <HostedPageDocs publicMode />} />
+      <Route path="/docs/test-pay" component={TestPaymentPage} />
       <Route path="/blocked" component={BlockedPage} />
       <Route path="/login">
         <BlockGuard><LoginPage /></BlockGuard>
