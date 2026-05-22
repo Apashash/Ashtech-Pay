@@ -4176,8 +4176,8 @@ export async function registerRoutes(
 
       // Notify admin via Telegram (fire & forget)
       storage.getUser(userId).then(linkUser => {
-        const host = req.get("host") || "ashtech.replit.app";
-        const proto = req.headers["x-forwarded-proto"] || req.protocol || "https";
+        const host = req.get("host") || "ashtechpay.top";
+        const proto = ((req.headers["x-forwarded-proto"] as string) || req.protocol || "https").split(",")[0].trim();
         const linkUrl = `${proto}://${host}/pay/${slug}`;
         notifyPaymentLinkCreated({
           userName: linkUser?.fullName || linkUser?.username || "Utilisateur",
@@ -9514,8 +9514,8 @@ export async function registerRoutes(
         notifyUrl: effectiveNotifyUrl,
       });
 
-      const host = req.headers.host || "pay.ashtechpay.top";
-      const protocol = req.headers["x-forwarded-proto"] || "https";
+      const host = req.headers.host || "ashtechpay.top";
+      const protocol = ((req.headers["x-forwarded-proto"] as string) || "https").split(",")[0].trim();
       const payUrl = `${protocol}://${host}/pay/${slug}`;
 
       res.json({
