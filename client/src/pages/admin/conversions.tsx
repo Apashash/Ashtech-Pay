@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { ArrowLeftRight, CheckCircle, Clock, RefreshCw, Loader2, User, Calendar, Settings, Percent, Save, Equal } from "lucide-react";
+import { ArrowLeftRight, CheckCircle, Clock, RefreshCw, Loader2, User, Calendar, Settings, Percent, Save, Equal, Zap, XCircle } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 
@@ -136,6 +136,42 @@ export default function AdminConversionsPage() {
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/admin/conversion-requests?status=all");
       return res.json();
+    },
+  });
+
+  const executeMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("POST", `/api/admin/conversion-requests/${id}/execute`);
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Erreur lors de l'exécution");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/conversion-requests"] });
+      toast({ title: "Conversion exécutée ✅", description: data.message });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("POST", `/api/admin/conversion-requests/${id}/cancel`, { reason: "Annulé manuellement par admin" });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Erreur lors de l'annulation");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/conversion-requests"] });
+      toast({ title: "Conversion annulée", description: "Le solde a été remboursé à l'utilisateur." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erreur", description: error.message, variant: "destructive" });
     },
   });
 
@@ -295,6 +331,39 @@ export default function AdminConversionsPage() {
                           )}
                         </div>
                       </div>
+                      {req.status === "pending" && (
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Button
+                            size="sm"
+                            className="gap-1.5 h-8 text-xs"
+                            onClick={() => executeMutation.mutate(req.id)}
+                            disabled={executeMutation.isPending || cancelMutation.isPending}
+                            data-testid={`button-execute-conversion-${req.id}`}
+                          >
+                            {executeMutation.isPending ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Zap className="w-3.5 h-3.5" />
+                            )}
+                            Forcer
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5 h-8 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
+                            onClick={() => cancelMutation.mutate(req.id)}
+                            disabled={executeMutation.isPending || cancelMutation.isPending}
+                            data-testid={`button-cancel-conversion-${req.id}`}
+                          >
+                            {cancelMutation.isPending ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <XCircle className="w-3.5 h-3.5" />
+                            )}
+                            Annuler
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
