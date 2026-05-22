@@ -326,9 +326,6 @@ export default function AdminConversionsPage() {
                             <Clock className="w-3 h-3" />
                             {req.createdAt ? format(new Date(req.createdAt), "dd/MM/yyyy HH:mm", { locale: fr }) : "-"}
                           </span>
-                          {req.notes && (
-                            <span className="text-xs italic bg-muted px-2 py-0.5 rounded">{req.notes}</span>
-                          )}
                         </div>
                       </div>
                       {req.status === "pending" && (
