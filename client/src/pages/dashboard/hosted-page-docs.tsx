@@ -182,6 +182,7 @@ export default function HostedPageDocs({ publicMode = false }: { publicMode?: bo
               </div>
               <p className="text-sm text-zinc-500 mt-1">
                 Intègre le checkout Ashtech Pay dans ton application via API REST. 16+ pays, Mobile Money.
+                Frais et fournisseurs gérés par l'administrateur — propagation automatique vers tous les intégrateurs.
               </p>
             </div>
             <Button
@@ -393,7 +394,7 @@ Content-Type: application/json`} />
                 </table>
               </div>
               <Note type="info">
-                Si <IC>allowed_countries</IC> est absent ou vide, <strong className="text-sky-300">tous les pays du tableau ci-dessus</strong> sont disponibles sur ta page de paiement. Appelle <IC>GET /api/public/countries</IC> pour la liste en temps réel.
+                Si <IC>allowed_countries</IC> est absent ou vide, <strong className="text-sky-300">tous les pays actifs</strong> sont disponibles. L'administrateur contrôle quels pays et opérateurs sont actifs — tout changement s'applique automatiquement sans modification de votre code.
               </Note>
             </Section>
 

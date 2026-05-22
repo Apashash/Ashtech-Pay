@@ -141,6 +141,34 @@ export default function AdminApiManagement() {
         </Card>
 
         {/* Access rules */}
+        {/* Unified API info */}
+        <Card className="border-sky-500/20 bg-sky-500/5">
+          <CardContent className="pt-5 pb-5">
+            <div className="flex items-start gap-3">
+              <Zap className="h-4 w-4 text-sky-400 mt-0.5 shrink-0" />
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-foreground">Ashtech Pay API — Unifié</p>
+                <p className="text-sm text-muted-foreground">
+                  Les deux fournisseurs (AfribaPay + PixPay) sont combinés sous une seule API.
+                  Le routage est automatique selon le pays et l'opérateur. Tout changement de frais
+                  ou de fournisseur dans le panneau admin se propage instantanément à tous les marchands
+                  intégrés, <strong className="text-foreground">sans modification de leur code</strong>.
+                </p>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {[
+                    { label: "GET /v1/countries", desc: "Pays actifs (admin-géré)" },
+                    { label: "POST /v1/collect",  desc: "Collecte paiement" },
+                    { label: "GET /v1/fees",      desc: "Frais en temps réel" },
+                    { label: "GET /v1/transaction/:id", desc: "Statut transaction" },
+                  ].map(e => (
+                    <span key={e.label} className="text-xs font-mono bg-muted px-2 py-1 rounded border" title={e.desc}>{e.label}</span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         <div className="grid sm:grid-cols-2 gap-4">
           <Card>
             <CardHeader className="pb-3">
@@ -152,6 +180,7 @@ export default function AdminApiManagement() {
             <CardContent className="text-sm text-muted-foreground space-y-1.5">
               <p>Le marchand utilise sa clé <code className="text-xs bg-muted px-1 rounded">ak_live_</code> côté serveur pour appeler <code className="text-xs bg-muted px-1 rounded">/v1/collect</code>.</p>
               <p>Chaque transaction est marquée <code className="text-xs bg-muted px-1 rounded">source: "api"</code>.</p>
+              <p className="text-xs text-sky-600">Frais admin → propagés automatiquement</p>
             </CardContent>
           </Card>
           <Card>
@@ -164,6 +193,7 @@ export default function AdminApiManagement() {
             <CardContent className="text-sm text-muted-foreground space-y-1.5">
               <p>Le marchand crée un lien via <code className="text-xs bg-muted px-1 rounded">/v1/hosted-payment/create</code>.</p>
               <p>Le client paie sur la page Ashtech Pay hébergée, sans code frontend.</p>
+              <p className="text-xs text-amber-600">Pays actifs → mis à jour par l'admin en temps réel</p>
             </CardContent>
           </Card>
         </div>

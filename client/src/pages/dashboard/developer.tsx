@@ -118,22 +118,6 @@ function MethodBadge({ method }: { method: string }) {
   );
 }
 
-interface LiveCountry {
-  code: string;
-  name: string;
-  currency: string;
-  operators: string[];
-}
-
-interface LiveFee {
-  country_code: string;
-  country_name: string;
-  currency: string;
-  total_fee_pct: number;
-  ashtech_margin_pct: number;
-  operators: string[];
-}
-
 export default function DeveloperPage({ publicMode = false }: { publicMode?: boolean }) {
   const [active, setActive] = useState("introduction");
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -151,16 +135,7 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
   const { data } = useQuery<{ apiKey: string }>({ queryKey: ["/api/user/api-key"] });
   const apiKey = data?.apiKey ?? "<VOTRE_CLÉ_API>";
 
-  const { data: liveCountries } = useQuery<LiveCountry[]>({
-    queryKey: ["/api/admin/countries-public"],
-    enabled: !publicMode,
-    retry: false,
-  });
-
-  const displayCountries: Array<{ code: string; name: string; currency: string; operators: string[]; otpOps: string[] }> =
-    liveCountries && liveCountries.length > 0
-      ? liveCountries.map(c => ({ ...c, otpOps: c.operators.filter(op => op.toLowerCase().includes("orange")) }))
-      : ALL_COUNTRIES;
+  const displayCountries = ALL_COUNTRIES;
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -466,10 +441,14 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
             </div>
 
             <p className="text-zinc-400 leading-relaxed">
-              Initie un paiement Mobile Money. Le client reçoit une demande de validation sur son téléphone
-              (USSD ou notification push selon l'opérateur). Les frais de la plateforme sont automatiquement
-              déduits — le <code className="text-[#79c0ff] bg-white/10 px-1.5 py-0.5 rounded text-xs">credited_amount</code> correspond
-              au montant net crédité sur votre compte.
+              Initie un paiement Mobile Money via l'Ashtech Pay API. Le routage entre fournisseurs est
+              automatique selon le pays et l'opérateur. Le client reçoit une demande de validation sur son
+              téléphone (USSD, OTP ou Wave selon l'opérateur). Les frais sont configurés par l'administrateur
+              et déduits automatiquement — le{" "}
+              <code className="text-[#79c0ff] bg-white/10 px-1.5 py-0.5 rounded text-xs">credited_amount</code>{" "}
+              correspond au montant net crédité sur votre compte. Consultez{" "}
+              <code className="text-[#79c0ff] bg-white/10 px-1.5 py-0.5 rounded text-xs">GET /v1/fees</code>{" "}
+              pour les frais actuels.
             </p>
 
             <div>
@@ -932,6 +911,124 @@ if (data.flow === "wave") {
                   ))}
                 </tbody>
               </TableWrapper>
+            </div>
+          </section>
+
+          {/* Fees */}
+          <section id="fees" ref={el => sectionRefs.current.fees = el} className="scroll-mt-20 space-y-6">
+            <div className="flex items-center gap-2 border-b border-white/10 pb-4">
+              <ArrowRight className="w-5 h-5 text-primary shrink-0" />
+              <h2 className="text-xl font-semibold text-white">Grille tarifaire en temps réel</h2>
+            </div>
+
+            <div className="flex items-center gap-3 flex-wrap">
+              <MethodBadge method="GET" />
+              <code className="text-sm font-mono text-zinc-300 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5">
+                /v1/fees
+              </code>
+            </div>
+
+            <p className="text-zinc-400 leading-relaxed">
+              Retourne la grille tarifaire actuellement en vigueur pour chaque pays.
+              Les frais sont <strong className="text-white">définis par l'administrateur</strong> dans le panneau de configuration
+              et s'appliquent automatiquement à tous vos appels à{" "}
+              <code className="text-[#79c0ff] bg-white/10 px-1.5 py-0.5 rounded text-xs">/v1/collect</code>.
+              Aucune modification de code requise de votre part quand les frais changent.
+            </p>
+
+            <div className="flex gap-3 items-start rounded-xl border border-green-500/20 bg-green-500/5 p-4">
+              <span className="text-green-400 mt-0.5 shrink-0">✓</span>
+              <p className="text-sm text-green-300">
+                <strong className="text-green-200">Propagation automatique</strong> — Quand l'admin modifie les frais ou change de fournisseur pour un pays,
+                le changement est immédiat. Tous les intégrateurs de l'Ashtech Pay API reçoivent automatiquement les nouveaux frais
+                sans redéploiement ni mise à jour de code.
+              </p>
+            </div>
+
+            <div className="grid lg:grid-cols-2 gap-5">
+              <div className="space-y-2 min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Requête</p>
+                <CodeBlock language="javascript" code={`fetch("https://ashtechpay.top/v1/fees", {
+  headers: {
+    "Authorization": "Bearer ${apiKey}"
+  }
+})`} />
+              </div>
+              <div className="space-y-2 min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Réponse</p>
+                <CodeBlock language="json" code={`[
+  {
+    "country_code": "CM",
+    "country_name": "Cameroun",
+    "currency": "XAF",
+    "total_fee_pct": 5.5,
+    "ashtech_margin_pct": 2.0,
+    "operators": ["MTN Mobile Money", "Orange Money"]
+  },
+  {
+    "country_code": "SN",
+    "country_name": "Sénégal",
+    "currency": "XOF",
+    "total_fee_pct": 5.0,
+    "ashtech_margin_pct": 2.0,
+    "operators": ["Free Money", "Orange Money", "Wave"]
+  }
+  // ...un objet par pays actif
+]`} />
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-3">Champs de la réponse</p>
+              <TableWrapper>
+                <TableHead cols={["Champ", "Type", "Description"]} />
+                <tbody>
+                  {[
+                    { name: "country_code",      type: "string",   desc: "Code ISO du pays (CM, SN, CI…)" },
+                    { name: "country_name",      type: "string",   desc: "Nom complet du pays" },
+                    { name: "currency",          type: "string",   desc: "Devise principale (XAF, XOF, GNF, CDF…)" },
+                    { name: "total_fee_pct",     type: "number",   desc: "Frais totaux en % appliqués au montant (ex: 5.5 = 5,5%)" },
+                    { name: "ashtech_margin_pct",type: "number",   desc: "Part Ashtech Pay dans les frais totaux" },
+                    { name: "operators",         type: "string[]", desc: "Opérateurs disponibles pour ce pays" },
+                  ].map(({ name, type, desc }) => (
+                    <tr key={name} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                      <td className="px-3 py-3 font-mono text-[#79c0ff] text-xs whitespace-nowrap">{name}</td>
+                      <td className="px-3 py-3 text-xs text-zinc-400 font-mono whitespace-nowrap">{type}</td>
+                      <td className="px-3 py-3 text-xs text-zinc-300">{desc}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </TableWrapper>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Exemple — calculer le montant net avant d'appeler /v1/collect</p>
+              <CodeBlock language="javascript" code={`// Récupérer les frais en cache (une fois au démarrage ou toutes les heures)
+const fees = await fetch("https://ashtechpay.top/v1/fees", {
+  headers: { "Authorization": "Bearer YOUR_API_KEY" }
+}).then(r => r.json());
+
+// Trouver les frais pour le pays du client
+function getFeeForCountry(countryCode) {
+  return fees.find(f => f.country_code === countryCode);
+}
+
+// Calculer le montant net crédité sur votre compte
+function computeNet(grossAmount, countryCode) {
+  const fee = getFeeForCountry(countryCode);
+  if (!fee) return grossAmount;
+  const feeAmount = Math.round(grossAmount * fee.total_fee_pct / 100);
+  return {
+    gross: grossAmount,
+    fee: feeAmount,
+    net: grossAmount - feeAmount,         // montant crédité sur votre wallet
+    fee_pct: fee.total_fee_pct,
+  };
+}
+
+// Exemple :
+console.log(computeNet(10000, "CM"));
+// → { gross: 10000, fee: 550, net: 9450, fee_pct: 5.5 }`} />
             </div>
           </section>
 
