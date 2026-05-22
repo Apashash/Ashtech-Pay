@@ -151,7 +151,11 @@ app.use((req, res, next) => {
     await db.execute(sql`ALTER TABLE conversion_requests ADD COLUMN IF NOT EXISTS executed_at TIMESTAMP`);
     await db.execute(sql`ALTER TABLE conversion_requests ADD COLUMN IF NOT EXISTS executed_by_id VARCHAR`);
     await db.execute(sql`ALTER TABLE user_notifications ADD COLUMN IF NOT EXISTS type TEXT NOT NULL DEFAULT 'info'`);
-    console.log("[Migration] Schema columns ready (api_key, notify_url, source, confirmed_at, hosted_page_configs, hosted_payment_sessions, payment_links.notify_url, token_revoked_before, conversion_requests.executed_at/by_id, user_notifications.type)");
+    await db.execute(sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS wallets_user_currency_unique
+      ON wallets (user_id, currency)
+    `);
+    console.log("[Migration] Schema columns ready (api_key, notify_url, source, confirmed_at, hosted_page_configs, hosted_payment_sessions, payment_links.notify_url, token_revoked_before, conversion_requests.executed_at/by_id, user_notifications.type, wallets_unique_idx)");
 
     // Performance indexes
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id)`);
