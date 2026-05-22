@@ -9065,10 +9065,6 @@ export async function registerRoutes(
           message: `Opérateur non supporté pour ce pays. Disponibles : ${available}`,
         });
       }
-      if ((operatorRecord as any).paymentProvider === "swychr") {
-        return res.status(422).json({ error: "unprocessable", message: "Cet opérateur n'est pas disponible via l'API directe." });
-      }
-
       // ── Validate currency matches country (accept both normalized and internal codes) ────
       const expectedIso = normalizeApiCurrency(country.currency);
       const receivedIso = normalizeApiCurrency(currency);
@@ -9079,8 +9075,19 @@ export async function registerRoutes(
         });
       }
 
-      // ── Resolve fees from DB ─────────────────────────────────────────────
-      const paymentProvider = (operatorRecord as any).paymentProvider as string;
+      // ── Resolve payment provider (use operator tag, fallback to country-based detection) ─
+      const PIXPAY_COLLECT_CODES = ["CM","CF","TD","GQ","CG","GA","BF","BJ","CI","GW","ML","NE","SN","TG","GN","CD"];
+      const AFRIBAPAY_COLLECT_CODES = ["CM","CI","SN","ML","GN","CF","CG","GA","GW","GQ","CD","TD","NE","BJ","RW","BF","TG"];
+      let paymentProvider = (operatorRecord as any).paymentProvider as string;
+      if (!paymentProvider || paymentProvider === "swychr") {
+        if (PIXPAY_COLLECT_CODES.includes(country.code)) {
+          paymentProvider = "pixpay";
+        } else if (AFRIBAPAY_COLLECT_CODES.includes(country.code)) {
+          paymentProvider = "afribapay";
+        } else {
+          return res.status(422).json({ error: "unprocessable", message: `Ce pays (${country.code}) n'est pas encore disponible via l'API directe.` });
+        }
+      }
       console.log(`[API /v1/collect] merchant=${merchant.id} | country=${country.code} | operator=${operatorName} | provider=${paymentProvider} | amount=${amountNum} ${currency}`);
       const resolvedFeeRecord = await storage.resolveFee("deposit", country.id, (operatorRecord as any).id);
       const ashtechMarginPct = (resolvedFeeRecord as any)?.ashtechMargin != null
@@ -9651,8 +9658,10 @@ export async function registerRoutes(
       const countryCode = country.code;
       const afribaPayCodes = ["CM", "CI", "SN", "ML", "GN", "CF", "CG", "GA", "GW", "GQ", "CD", "TD", "NE", "BJ", "RW", "BF", "TG", "GQ"];
 
+      const isPixPayCountry = (code: string) => PIXPAY_SUPPORTED_COUNTRIES.some((c: any) => c.code === code);
+
       try {
-        if (PIXPAY_SUPPORTED_COUNTRIES.includes(countryCode)) {
+        if (isPixPayCountry(countryCode)) {
           const pixpayServiceId = getPixPayServiceId(operator.name, countryCode, "cash_out");
           const pixBaseParams = {
             serviceId: String(pixpayServiceId || "1"),
@@ -9712,7 +9721,7 @@ export async function registerRoutes(
       }
 
       // Register in poller
-      const provider = PIXPAY_SUPPORTED_COUNTRIES.includes(countryCode) ? "pixpay" : "afribapay";
+      const provider = isPixPayCountry(countryCode) ? "pixpay" : "afribapay";
       addPendingPayment({
         transactionId: tx.id,
         reference: txRef,
