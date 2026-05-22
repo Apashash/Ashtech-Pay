@@ -17,6 +17,7 @@ const SECTIONS = [
   { id: "collect",        label: "POST /v1/collect",     icon: Terminal },
   { id: "flows",          label: "Flux de paiement",     icon: Zap },
   { id: "transaction",    label: "GET /v1/transaction",  icon: CheckCircle2 },
+  { id: "fees",           label: "GET /v1/fees",         icon: ArrowRight },
   { id: "webhooks",       label: "Webhooks",             icon: Webhook },
   { id: "errors",         label: "Codes d'erreur",       icon: ArrowRight },
 ];
@@ -117,6 +118,22 @@ function MethodBadge({ method }: { method: string }) {
   );
 }
 
+interface LiveCountry {
+  code: string;
+  name: string;
+  currency: string;
+  operators: string[];
+}
+
+interface LiveFee {
+  country_code: string;
+  country_name: string;
+  currency: string;
+  total_fee_pct: number;
+  ashtech_margin_pct: number;
+  operators: string[];
+}
+
 export default function DeveloperPage({ publicMode = false }: { publicMode?: boolean }) {
   const [active, setActive] = useState("introduction");
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -133,6 +150,17 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
 
   const { data } = useQuery<{ apiKey: string }>({ queryKey: ["/api/user/api-key"] });
   const apiKey = data?.apiKey ?? "<VOTRE_CLÉ_API>";
+
+  const { data: liveCountries } = useQuery<LiveCountry[]>({
+    queryKey: ["/api/admin/countries-public"],
+    enabled: !publicMode,
+    retry: false,
+  });
+
+  const displayCountries: Array<{ code: string; name: string; currency: string; operators: string[]; otpOps: string[] }> =
+    liveCountries && liveCountries.length > 0
+      ? liveCountries.map(c => ({ ...c, otpOps: c.operators.filter(op => op.toLowerCase().includes("orange")) }))
+      : ALL_COUNTRIES;
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -262,18 +290,28 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
                 <h1 className="text-2xl font-semibold text-white">Introduction</h1>
               </div>
               <p className="text-zinc-400 leading-relaxed">
-                L'API Ashtech Pay permet à vos applications d'initier des paiements Mobile Money dans{" "}
-                <strong className="text-white">{ALL_COUNTRIES.length} pays africains</strong>,
-                sans redirection. Elle gère automatiquement le routage entre les opérateurs et vous notifie
-                du résultat via webhook.
+                L'<strong className="text-white">Ashtech Pay API</strong> unifie plusieurs passerelles de paiement
+                africaines en une seule interface REST. Initiez des paiements Mobile Money dans{" "}
+                <strong className="text-white">{displayCountries.length}+ pays africains</strong>{" "}
+                sans redirection. Le routage entre les opérateurs est automatique — vous n'avez pas à
+                choisir le fournisseur. Les frais et opérateurs sont configurés par l'administrateur et
+                s'appliquent automatiquement à tous les appels API.
               </p>
+              <div className="flex items-start gap-3 rounded-xl border border-blue-500/20 bg-blue-500/5 p-4">
+                <span className="text-blue-400 mt-0.5 shrink-0">ℹ</span>
+                <p className="text-sm text-blue-300">
+                  <strong className="text-blue-200">Frais automatiques</strong> — Les frais sont définis par l'administrateur dans le panneau de configuration.
+                  Tout changement de frais ou de fournisseur s'applique immédiatement à tous les utilisateurs de l'API, sans aucune modification de votre code.
+                  Consultez <code className="text-[#79c0ff] bg-white/10 px-1 py-0.5 rounded text-xs">GET /v1/fees</code> pour les frais actuels en temps réel.
+                </p>
+              </div>
             </div>
 
             <div className="grid sm:grid-cols-3 gap-4">
               {[
-                { icon: Shield, title: "Sécurisé",   desc: "Chaque requête est authentifiée par clé API Bearer" },
-                { icon: Zap,    title: "Temps réel",  desc: "Résultat envoyé instantanément sur votre webhook" },
-                { icon: Globe,  title: `${ALL_COUNTRIES.length} pays`, desc: "Toute l'Afrique francophone couverte" },
+                { icon: Shield, title: "Sécurisé",     desc: "Authentification par clé API Bearer — serveur uniquement" },
+                { icon: Zap,    title: "Frais auto",    desc: "Frais admin-contrôlés, propagation instantanée vers tous les intégrateurs" },
+                { icon: Globe,  title: `${displayCountries.length}+ pays`, desc: "Toute l'Afrique francophone couverte" },
               ].map(({ icon: Icon, title, desc }) => (
                 <div key={title} className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-2">
                   <Icon className="w-5 h-5 text-primary" />
@@ -340,7 +378,8 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
 
             <p className="text-zinc-400 leading-relaxed">
               Retourne la liste complète des pays actifs et leurs opérateurs Mobile Money disponibles.
-              Utilisez cet endpoint pour peupler dynamiquement votre interface de paiement.
+              Cette liste est <strong className="text-white">gérée par l'administrateur</strong> — tout ajout ou retrait de pays/opérateur
+              est immédiatement visible via cet endpoint. Utilisez-le pour peupler dynamiquement votre interface de paiement.
             </p>
 
             <div className="grid lg:grid-cols-2 gap-5">
@@ -374,10 +413,10 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
 
             <div>
               <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-3">
-                Pays disponibles ({ALL_COUNTRIES.length})
+                Pays disponibles ({displayCountries.length}) — mis à jour par l'administrateur en temps réel
               </p>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {ALL_COUNTRIES.map(({ code, name, currency, operators, otpOps }) => (
+                {displayCountries.map(({ code, name, currency, operators, otpOps }) => (
                   <div key={code} className="rounded-lg border border-white/10 bg-white/5 p-3 space-y-2">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-xs font-semibold text-zinc-200">{name}</p>
@@ -611,15 +650,15 @@ const data = await res.json();
               </div>
             </div>
 
-            {/* Flow 2: OTP SMS (AfribaPay) */}
+            {/* Flow 2: OTP SMS */}
             <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-5 space-y-4">
               <div className="flex items-center gap-2">
                 <span className="w-6 h-6 rounded-full bg-yellow-500 flex items-center justify-center text-xs font-bold text-white shrink-0">2</span>
                 <h3 className="font-semibold text-yellow-300">Flux OTP SMS — Orange Money (la plupart des pays)</h3>
               </div>
               <p className="text-sm text-zinc-400">
-                Pour Orange Money dans la majorité des pays. Le réseau Orange envoie automatiquement un SMS
-                contenant l'OTP au numéro du client. Votre interface doit demander au client de saisir cet OTP.
+                Pour Orange Money dans la majorité des pays. L'API Ashtech Pay déclenche automatiquement
+                l'envoi d'un SMS contenant l'OTP au numéro du client. Votre interface doit demander au client de saisir cet OTP.
                 <strong className="text-zinc-200"> Le champ <code className="text-[#79c0ff] bg-white/10 px-1 py-0.5 rounded">ussd_code</code> est <code className="text-red-400">null</code></strong> — aucun code à composer.
               </p>
               <div className="text-xs text-zinc-500">
@@ -672,7 +711,7 @@ body: JSON.stringify({
               </div>
             </div>
 
-            {/* Flow 3: OTP USSD (PixPay) */}
+            {/* Flow 3: OTP USSD */}
             <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 p-5 space-y-4">
               <div className="flex items-center gap-2">
                 <span className="w-6 h-6 rounded-full bg-orange-500 flex items-center justify-center text-xs font-bold text-white shrink-0">3</span>
@@ -681,7 +720,7 @@ body: JSON.stringify({
               <p className="text-sm text-zinc-400">
                 Spécifique au Burkina Faso. L'API retourne un <code className="text-[#79c0ff] bg-white/10 px-1 py-0.5 rounded">ussd_code</code>{" "}
                 incluant le montant (ex : <code className="text-orange-300 bg-white/10 px-1 py-0.5 rounded">*144*4*6*5000#</code>).
-                Le client doit composer ce code depuis son téléphone — Orange répond par SMS avec l'OTP.
+                Le client compose ce code depuis son téléphone — Orange répond par SMS avec l'OTP.
               </p>
               <div className="grid lg:grid-cols-2 gap-4">
                 <div className="space-y-1 min-w-0">

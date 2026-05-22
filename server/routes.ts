@@ -9353,6 +9353,43 @@ export async function registerRoutes(
     }
   });
 
+  /** GET /v1/fees — live fee schedule (admin-controlled, auto-propagated) */
+  app.get("/v1/fees", requireApiKey, async (_req, res) => {
+    try {
+      const countries = await storage.getActiveCountries();
+      const result = await Promise.all(
+        countries.map(async (c: any) => {
+          const ops = await storage.getOperatorsByCountry(c.id);
+          const activeOps = ops.filter((o: any) => o.paymentProvider !== "swychr");
+          if (activeOps.length === 0) return null;
+
+          // Per-country fee from DB (admin-configurable)
+          const feeRecord = await storage.resolveFee("deposit", c.id, activeOps[0].id);
+          const providerFee = feeRecord
+            ? parseFloat((feeRecord as any).pixpayFee ?? (feeRecord as any).afribapayFee ?? "3.0")
+            : 3.0;
+          const ashtechMargin = feeRecord
+            ? parseFloat((feeRecord as any).ashtechMargin ?? "2.0")
+            : 2.0;
+          const totalFee = parseFloat((providerFee + ashtechMargin).toFixed(2));
+
+          return {
+            country_code: c.code,
+            country_name: c.name,
+            currency: normalizeApiCurrency(c.currency),
+            total_fee_pct: totalFee,
+            ashtech_margin_pct: parseFloat(ashtechMargin.toFixed(2)),
+            operators: activeOps.map((o: any) => o.name),
+          };
+        })
+      );
+      res.json(result.filter(Boolean));
+    } catch (e: any) {
+      console.error("[API v1 /fees]", e);
+      res.status(500).json({ error: "server_error", message: "Erreur serveur" });
+    }
+  });
+
   // ── Hosted Page ──────────────────────────────────────────────────────────
 
   function generateHpKey(prefix: string): string {
