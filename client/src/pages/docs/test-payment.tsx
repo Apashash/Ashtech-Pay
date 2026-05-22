@@ -193,7 +193,7 @@ function SDKForm() {
 
         <div className="h-px bg-gray-100" />
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="Pays">
             <NativeSelect value={countryCode} onChange={v => { setCountryCode(v); setOperator(""); setResponse(null); setError(null); }} placeholder="Sélectionner…">
               {ALL_COUNTRIES.map(c => (
@@ -227,7 +227,7 @@ function SDKForm() {
           </Field>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="Référence (optionnel)">
             <Input placeholder="ORDER-001" value={reference} onChange={e => setReference(e.target.value)}
               className="bg-white border-gray-300 text-gray-900 text-xs" data-testid="input-sdk-reference" />
@@ -465,7 +465,7 @@ function HostedPageForm() {
           ))}
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="Pays" hint={currency ? `Devise : ${currency}` : "Détermine la devise."}>
             <NativeSelect value={countryCode} onChange={setCountryCode} placeholder="Sélectionner…">
               {ALL_COUNTRIES.map(c => (
