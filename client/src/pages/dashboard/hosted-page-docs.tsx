@@ -687,17 +687,31 @@ curl https://ashtechpay.top/api/v1/hosted-payment/UUID_DU_LIEN \
               <span className="font-semibold text-sm text-white">Ashtech Pay</span>
               <span className="text-[10px] border border-white/20 text-zinc-400 px-1.5 py-0.5 rounded font-mono hidden sm:inline">Hosted Page v1</span>
             </div>
-            <div className="hidden sm:flex items-center gap-2">
-              <Link href="/login">
-                <Button variant="ghost" size="sm" className="text-zinc-400 hover:text-white text-xs" data-testid="link-login">
-                  Connexion
-                </Button>
-              </Link>
-              <Link href="/register">
-                <Button size="sm" className="text-xs" data-testid="link-register">
-                  S'inscrire
-                </Button>
-              </Link>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDownloadPDF}
+                disabled={downloading}
+                className="gap-1.5 border-white/20 text-zinc-300 hover:text-white hover:border-white/40 text-xs"
+                data-testid="button-download-pdf-hosted-public"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">{downloading ? "Génération…" : "Télécharger PDF"}</span>
+                <span className="sm:hidden">{downloading ? "…" : "PDF"}</span>
+              </Button>
+              <div className="hidden sm:flex items-center gap-2">
+                <Link href="/login">
+                  <Button variant="ghost" size="sm" className="text-zinc-400 hover:text-white text-xs" data-testid="link-login">
+                    Connexion
+                  </Button>
+                </Link>
+                <Link href="/register">
+                  <Button size="sm" className="text-xs" data-testid="link-register">
+                    S'inscrire
+                  </Button>
+                </Link>
+              </div>
             </div>
           </div>
         </header>

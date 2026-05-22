@@ -201,11 +201,12 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
               size="sm"
               onClick={handleDownloadPDF}
               disabled={downloading}
-              className="hidden sm:flex gap-1.5 border-white/20 text-zinc-300 hover:text-white hover:border-white/40 text-xs"
+              className="flex gap-1.5 border-white/20 text-zinc-300 hover:text-white hover:border-white/40 text-xs"
               data-testid="button-download-pdf-sdk"
             >
               <Download className="w-3.5 h-3.5" />
-              {downloading ? "Génération…" : "PDF"}
+              <span className="hidden sm:inline">{downloading ? "Génération…" : "Télécharger PDF"}</span>
+              <span className="sm:hidden">{downloading ? "…" : "PDF"}</span>
             </Button>
             <button
               className="lg:hidden text-zinc-400 hover:text-white"
