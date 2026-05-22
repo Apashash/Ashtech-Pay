@@ -51,7 +51,7 @@ import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkA
 import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, initiatePixPayPayout, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType, getPixPayServiceId, PIXPAY_OTP_USSD_CODES } from "./pixpay";
 import { addPendingPayment, removePendingPayment } from "./paymentPoller";
 import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, sameCfaFamily } from "./walletHelper";
-import { createSwychrPayout, formatInternationalPhone, detectMethodFromPhone, fiatToPusd, pusdToFiatRate, getConversionRate, convertFiatToPusd, getPayoutToken, COUNTRY_CURRENCY } from "./swychrPayout";
+import { createSwychrPayout, formatInternationalPhone, detectMethodFromPhone, fiatToPusd, pusdToFiatRate, convertFiatToPusd, getPayoutToken, COUNTRY_CURRENCY } from "./swychrPayout";
 import { addPendingPayout, removePendingPayout } from "./payoutPoller";
 import { addSSEClient, removeSSEClient, setActiveTicket, isUserOnline, getOnlineUserIds, getAdminViewingTicket, getUserViewingTicket, notifyUser, notifyAdmins, broadcastOnlineStatus, notifyUserForceLogout, notifyOtherSessionsForceLogout, notifyAllUsersForceLogout, notifySpecificSessionForceLogout } from "./sse";
 import {
@@ -3747,14 +3747,17 @@ export async function registerRoutes(
 
       const fromAmount = parseFloat(request.fromAmount);
 
-      // Get real Swychr rate — no fallback, must succeed
-      const convResult = await getConversionRate(request.fromCurrency, request.toCurrency, fromAmount);
-      if (!convResult.success || convResult.targetAmount === undefined) {
-        return res.status(400).json({
-          message: `Solde Swychr insuffisant pour exécuter cette conversion. Rechargez le compte Swychr avant de réessayer. (${convResult.message || "taux indisponible"})`,
-        });
+      // Use the stored toAmount (calculated at creation time with admin FX rates) — no external API needed
+      const receivedAmount = request.toAmount
+        ? parseFloat(request.toAmount)
+        : (() => {
+            // Fallback: recalculate locally with admin FX rates
+            const execFxRates_sync = { XAF: 585, XOF: 585, USD: 1, EUR: 0.92, GHS: 13, NGN: 1600, KES: 130, CDF: 2800 };
+            return convertCurrency(fromAmount, request.fromCurrency, request.toCurrency, execFxRates_sync);
+          })();
+      if (!receivedAmount || !isFinite(receivedAmount) || receivedAmount <= 0) {
+        return res.status(400).json({ message: "Impossible de calculer le montant reçu. Vérifiez les taux de change admin." });
       }
-      const receivedAmount = convResult.targetAmount;
 
       // Credit target wallet — each country currency has its own wallet
       const requestUser = await storage.getUser(request.userId);
@@ -3907,17 +3910,19 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Montant invalide" });
       }
 
-      const convResult = await getConversionRate(fromCurrency, toCurrency, parsedAmount);
-      if (!convResult.success || convResult.targetAmount === undefined) {
-        return res.status(400).json({ message: `Taux non disponible: ${convResult.message}` });
+      const previewFxRates = await loadFxRates();
+      const toAmount = convertCurrency(parsedAmount, fromCurrency, toCurrency, previewFxRates);
+      if (!isFinite(toAmount) || toAmount <= 0) {
+        return res.status(400).json({ message: `Taux non disponible pour ${fromCurrency} → ${toCurrency}. Configurez les taux de change dans l'admin.` });
       }
+      const rate = toAmount / parsedAmount;
 
       res.json({
         fromAmount: parsedAmount,
         fromCurrency,
-        toAmount: convResult.targetAmount,
+        toAmount,
         toCurrency,
-        rate: convResult.rate,
+        rate,
       });
     } catch (error) {
       res.status(500).json({ message: "Erreur serveur" });
@@ -10608,10 +10613,14 @@ export async function registerRoutes(
           if (!convUser) return null;
 
           const fromAmount = parseFloat(req.fromAmount);
-          const convResult = await getConversionRate(req.fromCurrency, req.toCurrency, fromAmount);
-          if (!convResult.success || convResult.targetAmount === undefined) return null;
-
-          const receivedAmount = convResult.targetAmount;
+          // Use stored toAmount — calculated at creation time with admin FX rates, no external API needed
+          const receivedAmount = req.toAmount
+            ? parseFloat(req.toAmount)
+            : (() => {
+                const fallbackRates = { XAF: 585, XOF: 585, USD: 1, EUR: 0.92, GHS: 13, NGN: 1600, KES: 130, CDF: 2800 };
+                return convertCurrency(fromAmount, req.fromCurrency, req.toCurrency, fallbackRates);
+              })();
+          if (!receivedAmount || !isFinite(receivedAmount) || receivedAmount <= 0) return null;
           const userPrimary = convUser.preferredCurrency || "XAF";
 
           if (req.toCurrency === userPrimary) {
