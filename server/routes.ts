@@ -3504,7 +3504,7 @@ export async function registerRoutes(
 
       console.log(`[Conversion] ${transaction.reference} — débit ${parsedAmount} ${fromCurrency}, crédit ${receivedAmount.toFixed(2)} ${toCurrency} dans ${delaySeconds}s (job=${convReq.id})`);
 
-      // Telegram #1 — conversion démarrée
+      // Telegram #1 — conversion démarrée (avec boutons Forcer / Annuler)
       notifyConversionStarted({
         userName: user.fullName || user.username,
         userEmail: user.email || "",
@@ -3517,6 +3517,7 @@ export async function registerRoutes(
         reference: transaction.reference || "",
         userCountry: user.country || "",
         estimatedSeconds: delaySeconds,
+        conversionId: convReq.id,
       }).catch(() => {})
 
       return res.json({
@@ -10591,6 +10592,95 @@ export async function registerRoutes(
           return {
             userName: ticketUser.fullName || ticketUser.username,
             subject: ticket.subject,
+          };
+        },
+
+        // ── Force execute conversion from Telegram ───────────────────────────
+        executeConversion: async (conversionId) => {
+          const allUsers = await storage.getAllUsers();
+          const adminUser = allUsers.find(u => u.role === "admin");
+          if (!adminUser) return null;
+
+          const req = await storage.getConversionRequest(conversionId).catch(() => null);
+          if (!req || req.status !== "pending") return null;
+
+          const convUser = await storage.getUser(req.userId).catch(() => null);
+          if (!convUser) return null;
+
+          const fromAmount = parseFloat(req.fromAmount);
+          const convResult = await getConversionRate(req.fromCurrency, req.toCurrency, fromAmount);
+          if (!convResult.success || convResult.targetAmount === undefined) return null;
+
+          const receivedAmount = convResult.targetAmount;
+          const userPrimary = convUser.preferredCurrency || "XAF";
+
+          if (req.toCurrency === userPrimary) {
+            await storage.updateUserBalance(req.userId, receivedAmount);
+          } else {
+            await storage.upsertWallet(req.userId, req.toCurrency, receivedAmount);
+          }
+
+          await storage.updateConversionRequest(conversionId, {
+            status: "completed",
+            toAmount: receivedAmount.toFixed(2),
+            executedAt: new Date(),
+            executedById: adminUser.id,
+          });
+
+          // Update related transaction
+          const meta = (() => { try { return JSON.parse(req.notes || "{}"); } catch { return {}; } })();
+          if (meta.txId) await storage.updateTransactionStatus(meta.txId, "completed").catch(() => {});
+
+          await storage.createUserNotification({
+            userId: req.userId,
+            title: "Conversion effectuée ✅",
+            message: `Votre conversion de ${fromAmount.toFixed(2)} ${req.fromCurrency} → ${receivedAmount.toFixed(2)} ${req.toCurrency} a été effectuée.`,
+            type: "success",
+          }).catch(() => {});
+
+          return {
+            userName: convUser.fullName || convUser.username,
+            fromAmount: fromAmount.toFixed(2),
+            fromCurrency: req.fromCurrency,
+            toAmount: receivedAmount.toFixed(2),
+            toCurrency: req.toCurrency,
+          };
+        },
+
+        // ── Cancel & refund conversion from Telegram ─────────────────────────
+        cancelConversion: async (conversionId) => {
+          const req = await storage.getConversionRequest(conversionId).catch(() => null);
+          if (!req || req.status !== "pending") return null;
+
+          const convUser = await storage.getUser(req.userId).catch(() => null);
+          if (!convUser) return null;
+
+          const fromAmount = parseFloat(req.fromAmount);
+          const userPrimary = convUser.preferredCurrency || "XAF";
+
+          // Refund source wallet
+          if (req.fromCurrency === userPrimary) {
+            await storage.updateUserBalance(req.userId, fromAmount);
+          } else {
+            await storage.upsertWallet(req.userId, req.fromCurrency, fromAmount);
+          }
+
+          await storage.updateConversionRequest(conversionId, { status: "cancelled" });
+
+          const meta = (() => { try { return JSON.parse(req.notes || "{}"); } catch { return {}; } })();
+          if (meta.txId) await storage.updateTransactionStatus(meta.txId, "failed").catch(() => {});
+
+          await storage.createUserNotification({
+            userId: req.userId,
+            title: "Conversion annulée",
+            message: `Votre conversion de ${fromAmount.toFixed(2)} ${req.fromCurrency} a été annulée. Votre solde a été remboursé.`,
+            type: "info",
+          }).catch(() => {});
+
+          return {
+            userName: convUser.fullName || convUser.username,
+            fromAmount: fromAmount.toFixed(2),
+            fromCurrency: req.fromCurrency,
           };
         },
       });

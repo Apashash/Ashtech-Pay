@@ -726,6 +726,7 @@ export async function notifyConversionStarted(opts: {
   reference: string;
   userCountry?: string;
   estimatedSeconds: number;
+  conversionId?: string;
 }): Promise<void> {
   const fromPays = countryDisplay(opts.fromCurrency);
   const toPays = countryDisplay(opts.toCurrency);
@@ -742,9 +743,21 @@ export async function notifyConversionStarted(opts: {
     `💱 <b>${fmt(opts.fromAmount, opts.fromCurrency)} → ${fmt(opts.toAmount, opts.toCurrency)}</b>\n` +
     `💸 Frais : ${fmt(opts.feeAmount, opts.fromCurrency)} (${opts.feePercent}%)\n` +
     `🔖 Réf. : <code>${opts.reference}</code>\n` +
+    (opts.conversionId ? `🆔 ID : <code>${opts.conversionId}</code>\n` : "") +
     `⏱️ Durée estimée : ~${opts.estimatedSeconds}s\n` +
     `🕐 Heure : ${now()}`;
-  await sendMessage(msg);
+
+  if (opts.conversionId) {
+    const id = opts.conversionId;
+    await sendMessageWithKeyboard(msg, [
+      [
+        { text: "⚡ Forcer maintenant", callback_data: `conv_exec:${id}` },
+        { text: "❌ Annuler & Rembourser", callback_data: `conv_can:${id}` },
+      ],
+    ]);
+  } else {
+    await sendMessage(msg);
+  }
 }
 
 export async function notifyConversionCompleted(opts: {
@@ -1268,6 +1281,8 @@ export async function handleTelegramUpdate(
     unblockIpByIdentifier: (identifier: string) => Promise<{ unblocked: number; ips: string[] }>;
     replyToTicket: (ticketId: string, message: string) => Promise<{ userName: string; subject: string } | null>;
     closeTicket: (ticketId: string) => Promise<{ userName: string; subject: string } | null>;
+    executeConversion: (conversionId: string) => Promise<{ fromAmount: string; fromCurrency: string; toAmount: string; toCurrency: string; userName: string } | null>;
+    cancelConversion: (conversionId: string) => Promise<{ fromAmount: string; fromCurrency: string; userName: string } | null>;
   }
 ): Promise<void> {
   // ── Callback query (button press) ──
@@ -1630,6 +1645,42 @@ export async function handleTelegramUpdate(
           `🔒 <b>TICKET CLÔTURÉ</b>\n\n👤 ${result.userName}\n📌 ${result.subject}\n🆔 <code>${ticketId}</code>\n🕐 ${now()}`);
       } else {
         await callBotApi("sendMessage", { chat_id: chatId, text: `⚠️ Ticket introuvable ou déjà clôturé.`, parse_mode: "HTML" });
+      }
+      return;
+    }
+
+    // ── Force execute conversion ──
+    if (data.startsWith("conv_exec:")) {
+      const conversionId = data.slice(10);
+      const result = await handlers.executeConversion(conversionId);
+      if (result) {
+        await editMessageText(messageId,
+          `⚡ <b>CONVERSION FORCÉE ✅</b>\n` +
+          `──────────────────\n` +
+          `👤 ${result.userName}\n` +
+          `💱 <b>${fmt(result.fromAmount, result.fromCurrency)} → ${fmt(result.toAmount, result.toCurrency)}</b>\n` +
+          `🆔 <code>${conversionId}</code>\n` +
+          `🕐 ${now()}`);
+      } else {
+        await editMessageText(messageId, `⚠️ Impossible d'exécuter — conversion introuvable ou déjà traitée.`);
+      }
+      return;
+    }
+
+    // ── Cancel & refund conversion ──
+    if (data.startsWith("conv_can:")) {
+      const conversionId = data.slice(9);
+      const result = await handlers.cancelConversion(conversionId);
+      if (result) {
+        await editMessageText(messageId,
+          `❌ <b>CONVERSION ANNULÉE</b>\n` +
+          `──────────────────\n` +
+          `👤 ${result.userName}\n` +
+          `💰 Remboursé : <b>${fmt(result.fromAmount, result.fromCurrency)}</b>\n` +
+          `🆔 <code>${conversionId}</code>\n` +
+          `🕐 ${now()}`);
+      } else {
+        await editMessageText(messageId, `⚠️ Impossible d'annuler — conversion introuvable ou déjà traitée.`);
       }
       return;
     }
