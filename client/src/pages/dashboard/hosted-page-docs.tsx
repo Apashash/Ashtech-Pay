@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Copy, CheckCheck, Terminal, Download } from "lucide-react";
+import { ArrowLeft, Copy, CheckCheck, Terminal, Download, FlaskConical } from "lucide-react";
 import { downloadHostedPagePDF } from "@/lib/pdf-docs";
 
 function CodeBlock({ code, language = "json" }: { code: string; language?: string }) {
@@ -182,20 +182,45 @@ export default function HostedPageDocs({ publicMode = false }: { publicMode?: bo
               </div>
               <p className="text-sm text-zinc-500 mt-1">
                 Intègre le checkout Ashtech Pay dans ton application via API REST. 16+ pays, Mobile Money.
-                Frais et fournisseurs gérés par l'administrateur — propagation automatique vers tous les intégrateurs.
               </p>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleDownloadPDF}
-              disabled={downloading}
-              className="gap-2 border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 shrink-0"
-              data-testid="button-download-pdf-hosted"
-            >
-              <Download className="h-3.5 w-3.5" />
-              {downloading ? "Génération…" : "Télécharger PDF"}
-            </Button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Link href="/docs/test-pay">
+                <Button
+                  size="sm"
+                  className="gap-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 hover:border-primary/50 shrink-0"
+                  data-testid="link-test-api-hp"
+                >
+                  <FlaskConical className="h-3.5 w-3.5" />
+                  Tester l'API
+                </Button>
+              </Link>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDownloadPDF}
+                disabled={downloading}
+                className="gap-2 border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 shrink-0"
+                data-testid="button-download-pdf-hosted"
+              >
+                <Download className="h-3.5 w-3.5" />
+                {downloading ? "Génération…" : "Télécharger PDF"}
+              </Button>
+            </div>
+          </div>
+
+          {/* Try it CTA banner */}
+          <div className="flex items-center justify-between gap-4 rounded-xl border border-primary/20 bg-primary/5 px-5 py-4 mt-4">
+            <div className="space-y-0.5">
+              <p className="text-sm font-semibold text-white">Testez l'intégration en direct</p>
+              <p className="text-xs text-zinc-400">Générez un vrai lien de paiement Hosted Page depuis notre sandbox interactif — aucun code requis.</p>
+            </div>
+            <Link href="/docs/test-pay">
+              <Button size="sm" className="gap-2 shrink-0 whitespace-nowrap" data-testid="cta-test-hp">
+                <FlaskConical className="h-3.5 w-3.5" />
+                Ouvrir le sandbox
+              </Button>
+            </Link>
           </div>
         </div>
 

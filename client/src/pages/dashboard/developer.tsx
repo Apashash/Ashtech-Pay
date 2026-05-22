@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import {
   ArrowLeft, Copy, CheckCheck, Terminal, Shield, Webhook,
   CheckCircle2, ArrowRight, Code2, Globe, Zap, BookOpen,
-  ChevronRight, Menu, X, List, Download,
+  ChevronRight, Menu, X, List, Download, FlaskConical,
 } from "lucide-react";
 import { downloadSDKDocs } from "@/lib/pdf-docs";
 
@@ -179,7 +179,7 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
               <Badge variant="outline" className="text-[10px] border-white/20 text-zinc-400 hidden sm:flex shrink-0">API v1</Badge>
             </div>
           </div>
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             {publicMode ? (
               <div className="hidden sm:flex items-center gap-2">
                 <Link href="/login">
@@ -193,12 +193,17 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
                   </Button>
                 </Link>
               </div>
-            ) : (
-              <span className="hidden md:flex items-center gap-1.5 text-xs text-zinc-500">
-                <Globe className="w-3.5 h-3.5" />
-                ashtechpay.top
-              </span>
-            )}
+            ) : null}
+            <Link href="/docs/test-pay">
+              <Button
+                size="sm"
+                className="gap-1.5 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 hover:border-primary/50 text-xs hidden sm:flex"
+                data-testid="link-test-api"
+              >
+                <FlaskConical className="w-3.5 h-3.5" />
+                Tester l'API
+              </Button>
+            </Link>
             <Button
               variant="outline"
               size="sm"
@@ -269,24 +274,28 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
                 africaines en une seule interface REST. Initiez des paiements Mobile Money dans{" "}
                 <strong className="text-white">{displayCountries.length}+ pays africains</strong>{" "}
                 sans redirection. Le routage entre les opérateurs est automatique — vous n'avez pas à
-                choisir le fournisseur. Les frais et opérateurs sont configurés par l'administrateur et
-                s'appliquent automatiquement à tous les appels API.
+                choisir le fournisseur.
               </p>
-              <div className="flex items-start gap-3 rounded-xl border border-blue-500/20 bg-blue-500/5 p-4">
-                <span className="text-blue-400 mt-0.5 shrink-0">ℹ</span>
-                <p className="text-sm text-blue-300">
-                  <strong className="text-blue-200">Frais automatiques</strong> — Les frais sont définis par l'administrateur dans le panneau de configuration.
-                  Tout changement de frais ou de fournisseur s'applique immédiatement à tous les utilisateurs de l'API, sans aucune modification de votre code.
-                  Consultez <code className="text-[#79c0ff] bg-white/10 px-1 py-0.5 rounded text-xs">GET /v1/fees</code> pour les frais actuels en temps réel.
-                </p>
-              </div>
             </div>
 
-            <div className="grid sm:grid-cols-3 gap-4">
+            {/* Try it CTA */}
+            <div className="flex items-center justify-between gap-4 rounded-xl border border-primary/20 bg-primary/5 px-5 py-4">
+              <div className="space-y-0.5">
+                <p className="text-sm font-semibold text-white">Prêt à tester ?</p>
+                <p className="text-xs text-zinc-400">Envoyez un vrai paiement en quelques secondes depuis notre sandbox interactif.</p>
+              </div>
+              <Link href="/docs/test-pay">
+                <Button size="sm" className="gap-2 shrink-0 whitespace-nowrap" data-testid="cta-test-api">
+                  <FlaskConical className="w-3.5 h-3.5" />
+                  Tester l'API
+                </Button>
+              </Link>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-4">
               {[
-                { icon: Shield, title: "Sécurisé",     desc: "Authentification par clé API Bearer — serveur uniquement" },
-                { icon: Zap,    title: "Frais auto",    desc: "Frais admin-contrôlés, propagation instantanée vers tous les intégrateurs" },
-                { icon: Globe,  title: `${displayCountries.length}+ pays`, desc: "Toute l'Afrique francophone couverte" },
+                { icon: Shield, title: "Sécurisé",           desc: "Authentification par clé API Bearer — côté serveur uniquement" },
+                { icon: Globe,  title: `${displayCountries.length}+ pays`, desc: "Toute l'Afrique francophone et au-delà" },
               ].map(({ icon: Icon, title, desc }) => (
                 <div key={title} className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-2">
                   <Icon className="w-5 h-5 text-primary" />
@@ -929,21 +938,8 @@ if (data.flow === "wave") {
             </div>
 
             <p className="text-zinc-400 leading-relaxed">
-              Retourne la grille tarifaire actuellement en vigueur pour chaque pays.
-              Les frais sont <strong className="text-white">définis par l'administrateur</strong> dans le panneau de configuration
-              et s'appliquent automatiquement à tous vos appels à{" "}
-              <code className="text-[#79c0ff] bg-white/10 px-1.5 py-0.5 rounded text-xs">/v1/collect</code>.
-              Aucune modification de code requise de votre part quand les frais changent.
+              Retourne la grille tarifaire en vigueur pour chaque pays actif.
             </p>
-
-            <div className="flex gap-3 items-start rounded-xl border border-green-500/20 bg-green-500/5 p-4">
-              <span className="text-green-400 mt-0.5 shrink-0">✓</span>
-              <p className="text-sm text-green-300">
-                <strong className="text-green-200">Propagation automatique</strong> — Quand l'admin modifie les frais ou change de fournisseur pour un pays,
-                le changement est immédiat. Tous les intégrateurs de l'Ashtech Pay API reçoivent automatiquement les nouveaux frais
-                sans redéploiement ni mise à jour de code.
-              </p>
-            </div>
 
             <div className="grid lg:grid-cols-2 gap-5">
               <div className="space-y-2 min-w-0">
