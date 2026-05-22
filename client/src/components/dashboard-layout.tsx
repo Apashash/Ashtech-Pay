@@ -315,13 +315,13 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       queryClient.clear();
       toast({ title: "Déconnexion réussie", description: "À bientôt!" });
       // Hard redirect: forces full page reload, resets ALL React state
-      window.location.href = "/login";
+      window.location.href = "/";
     },
     onError: () => {
       // Even if API fails, clear local state and redirect
       removeAuthToken();
       queryClient.clear();
-      window.location.href = "/login";
+      window.location.href = "/";
     },
   });
 

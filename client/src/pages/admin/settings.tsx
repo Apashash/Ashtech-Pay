@@ -8,7 +8,7 @@ import {
   Smartphone,
   AlertTriangle,
   Lock,
-  Zap
+  ShieldCheck
 } from "lucide-react";
 
 export default function AdminSettings() {
@@ -54,6 +54,14 @@ export default function AdminSettings() {
       icon: Lock,
       color: "bg-red-500/10 text-red-600",
       borderColor: "border-red-500/30"
+    },
+    {
+      id: "turnstile",
+      title: "Test Turnstile",
+      description: "Vérifier que la protection anti-bot Cloudflare fonctionne",
+      icon: ShieldCheck,
+      color: "bg-sky-500/10 text-sky-600",
+      borderColor: "border-sky-500/30"
     },
   ];
 

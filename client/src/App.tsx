@@ -55,6 +55,7 @@ import AdminSettingsPublicInfo from "@/pages/admin/settings/public-info";
 import AdminSettingsRates from "@/pages/admin/settings/rates";
 import AdminSettingsMaintenance from "@/pages/admin/settings/maintenance";
 import AdminSettingsLimits from "@/pages/admin/settings/limits";
+import AdminSettingsTurnstile from "@/pages/admin/settings/turnstile";
 import AdminWithdrawalNumbers from "@/pages/admin/withdrawal-numbers";
 import AdminDeposits from "@/pages/admin/transactions/deposits";
 import AdminWithdrawals from "@/pages/admin/transactions/withdrawals";
@@ -193,6 +194,7 @@ function Router() {
       <Route path="/admin/settings/rates" component={AdminSettingsRates} />
       <Route path="/admin/settings/maintenance" component={AdminSettingsMaintenance} />
       <Route path="/admin/settings/limits" component={AdminSettingsLimits} />
+      <Route path="/admin/settings/turnstile" component={AdminSettingsTurnstile} />
       <Route path="/admin/withdrawal-numbers" component={AdminWithdrawalNumbers} />
       <Route path="/admin/global-messages" component={AdminGlobalMessages} />
       <Route path="/admin/kyc" component={AdminKYC} />
@@ -289,7 +291,7 @@ function VpnDisconnectGuard() {
     const handler = (e: Event) => {
       queryClient.clear();
       removeAuthToken();
-      window.location.href = "/login?vpn=1";
+      window.location.href = "/";
     };
     window.addEventListener("vpn-disconnect", handler);
     return () => window.removeEventListener("vpn-disconnect", handler);
@@ -310,9 +312,9 @@ function ForceLogoutGuard() {
         try { localStorage.setItem("ashtech_rate_limit_until", String(retryAfter)); } catch {}
         window.location.href = `/blocked?until=${retryAfter}`;
       } else if (reason === "new_device") {
-        window.location.href = "/login?kicked=1";
+        window.location.href = "/";
       } else {
-        window.location.href = "/login";
+        window.location.href = "/";
       }
     };
     window.addEventListener("force-logout", handler);
