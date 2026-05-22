@@ -81,9 +81,12 @@ const DEFAULT_FEES: FeeState = {
   conversion_ashtech_fee_afribapay: "2",
 };
 
+const CONV_PER_PAGE = 15;
+
 export default function AdminConversionsPage() {
   const { toast } = useToast();
   const [fees, setFees] = useState<FeeState>(DEFAULT_FEES);
+  const [convPage, setConvPage] = useState(0);
 
   const { data: feeSettings } = useQuery<{
     convProviderFeeSwychr: number; convAshtechFeeSwychr: number;
@@ -302,7 +305,7 @@ export default function AdminConversionsPage() {
             </Card>
           ) : (
             <div className="space-y-3">
-              {requests.map((req) => (
+              {requests.slice(convPage * CONV_PER_PAGE, (convPage + 1) * CONV_PER_PAGE).map((req) => (
                 <Card key={req.id}>
                   <CardContent className="p-4">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -365,6 +368,29 @@ export default function AdminConversionsPage() {
                   </CardContent>
                 </Card>
               ))}
+              {requests.length > CONV_PER_PAGE && (
+                <div className="flex items-center justify-between pt-2">
+                  <Button
+                    variant="outline" size="sm"
+                    onClick={() => setConvPage(p => Math.max(0, p - 1))}
+                    disabled={convPage === 0}
+                    data-testid="button-conv-prev"
+                  >
+                    ← Précédent
+                  </Button>
+                  <span className="text-xs text-muted-foreground">
+                    {convPage + 1} / {Math.ceil(requests.length / CONV_PER_PAGE)} · {requests.length} conversions
+                  </span>
+                  <Button
+                    variant="outline" size="sm"
+                    onClick={() => setConvPage(p => Math.min(Math.ceil(requests.length / CONV_PER_PAGE) - 1, p + 1))}
+                    disabled={(convPage + 1) * CONV_PER_PAGE >= requests.length}
+                    data-testid="button-conv-next"
+                  >
+                    Suivant →
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </div>
