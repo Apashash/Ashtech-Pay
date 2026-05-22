@@ -85,7 +85,7 @@ function SelectField({
 
 // ─── SDK Mode ─────────────────────────────────────────────────────────────
 function SDKForm() {
-  const [apiKey, setApiKey] = useState("");
+  const [apiKey, setApiKey] = useState("ak_47de95f89624017ba9f815ea5cc17ea054833c0b05daad09");
   const [showKey, setShowKey] = useState(false);
   const [name, setName] = useState("");
   const [countryCode, setCountryCode] = useState("");
@@ -393,7 +393,7 @@ function SDKForm() {
 
 // ─── Hosted Page Mode ─────────────────────────────────────────────────────
 function HostedPageForm() {
-  const [hpKey, setHpKey] = useState("");
+  const [hpKey, setHpKey] = useState("hp_live_aee12fec4b2aab5aa567618432c80f7b85a2d101");
   const [showKey, setShowKey] = useState(false);
   const [countryCode, setCountryCode] = useState("");
   const [amount, setAmount] = useState("");
