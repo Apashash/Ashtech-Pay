@@ -630,7 +630,7 @@ function ModeTab({
     <button
       onClick={onClick}
       data-testid={testId}
-      className={`flex-1 flex items-center gap-2.5 rounded-lg px-4 py-2.5 text-left transition-all focus:outline-none ${
+      className={`flex-1 min-w-0 flex items-center gap-2 rounded-lg px-2.5 py-2.5 text-left transition-all focus:outline-none ${
         active
           ? "bg-white border border-gray-200 shadow-sm"
           : "hover:bg-white/60 border border-transparent"
@@ -639,8 +639,8 @@ function ModeTab({
       <div className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${active ? "bg-primary text-primary-foreground" : "bg-gray-200 text-gray-500"}`}>
         {icon}
       </div>
-      <div className="min-w-0 overflow-hidden">
-        <p className={`text-xs font-semibold ${active ? "text-gray-900" : "text-gray-500"}`}>{label}</p>
+      <div className="min-w-0 flex-1 overflow-hidden">
+        <p className={`text-xs font-semibold truncate ${active ? "text-gray-900" : "text-gray-500"}`}>{label}</p>
         <p className="text-[10px] font-mono text-gray-400 truncate">{endpoint}</p>
       </div>
     </button>
