@@ -1126,20 +1126,21 @@ export async function registerRoutes(
         });
       }
 
-      // Turnstile verification (only reject if token provided but invalid)
+      // Turnstile verification — token required when secret is configured
       const turnstileSecret = process.env.TURNSTILE_SECRET_KEY;
       if (turnstileSecret) {
         const turnstileToken = req.body.turnstileToken;
-        if (turnstileToken) {
-          const verifyRes = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ secret: turnstileSecret, response: turnstileToken, remoteip: ip }),
-          });
-          const verifyData = await verifyRes.json() as { success: boolean };
-          if (!verifyData.success) {
-            return res.status(400).json({ message: "Vérification anti-bot échouée. Veuillez réessayer." });
-          }
+        if (!turnstileToken) {
+          return res.status(400).json({ message: "Vérification anti-bot requise. Veuillez compléter le captcha." });
+        }
+        const verifyRes = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ secret: turnstileSecret, response: turnstileToken, remoteip: ip }),
+        });
+        const verifyData = await verifyRes.json() as { success: boolean };
+        if (!verifyData.success) {
+          return res.status(400).json({ message: "Vérification anti-bot échouée. Veuillez réessayer." });
         }
       }
 
@@ -1237,20 +1238,21 @@ export async function registerRoutes(
         });
       }
 
-      // Turnstile verification (only reject if token provided but invalid)
+      // Turnstile verification — token required when secret is configured
       const turnstileSecret = process.env.TURNSTILE_SECRET_KEY;
       if (turnstileSecret) {
         const turnstileToken = req.body.turnstileToken;
-        if (turnstileToken) {
-          const verifyRes = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ secret: turnstileSecret, response: turnstileToken, remoteip: ip }),
-          });
-          const verifyData = await verifyRes.json() as { success: boolean };
-          if (!verifyData.success) {
-            return res.status(400).json({ message: "Vérification anti-bot échouée. Veuillez réessayer." });
-          }
+        if (!turnstileToken) {
+          return res.status(400).json({ message: "Vérification anti-bot requise. Veuillez compléter le captcha." });
+        }
+        const verifyRes = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ secret: turnstileSecret, response: turnstileToken, remoteip: ip }),
+        });
+        const verifyData = await verifyRes.json() as { success: boolean };
+        if (!verifyData.success) {
+          return res.status(400).json({ message: "Vérification anti-bot échouée. Veuillez réessayer." });
         }
       }
 
