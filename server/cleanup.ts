@@ -1,4 +1,4 @@
-import { db } from "./db";
+import { db, pool } from "./db";
 import { and, lt, eq } from "drizzle-orm";
 import { transactions, paymentIntents } from "@shared/schema";
 
@@ -12,6 +12,14 @@ export async function cleanupOldTransactions() {
   try {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - RETENTION_DAYS);
+
+    // Delete notifications referencing old transactions first (avoid FK violation)
+    await pool.query(
+      `DELETE FROM user_notifications WHERE transaction_id IN (
+        SELECT id FROM transactions WHERE created_at < $1 AND status IN ('completed','failed')
+      )`,
+      [cutoffDate]
+    ).catch(() => {});
 
     // Delete old completed transactions
     const completedResult = await db
