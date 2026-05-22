@@ -749,6 +749,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createOperator(operator: InsertOperator): Promise<Operator> {
+    // Prevent duplicates: same name (case-insensitive) in same country
+    const existing = await db
+      .select()
+      .from(operators)
+      .where(eq(operators.countryId, operator.countryId));
+    const duplicate = existing.find(
+      (o) => o.name.trim().toLowerCase() === operator.name.trim().toLowerCase()
+    );
+    if (duplicate) {
+      throw new Error(`Un opérateur nommé "${duplicate.name}" existe déjà dans ce pays.`);
+    }
     const [newOperator] = await db.insert(operators).values(operator).returning();
     return newOperator;
   }

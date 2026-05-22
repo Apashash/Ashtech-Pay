@@ -6394,8 +6394,11 @@ export async function registerRoutes(
       });
       
       res.json(operator);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Admin create operator error:", error);
+      if (error?.message?.includes("existe déjà")) {
+        return res.status(409).json({ message: error.message });
+      }
       res.status(500).json({ message: "Erreur serveur" });
     }
   });
