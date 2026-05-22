@@ -225,7 +225,7 @@ export default function RegisterPage() {
     }
   };
 
-  const canSubmit = !siteKey || !!turnstileToken || turnstileFallback || turnstileError;
+  const canSubmit = !!turnstileToken || turnstileFallback || turnstileError;
 
   return (
     <div className="min-h-screen bg-muted flex items-center justify-center p-4 py-8">
@@ -427,7 +427,7 @@ export default function RegisterPage() {
                   )}
                 />
 
-                {siteKey && (
+                {siteKey ? (
                   <div className="py-1">
                     <TurnstileWidget
                       key={turnstileKey}
@@ -442,6 +442,10 @@ export default function RegisterPage() {
                         Vérification impossible. <button type="button" className="underline" onClick={() => { setTurnstileError(false); setTurnstileKey(k => k + 1); }}>Réessayer</button>
                       </p>
                     )}
+                  </div>
+                ) : (
+                  <div className="py-2 px-3 rounded-md border border-dashed border-muted-foreground/40 bg-muted/50 text-center" data-testid="status-turnstile-no-key">
+                    <p className="text-xs text-muted-foreground">🔒 Vérification anti-bot non disponible — clé Turnstile manquante</p>
                   </div>
                 )}
 
