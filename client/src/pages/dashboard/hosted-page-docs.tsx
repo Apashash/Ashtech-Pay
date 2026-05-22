@@ -3,7 +3,8 @@ import { Link } from "wouter";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Copy, CheckCheck, Terminal } from "lucide-react";
+import { ArrowLeft, Copy, CheckCheck, Terminal, Download } from "lucide-react";
+import { downloadHostedPagePDF } from "@/lib/pdf-docs";
 
 function CodeBlock({ code, language = "json" }: { code: string; language?: string }) {
   const [copied, setCopied] = useState(false);
@@ -152,6 +153,15 @@ const sections = [
 export default function HostedPageDocs({ publicMode = false }: { publicMode?: boolean }) {
   const backHref = publicMode ? "/" : "/dashboard/api-keys";
   const backLabel = publicMode ? "Accueil" : "Retour aux clés API";
+  const [downloading, setDownloading] = useState(false);
+
+  function handleDownloadPDF() {
+    setDownloading(true);
+    setTimeout(() => {
+      downloadHostedPagePDF();
+      setDownloading(false);
+    }, 50);
+  }
 
   const content = (
       <div className="w-full max-w-5xl min-w-0">
@@ -163,14 +173,29 @@ export default function HostedPageDocs({ publicMode = false }: { publicMode?: bo
               <ArrowLeft className="h-4 w-4" /> {backLabel}
             </Button>
           </Link>
-          <div className="flex items-center gap-3">
-            <Terminal className="h-5 w-5 text-zinc-500" />
-            <h1 className="text-xl font-semibold text-zinc-100">Hosted Payment Page</h1>
-            <span className="text-xs font-mono text-zinc-600 border border-zinc-700 px-1.5 py-0.5 rounded">v1.0</span>
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <div className="flex items-center gap-3">
+                <Terminal className="h-5 w-5 text-zinc-500" />
+                <h1 className="text-xl font-semibold text-zinc-100">Hosted Payment Page</h1>
+                <span className="text-xs font-mono text-zinc-600 border border-zinc-700 px-1.5 py-0.5 rounded">v1.0</span>
+              </div>
+              <p className="text-sm text-zinc-500 mt-1">
+                Intègre le checkout Ashtech Pay dans ton application via API REST. 16+ pays, Mobile Money.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDownloadPDF}
+              disabled={downloading}
+              className="gap-2 border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 shrink-0"
+              data-testid="button-download-pdf-hosted"
+            >
+              <Download className="h-3.5 w-3.5" />
+              {downloading ? "Génération…" : "Télécharger PDF"}
+            </Button>
           </div>
-          <p className="text-sm text-zinc-500 mt-1">
-            Intègre le checkout Ashtech Pay dans ton application via API REST. 16+ pays, Mobile Money.
-          </p>
         </div>
 
         <div className="flex gap-8">

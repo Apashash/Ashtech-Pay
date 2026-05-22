@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button";
 import {
   ArrowLeft, Copy, CheckCheck, Terminal, Shield, Webhook,
   CheckCircle2, ArrowRight, Code2, Globe, Zap, BookOpen,
-  ChevronRight, Menu, X, List,
+  ChevronRight, Menu, X, List, Download,
 } from "lucide-react";
+import { downloadSDKDocs } from "@/lib/pdf-docs";
 
 const SECTIONS = [
   { id: "introduction",   label: "Introduction",         icon: BookOpen },
@@ -119,7 +120,16 @@ function MethodBadge({ method }: { method: string }) {
 export default function DeveloperPage({ publicMode = false }: { publicMode?: boolean }) {
   const [active, setActive] = useState("introduction");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
+
+  function handleDownloadPDF() {
+    setDownloading(true);
+    setTimeout(() => {
+      downloadSDKDocs();
+      setDownloading(false);
+    }, 50);
+  }
 
   const { data } = useQuery<{ apiKey: string }>({ queryKey: ["/api/user/api-key"] });
   const apiKey = data?.apiKey ?? "<VOTRE_CLÉ_API>";
@@ -186,6 +196,17 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
                 ashtechpay.top
               </span>
             )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDownloadPDF}
+              disabled={downloading}
+              className="hidden sm:flex gap-1.5 border-white/20 text-zinc-300 hover:text-white hover:border-white/40 text-xs"
+              data-testid="button-download-pdf-sdk"
+            >
+              <Download className="w-3.5 h-3.5" />
+              {downloading ? "Génération…" : "PDF"}
+            </Button>
             <button
               className="lg:hidden text-zinc-400 hover:text-white"
               onClick={() => setSidebarOpen(v => !v)}
