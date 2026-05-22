@@ -167,7 +167,7 @@ function SDKForm() {
   return (
     <div className="grid lg:grid-cols-2 gap-0 divide-y lg:divide-y-0 lg:divide-x divide-gray-200">
       {/* Left: Form */}
-      <div className="p-6 space-y-5">
+      <div className="p-4 sm:p-6 space-y-5">
         <div className="flex items-center justify-between">
           <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Paramètres</p>
           <button onClick={reset} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors">
@@ -385,7 +385,7 @@ function HostedPageForm() {
   return (
     <div className="grid lg:grid-cols-2 gap-0 divide-y lg:divide-y-0 lg:divide-x divide-gray-200">
       {/* Left: Form */}
-      <div className="p-6 space-y-5">
+      <div className="p-4 sm:p-6 space-y-5">
         <div className="flex items-center justify-between">
           <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Paramètres</p>
           <button onClick={reset} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors">
@@ -451,16 +451,16 @@ function HostedPageForm() {
         {/* Fixed / Free toggle */}
         <div className="flex gap-1 p-1 bg-gray-100 rounded-lg border border-gray-200">
           {[
-            { val: true,  label: "Prix fixe",  sub: "Vous définissez le montant" },
+            { val: true,  label: "Prix fixe",  sub: "Vous définissez" },
             { val: false, label: "Prix libre", sub: "Le client choisit" },
           ].map(({ val, label, sub }) => (
             <button key={String(val)} onClick={() => setIsFixedAmount(val)}
-              className={`flex-1 px-3 py-2 rounded-md text-xs font-medium transition-all ${
+              className={`flex-1 min-w-0 px-2 py-2 rounded-md text-xs font-medium transition-all ${
                 isFixedAmount === val ? "bg-primary text-primary-foreground shadow-sm" : "text-gray-500 hover:text-gray-700"
               }`}
               data-testid={`button-hp-mode-${val ? "fixed" : "free"}`}>
-              <span className="block">{label}</span>
-              <span className="block text-[10px] font-normal opacity-70">{sub}</span>
+              <span className="block truncate">{label}</span>
+              <span className="block text-[10px] font-normal opacity-70 truncate">{sub}</span>
             </button>
           ))}
         </div>
