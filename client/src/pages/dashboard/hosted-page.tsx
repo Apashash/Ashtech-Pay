@@ -264,7 +264,7 @@ export default function HostedPageDashboard() {
                   <p className="text-sm font-semibold">{hp.docTitle}</p>
                   <p className="text-xs text-muted-foreground">{hp.docDesc}</p>
                 </div>
-                <Link href="/dashboard/hosted-page/docs">
+                <Link href="/docs/hosted-page">
                   <Button data-testid="button-documentation" className="gap-2">
                     <BookOpen className="h-4 w-4" />
                     Documentation

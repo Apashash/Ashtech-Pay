@@ -438,7 +438,7 @@ export default function ApiKeysPage() {
             )}
 
             {hasHpKeys && (
-              <Link href="/dashboard/hosted-page/docs">
+              <Link href="/docs/hosted-page">
                 <Button className="w-full" data-testid="button-documentation">
                   <BookOpen className="h-4 w-4 mr-2" />
                   {t.apiKeys.docButton}
@@ -518,7 +518,7 @@ export default function ApiKeysPage() {
                   </Button>
                 </div>
 
-                <Link href="/dashboard/developer">
+                <Link href="/docs/api">
                   <Button className="w-full mt-2" data-testid="link-open-docs">
                     <BookOpen className="w-4 h-4 mr-2" />
                     {t.apiKeys.sdkDocsButton}

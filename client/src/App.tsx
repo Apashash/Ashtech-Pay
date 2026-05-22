@@ -167,8 +167,6 @@ function Router() {
       <Route path="/dashboard/kyc-verified" component={KYCVerifiedPage} />
       <Route path="/dashboard/support" component={SupportPage} />
       <Route path="/dashboard/api-keys" component={ApiKeysPage} />
-      <Route path="/dashboard/developer" component={DeveloperPage} />
-      <Route path="/dashboard/hosted-page/docs" component={HostedPageDocs} />
       <Route path="/dashboard/hosted-page" component={HostedPageDashboard} />
       <Route path="/hpay/:id" component={HPayPage} />
       <Route path="/dashboard/settings" component={SettingsPage} />
