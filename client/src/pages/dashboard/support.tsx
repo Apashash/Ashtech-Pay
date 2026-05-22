@@ -122,6 +122,9 @@ export default function SupportPage() {
     { icon: SiWhatsapp, title: "WhatsApp", description: supportContact?.phone || "+237 6XX XXX XXX", available: true, action: "whatsapp", badge: 0 },
   ];
 
+  const [ticketPage, setTicketPage] = useState(0);
+  const TICKETS_PER_PAGE = 15;
+
   const { data: tickets, isLoading: ticketsLoading } = useQuery<SupportTicket[]>({ queryKey: ["/api/tickets"] });
 
   const { data: ticketData, isLoading: messagesLoading, refetch: refetchMessages } = useQuery<{
@@ -353,7 +356,7 @@ export default function SupportPage() {
                   <div className="flex items-center justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
                 ) : tickets && tickets.length > 0 ? (
                   <div className="space-y-2">
-                    {tickets.map((ticket) => (
+                    {tickets.slice(ticketPage * TICKETS_PER_PAGE, (ticketPage + 1) * TICKETS_PER_PAGE).map((ticket) => (
                       <Card key={ticket.id} className="cursor-pointer hover-elevate" onClick={() => openTicket(ticket)} data-testid={`ticket-item-${ticket.id}`}>
                         <CardContent className="p-4">
                           <div className="flex items-center justify-between">
@@ -366,6 +369,29 @@ export default function SupportPage() {
                         </CardContent>
                       </Card>
                     ))}
+                    {tickets.length > TICKETS_PER_PAGE && (
+                      <div className="flex items-center justify-between pt-2">
+                        <Button
+                          variant="outline" size="sm"
+                          onClick={() => setTicketPage(p => Math.max(0, p - 1))}
+                          disabled={ticketPage === 0}
+                          data-testid="button-tickets-prev"
+                        >
+                          ← Précédent
+                        </Button>
+                        <span className="text-xs text-muted-foreground">
+                          {ticketPage + 1} / {Math.ceil(tickets.length / TICKETS_PER_PAGE)}
+                        </span>
+                        <Button
+                          variant="outline" size="sm"
+                          onClick={() => setTicketPage(p => Math.min(Math.ceil(tickets.length / TICKETS_PER_PAGE) - 1, p + 1))}
+                          disabled={(ticketPage + 1) * TICKETS_PER_PAGE >= tickets.length}
+                          data-testid="button-tickets-next"
+                        >
+                          Suivant →
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <Card>
