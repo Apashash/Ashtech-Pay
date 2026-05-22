@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { DashboardLayout } from "@/components/dashboard-layout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,8 +10,8 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import {
   Code2, Globe, Eye, EyeOff, Copy, RefreshCw, BookOpen,
-  CheckCircle2, Terminal, Shield, CheckCheck, ChevronRight, Key, Zap,
-  AlertCircle, LockKeyhole, CheckCircle,
+  CheckCheck, Key, Shield, AlertCircle, LockKeyhole, CheckCircle,
+  Terminal, Zap, ArrowRight, FlaskConical,
 } from "lucide-react";
 import { useLanguage } from "@/lib/language";
 
@@ -29,11 +28,23 @@ interface HostedPageConfig {
   hpLive: string | null;
 }
 
-function CopyableKey({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
-  const [copied, setCopied] = useState(false);
+function KeyRow({
+  label,
+  value,
+  prefix,
+  hint,
+}: {
+  label: string;
+  value: string;
+  prefix?: string;
+  hint?: string;
+}) {
   const [visible, setVisible] = useState(false);
+  const [copied, setCopied] = useState(false);
   const { toast } = useToast();
   const { t } = useLanguage();
+
+  const masked = value.slice(0, 10) + "•".repeat(18) + value.slice(-4);
 
   function copy() {
     navigator.clipboard.writeText(value);
@@ -42,37 +53,46 @@ function CopyableKey({ label, value, icon }: { label: string; value: string; ico
     toast({ title: t.apiKeys.toastKeyCopied, description: label + t.apiKeys.toastKeyCopiedDescSuf });
   }
 
-  const masked = value.slice(0, 12) + "•".repeat(20) + value.slice(-4);
-
   return (
-    <div className="space-y-1.5">
-      <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{label}</Label>
-      <div className="flex items-center gap-2 min-w-0">
-        <div className="flex-1 min-w-0 flex items-center gap-2 bg-muted/50 rounded-lg border px-3 py-2">
-          {icon && <span className="text-muted-foreground shrink-0">{icon}</span>}
-          <code className="text-sm font-mono flex-1 min-w-0 truncate text-foreground">
-            {visible ? value : masked}
-          </code>
+    <div className="group">
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-semibold uppercase tracking-widest text-zinc-500">{label}</span>
+          {prefix && (
+            <span className="text-[10px] font-mono bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded border border-zinc-700">
+              {prefix}
+            </span>
+          )}
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setVisible(!visible)}
-          data-testid={`toggle-${label.toLowerCase().replace(/\s/g, "-")}`}
-          className="h-9 w-9 shrink-0"
-        >
-          {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={copy}
-          data-testid={`copy-${label.toLowerCase().replace(/\s/g, "-")}`}
-          className="h-9 w-9 shrink-0"
-        >
-          {copied ? <CheckCheck className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-        </Button>
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={() => setVisible(v => !v)}
+            data-testid={`toggle-${label.toLowerCase().replace(/\s/g, "-")}`}
+            className="p-1.5 rounded-md hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
+          >
+            {visible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+          </button>
+          <button
+            onClick={copy}
+            data-testid={`copy-${label.toLowerCase().replace(/\s/g, "-")}`}
+            className="p-1.5 rounded-md hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
+          >
+            {copied ? <CheckCheck className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+          </button>
+        </div>
       </div>
+      <div className="flex items-center gap-2 bg-[#0d1117] border border-zinc-800 rounded-lg px-3 py-2.5">
+        <code className="text-xs font-mono text-zinc-300 flex-1 min-w-0 truncate select-all">
+          {visible ? value : masked}
+        </code>
+        <button
+          onClick={copy}
+          className="shrink-0 text-zinc-600 hover:text-zinc-400 transition-colors sm:hidden"
+        >
+          {copied ? <CheckCheck className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+        </button>
+      </div>
+      {hint && <p className="text-[11px] text-zinc-600 mt-1">{hint}</p>}
     </div>
   );
 }
@@ -155,8 +175,8 @@ export default function ApiKeysPage() {
   if (userLoading || !currentUser) {
     return (
       <DashboardLayout>
-        <div className="w-full max-w-3xl min-w-0 flex items-center justify-center py-24">
-          <div className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        <div className="flex items-center justify-center py-32">
+          <div className="h-7 w-7 border-2 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
       </DashboardLayout>
     );
@@ -165,20 +185,15 @@ export default function ApiKeysPage() {
   if (!isVerified) {
     return (
       <DashboardLayout>
-        <div className="w-full max-w-3xl min-w-0 space-y-6">
-          <div>
-            <h1 className="text-2xl font-semibold text-foreground">{t.apiKeys.title}</h1>
-            <p className="text-muted-foreground text-sm mt-1">{t.apiKeys.subtitle}</p>
-          </div>
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 dark:border-amber-800/40 dark:bg-amber-950/30 p-8 flex flex-col items-center text-center gap-5" data-testid="banner-not-verified">
-            <div className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center">
-              <AlertCircle className="h-8 w-8 text-amber-600 dark:text-amber-400" />
+        <div className="w-full max-w-2xl space-y-6">
+          <PageHeader />
+          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-10 flex flex-col items-center text-center gap-5" data-testid="banner-not-verified">
+            <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+              <AlertCircle className="h-7 w-7 text-amber-400" />
             </div>
-            <div className="space-y-2">
-              <h2 className="text-lg font-semibold text-amber-900 dark:text-amber-200">{t.apiKeys.notVerifiedTitle}</h2>
-              <p className="text-sm text-amber-700 dark:text-amber-300 max-w-md"
-                dangerouslySetInnerHTML={{ __html: t.apiKeys.notVerifiedDesc }}
-              />
+            <div className="space-y-1.5">
+              <h2 className="text-base font-semibold text-foreground">{t.apiKeys.notVerifiedTitle}</h2>
+              <p className="text-sm text-muted-foreground max-w-sm" dangerouslySetInnerHTML={{ __html: t.apiKeys.notVerifiedDesc }} />
             </div>
             <Link href="/dashboard/kyc">
               <Button className="gap-2" data-testid="button-go-kyc">
@@ -186,7 +201,7 @@ export default function ApiKeysPage() {
                 {t.apiKeys.goKycButton}
               </Button>
             </Link>
-            <p className="text-xs text-amber-600 dark:text-amber-500">{t.apiKeys.kycStep}</p>
+            <p className="text-xs text-muted-foreground/60">{t.apiKeys.kycStep}</p>
           </div>
         </div>
       </DashboardLayout>
@@ -196,20 +211,15 @@ export default function ApiKeysPage() {
   if (!apiEnabled) {
     return (
       <DashboardLayout>
-        <div className="w-full max-w-3xl min-w-0 space-y-6">
-          <div>
-            <h1 className="text-2xl font-semibold text-foreground">{t.apiKeys.title}</h1>
-            <p className="text-muted-foreground text-sm mt-1">{t.apiKeys.subtitle}</p>
-          </div>
-          <div className="rounded-2xl border border-sky-200 bg-sky-50 dark:border-sky-800/40 dark:bg-sky-950/30 p-8 flex flex-col items-center text-center gap-5" data-testid="banner-api-not-enabled">
-            <div className="w-16 h-16 rounded-full bg-sky-100 dark:bg-sky-900/40 flex items-center justify-center">
-              <LockKeyhole className="h-8 w-8 text-sky-600 dark:text-sky-400" />
+        <div className="w-full max-w-2xl space-y-6">
+          <PageHeader />
+          <div className="rounded-2xl border border-sky-500/20 bg-sky-500/5 p-10 flex flex-col items-center text-center gap-5" data-testid="banner-api-not-enabled">
+            <div className="w-14 h-14 rounded-2xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center">
+              <LockKeyhole className="h-7 w-7 text-sky-400" />
             </div>
-            <div className="space-y-2">
-              <h2 className="text-lg font-semibold text-sky-900 dark:text-sky-200">{t.apiKeys.apiNotEnabledTitle}</h2>
-              <p className="text-sm text-sky-700 dark:text-sky-300 max-w-md"
-                dangerouslySetInnerHTML={{ __html: t.apiKeys.apiNotEnabledDesc }}
-              />
+            <div className="space-y-1.5">
+              <h2 className="text-base font-semibold text-foreground">{t.apiKeys.apiNotEnabledTitle}</h2>
+              <p className="text-sm text-muted-foreground max-w-sm" dangerouslySetInnerHTML={{ __html: t.apiKeys.apiNotEnabledDesc }} />
             </div>
             <a href="mailto:support@ashtechpay.top">
               <Button className="gap-2" data-testid="button-contact-admin">
@@ -217,8 +227,8 @@ export default function ApiKeysPage() {
                 {t.apiKeys.contactAdminButton}
               </Button>
             </a>
-            <div className="flex items-center gap-2 text-xs text-sky-600 dark:text-sky-500">
-              <CheckCircle className="h-3.5 w-3.5 text-green-500" />
+            <div className="flex items-center gap-1.5 text-xs text-green-500">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
               {t.apiKeys.apiActiveStatus}
             </div>
           </div>
@@ -229,122 +239,116 @@ export default function ApiKeysPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6 w-full max-w-3xl min-w-0">
-        <div>
-          <h1 className="text-2xl font-semibold text-foreground">{t.apiKeys.title}</h1>
-          <p className="text-muted-foreground text-sm mt-1">{t.apiKeys.subtitle}</p>
-        </div>
+      <div className="w-full max-w-2xl space-y-6">
 
-        <div className="flex items-start gap-3 rounded-xl border border-green-200 bg-green-50 dark:border-green-800/40 dark:bg-green-900/10 px-4 py-3.5" data-testid="banner-api-active">
-          <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5 shrink-0" />
+        {/* ── Header ── */}
+        <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-sm font-semibold text-green-800 dark:text-green-300">{t.apiKeys.apiBannerTitle}</p>
-            <p className="text-sm text-green-700 dark:text-green-400 mt-0.5">{t.apiKeys.apiBannerDesc}</p>
+            <h1 className="text-xl font-semibold text-foreground">{t.apiKeys.title}</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">{t.apiKeys.subtitle}</p>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+            </span>
+            <span className="text-xs text-green-500 font-medium">API Active</span>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <button
+        {/* ── Mode tabs ── */}
+        <div className="flex items-center gap-1 bg-[#0d1117] border border-zinc-800 rounded-xl p-1">
+          <ModeTab
+            active={mode === "hosted"}
             onClick={() => setMode("hosted")}
-            data-testid="button-mode-hosted"
-            className={`rounded-xl border-2 p-5 text-left transition-all focus:outline-none ${
-              mode === "hosted"
-                ? "border-primary bg-primary/5 shadow-sm"
-                : "border-border hover:border-primary/40 hover:bg-muted/40"
-            }`}
-          >
-            <div className="flex items-start gap-3 min-w-0">
-              <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${mode === "hosted" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
-                <Globe className="w-5 h-5" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-semibold text-foreground text-sm">Hosted Page</span>
-                  {mode === "hosted" && <Badge className="text-[10px] px-1.5 py-0">{t.apiKeys.modeActive}</Badge>}
-                </div>
-                <p className="text-xs text-muted-foreground mt-0.5">{t.apiKeys.hostedPageDesc}</p>
-              </div>
-            </div>
-          </button>
-
-          <button
+            icon={<Globe className="w-3.5 h-3.5" />}
+            label="Hosted Page"
+            endpoint="POST /v1/hosted-payment/create"
+            testId="button-mode-hosted"
+          />
+          <ModeTab
+            active={mode === "sdk"}
             onClick={() => setMode("sdk")}
-            data-testid="button-mode-sdk"
-            className={`rounded-xl border-2 p-5 text-left transition-all focus:outline-none ${
-              mode === "sdk"
-                ? "border-primary bg-primary/5 shadow-sm"
-                : "border-border hover:border-primary/40 hover:bg-muted/40"
-            }`}
-          >
-            <div className="flex items-start gap-3 min-w-0">
-              <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${mode === "sdk" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
-                <Code2 className="w-5 h-5" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-semibold text-foreground text-sm">SDK Direct API</span>
-                  {mode === "sdk" && <Badge className="text-[10px] px-1.5 py-0">{t.apiKeys.modeActive}</Badge>}
-                </div>
-                <p className="text-xs text-muted-foreground mt-0.5">{t.apiKeys.sdkDesc}</p>
-              </div>
-            </div>
-          </button>
+            icon={<Code2 className="w-3.5 h-3.5" />}
+            label="SDK Direct"
+            endpoint="POST /v1/collect"
+            testId="button-mode-sdk"
+          />
         </div>
 
+        {/* ── HOSTED PAGE MODE ── */}
         {mode === "hosted" && (
           <div className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+
+            {/* How it works */}
+            <div className="grid grid-cols-3 gap-3">
               {[
-                { icon: Key, label: t.apiKeys.step1Label, desc: t.apiKeys.step1Desc },
-                { icon: Zap, label: t.apiKeys.step2Label, desc: t.apiKeys.step2Desc },
-                { icon: Shield, label: t.apiKeys.step3Label, desc: t.apiKeys.step3Desc },
-              ].map(({ icon: Icon, label, desc }) => (
-                <div key={label} className="rounded-xl border bg-card p-4 space-y-2">
-                  <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <Icon className="h-3.5 w-3.5 text-primary" />
+                { icon: Key, label: t.apiKeys.step1Label, desc: t.apiKeys.step1Desc, color: "text-amber-400", bg: "bg-amber-400/10 border-amber-400/20" },
+                { icon: Zap, label: t.apiKeys.step2Label, desc: t.apiKeys.step2Desc, color: "text-blue-400", bg: "bg-blue-400/10 border-blue-400/20" },
+                { icon: Shield, label: t.apiKeys.step3Label, desc: t.apiKeys.step3Desc, color: "text-green-400", bg: "bg-green-400/10 border-green-400/20" },
+              ].map(({ icon: Icon, label, desc, color, bg }) => (
+                <div key={label} className="rounded-xl border border-zinc-800 bg-[#0d1117] p-3.5 space-y-2.5">
+                  <div className={`w-7 h-7 rounded-lg border flex items-center justify-center ${bg}`}>
+                    <Icon className={`w-3.5 h-3.5 ${color}`} />
                   </div>
-                  <p className="text-sm font-semibold">{label}</p>
-                  <p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
+                  <div>
+                    <p className="text-xs font-semibold text-foreground">{label}</p>
+                    <p className="text-[11px] text-zinc-500 mt-0.5 leading-relaxed">{desc}</p>
+                  </div>
                 </div>
               ))}
             </div>
 
-            <Card>
-              <CardHeader className="pb-3">
-                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{t.apiKeys.configSection}</p>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Globe className="w-4 h-4 text-muted-foreground" />
-                  {t.apiKeys.configTitle}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="success-url">Success Redirect URL</Label>
+            {/* Config URLs */}
+            <div className="rounded-xl border border-zinc-800 bg-[#0d1117] overflow-hidden">
+              <div className="px-5 py-4 border-b border-zinc-800 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-600 mb-0.5">{t.apiKeys.configSection}</p>
+                  <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                    <Globe className="w-3.5 h-3.5 text-zinc-500" />
+                    {t.apiKeys.configTitle}
+                  </h3>
+                </div>
+                {hasHpKeys && (
+                  <Badge className="bg-green-500/10 text-green-400 border-green-500/20 text-[10px]">
+                    {t.apiKeys.keysActive}
+                  </Badge>
+                )}
+              </div>
+
+              <div className="p-5 space-y-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-zinc-400">Success Redirect URL</Label>
                   <Input
                     id="success-url"
                     data-testid="input-success-url"
                     placeholder="https://monsite.com/payment/success"
                     value={successUrl}
                     onChange={(e) => setSuccessUrl(e.target.value)}
+                    className="bg-[#161b22] border-zinc-800 text-sm h-9 focus-visible:ring-primary/30"
                   />
-                  <p className="text-xs text-muted-foreground">{t.apiKeys.successUrlDesc}</p>
+                  <p className="text-[11px] text-zinc-600">{t.apiKeys.successUrlDesc}</p>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="cancel-url">Cancel Redirect URL</Label>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-zinc-400">Cancel Redirect URL</Label>
                   <Input
                     id="cancel-url"
                     data-testid="input-cancel-url"
                     placeholder="https://monsite.com/payment/cancel"
                     value={cancelUrl}
                     onChange={(e) => setCancelUrl(e.target.value)}
+                    className="bg-[#161b22] border-zinc-800 text-sm h-9 focus-visible:ring-primary/30"
                   />
-                  <p className="text-xs text-muted-foreground">{t.apiKeys.cancelUrlDesc}</p>
+                  <p className="text-[11px] text-zinc-600">{t.apiKeys.cancelUrlDesc}</p>
                 </div>
 
-                <div className="space-y-2 pt-2 border-t">
-                  <Label htmlFor="notify-url" className="flex items-center gap-2">
+                <div className="space-y-1.5 pt-3 border-t border-zinc-800/60">
+                  <Label className="text-xs text-zinc-400 flex items-center gap-2">
                     {t.apiKeys.webhookLabel}
-                    <span className="text-[10px] bg-violet-500/10 text-violet-500 border border-violet-500/20 px-1.5 py-0.5 rounded font-mono">{t.apiKeys.webhookBadge}</span>
+                    <span className="font-mono text-[10px] bg-violet-500/10 text-violet-400 border border-violet-500/20 px-1.5 py-0.5 rounded">
+                      {t.apiKeys.webhookBadge}
+                    </span>
                   </Label>
                   <Input
                     id="notify-url"
@@ -352,191 +356,198 @@ export default function ApiKeysPage() {
                     placeholder="https://monsite.com/webhooks/ashtechpay"
                     value={notifyUrl}
                     onChange={(e) => setNotifyUrl(e.target.value)}
+                    className="bg-[#161b22] border-zinc-800 text-sm h-9 focus-visible:ring-primary/30"
                   />
-                  <p className="text-xs text-muted-foreground">{t.apiKeys.webhookDesc}</p>
+                  <p className="text-[11px] text-zinc-600">{t.apiKeys.webhookDesc}</p>
                 </div>
 
-                {hasHpKeys ? (
-                  <Button
-                    variant="outline"
-                    onClick={() => hpMutation.mutate({ successUrl, cancelUrl, notifyUrl })}
-                    disabled={hpMutation.isPending}
-                    data-testid="button-save-urls"
-                  >
-                    {hpMutation.isPending ? t.apiKeys.savingButton : t.apiKeys.saveUrlsButton}
-                  </Button>
-                ) : (
-                  <Button
-                    onClick={() => hpMutation.mutate({ successUrl, cancelUrl, notifyUrl })}
-                    disabled={hpMutation.isPending}
-                    data-testid="button-generate-keys"
-                    className="w-full sm:w-auto"
-                  >
-                    {hpMutation.isPending ? (
-                      <>
-                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                        {t.apiKeys.generatingButton}
-                      </>
-                    ) : (
-                      <>
-                        <Key className="h-4 w-4 mr-2" />
-                        Generate API Keys
-                      </>
-                    )}
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
+                <div className="flex items-center gap-3 pt-1">
+                  {hasHpKeys ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => hpMutation.mutate({ successUrl, cancelUrl, notifyUrl })}
+                      disabled={hpMutation.isPending}
+                      data-testid="button-save-urls"
+                      className="border-zinc-700 hover:border-zinc-600"
+                    >
+                      {hpMutation.isPending ? t.apiKeys.savingButton : t.apiKeys.saveUrlsButton}
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={() => hpMutation.mutate({ successUrl, cancelUrl, notifyUrl })}
+                      disabled={hpMutation.isPending}
+                      data-testid="button-generate-keys"
+                    >
+                      {hpMutation.isPending ? (
+                        <><RefreshCw className="h-3.5 w-3.5 mr-2 animate-spin" />{t.apiKeys.generatingButton}</>
+                      ) : (
+                        <><Key className="h-3.5 w-3.5 mr-2" />Generate API Keys</>
+                      )}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* API Keys panel */}
+            {hpLoading && (
+              <div className="flex justify-center py-6">
+                <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
 
             {hasHpKeys && (
-              <Card>
-                <CardHeader className="pb-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{t.apiKeys.keysSection}</p>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <Key className="w-4 h-4 text-muted-foreground" />
+              <div className="rounded-xl border border-zinc-800 bg-[#0d1117] overflow-hidden">
+                <div className="px-5 py-4 border-b border-zinc-800 flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-600 mb-0.5">{t.apiKeys.keysSection}</p>
+                    <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      <Key className="w-3.5 h-3.5 text-zinc-500" />
                       API Keys
-                    </CardTitle>
-                    <Badge variant="secondary" className="bg-green-500/10 text-green-600 border-green-500/20">
-                      {t.apiKeys.keysActive}
-                    </Badge>
+                    </h3>
                   </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <CopyableKey
-                    label="Public Key"
-                    value={hpConfig!.pkLive!}
-                    icon={<Key className="h-3.5 w-3.5" />}
-                  />
-                  <CopyableKey
-                    label="Secret Key"
-                    value={hpConfig!.skLive!}
-                    icon={<Shield className="h-3.5 w-3.5" />}
-                  />
-                  <CopyableKey
-                    label="Hosted Page Key"
-                    value={hpConfig!.hpLive!}
-                    icon={<Globe className="h-3.5 w-3.5" />}
-                  />
+                  <Badge className="bg-green-500/10 text-green-400 border-green-500/20 text-[10px]">
+                    {t.apiKeys.keysActive}
+                  </Badge>
+                </div>
 
-                  <div className="pt-2 border-t">
+                <div className="p-5 space-y-5">
+                  <KeyRow label="Public Key" value={hpConfig!.pkLive!} prefix="pk_live_" hint="Frontend — identifiant public de votre compte." />
+                  <div className="border-t border-zinc-800/60" />
+                  <KeyRow label="Secret Key" value={hpConfig!.skLive!} prefix="sk_live_" hint="Backend uniquement — ne jamais exposer côté client." />
+                  <div className="border-t border-zinc-800/60" />
+                  <KeyRow label="Hosted Page Key" value={hpConfig!.hpLive!} prefix="hp_live_" hint="Crée des sessions de paiement hébergées." />
+
+                  <div className="pt-3 border-t border-zinc-800/60 flex items-center justify-between gap-3">
+                    <p className="text-[11px] text-zinc-600">{t.apiKeys.regenerateWarning}</p>
                     <Button
-                      variant="outline"
+                      variant="ghost"
                       size="sm"
                       onClick={() => hpMutation.mutate({ successUrl, cancelUrl, notifyUrl, regenerate: true })}
                       disabled={hpMutation.isPending}
                       data-testid="button-regenerate-keys"
-                      className="text-destructive hover:text-destructive"
+                      className="text-red-400 hover:text-red-300 hover:bg-red-500/10 shrink-0 text-xs"
                     >
-                      <RefreshCw className="h-3.5 w-3.5 mr-2" />
+                      <RefreshCw className="h-3 w-3 mr-1.5" />
                       {t.apiKeys.regenerateKeys}
                     </Button>
-                    <p className="text-xs text-muted-foreground mt-1.5">{t.apiKeys.regenerateWarning}</p>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             )}
 
+            {/* Action links */}
             {hasHpKeys && (
-              <Link href="/docs/hosted-page">
-                <Button className="w-full" data-testid="button-documentation">
-                  <BookOpen className="h-4 w-4 mr-2" />
-                  {t.apiKeys.docButton}
-                  <ChevronRight className="h-4 w-4 ml-auto" />
-                </Button>
-              </Link>
-            )}
-
-            {hpLoading && (
-              <div className="flex items-center justify-center py-4">
-                <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              <div className="grid grid-cols-2 gap-3">
+                <Link href="/docs/hosted-page">
+                  <button
+                    data-testid="button-documentation"
+                    className="w-full flex items-center gap-3 rounded-xl border border-zinc-800 bg-[#0d1117] hover:border-zinc-700 hover:bg-zinc-900/60 p-4 transition-all group"
+                  >
+                    <div className="w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                      <BookOpen className="w-4 h-4 text-primary" />
+                    </div>
+                    <div className="text-left flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground">{t.apiKeys.docButton}</p>
+                      <p className="text-[11px] text-zinc-600">Guide d'intégration</p>
+                    </div>
+                    <ArrowRight className="w-3.5 h-3.5 text-zinc-600 group-hover:text-zinc-400 transition-colors shrink-0" />
+                  </button>
+                </Link>
+                <Link href="/docs/test-pay">
+                  <button
+                    data-testid="button-test-sandbox"
+                    className="w-full flex items-center gap-3 rounded-xl border border-zinc-800 bg-[#0d1117] hover:border-amber-500/30 hover:bg-amber-500/5 p-4 transition-all group"
+                  >
+                    <div className="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
+                      <FlaskConical className="w-4 h-4 text-amber-400" />
+                    </div>
+                    <div className="text-left flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground">Tester l'API</p>
+                      <p className="text-[11px] text-zinc-600">Sandbox interactif</p>
+                    </div>
+                    <ArrowRight className="w-3.5 h-3.5 text-zinc-600 group-hover:text-amber-500 transition-colors shrink-0" />
+                  </button>
+                </Link>
               </div>
             )}
           </div>
         )}
 
+        {/* ── SDK DIRECT MODE ── */}
         {mode === "sdk" && (
           <div className="space-y-4">
-            <Card>
-              <CardHeader className="pb-3">
-                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{t.apiKeys.sdkAuthSection}</p>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Shield className="w-4 h-4 text-muted-foreground" />
-                  {t.apiKeys.sdkAuthTitle}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-sm text-muted-foreground">{t.apiKeys.sdkAuthDesc}</p>
 
-                <div className="rounded-lg border bg-muted/30 p-4">
-                  <div className="flex items-center justify-between gap-3 min-w-0">
-                    <code
-                      className="text-sm font-mono text-foreground flex-1 min-w-0 break-all select-all"
-                      data-testid="text-api-key"
+            {/* API Key panel */}
+            <div className="rounded-xl border border-zinc-800 bg-[#0d1117] overflow-hidden">
+              <div className="px-5 py-4 border-b border-zinc-800">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-600 mb-0.5">{t.apiKeys.sdkAuthSection}</p>
+                <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                  <Shield className="w-3.5 h-3.5 text-zinc-500" />
+                  {t.apiKeys.sdkAuthTitle}
+                </h3>
+              </div>
+
+              <div className="p-5 space-y-4">
+                <p className="text-sm text-zinc-500">{t.apiKeys.sdkAuthDesc}</p>
+
+                {/* Key display */}
+                <div className="bg-[#161b22] border border-zinc-800 rounded-xl px-4 py-3 flex items-center gap-3">
+                  <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-600 shrink-0">Bearer</span>
+                  <div className="w-px h-4 bg-zinc-800" />
+                  <code
+                    className="text-xs font-mono text-zinc-300 flex-1 min-w-0 truncate select-all"
+                    data-testid="text-api-key"
+                  >
+                    {sdkLoading ? t.apiKeys.sdkLoading : showKey ? apiKey : maskedKey}
+                  </code>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => setShowKey(v => !v)}
+                      disabled={sdkLoading || !apiKey}
+                      data-testid="button-toggle-key-visibility"
+                      className="p-1.5 rounded-md hover:bg-zinc-800 text-zinc-600 hover:text-zinc-300 transition-colors disabled:opacity-40"
                     >
-                      {sdkLoading ? t.apiKeys.sdkLoading : showKey ? apiKey : maskedKey}
-                    </code>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => setShowKey((v) => !v)}
-                        disabled={sdkLoading || !apiKey}
-                        data-testid="button-toggle-key-visibility"
-                        title={showKey ? t.apiKeys.sdkHide : t.apiKeys.sdkShow}
-                      >
-                        {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={copyKey}
-                        disabled={sdkLoading || !apiKey}
-                        data-testid="button-copy-key"
-                        title={t.apiKeys.sdkCopy}
-                      >
-                        {copied ? <CheckCheck className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-                      </Button>
-                    </div>
+                      {showKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                    <button
+                      onClick={copyKey}
+                      disabled={sdkLoading || !apiKey}
+                      data-testid="button-copy-key"
+                      className="p-1.5 rounded-md hover:bg-zinc-800 text-zinc-600 hover:text-zinc-300 transition-colors disabled:opacity-40"
+                    >
+                      {copied ? <CheckCheck className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-muted-foreground">{t.apiKeys.sdkRegenerateWarning}</p>
+                {/* Regen row */}
+                <div className="flex items-center justify-between gap-4 pt-1">
+                  <p className="text-[11px] text-zinc-600">{t.apiKeys.sdkRegenerateWarning}</p>
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
                     onClick={() => regenerateMutation.mutate()}
                     disabled={regenerateMutation.isPending}
                     data-testid="button-regenerate-key"
-                    className="shrink-0 ml-4"
+                    className="text-red-400 hover:text-red-300 hover:bg-red-500/10 shrink-0 text-xs"
                   >
-                    <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${regenerateMutation.isPending ? "animate-spin" : ""}`} />
+                    <RefreshCw className={`w-3 h-3 mr-1.5 ${regenerateMutation.isPending ? "animate-spin" : ""}`} />
                     {t.apiKeys.sdkRegenerate}
                   </Button>
                 </div>
+              </div>
+            </div>
 
-                <Link href="/docs/api">
-                  <Button className="w-full mt-2" data-testid="link-open-docs">
-                    <BookOpen className="w-4 h-4 mr-2" />
-                    {t.apiKeys.sdkDocsButton}
-                    <ChevronRight className="w-4 h-4 ml-auto" />
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-
-            <Card className="overflow-hidden">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <Terminal className="w-4 h-4 text-primary" />
-                  {t.apiKeys.sdkExampleTitle}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <pre className="text-xs bg-muted/60 rounded-lg p-4 overflow-x-auto max-w-full text-foreground/90 leading-relaxed">
+            {/* Code example */}
+            <div className="rounded-xl border border-zinc-800 bg-[#0d1117] overflow-hidden">
+              <div className="px-5 py-3.5 border-b border-zinc-800 flex items-center gap-2">
+                <Terminal className="w-3.5 h-3.5 text-zinc-600" />
+                <span className="text-xs font-semibold text-zinc-500">{t.apiKeys.sdkExampleTitle}</span>
+                <span className="ml-auto text-[10px] font-mono bg-zinc-800 text-zinc-500 px-2 py-0.5 rounded">JavaScript</span>
+              </div>
+              <pre className="text-xs font-mono text-zinc-400 p-5 overflow-x-auto leading-relaxed">
 {`fetch("https://ashtechpay.top/v1/collect", {
   method: "POST",
   headers: {
@@ -551,12 +562,87 @@ export default function ApiKeysPage() {
     reference: "ORDER-123"
   })
 })`}
-                </pre>
-              </CardContent>
-            </Card>
+              </pre>
+            </div>
+
+            {/* Action links */}
+            <div className="grid grid-cols-2 gap-3">
+              <Link href="/docs/api">
+                <button
+                  data-testid="link-open-docs"
+                  className="w-full flex items-center gap-3 rounded-xl border border-zinc-800 bg-[#0d1117] hover:border-zinc-700 hover:bg-zinc-900/60 p-4 transition-all group"
+                >
+                  <div className="w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                    <BookOpen className="w-4 h-4 text-primary" />
+                  </div>
+                  <div className="text-left flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground">{t.apiKeys.sdkDocsButton}</p>
+                    <p className="text-[11px] text-zinc-600">Référence complète</p>
+                  </div>
+                  <ArrowRight className="w-3.5 h-3.5 text-zinc-600 group-hover:text-zinc-400 transition-colors shrink-0" />
+                </button>
+              </Link>
+              <Link href="/docs/test-pay">
+                <button
+                  data-testid="button-test-sandbox-sdk"
+                  className="w-full flex items-center gap-3 rounded-xl border border-zinc-800 bg-[#0d1117] hover:border-amber-500/30 hover:bg-amber-500/5 p-4 transition-all group"
+                >
+                  <div className="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
+                    <FlaskConical className="w-4 h-4 text-amber-400" />
+                  </div>
+                  <div className="text-left flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground">Tester l'API</p>
+                    <p className="text-[11px] text-zinc-600">Sandbox interactif</p>
+                  </div>
+                  <ArrowRight className="w-3.5 h-3.5 text-zinc-600 group-hover:text-amber-500 transition-colors shrink-0" />
+                </button>
+              </Link>
+            </div>
           </div>
         )}
+
       </div>
     </DashboardLayout>
+  );
+}
+
+function PageHeader() {
+  const { t } = useLanguage();
+  return (
+    <div>
+      <h1 className="text-xl font-semibold text-foreground">{t.apiKeys.title}</h1>
+      <p className="text-sm text-muted-foreground mt-0.5">{t.apiKeys.subtitle}</p>
+    </div>
+  );
+}
+
+function ModeTab({
+  active, onClick, icon, label, endpoint, testId,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+  endpoint: string;
+  testId: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      data-testid={testId}
+      className={`flex-1 flex items-center gap-2.5 rounded-lg px-4 py-2.5 text-left transition-all focus:outline-none ${
+        active
+          ? "bg-[#1c2128] border border-zinc-700 shadow-sm"
+          : "hover:bg-zinc-900/60 border border-transparent"
+      }`}
+    >
+      <div className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${active ? "bg-primary text-primary-foreground" : "bg-zinc-800 text-zinc-500"}`}>
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <p className={`text-xs font-semibold ${active ? "text-foreground" : "text-zinc-500"}`}>{label}</p>
+        <p className="text-[10px] font-mono text-zinc-600 truncate">{endpoint}</p>
+      </div>
+    </button>
   );
 }
