@@ -37,7 +37,7 @@ app.use(
             fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
             imgSrc: ["'self'", "data:", "blob:", "https:"],
             connectSrc: ["'self'", "https:", "wss:"],
-            frameSrc: ["'none'", "https://challenges.cloudflare.com"],
+            frameSrc: ["https://challenges.cloudflare.com"],
             objectSrc: ["'none'"],
             upgradeInsecureRequests: isProd ? [] : null,
           },
