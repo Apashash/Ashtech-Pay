@@ -81,6 +81,8 @@ import {
   handleTelegramUpdate,
   registerTelegramWebhook,
   notifyWithdrawalNumberChangeRequest,
+  notifyNewTicket,
+  notifySupportMessage,
 } from "./telegram";
 import {
   sendWelcomeEmail,
@@ -6779,6 +6781,19 @@ export async function registerRoutes(
           isAdmin: false,
         });
       }
+
+      // Notify Telegram
+      storage.getUser(req.userId!).then(u => {
+        if (!u) return;
+        notifyNewTicket({
+          ticketId: ticket.id,
+          userName: u.fullName || u.username,
+          userEmail: u.email || "",
+          subject: ticket.subject,
+          firstMessage: req.body.message,
+          priority: ticket.priority,
+        }).catch(() => {});
+      }).catch(() => {});
       
       res.json(ticket);
     } catch (error) {
@@ -6860,12 +6875,24 @@ export async function registerRoutes(
       }
 
       // Push new message via SSE to admins
+      const msgSender = await storage.getUser(req.userId!);
       notifyAdmins("new_message", {
         ticketId: req.params.id,
         message,
-        userFullName: (await storage.getUser(req.userId!))?.fullName || "Utilisateur",
+        userFullName: msgSender?.fullName || "Utilisateur",
         subject: ticket.subject,
       });
+
+      // Notify Telegram (fire and forget)
+      if (msgSender) {
+        notifySupportMessage({
+          ticketId: req.params.id,
+          userName: msgSender.fullName || msgSender.username,
+          userEmail: msgSender.email || "",
+          subject: ticket.subject,
+          message: req.body.message,
+        }).catch(() => {});
+      }
       
       res.json(message);
     } catch (error) {
@@ -10461,6 +10488,65 @@ export async function registerRoutes(
         },
         getBlockedIps: () => getBlockedIps(),
         unblockIpByIdentifier: (identifier: string) => unblockByIdentifier(identifier),
+
+        // ── Reply to ticket from Telegram ────────────────────────────────────
+        replyToTicket: async (ticketId, message) => {
+          const ticket = await storage.getTicket(ticketId).catch(() => null);
+          if (!ticket) return null;
+          const ticketUser = await storage.getUser(ticket.userId).catch(() => null);
+          if (!ticketUser) return null;
+          const allUsers = await storage.getAllUsers();
+          const adminUser = allUsers.find(u => u.role === "admin" || u.role === "support");
+          if (!adminUser) return null;
+
+          const isUserViewing = getUserViewingTicket(ticket.userId, ticketId);
+          await storage.createTicketMessage({
+            ticketId,
+            senderId: adminUser.id,
+            message,
+            isAdmin: true,
+            readByAdmin: true,
+            readByUser: isUserViewing,
+          });
+          await storage.updateTicket(ticketId, {
+            status: ticket.status === "open" ? "in_progress" : ticket.status,
+          });
+          notifyUser(ticket.userId, "new_message", { ticketId, message });
+          await storage.createUserNotification({
+            userId: ticket.userId,
+            type: "admin_message",
+            title: "Nouveau message du support",
+            message: `Réponse à votre ticket : ${ticket.subject}`,
+            transactionId: null,
+            isRead: false,
+          }).catch(() => {});
+          return {
+            userName: ticketUser.fullName || ticketUser.username,
+            subject: ticket.subject,
+          };
+        },
+
+        // ── Close ticket from Telegram ───────────────────────────────────────
+        closeTicket: async (ticketId) => {
+          const ticket = await storage.getTicket(ticketId).catch(() => null);
+          if (!ticket) return null;
+          const ticketUser = await storage.getUser(ticket.userId).catch(() => null);
+          if (!ticketUser) return null;
+          await storage.updateTicket(ticketId, { status: "closed" });
+          notifyUser(ticket.userId, "ticket_closed", { ticketId });
+          await storage.createUserNotification({
+            userId: ticket.userId,
+            type: "ticket_closed",
+            title: "Ticket clôturé",
+            message: `Votre ticket "${ticket.subject}" a été clôturé par le support.`,
+            transactionId: null,
+            isRead: false,
+          }).catch(() => {});
+          return {
+            userName: ticketUser.fullName || ticketUser.username,
+            subject: ticket.subject,
+          };
+        },
       });
     } catch (err: any) {
       console.error("[TelegramWebhook] Error:", err?.message);

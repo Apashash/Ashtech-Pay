@@ -118,6 +118,8 @@ const pendingCustomRejections = new Map<string, { submissionId: string; messageI
 const pendingWithdrawalRejections = new Map<string, { reference: string; messageId: number }>();
 // State: waiting for withdrawal number change rejection reason (chatId → changeId + messageId)
 const pendingWncRejections = new Map<string, { changeId: string; messageId: number }>();
+// State: waiting for ticket reply text (chatId → ticketId)
+const pendingTicketReplies = new Map<string, string>();
 
 function fmt(amount: string | number, currency: string): string {
   return `${parseFloat(String(amount)).toLocaleString("fr-FR")} ${currency}`;
@@ -845,6 +847,80 @@ export async function notifyPaymentLinkCreated(opts: {
   await sendMessage(msg);
 }
 
+// ─── SUPPORT TICKETS ─────────────────────────────────────
+
+export async function notifyNewTicket(opts: {
+  ticketId: string;
+  userName: string;
+  userEmail: string;
+  subject: string;
+  firstMessage?: string;
+  priority: string;
+}): Promise<void> {
+  if (!isConfigured()) return;
+  const priorityIcon: Record<string, string> = { low: "🟢", medium: "🟡", high: "🟠", urgent: "🔴" };
+  const icon = priorityIcon[opts.priority] ?? "🟡";
+  const msg =
+    `🎫 <b>NOUVEAU TICKET SUPPORT</b>\n` +
+    `──────────────────\n` +
+    `👤 <b>${opts.userName}</b>\n` +
+    `📧 ${opts.userEmail}\n` +
+    `──────────────────\n` +
+    `📌 Sujet : <b>${opts.subject}</b>\n` +
+    `${icon} Priorité : <b>${opts.priority}</b>\n` +
+    (opts.firstMessage ? `💬 Message : <i>${opts.firstMessage.slice(0, 200)}</i>\n` : "") +
+    `──────────────────\n` +
+    `🆔 <code>${opts.ticketId}</code>\n` +
+    `🕐 ${now()}`;
+  await callBotApi("sendMessage", {
+    chat_id: CHAT_ID,
+    text: msg,
+    parse_mode: "HTML",
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: "💬 Répondre", callback_data: `tc:reply:${opts.ticketId}` },
+          { text: "🔒 Clôturer", callback_data: `tc:close:${opts.ticketId}` },
+        ],
+      ],
+    },
+  });
+}
+
+export async function notifySupportMessage(opts: {
+  ticketId: string;
+  userName: string;
+  userEmail: string;
+  subject: string;
+  message: string;
+}): Promise<void> {
+  if (!isConfigured()) return;
+  const msg =
+    `💬 <b>MESSAGE SUPPORT</b>\n` +
+    `──────────────────\n` +
+    `👤 <b>${opts.userName}</b>\n` +
+    `📧 ${opts.userEmail}\n` +
+    `──────────────────\n` +
+    `📌 Ticket : <b>${opts.subject}</b>\n` +
+    `💬 <i>${opts.message.slice(0, 300)}</i>\n` +
+    `──────────────────\n` +
+    `🆔 <code>${opts.ticketId}</code>\n` +
+    `🕐 ${now()}`;
+  await callBotApi("sendMessage", {
+    chat_id: CHAT_ID,
+    text: msg,
+    parse_mode: "HTML",
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: "💬 Répondre", callback_data: `tc:reply:${opts.ticketId}` },
+          { text: "🔒 Clôturer", callback_data: `tc:close:${opts.ticketId}` },
+        ],
+      ],
+    },
+  });
+}
+
 // ─── KYC COMPLET AVEC PHOTOS + BOUTONS ──────────────────
 
 export async function notifyKycSubmittedFull(opts: {
@@ -1190,6 +1266,8 @@ export async function handleTelegramUpdate(
     rejectWithdrawalNumberChange: (changeId: string, reason: string) => Promise<{ userName: string; userEmail: string } | null>;
     getBlockedIps: () => { ip: string; identifier: string; blockedUntil: number; blockedAt: number }[];
     unblockIpByIdentifier: (identifier: string) => Promise<{ unblocked: number; ips: string[] }>;
+    replyToTicket: (ticketId: string, message: string) => Promise<{ userName: string; subject: string } | null>;
+    closeTicket: (ticketId: string) => Promise<{ userName: string; subject: string } | null>;
   }
 ): Promise<void> {
   // ── Callback query (button press) ──
@@ -1530,6 +1608,32 @@ export async function handleTelegramUpdate(
       return;
     }
 
+    // ── Ticket: reply via button ──
+    if (data.startsWith("tc:reply:")) {
+      const ticketId = data.slice(9);
+      pendingTicketReplies.set(chatId, ticketId);
+      await callBotApi("sendMessage", {
+        chat_id: chatId,
+        text: `✍️ Envoyez votre réponse pour le ticket <code>${ticketId.slice(0, 8)}…</code> :\n\n<i>Tapez votre message ci-dessous :</i>`,
+        parse_mode: "HTML",
+        reply_markup: { force_reply: true, selective: true },
+      });
+      return;
+    }
+
+    // ── Ticket: close via button ──
+    if (data.startsWith("tc:close:")) {
+      const ticketId = data.slice(9);
+      const result = await handlers.closeTicket(ticketId);
+      if (result) {
+        await editMessageText(messageId,
+          `🔒 <b>TICKET CLÔTURÉ</b>\n\n👤 ${result.userName}\n📌 ${result.subject}\n🆔 <code>${ticketId}</code>\n🕐 ${now()}`);
+      } else {
+        await callBotApi("sendMessage", { chat_id: chatId, text: `⚠️ Ticket introuvable ou déjà clôturé.`, parse_mode: "HTML" });
+      }
+      return;
+    }
+
     // ── Toggle country ──
     if (data.startsWith("ct:")) {
       const countryId = data.slice(3);
@@ -1548,6 +1652,23 @@ export async function handleTelegramUpdate(
   if (update.message?.text) {
     const chatId = String(update.message.chat?.id ?? "");
     const text: string = update.message.text.trim();
+
+    // ── Check pending ticket reply ──
+    const pendingTicketId = pendingTicketReplies.get(chatId);
+    if (pendingTicketId && !text.startsWith("/") && !REPLY_KEYBOARD_MAP[text]) {
+      pendingTicketReplies.delete(chatId);
+      const result = await handlers.replyToTicket(pendingTicketId, text);
+      if (result) {
+        await callBotApi("sendMessage", {
+          chat_id: chatId,
+          text: `✅ <b>Réponse envoyée</b>\n\n👤 ${result.userName}\n📌 ${result.subject}\n💬 <i>${text.slice(0, 100)}</i>\n🕐 ${now()}`,
+          parse_mode: "HTML",
+        });
+      } else {
+        await callBotApi("sendMessage", { chat_id: chatId, text: `⚠️ Ticket introuvable.`, parse_mode: "HTML" });
+      }
+      return;
+    }
 
     // ── Check pending custom KYC rejection first ──
     const pending = pendingCustomRejections.get(chatId);
@@ -1759,6 +1880,45 @@ export async function handleTelegramUpdate(
         await sendWithBanner(chatId, txtBannerMap[type] ?? "stats", msgText);
         return;
       }
+      return;
+    }
+
+    // ── /reply <ticketId> <message> ──
+    if (text.startsWith("/reply ")) {
+      const rest = text.slice(7).trim();
+      const spaceIdx = rest.indexOf(" ");
+      if (spaceIdx === -1) {
+        await callBotApi("sendMessage", {
+          chat_id: chatId,
+          text: `⚠️ Usage : <code>/reply TICKET_ID votre message</code>`,
+          parse_mode: "HTML",
+        });
+        return;
+      }
+      const ticketId = rest.slice(0, spaceIdx).trim();
+      const replyMsg = rest.slice(spaceIdx + 1).trim();
+      const result = await handlers.replyToTicket(ticketId, replyMsg);
+      await callBotApi("sendMessage", {
+        chat_id: chatId,
+        text: result
+          ? `✅ <b>Réponse envoyée</b>\n\n👤 ${result.userName}\n📌 ${result.subject}\n💬 <i>${replyMsg.slice(0, 100)}</i>\n🕐 ${now()}`
+          : `⚠️ Ticket introuvable : <code>${ticketId}</code>`,
+        parse_mode: "HTML",
+      });
+      return;
+    }
+
+    // ── /close <ticketId> ──
+    if (text.startsWith("/close ")) {
+      const ticketId = text.slice(7).trim();
+      const result = await handlers.closeTicket(ticketId);
+      await callBotApi("sendMessage", {
+        chat_id: chatId,
+        text: result
+          ? `🔒 <b>Ticket clôturé</b>\n\n👤 ${result.userName}\n📌 ${result.subject}\n🆔 <code>${ticketId}</code>\n🕐 ${now()}`
+          : `⚠️ Ticket introuvable : <code>${ticketId}</code>`,
+        parse_mode: "HTML",
+      });
       return;
     }
 
