@@ -3801,9 +3801,9 @@ export async function registerRoutes(
         toCurrency: request.toCurrency,
         message: `Conversion exécutée : ${fromAmount.toFixed(2)} ${request.fromCurrency} → ${receivedAmount.toFixed(2)} ${request.toCurrency}`,
       });
-    } catch (error) {
-      console.error("Admin execute conversion error:", error);
-      res.status(500).json({ message: "Erreur serveur lors de l'exécution" });
+    } catch (error: any) {
+      console.error("Admin execute conversion error:", error?.message || error);
+      res.status(500).json({ message: `Erreur serveur lors de l'exécution: ${error?.message || "erreur inconnue"}` });
     }
   });
 
