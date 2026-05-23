@@ -3207,7 +3207,7 @@ export async function registerRoutes(
             transactionId: transaction.id,
             reference:     pollerRef,
             userId,
-            amount:        data.amount,
+            amount:        creditedAmount.toFixed(2),
             totalDebited:  totalAmount.toFixed(2),
             provider:      paymentProvider as "swychr" | "afribapay" | "pixpay",
             countryCode,
