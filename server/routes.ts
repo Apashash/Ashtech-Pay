@@ -1915,6 +1915,8 @@ export async function registerRoutes(
         notifyDepositFailed({
           userName: txUser?.fullName || txUser?.username || "Utilisateur",
           userEmail: txUser?.email || "",
+          userPhone: txUser?.phone || undefined,
+          userCountry: txUser?.country || undefined,
           amount: transaction.totalAmount || transaction.amount,
           currency: transaction.currency || "XAF",
           reference: transaction.reference || req.params.reference,
@@ -2317,6 +2319,23 @@ export async function registerRoutes(
             txType:        "transfer_out",
             txCurrency:    txCurrency,
           });
+          notifyTransferSent({
+            senderName: sender.fullName || sender.username,
+            senderEmail: sender.email || "",
+            senderPhone: sender.phone || undefined,
+            senderCountry: sender.country || undefined,
+            recipientName,
+            recipientPhone,
+            recipientCountry: (country as any)?.name || transferCountryCode,
+            amount: creditedAmount.toFixed(2),
+            grossAmount: totalAmount.toFixed(2),
+            feeAmount: feeAmount.toFixed(2),
+            currency: txCurrency,
+            reference,
+            operator: (operator as any)?.name || undefined,
+            provider: transferProvider,
+            isInternal: false,
+          }).catch(() => {});
         } else {
           const errMsg = (payoutResult.message || "").toLowerCase();
           const requiresManualReview =
@@ -2465,6 +2484,20 @@ export async function registerRoutes(
         isRead: false,
       });
 
+      notifyTransferSent({
+        senderName: sender.fullName || sender.username,
+        senderEmail: sender.email || "",
+        senderPhone: sender.phone || undefined,
+        senderCountry: sender.country || undefined,
+        recipientName: recipient.fullName || recipient.username,
+        recipientEmail: recipient.email || undefined,
+        recipientCountry: recipient.country || undefined,
+        amount: amountNum.toFixed(2),
+        currency,
+        reference: transferRef,
+        isInternal: true,
+      }).catch(() => {});
+
       res.json({ message: "Transfert réussi", transaction: transactionOut, recipientName: recipient.fullName });
     } catch (error) {
       console.error("Internal transfer error:", error);
@@ -2575,10 +2608,13 @@ export async function registerRoutes(
       notifyNewDeposit({
         userName: user.fullName || user.username,
         userEmail: user.email || "",
+        userPhone: user.phone || undefined,
+        userCountry: user.country || undefined,
         amount: totalAmount,
         currency: countryCurrency,
         method: data.paymentMethod === "mobile_money" ? `Mobile Money (${operatorName})` : data.paymentMethod,
         phone: data.phoneNumber || undefined,
+        operator: operatorName || undefined,
         reference: depositRef,
         provider: paymentProvider,
         country: countryCode,
@@ -3094,6 +3130,7 @@ export async function registerRoutes(
       notifyWithdrawalRequest({
         userName: user.fullName || user.username,
         userEmail: user.email || "",
+        userPhone: user.phone || undefined,
         amount: creditedAmount,
         grossAmount: totalAmount,
         currency: withdrawalCurrency,
@@ -3103,6 +3140,7 @@ export async function registerRoutes(
         provider: withdrawalProvider,
         senderCountry: user.country || "",
         recipientCountry: withdrawalCountryCode || "",
+        recipientName: user.fullName || user.username,
       }).catch(() => {});
 
       // Call payout API immediately — choose provider based on operator config
@@ -3236,13 +3274,16 @@ export async function registerRoutes(
             notifyWithdrawalPendingManual({
               userName: user.fullName || user.username,
               userEmail: user.email || "",
+              userPhone: user.phone || undefined,
               amount: creditedAmount,
               grossAmount: totalAmount,
               currency: withdrawalCurrency,
               phone: data.accountDetails,
+              operator: (withdrawalOperator as any)?.name || undefined,
               reference: withdrawalRef,
               senderCountry: user.country || "",
               recipientCountry: withdrawalCountryCode || "",
+              recipientName: user.fullName || user.username,
             }).catch(() => {});
           } else {
             console.error(`[Withdrawal] Payout failed for ${withdrawalRef} (${paymentProvider}): ${payoutResult.message}`);
@@ -7549,10 +7590,15 @@ export async function registerRoutes(
         adminName: (adminUser as any)?.fullName || (adminUser as any)?.username || "Admin",
         userName: (txUser as any)?.fullName || (txUser as any)?.username || "Inconnu",
         userEmail: (txUser as any)?.email || "",
+        userPhone: (txUser as any)?.phone || undefined,
+        senderCountry: (txUser as any)?.country || undefined,
         amount: tx.amount,
         grossAmount: (tx as any).totalAmount || tx.amount,
         currency: tx.currency || "XAF",
         reference: tx.reference || tx.id,
+        recipientName: tx.recipientName || undefined,
+        recipientPhone: tx.recipientPhone || undefined,
+        recipientCountry: tx.recipientCountry || undefined,
       }).catch(() => {});
       await storage.createAdminLog({
         adminId: req.userId!,
@@ -8295,6 +8341,8 @@ export async function registerRoutes(
           notifyDepositFailed({
             userName: txUser?.fullName || txUser?.username || "Utilisateur",
             userEmail: txUser?.email || "",
+            userPhone: txUser?.phone || undefined,
+            userCountry: txUser?.country || undefined,
             amount: transaction.totalAmount || transaction.amount,
             currency: transaction.currency || "XAF",
             reference: transaction.reference || transaction.id,
@@ -8380,10 +8428,16 @@ export async function registerRoutes(
             notifyWithdrawalAutoValidated({
               userName: txUser?.fullName || txUser?.username || "Utilisateur",
               userEmail: txUser?.email || "",
+              userPhone: txUser?.phone || undefined,
+              senderCountry: txUser?.country || undefined,
               amount: transaction.amount,
+              grossAmount: (transaction as any).totalAmount || transaction.amount,
               currency: txCurrency,
               reference: transaction.reference || String(transaction.id),
               provider: "AfribaPay",
+              recipientName: transaction.recipientName || undefined,
+              recipientPhone: transaction.recipientPhone || undefined,
+              recipientCountry: transaction.recipientCountry || undefined,
             }).catch(() => {});
           }).catch(() => {});
           console.log(`[AfribaPay Webhook] ✓ Payout SUCCESS: ${transaction.id} (${transaction.type})`);
@@ -8413,6 +8467,8 @@ export async function registerRoutes(
             notifyDepositConfirmed({
               userName: txUser?.fullName || txUser?.username || "Utilisateur",
               userEmail: txUser?.email || "",
+              userPhone: txUser?.phone || undefined,
+              userCountry: txUser?.country || undefined,
               amount: transaction.amount,
               grossAmount: (transaction as any).totalAmount || transaction.amount,
               currency: txCurrency,
@@ -8460,12 +8516,17 @@ export async function registerRoutes(
             notifyWithdrawalFailed({
               userName: txUser?.fullName || txUser?.username || "Utilisateur",
               userEmail: txUser?.email || "",
+              userPhone: txUser?.phone || undefined,
+              senderCountry: txUser?.country || undefined,
               amount: transaction.amount,
               grossAmount: (transaction as any).totalAmount || transaction.amount,
               currency: txCurrency,
               reference: transaction.reference || String(transaction.id),
               reason: `Échec ${transaction.type === "transfer_out" ? "transfert" : "retrait"} (AfribaPay)`,
               provider: "AfribaPay",
+              recipientName: transaction.recipientName || undefined,
+              recipientPhone: transaction.recipientPhone || undefined,
+              recipientCountry: transaction.recipientCountry || undefined,
             }).catch(() => {});
           }).catch(() => {});
           console.log(`[AfribaPay Webhook] ✗ Payout FAILED: ${transaction.id} — refunded ${refundAmount} ${txCurrency}`);
@@ -8491,6 +8552,8 @@ export async function registerRoutes(
             notifyDepositFailed({
               userName: txUser?.fullName || txUser?.username || "Utilisateur",
               userEmail: txUser?.email || "",
+              userPhone: txUser?.phone || undefined,
+              userCountry: txUser?.country || undefined,
               amount: transaction.totalAmount || transaction.amount,
               currency: txCurrency,
               reference: transaction.reference || String(transaction.id),
@@ -8565,10 +8628,16 @@ export async function registerRoutes(
             notifyWithdrawalAutoValidated({
               userName: txUser?.fullName || txUser?.username || "Utilisateur",
               userEmail: txUser?.email || "",
+              userPhone: txUser?.phone || undefined,
+              senderCountry: txUser?.country || undefined,
               amount: transaction.amount,
+              grossAmount: (transaction as any).totalAmount || transaction.amount,
               currency: txCurrency,
               reference: transaction.reference || String(transaction.id),
               provider: "PixPay",
+              recipientName: transaction.recipientName || undefined,
+              recipientPhone: transaction.recipientPhone || undefined,
+              recipientCountry: transaction.recipientCountry || undefined,
             }).catch(() => {});
           }).catch(() => {});
           console.log(`[PixPay Webhook] ✓ Payout SUCCESS: ${transaction.id} (${transaction.type})`);
@@ -8598,6 +8667,8 @@ export async function registerRoutes(
             notifyDepositConfirmed({
               userName: txUser?.fullName || txUser?.username || "Utilisateur",
               userEmail: txUser?.email || "",
+              userPhone: txUser?.phone || undefined,
+              userCountry: txUser?.country || undefined,
               amount: transaction.amount,
               grossAmount: (transaction as any).totalAmount || transaction.amount,
               currency: txCurrency,
@@ -8645,12 +8716,17 @@ export async function registerRoutes(
             notifyWithdrawalFailed({
               userName: txUser?.fullName || txUser?.username || "Utilisateur",
               userEmail: txUser?.email || "",
+              userPhone: txUser?.phone || undefined,
+              senderCountry: txUser?.country || undefined,
               amount: transaction.amount,
               grossAmount: (transaction as any).totalAmount || transaction.amount,
               currency: txCurrency,
               reference: transaction.reference || String(transaction.id),
               reason: `${providerMessage || "Échec"} — ${transaction.type === "transfer_out" ? "transfert" : "retrait"} (PixPay)`,
               provider: "PixPay",
+              recipientName: transaction.recipientName || undefined,
+              recipientPhone: transaction.recipientPhone || undefined,
+              recipientCountry: transaction.recipientCountry || undefined,
             }).catch(() => {});
           }).catch(() => {});
           console.log(`[PixPay Webhook] ✗ Payout FAILED: ${transaction.id} — refunded ${refundAmount} ${txCurrency}`);
@@ -8676,6 +8752,8 @@ export async function registerRoutes(
             notifyDepositFailed({
               userName: txUser?.fullName || txUser?.username || "Utilisateur",
               userEmail: txUser?.email || "",
+              userPhone: txUser?.phone || undefined,
+              userCountry: txUser?.country || undefined,
               amount: transaction.totalAmount || transaction.amount,
               currency: txCurrency,
               reference: transaction.reference || String(transaction.id),

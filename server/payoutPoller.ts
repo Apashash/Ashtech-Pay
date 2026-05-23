@@ -119,11 +119,16 @@ async function processPayout(payout: PendingPayout, apiStatus: string) {
       notifyWithdrawalAutoValidated({
         userName: (txUser as any)?.fullName || (txUser as any)?.username || "Utilisateur",
         userEmail: (txUser as any)?.email || "",
+        userPhone: (txUser as any)?.phone || undefined,
+        senderCountry: (txUser as any)?.country || undefined,
         amount: payout.amount,
         grossAmount: payout.totalDebited || payout.amount,
         currency,
         reference: payout.reference,
         provider: payout.provider,
+        recipientName: transaction.recipientName || undefined,
+        recipientPhone: transaction.recipientPhone || undefined,
+        recipientCountry: transaction.recipientCountry || undefined,
       }).catch(() => {});
 
     } else {
@@ -144,12 +149,17 @@ async function processPayout(payout: PendingPayout, apiStatus: string) {
       notifyWithdrawalFailed({
         userName: (failedUser as any)?.fullName || (failedUser as any)?.username || "Utilisateur",
         userEmail: (failedUser as any)?.email || "",
+        userPhone: (failedUser as any)?.phone || undefined,
+        senderCountry: (failedUser as any)?.country || undefined,
         amount: payout.amount,
         grossAmount: payout.totalDebited || payout.amount,
         currency,
         reference: payout.reference,
         reason: apiStatus,
         provider: payout.provider,
+        recipientName: transaction.recipientName || undefined,
+        recipientPhone: transaction.recipientPhone || undefined,
+        recipientCountry: transaction.recipientCountry || undefined,
       }).catch(() => {});
     }
 

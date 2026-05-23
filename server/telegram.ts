@@ -211,39 +211,50 @@ function countryDisplay(input: string | null | undefined): string {
 export async function notifyNewDeposit(opts: {
   userName: string;
   userEmail: string;
+  userPhone?: string;
+  userCountry?: string;
   amount: string | number;
   currency: string;
   method: string;
   phone?: string;
+  operator?: string;
   reference: string;
   provider?: string;
   country?: string;
   grossAmount?: string | number;
   source?: string;
 }): Promise<void> {
-  const pays = opts.country ? countryDisplay(opts.country) : countryDisplay(opts.currency);
+  const payerPays = opts.country ? countryDisplay(opts.country) : countryDisplay(opts.currency);
+  const beneficiaryPays = opts.userCountry ? countryDisplay(opts.userCountry) : "";
   const hasGross = opts.grossAmount != null && String(opts.grossAmount) !== String(opts.amount);
   const sourceLabel = opts.source === "api" ? "🔌 <b>Paiement via API</b>\n" : opts.source === "hosted_page" ? "🖥️ <b>Page de paiement hébergée (API)</b>\n" : "";
   const msg =
     `🟡 <b>NOUVEAU DÉPÔT EN ATTENTE</b>\n` +
     `──────────────────\n` +
     (sourceLabel ? sourceLabel : "") +
-    `👤 Utilisateur : <b>${opts.userName}</b>\n` +
-    `📧 Email : ${opts.userEmail}\n` +
-    (pays ? `🌍 Pays : <b>${pays}</b>\n` : "") +
     (hasGross ? `💰 Montant brut : <b>${fmt(opts.grossAmount!, opts.currency)}</b>\n` : "") +
     `💳 Montant crédité : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
-    `📱 Méthode : ${opts.method}\n` +
-    (opts.phone ? `📞 Téléphone : ${opts.phone}\n` : "") +
     (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +
     `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
-    `🕐 Heure : ${now()}`;
+    `🕐 Heure : ${now()}\n` +
+    `──── 📤 EXPÉDITEUR (PAYEUR) ────\n` +
+    (opts.phone ? `📞 Téléphone : ${opts.phone}\n` : "") +
+    (opts.operator ? `📡 Opérateur : <b>${opts.operator}</b>\n` : "") +
+    (payerPays ? `🌍 Pays : <b>${payerPays}</b>\n` : "") +
+    `📱 Méthode : ${opts.method}\n` +
+    `──── 📥 BÉNÉFICIAIRE ────\n` +
+    `👤 Nom : <b>${opts.userName}</b>\n` +
+    `📧 Email : ${opts.userEmail}\n` +
+    (opts.userPhone ? `📞 Téléphone : ${opts.userPhone}\n` : "") +
+    (beneficiaryPays && beneficiaryPays !== payerPays ? `🌍 Pays : <b>${beneficiaryPays}</b>\n` : "");
   await sendMessage(msg);
 }
 
 export async function notifyDepositConfirmed(opts: {
   userName: string;
   userEmail: string;
+  userPhone?: string;
+  userCountry?: string;
   amount: string | number;
   currency: string;
   reference: string;
@@ -254,56 +265,51 @@ export async function notifyDepositConfirmed(opts: {
   paymentMethod?: string;
   phone?: string;
   operator?: string;
-  // Payment link specific — payer info
   payerName?: string;
   payerEmail?: string;
   payerPhone?: string;
-  // Payment link specific — beneficiary info
   beneficiaryUsername?: string;
   beneficiaryPhone?: string;
   creditedCurrency?: string;
   linkTitle?: string;
   source?: string;
 }): Promise<void> {
-  const pays = opts.country ? countryDisplay(opts.country) : countryDisplay(opts.currency);
+  const payerPays = opts.country ? countryDisplay(opts.country) : countryDisplay(opts.currency);
+  const beneficiaryPays = opts.userCountry ? countryDisplay(opts.userCountry) : "";
   const hasGross = opts.grossAmount != null && String(opts.grossAmount) !== String(opts.amount);
   const isLink = opts.depositType === "payment_link";
   const typeLabel = isLink ? "Lien de paiement" : "Dépôt normal";
   const methodLabel = opts.paymentMethod === "mobile_money" ? "Mobile Money" : opts.paymentMethod || "";
   const sourceLabel = opts.source === "api" ? "🔌 <b>Paiement via API</b>\n" : opts.source === "hosted_page" ? "🖥️ <b>Page de paiement hébergée (API)</b>\n" : "";
+  const payerPhone = isLink ? (opts.payerPhone || opts.phone) : opts.phone;
+  const payerName = isLink ? opts.payerName : undefined;
+  const payerEmail = isLink ? opts.payerEmail : undefined;
 
-  let msg =
+  const msg =
     `✅ <b>PAIEMENT REÇU / DÉPÔT CONFIRMÉ</b>\n` +
     `──────────────────\n` +
     (sourceLabel ? sourceLabel : "") +
-    `👤 Utilisateur : <b>${opts.userName}</b>\n` +
-    `📧 Email : ${opts.userEmail}\n` +
-    (pays ? `🌍 Pays : <b>${pays}</b>\n` : "") +
     `📋 Type : <b>${typeLabel}</b>\n` +
     (isLink && opts.linkTitle ? `🔗 Lien : <b>${opts.linkTitle}</b>\n` : "") +
-    (methodLabel ? `📱 Méthode : ${methodLabel}\n` : "") +
-    (opts.operator ? `📡 Opérateur : <b>${opts.operator}</b>\n` : "") +
-    (opts.phone ? `📞 Numéro : ${opts.phone}\n` : "") +
     (hasGross ? `💰 Montant brut : <b>${fmt(opts.grossAmount!, opts.currency)}</b>\n` : "") +
     `💳 Montant crédité : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
     (opts.creditedCurrency ? `💱 Compte crédité : <b>${opts.creditedCurrency}</b>\n` : "") +
     (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +
     `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
-    `🕐 Heure : ${now()}`;
-
-  if (isLink) {
-    msg +=
-      `\n──── 💳 PAYEUR ────\n` +
-      (opts.payerName ? `👤 Nom : <b>${opts.payerName}</b>\n` : "") +
-      (opts.payerEmail ? `📧 Email : ${opts.payerEmail}\n` : "") +
-      (opts.payerPhone ? `📞 Téléphone : ${opts.payerPhone}\n` : "") +
-      `──── 🏦 BÉNÉFICIAIRE ────\n` +
-      `👤 Nom : <b>${opts.userName}</b>\n` +
-      `📧 Email : ${opts.userEmail}\n` +
-      (opts.beneficiaryUsername ? `🔑 Username : ${opts.beneficiaryUsername}\n` : "") +
-      (opts.beneficiaryPhone ? `📞 Téléphone : ${opts.beneficiaryPhone}\n` : "") +
-      (opts.creditedCurrency ? `💱 Compte crédité : <b>${opts.creditedCurrency}</b>\n` : "");
-  }
+    `🕐 Heure : ${now()}\n` +
+    `──── 📤 EXPÉDITEUR (PAYEUR) ────\n` +
+    (payerName ? `👤 Nom : <b>${payerName}</b>\n` : "") +
+    (payerEmail ? `📧 Email : ${payerEmail}\n` : "") +
+    (payerPhone ? `📞 Téléphone : ${payerPhone}\n` : "") +
+    (opts.operator ? `📡 Opérateur : <b>${opts.operator}</b>\n` : "") +
+    (payerPays ? `🌍 Pays : <b>${payerPays}</b>\n` : "") +
+    (methodLabel ? `📱 Méthode : ${methodLabel}\n` : "") +
+    `──── 📥 BÉNÉFICIAIRE ────\n` +
+    `👤 Nom : <b>${opts.userName}</b>\n` +
+    `📧 Email : ${opts.userEmail}\n` +
+    (opts.beneficiaryUsername ? `🔑 Username : ${opts.beneficiaryUsername}\n` : "") +
+    ((opts.beneficiaryPhone || opts.userPhone) ? `📞 Téléphone : ${opts.beneficiaryPhone || opts.userPhone}\n` : "") +
+    (beneficiaryPays ? `🌍 Pays : <b>${beneficiaryPays}</b>\n` : "");
 
   await sendMessage(msg);
 }
@@ -311,6 +317,8 @@ export async function notifyDepositConfirmed(opts: {
 export async function notifyDepositFailed(opts: {
   userName: string;
   userEmail: string;
+  userPhone?: string;
+  userCountry?: string;
   amount: string | number;
   currency: string;
   reference: string;
@@ -322,27 +330,37 @@ export async function notifyDepositFailed(opts: {
   phone?: string;
   operator?: string;
   source?: string;
+  payerName?: string;
+  payerEmail?: string;
 }): Promise<void> {
-  const pays = opts.country ? countryDisplay(opts.country) : countryDisplay(opts.currency);
-  const typeLabel = opts.depositType === "payment_link" ? "Lien de paiement" : "Dépôt normal";
+  const payerPays = opts.country ? countryDisplay(opts.country) : countryDisplay(opts.currency);
+  const beneficiaryPays = opts.userCountry ? countryDisplay(opts.userCountry) : "";
+  const isLink = opts.depositType === "payment_link";
+  const typeLabel = isLink ? "Lien de paiement" : "Dépôt normal";
   const methodLabel = opts.paymentMethod === "mobile_money" ? "Mobile Money" : opts.paymentMethod || "";
   const sourceLabel = opts.source === "api" ? "🔌 <b>Paiement via API</b>\n" : opts.source === "hosted_page" ? "🖥️ <b>Page de paiement hébergée (API)</b>\n" : "";
   const msg =
     `❌ <b>ÉCHEC DE PAIEMENT (DÉPÔT)</b>\n` +
     `──────────────────\n` +
     (sourceLabel ? sourceLabel : "") +
-    `👤 Utilisateur : <b>${opts.userName}</b>\n` +
-    `📧 Email : ${opts.userEmail}\n` +
-    (pays ? `🌍 Pays : <b>${pays}</b>\n` : "") +
     `📋 Type : <b>${typeLabel}</b>\n` +
-    (methodLabel ? `📱 Méthode : ${methodLabel}\n` : "") +
-    (opts.operator ? `📡 Opérateur : <b>${opts.operator}</b>\n` : "") +
-    (opts.phone ? `📞 Numéro : ${opts.phone}\n` : "") +
     `💰 Montant : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
     (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +
     (opts.reason ? `⚠️ Raison : ${opts.reason}\n` : "") +
     `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
-    `🕐 Heure : ${now()}`;
+    `🕐 Heure : ${now()}\n` +
+    `──── 📤 EXPÉDITEUR (PAYEUR) ────\n` +
+    (isLink && opts.payerName ? `👤 Nom : <b>${opts.payerName}</b>\n` : "") +
+    (isLink && opts.payerEmail ? `📧 Email : ${opts.payerEmail}\n` : "") +
+    (opts.phone ? `📞 Téléphone : ${opts.phone}\n` : "") +
+    (opts.operator ? `📡 Opérateur : <b>${opts.operator}</b>\n` : "") +
+    (payerPays ? `🌍 Pays : <b>${payerPays}</b>\n` : "") +
+    (methodLabel ? `📱 Méthode : ${methodLabel}\n` : "") +
+    `──── 📥 BÉNÉFICIAIRE ────\n` +
+    `👤 Nom : <b>${opts.userName}</b>\n` +
+    `📧 Email : ${opts.userEmail}\n` +
+    (opts.userPhone ? `📞 Téléphone : ${opts.userPhone}\n` : "") +
+    (beneficiaryPays ? `🌍 Pays : <b>${beneficiaryPays}</b>\n` : "");
   await sendMessage(msg);
 }
 
@@ -419,6 +437,7 @@ export async function notifyWithdrawalNumberChangeRequest(opts: {
 export async function notifyWithdrawalRequest(opts: {
   userName: string;
   userEmail: string;
+  userPhone?: string;
   amount: string | number;
   currency: string;
   phone: string;
@@ -428,27 +447,29 @@ export async function notifyWithdrawalRequest(opts: {
   senderCountry?: string;
   recipientCountry?: string;
   grossAmount?: string | number;
+  recipientName?: string;
 }): Promise<void> {
   const senderPays = countryDisplay(opts.senderCountry || opts.currency);
   const recipientPays = countryDisplay(opts.recipientCountry || opts.currency);
-  const sameCountry = senderPays === recipientPays;
   const hasGross = opts.grossAmount != null && String(opts.grossAmount) !== String(opts.amount);
   const msg =
     `🔵 <b>DEMANDE DE RETRAIT</b>\n` +
     `──────────────────\n` +
-    `👤 Utilisateur : <b>${opts.userName}</b>\n` +
-    `📧 Email : ${opts.userEmail}\n` +
-    (sameCountry
-      ? (senderPays ? `🌍 Pays : <b>${senderPays}</b>\n` : "")
-      : `🌍 Expéditeur : <b>${senderPays || "—"}</b>\n` +
-        `📍 Destinataire : <b>${recipientPays || "—"}</b>\n`) +
     (hasGross ? `💰 Montant brut : <b>${fmt(opts.grossAmount!, opts.currency)}</b>\n` : "") +
     `💳 Montant net : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
-    `📱 Numéro : ${opts.phone}\n` +
-    (opts.operator ? `📡 Opérateur : ${opts.operator}\n` : "") +
     (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +
     `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
-    `🕐 Heure : ${now()}`;
+    `🕐 Heure : ${now()}\n` +
+    `──── 👤 EXPÉDITEUR ────\n` +
+    `👤 Nom : <b>${opts.userName}</b>\n` +
+    `📧 Email : ${opts.userEmail}\n` +
+    (opts.userPhone ? `📞 Téléphone : ${opts.userPhone}\n` : "") +
+    (senderPays ? `🌍 Pays : <b>${senderPays}</b>\n` : "") +
+    `──── 📲 DESTINATAIRE ────\n` +
+    (opts.recipientName ? `👤 Nom : <b>${opts.recipientName}</b>\n` : "") +
+    `📞 Téléphone : ${opts.phone}\n` +
+    (opts.operator ? `📡 Opérateur : <b>${opts.operator}</b>\n` : "") +
+    (recipientPays ? `🌍 Pays : <b>${recipientPays}</b>\n` : "");
   const ref = opts.reference;
   await sendMessageWithKeyboard(msg, [
     [
@@ -468,33 +489,38 @@ export async function notifyWithdrawalRequest(opts: {
 export async function notifyWithdrawalPendingManual(opts: {
   userName: string;
   userEmail: string;
+  userPhone?: string;
   amount: string | number;
   currency: string;
   phone: string;
+  operator?: string;
   reference: string;
   senderCountry?: string;
   recipientCountry?: string;
   grossAmount?: string | number;
+  recipientName?: string;
 }): Promise<void> {
   const senderPays = countryDisplay(opts.senderCountry || opts.currency);
   const recipientPays = countryDisplay(opts.recipientCountry || opts.currency);
-  const sameCountry = senderPays === recipientPays;
   const hasGross = opts.grossAmount != null && String(opts.grossAmount) !== String(opts.amount);
   const msg =
     `⏸ <b>RETRAIT EN ATTENTE MANUELLE</b>\n` +
     `──────────────────\n` +
-    `👤 Utilisateur : <b>${opts.userName}</b>\n` +
-    `📧 Email : ${opts.userEmail}\n` +
-    (sameCountry
-      ? (senderPays ? `🌍 Pays : <b>${senderPays}</b>\n` : "")
-      : `🌍 Expéditeur : <b>${senderPays || "—"}</b>\n` +
-        `📍 Destinataire : <b>${recipientPays || "—"}</b>\n`) +
     (hasGross ? `💰 Montant brut : <b>${fmt(opts.grossAmount!, opts.currency)}</b>\n` : "") +
     `💳 Montant net : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
-    `📱 Numéro : ${opts.phone}\n` +
     `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
     `⚠️ <b>Validation manuelle requise !</b>\n` +
-    `🕐 Heure : ${now()}`;
+    `🕐 Heure : ${now()}\n` +
+    `──── 👤 EXPÉDITEUR ────\n` +
+    `👤 Nom : <b>${opts.userName}</b>\n` +
+    `📧 Email : ${opts.userEmail}\n` +
+    (opts.userPhone ? `📞 Téléphone : ${opts.userPhone}\n` : "") +
+    (senderPays ? `🌍 Pays : <b>${senderPays}</b>\n` : "") +
+    `──── 📲 DESTINATAIRE ────\n` +
+    (opts.recipientName ? `👤 Nom : <b>${opts.recipientName}</b>\n` : "") +
+    `📞 Téléphone : ${opts.phone}\n` +
+    (opts.operator ? `📡 Opérateur : <b>${opts.operator}</b>\n` : "") +
+    (recipientPays ? `🌍 Pays : <b>${recipientPays}</b>\n` : "");
   const ref = opts.reference;
   await sendMessageWithKeyboard(msg, [
     [
@@ -510,23 +536,39 @@ export async function notifyWithdrawalPendingManual(opts: {
 export async function notifyWithdrawalAutoValidated(opts: {
   userName: string;
   userEmail: string;
+  userPhone?: string;
   amount: string | number;
   currency: string;
   reference: string;
   provider?: string;
   grossAmount?: string | number;
+  recipientName?: string;
+  recipientPhone?: string;
+  recipientCountry?: string;
+  operator?: string;
+  senderCountry?: string;
 }): Promise<void> {
   const hasGross = opts.grossAmount != null && String(opts.grossAmount) !== String(opts.amount);
+  const senderPays = countryDisplay(opts.senderCountry || opts.currency);
+  const recipientPays = countryDisplay(opts.recipientCountry || opts.currency);
   const msg =
     `✅ <b>RETRAIT VALIDÉ AUTOMATIQUEMENT</b>\n` +
     `──────────────────\n` +
-    `👤 Utilisateur : <b>${opts.userName}</b>\n` +
-    `📧 Email : ${opts.userEmail}\n` +
     (hasGross ? `💰 Montant brut : <b>${fmt(opts.grossAmount!, opts.currency)}</b>\n` : "") +
     `💳 Montant net : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
     (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +
     `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
-    `🕐 Heure : ${now()}`;
+    `🕐 Heure : ${now()}\n` +
+    `──── 👤 EXPÉDITEUR ────\n` +
+    `👤 Nom : <b>${opts.userName}</b>\n` +
+    `📧 Email : ${opts.userEmail}\n` +
+    (opts.userPhone ? `📞 Téléphone : ${opts.userPhone}\n` : "") +
+    (senderPays ? `🌍 Pays : <b>${senderPays}</b>\n` : "") +
+    `──── 📲 DESTINATAIRE ────\n` +
+    (opts.recipientName ? `👤 Nom : <b>${opts.recipientName}</b>\n` : "") +
+    (opts.recipientPhone ? `📞 Téléphone : ${opts.recipientPhone}\n` : "") +
+    (opts.operator ? `📡 Opérateur : <b>${opts.operator}</b>\n` : "") +
+    (recipientPays ? `🌍 Pays : <b>${recipientPays}</b>\n` : "");
   await sendMessage(msg);
 }
 
@@ -534,47 +576,79 @@ export async function notifyWithdrawalManuallyValidated(opts: {
   adminName: string;
   userName: string;
   userEmail: string;
+  userPhone?: string;
   amount: string | number;
   currency: string;
   reference: string;
   grossAmount?: string | number;
+  recipientName?: string;
+  recipientPhone?: string;
+  recipientCountry?: string;
+  operator?: string;
+  senderCountry?: string;
 }): Promise<void> {
   const hasGross = opts.grossAmount != null && String(opts.grossAmount) !== String(opts.amount);
+  const senderPays = countryDisplay(opts.senderCountry || opts.currency);
+  const recipientPays = countryDisplay(opts.recipientCountry || opts.currency);
   const msg =
     `✅ <b>RETRAIT VALIDÉ MANUELLEMENT</b>\n` +
     `──────────────────\n` +
     `🛡️ Admin : <b>${opts.adminName}</b>\n` +
-    `👤 Utilisateur : <b>${opts.userName}</b>\n` +
-    `📧 Email : ${opts.userEmail}\n` +
     (hasGross ? `💰 Montant brut : <b>${fmt(opts.grossAmount!, opts.currency)}</b>\n` : "") +
     `💳 Montant net : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
     `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
-    `🕐 Heure : ${now()}`;
+    `🕐 Heure : ${now()}\n` +
+    `──── 👤 EXPÉDITEUR ────\n` +
+    `👤 Nom : <b>${opts.userName}</b>\n` +
+    `📧 Email : ${opts.userEmail}\n` +
+    (opts.userPhone ? `📞 Téléphone : ${opts.userPhone}\n` : "") +
+    (senderPays ? `🌍 Pays : <b>${senderPays}</b>\n` : "") +
+    `──── 📲 DESTINATAIRE ────\n` +
+    (opts.recipientName ? `👤 Nom : <b>${opts.recipientName}</b>\n` : "") +
+    (opts.recipientPhone ? `📞 Téléphone : ${opts.recipientPhone}\n` : "") +
+    (opts.operator ? `📡 Opérateur : <b>${opts.operator}</b>\n` : "") +
+    (recipientPays ? `🌍 Pays : <b>${recipientPays}</b>\n` : "");
   await sendMessage(msg);
 }
 
 export async function notifyWithdrawalFailed(opts: {
   userName: string;
   userEmail: string;
+  userPhone?: string;
   amount: string | number;
   currency: string;
   reference: string;
   reason?: string;
   provider?: string;
   grossAmount?: string | number;
+  recipientName?: string;
+  recipientPhone?: string;
+  recipientCountry?: string;
+  operator?: string;
+  senderCountry?: string;
 }): Promise<void> {
   const hasGross = opts.grossAmount != null && String(opts.grossAmount) !== String(opts.amount);
+  const senderPays = countryDisplay(opts.senderCountry || opts.currency);
+  const recipientPays = countryDisplay(opts.recipientCountry || opts.currency);
   const msg =
     `❌ <b>ÉCHEC DE RETRAIT</b>\n` +
     `──────────────────\n` +
-    `👤 Utilisateur : <b>${opts.userName}</b>\n` +
-    `📧 Email : ${opts.userEmail}\n` +
     (hasGross ? `💰 Montant brut : <b>${fmt(opts.grossAmount!, opts.currency)}</b>\n` : "") +
     `💳 Montant net : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
     (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +
     (opts.reason ? `⚠️ Raison : ${opts.reason}\n` : "") +
     `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
-    `🕐 Heure : ${now()}`;
+    `🕐 Heure : ${now()}\n` +
+    `──── 👤 EXPÉDITEUR ────\n` +
+    `👤 Nom : <b>${opts.userName}</b>\n` +
+    `📧 Email : ${opts.userEmail}\n` +
+    (opts.userPhone ? `📞 Téléphone : ${opts.userPhone}\n` : "") +
+    (senderPays ? `🌍 Pays : <b>${senderPays}</b>\n` : "") +
+    `──── 📲 DESTINATAIRE ────\n` +
+    (opts.recipientName ? `👤 Nom : <b>${opts.recipientName}</b>\n` : "") +
+    (opts.recipientPhone ? `📞 Téléphone : ${opts.recipientPhone}\n` : "") +
+    (opts.operator ? `📡 Opérateur : <b>${opts.operator}</b>\n` : "") +
+    (recipientPays ? `🌍 Pays : <b>${recipientPays}</b>\n` : "");
   await sendMessage(msg);
 }
 
@@ -798,19 +872,46 @@ export async function notifyConversionCompleted(opts: {
 export async function notifyTransferSent(opts: {
   senderName: string;
   senderEmail: string;
+  senderPhone?: string;
+  senderCountry?: string;
   recipientName: string;
+  recipientEmail?: string;
+  recipientPhone?: string;
+  recipientCountry?: string;
   amount: string | number;
+  grossAmount?: string | number;
+  feeAmount?: string | number;
   currency: string;
   reference: string;
+  operator?: string;
+  provider?: string;
+  isInternal?: boolean;
 }): Promise<void> {
+  const hasGross = opts.grossAmount != null && String(opts.grossAmount) !== String(opts.amount);
+  const senderPays = countryDisplay(opts.senderCountry || opts.currency);
+  const recipientPays = countryDisplay(opts.recipientCountry || opts.currency);
+  const typeLabel = opts.isInternal ? "🔄 Transfert interne Ashtech Pay" : "📲 Transfert Mobile Money";
   const msg =
     `💸 <b>TRANSFERT ENVOYÉ</b>\n` +
     `──────────────────\n` +
-    `👤 Expéditeur : <b>${opts.senderName}</b> (${opts.senderEmail})\n` +
-    `👥 Destinataire : <b>${opts.recipientName}</b>\n` +
-    `💰 Montant : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
+    `📋 Type : ${typeLabel}\n` +
+    (hasGross ? `💰 Montant brut : <b>${fmt(opts.grossAmount!, opts.currency)}</b>\n` : "") +
+    `💳 Montant net : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
+    (opts.feeAmount && parseFloat(String(opts.feeAmount)) > 0 ? `💸 Frais : ${fmt(opts.feeAmount, opts.currency)}\n` : "") +
+    (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +
     `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
-    `🕐 Heure : ${now()}`;
+    `🕐 Heure : ${now()}\n` +
+    `──── 👤 EXPÉDITEUR ────\n` +
+    `👤 Nom : <b>${opts.senderName}</b>\n` +
+    `📧 Email : ${opts.senderEmail}\n` +
+    (opts.senderPhone ? `📞 Téléphone : ${opts.senderPhone}\n` : "") +
+    (senderPays ? `🌍 Pays : <b>${senderPays}</b>\n` : "") +
+    `──── 📲 DESTINATAIRE ────\n` +
+    `👤 Nom : <b>${opts.recipientName}</b>\n` +
+    (opts.recipientEmail ? `📧 Email : ${opts.recipientEmail}\n` : "") +
+    (opts.recipientPhone ? `📞 Téléphone : ${opts.recipientPhone}\n` : "") +
+    (opts.operator ? `📡 Opérateur : <b>${opts.operator}</b>\n` : "") +
+    (recipientPays ? `🌍 Pays : <b>${recipientPays}</b>\n` : "");
   await sendMessage(msg);
 }
 

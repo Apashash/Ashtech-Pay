@@ -106,6 +106,8 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
       notifyDepositConfirmed({
         userName: (txUser as any)?.fullName || (txUser as any)?.username || "Utilisateur",
         userEmail: (txUser as any)?.email || "",
+        userPhone: (txUser as any)?.phone || undefined,
+        userCountry: (txUser as any)?.country || undefined,
         amount: payment.amount,
         grossAmount: (payment as any).totalAmount || payment.amount,
         currency: paymentCurrency,
@@ -171,6 +173,8 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
       notifyDepositFailed({
         userName: (txUserFailed as any)?.fullName || (txUserFailed as any)?.username || "Utilisateur",
         userEmail: (txUserFailed as any)?.email || "",
+        userPhone: (txUserFailed as any)?.phone || undefined,
+        userCountry: (txUserFailed as any)?.country || undefined,
         amount: payment.amount,
         currency: transaction.currency || "XAF",
         reference: payment.reference,
@@ -289,6 +293,8 @@ export async function recoverPendingDeposits() {
             notifyDepositFailed({
               userName: txUser?.fullName || (txUser as any)?.username || "Utilisateur",
               userEmail: txUser?.email || "",
+              userPhone: (txUser as any)?.phone || undefined,
+              userCountry: (txUser as any)?.country || undefined,
               amount: tx.totalAmount || tx.amount,
               currency: tx.currency || "XAF",
               reference: tx.reference || tx.id,
