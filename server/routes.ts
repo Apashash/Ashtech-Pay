@@ -4239,10 +4239,20 @@ export async function registerRoutes(
       res.json(paymentLink);
 
       // Notify admin via Telegram (fire & forget)
-      storage.getUser(userId).then(linkUser => {
+      Promise.all([
+        storage.getUser(userId),
+        (data.allowedCountries && data.allowedCountries.length > 0) ? storage.getAllCountries() : Promise.resolve([] as any[]),
+      ]).then(([linkUser, allCountries]) => {
         const host = req.get("host") || "ashtechpay.top";
         const proto = ((req.headers["x-forwarded-proto"] as string) || req.protocol || "https").split(",")[0].trim();
         const linkUrl = `${proto}://${host}/pay/${slug}`;
+        // Resolve country UUIDs → ISO codes for display
+        const resolvedCountryCodes = (data.allowedCountries && data.allowedCountries.length > 0)
+          ? data.allowedCountries.map((id: string) => {
+              const found = (allCountries as any[]).find((c: any) => c.id === id);
+              return found?.code || id;
+            })
+          : null;
         notifyPaymentLinkCreated({
           userName: linkUser?.fullName || linkUser?.username || "Utilisateur",
           userEmail: linkUser?.email || "",
@@ -4254,7 +4264,7 @@ export async function registerRoutes(
           slug,
           linkUrl,
           expiresAt: data.expiresAt ? new Date(data.expiresAt) : null,
-          allowedCountries: (data.allowedCountries && data.allowedCountries.length > 0) ? data.allowedCountries : null,
+          allowedCountries: resolvedCountryCodes,
           hasPdfDelivery: data.hasPdfDelivery || false,
           redirectUrl: data.redirectUrl || null,
         }).catch(() => {});
