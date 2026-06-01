@@ -3791,10 +3791,10 @@ export async function registerRoutes(
       // Use the stored toAmount (calculated at creation time with admin FX rates) — no external API needed
       const receivedAmount = request.toAmount
         ? parseFloat(request.toAmount)
-        : (() => {
-            // Fallback: recalculate locally with admin FX rates
-            const execFxRates_sync = { XAF: 585, XOF: 585, USD: 1, EUR: 0.92, GHS: 13, NGN: 1600, KES: 130, CDF: 2800 };
-            return convertCurrency(fromAmount, request.fromCurrency, request.toCurrency, execFxRates_sync);
+        : await (async () => {
+            // Fallback: recalculate using admin-configured FX rates
+            const execFxRates = await loadFxRates();
+            return convertCurrency(fromAmount, request.fromCurrency, request.toCurrency, execFxRates);
           })();
       if (!receivedAmount || !isFinite(receivedAmount) || receivedAmount <= 0) {
         return res.status(400).json({ message: "Impossible de calculer le montant reçu. Vérifiez les taux de change admin." });
@@ -10701,9 +10701,10 @@ export async function registerRoutes(
           // Use stored toAmount — calculated at creation time with admin FX rates, no external API needed
           const receivedAmount = req.toAmount
             ? parseFloat(req.toAmount)
-            : (() => {
-                const fallbackRates = { XAF: 585, XOF: 585, USD: 1, EUR: 0.92, GHS: 13, NGN: 1600, KES: 130, CDF: 2800 };
-                return convertCurrency(fromAmount, req.fromCurrency, req.toCurrency, fallbackRates);
+            : await (async () => {
+                // Fallback: recalculate using admin-configured FX rates
+                const execFallbackRates = await loadFxRates();
+                return convertCurrency(fromAmount, req.fromCurrency, req.toCurrency, execFallbackRates);
               })();
           if (!receivedAmount || !isFinite(receivedAmount) || receivedAmount <= 0) return null;
           const userPrimary = convUser.preferredCurrency || "XAF";
