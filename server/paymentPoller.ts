@@ -113,7 +113,7 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
         currency: paymentCurrency,
         reference: payment.reference,
         provider: payment.provider,
-        country: (txUser as any)?.country || "",
+        country: undefined,
         depositType: payment.type,
         paymentMethod: transaction.paymentMethod || undefined,
         phone: transaction.recipientPhone || undefined,
