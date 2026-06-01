@@ -308,9 +308,10 @@ export default function AdminFeesDeposits() {
           <div className="space-y-2">
             {grouped.map(({ country, ops }) => {
               const isOpen = openCountries.has(country.id);
-              const afribOps = ops.filter(op => (op as any).paymentProvider === "afribapay");
-              const pixpayOps = ops.filter(op => (op as any).paymentProvider === "pixpay");
-              const swychrOps = ops.filter(op => !["afribapay", "pixpay"].includes((op as any).paymentProvider));
+              const depProvider = (op: any) => op.depositPaymentProvider || op.paymentProvider || "swychr";
+              const afribOps = ops.filter(op => depProvider(op) === "afribapay");
+              const pixpayOps = ops.filter(op => depProvider(op) === "pixpay");
+              const swychrOps = ops.filter(op => !["afribapay", "pixpay"].includes(depProvider(op)));
               return (
                 <Collapsible key={country.id} open={isOpen} onOpenChange={() => toggleCountry(country.id)}>
                   <CollapsibleTrigger asChild>
@@ -349,7 +350,7 @@ export default function AdminFeesDeposits() {
                       {ops.map(op => {
                         const fee = findFee(op, country);
                         const isShared = fee && (fee as any).operatorId !== op.id;
-                        const provider = (op as any).paymentProvider || "swychr";
+                        const provider = (op as any).depositPaymentProvider || (op as any).paymentProvider || "swychr";
                         const isAfribaPay = provider === "afribapay";
                         const isPixPay = provider === "pixpay";
                         const provFee = isAfribaPay
