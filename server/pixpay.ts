@@ -237,6 +237,8 @@ function humanizePixPayError(raw: string | undefined | null): string {
     return "Montant trop faible pour cet opérateur. Veuillez entrer un montant plus élevé.";
   if (msg.includes("insuffisance") || msg.includes("insufficient") || msg.includes("insuff"))
     return "Solde insuffisant dans votre portefeuille mobile. Veuillez recharger votre compte.";
+  if (msg.includes("operator_internal_txn_failure") || msg.includes("internal_txn_failure"))
+    return "L'opérateur mobile a rejeté la transaction (erreur interne opérateur). Vérifiez que le numéro est correct, le compte actif et réessayez. Si l'erreur persiste, contactez le support.";
   if (msg.includes("not authorize") || msg.includes("unauthorized") || msg.includes("not activated"))
     return "Service non disponible pour ce pays ou opérateur. Contactez le support.";
   if (msg.includes("invalid") && msg.includes("key"))
