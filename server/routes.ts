@@ -2100,6 +2100,11 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Utilisateur non trouvé" });
       }
 
+      if (sender.withdrawalBlocked) {
+        const reason = sender.withdrawalBlockReason || "Votre compte a été restreint. Contactez le support.";
+        return res.status(403).json({ message: reason, code: "WITHDRAWAL_BLOCKED" });
+      }
+
       const operator = await storage.getOperator(operatorId);
       if (!operator) {
         return res.status(404).json({ message: "Opérateur non trouvé" });
@@ -2995,6 +3000,11 @@ export async function registerRoutes(
       const user = await storage.getUser(userId);
       if (!user) {
         return res.status(404).json({ message: "Utilisateur non trouvé" });
+      }
+
+      if (user.withdrawalBlocked) {
+        const reason = user.withdrawalBlockReason || "Votre compte a été restreint. Contactez le support.";
+        return res.status(403).json({ message: reason, code: "WITHDRAWAL_BLOCKED" });
       }
 
       const userCurrency = user.preferredCurrency || "XAF";
@@ -5945,6 +5955,56 @@ export async function registerRoutes(
       res.json(safeUser);
     } catch (error) {
       console.error("Admin unban user error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // Admin: Block user withdrawals & transfers
+  app.post("/api/admin/users/:id/block-withdrawal", requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { reason } = req.body;
+      const user = await storage.updateUser(id, {
+        withdrawalBlocked: true,
+        withdrawalBlockReason: reason || "Retrait et envoi bloqués par l'administration.",
+      });
+      if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
+      await storage.createAdminLog({
+        adminId: req.userId!,
+        action: "block_withdrawal",
+        targetType: "user",
+        targetId: id,
+        details: JSON.stringify({ reason }),
+        ipAddress: req.ip || null,
+      });
+      const { password, ...safeUser } = user;
+      res.json(safeUser);
+    } catch (error) {
+      console.error("Admin block withdrawal error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // Admin: Unblock user withdrawals & transfers
+  app.post("/api/admin/users/:id/unblock-withdrawal", requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const user = await storage.updateUser(id, {
+        withdrawalBlocked: false,
+        withdrawalBlockReason: null,
+      });
+      if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
+      await storage.createAdminLog({
+        adminId: req.userId!,
+        action: "unblock_withdrawal",
+        targetType: "user",
+        targetId: id,
+        ipAddress: req.ip || null,
+      });
+      const { password, ...safeUser } = user;
+      res.json(safeUser);
+    } catch (error) {
+      console.error("Admin unblock withdrawal error:", error);
       res.status(500).json({ message: "Erreur serveur" });
     }
   });

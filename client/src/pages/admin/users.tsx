@@ -76,6 +76,8 @@ interface User {
   kycStatus: string;
   isBanned: boolean;
   banReason: string | null;
+  withdrawalBlocked: boolean;
+  withdrawalBlockReason: string | null;
   role: string;
   createdAt: string;
 }
@@ -99,6 +101,8 @@ export default function AdminUsers() {
   const [convFrom, setConvFrom] = useState("");
   const [convTo, setConvTo] = useState("");
   const [convAmount, setConvAmount] = useState("");
+  const [blockWithdrawalModal, setBlockWithdrawalModal] = useState<User | null>(null);
+  const [blockWithdrawalReason, setBlockWithdrawalReason] = useState("");
   const [filter, setFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [debouncedSearch, setDebouncedSearch] = useState(search);
@@ -385,6 +389,30 @@ export default function AdminUsers() {
     }
   };
 
+  const blockWithdrawalMutation = useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
+      return apiRequest("POST", `/api/admin/users/${id}/block-withdrawal`, { reason });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      toast({ title: "Retraits et envois bloqués" });
+      setBlockWithdrawalModal(null);
+      setBlockWithdrawalReason("");
+    },
+    onError: () => toast({ title: "Erreur", variant: "destructive" }),
+  });
+
+  const unblockWithdrawalMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest("POST", `/api/admin/users/${id}/unblock-withdrawal`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      toast({ title: "Retraits et envois débloqués" });
+    },
+    onError: () => toast({ title: "Erreur", variant: "destructive" }),
+  });
+
   const fixCurrenciesMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/admin/fix-currencies", {});
@@ -619,6 +647,15 @@ export default function AdminUsers() {
                             }}>
                               <DollarSign className="w-4 h-4 mr-2" /> Modifier le solde
                             </DropdownMenuItem>
+                            {user.withdrawalBlocked ? (
+                              <DropdownMenuItem onClick={() => unblockWithdrawalMutation.mutate(user.id)}>
+                                <CheckCircle className="w-4 h-4 mr-2 text-green-500" /> Débloquer retraits
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem onClick={() => { setBlockWithdrawalReason(""); setBlockWithdrawalModal(user); }} className="text-orange-500">
+                                <Ban className="w-4 h-4 mr-2" /> Bloquer retraits/envois
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={() => setDeleteModal(user)} className="text-red-500">
                               <Trash2 className="w-4 h-4 mr-2" /> Supprimer
@@ -753,16 +790,24 @@ export default function AdminUsers() {
                     </div>
                     <div className="p-2 rounded-lg bg-muted/30">
                       <p className="text-xs text-muted-foreground">Statut</p>
-                      <div className="mt-0.5">
+                      <div className="mt-0.5 flex flex-col gap-1">
                         {viewUser.isBanned
-                          ? <Badge variant="destructive" className="gap-1 text-xs"><Ban className="w-3 h-3" /> Banni</Badge>
-                          : <Badge className="bg-green-500 gap-1 text-xs"><CheckCircle className="w-3 h-3" /> Actif</Badge>
+                          ? <Badge variant="destructive" className="gap-1 text-xs w-fit"><Ban className="w-3 h-3" /> Banni</Badge>
+                          : <Badge className="bg-green-500 gap-1 text-xs w-fit"><CheckCircle className="w-3 h-3" /> Actif</Badge>
                         }
+                        {viewUser.withdrawalBlocked && (
+                          <Badge variant="outline" className="gap-1 text-xs text-orange-500 border-orange-500/50 w-fit"><Ban className="w-3 h-3" /> Retraits bloqués</Badge>
+                        )}
                       </div>
                     </div>
                   </div>
                   {viewUser.banReason && (
                     <p className="text-xs text-red-500 mt-2 p-2 bg-red-500/10 rounded-lg">Raison du ban : {viewUser.banReason}</p>
+                  )}
+                  {viewUser.withdrawalBlocked && viewUser.withdrawalBlockReason && (
+                    <p className="text-xs text-orange-500 mt-2 p-2 bg-orange-500/10 rounded-lg border border-orange-500/20">
+                      🔒 Retraits bloqués : {viewUser.withdrawalBlockReason}
+                    </p>
                   )}
                 </div>
 
@@ -817,6 +862,21 @@ export default function AdminUsers() {
                         onClick={() => { setViewUser(null); setBanModal(viewUser); }}
                       >
                         <Ban className="w-4 h-4" /> Bannir
+                      </Button>
+                    )}
+                    {viewUser.withdrawalBlocked ? (
+                      <Button
+                        variant="outline" size="sm" className="gap-2 justify-start text-green-600"
+                        onClick={() => { unblockWithdrawalMutation.mutate(viewUser.id); setViewUser(null); }}
+                      >
+                        <CheckCircle className="w-4 h-4" /> Débloquer retraits
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline" size="sm" className="gap-2 justify-start text-orange-500"
+                        onClick={() => { setViewUser(null); setBlockWithdrawalReason(""); setBlockWithdrawalModal(viewUser); }}
+                      >
+                        <Ban className="w-4 h-4" /> Bloquer retraits/envois
                       </Button>
                     )}
                     <Button
@@ -889,6 +949,40 @@ export default function AdminUsers() {
                 data-testid="button-save-user"
               >
                 Enregistrer
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Block Withdrawal Modal */}
+        <Dialog open={!!blockWithdrawalModal} onOpenChange={() => setBlockWithdrawalModal(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="text-orange-500">Bloquer retraits et envois</DialogTitle>
+              <DialogDescription>
+                L'utilisateur <strong>{blockWithdrawalModal?.fullName || blockWithdrawalModal?.username}</strong> ne pourra plus effectuer de retraits ni d'envois d'argent. La raison sera affichée lorsqu'il tentera l'opération.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 py-2">
+              <label className="text-sm text-muted-foreground">Raison (visible par l'utilisateur)</label>
+              <textarea
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm min-h-[80px] resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+                placeholder="Ex : Activité suspecte détectée sur votre compte..."
+                value={blockWithdrawalReason}
+                onChange={(e) => setBlockWithdrawalReason(e.target.value)}
+                data-testid="input-withdrawal-block-reason"
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setBlockWithdrawalModal(null)}>Annuler</Button>
+              <Button
+                variant="destructive"
+                className="bg-orange-600 hover:bg-orange-700"
+                disabled={blockWithdrawalMutation.isPending}
+                onClick={() => blockWithdrawalModal && blockWithdrawalMutation.mutate({ id: blockWithdrawalModal.id, reason: blockWithdrawalReason })}
+                data-testid="button-confirm-block-withdrawal"
+              >
+                {blockWithdrawalMutation.isPending ? "En cours..." : "Bloquer"}
               </Button>
             </DialogFooter>
           </DialogContent>

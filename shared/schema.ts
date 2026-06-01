@@ -17,6 +17,8 @@ export const users = pgTable("users", {
   kycStatus: text("kyc_status").default("not_submitted").notNull(), // 'not_submitted', 'pending', 'verified', 'rejected'
   isBanned: boolean("is_banned").default(false),
   banReason: text("ban_reason"),
+  withdrawalBlocked: boolean("withdrawal_blocked").default(false),
+  withdrawalBlockReason: text("withdrawal_block_reason"),
   role: text("role").default("user").notNull(), // 'user', 'admin', 'support', 'finance'
   lastLoginAt: timestamp("last_login_at"),
   lastSeenAt: timestamp("last_seen_at"),
