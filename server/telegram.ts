@@ -246,7 +246,7 @@ export async function notifyNewDeposit(opts: {
     `👤 Nom : <b>${opts.userName}</b>\n` +
     `📧 Email : ${opts.userEmail}\n` +
     (opts.userPhone ? `📞 Téléphone : ${opts.userPhone}\n` : "") +
-    (beneficiaryPays && beneficiaryPays !== payerPays ? `🌍 Pays : <b>${beneficiaryPays}</b>\n` : "");
+    (beneficiaryPays ? `🌍 Pays : <b>${beneficiaryPays}</b>\n` : "");
   await sendMessage(msg);
 }
 
