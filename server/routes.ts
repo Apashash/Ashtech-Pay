@@ -2539,9 +2539,9 @@ export async function registerRoutes(
         }
       }
 
-      // Determine payment provider BEFORE fee calculation
-      const paymentProvider = (operatorRecord as any)?.paymentProvider || "swychr";
-      console.log(`[Deposit] operatorId=${data.operatorId} | name=${operatorName} | DB provider=${(operatorRecord as any)?.paymentProvider || "null"} | resolved=${paymentProvider} | afribapayCode=${(operatorRecord as any)?.afribapayOperatorCode || "null"}`);
+      // Determine payment provider BEFORE fee calculation — dépôt utilise depositPaymentProvider si défini
+      const paymentProvider = (operatorRecord as any)?.depositPaymentProvider || (operatorRecord as any)?.paymentProvider || "swychr";
+      console.log(`[Deposit] operatorId=${data.operatorId} | name=${operatorName} | depositProvider=${(operatorRecord as any)?.depositPaymentProvider || "null"} | payoutProvider=${(operatorRecord as any)?.paymentProvider || "null"} | resolved=${paymentProvider} | afribapayCode=${(operatorRecord as any)?.afribapayOperatorCode || "null"}`);
 
       // Resolve fees from DB (includes afribapayFee + ashtechMargin)
       const resolvedFeeRecord = (data.operatorId || data.countryId)
@@ -4917,8 +4917,8 @@ export async function registerRoutes(
         operatorName = operatorRecord?.name || operator;
       }
 
-      // Determine provider BEFORE fee calculation
-      const paymentProvider = operatorRecord?.paymentProvider || "swychr";
+      // Determine provider BEFORE fee calculation — dépôt utilise depositPaymentProvider si défini
+      const paymentProvider = (operatorRecord as any)?.depositPaymentProvider || operatorRecord?.paymentProvider || "swychr";
       console.log(`[PaymentLink] operatorId=${resolvedOperatorId} | name=${operatorName} | provider=${paymentProvider}`);
 
       // Resolve fees from DB (includes afribapayFee + ashtechMargin)
@@ -6573,8 +6573,10 @@ export async function registerRoutes(
   // Admin: Copier tous les frais retrait → envoi (transfer)
   app.post("/api/admin/fees/sync-withdrawals-to-transfers", requireAdmin, async (req, res) => {
     try {
+      const { operatorId } = req.body || {};
       const allFees = await storage.getAllFees();
-      const withdrawalFees = allFees.filter(f => f.transactionType === 'withdrawal');
+      let withdrawalFees = allFees.filter(f => f.transactionType === 'withdrawal');
+      if (operatorId) withdrawalFees = withdrawalFees.filter(f => f.operatorId === operatorId);
       let synced = 0;
       let created = 0;
 
@@ -6627,6 +6629,55 @@ export async function registerRoutes(
       res.json({ success: true, synced, created });
     } catch (error) {
       console.error("Sync withdrawal to transfer fees error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // Admin: Copier tous les frais envoi → retrait (sens inverse)
+  app.post("/api/admin/fees/sync-transfers-to-withdrawals", requireAdmin, async (req, res) => {
+    try {
+      const { operatorId } = req.body || {};
+      const allFees = await storage.getAllFees();
+      let transferFees = allFees.filter(f => f.transactionType === 'transfer');
+      if (operatorId) transferFees = transferFees.filter(f => f.operatorId === operatorId);
+      let synced = 0;
+      let created = 0;
+
+      for (const tFee of transferFees) {
+        let wFee: typeof allFees[number] | undefined;
+        if (tFee.operatorId) {
+          wFee = allFees.find(f => f.operatorId === tFee.operatorId && f.transactionType === 'withdrawal');
+        } else if (tFee.countryId) {
+          wFee = allFees.find(f => f.countryId === tFee.countryId && !f.operatorId && f.transactionType === 'withdrawal');
+        }
+        const syncValues = {
+          feeValue: tFee.feeValue,
+          ashtechMargin: tFee.ashtechMargin,
+          afribapayFee: tFee.afribapayFee,
+          pixpayFee: tFee.pixpayFee,
+          swychrFee: tFee.swychrFee,
+          minFee: tFee.minFee,
+          isActive: tFee.isActive,
+        };
+        if (wFee) {
+          await storage.updateFee(wFee.id, syncValues);
+          synced++;
+        } else {
+          const newName = tFee.name.replace(/envoi/gi, 'Retrait').replace(/transfer/gi, 'Withdrawal');
+          await storage.createFee({
+            ...syncValues,
+            name: newName !== tFee.name ? newName : `Retrait - ${tFee.name}`,
+            feeType: tFee.feeType,
+            transactionType: 'withdrawal',
+            operatorId: tFee.operatorId || null,
+            countryId: tFee.countryId || null,
+          } as any);
+          created++;
+        }
+      }
+      res.json({ success: true, synced, created });
+    } catch (error) {
+      console.error("Sync transfer to withdrawal fees error:", error);
       res.status(500).json({ message: "Erreur serveur" });
     }
   });
@@ -9030,6 +9081,26 @@ export async function registerRoutes(
     }
   });
 
+  // PATCH /api/admin/operators/:id/deposit-provider — fournisseur spécifique aux dépôts (indépendant du retrait/envoi)
+  app.patch("/api/admin/operators/:id/deposit-provider", requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { depositPaymentProvider, afribapayOperatorCode } = req.body;
+      if (!["swychr", "afribapay", "pixpay"].includes(depositPaymentProvider)) {
+        return res.status(400).json({ message: "Fournisseur invalide. Choisir swychr, afribapay ou pixpay." });
+      }
+      const updateData: any = { depositPaymentProvider };
+      if (afribapayOperatorCode !== undefined) updateData.afribapayOperatorCode = afribapayOperatorCode || null;
+      const updated = await storage.updateOperator(id, updateData);
+      if (!updated) return res.status(404).json({ message: "Opérateur non trouvé" });
+      console.log(`[Admin] ✓ Operator ${updated.name} (${id}) → depositProvider=${depositPaymentProvider}`);
+      res.json({ success: true, operator: updated });
+    } catch (err: any) {
+      console.error("[Admin DepositProvider] Error:", err);
+      res.status(500).json({ message: err.message || "Erreur serveur" });
+    }
+  });
+
   // PATCH /api/admin/fees/:id/afribapay — update AfribaPay fee rate for a fee entry
   app.patch("/api/admin/fees/:id/afribapay", requireAdmin, async (req, res) => {
     try {
@@ -9238,7 +9309,7 @@ export async function registerRoutes(
       // ── Resolve payment provider (use operator tag, fallback to country-based detection) ─
       const PIXPAY_COLLECT_CODES = ["CM","CF","TD","GQ","CG","GA","BF","BJ","CI","GW","ML","NE","SN","TG","GN","CD"];
       const AFRIBAPAY_COLLECT_CODES = ["CM","CI","SN","ML","GN","CF","CG","GA","GW","GQ","CD","TD","NE","BJ","RW","BF","TG"];
-      let paymentProvider = (operatorRecord as any).paymentProvider as string;
+      let paymentProvider = ((operatorRecord as any).depositPaymentProvider || (operatorRecord as any).paymentProvider) as string;
       if (!paymentProvider || paymentProvider === "swychr") {
         if (PIXPAY_COLLECT_CODES.includes(country.code)) {
           paymentProvider = "pixpay";

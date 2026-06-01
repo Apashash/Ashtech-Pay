@@ -213,6 +213,12 @@ export default function AdminFeesTransfers() {
     onError: (err: any) => toast({ title: "Erreur AfribaPay", description: err?.message || "Erreur serveur", variant: "destructive" }),
   });
 
+  const syncToWithdrawalMutation = useMutation({
+    mutationFn: async (operatorId: string) =>
+      apiRequest("POST", "/api/admin/fees/sync-transfers-to-withdrawals", { operatorId }),
+    onError: () => {},
+  });
+
   const handleSave = async () => {
     if (!editing) return;
     const originalProvider = (editing.operator as any).paymentProvider || "swychr";
@@ -235,7 +241,7 @@ export default function AdminFeesTransfers() {
         : localProvider === "pixpay"
           ? pixpayFeeVal + marginVal
           : swychrFeeVal + marginVal;
-      createFeeMutation.mutate({
+      await createFeeMutation.mutateAsync({
         name: `Envoi - ${editing.operator.name}`,
         transactionType: "transfer",
         feeType: (editing.fee as any)?.feeType || "percentage",
@@ -250,12 +256,13 @@ export default function AdminFeesTransfers() {
         isActive,
       });
     } else if (localProvider === "pixpay") {
-      pixpayMutation.mutate({ id: editing.fee!.id, pxFee: pixpayFee, margin: ashtechMargin, active: isActive, min: minFee });
+      await pixpayMutation.mutateAsync({ id: editing.fee!.id, pxFee: pixpayFee, margin: ashtechMargin, active: isActive, min: minFee });
     } else if (localProvider === "afribapay") {
-      afribaMutation.mutate({ id: editing.fee!.id, afribaFee: afribapayFee, margin: ashtechMargin, active: isActive, min: minFee });
+      await afribaMutation.mutateAsync({ id: editing.fee!.id, afribaFee: afribapayFee, margin: ashtechMargin, active: isActive, min: minFee });
     } else {
-      swychrMutation.mutate({ id: editing.fee!.id, margin: ashtechMargin, active: isActive, min: minFee });
+      await swychrMutation.mutateAsync({ id: editing.fee!.id, margin: ashtechMargin, active: isActive, min: minFee });
     }
+    syncToWithdrawalMutation.mutate(editing.operator.id);
   };
 
   const isPending = swychrMutation.isPending || afribaMutation.isPending || pixpayMutation.isPending || providerMutation.isPending || createFeeMutation.isPending;

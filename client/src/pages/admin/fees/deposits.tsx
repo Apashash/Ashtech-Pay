@@ -101,7 +101,7 @@ export default function AdminFeesDeposits() {
   const openEdit = (op: Operator, country: Country) => {
     const fee = findFee(op, country);
     const needsCreate = !fee || (fee as any).operatorId !== op.id;
-    const provider = (op as any).paymentProvider || "swychr";
+    const provider = (op as any).depositPaymentProvider || (op as any).paymentProvider || "swychr";
     setEditing({ fee: fee ?? null, operator: op, country, needsCreate });
     // Si frais spécifique en DB → utilise les valeurs DB et met à jour le sticky
     if (!needsCreate && fee) {
@@ -153,14 +153,14 @@ export default function AdminFeesDeposits() {
   // Provider: update operator's payment provider
   const providerMutation = useMutation({
     mutationFn: async ({ opId, provider, code }: { opId: string; provider: string; code: string }) =>
-      apiRequest("PATCH", `/api/admin/operators/${opId}/provider`, {
-        paymentProvider: provider,
+      apiRequest("PATCH", `/api/admin/operators/${opId}/deposit-provider`, {
+        depositPaymentProvider: provider,
         afribapayOperatorCode: code || null,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/operators"] });
     },
-    onError: (err: any) => toast({ title: "Erreur fournisseur", description: err?.message || "Erreur serveur", variant: "destructive" }),
+    onError: (err: any) => toast({ title: "Erreur fournisseur dépôt", description: err?.message || "Erreur serveur", variant: "destructive" }),
   });
 
   // PixPay fee mutation

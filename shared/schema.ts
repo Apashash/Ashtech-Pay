@@ -284,7 +284,8 @@ export const operators = pgTable("operators", {
   type: text("type").notNull(), // 'mobile_money', 'bank', 'crypto'
   countryId: varchar("country_id").notNull().references(() => countries.id),
   gateway: text("gateway").default("soleapay").notNull(), // 'soleapay', 'winipay'
-  paymentProvider: text("payment_provider").default("swychr").notNull(), // 'swychr' | 'afribapay' | 'pixpay'
+  paymentProvider: text("payment_provider").default("swychr").notNull(), // 'swychr' | 'afribapay' | 'pixpay' — utilisé pour retrait + envoi
+  depositPaymentProvider: text("deposit_payment_provider"), // nullable — fournisseur spécifique pour dépôts (si null, hérite de paymentProvider)
   afribapayOperatorCode: text("afribapay_operator_code"), // operator code used in AfribaPay API (e.g. "mtn", "orange")
   pixpayServiceId: text("pixpay_service_id"), // numeric service_id used in PixPay API
   pixpayOperatorType: text("pixpay_operator_type").default("ussd"), // 'ussd' | 'otp' | 'wave'
