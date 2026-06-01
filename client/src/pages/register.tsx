@@ -465,6 +465,13 @@ export default function RegisterPage() {
                   ) : t.register.submit}
                 </Button>
                 )}
+
+                <p className="text-center text-xs text-muted-foreground mt-3 px-2">
+                  En créant un compte, vous acceptez nos{" "}
+                  <a href="/terms" className="underline underline-offset-2 hover:text-foreground transition-colors">
+                    conditions générales d'utilisation
+                  </a>.
+                </p>
               </form>
             </Form>
           )}
