@@ -84,7 +84,7 @@ export async function recoverPendingPayouts() {
 async function processPayout(payout: PendingPayout, apiStatus: string) {
   try {
     const transaction = await storage.getTransactionById(payout.transactionId);
-    if (!transaction || transaction.status !== "pending") {
+    if (!transaction || (transaction.status !== "pending" && transaction.status !== "processing")) {
       removePendingPayout(payout.reference);
       return;
     }
