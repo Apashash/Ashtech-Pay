@@ -7542,14 +7542,16 @@ export async function registerRoutes(
         const pfx = phonePrefixes[countryCode];
         if (pfx && localPhone.startsWith(pfx)) localPhone = localPhone.slice(pfx.length);
         const callbackUrl = `${process.env.APP_URL || ""}/api/afribapay/webhook`;
+        // Use a unique retry ref so AfribaPay doesn't reject "reference already exists"
+        const afribaAdminRetryRef = `${txRef}-R${Date.now().toString(36)}`;
         const result = await initiateAfribaPayout({
           operator: afribapayOperatorCode,
           country: countryCode,
           phone_number: localPhone,
           amount: creditedAmount,
           currency: afribapayCurrency,
-          order_id: txRef,
-          reference_id: txRef,
+          order_id: afribaAdminRetryRef,
+          reference_id: afribaAdminRetryRef,
           notify_url: callbackUrl,
         });
         if (result.success && result.transaction_id) {
@@ -7563,12 +7565,14 @@ export async function registerRoutes(
           return res.status(400).json({ message: `PixPay non supporté pour cet opérateur (${operator?.name}) dans ${countryCode}` });
         }
         const pixpayIpnUrl = `${process.env.APP_URL || ""}/api/pixpay/webhook`;
+        // Use a unique retry ref for PixPay as well
+        const pixpayAdminRetryRef = `${txRef}-R${Date.now().toString(36)}`;
         const result = await initiatePixPayPayout({
           serviceId: String(serviceId),
           amount: creditedAmount,
           phone: phone.replace(/\s/g, ""),
           countryCode,
-          orderId: txRef,
+          orderId: pixpayAdminRetryRef,
           ipnUrl: pixpayIpnUrl,
           customData: txRef,
         });
@@ -10556,14 +10560,16 @@ export async function registerRoutes(
               const pfx = phonePrefixes[countryCode];
               if (pfx && localPhone.startsWith(pfx)) localPhone = localPhone.slice(pfx.length);
 
+              // Use a unique retry ref so AfribaPay doesn't reject "reference already exists"
+              const afribaRetryRef = `${txRef}-R${Date.now().toString(36)}`;
               const afribaResult = await initiateAfribaPayout({
                 operator: afribapayOperatorCode,
                 country: countryCode,
                 phone_number: localPhone,
                 amount: txAmount,
                 currency: afribapayCurrency,
-                order_id: txRef,
-                reference_id: txRef,
+                order_id: afribaRetryRef,
+                reference_id: afribaRetryRef,
                 notify_url: callbackUrl,
               });
               if (afribaResult.success && afribaResult.transaction_id) {
@@ -10574,12 +10580,14 @@ export async function registerRoutes(
             } else if (provider === "pixpay") {
               const cashInServiceId = getPixPayServiceId(operator?.name || "", countryCode, "cash_in");
               const pixpayIpnUrl = `${process.env.APP_URL || ""}/api/pixpay/webhook`;
+              // Use a unique retry ref for PixPay as well
+              const pixpayRetryRef = `${txRef}-R${Date.now().toString(36)}`;
               const pixpayResult = await initiatePixPayPayout({
                 serviceId: String(cashInServiceId || ""),
                 amount: txAmount,
                 phone: beneficiaryPhone.replace(/\s/g, ""),
                 countryCode,
-                orderId: txRef,
+                orderId: pixpayRetryRef,
                 ipnUrl: pixpayIpnUrl,
                 customData: txRef,
               });
