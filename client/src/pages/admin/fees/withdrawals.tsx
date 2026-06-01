@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Pencil, ArrowUpCircle, Info, ChevronDown, ChevronRight, Zap, Globe, Copy, Loader2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { isProviderAvailable } from "@/lib/providerCountries";
 import type { Fee, Country, Operator } from "@shared/schema";
 
 interface EditState {
@@ -465,9 +466,15 @@ export default function AdminFeesWithdrawals() {
                     }} data-testid="select-provider">
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="swychr">Swychr</SelectItem>
-                        <SelectItem value="afribapay">⚡ AfribaPay</SelectItem>
-                        <SelectItem value="pixpay">🔷 PixPay</SelectItem>
+                        <SelectItem value="swychr" disabled={!isProviderAvailable("swychr", editing.country.code)}>
+                          Swychr{!isProviderAvailable("swychr", editing.country.code) ? " (non disponible)" : ""}
+                        </SelectItem>
+                        <SelectItem value="afribapay" disabled={!isProviderAvailable("afribapay", editing.country.code)}>
+                          ⚡ AfribaPay{!isProviderAvailable("afribapay", editing.country.code) ? " (non disponible)" : ""}
+                        </SelectItem>
+                        <SelectItem value="pixpay" disabled={!isProviderAvailable("pixpay", editing.country.code)}>
+                          🔷 PixPay{!isProviderAvailable("pixpay", editing.country.code) ? " (non disponible)" : ""}
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

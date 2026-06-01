@@ -482,20 +482,9 @@ export function computePixPayFees(
 
 // ─── Supported countries (for admin display) ──────────────────────────────────
 export const PIXPAY_SUPPORTED_COUNTRIES = [
-  { code: "CM", name: "Cameroun",          currency: "XAF", flag: "🇨🇲" },
-  { code: "CF", name: "Centrafrique",      currency: "XAF", flag: "🇨🇫" },
-  { code: "TD", name: "Tchad",             currency: "XAF", flag: "🇹🇩" },
-  { code: "GQ", name: "Guinée équatoriale",currency: "XAF", flag: "🇬🇶" },
-  { code: "CG", name: "Congo Brazzaville", currency: "XAF", flag: "🇨🇬" },
-  { code: "GA", name: "Gabon",             currency: "XAF", flag: "🇬🇦" },
-  { code: "BF", name: "Burkina Faso",      currency: "XOF", flag: "🇧🇫" },
-  { code: "BJ", name: "Bénin",             currency: "XOF", flag: "🇧🇯" },
-  { code: "CI", name: "Côte d'Ivoire",     currency: "XOF", flag: "🇨🇮" },
-  { code: "GW", name: "Guinée-Bissau",     currency: "XOF", flag: "🇬🇼" },
-  { code: "ML", name: "Mali",              currency: "XOF", flag: "🇲🇱" },
-  { code: "NE", name: "Niger",             currency: "XOF", flag: "🇳🇪" },
-  { code: "SN", name: "Sénégal",           currency: "XOF", flag: "🇸🇳" },
-  { code: "TG", name: "Togo",              currency: "XOF", flag: "🇹🇬" },
-  { code: "GN", name: "Guinée Conakry",    currency: "GNF", flag: "🇬🇳" },
-  { code: "CD", name: "RD Congo",          currency: "CDF", flag: "🇨🇩" },
+  { code: "CM", name: "Cameroun",      currency: "XAF", flag: "🇨🇲" },
+  { code: "CD", name: "RD Congo",      currency: "CDF", flag: "🇨🇩" },
+  { code: "CI", name: "Côte d'Ivoire", currency: "XOF", flag: "🇨🇮" },
+  { code: "SN", name: "Sénégal",       currency: "XOF", flag: "🇸🇳" },
+  { code: "BF", name: "Burkina Faso",  currency: "XOF", flag: "🇧🇫" },
 ];
