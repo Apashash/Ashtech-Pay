@@ -1965,7 +1965,10 @@ export async function registerRoutes(
                 f => !f.operatorId && !f.countryId && f.transactionType === transactionType && f.isActive
               );
             }
-            const provider = (op as any).paymentProvider || "swychr";
+            // For deposits, use depositPaymentProvider; for others use paymentProvider
+            const provider = transactionType === "deposit"
+              ? ((op as any).depositPaymentProvider || (op as any).paymentProvider || "swychr")
+              : ((op as any).paymentProvider || "swychr");
             const afribaRate = operatorFee ? parseFloat((operatorFee as any).afribapayFee || "0") : 0;
             const pixpayRate = operatorFee ? parseFloat((operatorFee as any).pixpayFee || "0") : 0;
             const marginRate = operatorFee ? parseFloat((operatorFee as any).ashtechMargin || "0") : 0;
