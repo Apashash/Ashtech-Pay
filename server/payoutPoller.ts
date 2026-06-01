@@ -37,7 +37,7 @@ export async function recoverPendingPayouts() {
   try {
     const all = await storage.getAllTransactions();
     const pending = all.filter(t =>
-      (t.type === "withdrawal" || t.type === "transfer_out") && t.status === "pending"
+      (t.type === "withdrawal" || t.type === "transfer_out") && (t.status === "pending" || t.status === "processing")
     );
     if (pending.length === 0) {
       console.log("[PayoutPoller] No pending payouts to recover");
