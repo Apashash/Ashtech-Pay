@@ -2658,11 +2658,6 @@ export async function registerRoutes(
             if (prefix && localPhone.startsWith(prefix)) {
               localPhone = localPhone.slice(prefix.length);
             }
-            // Some countries use 10-digit local numbers with a leading 0 (e.g. CI: 0595857098 → 595857098)
-            // AfribaPay expects the number WITHOUT the leading 0
-            if (localPhone.startsWith("0") && localPhone.length >= 9) {
-              localPhone = localPhone.slice(1);
-            }
             console.log(`[Deposit] AfribaPay phone formatted: raw="${data.phoneNumber}" → local="${localPhone}" country=${countryCode}`);
 
             // Build return/cancel URLs for Wave (redirect-based operators)
