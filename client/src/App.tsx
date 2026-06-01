@@ -29,6 +29,7 @@ import SendMoneyPage from "@/pages/dashboard/send";
 import FeeExplanationsPage from "@/pages/dashboard/fee-details";
 import GlobalMessagePage from "@/pages/dashboard/global-message";
 import WalletsPage from "@/pages/dashboard/wallets";
+import ConvertPage from "@/pages/dashboard/convert";
 import KYCPage from "@/pages/dashboard/kyc";
 import KYCVerifiedPage from "@/pages/dashboard/kyc-verified";
 import SupportPage from "@/pages/dashboard/support";
@@ -165,6 +166,7 @@ function Router() {
       <Route path="/dashboard/fee-details" component={FeeExplanationsPage} />
       <Route path="/dashboard/global-message" component={GlobalMessagePage} />
       <Route path="/dashboard/wallets" component={WalletsPage} />
+      <Route path="/dashboard/convert" component={ConvertPage} />
       <Route path="/dashboard/kyc" component={KYCPage} />
       <Route path="/dashboard/kyc-verified" component={KYCVerifiedPage} />
       <Route path="/dashboard/support" component={SupportPage} />
