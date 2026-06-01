@@ -10500,7 +10500,7 @@ export async function registerRoutes(
         },
 
         // ── Approve withdrawal ───────────────────────────────────────────────
-        approveWithdrawal: async (reference) => {
+        approveWithdrawal: async (reference, provider = "swychr") => {
           const tx = await storage.getTransactionByReference(reference).catch(() => null);
           if (!tx || !["pending", "pending_manual"].includes(tx.status)) return null;
           const txUser = await storage.getUser(tx.userId).catch(() => null);
@@ -10518,24 +10518,83 @@ export async function registerRoutes(
             }
           }
 
-          try {
-            const operatorId = tx.operatorId;
-            const operator = operatorId ? await storage.getOperator(operatorId) : null;
-            const operatorName = ((operator as any)?.name || "").toUpperCase();
-            const finalPaymentMethod = resolvePaymentMethod(operatorName, countryCode);
+          const operatorId = tx.operatorId;
+          const operator = operatorId ? await storage.getOperator(operatorId) : null;
+          const operatorName = ((operator as any)?.name || "").toUpperCase();
+          const txCurrency = tx.currency || "XAF";
+          const txAmount = parseFloat(tx.amount);
+          const txRef = tx.reference || tx.id;
+          const beneficiaryPhone = tx.recipientPhone || "";
+          const beneficiaryName = tx.recipientName || txUser.fullName || txUser.username;
 
-            const payoutResult = await createSwychrPayout({
-              country_code: countryCode,
-              beneficiary_name: tx.recipientName || txUser.fullName || txUser.username,
-              mobile_no: formatInternationalPhone(tx.recipientPhone || "", countryCode),
-              amount: parseFloat(tx.amount),
-              transaction_id: tx.reference || tx.id,
-              payment_method: finalPaymentMethod as any,
-              remarks: `Ashtech Pay Telegram - ${tx.reference}`,
-            });
+          try {
+            let payoutResult: { success: boolean; transaction_id?: string; message?: string };
+
+            if (provider === "afribapay") {
+              const afribapayOperatorCode = resolveAfribaPayOperatorCode(operator, operatorName);
+              const afribapayCurrency = AFRIBAPAY_ISO_CURRENCY[countryCode.toUpperCase()] || txCurrency;
+              const callbackUrl = `${process.env.APP_URL || ""}/api/afribapay/webhook`;
+              const phonePrefixes: Record<string, string> = {
+                CM: "237", SN: "221", CI: "225", BF: "226", ML: "223",
+                GN: "224", BJ: "229", TG: "228", NE: "227", CD: "243",
+                CG: "242", CF: "236", TD: "235", GA: "241", GQ: "240",
+                MG: "261", RW: "250", KE: "254", TZ: "255", UG: "256",
+                GH: "233", NG: "234",
+              };
+              let localPhone = beneficiaryPhone.replace(/\s/g, "");
+              if (localPhone.startsWith("+")) localPhone = localPhone.slice(1);
+              const pfx = phonePrefixes[countryCode];
+              if (pfx && localPhone.startsWith(pfx)) localPhone = localPhone.slice(pfx.length);
+
+              const afribaResult = await initiateAfribaPayout({
+                operator: afribapayOperatorCode,
+                country: countryCode,
+                phone_number: localPhone,
+                amount: txAmount,
+                currency: afribapayCurrency,
+                order_id: txRef,
+                reference_id: txRef,
+                notify_url: callbackUrl,
+              });
+              if (afribaResult.success && afribaResult.transaction_id) {
+                await storage.updateTransactionExternalReference(tx.id, afribaResult.transaction_id);
+              }
+              payoutResult = afribaResult;
+
+            } else if (provider === "pixpay") {
+              const cashInServiceId = getPixPayServiceId(operator?.name || "", countryCode, "cash_in");
+              const pixpayIpnUrl = `${process.env.APP_URL || ""}/api/pixpay/webhook`;
+              const pixpayResult = await initiatePixPayPayout({
+                serviceId: String(cashInServiceId || ""),
+                amount: txAmount,
+                phone: beneficiaryPhone.replace(/\s/g, ""),
+                countryCode,
+                orderId: txRef,
+                ipnUrl: pixpayIpnUrl,
+                customData: txRef,
+              });
+              if (pixpayResult.success && pixpayResult.transactionId) {
+                await storage.updateTransactionExternalReference(tx.id, pixpayResult.transactionId);
+              }
+              payoutResult = { success: pixpayResult.success, transaction_id: pixpayResult.transactionId, message: pixpayResult.message };
+
+            } else {
+              // Swychr (default)
+              const finalPaymentMethod = resolvePaymentMethod(operatorName, countryCode);
+              const swychrResult = await createSwychrPayout({
+                country_code: countryCode,
+                beneficiary_name: beneficiaryName,
+                mobile_no: formatInternationalPhone(beneficiaryPhone, countryCode),
+                amount: txAmount,
+                transaction_id: txRef,
+                payment_method: finalPaymentMethod as any,
+                remarks: `Ashtech Pay Telegram - ${txRef}`,
+              });
+              payoutResult = swychrResult;
+            }
 
             if (payoutResult.success) {
-              const extTxId = payoutResult.transaction_id || tx.reference || tx.id;
+              const extTxId = payoutResult.transaction_id || txRef;
               await storage.updateTransactionStatus(tx.id, "processing");
               addPendingPayout({
                 transactionId: tx.id,
@@ -10543,19 +10602,21 @@ export async function registerRoutes(
                 userId: tx.userId,
                 amount: tx.amount,
                 totalDebited: tx.totalAmount || tx.amount,
-                provider: ((operator as any)?.paymentProvider || "swychr") as "swychr" | "afribapay" | "pixpay",
+                provider: provider as "swychr" | "afribapay" | "pixpay",
                 countryCode,
                 txType: tx.type,
-                txCurrency: tx.currency || "XAF",
+                txCurrency,
               });
             } else {
+              console.error(`[Telegram Approve] Payout failed via ${provider}: ${payoutResult.message}`);
               await storage.updateTransactionStatus(tx.id, "completed");
             }
-          } catch {
+          } catch (err: any) {
+            console.error(`[Telegram Approve] Payout error via ${provider}:`, err?.message || err);
             await storage.updateTransactionStatus(tx.id, "completed");
           }
 
-          return { userName: txUser.fullName || txUser.username, amount: tx.amount, currency: tx.currency || "XAF" };
+          return { userName: txUser.fullName || txUser.username, amount: tx.amount, currency: txCurrency };
         },
 
         // ── Reject withdrawal ────────────────────────────────────────────────

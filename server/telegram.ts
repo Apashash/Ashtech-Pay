@@ -473,14 +473,16 @@ export async function notifyWithdrawalRequest(opts: {
   const ref = opts.reference;
   await sendMessageWithKeyboard(msg, [
     [
-      { text: "✅ Approuver", callback_data: `wa:${ref}` },
+      { text: "✅ Swychr", callback_data: `wap:${ref}:swychr` },
+      { text: "✅ AfribaPay", callback_data: `wap:${ref}:afribapay` },
+      { text: "✅ PixPay", callback_data: `wap:${ref}:pixpay` },
+    ],
+    [
       { text: "❌ Rejeter", callback_data: `wrd:${ref}:can` },
-    ],
-    [
       { text: "💸 Solde insuffisant", callback_data: `wrd:${ref}:ins` },
-      { text: "⚠️ Activité suspecte", callback_data: `wrd:${ref}:frau` },
     ],
     [
+      { text: "⚠️ Activité suspecte", callback_data: `wrd:${ref}:frau` },
       { text: "✍️ Raison personnalisée", callback_data: `wrc:${ref}` },
     ],
   ]);
@@ -524,10 +526,12 @@ export async function notifyWithdrawalPendingManual(opts: {
   const ref = opts.reference;
   await sendMessageWithKeyboard(msg, [
     [
-      { text: "✅ Approuver & Envoyer", callback_data: `wa:${ref}` },
-      { text: "❌ Annuler & Rembourser", callback_data: `wrd:${ref}:can` },
+      { text: "✅ Swychr", callback_data: `wap:${ref}:swychr` },
+      { text: "✅ AfribaPay", callback_data: `wap:${ref}:afribapay` },
+      { text: "✅ PixPay", callback_data: `wap:${ref}:pixpay` },
     ],
     [
+      { text: "❌ Annuler & Rembourser", callback_data: `wrd:${ref}:can` },
       { text: "✍️ Raison personnalisée", callback_data: `wrc:${ref}` },
     ],
   ]);
@@ -1373,7 +1377,7 @@ export async function handleTelegramUpdate(
       revenue: { deposits: number; withdrawals: number; transfers: number; paymentLinks: number; conversions: number; total: number };
     }>;
     resetUserPassword: (email: string) => Promise<{ userName: string; found: boolean } | null>;
-    approveWithdrawal: (reference: string) => Promise<{ userName: string; amount: string; currency: string } | null>;
+    approveWithdrawal: (reference: string, provider?: string) => Promise<{ userName: string; amount: string; currency: string } | null>;
     rejectWithdrawal: (reference: string, reason: string) => Promise<{ userName: string } | null>;
     searchUsers: (query: string) => Promise<{ userName: string; email: string; balance: number; currency: string; kycStatus: string; country?: string; banned: boolean }[]>;
     approveWithdrawalNumberChange: (changeId: string) => Promise<{ userName: string; userEmail: string; newPhone: string; action: string } | null>;
@@ -1618,13 +1622,29 @@ export async function handleTelegramUpdate(
       return;
     }
 
-    // ── Approve withdrawal ──
-    if (data.startsWith("wa:")) {
-      const reference = data.slice(3);
-      const result = await handlers.approveWithdrawal(reference);
+    // ── Approve withdrawal with provider choice ──
+    if (data.startsWith("wap:")) {
+      const parts = data.split(":");
+      const reference = parts[1];
+      const provider = parts[2] || "swychr";
+      const providerLabel: Record<string, string> = { swychr: "Swychr", afribapay: "AfribaPay", pixpay: "PixPay" };
+      const result = await handlers.approveWithdrawal(reference, provider);
       if (result) {
         await editMessageText(messageId,
-          `✅ <b>RETRAIT APPROUVÉ</b>\n\n👤 ${result.userName}\n💰 ${fmt(result.amount, result.currency)}\n🔖 <code>${reference}</code>\n🕐 ${now()}`);
+          `✅ <b>RETRAIT APPROUVÉ</b>\n\n👤 ${result.userName}\n💰 ${fmt(result.amount, result.currency)}\n🔌 Via : <b>${providerLabel[provider] || provider}</b>\n🔖 <code>${reference}</code>\n🕐 ${now()}`);
+      } else {
+        await editMessageText(messageId, `⚠️ Impossible d'approuver — transaction introuvable ou déjà traitée.`);
+      }
+      return;
+    }
+
+    // ── Approve withdrawal (legacy wa: handler kept for compatibility) ──
+    if (data.startsWith("wa:")) {
+      const reference = data.slice(3);
+      const result = await handlers.approveWithdrawal(reference, "swychr");
+      if (result) {
+        await editMessageText(messageId,
+          `✅ <b>RETRAIT APPROUVÉ</b>\n\n👤 ${result.userName}\n💰 ${fmt(result.amount, result.currency)}\n🔌 Via : <b>Swychr</b>\n🔖 <code>${reference}</code>\n🕐 ${now()}`);
       } else {
         await editMessageText(messageId, `⚠️ Impossible d'approuver — transaction introuvable ou déjà traitée.`);
       }
