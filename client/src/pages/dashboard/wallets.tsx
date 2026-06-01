@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { ArrowLeftRight, Plus, X, ChevronRight, TrendingUp, Repeat2 } from "lucide-react";
+import { ArrowLeftRight, Plus, X, ChevronRight, TrendingUp, Repeat2, Loader2, AlertTriangle } from "lucide-react";
 import { ALL_FX_CURRENCIES, CURRENCY_SYMBOLS } from "@shared/schema";
 import type { User, Transaction } from "@shared/schema";
 import { useLanguage } from "@/lib/language";
