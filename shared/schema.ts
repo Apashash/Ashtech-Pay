@@ -160,6 +160,7 @@ export const ALL_FX_CURRENCIES: FxCurrency[] = [
   { code: "TZS", name: "Tanzanian Shilling", defaultRate: 2650.00 },
   { code: "UGX", name: "Ugandan Shilling", defaultRate: 3600.00 },
   { code: "CDF", name: "Congolese Franc", defaultRate: 2500.00 },
+  { code: "GNF", name: "Franc Guinéen", defaultRate: 9095.00 },
 ];
 
 export const CURRENCY_SYMBOLS: Record<SupportedCurrency, string> = {
