@@ -91,8 +91,8 @@ export default function AdminWithdrawals() {
   }, [depositConfig]);
 
   const updateStatusMutation = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      return apiRequest("PATCH", `/api/admin/transactions/${id}`, { status });
+    mutationFn: async ({ id, status, forceComplete }: { id: string; status: string; forceComplete?: boolean }) => {
+      return apiRequest("PATCH", `/api/admin/transactions/${id}`, { status, ...(forceComplete ? { forceComplete: true } : {}) });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/transactions", "withdrawals"] });
@@ -498,7 +498,7 @@ export default function AdminWithdrawals() {
                     <Button
                       variant="outline"
                       disabled={updateStatusMutation.isPending || !modalStatus || modalStatus === tx.status}
-                      onClick={() => updateStatusMutation.mutate({ id: tx.id, status: modalStatus })}
+                      onClick={() => updateStatusMutation.mutate({ id: tx.id, status: modalStatus, forceComplete: modalStatus === "completed" })}
                       data-testid="button-modal-apply-status"
                     >
                       Appliquer
