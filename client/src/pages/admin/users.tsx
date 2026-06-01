@@ -499,7 +499,12 @@ export default function AdminUsers() {
                   </TableRow>
                 ) : (
                   filteredUsers.map((user) => (
-                    <TableRow key={user.id} data-testid={`user-row-${user.id}`}>
+                    <TableRow
+                      key={user.id}
+                      data-testid={`user-row-${user.id}`}
+                      className="cursor-pointer hover:bg-muted/50 transition-colors"
+                      onClick={() => setViewUser(user)}
+                    >
                       <TableCell className="max-w-[160px]">
                         <div className="space-y-0.5">
                           <p className="font-medium text-sm truncate">{user.fullName}</p>
@@ -554,7 +559,7 @@ export default function AdminUsers() {
                       <TableCell className="text-sm whitespace-nowrap">
                         {user.createdAt ? format(new Date(user.createdAt), "dd/MM/yy", { locale: fr }) : "-"}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon" data-testid={`button-actions-${user.id}`}>
@@ -674,88 +679,153 @@ export default function AdminUsers() {
         </Dialog>
 
         <Dialog open={!!viewUser} onOpenChange={() => setViewUser(null)}>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Détails de {viewUser?.fullName}</DialogTitle>
+              <DialogTitle className="flex items-center gap-2">
+                <span className="text-xl">{viewUser ? getCountryFlag(viewUser.country, viewUser.preferredCurrency || "XAF") : ""}</span>
+                {viewUser?.fullName}
+              </DialogTitle>
+              <DialogDescription>@{viewUser?.username} · {viewUser?.country || "Pays inconnu"}</DialogDescription>
             </DialogHeader>
             {viewUser && (
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-muted-foreground">ID</p>
-                    <p className="font-mono text-xs">{viewUser.id}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Username</p>
-                    <p>@{viewUser.username}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Email</p>
-                    <p>{viewUser.email}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Téléphone</p>
-                    <p>{viewUser.phone || "-"}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Pays</p>
-                    <p>{viewUser.country || "-"}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Devise</p>
-                    <p>{viewUser.preferredCurrency}</p>
-                  </div>
-                  <div className="col-span-2">
-                    <p className="text-muted-foreground mb-2">Soldes</p>
-                    <div className="grid grid-cols-3 gap-2">
-                      <div className="flex flex-col items-center p-2 rounded border bg-primary/10 text-center border-primary/30">
-                        <span className="text-base">{getCountryFlag(viewUser.country, viewUser.preferredCurrency || "XAF")}</span>
-                        <span className="text-xs font-bold text-primary">{viewUser.preferredCurrency || "XAF"} ★</span>
-                        <span className={`text-xs font-semibold ${parseFloat(viewUser.balance) > 0 ? "text-green-600" : "text-muted-foreground"}`}>
-                          {parseFloat(viewUser.balance).toLocaleString("fr-FR", { maximumFractionDigits: 0 })}
+                {/* Soldes */}
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Soldes</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="flex flex-col items-center p-3 rounded-lg border bg-primary/10 text-center border-primary/30">
+                      <span className="text-lg">{getCountryFlag(viewUser.country, viewUser.preferredCurrency || "XAF")}</span>
+                      <span className="text-xs font-bold text-primary mt-1">{viewUser.preferredCurrency || "XAF"} ★</span>
+                      <span className={`text-sm font-bold mt-0.5 ${parseFloat(viewUser.balance) > 0 ? "text-green-500" : "text-muted-foreground"}`}>
+                        {parseFloat(viewUser.balance).toLocaleString("fr-FR", { maximumFractionDigits: 0 })}
+                      </span>
+                    </div>
+                    {viewUserWallets?.filter((w: any) => w.currency !== viewUser.preferredCurrency).map((wallet: any) => (
+                      <div key={wallet.id} className="flex flex-col items-center p-3 rounded-lg border bg-muted/40 text-center">
+                        <span className="text-lg">{CURRENCY_FLAGS[wallet.currency] || "🏳️"}</span>
+                        <span className="text-xs font-bold mt-1">{wallet.currency}</span>
+                        <span className={`text-sm font-bold mt-0.5 ${parseFloat(wallet.balance) > 0 ? "text-green-500" : "text-muted-foreground"}`}>
+                          {parseFloat(wallet.balance).toLocaleString("fr-FR", { maximumFractionDigits: 2 })}
                         </span>
                       </div>
-                      {viewUserWallets?.map((wallet: any) => (
-                        <div key={wallet.id} className="flex flex-col items-center p-2 rounded border bg-muted/40 text-center">
-                          <span className="text-base">{CURRENCY_FLAGS[wallet.currency] || "🏳️"}</span>
-                          <span className="text-xs font-bold">{wallet.currency}</span>
-                          <span className={`text-xs font-semibold ${parseFloat(wallet.balance) > 0 ? "text-green-600" : "text-muted-foreground"}`}>
-                            {parseFloat(wallet.balance).toLocaleString("fr-FR", { maximumFractionDigits: 2 })}
-                          </span>
-                        </div>
-                      ))}
+                    ))}
+                  </div>
+                  {(viewUser.totalBalanceXAF ?? 0) > 0 && (
+                    <p className="text-xs text-muted-foreground mt-2 text-right">
+                      Total : <span className="font-semibold text-foreground">{formatCurrency(viewUser.totalBalanceXAF ?? 0, "XAF")}</span>
+                    </p>
+                  )}
+                </div>
+
+                {/* Infos */}
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Informations</p>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="p-2 rounded-lg bg-muted/30">
+                      <p className="text-xs text-muted-foreground">Email</p>
+                      <p className="font-medium truncate">{viewUser.email}</p>
                     </div>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Rôle</p>
-                    {getRoleBadge(viewUser.role)}
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Statut KYC</p>
-                    {viewUser.kycStatus === "verified" ? (
-                      <Badge className="bg-green-500 gap-1">
-                        <CheckCircle className="w-3 h-3" /> Vérifié
-                      </Badge>
-                    ) : viewUser.kycStatus === "rejected" ? (
-                      <Badge variant="destructive" className="gap-1">
-                        <XCircle className="w-3 h-3" /> Rejeté
-                      </Badge>
-                    ) : viewUser.kycStatus === "pending" ? (
-                      <Badge variant="secondary" className="gap-1">
-                        <Shield className="w-3 h-3" /> En attente
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="gap-1">
-                        <XCircle className="w-3 h-3" /> Pas encore vérifié
-                      </Badge>
-                    )}
+                    <div className="p-2 rounded-lg bg-muted/30">
+                      <p className="text-xs text-muted-foreground">Téléphone</p>
+                      <p className="font-medium">{viewUser.phone || "—"}</p>
+                    </div>
+                    <div className="p-2 rounded-lg bg-muted/30">
+                      <p className="text-xs text-muted-foreground">Rôle</p>
+                      <div className="mt-0.5">{getRoleBadge(viewUser.role)}</div>
+                    </div>
+                    <div className="p-2 rounded-lg bg-muted/30">
+                      <p className="text-xs text-muted-foreground">KYC</p>
+                      <div className="mt-0.5">
+                        {viewUser.kycStatus === "verified" ? (
+                          <Badge className="bg-green-500 gap-1 text-xs"><CheckCircle className="w-3 h-3" /> Vérifié</Badge>
+                        ) : viewUser.kycStatus === "rejected" ? (
+                          <Badge variant="destructive" className="gap-1 text-xs"><XCircle className="w-3 h-3" /> Rejeté</Badge>
+                        ) : viewUser.kycStatus === "pending" ? (
+                          <Badge variant="secondary" className="gap-1 text-xs"><Shield className="w-3 h-3" /> En attente</Badge>
+                        ) : (
+                          <Badge variant="outline" className="gap-1 text-xs"><XCircle className="w-3 h-3" /> Non vérifié</Badge>
+                        )}
+                      </div>
+                    </div>
+                    <div className="p-2 rounded-lg bg-muted/30">
+                      <p className="text-xs text-muted-foreground">Inscrit le</p>
+                      <p className="font-medium">{viewUser.createdAt ? format(new Date(viewUser.createdAt), "dd/MM/yyyy", { locale: fr }) : "—"}</p>
+                    </div>
+                    <div className="p-2 rounded-lg bg-muted/30">
+                      <p className="text-xs text-muted-foreground">Statut</p>
+                      <div className="mt-0.5">
+                        {viewUser.isBanned
+                          ? <Badge variant="destructive" className="gap-1 text-xs"><Ban className="w-3 h-3" /> Banni</Badge>
+                          : <Badge className="bg-green-500 gap-1 text-xs"><CheckCircle className="w-3 h-3" /> Actif</Badge>
+                        }
+                      </div>
+                    </div>
                   </div>
                   {viewUser.banReason && (
-                    <div className="col-span-2">
-                      <p className="text-muted-foreground">Raison du ban</p>
-                      <p className="text-red-500">{viewUser.banReason}</p>
-                    </div>
+                    <p className="text-xs text-red-500 mt-2 p-2 bg-red-500/10 rounded-lg">Raison du ban : {viewUser.banReason}</p>
                   )}
+                </div>
+
+                {/* Actions rapides */}
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Actions</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      variant="outline" size="sm" className="gap-2 justify-start"
+                      onClick={() => { setViewUser(null); openEditModal(viewUser); }}
+                    >
+                      <Edit className="w-4 h-4" /> Modifier
+                    </Button>
+                    <Button
+                      variant="outline" size="sm" className="gap-2 justify-start"
+                      onClick={() => {
+                        setViewUser(null);
+                        setBalanceCurrency(viewUser.preferredCurrency || "XAF");
+                        setNewBalance(viewUser.balance);
+                        setUpdateType("set");
+                        setBalanceModal(viewUser);
+                      }}
+                    >
+                      <DollarSign className="w-4 h-4" /> Modifier le solde
+                    </Button>
+                    {viewUser.kycStatus !== "verified" && (
+                      <Button
+                        variant="outline" size="sm" className="gap-2 justify-start text-green-600"
+                        onClick={() => { kycMutation.mutate({ id: viewUser.id, kycStatus: "verified" }); setViewUser(null); }}
+                      >
+                        <CheckCircle className="w-4 h-4" /> Approuver KYC
+                      </Button>
+                    )}
+                    {viewUser.kycStatus !== "rejected" && (
+                      <Button
+                        variant="outline" size="sm" className="gap-2 justify-start text-orange-500"
+                        onClick={() => { kycMutation.mutate({ id: viewUser.id, kycStatus: "rejected" }); setViewUser(null); }}
+                      >
+                        <XCircle className="w-4 h-4" /> Rejeter KYC
+                      </Button>
+                    )}
+                    {viewUser.isBanned ? (
+                      <Button
+                        variant="outline" size="sm" className="gap-2 justify-start text-green-600"
+                        onClick={() => { unbanMutation.mutate(viewUser.id); setViewUser(null); }}
+                      >
+                        <CheckCircle className="w-4 h-4" /> Débannir
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline" size="sm" className="gap-2 justify-start text-red-500"
+                        onClick={() => { setViewUser(null); setBanModal(viewUser); }}
+                      >
+                        <Ban className="w-4 h-4" /> Bannir
+                      </Button>
+                    )}
+                    <Button
+                      variant="outline" size="sm" className="gap-2 justify-start text-red-500"
+                      onClick={() => { setViewUser(null); setDeleteModal(viewUser); }}
+                    >
+                      <Trash2 className="w-4 h-4" /> Supprimer
+                    </Button>
+                  </div>
                 </div>
               </div>
             )}
