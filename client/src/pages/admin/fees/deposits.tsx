@@ -144,6 +144,7 @@ export default function AdminFeesDeposits() {
       apiRequest("POST", "/api/admin/fees", body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/fees"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/operators"] });
       toast({ title: "Frais créés pour cet opérateur" });
       closeEdit();
     },
@@ -173,6 +174,7 @@ export default function AdminFeesDeposits() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/fees"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/operators"] });
       toast({ title: "Frais PixPay mis à jour" });
       closeEdit();
     },
@@ -192,6 +194,7 @@ export default function AdminFeesDeposits() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/fees"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/operators"] });
       toast({ title: "Frais mis à jour" });
       closeEdit();
     },
@@ -208,6 +211,7 @@ export default function AdminFeesDeposits() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/fees"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/operators"] });
       toast({ title: "Frais AfribaPay mis à jour" });
       closeEdit();
     },
@@ -216,7 +220,7 @@ export default function AdminFeesDeposits() {
 
   const handleSave = async () => {
     if (!editing) return;
-    const originalProvider = (editing.operator as any).paymentProvider || "swychr";
+    const originalProvider = (editing.operator as any).depositPaymentProvider || (editing.operator as any).paymentProvider || "swychr";
     const providerChanged = localProvider !== originalProvider ||
       localAfribapayCode !== ((editing.operator as any).afribapayOperatorCode || "");
     if (providerChanged) {
