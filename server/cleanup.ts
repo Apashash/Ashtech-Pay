@@ -6,52 +6,14 @@ const CLEANUP_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
 const RETENTION_DAYS = 30;
 
 /**
- * Delete completed/failed transactions older than RETENTION_DAYS
+ * Clean up expired payment intents only — transactions are kept indefinitely
  */
 export async function cleanupOldTransactions() {
   try {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - RETENTION_DAYS);
 
-    // Delete notifications referencing old transactions first (avoid FK violation)
-    await pool.query(
-      `DELETE FROM user_notifications WHERE transaction_id IN (
-        SELECT id FROM transactions WHERE created_at < $1 AND status IN ('completed','failed')
-      )`,
-      [cutoffDate]
-    ).catch(() => {});
-
-    // Delete old completed transactions
-    const completedResult = await db
-      .delete(transactions)
-      .where(
-        and(
-          lt(transactions.createdAt, cutoffDate),
-          eq(transactions.status, "completed")
-        )
-      );
-
-    const completedCount = completedResult.rowCount || 0;
-    if (completedCount > 0) {
-      console.log(`[Cleanup] Deleted ${completedCount} completed transactions older than ${RETENTION_DAYS} days`);
-    }
-
-    // Delete old failed transactions
-    const failedResult = await db
-      .delete(transactions)
-      .where(
-        and(
-          lt(transactions.createdAt, cutoffDate),
-          eq(transactions.status, "failed")
-        )
-      );
-
-    const failedCount = failedResult.rowCount || 0;
-    if (failedCount > 0) {
-      console.log(`[Cleanup] Deleted ${failedCount} failed transactions older than ${RETENTION_DAYS} days`);
-    }
-
-    // Delete old payment intents
+    // Only delete old payment intents (temporary checkout sessions, not financial records)
     const piResult = await db
       .delete(paymentIntents)
       .where(
@@ -60,15 +22,10 @@ export async function cleanupOldTransactions() {
 
     const piCount = piResult.rowCount || 0;
     if (piCount > 0) {
-      console.log(`[Cleanup] Deleted ${piCount} payment intents older than ${RETENTION_DAYS} days`);
-    }
-
-    const totalDeleted = completedCount + failedCount + piCount;
-    if (totalDeleted > 0) {
-      console.log(`[Cleanup] Total cleaned up: ${totalDeleted} records`);
+      console.log(`[Cleanup] Deleted ${piCount} expired payment intents older than ${RETENTION_DAYS} days`);
     }
   } catch (err: any) {
-    console.error("[Cleanup] Error cleaning up old transactions:", err.message);
+    console.error("[Cleanup] Error during cleanup:", err.message);
   }
 }
 
