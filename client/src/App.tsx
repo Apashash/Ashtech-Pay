@@ -330,7 +330,15 @@ function ImpersonationBanner() {
   const [, navigate] = useLocation();
   const { data: user } = useQuery<any>({ queryKey: ["/api/user"], retry: false });
 
-  if (!user?.impersonatedBy) return null;
+  // Fallback: read from sessionStorage so the banner survives page navigations
+  // where the query might briefly be undefined while refetching.
+  const ssImpersonated = sessionStorage.getItem("impersonatedBy");
+  const ssUsername = sessionStorage.getItem("impersonatedUsername");
+
+  const isImpersonating = !!(user?.impersonatedBy || ssImpersonated);
+  const displayUsername = user?.username || ssUsername || "";
+
+  if (!isImpersonating) return null;
 
   const handleExit = async () => {
     try {
@@ -339,6 +347,8 @@ function ImpersonationBanner() {
         credentials: "include",
       });
       if (res.ok) {
+        sessionStorage.removeItem("impersonatedBy");
+        sessionStorage.removeItem("impersonatedUsername");
         queryClient.clear();
         navigate("/admin/users");
       }
@@ -349,7 +359,7 @@ function ImpersonationBanner() {
     <div className="fixed top-0 left-0 right-0 z-[9999] bg-red-600 text-white text-sm flex items-center justify-between px-4 py-2.5 shadow-lg">
       <span className="font-medium flex items-center gap-2">
         <span className="text-base">👁</span>
-        Connecté en tant que <strong className="underline underline-offset-2">{user.username}</strong>
+        Connecté en tant que <strong className="underline underline-offset-2">{displayUsername}</strong>
       </span>
       <button
         onClick={handleExit}

@@ -338,6 +338,8 @@ export default function AdminUserDetail() {
       return json;
     },
     onSuccess: (data) => {
+      sessionStorage.setItem("impersonatedBy", data.adminId || "admin");
+      sessionStorage.setItem("impersonatedUsername", data.username);
       queryClient.clear();
       toast({ title: `Connecté en tant que @${data.username}` });
       navigate("/dashboard");
