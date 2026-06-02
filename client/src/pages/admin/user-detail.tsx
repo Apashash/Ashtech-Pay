@@ -87,6 +87,22 @@ interface Transaction {
   fee: string | null;
 }
 
+interface TransactionDetail extends Transaction {
+  reference: string | null;
+  externalReference: string | null;
+  recipientId: string | null;
+  paymentLinkId: string | null;
+  operatorId: string | null;
+  notifyUrl: string | null;
+  source: string | null;
+  confirmedAt: string | null;
+  updatedAt: string | null;
+  user: { fullName: string; email: string; username: string; country: string | null; phone: string | null } | null;
+  recipient: { fullName: string; email: string; username: string; country: string | null } | null;
+  paymentLink: { title: string; slug: string } | null;
+  operator: { id: string; name: string; type: string; paymentProvider: string | null } | null;
+}
+
 const CURRENCY_FLAGS: Record<string, string> = {
   XAF: "🇨🇲", XAFC: "🇨🇬", XAFG: "🇬🇦",
   XOF: "🇸🇳", XOFC: "🇨🇮", XOFF: "🇧🇫", XOFN: "🇳🇪", XOFB: "🇧🇯", XOFT: "🇹🇬", XOFS: "🇸🇳", XOFM: "🇲🇱",
@@ -165,6 +181,7 @@ export default function AdminUserDetail() {
   const [blockModal, setBlockModal] = useState(false);
   const [blockReason, setBlockReason] = useState("");
   const [balanceModal, setBalanceModal] = useState(false);
+  const [selectedTxId, setSelectedTxId] = useState<string | null>(null);
   const [newBalance, setNewBalance] = useState("");
   const [balanceCurrency, setBalanceCurrency] = useState("XAF");
   const [updateType, setUpdateType] = useState<"set" | "add">("set");
@@ -212,6 +229,16 @@ export default function AdminUserDetail() {
       return res.json();
     },
     enabled: !!id,
+  });
+
+  const { data: txDetail, isLoading: txDetailLoading } = useQuery<TransactionDetail>({
+    queryKey: [`/api/admin/transactions/${selectedTxId}/details`],
+    queryFn: async () => {
+      const res = await fetch(`/api/admin/transactions/${selectedTxId}/details`, { credentials: "include", headers: authHeaders });
+      if (!res.ok) throw new Error("Erreur");
+      return res.json();
+    },
+    enabled: !!selectedTxId,
   });
 
   const walletList = user ? [
@@ -587,7 +614,7 @@ export default function AdminUserDetail() {
                         </TableHeader>
                         <TableBody>
                           {txData.data.map((tx) => (
-                            <TableRow key={tx.id}>
+                            <TableRow key={tx.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedTxId(tx.id)}>
                               <TableCell className="pr-0">{getTxIcon(tx.type)}</TableCell>
                               <TableCell>
                                 <div>
@@ -869,6 +896,166 @@ export default function AdminUserDetail() {
           </Tabs>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setBalanceModal(false); setNewBalance(""); setConvAmount(""); setBalanceTab("modifier"); }}>Fermer</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* ─── MODAL DÉTAIL TRANSACTION ─────────────────────── */}
+      <Dialog open={!!selectedTxId} onOpenChange={(open) => { if (!open) setSelectedTxId(null); }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Détails de la transaction</DialogTitle>
+            <DialogDescription>Informations complètes</DialogDescription>
+          </DialogHeader>
+          {txDetailLoading ? (
+            <div className="py-8 text-center text-muted-foreground text-sm">Chargement...</div>
+          ) : txDetail ? (
+            <div className="space-y-4 text-sm">
+              {/* Statut + type */}
+              <div className="flex items-center gap-3">
+                {getTxIcon(txDetail.type)}
+                <div>
+                  <p className="font-semibold">{getTxLabel(txDetail.type)}</p>
+                  <p className="text-muted-foreground text-xs">{txDetail.id}</p>
+                </div>
+                <div className="ml-auto">{getStatusBadge(txDetail.status)}</div>
+              </div>
+
+              {/* Montant */}
+              <div className="rounded-lg bg-muted/40 p-3 flex justify-between items-center">
+                <span className="text-muted-foreground">Montant</span>
+                <span className={`text-lg font-bold ${
+                  txDetail.type === "deposit" || txDetail.type === "payment_link" || txDetail.type === "transfer_in"
+                    ? "text-green-600" : "text-red-500"
+                }`}>
+                  {txDetail.type === "deposit" || txDetail.type === "payment_link" || txDetail.type === "transfer_in" ? "+" : "-"}
+                  {parseFloat(txDetail.amount).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {txDetail.currency}
+                </span>
+              </div>
+              {txDetail.fee && parseFloat(txDetail.fee) > 0 && (
+                <div className="flex justify-between text-xs text-muted-foreground px-1">
+                  <span>Frais</span>
+                  <span>{parseFloat(txDetail.fee).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {txDetail.currency}</span>
+                </div>
+              )}
+
+              {/* Description */}
+              {txDetail.description && (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Description</p>
+                  <p className="text-sm">{txDetail.description}</p>
+                </div>
+              )}
+
+              {/* Références */}
+              <div className="space-y-2 border rounded-lg p-3">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Références</p>
+                {txDetail.reference && (
+                  <div className="flex justify-between gap-2">
+                    <span className="text-muted-foreground shrink-0">Réf. interne</span>
+                    <span className="font-mono text-xs break-all text-right">{txDetail.reference}</span>
+                  </div>
+                )}
+                {txDetail.externalReference && (
+                  <div className="flex justify-between gap-2">
+                    <span className="text-muted-foreground shrink-0">Réf. externe</span>
+                    <span className="font-mono text-xs break-all text-right">{txDetail.externalReference}</span>
+                  </div>
+                )}
+                {txDetail.source && (
+                  <div className="flex justify-between gap-2">
+                    <span className="text-muted-foreground">Source</span>
+                    <Badge variant="outline" className="text-xs">{txDetail.source}</Badge>
+                  </div>
+                )}
+              </div>
+
+              {/* Opérateur */}
+              {txDetail.operator && (
+                <div className="space-y-2 border rounded-lg p-3">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Opérateur</p>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Nom</span>
+                    <span className="font-medium">{txDetail.operator.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Type</span>
+                    <span>{txDetail.operator.type}</span>
+                  </div>
+                  {txDetail.operator.paymentProvider && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Passerelle</span>
+                      <span className="font-mono text-xs">{txDetail.operator.paymentProvider}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Destinataire */}
+              {txDetail.recipient && (
+                <div className="space-y-2 border rounded-lg p-3">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Destinataire</p>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Nom</span>
+                    <span className="font-medium">{txDetail.recipient.fullName}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Email</span>
+                    <span className="text-xs">{txDetail.recipient.email}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">@username</span>
+                    <span>@{txDetail.recipient.username}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Lien de paiement */}
+              {txDetail.paymentLink && (
+                <div className="space-y-2 border rounded-lg p-3">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Lien de paiement</p>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Titre</span>
+                    <span className="font-medium">{txDetail.paymentLink.title}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Slug</span>
+                    <span className="font-mono text-xs">{txDetail.paymentLink.slug}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Dates */}
+              <div className="space-y-2 border rounded-lg p-3">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Dates</p>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Créée le</span>
+                  <span className="text-xs">{txDetail.createdAt ? format(new Date(txDetail.createdAt), "dd/MM/yyyy HH:mm:ss", { locale: fr }) : "—"}</span>
+                </div>
+                {txDetail.confirmedAt && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Confirmée le</span>
+                    <span className="text-xs">{format(new Date(txDetail.confirmedAt), "dd/MM/yyyy HH:mm:ss", { locale: fr })}</span>
+                  </div>
+                )}
+                {txDetail.updatedAt && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Mise à jour</span>
+                    <span className="text-xs">{format(new Date(txDetail.updatedAt), "dd/MM/yyyy HH:mm:ss", { locale: fr })}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Notify URL */}
+              {txDetail.notifyUrl && (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Webhook URL</p>
+                  <p className="font-mono text-xs break-all bg-muted/40 p-2 rounded">{txDetail.notifyUrl}</p>
+                </div>
+              )}
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSelectedTxId(null)}>Fermer</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
