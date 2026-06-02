@@ -34,8 +34,6 @@ import {
   Code2,
   Terminal,
   FlaskConical,
-  FileText as Terms,
-  ShieldCheck,
   Scale,
   HelpCircle,
   Mail,
@@ -121,9 +119,7 @@ function Navbar() {
     {
       title: t.nav.legal,
       items: [
-        { label: t.nav.terms, href: "/terms", icon: Terms },
-        { label: t.nav.privacy, href: "/privacy", icon: ShieldCheck },
-        { label: t.nav.legalNotice, href: "/legal", icon: Scale },
+        { label: "Conditions d'utilisation", href: "/terms", icon: Scale },
       ],
     },
   ];
@@ -966,9 +962,7 @@ function Footer() {
           <div>
             <h4 className="font-semibold text-foreground mb-3 sm:mb-4 text-xs sm:text-sm uppercase tracking-wider">{t.landing.footerCol3}</h4>
             <ul className="space-y-2 sm:space-y-3">
-              <li><Link href="/terms" className="text-muted-foreground hover:text-primary text-xs sm:text-sm transition-colors">{t.landing.footerTerms}</Link></li>
-              <li><Link href="/privacy" className="text-muted-foreground hover:text-primary text-xs sm:text-sm transition-colors">{t.landing.footerPrivacy}</Link></li>
-              <li><Link href="/legal" className="text-muted-foreground hover:text-primary text-xs sm:text-sm transition-colors">{t.landing.footerLegal}</Link></li>
+              <li><Link href="/terms" className="text-muted-foreground hover:text-primary text-xs sm:text-sm transition-colors">Conditions d'utilisation</Link></li>
             </ul>
           </div>
         </div>
