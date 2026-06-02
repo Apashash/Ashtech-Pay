@@ -176,6 +176,7 @@ export default function AdminUserDetail() {
   const [txPage, setTxPage] = useState(1);
   const [txSearch, setTxSearch] = useState("");
   const [txType, setTxType] = useState("all");
+  const [txStatus, setTxStatus] = useState("all");
 
   const [editModal, setEditModal] = useState(false);
   const [editForm, setEditForm] = useState({ fullName: "", email: "", phone: "", role: "" });
@@ -225,11 +226,12 @@ export default function AdminUserDetail() {
   });
 
   const { data: txData, isLoading: txLoading } = useQuery<{ data: Transaction[]; total: number; pages: number }>({
-    queryKey: [`/api/admin/transactions`, id, txPage, txSearch, txType],
+    queryKey: [`/api/admin/transactions`, id, txPage, txSearch, txType, txStatus],
     queryFn: async () => {
       const params = new URLSearchParams({ userId: id!, page: String(txPage), limit: "20" });
       if (txSearch) params.set("search", txSearch);
       if (txType !== "all") params.set("type", txType);
+      if (txStatus !== "all") params.set("status", txStatus);
       const res = await fetch(`/api/admin/transactions?${params}`, { credentials: "include", headers: authHeaders });
       if (!res.ok) throw new Error("Erreur");
       return res.json();
@@ -630,6 +632,27 @@ export default function AdminUserDetail() {
                     className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
                       txType === value
                         ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-muted/40 text-muted-foreground border-border hover:bg-muted"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { value: "all", label: "Tous statuts" },
+                  { value: "pending", label: "⏳ En attente" },
+                  { value: "completed", label: "✅ Complété" },
+                  { value: "failed", label: "❌ Échoué" },
+                  { value: "cancelled", label: "🚫 Annulé" },
+                ].map(({ value, label }) => (
+                  <button
+                    key={value}
+                    onClick={() => { setTxStatus(value); setTxPage(1); }}
+                    className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                      txStatus === value
+                        ? "bg-secondary text-secondary-foreground border-secondary"
                         : "bg-muted/40 text-muted-foreground border-border hover:bg-muted"
                     }`}
                   >
