@@ -1256,7 +1256,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAdminTransactionsPaginated(params: { limit: number; offset: number; types?: string[]; type?: string; status?: string; search?: string; userId?: string }): Promise<{ data: Transaction[]; total: number }> {
-    const { limit, offset, types, type, status, userId } = params;
+    const { limit, offset, types, type, status, search, userId } = params;
 
     const conditions: any[] = [];
     if (userId) conditions.push(eq(transactions.userId, userId));
@@ -1266,6 +1266,13 @@ export class DatabaseStorage implements IStorage {
       conditions.push(eq(transactions.type, type));
     }
     if (status && status !== "all") conditions.push(eq(transactions.status, status));
+    if (search) {
+      conditions.push(or(
+        ilike(transactions.reference, `%${search}%`),
+        ilike(transactions.externalReference, `%${search}%`),
+        ilike(transactions.description, `%${search}%`),
+      ));
+    }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 

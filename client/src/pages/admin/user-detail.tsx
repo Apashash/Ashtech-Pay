@@ -48,6 +48,8 @@ import {
   ChevronLeft,
   ChevronRight,
   LogIn,
+  Search,
+  X,
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -172,6 +174,8 @@ export default function AdminUserDetail() {
   const { toast } = useToast();
   const [tab, setTab] = useState("profil");
   const [txPage, setTxPage] = useState(1);
+  const [txSearch, setTxSearch] = useState("");
+  const [txType, setTxType] = useState("all");
 
   const [editModal, setEditModal] = useState(false);
   const [editForm, setEditForm] = useState({ fullName: "", email: "", phone: "", role: "" });
@@ -221,9 +225,11 @@ export default function AdminUserDetail() {
   });
 
   const { data: txData, isLoading: txLoading } = useQuery<{ data: Transaction[]; total: number; pages: number }>({
-    queryKey: [`/api/admin/transactions`, id, txPage],
+    queryKey: [`/api/admin/transactions`, id, txPage, txSearch, txType],
     queryFn: async () => {
       const params = new URLSearchParams({ userId: id!, page: String(txPage), limit: "20" });
+      if (txSearch) params.set("search", txSearch);
+      if (txType !== "all") params.set("type", txType);
       const res = await fetch(`/api/admin/transactions?${params}`, { credentials: "include", headers: authHeaders });
       if (!res.ok) throw new Error("Erreur");
       return res.json();
@@ -592,7 +598,47 @@ export default function AdminUserDetail() {
           </TabsContent>
 
           {/* ─── ONGLET TRANSACTIONS ───────────────────────── */}
-          <TabsContent value="transactions" className="mt-4">
+          <TabsContent value="transactions" className="mt-4 space-y-3">
+            {/* Recherche + filtres */}
+            <div className="flex flex-col gap-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  className="pl-9 pr-9 h-9 text-sm"
+                  placeholder="Recherche par référence, réf. externe, description..."
+                  value={txSearch}
+                  onChange={(e) => { setTxSearch(e.target.value); setTxPage(1); }}
+                />
+                {txSearch && (
+                  <button className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" onClick={() => { setTxSearch(""); setTxPage(1); }}>
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { value: "all", label: "Tous" },
+                  { value: "deposit", label: "Dépôt" },
+                  { value: "withdrawal", label: "Retrait" },
+                  { value: "transfer_in,transfer_out", label: "Transfert" },
+                  { value: "payment_link", label: "Lien paiement" },
+                  { value: "conversion", label: "Conversion" },
+                ].map(({ value, label }) => (
+                  <button
+                    key={value}
+                    onClick={() => { setTxType(value); setTxPage(1); }}
+                    className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                      txType === value
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-muted/40 text-muted-foreground border-border hover:bg-muted"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <Card>
               <CardContent className="p-0">
                 {txLoading ? (

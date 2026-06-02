@@ -6114,12 +6114,14 @@ export async function registerRoutes(
       const userId = (req.query.userId as string) || undefined;
       const offset = (page - 1) * limit;
 
+      const search = (req.query.search as string) || undefined;
       const typeList = type !== "all" ? type.split(",").map(t => t.trim()).filter(Boolean) : [];
       const { data: txList, total } = await (storage as any).getAdminTransactionsPaginated({
         limit, offset,
         types: typeList.length > 0 ? typeList : undefined,
         status: status !== "all" ? status : undefined,
         userId,
+        search,
       });
 
       // Batch user lookup — one query for all unique user IDs (no N+1)
