@@ -542,7 +542,7 @@ export default function AdminUserDetail() {
                       variant="outline" size="sm" className="gap-2 justify-start text-orange-500"
                       onClick={() => { setBlockReason(""); setBlockModal(true); }}
                     >
-                      <Ban className="w-4 h-4" /> Bloquer retraits/envois
+                      <Ban className="w-4 h-4" /> Off retrait
                     </Button>
                   )}
                   <Button
