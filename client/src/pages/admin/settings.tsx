@@ -5,7 +5,6 @@ import { useLocation } from "wouter";
 import { 
   Settings,
   Globe,
-  Smartphone,
   AlertTriangle,
   Lock,
   ShieldCheck
@@ -30,14 +29,6 @@ export default function AdminSettings() {
       icon: Globe,
       color: "bg-green-500/10 text-green-600",
       borderColor: "border-green-500/30"
-    },
-    {
-      id: "rates",
-      title: "Device et taux",
-      description: "Taux de change par devise",
-      icon: Smartphone,
-      color: "bg-purple-500/10 text-purple-600",
-      borderColor: "border-purple-500/30"
     },
     {
       id: "maintenance",

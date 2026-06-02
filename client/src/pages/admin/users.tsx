@@ -187,7 +187,6 @@ export default function AdminUsers() {
   ] : [];
 
   const convFeePercent = conversionFeeSetting?.value ? parseFloat(conversionFeeSetting.value) : 6;
-  const xafRate = (fxRates as Record<string, number>)["XAF"] || 585;
 
   const convPreview = (() => {
     if (!convFrom || !convTo || !convAmount || convFrom === convTo) return null;
@@ -195,10 +194,11 @@ export default function AdminUsers() {
     if (isNaN(amount) || amount <= 0) return null;
     const fee = (amount * convFeePercent) / 100;
     const afterFee = amount - fee;
-    const fromRate = (fxRates as Record<string, number>)[convFrom] || xafRate;
-    const toRate = (fxRates as Record<string, number>)[convTo] || xafRate;
-    const inXAF = afterFee * (xafRate / fromRate);
-    const received = inXAF * (toRate / xafRate);
+    // fxRates are XAF-direct: fxRates[currency] = how many XAF = 1 unit of that currency
+    const fromRate = (fxRates as Record<string, number>)[convFrom] || 1;
+    const toRate = (fxRates as Record<string, number>)[convTo] || 1;
+    const inXAF = afterFee * fromRate;
+    const received = inXAF / toRate;
     const srcBalance = parseFloat(userWalletList.find(w => w.currency === convFrom)?.balance || "0");
     return { fee, received, srcBalance, sufficient: srcBalance >= amount };
   })();

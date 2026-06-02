@@ -54,7 +54,6 @@ import AdminLogs from "@/pages/admin/logs";
 import AdminSettings from "@/pages/admin/settings";
 import AdminSettingsPlatform from "@/pages/admin/settings/platform";
 import AdminSettingsPublicInfo from "@/pages/admin/settings/public-info";
-import AdminSettingsRates from "@/pages/admin/settings/rates";
 import AdminSettingsMaintenance from "@/pages/admin/settings/maintenance";
 import AdminSettingsLimits from "@/pages/admin/settings/limits";
 import AdminSettingsTurnstile from "@/pages/admin/settings/turnstile";
@@ -193,7 +192,6 @@ function Router() {
       <Route path="/admin/settings" component={AdminSettings} />
       <Route path="/admin/settings/platform" component={AdminSettingsPlatform} />
       <Route path="/admin/settings/public-info" component={AdminSettingsPublicInfo} />
-      <Route path="/admin/settings/rates" component={AdminSettingsRates} />
       <Route path="/admin/settings/maintenance" component={AdminSettingsMaintenance} />
       <Route path="/admin/settings/limits" component={AdminSettingsLimits} />
       <Route path="/admin/settings/turnstile" component={AdminSettingsTurnstile} />

@@ -63,12 +63,12 @@ export default function WithdrawPage() {
   });
   const { rates: fxRates } = useExchangeRates();
   const userCurrency = user?.preferredCurrency || "XAF";
-  const xafRate = fxRates["XAF"] || 585;
-  const userFxRate = fxRates[userCurrency] || xafRate;
-  const convertFromXAF = (xaf: number) => Math.ceil(xaf * userFxRate / xafRate);
+  // fxRates are XAF-direct: fxRates[currency] = how many XAF = 1 unit of that currency
+  const userRate = fxRates[userCurrency] || 1; // XAF per 1 unit of userCurrency
+  const convertFromXAF = (xaf: number) => Math.ceil(xaf / userRate);
   const limitsLoaded = limits !== undefined && fxRates && Object.keys(fxRates).length > 0;
   const minWithdrawal = convertFromXAF(limits?.minWithdrawal ?? 150);
-  const maxWithdrawal = Math.floor((limits?.maxWithdrawal ?? 5000000) * userFxRate / xafRate);
+  const maxWithdrawal = Math.floor((limits?.maxWithdrawal ?? 5000000) / userRate);
 
   const rawBalance = parseFloat(user?.balance || "0");
   const isDecimalCurrency = userCurrency === "USD" || userCurrency === "EUR";

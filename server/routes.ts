@@ -4445,26 +4445,12 @@ export async function registerRoutes(
     }
   });
 
-  // Public exchange rates route — returns all fx_rate_XXX as units per 1 USD
+  // Public exchange rates — XAF-direct format (how many XAF = 1 unit of currency)
+  // Source: countries.exchange_rate field (set in /admin/countries)
   app.get("/api/public/exchange-rates", async (_req, res) => {
     try {
-      const settings = await storage.getAllSettings();
-      const rates: Record<string, number> = {};
-
-      settings.forEach(s => {
-        if (s.key.startsWith("fx_rate_")) {
-          const code = s.key.replace("fx_rate_", "");
-          const val = parseFloat(s.value);
-          if (!isNaN(val) && val > 0) rates[code] = val;
-        }
-      });
-
-      // Fallback defaults if not in DB yet
-      ALL_FX_CURRENCIES.forEach(c => {
-        if (!rates[c.code]) rates[c.code] = c.defaultRate;
-      });
-
-      res.json(rates);
+      const fxRates = await loadFxRates();
+      res.json(fxRates);
     } catch (error) {
       console.error("Get exchange rates error:", error);
       res.status(500).json({ message: "Erreur serveur" });

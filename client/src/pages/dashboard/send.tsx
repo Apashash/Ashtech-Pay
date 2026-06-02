@@ -90,10 +90,10 @@ export default function SendMoneyPage() {
   });
   const { rates: fxRates } = useExchangeRates();
   const senderCurrency = (selectedWallet || primaryCurrency || "XAF") as string;
-  const xafFxRate = fxRates["XAF"] || 585;
-  const senderFxRate = fxRates[senderCurrency] || xafFxRate;
-  const minTransfer = Math.ceil((limits?.minTransfer ?? 150) * senderFxRate / xafFxRate);
-  const maxTransfer = Math.floor((limits?.maxTransfer ?? 5000000) * senderFxRate / xafFxRate);
+  // fxRates are XAF-direct: fxRates[currency] = how many XAF = 1 unit of that currency
+  const senderRate = fxRates[senderCurrency] || 1; // XAF per 1 unit of senderCurrency
+  const minTransfer = Math.ceil((limits?.minTransfer ?? 150) / senderRate);
+  const maxTransfer = Math.floor((limits?.maxTransfer ?? 5000000) / senderRate);
 
   const { data: countries, isLoading: isLoadingConfig } = useQuery<CountryConfig[]>({
     queryKey: ["/api/transfers/config"],

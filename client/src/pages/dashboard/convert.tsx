@@ -104,11 +104,11 @@ export default function ConvertPage() {
   const feeAmount = (parsedAmount * conversionFeePercent) / 100;
   const amountAfterFee = parsedAmount - feeAmount;
   const CFA_CODES = new Set(["XAF","XAFC","XAFG","XOF","XOFC","XOFF","XOFN","XOFB","XOFT","XOFS","XOFM"]);
-  const xafRate = fxRates["XAF"] || 585;
-  const fromRateUSD = CFA_CODES.has(fromCurrency) ? xafRate : (fxRates[fromCurrency] || xafRate);
-  const toRateUSD = CFA_CODES.has(toCurrency) ? xafRate : (fxRates[toCurrency] || xafRate);
-  const amountInXAF = amountAfterFee * (xafRate / fromRateUSD);
-  const previewAmount = amountInXAF * (toRateUSD / xafRate);
+  // fxRates are XAF-direct: fxRates[currency] = how many XAF = 1 unit of that currency (CFA = 1)
+  const fromRate = CFA_CODES.has(fromCurrency) ? 1 : (fxRates[fromCurrency] || 1);
+  const toRate = CFA_CODES.has(toCurrency) ? 1 : (fxRates[toCurrency] || 1);
+  const amountInXAF = amountAfterFee * fromRate;
+  const previewAmount = amountInXAF / toRate;
 
   const walletSymbol = (currency: string) => (CURRENCY_SYMBOLS as Record<string, string>)[currency] || currency;
 

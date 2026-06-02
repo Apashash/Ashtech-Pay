@@ -8,64 +8,68 @@ export const CFA_CURRENCIES = new Set([
   "XOF", "XOFC", "XOFF", "XOFN", "XOFB", "XOFT", "XOFS", "XOFM", // West African CFA (BCEAO)
 ]);
 
+// XAF reference (1 USD ≈ 585 XAF) — used only for fallback default computation
+const XAF_PER_USD = 585;
 
-// Load fx rates (units per 1 USD) from admin "Devises & Taux de change" settings
+// Build fallback defaults: XAF-direct (how many XAF = 1 unit of currency)
+// using ALL_FX_CURRENCIES which stores USD-pivot rates (units per 1 USD)
+const FALLBACK_RATES: Record<string, number> = {};
+ALL_FX_CURRENCIES.forEach(c => {
+  // xaf_direct = (XAF per USD) / (currency per USD) = XAF per 1 unit of currency
+  FALLBACK_RATES[c.code] = XAF_PER_USD / c.defaultRate;
+});
+// CFA variants all 1:1 with XAF
+CFA_CURRENCIES.forEach(code => { FALLBACK_RATES[code] = 1; });
+
+// Load XAF-direct rates from countries table.
+// Each country has: currency (e.g. "CDF") + exchangeRate (XAF per 1 unit)
+// If multiple countries share the same currency, the last one wins (they should be identical).
 export async function loadFxRates(): Promise<Record<string, number>> {
-  const allSettings = await storage.getAllSettings();
-  const rates: Record<string, number> = {};
-  allSettings.forEach(s => {
-    if (s.key.startsWith("fx_rate_")) {
-      const code = s.key.replace("fx_rate_", "");
-      const val = parseFloat(s.value);
-      if (!isNaN(val) && val > 0) rates[code] = val;
+  const allCountries = await storage.getAllCountries();
+  const rates: Record<string, number> = { ...FALLBACK_RATES };
+
+  allCountries.forEach((c: any) => {
+    const rate = parseFloat(c.exchangeRate as string);
+    if (c.currency && !isNaN(rate) && rate > 0) {
+      rates[c.currency] = rate;
     }
   });
-  ALL_FX_CURRENCIES.forEach(c => {
-    if (!rates[c.code]) rates[c.code] = c.defaultRate;
-  });
+
+  // CFA currencies are always 1:1 with XAF
+  CFA_CURRENCIES.forEach(code => { rates[code] = 1; });
+
   return rates;
 }
 
-// Convert an amount to the target currency using admin rates (USD as pivot)
-export function convertFromXAF(amountXAF: number, targetCurrency: string, fxRates: Record<string, number>): number {
-  if (targetCurrency === "XAF") return amountXAF;
-  // All CFA variants (XOF, XOFS, XOFC, XOFT, etc.) are 1:1 with XAF
-  if (CFA_CURRENCIES.has(targetCurrency)) return amountXAF;
-  
-  // 1. Convert XAF to USD (A to USD)
-  const xafRate = fxRates["XAF"] || 585;
-  const amountUSD = amountXAF / xafRate;
-  
-  // 2. Convert USD to Target (USD to B)
-  const targetRate = fxRates[targetCurrency];
-  if (targetRate === undefined) {
-    console.warn(`[walletHelper] No rate found for ${targetCurrency}, falling back to 1:1 with USD`);
-    return amountUSD;
-  }
-
-  return amountUSD * targetRate;
-}
-
-// Convert any currency amount to XAF using admin rates (USD as pivot)
+// Convert an amount in `fromCurrency` to XAF using XAF-direct rates
 export function convertToXAF(amount: number, fromCurrency: string, fxRates: Record<string, number>): number {
   if (fromCurrency === "XAF") return amount;
-  // All CFA variants (XOF, XOFS, XOFC, XOFT, etc.) are 1:1 with XAF
   if (CFA_CURRENCIES.has(fromCurrency)) return amount;
-  
-  // 1. Convert Source to USD (A to USD)
-  const fromRate = fxRates[fromCurrency];
-  if (fromRate === undefined) {
-    console.warn(`[walletHelper] No rate found for ${fromCurrency}, falling back to 1:1 with USD`);
-    return amount; // Treat as USD if no rate
-  }
-  const amountUSD = amount / fromRate;
 
-  // 2. Convert USD to XAF (USD to B)
-  const xafRate = fxRates["XAF"] || 585;
-  return amountUSD * xafRate;
+  const rate = fxRates[fromCurrency];
+  if (rate === undefined || rate === 0) {
+    console.warn(`[walletHelper] No rate found for ${fromCurrency}, falling back to 1:1`);
+    return amount;
+  }
+  // rate = XAF per 1 unit of fromCurrency
+  return amount * rate;
 }
 
-// Convert between two arbitrary currencies via USD as pivot
+// Convert an XAF amount to `targetCurrency` using XAF-direct rates
+export function convertFromXAF(amountXAF: number, targetCurrency: string, fxRates: Record<string, number>): number {
+  if (targetCurrency === "XAF") return amountXAF;
+  if (CFA_CURRENCIES.has(targetCurrency)) return amountXAF;
+
+  const rate = fxRates[targetCurrency];
+  if (rate === undefined || rate === 0) {
+    console.warn(`[walletHelper] No rate found for ${targetCurrency}, falling back to 1:1`);
+    return amountXAF;
+  }
+  // rate = XAF per 1 unit of targetCurrency  →  targetCurrency per XAF = 1/rate
+  return amountXAF / rate;
+}
+
+// Convert between two arbitrary currencies via XAF as pivot
 export function convertCurrency(
   amount: number,
   fromCurrency: string,
@@ -73,16 +77,10 @@ export function convertCurrency(
   fxRates: Record<string, number>
 ): number {
   if (fromCurrency === toCurrency) return amount;
-  // CFA variants are all 1:1 with each other
   if (CFA_CURRENCIES.has(fromCurrency) && CFA_CURRENCIES.has(toCurrency)) return amount;
-  
-  // 1. Convert Source to USD
-  const fromRate = CFA_CURRENCIES.has(fromCurrency) ? (fxRates["XAF"] || 585) : fxRates[fromCurrency];
-  const amountUSD = fromRate ? (amount / fromRate) : amount;
 
-  // 2. Convert USD to Target
-  const targetRate = CFA_CURRENCIES.has(toCurrency) ? (fxRates["XAF"] || 585) : fxRates[toCurrency];
-  return targetRate ? (amountUSD * targetRate) : amountUSD;
+  const amountInXAF = convertToXAF(amount, fromCurrency, fxRates);
+  return convertFromXAF(amountInXAF, toCurrency, fxRates);
 }
 
 
@@ -127,8 +125,7 @@ export async function creditUserWallet(
     return;
   }
 
-  // Rule 2: Any other currency (including same-family CFA variants) → own secondary wallet
-  // e.g. XOFT for Togo, XAFG for Gabon — each country has its own wallet
+  // Rule 2: Any other currency → own secondary wallet
   console.log(`[walletHelper] Crediting secondary wallet ${paymentCurrency} for user ${userId}: +${amount}`);
   await storage.upsertWallet(userId, paymentCurrency, amount);
 }

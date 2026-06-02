@@ -139,11 +139,13 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const preferredCurrency = user?.preferredCurrency || "XAF";
   const sidebarBalance = (() => {
     if (wallets.length === 0) return user?.balance || "0";
+    // fxRates are XAF-direct: fxRates[currency] = how many XAF = 1 unit of that currency
     const localRate = rates[preferredCurrency] || 1;
     let total = 0;
     for (const wallet of wallets) {
       const walletRate = rates[wallet.currency] || 1;
-      total += parseFloat(wallet.balance || "0") * (localRate / walletRate);
+      // Convert wallet balance to preferredCurrency: balance * walletRate (→XAF) / localRate (→preferred)
+      total += parseFloat(wallet.balance || "0") * (walletRate / localRate);
     }
     return total.toFixed(preferredCurrency === "USD" || preferredCurrency === "EUR" ? 2 : 0);
   })();
