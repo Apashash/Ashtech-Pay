@@ -5718,7 +5718,7 @@ export async function registerRoutes(
   app.get("/api/admin/users/:id", requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
-      const user = await storage.getUserById(id);
+      const user = await storage.getUser(id);
       if (!user) return res.status(404).json({ message: "Utilisateur introuvable" });
       const fxRates = await loadFxRates();
       const wallets = await storage.getWalletsByUserIds([id]);
