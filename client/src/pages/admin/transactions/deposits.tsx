@@ -59,7 +59,7 @@ interface TransactionDetails extends Transaction {
   user?: { fullName: string; email: string; username: string; country?: string; phone?: string } | null;
   paymentIntent?: { payerName?: string; payerEmail?: string; payerPhone?: string; payerCountry?: string } | null;
   paymentLink?: { title: string; slug: string } | null;
-  operator?: { id: string; name: string; type: string; paymentProvider: string } | null;
+  operator?: { id: string; name: string; type: string; paymentProvider: string; depositPaymentProvider?: string | null } | null;
 }
 
 export default function AdminDeposits() {
@@ -621,7 +621,7 @@ export default function AdminDeposits() {
                           <Zap className="w-4 h-4" />
                           <span className="text-sm">Fournisseur</span>
                         </div>
-                        <span className="text-sm font-medium capitalize">{txDetails.operator.paymentProvider}</span>
+                        <span className="text-sm font-medium capitalize">{txDetails.operator.depositPaymentProvider || txDetails.operator.paymentProvider}</span>
                       </div>
                     </div>
                   </>

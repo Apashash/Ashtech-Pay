@@ -58,7 +58,7 @@ interface TransactionDetails extends Transaction {
   paymentLink?: { title: string; slug: string } | null;
   paymentIntent?: any;
   recipient?: { fullName: string; email: string; username: string; country?: string } | null;
-  operator?: { id: string; name: string; type: string; paymentProvider: string } | null;
+  operator?: { id: string; name: string; type: string; paymentProvider: string; depositPaymentProvider?: string | null } | null;
 }
 
 export default function AdminTransactions() {
@@ -539,7 +539,7 @@ export default function AdminTransactions() {
                         <FileText className="w-4 h-4" />
                         <span className="text-sm">Fournisseur</span>
                       </div>
-                      <span className="text-sm font-medium capitalize">{txDetails.operator.paymentProvider}</span>
+                      <span className="text-sm font-medium capitalize">{(txDetails.type === "deposit" && txDetails.operator.depositPaymentProvider) ? txDetails.operator.depositPaymentProvider : txDetails.operator.paymentProvider}</span>
                     </div>
                   </div>
                 </>

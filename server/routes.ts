@@ -6128,7 +6128,8 @@ export async function registerRoutes(
           id: operatorData.id,
           name: operatorData.name,
           type: operatorData.type,
-          paymentProvider: operatorData.paymentProvider
+          paymentProvider: operatorData.paymentProvider,
+          depositPaymentProvider: (operatorData as any).depositPaymentProvider || null,
         } : null;
       }
       
