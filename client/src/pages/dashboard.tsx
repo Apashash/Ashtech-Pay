@@ -650,6 +650,9 @@ export default function DashboardPage() {
     onSuccess: () => {
       removeAuthToken();
       queryClient.clear();
+      sessionStorage.removeItem("impersonatedBy");
+      sessionStorage.removeItem("impersonatedUsername");
+      sessionStorage.removeItem("impersonationBannerPos");
       setLocation("/");
     },
   });

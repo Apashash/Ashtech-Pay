@@ -379,8 +379,8 @@ function ImpersonationBanner() {
         sessionStorage.removeItem("impersonatedBy");
         sessionStorage.removeItem("impersonatedUsername");
         sessionStorage.removeItem("impersonationBannerPos");
-        queryClient.clear();
-        navigate("/admin/users");
+        // Full page reload so the admin session is picked up fresh
+        window.location.href = "/admin/users";
       }
     } catch {}
   };

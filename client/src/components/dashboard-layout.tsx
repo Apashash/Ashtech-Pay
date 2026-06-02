@@ -315,6 +315,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     onSuccess: () => {
       removeAuthToken();
       queryClient.clear();
+      sessionStorage.removeItem("impersonatedBy");
+      sessionStorage.removeItem("impersonatedUsername");
+      sessionStorage.removeItem("impersonationBannerPos");
       toast({ title: "Déconnexion réussie", description: "À bientôt!" });
       // Hard redirect: forces full page reload, resets ALL React state
       window.location.href = "/";
@@ -323,6 +326,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       // Even if API fails, clear local state and redirect
       removeAuthToken();
       queryClient.clear();
+      sessionStorage.removeItem("impersonatedBy");
+      sessionStorage.removeItem("impersonatedUsername");
+      sessionStorage.removeItem("impersonationBannerPos");
       window.location.href = "/";
     },
   });
