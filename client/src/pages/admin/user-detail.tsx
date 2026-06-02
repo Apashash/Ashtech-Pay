@@ -491,7 +491,7 @@ export default function AdminUserDetail() {
                   </Button>
                   <Button
                     variant="outline" size="sm" className="gap-2 justify-start col-span-2"
-                    onClick={() => navigate(`/admin/kyc?search=${encodeURIComponent(user.username)}`)}
+                    onClick={() => navigate(`/admin/kyc?search=${encodeURIComponent(user.email)}`)}
                   >
                     <FileSearch className="w-4 h-4" /> Voir le KYC
                   </Button>
