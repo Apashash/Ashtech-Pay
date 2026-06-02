@@ -50,6 +50,7 @@ import {
   LogIn,
   Search,
   X,
+  SlidersHorizontal,
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -177,6 +178,7 @@ export default function AdminUserDetail() {
   const [txSearch, setTxSearch] = useState("");
   const [txType, setTxType] = useState("all");
   const [txStatus, setTxStatus] = useState("all");
+  const [showFilters, setShowFilters] = useState(false);
 
   const [editModal, setEditModal] = useState(false);
   const [editForm, setEditForm] = useState({ fullName: "", email: "", phone: "", role: "" });
@@ -601,13 +603,13 @@ export default function AdminUserDetail() {
 
           {/* ─── ONGLET TRANSACTIONS ───────────────────────── */}
           <TabsContent value="transactions" className="mt-4 space-y-3">
-            {/* Recherche + filtres */}
-            <div className="flex flex-col gap-2">
-              <div className="relative">
+            {/* Recherche + bouton filtres */}
+            <div className="flex gap-2">
+              <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   className="pl-9 pr-9 h-9 text-sm"
-                  placeholder="Recherche par référence, réf. externe, description..."
+                  placeholder="Référence, réf. externe, description..."
                   value={txSearch}
                   onChange={(e) => { setTxSearch(e.target.value); setTxPage(1); }}
                 />
@@ -617,50 +619,84 @@ export default function AdminUserDetail() {
                   </button>
                 )}
               </div>
-              <div className="flex flex-wrap gap-1.5">
-                {[
-                  { value: "all", label: "Tous" },
-                  { value: "deposit", label: "Dépôt" },
-                  { value: "withdrawal", label: "Retrait" },
-                  { value: "transfer_in,transfer_out", label: "Transfert" },
-                  { value: "payment_link", label: "Lien paiement" },
-                  { value: "conversion", label: "Conversion" },
-                ].map(({ value, label }) => (
-                  <button
-                    key={value}
-                    onClick={() => { setTxType(value); setTxPage(1); }}
-                    className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-                      txType === value
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "bg-muted/40 text-muted-foreground border-border hover:bg-muted"
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {[
-                  { value: "all", label: "Tous statuts" },
-                  { value: "pending", label: "⏳ En attente" },
-                  { value: "completed", label: "✅ Complété" },
-                  { value: "failed", label: "❌ Échoué" },
-                  { value: "cancelled", label: "🚫 Annulé" },
-                ].map(({ value, label }) => (
-                  <button
-                    key={value}
-                    onClick={() => { setTxStatus(value); setTxPage(1); }}
-                    className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-                      txStatus === value
-                        ? "bg-secondary text-secondary-foreground border-secondary"
-                        : "bg-muted/40 text-muted-foreground border-border hover:bg-muted"
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className={`h-9 gap-1.5 shrink-0 ${(txType !== "all" || txStatus !== "all") ? "border-primary text-primary" : ""}`}
+                onClick={() => setShowFilters(v => !v)}
+              >
+                <SlidersHorizontal className="w-4 h-4" />
+                Filtres
+                {(txType !== "all" || txStatus !== "all") && (
+                  <span className="ml-0.5 bg-primary text-primary-foreground rounded-full w-4 h-4 text-[10px] flex items-center justify-center">
+                    {(txType !== "all" ? 1 : 0) + (txStatus !== "all" ? 1 : 0)}
+                  </span>
+                )}
+              </Button>
             </div>
+
+            {/* Panneau filtres déroulant */}
+            {showFilters && (
+              <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
+                <div className="space-y-1.5">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Type</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      { value: "all", label: "Tous" },
+                      { value: "deposit", label: "Dépôt" },
+                      { value: "withdrawal", label: "Retrait" },
+                      { value: "transfer_in,transfer_out", label: "Transfert" },
+                      { value: "payment_link", label: "Lien paiement" },
+                      { value: "conversion", label: "Conversion" },
+                    ].map(({ value, label }) => (
+                      <button
+                        key={value}
+                        onClick={() => { setTxType(value); setTxPage(1); }}
+                        className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                          txType === value
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-background text-muted-foreground border-border hover:bg-muted"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Statut</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      { value: "all", label: "Tous" },
+                      { value: "pending", label: "En attente" },
+                      { value: "completed", label: "Complété" },
+                      { value: "failed", label: "Échoué" },
+                      { value: "cancelled", label: "Annulé" },
+                    ].map(({ value, label }) => (
+                      <button
+                        key={value}
+                        onClick={() => { setTxStatus(value); setTxPage(1); }}
+                        className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                          txStatus === value
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-background text-muted-foreground border-border hover:bg-muted"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {(txType !== "all" || txStatus !== "all") && (
+                  <button
+                    className="text-xs text-muted-foreground hover:text-foreground underline"
+                    onClick={() => { setTxType("all"); setTxStatus("all"); setTxPage(1); }}
+                  >
+                    Réinitialiser les filtres
+                  </button>
+                )}
+              </div>
+            )}
 
             <Card>
               <CardContent className="p-0">
