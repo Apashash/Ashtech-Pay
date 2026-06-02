@@ -375,7 +375,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider style={style as React.CSSProperties}>
-      <div className={`flex min-h-dvh w-full${(user as any)?.impersonatedBy ? " pt-10" : ""}`}>
+      <div className="flex min-h-dvh w-full">
         <Sidebar>
           <SidebarHeader className="p-4 border-b border-sidebar-border">
             <Link href="/dashboard">

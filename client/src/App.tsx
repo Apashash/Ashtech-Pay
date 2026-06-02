@@ -330,17 +330,46 @@ function ImpersonationBanner() {
   const [, navigate] = useLocation();
   const { data: user } = useQuery<any>({ queryKey: ["/api/user"], retry: false });
 
-  // Fallback: read from sessionStorage so the banner survives page navigations
-  // where the query might briefly be undefined while refetching.
   const ssImpersonated = sessionStorage.getItem("impersonatedBy");
   const ssUsername = sessionStorage.getItem("impersonatedUsername");
 
   const isImpersonating = !!(user?.impersonatedBy || ssImpersonated);
   const displayUsername = user?.username || ssUsername || "";
 
-  if (!isImpersonating) return null;
+  const [expanded, setExpanded] = React.useState(false);
+  const [pos, setPos] = React.useState(() => {
+    const saved = sessionStorage.getItem("impersonationBannerPos");
+    return saved ? JSON.parse(saved) : { x: window.innerWidth - 80, y: 80 };
+  });
+  const dragging = React.useRef(false);
+  const dragOffset = React.useRef({ x: 0, y: 0 });
+  const moved = React.useRef(false);
 
-  const handleExit = async () => {
+  const onPointerDown = (e: React.PointerEvent) => {
+    dragging.current = true;
+    moved.current = false;
+    dragOffset.current = { x: e.clientX - pos.x, y: e.clientY - pos.y };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    e.preventDefault();
+  };
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!dragging.current) return;
+    moved.current = true;
+    const newX = Math.min(Math.max(0, e.clientX - dragOffset.current.x), window.innerWidth - 60);
+    const newY = Math.min(Math.max(0, e.clientY - dragOffset.current.y), window.innerHeight - 60);
+    setPos({ x: newX, y: newY });
+    setExpanded(false);
+  };
+
+  const onPointerUp = (e: React.PointerEvent) => {
+    dragging.current = false;
+    sessionStorage.setItem("impersonationBannerPos", JSON.stringify(pos));
+    if (!moved.current) setExpanded(v => !v);
+  };
+
+  const handleExit = async (e: React.MouseEvent) => {
+    e.stopPropagation();
     try {
       const res = await fetch("/api/admin/impersonate/exit", {
         method: "POST",
@@ -349,24 +378,39 @@ function ImpersonationBanner() {
       if (res.ok) {
         sessionStorage.removeItem("impersonatedBy");
         sessionStorage.removeItem("impersonatedUsername");
+        sessionStorage.removeItem("impersonationBannerPos");
         queryClient.clear();
         navigate("/admin/users");
       }
     } catch {}
   };
 
+  if (!isImpersonating) return null;
+
   return (
-    <div className="fixed top-0 left-0 right-0 z-[9999] bg-red-600 text-white text-sm flex items-center justify-between px-4 py-2.5 shadow-lg">
-      <span className="font-medium flex items-center gap-2">
-        <span className="text-base">👁</span>
-        Connecté en tant que <strong className="underline underline-offset-2">{displayUsername}</strong>
-      </span>
-      <button
-        onClick={handleExit}
-        className="ml-4 flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white text-red-600 font-semibold text-xs hover:bg-red-50 transition-colors shrink-0 shadow-sm"
-      >
-        ← Retour admin
-      </button>
+    <div
+      style={{ left: pos.x, top: pos.y, touchAction: "none" }}
+      className="fixed z-[9999] select-none"
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+    >
+      {expanded ? (
+        <div className="flex flex-col items-center gap-2 bg-red-600 text-white rounded-2xl shadow-2xl px-4 py-3 min-w-[160px] cursor-grab active:cursor-grabbing">
+          <span className="text-xs font-medium opacity-80">Mode admin</span>
+          <span className="font-bold text-sm">@{displayUsername}</span>
+          <button
+            onClick={handleExit}
+            className="w-full mt-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white text-red-600 font-semibold text-xs hover:bg-red-50 transition-colors shadow-sm"
+          >
+            ← Retour admin
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center justify-center w-14 h-14 rounded-full bg-red-600 shadow-2xl cursor-grab active:cursor-grabbing border-2 border-white/30">
+          <span className="text-xl">👁</span>
+        </div>
+      )}
     </div>
   );
 }
