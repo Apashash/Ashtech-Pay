@@ -370,19 +370,18 @@ function ImpersonationBanner() {
 
   const handleExit = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    // Always clear sessionStorage first — button must disappear regardless
+    sessionStorage.removeItem("impersonatedBy");
+    sessionStorage.removeItem("impersonatedUsername");
+    sessionStorage.removeItem("impersonationBannerPos");
     try {
-      const res = await fetch("/api/admin/impersonate/exit", {
+      await fetch("/api/admin/impersonate/exit", {
         method: "POST",
         credentials: "include",
       });
-      if (res.ok) {
-        sessionStorage.removeItem("impersonatedBy");
-        sessionStorage.removeItem("impersonatedUsername");
-        sessionStorage.removeItem("impersonationBannerPos");
-        // Full page reload so the admin session is picked up fresh
-        window.location.href = "/admin/users";
-      }
     } catch {}
+    // Always redirect to admin, even if API call failed (session already gone)
+    window.location.href = "/admin/users";
   };
 
   if (!isImpersonating) return null;
