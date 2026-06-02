@@ -346,15 +346,16 @@ function ImpersonationBanner() {
   };
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-[9999] bg-orange-500 text-white text-sm flex items-center justify-between px-4 py-2 shadow-md">
-      <span className="font-medium">
-        👁 Mode impersonation — vous naviguez en tant que <strong>{user.username}</strong>
+    <div className="fixed top-0 left-0 right-0 z-[9999] bg-red-600 text-white text-sm flex items-center justify-between px-4 py-2.5 shadow-lg">
+      <span className="font-medium flex items-center gap-2">
+        <span className="text-base">👁</span>
+        Connecté en tant que <strong className="underline underline-offset-2">{user.username}</strong>
       </span>
       <button
         onClick={handleExit}
-        className="ml-4 px-3 py-1 rounded bg-white text-orange-600 font-semibold text-xs hover:bg-orange-100 transition-colors shrink-0"
+        className="ml-4 flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white text-red-600 font-semibold text-xs hover:bg-red-50 transition-colors shrink-0 shadow-sm"
       >
-        Quitter
+        ← Retour admin
       </button>
     </div>
   );
