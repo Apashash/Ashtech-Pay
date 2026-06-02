@@ -175,6 +175,7 @@ declare module "express-session" {
     userAgent?: string;
     loginAt?: string;
     tokenIssuedAt?: number;
+    impersonatedBy?: string;
   }
 }
 
@@ -1431,7 +1432,8 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Utilisateur non trouvé" });
       }
       const { password: _, ...safeUser } = user;
-      res.json(safeUser);
+      const impersonatedBy = req.session.impersonatedBy || null;
+      res.json({ ...safeUser, impersonatedBy });
     } catch (error) {
       console.error("Get user error:", error);
       res.status(500).json({ message: "Erreur serveur" });
@@ -6018,6 +6020,59 @@ export async function registerRoutes(
       res.json(safeUser);
     } catch (error) {
       console.error("Admin unblock withdrawal error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // Admin: Impersonate user — se connecter en tant qu'utilisateur
+  app.post("/api/admin/users/:id/impersonate", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const adminId = req.userId!;
+
+      if (id === adminId) {
+        return res.status(400).json({ message: "Vous êtes déjà connecté avec ce compte." });
+      }
+
+      const targetUser = await storage.getUser(id);
+      if (!targetUser) return res.status(404).json({ message: "Utilisateur non trouvé" });
+
+      await storage.createAdminLog({
+        adminId,
+        action: "impersonate",
+        targetType: "user",
+        targetId: id,
+        details: JSON.stringify({ targetUsername: targetUser.username }),
+        ipAddress: req.ip || null,
+      });
+
+      req.session.impersonatedBy = adminId;
+      req.session.userId = id;
+
+      res.json({ ok: true, userId: id, username: targetUser.username });
+    } catch (error) {
+      console.error("Admin impersonate error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // Admin: Exit impersonation — revenir à son propre compte admin
+  app.post("/api/admin/impersonate/exit", requireAuth, async (req, res) => {
+    try {
+      const originalAdminId = req.session.impersonatedBy;
+      if (!originalAdminId) {
+        return res.status(400).json({ message: "Vous n'êtes pas en mode impersonation." });
+      }
+
+      const admin = await storage.getUser(originalAdminId);
+      if (!admin) return res.status(404).json({ message: "Compte admin introuvable" });
+
+      req.session.userId = originalAdminId;
+      req.session.impersonatedBy = undefined;
+
+      res.json({ ok: true, adminId: originalAdminId, username: admin.username });
+    } catch (error) {
+      console.error("Exit impersonation error:", error);
       res.status(500).json({ message: "Erreur serveur" });
     }
   });

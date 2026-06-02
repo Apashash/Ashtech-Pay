@@ -47,6 +47,7 @@ import {
   ArrowLeftRight,
   ChevronLeft,
   ChevronRight,
+  LogIn,
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -287,6 +288,24 @@ export default function AdminUserDetail() {
     mutationFn: async () => apiRequest("DELETE", `/api/admin/users/${id}`),
     onSuccess: () => { toast({ title: "Utilisateur supprimé" }); navigate("/admin/users"); },
     onError: () => toast({ title: "Erreur", variant: "destructive" }),
+  });
+
+  const impersonateMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/admin/users/${id}/impersonate`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || "Erreur");
+      return json;
+    },
+    onSuccess: (data) => {
+      queryClient.clear();
+      toast({ title: `Connecté en tant que @${data.username}` });
+      navigate("/dashboard");
+    },
+    onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
   });
 
   const updateBalanceMutation = useMutation({
@@ -531,6 +550,14 @@ export default function AdminUserDetail() {
                     onClick={() => setDeleteModal(true)}
                   >
                     <Trash2 className="w-4 h-4" /> Supprimer
+                  </Button>
+                  <Button
+                    variant="default" size="sm" className="gap-2 justify-start col-span-2 bg-indigo-600 hover:bg-indigo-700 text-white"
+                    onClick={() => impersonateMutation.mutate()}
+                    disabled={impersonateMutation.isPending}
+                  >
+                    <LogIn className="w-4 h-4" />
+                    {impersonateMutation.isPending ? "Connexion..." : `Se connecter en tant que @${user.username}`}
                   </Button>
                 </div>
               </CardContent>

@@ -326,6 +326,40 @@ function ForceLogoutGuard() {
   return null;
 }
 
+function ImpersonationBanner() {
+  const [, navigate] = useLocation();
+  const { data: user } = useQuery<any>({ queryKey: ["/api/user"], retry: false });
+
+  if (!user?.impersonatedBy) return null;
+
+  const handleExit = async () => {
+    try {
+      const res = await fetch("/api/admin/impersonate/exit", {
+        method: "POST",
+        credentials: "include",
+      });
+      if (res.ok) {
+        queryClient.clear();
+        navigate("/admin/users");
+      }
+    } catch {}
+  };
+
+  return (
+    <div className="fixed top-0 left-0 right-0 z-[9999] bg-orange-500 text-white text-sm flex items-center justify-between px-4 py-2 shadow-md">
+      <span className="font-medium">
+        👁 Mode impersonation — vous naviguez en tant que <strong>{user.username}</strong>
+      </span>
+      <button
+        onClick={handleExit}
+        className="ml-4 px-3 py-1 rounded bg-white text-orange-600 font-semibold text-xs hover:bg-orange-100 transition-colors shrink-0"
+      >
+        Quitter
+      </button>
+    </div>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -336,6 +370,7 @@ function App() {
             <VpnDisconnectGuard />
             <ForceLogoutGuard />
             <GlobalSSEWatcher />
+            <ImpersonationBanner />
             <GeoGuard>
               <Router />
             </GeoGuard>
