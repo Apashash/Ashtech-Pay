@@ -6056,6 +6056,7 @@ export async function registerRoutes(
       const limit = Math.min(100, parseInt(req.query.limit as string) || 50);
       const type = (req.query.type as string) || "all";
       const status = (req.query.status as string) || "all";
+      const userId = (req.query.userId as string) || undefined;
       const offset = (page - 1) * limit;
 
       const typeList = type !== "all" ? type.split(",").map(t => t.trim()).filter(Boolean) : [];
@@ -6063,6 +6064,7 @@ export async function registerRoutes(
         limit, offset,
         types: typeList.length > 0 ? typeList : undefined,
         status: status !== "all" ? status : undefined,
+        userId,
       });
 
       // Batch user lookup — one query for all unique user IDs (no N+1)

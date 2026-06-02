@@ -25,6 +25,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
   Ban,
   CheckCircle,
   XCircle,
@@ -34,13 +42,18 @@ import {
   DollarSign,
   ArrowLeft,
   FileSearch,
+  ArrowDownLeft,
+  ArrowUpRight,
+  ArrowLeftRight,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { formatCurrency } from "@/lib/currency";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { ALL_FX_CURRENCIES, COUNTRY_CURRENCIES as SHARED_COUNTRY_CURRENCIES } from "@shared/schema";
+import { ALL_FX_CURRENCIES } from "@shared/schema";
 
 interface User {
   id: string;
@@ -62,6 +75,17 @@ interface User {
   createdAt: string;
 }
 
+interface Transaction {
+  id: string;
+  type: string;
+  amount: string;
+  currency: string;
+  status: string;
+  description: string | null;
+  createdAt: string;
+  fee: string | null;
+}
+
 const CURRENCY_FLAGS: Record<string, string> = {
   XAF: "🇨🇲", XAFC: "🇨🇬", XAFG: "🇬🇦",
   XOF: "🇸🇳", XOFC: "🇨🇮", XOFF: "🇧🇫", XOFN: "🇳🇪", XOFB: "🇧🇯", XOFT: "🇹🇬", XOFS: "🇸🇳", XOFM: "🇲🇱",
@@ -72,28 +96,15 @@ const CURRENCY_FLAGS: Record<string, string> = {
 };
 
 const COUNTRY_FLAGS: Record<string, string> = {
-  "Cameroun": "🇨🇲", "Cameroon": "🇨🇲",
-  "Togo": "🇹🇬",
-  "Sénégal": "🇸🇳", "Senegal": "🇸🇳",
-  "Côte d'Ivoire": "🇨🇮", "Ivory Coast": "🇨🇮",
-  "Mali": "🇲🇱",
-  "Bénin": "🇧🇯", "Benin": "🇧🇯",
-  "Burkina Faso": "🇧🇫",
-  "Niger": "🇳🇪",
-  "Guinée": "🇬🇳", "Guinée Conakry": "🇬🇳",
-  "Ghana": "🇬🇭",
-  "Nigeria": "🇳🇬", "Nigéria": "🇳🇬",
-  "Kenya": "🇰🇪",
-  "Rwanda": "🇷🇼",
-  "Tanzanie": "🇹🇿", "Tanzania": "🇹🇿",
-  "Ouganda": "🇺🇬", "Uganda": "🇺🇬",
-  "Congo RDC": "🇨🇩", "RD Congo": "🇨🇩",
-  "Congo": "🇨🇬", "Congo Brazzaville": "🇨🇬",
-  "Gabon": "🇬🇦",
-  "Guinée-Bissau": "🇬🇼",
-  "Guinée Équatoriale": "🇬🇶",
-  "Centrafrique": "🇨🇫",
-  "Tchad": "🇹🇩",
+  "Cameroun": "🇨🇲", "Cameroon": "🇨🇲", "Togo": "🇹🇬",
+  "Sénégal": "🇸🇳", "Senegal": "🇸🇳", "Côte d'Ivoire": "🇨🇮", "Ivory Coast": "🇨🇮",
+  "Mali": "🇲🇱", "Bénin": "🇧🇯", "Benin": "🇧🇯", "Burkina Faso": "🇧🇫",
+  "Niger": "🇳🇪", "Guinée": "🇬🇳", "Guinée Conakry": "🇬🇳", "Ghana": "🇬🇭",
+  "Nigeria": "🇳🇬", "Nigéria": "🇳🇬", "Kenya": "🇰🇪", "Rwanda": "🇷🇼",
+  "Tanzanie": "🇹🇿", "Tanzania": "🇹🇿", "Ouganda": "🇺🇬", "Uganda": "🇺🇬",
+  "Congo RDC": "🇨🇩", "RD Congo": "🇨🇩", "Congo": "🇨🇬", "Congo Brazzaville": "🇨🇬",
+  "Gabon": "🇬🇦", "Guinée-Bissau": "🇬🇼", "Guinée Équatoriale": "🇬🇶",
+  "Centrafrique": "🇨🇫", "Tchad": "🇹🇩",
 };
 
 function getCountryFlag(country: string | null, currency: string): string {
@@ -110,10 +121,40 @@ function getRoleBadge(role: string) {
   }
 }
 
+function getTxIcon(type: string) {
+  if (type === "deposit" || type === "payment_link") return <ArrowDownLeft className="w-4 h-4 text-green-500 shrink-0" />;
+  if (type === "withdrawal") return <ArrowUpRight className="w-4 h-4 text-red-500 shrink-0" />;
+  return <ArrowLeftRight className="w-4 h-4 text-blue-500 shrink-0" />;
+}
+
+function getTxLabel(type: string) {
+  const labels: Record<string, string> = {
+    deposit: "Dépôt",
+    withdrawal: "Retrait",
+    transfer_in: "Reçu",
+    transfer_out: "Envoi",
+    payment_link: "Lien paiement",
+    conversion: "Conversion",
+  };
+  return labels[type] || type;
+}
+
+function getStatusBadge(status: string) {
+  switch (status) {
+    case "completed": return <Badge className="bg-green-500 text-xs px-1.5 py-0">Complété</Badge>;
+    case "pending": return <Badge variant="secondary" className="text-xs px-1.5 py-0">En attente</Badge>;
+    case "failed": return <Badge variant="destructive" className="text-xs px-1.5 py-0">Échoué</Badge>;
+    case "cancelled": return <Badge variant="outline" className="text-xs px-1.5 py-0">Annulé</Badge>;
+    default: return <Badge variant="outline" className="text-xs px-1.5 py-0">{status}</Badge>;
+  }
+}
+
 export default function AdminUserDetail() {
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const [tab, setTab] = useState("profil");
+  const [txPage, setTxPage] = useState(1);
 
   const [editModal, setEditModal] = useState(false);
   const [editForm, setEditForm] = useState({ fullName: "", email: "", phone: "", role: "" });
@@ -131,13 +172,14 @@ export default function AdminUserDetail() {
   const [convTo, setConvTo] = useState("");
   const [convAmount, setConvAmount] = useState("");
 
+  const authHeaders = localStorage.getItem("ashtech_auth_token")
+    ? { Authorization: `Bearer ${localStorage.getItem("ashtech_auth_token")}` }
+    : {};
+
   const { data: user, isLoading, refetch } = useQuery<User>({
     queryKey: [`/api/admin/users/${id}`],
     queryFn: async () => {
-      const res = await fetch(`/api/admin/users/${id}`, {
-        credentials: "include",
-        headers: { ...(localStorage.getItem("ashtech_auth_token") ? { Authorization: `Bearer ${localStorage.getItem("ashtech_auth_token")}` } : {}) },
-      });
+      const res = await fetch(`/api/admin/users/${id}`, { credentials: "include", headers: authHeaders });
       if (!res.ok) throw new Error("Utilisateur introuvable");
       return res.json();
     },
@@ -158,6 +200,17 @@ export default function AdminUserDetail() {
       const res = await apiRequest("GET", "/api/settings/conversion_fee_percent");
       return res.json();
     },
+  });
+
+  const { data: txData, isLoading: txLoading } = useQuery<{ data: Transaction[]; total: number; pages: number }>({
+    queryKey: [`/api/admin/transactions`, id, txPage],
+    queryFn: async () => {
+      const params = new URLSearchParams({ userId: id!, page: String(txPage), limit: "20" });
+      const res = await fetch(`/api/admin/transactions?${params}`, { credentials: "include", headers: authHeaders });
+      if (!res.ok) throw new Error("Erreur");
+      return res.json();
+    },
+    enabled: !!id,
   });
 
   const walletList = user ? [
@@ -285,7 +338,7 @@ export default function AdminUserDetail() {
 
   return (
     <AdminLayout>
-      <div className="p-4 sm:p-6 space-y-6 max-w-2xl mx-auto">
+      <div className="p-4 sm:p-6 space-y-4 max-w-2xl mx-auto">
         {/* Header */}
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => navigate("/admin/users")}>
@@ -300,180 +353,273 @@ export default function AdminUserDetail() {
           </div>
         </div>
 
-        {/* Soldes */}
-        <Card>
-          <CardContent className="pt-5 space-y-3">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Soldes</p>
-            <div className="grid grid-cols-3 gap-2">
-              <div className="flex flex-col items-center p-3 rounded-lg border bg-primary/10 text-center border-primary/30">
-                <span className="text-lg">{getCountryFlag(user.country, user.preferredCurrency || "XAF")}</span>
-                <span className="text-xs font-bold text-primary mt-1">{user.preferredCurrency || "XAF"} ★</span>
-                <span className={`text-sm font-bold mt-0.5 ${parseFloat(user.balance) > 0 ? "text-green-500" : "text-muted-foreground"}`}>
-                  {parseFloat(user.balance).toLocaleString("fr-FR", { maximumFractionDigits: 0 })}
-                </span>
-              </div>
-              {wallets?.filter((w: any) => w.currency !== user.preferredCurrency).map((wallet: any) => (
-                <div key={wallet.id} className="flex flex-col items-center p-3 rounded-lg border bg-muted/40 text-center">
-                  <span className="text-lg">{CURRENCY_FLAGS[wallet.currency] || "🏳️"}</span>
-                  <span className="text-xs font-bold mt-1">{wallet.currency}</span>
-                  <span className={`text-sm font-bold mt-0.5 ${parseFloat(wallet.balance) > 0 ? "text-green-500" : "text-muted-foreground"}`}>
-                    {parseFloat(wallet.balance).toLocaleString("fr-FR", { maximumFractionDigits: 2 })}
-                  </span>
-                </div>
-              ))}
-            </div>
-            {(user.totalBalanceXAF ?? 0) > 0 && (
-              <p className="text-xs text-muted-foreground text-right">
-                Total : <span className="font-semibold text-foreground">{formatCurrency(user.totalBalanceXAF ?? 0, "XAF")}</span>
-              </p>
-            )}
-          </CardContent>
-        </Card>
+        {/* Onglets */}
+        <Tabs value={tab} onValueChange={setTab}>
+          <TabsList className="w-full">
+            <TabsTrigger value="profil" className="flex-1">Profil</TabsTrigger>
+            <TabsTrigger value="transactions" className="flex-1">
+              Transactions {txData?.total != null ? `(${txData.total})` : ""}
+            </TabsTrigger>
+          </TabsList>
 
-        {/* Informations */}
-        <Card>
-          <CardContent className="pt-5 space-y-3">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Informations</p>
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div className="p-2 rounded-lg bg-muted/30">
-                <p className="text-xs text-muted-foreground">Email</p>
-                <p className="font-medium truncate">{user.email}</p>
-              </div>
-              <div className="p-2 rounded-lg bg-muted/30">
-                <p className="text-xs text-muted-foreground">Téléphone</p>
-                <p className="font-medium">{user.phone || "—"}</p>
-              </div>
-              <div className="p-2 rounded-lg bg-muted/30">
-                <p className="text-xs text-muted-foreground">Rôle</p>
-                <div className="mt-0.5">{getRoleBadge(user.role)}</div>
-              </div>
-              <div className="p-2 rounded-lg bg-muted/30">
-                <p className="text-xs text-muted-foreground">KYC</p>
-                <div className="mt-0.5">
-                  {user.kycStatus === "verified" ? (
-                    <Badge className="bg-green-500 gap-1 text-xs"><CheckCircle className="w-3 h-3" /> Vérifié</Badge>
-                  ) : user.kycStatus === "rejected" ? (
-                    <Badge variant="destructive" className="gap-1 text-xs"><XCircle className="w-3 h-3" /> Rejeté</Badge>
-                  ) : user.kycStatus === "pending" ? (
-                    <Badge variant="secondary" className="gap-1 text-xs"><Shield className="w-3 h-3" /> En attente</Badge>
+          {/* ─── ONGLET PROFIL ─────────────────────────────── */}
+          <TabsContent value="profil" className="space-y-4 mt-4">
+            {/* Soldes */}
+            <Card>
+              <CardContent className="pt-5 space-y-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Soldes</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="flex flex-col items-center p-3 rounded-lg border bg-primary/10 text-center border-primary/30">
+                    <span className="text-lg">{getCountryFlag(user.country, user.preferredCurrency || "XAF")}</span>
+                    <span className="text-xs font-bold text-primary mt-1">{user.preferredCurrency || "XAF"} ★</span>
+                    <span className={`text-sm font-bold mt-0.5 ${parseFloat(user.balance) > 0 ? "text-green-500" : "text-muted-foreground"}`}>
+                      {parseFloat(user.balance).toLocaleString("fr-FR", { maximumFractionDigits: 0 })}
+                    </span>
+                  </div>
+                  {wallets?.filter((w: any) => w.currency !== user.preferredCurrency).map((wallet: any) => (
+                    <div key={wallet.id} className="flex flex-col items-center p-3 rounded-lg border bg-muted/40 text-center">
+                      <span className="text-lg">{CURRENCY_FLAGS[wallet.currency] || "🏳️"}</span>
+                      <span className="text-xs font-bold mt-1">{wallet.currency}</span>
+                      <span className={`text-sm font-bold mt-0.5 ${parseFloat(wallet.balance) > 0 ? "text-green-500" : "text-muted-foreground"}`}>
+                        {parseFloat(wallet.balance).toLocaleString("fr-FR", { maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                {(user.totalBalanceXAF ?? 0) > 0 && (
+                  <p className="text-xs text-muted-foreground text-right">
+                    Total : <span className="font-semibold text-foreground">{formatCurrency(user.totalBalanceXAF ?? 0, "XAF")}</span>
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Informations */}
+            <Card>
+              <CardContent className="pt-5 space-y-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Informations</p>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="p-2 rounded-lg bg-muted/30">
+                    <p className="text-xs text-muted-foreground">Email</p>
+                    <p className="font-medium truncate">{user.email}</p>
+                  </div>
+                  <div className="p-2 rounded-lg bg-muted/30">
+                    <p className="text-xs text-muted-foreground">Téléphone</p>
+                    <p className="font-medium">{user.phone || "—"}</p>
+                  </div>
+                  <div className="p-2 rounded-lg bg-muted/30">
+                    <p className="text-xs text-muted-foreground">Rôle</p>
+                    <div className="mt-0.5">{getRoleBadge(user.role)}</div>
+                  </div>
+                  <div className="p-2 rounded-lg bg-muted/30">
+                    <p className="text-xs text-muted-foreground">KYC</p>
+                    <div className="mt-0.5">
+                      {user.kycStatus === "verified" ? (
+                        <Badge className="bg-green-500 gap-1 text-xs"><CheckCircle className="w-3 h-3" /> Vérifié</Badge>
+                      ) : user.kycStatus === "rejected" ? (
+                        <Badge variant="destructive" className="gap-1 text-xs"><XCircle className="w-3 h-3" /> Rejeté</Badge>
+                      ) : user.kycStatus === "pending" ? (
+                        <Badge variant="secondary" className="gap-1 text-xs"><Shield className="w-3 h-3" /> En attente</Badge>
+                      ) : (
+                        <Badge variant="outline" className="gap-1 text-xs"><XCircle className="w-3 h-3" /> Non vérifié</Badge>
+                      )}
+                    </div>
+                  </div>
+                  <div className="p-2 rounded-lg bg-muted/30">
+                    <p className="text-xs text-muted-foreground">Inscrit le</p>
+                    <p className="font-medium">{user.createdAt ? format(new Date(user.createdAt), "dd/MM/yyyy", { locale: fr }) : "—"}</p>
+                  </div>
+                  <div className="p-2 rounded-lg bg-muted/30">
+                    <p className="text-xs text-muted-foreground">Statut</p>
+                    <div className="mt-0.5 flex flex-col gap-1">
+                      {user.isBanned
+                        ? <Badge variant="destructive" className="gap-1 text-xs w-fit"><Ban className="w-3 h-3" /> Banni</Badge>
+                        : <Badge className="bg-green-500 gap-1 text-xs w-fit"><CheckCircle className="w-3 h-3" /> Actif</Badge>
+                      }
+                      {user.withdrawalBlocked && (
+                        <Badge variant="outline" className="gap-1 text-xs text-orange-500 border-orange-500/50 w-fit"><Ban className="w-3 h-3" /> Retraits bloqués</Badge>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                {user.banReason && (
+                  <p className="text-xs text-red-500 mt-2 p-2 bg-red-500/10 rounded-lg">Raison du ban : {user.banReason}</p>
+                )}
+                {user.withdrawalBlocked && user.withdrawalBlockReason && (
+                  <p className="text-xs text-orange-500 mt-2 p-2 bg-orange-500/10 rounded-lg border border-orange-500/20">
+                    🔒 Retraits bloqués : {user.withdrawalBlockReason}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Actions */}
+            <Card>
+              <CardContent className="pt-5 space-y-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Actions</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    variant="outline" size="sm" className="gap-2 justify-start"
+                    onClick={() => { setEditForm({ fullName: user.fullName, email: user.email, phone: user.phone || "", role: user.role }); setEditModal(true); }}
+                  >
+                    <Edit className="w-4 h-4" /> Modifier
+                  </Button>
+                  <Button
+                    variant="outline" size="sm" className="gap-2 justify-start"
+                    onClick={() => { setBalanceCurrency(user.preferredCurrency || "XAF"); setNewBalance(user.balance); setUpdateType("set"); setBalanceModal(true); }}
+                  >
+                    <DollarSign className="w-4 h-4" /> Modifier le solde
+                  </Button>
+                  <Button
+                    variant="outline" size="sm" className="gap-2 justify-start col-span-2"
+                    onClick={() => navigate(`/admin/kyc?search=${encodeURIComponent(user.username)}`)}
+                  >
+                    <FileSearch className="w-4 h-4" /> Voir le KYC
+                  </Button>
+                  {user.kycStatus !== "verified" && (
+                    <Button
+                      variant="outline" size="sm" className="gap-2 justify-start text-green-600"
+                      onClick={() => kycMutation.mutate({ kycStatus: "verified" })}
+                      disabled={kycMutation.isPending}
+                    >
+                      <CheckCircle className="w-4 h-4" /> Approuver KYC
+                    </Button>
+                  )}
+                  {user.kycStatus !== "rejected" && (
+                    <Button
+                      variant="outline" size="sm" className="gap-2 justify-start text-orange-500"
+                      onClick={() => kycMutation.mutate({ kycStatus: "rejected" })}
+                      disabled={kycMutation.isPending}
+                    >
+                      <XCircle className="w-4 h-4" /> Rejeter KYC
+                    </Button>
+                  )}
+                  {user.isBanned ? (
+                    <Button
+                      variant="outline" size="sm" className="gap-2 justify-start text-green-600"
+                      onClick={() => unbanMutation.mutate()}
+                      disabled={unbanMutation.isPending}
+                    >
+                      <CheckCircle className="w-4 h-4" /> Débannir
+                    </Button>
                   ) : (
-                    <Badge variant="outline" className="gap-1 text-xs"><XCircle className="w-3 h-3" /> Non vérifié</Badge>
+                    <Button
+                      variant="outline" size="sm" className="gap-2 justify-start text-red-500"
+                      onClick={() => { setBanReason(""); setBanModal(true); }}
+                    >
+                      <Ban className="w-4 h-4" /> Bannir
+                    </Button>
                   )}
-                </div>
-              </div>
-              <div className="p-2 rounded-lg bg-muted/30">
-                <p className="text-xs text-muted-foreground">Inscrit le</p>
-                <p className="font-medium">{user.createdAt ? format(new Date(user.createdAt), "dd/MM/yyyy", { locale: fr }) : "—"}</p>
-              </div>
-              <div className="p-2 rounded-lg bg-muted/30">
-                <p className="text-xs text-muted-foreground">Statut</p>
-                <div className="mt-0.5 flex flex-col gap-1">
-                  {user.isBanned
-                    ? <Badge variant="destructive" className="gap-1 text-xs w-fit"><Ban className="w-3 h-3" /> Banni</Badge>
-                    : <Badge className="bg-green-500 gap-1 text-xs w-fit"><CheckCircle className="w-3 h-3" /> Actif</Badge>
-                  }
-                  {user.withdrawalBlocked && (
-                    <Badge variant="outline" className="gap-1 text-xs text-orange-500 border-orange-500/50 w-fit"><Ban className="w-3 h-3" /> Retraits bloqués</Badge>
+                  {user.withdrawalBlocked ? (
+                    <Button
+                      variant="outline" size="sm" className="gap-2 justify-start text-green-600"
+                      onClick={() => unblockMutation.mutate()}
+                      disabled={unblockMutation.isPending}
+                    >
+                      <CheckCircle className="w-4 h-4" /> Débloquer retraits
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline" size="sm" className="gap-2 justify-start text-orange-500"
+                      onClick={() => { setBlockReason(""); setBlockModal(true); }}
+                    >
+                      <Ban className="w-4 h-4" /> Bloquer retraits/envois
+                    </Button>
                   )}
+                  <Button
+                    variant="outline" size="sm" className="gap-2 justify-start text-red-500"
+                    onClick={() => setDeleteModal(true)}
+                  >
+                    <Trash2 className="w-4 h-4" /> Supprimer
+                  </Button>
                 </div>
-              </div>
-            </div>
-            {user.banReason && (
-              <p className="text-xs text-red-500 mt-2 p-2 bg-red-500/10 rounded-lg">Raison du ban : {user.banReason}</p>
-            )}
-            {user.withdrawalBlocked && user.withdrawalBlockReason && (
-              <p className="text-xs text-orange-500 mt-2 p-2 bg-orange-500/10 rounded-lg border border-orange-500/20">
-                🔒 Retraits bloqués : {user.withdrawalBlockReason}
-              </p>
-            )}
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-        {/* Actions */}
-        <Card>
-          <CardContent className="pt-5 space-y-3">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Actions</p>
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                variant="outline" size="sm" className="gap-2 justify-start"
-                onClick={() => { setEditForm({ fullName: user.fullName, email: user.email, phone: user.phone || "", role: user.role }); setEditModal(true); }}
-              >
-                <Edit className="w-4 h-4" /> Modifier
-              </Button>
-              <Button
-                variant="outline" size="sm" className="gap-2 justify-start"
-                onClick={() => { setBalanceCurrency(user.preferredCurrency || "XAF"); setNewBalance(user.balance); setUpdateType("set"); setBalanceModal(true); }}
-              >
-                <DollarSign className="w-4 h-4" /> Modifier le solde
-              </Button>
-              <Button
-                variant="outline" size="sm" className="gap-2 justify-start col-span-2"
-                onClick={() => navigate(`/admin/kyc?search=${encodeURIComponent(user.username)}`)}
-              >
-                <FileSearch className="w-4 h-4" /> Voir le KYC
-              </Button>
-              {user.kycStatus !== "verified" && (
-                <Button
-                  variant="outline" size="sm" className="gap-2 justify-start text-green-600"
-                  onClick={() => kycMutation.mutate({ kycStatus: "verified" })}
-                  disabled={kycMutation.isPending}
-                >
-                  <CheckCircle className="w-4 h-4" /> Approuver KYC
-                </Button>
-              )}
-              {user.kycStatus !== "rejected" && (
-                <Button
-                  variant="outline" size="sm" className="gap-2 justify-start text-orange-500"
-                  onClick={() => kycMutation.mutate({ kycStatus: "rejected" })}
-                  disabled={kycMutation.isPending}
-                >
-                  <XCircle className="w-4 h-4" /> Rejeter KYC
-                </Button>
-              )}
-              {user.isBanned ? (
-                <Button
-                  variant="outline" size="sm" className="gap-2 justify-start text-green-600"
-                  onClick={() => unbanMutation.mutate()}
-                  disabled={unbanMutation.isPending}
-                >
-                  <CheckCircle className="w-4 h-4" /> Débannir
-                </Button>
-              ) : (
-                <Button
-                  variant="outline" size="sm" className="gap-2 justify-start text-red-500"
-                  onClick={() => { setBanReason(""); setBanModal(true); }}
-                >
-                  <Ban className="w-4 h-4" /> Bannir
-                </Button>
-              )}
-              {user.withdrawalBlocked ? (
-                <Button
-                  variant="outline" size="sm" className="gap-2 justify-start text-green-600"
-                  onClick={() => unblockMutation.mutate()}
-                  disabled={unblockMutation.isPending}
-                >
-                  <CheckCircle className="w-4 h-4" /> Débloquer retraits
-                </Button>
-              ) : (
-                <Button
-                  variant="outline" size="sm" className="gap-2 justify-start text-orange-500"
-                  onClick={() => { setBlockReason(""); setBlockModal(true); }}
-                >
-                  <Ban className="w-4 h-4" /> Bloquer retraits/envois
-                </Button>
-              )}
-              <Button
-                variant="outline" size="sm" className="gap-2 justify-start text-red-500"
-                onClick={() => setDeleteModal(true)}
-              >
-                <Trash2 className="w-4 h-4" /> Supprimer
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+          {/* ─── ONGLET TRANSACTIONS ───────────────────────── */}
+          <TabsContent value="transactions" className="mt-4">
+            <Card>
+              <CardContent className="p-0">
+                {txLoading ? (
+                  <div className="py-12 text-center text-muted-foreground text-sm">Chargement...</div>
+                ) : !txData?.data?.length ? (
+                  <div className="py-12 text-center text-muted-foreground text-sm">Aucune transaction trouvée</div>
+                ) : (
+                  <>
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-[36px]"></TableHead>
+                            <TableHead>Type</TableHead>
+                            <TableHead>Montant</TableHead>
+                            <TableHead>Statut</TableHead>
+                            <TableHead className="hidden sm:table-cell">Date</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {txData.data.map((tx) => (
+                            <TableRow key={tx.id}>
+                              <TableCell className="pr-0">{getTxIcon(tx.type)}</TableCell>
+                              <TableCell>
+                                <div>
+                                  <p className="text-sm font-medium">{getTxLabel(tx.type)}</p>
+                                  {tx.description && (
+                                    <p className="text-xs text-muted-foreground truncate max-w-[160px]">{tx.description}</p>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap">
+                                <span className={`font-semibold text-sm ${
+                                  tx.type === "deposit" || tx.type === "payment_link" || tx.type === "transfer_in"
+                                    ? "text-green-600"
+                                    : "text-red-500"
+                                }`}>
+                                  {tx.type === "deposit" || tx.type === "payment_link" || tx.type === "transfer_in" ? "+" : "-"}
+                                  {parseFloat(tx.amount).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {tx.currency}
+                                </span>
+                                {tx.fee && parseFloat(tx.fee) > 0 && (
+                                  <p className="text-xs text-muted-foreground">Frais : {parseFloat(tx.fee).toLocaleString("fr-FR", { maximumFractionDigits: 2 })}</p>
+                                )}
+                              </TableCell>
+                              <TableCell>{getStatusBadge(tx.status)}</TableCell>
+                              <TableCell className="hidden sm:table-cell text-xs text-muted-foreground whitespace-nowrap">
+                                {tx.createdAt ? format(new Date(tx.createdAt), "dd/MM/yy HH:mm", { locale: fr }) : "—"}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    {/* Pagination */}
+                    {(txData.pages || 1) > 1 && (
+                      <div className="flex items-center justify-between px-4 py-3 border-t">
+                        <span className="text-xs text-muted-foreground">
+                          Page {txPage} / {txData.pages} — {txData.total} transactions
+                        </span>
+                        <div className="flex gap-2">
+                          <Button variant="outline" size="sm" disabled={txPage <= 1} onClick={() => setTxPage(p => Math.max(1, p - 1))}>
+                            <ChevronLeft className="w-4 h-4" />
+                          </Button>
+                          <Button variant="outline" size="sm" disabled={txPage >= txData.pages} onClick={() => setTxPage(p => p + 1)}>
+                            <ChevronRight className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
 
-      {/* Modifier l'utilisateur */}
+      {/* ─── MODALS ──────────────────────────────────────────── */}
+
+      {/* Modifier */}
       <Dialog open={editModal} onOpenChange={setEditModal}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
@@ -508,9 +654,7 @@ export default function AdminUserDetail() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditModal(false)}>Annuler</Button>
-            <Button onClick={() => updateUserMutation.mutate(editForm)} disabled={updateUserMutation.isPending}>
-              Enregistrer
-            </Button>
+            <Button onClick={() => updateUserMutation.mutate(editForm)} disabled={updateUserMutation.isPending}>Enregistrer</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -538,11 +682,7 @@ export default function AdminUserDetail() {
           </DialogHeader>
           <div className="space-y-3 py-2">
             <label className="text-sm text-muted-foreground">Raison (visible par l'utilisateur)</label>
-            <Textarea
-              placeholder="Ex : Activité suspecte détectée..."
-              value={blockReason}
-              onChange={(e) => setBlockReason(e.target.value)}
-            />
+            <Textarea placeholder="Ex : Activité suspecte détectée..." value={blockReason} onChange={(e) => setBlockReason(e.target.value)} />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setBlockModal(false)}>Annuler</Button>

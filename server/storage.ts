@@ -1255,10 +1255,11 @@ export class DatabaseStorage implements IStorage {
     return new Map(result.map(u => [u.id, u]));
   }
 
-  async getAdminTransactionsPaginated(params: { limit: number; offset: number; types?: string[]; type?: string; status?: string; search?: string }): Promise<{ data: Transaction[]; total: number }> {
-    const { limit, offset, types, type, status } = params;
+  async getAdminTransactionsPaginated(params: { limit: number; offset: number; types?: string[]; type?: string; status?: string; search?: string; userId?: string }): Promise<{ data: Transaction[]; total: number }> {
+    const { limit, offset, types, type, status, userId } = params;
 
     const conditions: any[] = [];
+    if (userId) conditions.push(eq(transactions.userId, userId));
     if (types && types.length > 0) {
       conditions.push(inArray(transactions.type, types));
     } else if (type && type !== "all") {
