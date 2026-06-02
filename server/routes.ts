@@ -5713,6 +5713,25 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/admin/users/:id", requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const user = await storage.getUserById(id);
+      if (!user) return res.status(404).json({ message: "Utilisateur introuvable" });
+      const fxRates = await loadFxRates();
+      const wallets = await storage.getWalletsByUserIds([id]);
+      const { password, ...safeUser } = user as any;
+      const primaryCurrency = safeUser.preferredCurrency || "XAF";
+      const primaryXAF = convertToXAF(parseFloat(safeUser.balance) || 0, primaryCurrency, fxRates);
+      const secondaryWallets = wallets.filter((w: any) => w.currency !== primaryCurrency);
+      const secondaryXAF = secondaryWallets.reduce((sum: number, w: any) => sum + convertToXAF(parseFloat(w.balance) || 0, w.currency, fxRates), 0);
+      return res.json({ ...safeUser, totalBalanceXAF: Math.round(primaryXAF + secondaryXAF) });
+    } catch (error) {
+      console.error("Admin get user by id error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   app.get("/api/admin/users", requireAdmin, async (req, res) => {
     try {
       const page = Math.max(1, parseInt(req.query.page as string) || 1);

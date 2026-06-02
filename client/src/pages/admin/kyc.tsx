@@ -103,8 +103,14 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
 export default function AdminKYC() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("pending");
+  const [search, setSearch] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("search") || "";
+  });
+  const [statusFilter, setStatusFilter] = useState<string>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("search") ? "all" : "pending";
+  });
   const [viewSubmission, setViewSubmission] = useState<KycSubmission | null>(null);
   const [rejectModal, setRejectModal] = useState<KycSubmission | null>(null);
   const [rejectNote, setRejectNote] = useState("");

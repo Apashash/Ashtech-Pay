@@ -45,6 +45,7 @@ import CheckoutPage from "@/pages/checkout";
 import NotFound from "@/pages/not-found";
 import AdminDashboard from "@/pages/admin/index";
 import AdminUsers from "@/pages/admin/users";
+import AdminUserDetail from "@/pages/admin/user-detail";
 import AdminTransactions from "@/pages/admin/transactions";
 import AdminFees from "@/pages/admin/fees";
 import AdminCountries from "@/pages/admin/countries";
@@ -177,6 +178,7 @@ function Router() {
       <Route path="/checkout/:transactionId" component={CheckoutPage} />
       <Route path="/admin" component={AdminDashboard} />
       <Route path="/admin/users" component={AdminUsers} />
+      <Route path="/admin/users/:id" component={AdminUserDetail} />
       <Route path="/admin/transactions" component={AdminTransactions} />
       <Route path="/admin/transactions/deposits" component={AdminDeposits} />
       <Route path="/admin/transactions/withdrawals" component={AdminWithdrawals} />
