@@ -93,6 +93,7 @@ import {
   sendWithdrawalNumberApprovedEmail,
   sendAccountDeletedEmail,
   sendAdminOtpEmail,
+  sendPasswordChangeOtpEmail,
 } from "./email";
 
 // ─── AfribaPay: country → ISO currency (authoritative, from AfribaPay API) ───
@@ -1771,6 +1772,86 @@ export async function registerRoutes(
       res.json({ message: "Compte supprimé avec succès" });
     } catch (error) {
       console.error("Delete account error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // ─── Password Change with OTP ────────────────────────────────────────────────
+  // In-memory store: userId → { otp, newPasswordHash, expiresAt, attempts }
+  const passwordChangeOtpStore = new Map<string, {
+    otp: string;
+    newPasswordHash: string;
+    expiresAt: number;
+    attempts: number;
+  }>();
+
+  app.post("/api/user/password-change/request", requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId!;
+      const { currentPassword, newPassword } = req.body;
+
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({ message: "Mot de passe actuel et nouveau mot de passe requis" });
+      }
+      if (newPassword.length < 6) {
+        return res.status(400).json({ message: "Le nouveau mot de passe doit contenir au moins 6 caractères" });
+      }
+
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
+
+      const valid = await bcrypt.compare(currentPassword, user.password);
+      if (!valid) {
+        return res.status(400).json({ message: "Mot de passe actuel incorrect" });
+      }
+
+      const newHash = await bcrypt.hash(newPassword, 10);
+      const otp = String(Math.floor(1000 + Math.random() * 9000));
+      const expiresAt = Date.now() + 10 * 60 * 1000;
+
+      passwordChangeOtpStore.set(userId, { otp, newPasswordHash: newHash, expiresAt, attempts: 0 });
+
+      if (user.email) {
+        sendPasswordChangeOtpEmail(user.email, user.fullName || user.username, otp).catch(() => {});
+      }
+
+      res.json({ message: "Code OTP envoyé par email" });
+    } catch (err) {
+      console.error("[PasswordChange] request error:", err);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  app.post("/api/user/password-change/confirm", requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId!;
+      const { otp } = req.body;
+
+      if (!otp) return res.status(400).json({ message: "Code OTP requis" });
+
+      const entry = passwordChangeOtpStore.get(userId);
+      if (!entry) return res.status(400).json({ message: "Aucune demande de changement en cours. Veuillez recommencer." });
+      if (Date.now() > entry.expiresAt) {
+        passwordChangeOtpStore.delete(userId);
+        return res.status(400).json({ message: "Le code OTP a expiré. Veuillez recommencer." });
+      }
+
+      entry.attempts += 1;
+      if (entry.attempts > 5) {
+        passwordChangeOtpStore.delete(userId);
+        return res.status(400).json({ message: "Trop de tentatives. Veuillez recommencer." });
+      }
+
+      if (otp.trim() !== entry.otp) {
+        return res.status(400).json({ message: "Code OTP incorrect" });
+      }
+
+      await storage.updatePassword(userId, entry.newPasswordHash);
+      passwordChangeOtpStore.delete(userId);
+
+      res.json({ message: "Mot de passe modifié avec succès" });
+    } catch (err) {
+      console.error("[PasswordChange] confirm error:", err);
       res.status(500).json({ message: "Erreur serveur" });
     }
   });

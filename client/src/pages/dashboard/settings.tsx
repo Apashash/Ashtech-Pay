@@ -41,6 +41,7 @@ import {
   LogOut,
   MapPin,
   Clock,
+  KeyRound,
 } from "lucide-react";
 import { Link } from "wouter";
 import { useState, useEffect } from "react";
@@ -280,6 +281,9 @@ export default function SettingsPage() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showOtpSheet, setShowOtpSheet] = useState(false);
+  const [otpValue, setOtpValue] = useState("");
+  const [showSuccessSheet, setShowSuccessSheet] = useState(false);
 
   useEffect(() => {
     if (user && !isInitialized) {
@@ -317,6 +321,62 @@ export default function SettingsPage() {
       toast({ title: "Erreur", description: error.message, variant: "destructive" });
     },
   });
+
+  const requestPasswordChangeMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/user/password-change/request", {
+        currentPassword,
+        newPassword,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Erreur");
+      return data;
+    },
+    onSuccess: () => {
+      setShowOtpSheet(true);
+      setOtpValue("");
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const confirmPasswordChangeMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/user/password-change/confirm", { otp: otpValue });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Erreur");
+      return data;
+    },
+    onSuccess: () => {
+      setShowOtpSheet(false);
+      setShowSuccessSheet(true);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setOtpValue("");
+      setSecurityOpen(false);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Code incorrect", description: error.message, variant: "destructive" });
+    },
+  });
+
+  function handleChangePasswordClick() {
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      toast({ title: "Champs requis", description: "Veuillez remplir tous les champs.", variant: "destructive" });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast({ title: "Erreur", description: "Les mots de passe ne correspondent pas.", variant: "destructive" });
+      return;
+    }
+    if (newPassword.length < 6) {
+      toast({ title: "Erreur", description: "Le nouveau mot de passe doit contenir au moins 6 caractères.", variant: "destructive" });
+      return;
+    }
+    requestPasswordChangeMutation.mutate();
+  }
 
   const kycVerified = user?.isVerified || user?.kycStatus === "approved" || user?.kycStatus === "verified";
   const kycPending = user?.kycStatus === "pending";
@@ -522,8 +582,17 @@ export default function SettingsPage() {
                   <Label className="text-xs">{t.settings.confirmPassword}</Label>
                   <Input type="password" placeholder="••••••••" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} data-testid="input-confirm-password" />
                 </div>
-                <Button size="sm" variant="outline" data-testid="button-change-password">
-                  <Lock className="w-3.5 h-3.5 mr-1.5" /> {t.settings.changePasswordBtn}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleChangePasswordClick}
+                  disabled={requestPasswordChangeMutation.isPending}
+                  data-testid="button-change-password"
+                >
+                  {requestPasswordChangeMutation.isPending
+                    ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                    : <Lock className="w-3.5 h-3.5 mr-1.5" />}
+                  {t.settings.changePasswordBtn}
                 </Button>
               </div>
             </CollapsibleContent>
@@ -595,6 +664,76 @@ export default function SettingsPage() {
             >
               {deleteAccountMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
               {t.settings.confirmDelete}
+            </Button>
+          </BottomSheetFooter>
+        </BottomSheetContent>
+      </BottomSheet>
+
+      {/* OTP Confirmation Sheet */}
+      <BottomSheet open={showOtpSheet} onOpenChange={(open) => { if (!open) { setShowOtpSheet(false); setOtpValue(""); } }}>
+        <BottomSheetContent>
+          <BottomSheetHeader>
+            <BottomSheetTitle className="flex items-center gap-2">
+              <KeyRound className="w-5 h-5 text-primary" />
+              Confirmer le changement
+            </BottomSheetTitle>
+            <BottomSheetDescription>
+              Un code à 4 chiffres a été envoyé à votre adresse email. Entrez-le ci-dessous pour confirmer le changement de mot de passe.
+            </BottomSheetDescription>
+          </BottomSheetHeader>
+          <div className="py-5 space-y-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Code OTP</Label>
+              <Input
+                type="text"
+                inputMode="numeric"
+                maxLength={4}
+                placeholder="• • • •"
+                value={otpValue}
+                onChange={(e) => setOtpValue(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                className="text-center text-2xl font-bold tracking-[0.5em] h-14"
+                autoFocus
+                data-testid="input-password-otp"
+              />
+              <p className="text-xs text-muted-foreground text-center">Ce code expire dans 10 minutes.</p>
+            </div>
+          </div>
+          <BottomSheetFooter>
+            <Button variant="outline" onClick={() => { setShowOtpSheet(false); setOtpValue(""); }}>
+              Annuler
+            </Button>
+            <Button
+              onClick={() => confirmPasswordChangeMutation.mutate()}
+              disabled={otpValue.length !== 4 || confirmPasswordChangeMutation.isPending}
+              data-testid="button-confirm-otp"
+            >
+              {confirmPasswordChangeMutation.isPending
+                ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                : <Check className="w-4 h-4 mr-2" />}
+              Confirmer
+            </Button>
+          </BottomSheetFooter>
+        </BottomSheetContent>
+      </BottomSheet>
+
+      {/* Success Sheet */}
+      <BottomSheet open={showSuccessSheet} onOpenChange={setShowSuccessSheet}>
+        <BottomSheetContent>
+          <BottomSheetHeader>
+            <BottomSheetTitle className="flex items-center gap-2 text-green-600 dark:text-green-400">
+              <div className="w-10 h-10 rounded-full bg-green-500/15 flex items-center justify-center">
+                <Check className="w-5 h-5 text-green-600 dark:text-green-400" />
+              </div>
+              Mot de passe modifié avec succès
+            </BottomSheetTitle>
+            <BottomSheetDescription>
+              Votre mot de passe a été mis à jour. Vous pouvez maintenant utiliser votre nouveau mot de passe pour vous connecter.
+            </BottomSheetDescription>
+          </BottomSheetHeader>
+          <div className="h-2" />
+          <BottomSheetFooter>
+            <Button className="w-full" onClick={() => setShowSuccessSheet(false)}>
+              Fermer
             </Button>
           </BottomSheetFooter>
         </BottomSheetContent>

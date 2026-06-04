@@ -515,6 +515,46 @@ export async function sendCampaignEmail(opts: CampaignEmailOptions): Promise<voi
   await sendEmail(to, subject, html, "campaign");
 }
 
+// ─── PASSWORD CHANGE OTP ──────────────────────────────────────────────────────
+export async function sendPasswordChangeOtpEmail(to: string, fullName: string, code: string): Promise<void> {
+  const firstName = fullName?.trim().split(" ")[0] || "cher(e) client(e)";
+
+  const bodyRows = `
+  <tr>
+    <td style="padding:36px 40px 8px;">
+      <h1 style="margin:0 0 20px;font-size:28px;font-weight:700;color:${TEXT};line-height:1.3;">
+        Confirmation de changement<br/>de mot de passe.
+      </h1>
+      <p style="margin:0 0 6px;font-size:15px;color:${TEXT};line-height:1.7;">Bonjour ${firstName},</p>
+      <p style="margin:0 0 24px;font-size:15px;color:${TEXT};line-height:1.7;">
+        Vous avez demandé à changer votre mot de passe. Entrez le code ci-dessous pour confirmer cette action.
+        Ce code est valable <strong style="color:${TEXT};">10 minutes</strong>.
+      </p>
+      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px;">
+        <tr>
+          <td align="center">
+            <div style="display:inline-block;background:#1E3A8A;color:#FFFFFF;font-size:48px;font-weight:900;letter-spacing:20px;padding:20px 40px;border-radius:10px;font-family:monospace;">
+              ${code}
+            </div>
+          </td>
+        </tr>
+      </table>
+      <table width="100%" cellpadding="0" cellspacing="0" border="0"
+             style="background:${BOX_BG};border-radius:6px;margin:8px 0 24px;">
+        <tr>
+          <td style="padding:16px 20px;font-size:13px;color:${MUTED};line-height:1.6;">
+            Si vous n'avez pas demandé ce changement, ignorez cet email. Votre mot de passe ne sera pas modifié.
+          </td>
+        </tr>
+      </table>
+      ${supportNote()}
+    </td>
+  </tr>`;
+
+  const html = emailBase("Confirmation de changement de mot de passe", bodyRows);
+  await sendEmail(to, "Code de confirmation — Changement de mot de passe Ashtech Pay", html, "password-change-otp");
+}
+
 // ─── Admin OTP ────────────────────────────────────────────────────────────────
 export async function sendAdminOtpEmail(to: string, adminName: string, code: string): Promise<void> {
   const bodyRows = `
