@@ -55,7 +55,7 @@ import {
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { formatCurrency } from "@/lib/currency";
-import { apiRequest, queryClient, setAuthToken } from "@/lib/queryClient";
+import { apiRequest, queryClient, setAuthToken, getAuthHeaders } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { ALL_FX_CURRENCIES } from "@shared/schema";
 
@@ -332,6 +332,7 @@ export default function AdminUserDetail() {
       const res = await fetch(`/api/admin/users/${id}/impersonate`, {
         method: "POST",
         credentials: "include",
+        headers: getAuthHeaders(),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.message || "Erreur");
