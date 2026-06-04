@@ -185,9 +185,6 @@ export default function TransactionsPage() {
 
   const getApiBadge = (tx: Transaction) => {
     const t = tx as any;
-    if (t.confirmedAt && t.status === "completed" && t.type === "deposit") {
-      return <Badge className="text-[10px] px-1.5 py-0 gap-1 bg-violet-500/10 text-violet-600 border-violet-500/30 font-medium"><Pencil className="w-2.5 h-2.5" />Rectification</Badge>;
-    }
     if (t.type === "payment_link") return null;
     if (t.source === "hosted_page") return <Badge className="text-[10px] px-1.5 py-0 gap-1 bg-amber-500/10 text-amber-600 border-amber-500/30"><Globe className="w-2.5 h-2.5" />Hosted</Badge>;
     if (t.source === "api") return <Badge className="text-[10px] px-1.5 py-0 gap-1 bg-sky-500/10 text-sky-600 border-sky-500/30"><Code2 className="w-2.5 h-2.5" />API</Badge>;
