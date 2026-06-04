@@ -408,6 +408,8 @@ function ImpersonationBanner() {
           <span className="font-bold text-sm">@{displayUsername}</span>
           <button
             onClick={handleExit}
+            onPointerDown={e => e.stopPropagation()}
+            onPointerUp={e => e.stopPropagation()}
             className="w-full mt-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white text-red-600 font-semibold text-xs hover:bg-red-50 transition-colors shadow-sm"
           >
             ← Retour admin
