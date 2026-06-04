@@ -375,10 +375,17 @@ function ImpersonationBanner() {
     sessionStorage.removeItem("impersonatedUsername");
     sessionStorage.removeItem("impersonationBannerPos");
     try {
-      await fetch("/api/admin/impersonate/exit", {
+      const res = await fetch("/api/admin/impersonate/exit", {
         method: "POST",
         credentials: "include",
       });
+      if (res.ok) {
+        const data = await res.json();
+        // Restore admin token so Bearer auth works correctly
+        if (data.token) {
+          localStorage.setItem("ashtech_auth_token", data.token);
+        }
+      }
     } catch {}
     // Always redirect to admin, even if API call failed (session already gone)
     window.location.href = "/admin/users";

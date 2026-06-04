@@ -55,7 +55,7 @@ import {
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { formatCurrency } from "@/lib/currency";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, setAuthToken } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { ALL_FX_CURRENCIES } from "@shared/schema";
 
@@ -340,6 +340,8 @@ export default function AdminUserDetail() {
     onSuccess: (data) => {
       sessionStorage.setItem("impersonatedBy", data.adminId || "admin");
       sessionStorage.setItem("impersonatedUsername", data.username);
+      // Remplace le token admin par le token de l'utilisateur impersonné
+      if (data.token) setAuthToken(data.token);
       queryClient.clear();
       toast({ title: `Connecté en tant que @${data.username}` });
       navigate("/dashboard");

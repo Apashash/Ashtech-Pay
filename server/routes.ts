@@ -6130,7 +6130,13 @@ export async function registerRoutes(
       req.session.impersonatedBy = adminId;
       req.session.userId = id;
 
-      res.json({ ok: true, userId: id, username: targetUser.username });
+      // Generate a new token for the impersonated user so Bearer auth also works
+      const impersonateToken = storeAuthToken(id);
+
+      req.session.save((err) => {
+        if (err) console.error("[Impersonate] Session save error:", err);
+        res.json({ ok: true, userId: id, adminId, username: targetUser.username, token: impersonateToken });
+      });
     } catch (error) {
       console.error("Admin impersonate error:", error);
       res.status(500).json({ message: "Erreur serveur" });
@@ -6151,7 +6157,13 @@ export async function registerRoutes(
       req.session.userId = originalAdminId;
       req.session.impersonatedBy = undefined;
 
-      res.json({ ok: true, adminId: originalAdminId, username: admin.username });
+      // Generate a new token for the admin so Bearer auth is restored
+      const adminToken = storeAuthToken(originalAdminId);
+
+      req.session.save((err) => {
+        if (err) console.error("[ExitImpersonate] Session save error:", err);
+        res.json({ ok: true, adminId: originalAdminId, username: admin.username, token: adminToken });
+      });
     } catch (error) {
       console.error("Exit impersonation error:", error);
       res.status(500).json({ message: "Erreur serveur" });
