@@ -378,6 +378,7 @@ function ImpersonationBanner() {
       const res = await fetch("/api/admin/impersonate/exit", {
         method: "POST",
         credentials: "include",
+        headers: getAuthHeaders(),
       });
       if (res.ok) {
         const data = await res.json();
