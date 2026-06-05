@@ -174,7 +174,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       setOtpSent(true);
       setOtpEmail(data.email);
       setOtpError("");
-      setOtpCode(["", "", "", ""]);
+      setOtpCode(["", "", "", "", "", ""]);
       setTimeout(() => otpRefs[0].current?.focus(), 100);
     },
     onError: (error: Error) => {
