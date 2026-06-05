@@ -36,6 +36,9 @@ async function throwIfResNotOk(res: Response) {
         removeAuthToken();
         window.dispatchEvent(new CustomEvent("force-logout", { detail: { retryAfter: json.retryAfter } }));
       }
+      if (json.requireOtp && res.status === 403) {
+        window.dispatchEvent(new CustomEvent("admin-otp-required"));
+      }
       throw Object.assign(new Error(json.message || text), json);
     } catch (e) {
       if (e instanceof SyntaxError) {

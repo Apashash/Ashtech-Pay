@@ -206,6 +206,18 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     }
   }, [user, otpStatus]);
 
+  // Listen for 403 requireOtp events from any admin API call (multi-process session issue)
+  useEffect(() => {
+    const handleOtpRequired = () => {
+      queryClient.setQueryData(["/api/admin/otp-status"], { verified: false });
+      setOtpSent(false);
+      setOtpCode(["", "", "", "", "", ""]);
+      setOtpError("");
+    };
+    window.addEventListener("admin-otp-required", handleOtpRequired);
+    return () => window.removeEventListener("admin-otp-required", handleOtpRequired);
+  }, [queryClient]);
+
   function handleOtpInput(idx: number, val: string) {
     const digit = val.replace(/\D/g, "").slice(-1);
     const newCode = [...otpCode];
