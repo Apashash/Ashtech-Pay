@@ -1001,6 +1001,7 @@ export const hostedPageConfigs = pgTable("hosted_page_configs", {
   pkLive: text("pk_live").unique(),
   skLive: text("sk_live").unique(),
   hpLive: text("hp_live").unique(),
+  hpLiveHash: text("hp_live_hash").unique(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

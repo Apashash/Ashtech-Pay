@@ -68,6 +68,19 @@ app.use(express.urlencoded({ extended: false, limit: "2mb" }));
 // ── Security: Remove server identity header ───────────────────────────────────
 app.disable("x-powered-by");
 
+// ── Security: Hardened headers for all /api responses (5.6) ──────────────────
+// Applies X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Cache-Control
+// and a restrictive CSP to every REST endpoint — independent of Helmet's HTML CSP.
+app.use("/api", (_req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  res.setHeader("Content-Security-Policy", "default-src 'none'");
+  res.setHeader("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
+  res.setHeader("Cache-Control", "no-store");
+  next();
+});
+
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
     hour: "numeric",
@@ -85,6 +98,16 @@ app.use((req, res, next) => {
 
   const originalResJson = res.json;
   res.json = function (bodyJson, ...args) {
+    // ── 5.5: Sanitize error responses in production ───────────────────────────
+    // Prevents internal error messages and stack traces leaking to clients.
+    if (isProd && res.statusCode >= 500 && bodyJson && typeof bodyJson === "object") {
+      const sanitized = {
+        message: "Une erreur interne s'est produite.",
+        ...(bodyJson.error ? { error: "server_error" } : {}),
+      };
+      capturedJsonResponse = sanitized;
+      return originalResJson.apply(res, [sanitized, ...args]);
+    }
     capturedJsonResponse = bodyJson;
     return originalResJson.apply(res, [bodyJson, ...args]);
   };
@@ -138,6 +161,9 @@ app.use((req, res, next) => {
     `);
     await db.execute(sql`ALTER TABLE hosted_payment_sessions ADD COLUMN IF NOT EXISTS notify_url TEXT`);
     await db.execute(sql`ALTER TABLE payment_links ADD COLUMN IF NOT EXISTS notify_url TEXT`);
+    // 5.3 — field encryption: hp_live_hash for searchable HMAC lookup
+    await db.execute(sql`ALTER TABLE hosted_page_configs ADD COLUMN IF NOT EXISTS hp_live_hash TEXT UNIQUE`);
+    await db.execute(sql`ALTER TABLE hosted_page_configs ADD COLUMN IF NOT EXISTS notify_url TEXT`);
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS "session" (
         "sid" varchar NOT NULL COLLATE "default",

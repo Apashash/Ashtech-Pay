@@ -1081,6 +1081,25 @@ export async function registerRoutes(
         return res.status(400).send("Invalid storage folder");
       }
 
+      // ── 5.2 IDOR fix: KYC documents require ownership or admin role ──────────
+      if (isRelativePath && storagePath.startsWith("kyc/")) {
+        const requestingUser = await storage.getUser(req.userId!);
+        const isAdminRole = requestingUser && ["admin", "support", "finance"].includes(requestingUser.role);
+        if (!isAdminRole) {
+          // Verify the path belongs to a KYC submission owned by this user
+          const kycSub = await storage.getKycSubmissionByUserId(req.userId!);
+          const ownedPaths = [kycSub?.documentFrontPath, kycSub?.documentBackPath, kycSub?.selfiePath]
+            .filter(Boolean) as string[];
+          // Normalize: strip "kyc/" prefix from stored paths if present
+          const normalizedOwned = ownedPaths.map(p => p.startsWith("kyc/") ? p : p);
+          const requestedNorm = storagePath;
+          const isOwned = normalizedOwned.some(p => p === requestedNorm || p.endsWith("/" + requestedNorm.split("/").pop()!));
+          if (!isOwned) {
+            return res.status(403).send("Accès refusé");
+          }
+        }
+      }
+
       const result = await downloadFromSupabase(storagePath);
       if (!result) return res.status(404).send("Image not found");
 

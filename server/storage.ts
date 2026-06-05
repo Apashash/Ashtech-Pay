@@ -1,3 +1,4 @@
+import { encryptField, decryptField, hmacField } from "./fieldEncryption";
 import { 
   users,
   transactions,
@@ -1751,34 +1752,62 @@ export class DatabaseStorage implements IStorage {
     return Number(cnt);
   }
 
-  // Hosted Page
+  // Hosted Page — field-level encryption for sk_live, pk_live; HMAC hash for hp_live lookup
+  private decryptHostedPageConfig(config: HostedPageConfig): HostedPageConfig {
+    return {
+      ...config,
+      skLive: decryptField(config.skLive),
+      pkLive: decryptField(config.pkLive),
+      hpLive: decryptField(config.hpLive),
+    };
+  }
+
   async getHostedPageConfig(userId: string): Promise<HostedPageConfig | undefined> {
     const [config] = await db.select().from(hostedPageConfigs).where(eq(hostedPageConfigs.userId, userId));
-    return config || undefined;
+    if (!config) return undefined;
+    return this.decryptHostedPageConfig(config);
   }
 
   async saveHostedPageConfig(userId: string, data: Partial<HostedPageConfig>): Promise<HostedPageConfig> {
-    const existing = await this.getHostedPageConfig(userId);
-    if (existing) {
+    const toStore: Partial<HostedPageConfig> = { ...data };
+    // Encrypt sensitive key fields before persisting
+    if (toStore.skLive !== undefined) toStore.skLive = encryptField(toStore.skLive);
+    if (toStore.pkLive !== undefined) toStore.pkLive = encryptField(toStore.pkLive);
+    if (toStore.hpLive !== undefined) {
+      const plainHpLive = toStore.hpLive;
+      toStore.hpLive = encryptField(plainHpLive);
+      toStore.hpLiveHash = hmacField(plainHpLive) ?? undefined;
+    }
+    const existing = await db.select().from(hostedPageConfigs).where(eq(hostedPageConfigs.userId, userId));
+    let raw: HostedPageConfig;
+    if (existing.length > 0) {
       const [updated] = await db
         .update(hostedPageConfigs)
-        .set({ ...data, updatedAt: new Date() })
+        .set({ ...toStore, updatedAt: new Date() })
         .where(eq(hostedPageConfigs.userId, userId))
         .returning();
-      return updated;
+      raw = updated;
     } else {
       const [created] = await db
         .insert(hostedPageConfigs)
-        .values({ userId, ...data })
+        .values({ userId, ...toStore })
         .returning();
-      return created;
+      raw = created;
     }
+    return this.decryptHostedPageConfig(raw);
   }
 
   async getUserByHpKey(hpLive: string): Promise<User | undefined> {
-    const [config] = await db.select().from(hostedPageConfigs).where(eq(hostedPageConfigs.hpLive, hpLive));
-    if (!config) return undefined;
-    return this.getUser(config.userId);
+    // Look up by HMAC hash (hp_live_hash column) — tolerates legacy plaintext rows too
+    const hash = hmacField(hpLive);
+    if (hash) {
+      const [config] = await db.select().from(hostedPageConfigs).where(eq(hostedPageConfigs.hpLiveHash, hash));
+      if (config) return this.getUser(config.userId);
+    }
+    // Legacy fallback: plaintext hp_live stored before encryption was introduced
+    const [legacy] = await db.select().from(hostedPageConfigs).where(eq(hostedPageConfigs.hpLive, hpLive));
+    if (legacy) return this.getUser(legacy.userId);
+    return undefined;
   }
 
   async createHostedPaymentSession(data: Omit<HostedPaymentSession, "createdAt">): Promise<HostedPaymentSession> {
