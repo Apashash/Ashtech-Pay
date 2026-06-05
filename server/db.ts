@@ -4,8 +4,8 @@ import * as schema from "@shared/schema";
 
 const { Pool } = pg;
 
-// Prefer Replit's built-in DATABASE_URL (local PostgreSQL) over Supabase
-const databaseUrl = process.env.DATABASE_URL || process.env.SUPABASE_DATABASE_URL;
+// Prefer SUPABASE_DATABASE_URL (production data) over Replit's local empty DB
+const databaseUrl = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
 
 if (!databaseUrl) {
   throw new Error(
