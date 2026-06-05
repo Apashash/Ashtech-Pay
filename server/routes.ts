@@ -180,11 +180,59 @@ declare module "express-session" {
   }
 }
 
-// ─── Admin OTP store (in-memory, per-session) ─────────────────────────────────
+// ─── Admin OTP store (in-memory, per-userId) ──────────────────────────────────
+// Stores pending OTP codes. Never persisted to DB — cannot be injected via SQL.
 const adminOtpStore = new Map<string, { code: string; expiresAt: number }>();
 
+// ─── Admin verified sessions (in-memory, per-sessionID) ───────────────────────
+// Replaces session JSONB flag (CWE-287 fix: Vecteurs 1 & 2).
+// Key = express sessionID (server-assigned, unguessable).
+// Bound to both sessionID AND userId — ghost sessions cannot forge an entry.
+// Never written to PostgreSQL → cannot be injected via UPDATE/INSERT on session table.
+const adminVerifiedSessions = new Map<string, { userId: string; expiresAt: number }>();
+const ADMIN_OTP_SESSION_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
+
+// Periodic cleanup of expired OTP session entries (every 10 min)
+setInterval(() => {
+  const now = Date.now();
+  for (const [sid, entry] of adminVerifiedSessions) {
+    if (entry.expiresAt <= now) adminVerifiedSessions.delete(sid);
+  }
+}, 10 * 60 * 1000);
+
+// ─── OTP brute-force rate limiter (in-memory, per-userId) ─────────────────────
+// Max 5 wrong attempts per 15 min window before lockout.
+const otpAttempts = new Map<string, { count: number; lockedUntil: number }>();
+const OTP_MAX_ATTEMPTS = 5;
+const OTP_LOCKOUT_MS = 15 * 60 * 1000;
+
+function checkOtpRateLimit(userId: string): { allowed: boolean; retryAfter?: number } {
+  const now = Date.now();
+  const rec = otpAttempts.get(userId);
+  if (rec && rec.lockedUntil > now) {
+    return { allowed: false, retryAfter: Math.ceil((rec.lockedUntil - now) / 1000) };
+  }
+  return { allowed: true };
+}
+
+function recordOtpFailure(userId: string): void {
+  const now = Date.now();
+  const rec = otpAttempts.get(userId) ?? { count: 0, lockedUntil: 0 };
+  rec.count += 1;
+  if (rec.count >= OTP_MAX_ATTEMPTS) {
+    rec.lockedUntil = now + OTP_LOCKOUT_MS;
+    rec.count = 0; // reset counter after lockout
+  }
+  otpAttempts.set(userId, rec);
+}
+
+function clearOtpFailures(userId: string): void {
+  otpAttempts.delete(userId);
+}
+
 function generateAdminOtp(): string {
-  return Math.floor(1000 + Math.random() * 9000).toString();
+  // 6 digits — 1 million combinations vs 10 000 with 4 digits
+  return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
 const TOKEN_EXPIRY_MS = 3 * 24 * 60 * 60 * 1000;
@@ -379,10 +427,27 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
   if (!req.userId) {
     return res.status(401).json({ message: "Non autorisé" });
   }
+
+  // Always re-fetch role from DB — never trust session cache (CWE-287 Vector 3 fix)
   const user = await storage.getUser(req.userId);
   if (!user || !["admin", "support", "finance"].includes(user.role)) {
     return res.status(403).json({ message: "Accès refusé - Droits admin requis" });
   }
+
+  // OTP check: verify against server-side in-memory store ONLY.
+  // The session JSONB (PostgreSQL) is intentionally NOT consulted here —
+  // it can be injected via UPDATE/INSERT on the session table (CWE-287 Vectors 1 & 2).
+  const otpEntry = adminVerifiedSessions.get(req.sessionID);
+  const otpValid = otpEntry &&
+    otpEntry.userId === req.userId &&
+    otpEntry.expiresAt > Date.now();
+
+  if (!otpValid) {
+    // Clean up stale entry if present
+    if (otpEntry) adminVerifiedSessions.delete(req.sessionID);
+    return res.status(403).json({ message: "Vérification OTP admin requise", requireOtp: true });
+  }
+
   next();
 }
 
@@ -1389,7 +1454,10 @@ export async function registerRoutes(
       const token = authHeader.substring(7);
       removeAuthToken(token);
     }
-    
+
+    // Clear admin OTP verification state for this session (in-memory store)
+    adminVerifiedSessions.delete(req.sessionID);
+
     req.session.destroy((err) => {
       if (err) {
         return res.status(500).json({ message: "Erreur lors de la déconnexion" });
@@ -5594,7 +5662,10 @@ export async function registerRoutes(
     if (!user || !["admin", "support", "finance"].includes(user.role)) {
       return res.status(403).json({ message: "Accès refusé" });
     }
-    res.json({ verified: !!(req.session as any).adminOtpVerified });
+    // Read from in-memory store only — never trust session JSONB (CWE-287 fix)
+    const entry = adminVerifiedSessions.get(req.sessionID);
+    const verified = !!(entry && entry.userId === req.userId && entry.expiresAt > Date.now());
+    res.json({ verified });
   });
 
   // POST /api/admin/request-otp — generate & send 4-digit code to admin email
@@ -5607,13 +5678,16 @@ export async function registerRoutes(
       if (!user.email) {
         return res.status(400).json({ message: "Aucun email configuré pour ce compte admin" });
       }
-      const code = generateAdminOtp();
+      // Invalidate any previous pending code before issuing a new one
+      adminOtpStore.delete(req.userId!);
+      // Clear any existing verified session (require fresh OTP on new request)
+      adminVerifiedSessions.delete(req.sessionID);
+
+      const code = generateAdminOtp(); // 6 digits (1 000 000 combinations)
       adminOtpStore.set(req.userId!, { code, expiresAt: Date.now() + 5 * 60 * 1000 });
       await sendAdminOtpEmail(user.email, user.fullName || user.username, code);
-      // Also send via Telegram as backup
-      const { notifyAdminLogin: _unused, ...tg } = await import("./telegram").catch(() => ({} as any));
-      const { sendMessage: tgSend } = await import("./telegram").catch(() => ({ sendMessage: null } as any));
-      // Send code via Telegram too (direct raw call to avoid circular issues)
+
+      // Send code via Telegram as backup channel
       const botToken = process.env.TELEGRAM_BOT_TOKEN;
       const chatId = process.env.TELEGRAM_CHAT_ID;
       if (botToken && chatId) {
@@ -5627,7 +5701,11 @@ export async function registerRoutes(
           }),
         }).catch(() => {});
       }
-      console.log(`[AdminOTP] Code sent to ${user.email} (code: ${code})`);
+
+      // Log to admin_logs — do NOT log the OTP code itself
+      const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
+      storage.createAdminLog({ adminId: req.userId!, action: "otp_requested", details: `OTP demandé depuis IP ${ip}` }).catch(() => {});
+      console.log(`[AdminOTP] Code envoyé à ${user.email.replace(/(.{2}).+(@.+)/, "$1***$2")}`);
       res.json({ sent: true, email: user.email.replace(/(.{2}).+(@.+)/, "$1***$2") });
     } catch (error: any) {
       console.error("Admin OTP request error:", error.message);
@@ -5635,17 +5713,34 @@ export async function registerRoutes(
     }
   });
 
-  // POST /api/admin/verify-otp — verify 4-digit code and mark session
+  // POST /api/admin/verify-otp — verify 6-digit code and register session in-memory
   app.post("/api/admin/verify-otp", requireAuth, async (req, res) => {
     try {
       const user = await storage.getUser(req.userId!);
       if (!user || !["admin", "support", "finance"].includes(user.role)) {
         return res.status(403).json({ message: "Accès refusé" });
       }
+
+      // ── Brute-force protection (CWE-287 fix: 10 000 combinations → locked after 5 fails)
+      const rateCheck = checkOtpRateLimit(req.userId!);
+      if (!rateCheck.allowed) {
+        const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
+        storage.createAdminLog({
+          adminId: req.userId!,
+          action: "otp_locked",
+          details: `Trop de tentatives OTP depuis IP ${ip} — compte verrouillé ${Math.ceil((rateCheck.retryAfter ?? 0) / 60)} min`,
+        }).catch(() => {});
+        return res.status(429).json({
+          message: `Trop de tentatives. Réessayez dans ${Math.ceil((rateCheck.retryAfter ?? 900) / 60)} minute(s).`,
+          retryAfter: rateCheck.retryAfter,
+        });
+      }
+
       const { code } = req.body as { code: string };
       if (!code || typeof code !== "string") {
         return res.status(400).json({ message: "Code requis" });
       }
+
       const stored = adminOtpStore.get(req.userId!);
       if (!stored) {
         return res.status(400).json({ message: "Aucun code demandé. Veuillez demander un nouveau code." });
@@ -5654,15 +5749,43 @@ export async function registerRoutes(
         adminOtpStore.delete(req.userId!);
         return res.status(400).json({ message: "Code expiré. Veuillez demander un nouveau code." });
       }
-      if (stored.code !== code.trim()) {
-        return res.status(400).json({ message: "Code incorrect." });
+
+      // Constant-time comparison to prevent timing attacks
+      const submittedCode = code.trim();
+      const codesMatch = submittedCode.length === stored.code.length &&
+        crypto.timingSafeEqual(Buffer.from(submittedCode), Buffer.from(stored.code));
+
+      if (!codesMatch) {
+        recordOtpFailure(req.userId!);
+        const remaining = OTP_MAX_ATTEMPTS - (otpAttempts.get(req.userId!)?.count ?? OTP_MAX_ATTEMPTS);
+        return res.status(400).json({
+          message: remaining > 0
+            ? `Code incorrect. ${remaining} tentative(s) restante(s).`
+            : "Code incorrect. Compte temporairement verrouillé.",
+        });
       }
+
+      // ── OTP valid — register in server-side in-memory store ONLY (never in session JSONB)
       adminOtpStore.delete(req.userId!);
-      (req.session as any).adminOtpVerified = true;
-      req.session.save(() => {});
-      console.log(`[AdminOTP] Admin ${user.email} verified successfully`);
-      const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "inconnue";
+      clearOtpFailures(req.userId!);
+
+      adminVerifiedSessions.set(req.sessionID, {
+        userId: req.userId!,
+        expiresAt: Date.now() + ADMIN_OTP_SESSION_TTL_MS,
+      });
+
+      const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
+
+      // Log successful verification to admin_logs (traceable audit trail)
+      storage.createAdminLog({
+        adminId: req.userId!,
+        action: "otp_verified",
+        details: `Vérification OTP réussie depuis IP ${ip} — session valide 4h`,
+      }).catch(() => {});
+
+      console.log(`[AdminOTP] Admin ${user.email?.replace(/(.{2}).+(@.+)/, "$1***$2")} vérifié depuis ${ip}`);
       notifyAdminLoginSuccess({ adminName: user.fullName || user.username, adminEmail: user.email || "", ip }).catch(() => {});
+
       res.json({ success: true });
     } catch (error: any) {
       console.error("Admin OTP verify error:", error.message);
