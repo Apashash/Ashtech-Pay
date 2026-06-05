@@ -729,6 +729,14 @@ setInterval(() => {
 }, 5 * 60 * 1000);
 
 function getClientIp(req: Request): string {
+  // CF-Connecting-IP is the real client IP set by Cloudflare (overrides proxy IPs)
+  const cfIp = req.headers["cf-connecting-ip"];
+  if (cfIp) return Array.isArray(cfIp) ? cfIp[0].trim() : cfIp.trim();
+
+  // True-Client-IP is also set by Cloudflare Enterprise plans
+  const trueIp = req.headers["true-client-ip"];
+  if (trueIp) return Array.isArray(trueIp) ? trueIp[0].trim() : trueIp.trim();
+
   const forwarded = req.headers["x-forwarded-for"];
   if (forwarded) {
     const raw = Array.isArray(forwarded) ? forwarded[0] : forwarded;
@@ -1032,12 +1040,11 @@ export async function registerRoutes(
         });
       }
 
-      // VPN check for authenticated users — disconnect immediately if VPN detected
-      if (req.path.startsWith("/api/") && !req.path.startsWith("/api/public/")) {
+      // VPN check for authenticated users — skip for admins (trusted + OTP-verified)
+      const isAdminRole = user && ["admin", "support", "finance"].includes(user.role);
+      if (!isAdminRole && req.path.startsWith("/api/") && !req.path.startsWith("/api/public/")) {
         const ip = getClientIp(req);
-        console.log(`[VPN-DEBUG] path=${req.path} ip=${ip} x-forwarded-for=${req.headers["x-forwarded-for"]} req.ip=${req.ip}`);
         const isVpn = await checkVpnOrProxy(ip);
-        console.log(`[VPN-DEBUG] ip=${ip} isVpn=${isVpn} isPrivate=${isPrivateIp(ip)}`);
         if (isVpn) {
           console.log(`[VPN] Disconnecting user ${userId} — VPN/proxy detected from ${ip}`);
           if (req.session) req.session.userId = undefined;
