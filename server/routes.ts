@@ -6362,10 +6362,6 @@ export async function registerRoutes(
       const { amount, currency, type, reason } = req.body; // type: 'set' | 'add'
       const userId = req.params.id;
 
-      // ── Mandatory justification (audit requirement — CWE-20 fix)
-      if (!reason || typeof reason !== "string" || reason.trim().length < 5) {
-        return res.status(400).json({ message: "Un motif de modification est obligatoire (min 5 caractères)." });
-      }
 
       const user = await storage.getUser(userId);
       if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });

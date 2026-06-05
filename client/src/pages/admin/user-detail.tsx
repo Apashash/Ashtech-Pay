@@ -944,7 +944,7 @@ export default function AdminUserDetail() {
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <Label>Motif de modification <span className="text-red-400">*</span></Label>
+                  <Label>Motif de modification <span className="text-muted-foreground text-xs">(optionnel)</span></Label>
                   <Input
                     value={balanceReason}
                     onChange={(e) => setBalanceReason(e.target.value)}
@@ -952,7 +952,7 @@ export default function AdminUserDetail() {
                     data-testid="input-balance-reason"
                   />
                 </div>
-                <Button className="w-full" onClick={() => updateBalanceMutation.mutate()} disabled={updateBalanceMutation.isPending || !newBalance || balanceReason.trim().length < 5}>
+                <Button className="w-full" onClick={() => updateBalanceMutation.mutate()} disabled={updateBalanceMutation.isPending || !newBalance}>
                   {updateBalanceMutation.isPending ? "Mise à jour..." : `Mettre à jour ${balanceCurrency}`}
                 </Button>
               </div>
