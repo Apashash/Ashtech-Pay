@@ -1,0 +1,42 @@
+# =============================================================================
+# .htaccess — Ashtech Pay — Blocage des fichiers source sensibles
+#
+# Ce fichier est lu automatiquement par Apache (Plesk Proxy mode).
+# Il bloque l'accès aux fichiers source AVANT que Node.js soit contacté.
+# =============================================================================
+
+# Activer le moteur de réécriture
+Options -Indexes
+RewriteEngine On
+
+# ── Bloquer les dossiers source serveur ──────────────────────────────────────
+RewriteRule ^server/ - [F,L]
+RewriteRule ^shared/ - [F,L]
+RewriteRule ^node_modules/ - [F,L]
+RewriteRule ^migrations/ - [F,L]
+RewriteRule ^script/ - [F,L]
+RewriteRule ^attached_assets/ - [F,L]
+RewriteRule ^\.git/ - [F,L]
+
+# ── Bloquer les fichiers sensibles à la racine ───────────────────────────────
+RewriteRule ^package\.json$ - [F,L]
+RewriteRule ^package-lock\.json$ - [F,L]
+RewriteRule ^tsconfig\.json$ - [F,L]
+RewriteRule ^drizzle\.config\.ts$ - [F,L]
+RewriteRule ^vite\.config\.ts$ - [F,L]
+RewriteRule ^\.env$ - [F,L]
+RewriteRule ^\.env\..+$ - [F,L]
+
+# ── Bloquer par extension de fichier ─────────────────────────────────────────
+RewriteRule \.ts$ - [F,L]
+RewriteRule \.tsx$ - [F,L]
+RewriteRule \.map$ - [F,L]
+RewriteRule \.cjs\.map$ - [F,L]
+
+# ── Bloquer tous les fichiers cachés (commençant par un point) ───────────────
+RewriteRule (^|/)\. - [F,L]
+
+# ── Tout le reste → Node.js (port 5000) ─────────────────────────────────────
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ http://localhost:5000/$1 [P,L]
