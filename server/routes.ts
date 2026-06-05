@@ -195,7 +195,7 @@ const adminOtpStore = new Map<string, { code: string; expiresAt: number }>();
 // BACKUP:  session._avs timestamp (PostgreSQL-backed — survives restarts & multi-process)
 // Both are checked on every otp-status request.
 const adminVerifiedSessions = new Map<string, { userId: string; expiresAt: number }>();
-const ADMIN_OTP_SESSION_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
+const ADMIN_OTP_SESSION_TTL_MS = 3 * 24 * 60 * 60 * 1000; // 3 days — matches session maxAge
 
 // Periodic cleanup of expired in-memory entries (every 10 min)
 setInterval(() => {
@@ -5962,7 +5962,7 @@ export async function registerRoutes(
       storage.createAdminLog({
         adminId: req.userId!,
         action: "otp_verified",
-        details: `Vérification OTP réussie depuis IP ${ip} — session valide 4h`,
+        details: `Vérification OTP réussie depuis IP ${ip} — session valide 3 jours`,
       }).catch(() => {});
 
       console.log(`[AdminOTP] Admin ${user.email?.replace(/(.{2}).+(@.+)/, "$1***$2")} vérifié depuis ${ip}`);
