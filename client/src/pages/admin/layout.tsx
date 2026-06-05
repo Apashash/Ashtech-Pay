@@ -211,9 +211,12 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   }, [user, otpStatus]);
 
   // Listen for 403 requireOtp events from any admin API call (multi-process session issue)
-  // Grace period: ignore events within 2 minutes of OTP verification (avoids loop from background refetches)
+  // Only show "session expired" banner if OTP was previously verified in this browser session.
+  // If otpVerifiedAtRef.current === 0, the user has never verified yet — let the OTP gate handle it.
   useEffect(() => {
     const handleOtpRequired = () => {
+      // Never verified OTP in this session yet — don't show expired banner, let OTP gate show instead
+      if (otpVerifiedAtRef.current === 0) return;
       const timeSinceVerified = Date.now() - otpVerifiedAtRef.current;
       const GRACE_MS = 2 * 60 * 1000; // 2 minutes grace after OTP verification
       if (timeSinceVerified < GRACE_MS) return; // ignore — background refetch race condition
@@ -304,6 +307,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   }>({
     queryKey: ["/api/admin/layout-stats"],
     refetchInterval: 12000,
+    enabled: !!otpStatus?.verified,
   });
 
   const notifications = layoutStats?.notifications || [];

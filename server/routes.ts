@@ -437,13 +437,38 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
     return res.status(403).json({ message: "Accès refusé - Droits admin requis" });
   }
 
-  // OTP check: dual verification — in-memory (instant) OR session (persistent).
+  // OTP check: triple verification — in-memory (instant) OR session middleware (persistent)
+  // OR direct DB session query (fallback for PM2 cluster where req.session may lag).
   const now = Date.now();
   const memEntry = adminVerifiedSessions.get(req.sessionID);
   const memValid = !!(memEntry && memEntry.userId === req.userId && memEntry.expiresAt > now);
   const avsExp = req.session._avs;
   const sessionValid = typeof avsExp === "number" && avsExp > now;
-  const otpValid = memValid || sessionValid;
+  let otpValid = memValid || sessionValid;
+
+  // Tier 3: direct DB session read — handles PM2 cluster where req.session._avs
+  // might not be hydrated yet if a different worker saved the session.
+  if (!otpValid && req.sessionID) {
+    try {
+      const dbRow = await sessionPool.query(
+        `SELECT sess FROM session WHERE sid = $1 AND expire > NOW() LIMIT 1`,
+        [req.sessionID]
+      );
+      if (dbRow.rows.length > 0) {
+        const sessData = typeof dbRow.rows[0].sess === "string"
+          ? JSON.parse(dbRow.rows[0].sess)
+          : dbRow.rows[0].sess;
+        const dbAvs = sessData?._avs;
+        if (typeof dbAvs === "number" && dbAvs > now) {
+          otpValid = true;
+          // Sync back to in-memory map so subsequent requests on this worker are fast
+          adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: dbAvs });
+        }
+      }
+    } catch {
+      // DB fallback failed — continue with otpValid = false
+    }
+  }
 
   if (!otpValid) {
     return res.status(403).json({ message: "Vérification OTP admin requise", requireOtp: true });
