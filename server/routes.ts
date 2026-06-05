@@ -18,6 +18,9 @@ import {
   loginLimiter,
   otpConfirmLimiter,
   adminActionLimiter,
+  webhookLimiter,
+  transactionStatusLimiter,
+  hostedPaymentLimiter,
 } from "./rateLimiter";
 import { 
   loginSchema, 
@@ -2161,7 +2164,7 @@ export async function registerRoutes(
   });
 
   // Public endpoint to check transaction status (for payment page polling)
-  app.get("/api/transactions/status/:reference", async (req, res) => {
+  app.get("/api/transactions/status/:reference", transactionStatusLimiter, async (req, res) => {
     try {
       const transaction = await storage.getTransactionByReference(req.params.reference);
       if (!transaction) {
@@ -4790,14 +4793,12 @@ export async function registerRoutes(
       const conversionFeePercentSwychr = convProviderFeeSwychr + convAshtechFeeSwychr;
       const conversionFeePercentPixpay = convProviderFeePixpay + convAshtechFeePixpay;
       const conversionFeePercentAfribapay = convProviderFeeAfribapay + convAshtechFeeAfribapay;
+      // Ne pas exposer la décomposition interne (providerFee + ashtechFee) — totaux uniquement
       res.json({
         conversionFeePercent,
         conversionFeePercentSwychr,
         conversionFeePercentPixpay,
         conversionFeePercentAfribapay,
-        convProviderFeeSwychr, convAshtechFeeSwychr,
-        convProviderFeePixpay, convAshtechFeePixpay,
-        convProviderFeeAfribapay, convAshtechFeeAfribapay,
         depositFeePercent,
         paymentLinkFeePercent,
       });
@@ -9134,8 +9135,17 @@ export async function registerRoutes(
     res.redirect(`${baseUrl}/dashboard?payment=processing`);
   });
 
-  app.post("/api/swychr/webhook", async (req, res) => {
+  app.post("/api/swychr/webhook", webhookLimiter, async (req, res) => {
     try {
+      // ── Vérification du secret webhook ──────────────────────────────────────
+      const webhookSecret = process.env.WEBHOOK_SECRET;
+      if (webhookSecret) {
+        const token = req.query.token || req.headers["x-webhook-token"];
+        if (token !== webhookSecret) {
+          console.warn("[Swychr Webhook] Token invalide — requête rejetée");
+          return res.status(401).json({ message: "Unauthorized" });
+        }
+      }
       const payload = req.body;
       console.log("[Swychr Webhook] Received:", JSON.stringify(payload));
 
@@ -9251,8 +9261,17 @@ export async function registerRoutes(
   });
 
   // ─── AfribaPay Webhook ────────────────────────────────────────────────────
-  app.post("/api/afribapay/webhook", async (req, res) => {
+  app.post("/api/afribapay/webhook", webhookLimiter, async (req, res) => {
     try {
+      // ── Vérification du secret webhook ──────────────────────────────────────
+      const webhookSecret = process.env.WEBHOOK_SECRET;
+      if (webhookSecret) {
+        const token = req.query.token || req.headers["x-webhook-token"];
+        if (token !== webhookSecret) {
+          console.warn("[AfribaPay Webhook] Token invalide — requête rejetée");
+          return res.status(401).json({ message: "Unauthorized" });
+        }
+      }
       const payload = req.body;
       console.log("[AfribaPay Webhook] Received:", JSON.stringify(payload));
 
@@ -9450,8 +9469,17 @@ export async function registerRoutes(
   });
 
   // ─── PixPay IPN Webhook ───────────────────────────────────────────────────────
-  app.post("/api/pixpay/webhook", async (req, res) => {
+  app.post("/api/pixpay/webhook", webhookLimiter, async (req, res) => {
     try {
+      // ── Vérification du secret webhook ──────────────────────────────────────
+      const webhookSecret = process.env.WEBHOOK_SECRET;
+      if (webhookSecret) {
+        const token = req.query.token || req.headers["x-webhook-token"];
+        if (token !== webhookSecret) {
+          console.warn("[PixPay Webhook] Token invalide — requête rejetée");
+          return res.status(401).json({ message: "Unauthorized" });
+        }
+      }
       const payload = req.body;
       console.log("[PixPay Webhook] Received:", JSON.stringify(payload));
 
@@ -10413,7 +10441,7 @@ export async function registerRoutes(
   });
 
   // POST /api/v1/hosted-payment/create — create a hosted payment link (uses existing /pay/:slug page)
-  app.post("/api/v1/hosted-payment/create", async (req: Request, res: Response) => {
+  app.post("/api/v1/hosted-payment/create", hostedPaymentLimiter, async (req: Request, res: Response) => {
     try {
       const authHeader = req.headers.authorization || "";
       const hpKey = authHeader.replace("Bearer ", "").trim();

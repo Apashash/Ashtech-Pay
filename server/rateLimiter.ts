@@ -173,3 +173,42 @@ export const adminActionLimiter = rateLimit({
   handler: (_req, res) =>
     reject(res, "Trop d'actions admin. Réessayez dans une minute.", 60),
 });
+
+// ─── 11. Webhooks prestataires : 120 / minute / IP ───────────────────────────
+// Bloque le flooding de faux callbacks de paiement.
+export const webhookLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: getIp,
+  validate: sharedValidate,
+  handler: (_req, res) =>
+    reject(res, "Trop de requêtes webhook. Réessayez dans une minute.", 60),
+});
+
+// ─── 12. Statut de transaction public : 30 / minute / IP ────────────────────
+// Empêche l'énumération de références de transactions.
+export const transactionStatusLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: getIp,
+  validate: sharedValidate,
+  handler: (_req, res) =>
+    reject(res, "Trop de requêtes. Réessayez dans une minute.", 60),
+});
+
+// ─── 13. API marchands hébergés : 20 / minute / IP ──────────────────────────
+// Limite la création de sessions de paiement hébergées.
+export const hostedPaymentLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: getIp,
+  validate: sharedValidate,
+  handler: (_req, res) =>
+    reject(res, "Trop de demandes de paiement hébergé. Réessayez dans une minute.", 60),
+});
