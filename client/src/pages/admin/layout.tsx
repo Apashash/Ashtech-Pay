@@ -147,7 +147,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   });
 
   // ─── Admin OTP Gate ─────────────────────────────────────────────────────────
-  const [otpCode, setOtpCode] = useState(["", "", "", ""]);
+  const [otpCode, setOtpCode] = useState(["", "", "", "", "", ""]);
   const [otpSent, setOtpSent] = useState(false);
   const [otpEmail, setOtpEmail] = useState("");
   const [otpError, setOtpError] = useState("");
@@ -155,7 +155,9 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   const otpRef1 = useRef<HTMLInputElement>(null);
   const otpRef2 = useRef<HTMLInputElement>(null);
   const otpRef3 = useRef<HTMLInputElement>(null);
-  const otpRefs = [otpRef0, otpRef1, otpRef2, otpRef3];
+  const otpRef4 = useRef<HTMLInputElement>(null);
+  const otpRef5 = useRef<HTMLInputElement>(null);
+  const otpRefs = [otpRef0, otpRef1, otpRef2, otpRef3, otpRef4, otpRef5];
 
   const { data: otpStatus, isLoading: otpLoading, refetch: refetchOtp } = useQuery<{ verified: boolean }>({
     queryKey: ["/api/admin/otp-status"],
@@ -411,7 +413,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
 
             <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 rounded-lg p-3">
               <MailCheck className="w-4 h-4 shrink-0" />
-              <span>Le code à 4 chiffres expire dans 5 minutes.</span>
+              <span>Le code à 6 chiffres expire dans 5 minutes.</span>
             </div>
           </div>
         </div>
