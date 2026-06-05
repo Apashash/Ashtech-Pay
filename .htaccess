@@ -1,9 +1,13 @@
 # =============================================================================
-# .htaccess — Ashtech Pay — Blocage des fichiers source sensibles
-#
-# Ce fichier est lu automatiquement par Apache (Plesk Proxy mode).
-# Il bloque l'accès aux fichiers source AVANT que Node.js soit contacté.
+# .htaccess — Ashtech Pay
 # =============================================================================
+
+# ── Passenger : forcer le fichier de démarrage correct ───────────────────────
+# Passenger intercepte les requêtes avant mod_rewrite.
+# Ces directives lui indiquent d'utiliser dist/index.cjs (et non app.js par défaut).
+PassengerStartupFile dist/index.cjs
+PassengerAppType node
+PassengerResolveSymlinksInDocumentRoot on
 
 # Activer le moteur de réécriture
 Options -Indexes
