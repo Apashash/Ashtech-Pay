@@ -5,14 +5,13 @@ import { AdminLayout } from "./layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   CheckCircle, XCircle, Clock, ArrowLeft, Copy, User as UserIcon,
   Mail, Phone, MapPin, CreditCard, FileText, Calendar, Link2,
-  Zap, ArrowDownCircle, ArrowUpCircle, ArrowLeftRight, RefreshCw
+  Zap, ArrowDownCircle, ArrowUpCircle, ArrowLeftRight, RefreshCw, AlertTriangle
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -40,7 +39,7 @@ interface TransactionDetails {
   recipientName?: string | null;
   recipientCountry?: string | null;
   source?: string | null;
-  user?: { fullName: string; email: string; username: string; country?: string; phone?: string } | null;
+  user?: { id?: string; fullName: string; email: string; username: string; country?: string; phone?: string } | null;
   paymentIntent?: { payerName?: string; payerEmail?: string; payerPhone?: string; payerCountry?: string } | null;
   paymentLink?: { title: string; slug: string } | null;
   recipient?: { fullName: string; email: string; username: string; country?: string } | null;
@@ -99,15 +98,32 @@ function getTypeIcon(type: string) {
 
 function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between py-2">
-      <div className="flex items-center gap-2 text-muted-foreground">
+    <div className="flex items-start justify-between gap-3 py-2">
+      <div className="flex items-center gap-2 text-muted-foreground shrink-0">
         {icon}
-        <span className="text-sm">{label}</span>
+        <span className="text-sm whitespace-nowrap">{label}</span>
       </div>
-      <div className="text-sm font-medium text-right max-w-[60%]">{value}</div>
+      <div className="text-sm font-medium text-right min-w-0 break-all">{value}</div>
     </div>
   );
 }
+
+const STATUS_LABELS: Record<string, string> = {
+  completed: "Validé",
+  failed: "Échoué",
+  cancelled: "Annulé",
+  pending: "En attente",
+  processing: "En cours",
+  refunded: "Remboursé",
+};
+
+const VALID_TRANSITIONS: Record<string, string[]> = {
+  pending:    ["completed", "failed", "cancelled"],
+  processing: ["completed", "failed", "pending"],
+  failed:     ["pending"],
+  cancelled:  ["pending"],
+  completed:  ["pending", "failed", "cancelled"],
+};
 
 export default function AdminTransactionDetail() {
   const { id } = useParams<{ id: string }>();
@@ -115,6 +131,7 @@ export default function AdminTransactionDetail() {
   const { toast } = useToast();
   const [modalStatus, setModalStatus] = useState("");
   const [modalReason, setModalReason] = useState("");
+  const [confirmRevert, setConfirmRevert] = useState(false);
 
   const { data: tx, isLoading, refetch } = useQuery<TransactionDetails>({
     queryKey: [`/api/admin/transactions/${id}/details`],
@@ -136,6 +153,7 @@ export default function AdminTransactionDetail() {
       refetch();
       setModalReason("");
       setModalStatus("");
+      setConfirmRevert(false);
     },
     onError: (err: Error) => {
       toast({ title: "Erreur", description: err.message, variant: "destructive" });
@@ -161,7 +179,7 @@ export default function AdminTransactionDetail() {
     return (
       <AdminLayout>
         <div className="p-6">
-          <Button variant="ghost" onClick={() => navigate(-1 as any)} className="gap-2 mb-4">
+          <Button variant="ghost" onClick={() => history.back()} className="gap-2 mb-4">
             <ArrowLeft className="w-4 h-4" />Retour
           </Button>
           <p className="text-muted-foreground">Transaction introuvable.</p>
@@ -174,16 +192,20 @@ export default function AdminTransactionDetail() {
     ? (isIncoming(tx.type) ? "text-green-400" : "text-red-400")
     : tx.status === "pending" ? "text-amber-400" : "text-muted-foreground";
 
-  const TERMINAL_STATES = ["completed", "refunded"];
-  const isTerminal = TERMINAL_STATES.includes(tx.status);
-
-  const VALID_TRANSITIONS: Record<string, string[]> = {
-    pending: ["completed", "failed", "cancelled"],
-    processing: ["completed", "failed", "pending"],
-    failed: ["pending"],
-    cancelled: ["pending"],
-  };
+  const isTerminal = tx.status === "refunded";
   const allowedTransitions = VALID_TRANSITIONS[tx.status] ?? [];
+
+  const isRevertingCompleted = tx.status === "completed" && (modalStatus === "failed" || modalStatus === "cancelled");
+  const isDepositRevert = isRevertingCompleted && (tx.type === "deposit" || tx.type === "payment_link");
+  const isWithdrawalRevert = isRevertingCompleted && (tx.type === "withdrawal" || tx.type === "transfer_out");
+
+  const handleApply = () => {
+    if (isRevertingCompleted && !confirmRevert) {
+      setConfirmRevert(true);
+      return;
+    }
+    updateStatusMutation.mutate({ status: modalStatus, reason: modalReason });
+  };
 
   return (
     <AdminLayout>
@@ -223,11 +245,11 @@ export default function AdminTransactionDetail() {
             {tx.reference && (
               <InfoRow
                 icon={<FileText className="w-4 h-4" />}
-                label="Référence interne"
+                label="Réf. interne"
                 value={
-                  <div className="flex items-center gap-2">
-                    <code className="text-xs font-mono bg-muted px-2 py-1 rounded">{tx.reference}</code>
-                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => copyToClipboard(tx.reference!)} data-testid="button-copy-ref">
+                  <div className="flex items-center gap-1 justify-end">
+                    <code className="text-xs font-mono bg-muted px-2 py-1 rounded break-all">{tx.reference}</code>
+                    <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={() => copyToClipboard(tx.reference!)} data-testid="button-copy-ref">
                       <Copy className="w-3 h-3" />
                     </Button>
                   </div>
@@ -237,11 +259,11 @@ export default function AdminTransactionDetail() {
             {tx.externalReference && (
               <InfoRow
                 icon={<Link2 className="w-4 h-4" />}
-                label="Référence externe"
+                label="Réf. externe"
                 value={
-                  <div className="flex items-center gap-2">
-                    <code className="text-xs font-mono bg-muted px-2 py-1 rounded">{tx.externalReference}</code>
-                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => copyToClipboard(tx.externalReference!)} data-testid="button-copy-ext-ref">
+                  <div className="flex items-center gap-1 justify-end">
+                    <code className="text-xs font-mono bg-muted px-2 py-1 rounded break-all">{tx.externalReference}</code>
+                    <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={() => copyToClipboard(tx.externalReference!)} data-testid="button-copy-ext-ref">
                       <Copy className="w-3 h-3" />
                     </Button>
                   </div>
@@ -272,11 +294,11 @@ export default function AdminTransactionDetail() {
             </CardHeader>
             <CardContent className="divide-y divide-border">
               <InfoRow icon={<UserIcon className="w-4 h-4" />} label="Nom" value={
-                <button className="text-primary hover:underline font-medium" onClick={() => navigate(`/admin/users/${(tx.user as any)?.id || ""}`)}>
+                <button className="text-primary hover:underline font-medium text-right" onClick={() => navigate(`/admin/users/${tx.user?.id || ""}`)}>
                   {tx.user.fullName}
                 </button>
               } />
-              <InfoRow icon={<Mail className="w-4 h-4" />} label="Email" value={tx.user.email} />
+              <InfoRow icon={<Mail className="w-4 h-4" />} label="Email" value={<span className="break-all">{tx.user.email}</span>} />
               {tx.user.phone && <InfoRow icon={<Phone className="w-4 h-4" />} label="Téléphone" value={tx.user.phone} />}
               {tx.user.country && <InfoRow icon={<MapPin className="w-4 h-4" />} label="Pays" value={tx.user.country} />}
             </CardContent>
@@ -293,7 +315,7 @@ export default function AdminTransactionDetail() {
                 <InfoRow icon={<UserIcon className="w-4 h-4" />} label="Nom" value={tx.payerName || tx.paymentIntent?.payerName} />
               )}
               {(tx.payerEmail || tx.paymentIntent?.payerEmail) && (
-                <InfoRow icon={<Mail className="w-4 h-4" />} label="Email" value={tx.payerEmail || tx.paymentIntent?.payerEmail} />
+                <InfoRow icon={<Mail className="w-4 h-4" />} label="Email" value={<span className="break-all">{tx.payerEmail || tx.paymentIntent?.payerEmail}</span>} />
               )}
               {tx.paymentIntent?.payerPhone && (
                 <InfoRow icon={<Phone className="w-4 h-4" />} label="Téléphone" value={tx.paymentIntent.payerPhone} />
@@ -312,7 +334,7 @@ export default function AdminTransactionDetail() {
             </CardHeader>
             <CardContent className="divide-y divide-border">
               <InfoRow icon={<UserIcon className="w-4 h-4" />} label="Nom" value={tx.recipient.fullName} />
-              <InfoRow icon={<Mail className="w-4 h-4" />} label="Email" value={tx.recipient.email} />
+              <InfoRow icon={<Mail className="w-4 h-4" />} label="Email" value={<span className="break-all">{tx.recipient.email}</span>} />
               {tx.recipient.country && <InfoRow icon={<MapPin className="w-4 h-4" />} label="Pays" value={tx.recipient.country} />}
             </CardContent>
           </Card>
@@ -364,31 +386,10 @@ export default function AdminTransactionDetail() {
                     data-testid="input-status-reason"
                   />
                 </div>
-                <div className="flex gap-2">
-                  <Select value={modalStatus} onValueChange={setModalStatus}>
-                    <SelectTrigger className="flex-1" data-testid="select-status">
-                      <SelectValue placeholder="Choisir un statut…" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {allowedTransitions.map(s => (
-                        <SelectItem key={s} value={s}>
-                          {s === "completed" ? "Validé" : s === "failed" ? "Échoué" : s === "cancelled" ? "Annulé" : s === "pending" ? "En attente" : s}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    variant="outline"
-                    disabled={updateStatusMutation.isPending || !modalStatus}
-                    onClick={() => updateStatusMutation.mutate({ status: modalStatus, reason: modalReason })}
-                    data-testid="button-apply-status"
-                  >
-                    Appliquer
-                  </Button>
-                </div>
 
+                {/* Quick action buttons for pending */}
                 {tx.status === "pending" && (
-                  <div className="grid grid-cols-2 gap-2 pt-1">
+                  <div className="grid grid-cols-2 gap-2">
                     <Button
                       className="bg-green-600 hover:bg-green-700"
                       onClick={() => updateStatusMutation.mutate({ status: "completed", reason: modalReason || "Validation admin" })}
@@ -404,6 +405,93 @@ export default function AdminTransactionDetail() {
                       data-testid="button-quick-reject"
                     >
                       <XCircle className="w-4 h-4 mr-2" />Rejeter
+                    </Button>
+                  </div>
+                )}
+
+                {/* Quick action buttons for completed — allow revert */}
+                {tx.status === "completed" && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      variant="outline"
+                      className="border-amber-500/50 text-amber-400 hover:bg-amber-500/10"
+                      onClick={() => updateStatusMutation.mutate({ status: "pending", reason: modalReason || "Remis en attente par admin" })}
+                      disabled={updateStatusMutation.isPending}
+                      data-testid="button-revert-pending"
+                    >
+                      <Clock className="w-4 h-4 mr-2" />En attente
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={() => {
+                        if (!confirmRevert) { setConfirmRevert(true); setModalStatus("failed"); return; }
+                        updateStatusMutation.mutate({ status: "failed", reason: modalReason || "Rejet admin (annulation)" });
+                      }}
+                      disabled={updateStatusMutation.isPending}
+                      data-testid="button-revert-reject"
+                    >
+                      <XCircle className="w-4 h-4 mr-2" />Rejeter
+                    </Button>
+                  </div>
+                )}
+
+                {/* Confirmation warning when reverting a completed transaction */}
+                {confirmRevert && tx.status === "completed" && (
+                  <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 space-y-2">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                      <div className="text-sm text-amber-300 space-y-1">
+                        <p className="font-semibold">Confirmer l'annulation ?</p>
+                        {isDepositRevert && (
+                          <p>Ce dépôt a déjà été crédité. <strong>Le montant sera débité du solde de l'utilisateur.</strong></p>
+                        )}
+                        {isWithdrawalRevert && (
+                          <p>Ce retrait a déjà été envoyé. Aucun solde ne sera modifié (le montant avait déjà été déduit).</p>
+                        )}
+                        {!isDepositRevert && !isWithdrawalRevert && (
+                          <p>Cette action modifiera le statut de la transaction.</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        disabled={updateStatusMutation.isPending}
+                        onClick={() => updateStatusMutation.mutate({ status: modalStatus || "failed", reason: modalReason || "Rejet admin (annulation)" })}
+                        data-testid="button-confirm-revert"
+                      >
+                        Confirmer
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => { setConfirmRevert(false); setModalStatus(""); }} data-testid="button-cancel-revert">
+                        Annuler
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Generic selector for all other transitions */}
+                {allowedTransitions.length > 0 && (
+                  <div className="flex gap-2 pt-1">
+                    <Select value={modalStatus} onValueChange={setModalStatus}>
+                      <SelectTrigger className="flex-1" data-testid="select-status">
+                        <SelectValue placeholder="Autre statut…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {allowedTransitions.map(s => (
+                          <SelectItem key={s} value={s}>
+                            {STATUS_LABELS[s] || s}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      variant="outline"
+                      disabled={updateStatusMutation.isPending || !modalStatus}
+                      onClick={handleApply}
+                      data-testid="button-apply-status"
+                    >
+                      Appliquer
                     </Button>
                   </div>
                 )}

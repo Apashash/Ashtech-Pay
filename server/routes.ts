@@ -6887,10 +6887,9 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Transaction non trouvée" });
       }
 
-      // ── Terminal state immutability (CWE-20 fix — prevents retroactive fraud)
-      // completed and refunded are FINAL. Once money moved, status cannot be changed.
-      // forceComplete=true is only allowed for: pending → completed (admin manual override).
-      const TERMINAL_STATES = ["completed", "refunded"] as const;
+      // ── Terminal state immutability — only "refunded" is truly immutable.
+      // "completed" can be reverted by admin (with balance correction).
+      const TERMINAL_STATES = ["refunded"] as const;
       const isCurrentlyTerminal = TERMINAL_STATES.includes(existingTx.status as any);
 
       if (isCurrentlyTerminal) {
@@ -6900,12 +6899,13 @@ export async function registerRoutes(
         });
       }
 
-      // ── Valid state machine transitions (prevents nonsensical or fraudulent jumps)
+      // ── Valid state machine transitions
       const VALID_TRANSITIONS: Record<string, string[]> = {
         pending:    ["completed", "failed", "cancelled"],
         processing: ["completed", "failed", "pending"],
-        failed:     ["pending"],      // admin can re-queue a failed tx; completing it requires pending first
-        cancelled:  ["pending"],      // can uncancel to pending only
+        failed:     ["pending"],
+        cancelled:  ["pending"],
+        completed:  ["pending", "failed", "cancelled"],
       };
 
       const allowed = VALID_TRANSITIONS[existingTx.status] ?? [];
@@ -7127,11 +7127,11 @@ export async function registerRoutes(
         });
       }
 
-      // Refund user when transfer_out or withdrawal is rejected (only if previously pending)
+      // Refund user when transfer_out or withdrawal is rejected (only if previously pending/processing)
       const wasNotRejected = existingTx.status !== "failed" && existingTx.status !== "cancelled";
       const isNowRejected = status === "failed" || status === "cancelled";
       
-      if (wasNotRejected && isNowRejected && (transaction.type === "transfer_out" || transaction.type === "withdrawal")) {
+      if (wasNotRejected && isNowRejected && (transaction.type === "transfer_out" || transaction.type === "withdrawal") && existingTx.status !== "completed") {
         // Refund total amount (amount + fee) to the wallet that was originally debited
         const refundAmount = transaction.totalAmount 
           ? parseFloat(transaction.totalAmount) 
@@ -7148,6 +7148,30 @@ export async function registerRoutes(
             isRead:        false,
           });
         }
+      }
+
+      // ── Reverse credit when a COMPLETED deposit/payment_link is reverted to failed/cancelled
+      // The wallet was already credited when the deposit was approved — we must deduct it back.
+      if (existingTx.status === "completed" && isNowRejected && (transaction.type === "deposit" || transaction.type === "payment_link")) {
+        const debitAmount = parseFloat(transaction.amount);
+        const txCurrency = transaction.currency || "XAF";
+        const user = await storage.getUser(transaction.userId);
+        const userPrimary = user?.preferredCurrency || "XAF";
+        if (txCurrency === userPrimary) {
+          await storage.updateUserBalance(transaction.userId, -debitAmount);
+        } else {
+          // Deduct from secondary wallet (negative upsert)
+          await storage.upsertWallet(transaction.userId, txCurrency, -debitAmount);
+        }
+        await storage.createUserNotification({
+          userId:        transaction.userId,
+          type:          "deposit_failed",
+          title:         "Dépôt annulé",
+          message:       `Votre dépôt de ${transaction.amount} ${txCurrency} a été annulé par l'administration. Le montant a été débité de votre compte.`,
+          transactionId: transaction.id,
+          isRead:        false,
+        });
+        console.log(`[Admin] Reversed deposit credit: -${debitAmount} ${txCurrency} for user ${transaction.userId}`);
       }
       
       try {
