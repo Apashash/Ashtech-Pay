@@ -1,1 +1,1 @@
-require('./dist/index.cjs');
+import('./dist/index.cjs');
