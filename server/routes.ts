@@ -5792,9 +5792,7 @@ export async function registerRoutes(
       clearOtpFailures(req.userId!);
 
       req.session._avs = Date.now() + ADMIN_OTP_SESSION_TTL_MS;
-      await new Promise<void>((resolve, reject) =>
-        req.session.save((err) => (err ? reject(err) : resolve()))
-      );
+      // Express-session auto-saves the session when the response is sent — no explicit save needed.
 
       const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
 
