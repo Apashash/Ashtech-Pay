@@ -6880,10 +6880,6 @@ export async function registerRoutes(
       const { id } = req.params;
       const { status, forceComplete, reason } = req.body;
 
-      // ── Mandatory justification for any status change (CWE-20 / audit trail)
-      if (!reason || typeof reason !== "string" || reason.trim().length < 5) {
-        return res.status(400).json({ message: "Un motif est obligatoire pour modifier le statut d'une transaction (min 5 caractères)." });
-      }
 
       // Get the current transaction to check previous status
       const existingTx = await storage.getTransactionById(id);

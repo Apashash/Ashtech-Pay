@@ -62,6 +62,7 @@ import AdminWithdrawalNumbers from "@/pages/admin/withdrawal-numbers";
 import AdminDeposits from "@/pages/admin/transactions/deposits";
 import AdminWithdrawals from "@/pages/admin/transactions/withdrawals";
 import AdminTransfers from "@/pages/admin/transactions/transfers";
+import AdminTransactionDetail from "@/pages/admin/transaction-detail";
 import AdminFeesDeposits from "@/pages/admin/fees/deposits";
 import AdminFeesWithdrawals from "@/pages/admin/fees/withdrawals";
 import AdminFeesTransfers from "@/pages/admin/fees/transfers";
@@ -183,6 +184,7 @@ function Router() {
       <Route path="/admin/transactions/deposits" component={AdminDeposits} />
       <Route path="/admin/transactions/withdrawals" component={AdminWithdrawals} />
       <Route path="/admin/transactions/transfers" component={AdminTransfers} />
+      <Route path="/admin/transactions/:id" component={AdminTransactionDetail} />
       <Route path="/admin/fees" component={AdminFees} />
       <Route path="/admin/fees/deposits" component={AdminFeesDeposits} />
       <Route path="/admin/fees/withdrawals" component={AdminFeesWithdrawals} />

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { AdminLayout } from "../layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -56,6 +57,7 @@ interface TransactionDetails extends Transaction {
 
 export default function AdminWithdrawals() {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>(() => { const params = new URLSearchParams(window.location.search); return params.get("status") || "all"; });
   const [selectedTxId, setSelectedTxId] = useState<string | null>(null);
@@ -301,7 +303,7 @@ export default function AdminWithdrawals() {
                           <Button 
                             size="icon" 
                             variant="ghost"
-                            onClick={() => setSelectedTxId(tx.id)}
+                            onClick={() => navigate(`/admin/transactions/${tx.id}`)}
                             data-testid={`button-view-withdrawal-${tx.id}`}
                           >
                             <Eye className="w-4 h-4" />
@@ -484,7 +486,7 @@ export default function AdminWithdrawals() {
                 <div className="space-y-3">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Modifier le statut</p>
                   <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">Motif de modification <span className="text-red-400">*</span></label>
+                    <label className="text-xs text-muted-foreground mb-1 block">Motif de modification <span className="text-muted-foreground text-xs">(optionnel)</span></label>
                     <input
                       className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground mb-2"
                       placeholder="Ex: Paiement confirmé par le client, erreur de statut…"
@@ -508,7 +510,7 @@ export default function AdminWithdrawals() {
                     </Select>
                     <Button
                       variant="outline"
-                      disabled={updateStatusMutation.isPending || !modalStatus || modalStatus === tx.status || modalReason.trim().length < 5}
+                      disabled={updateStatusMutation.isPending || !modalStatus || modalStatus === tx.status}
                       onClick={() => updateStatusMutation.mutate({ id: tx.id, status: modalStatus, forceComplete: modalStatus === "completed", reason: modalReason })}
                       data-testid="button-modal-apply-status"
                     >

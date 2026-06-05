@@ -64,7 +64,7 @@ interface TransactionDetails extends Transaction {
 
 export default function AdminDeposits() {
   const { toast } = useToast();
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>(() => { const params = new URLSearchParams(window.location.search); return params.get("status") || "all"; });
   const [typeFilter, setTypeFilter] = useState<string>("all");
@@ -126,8 +126,8 @@ export default function AdminDeposits() {
       toast({ title: "Statut mis à jour" });
       setSelectedTxId(null);
     },
-    onError: () => {
-      toast({ title: "Erreur", variant: "destructive" });
+    onError: (err: Error) => {
+      toast({ title: "Erreur", description: err.message, variant: "destructive" });
     },
   });
 
@@ -377,7 +377,7 @@ export default function AdminDeposits() {
                           <Button 
                             size="icon" 
                             variant="ghost"
-                            onClick={() => setSelectedTxId(tx.id)}
+                            onClick={() => navigate(`/admin/transactions/${tx.id}`)}
                             data-testid={`button-view-deposit-${tx.id}`}
                           >
                             <Eye className="w-4 h-4" />
@@ -632,7 +632,7 @@ export default function AdminDeposits() {
                 <div className="space-y-3">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Modifier le statut</p>
                   <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">Motif de modification <span className="text-red-400">*</span></label>
+                    <label className="text-xs text-muted-foreground mb-1 block">Motif de modification <span className="text-muted-foreground text-xs">(optionnel)</span></label>
                     <input
                       className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground mb-2"
                       placeholder="Ex: Paiement reçu et confirmé, doublon détecté…"
@@ -656,7 +656,7 @@ export default function AdminDeposits() {
                     </Select>
                     <Button
                       variant="outline"
-                      disabled={updateStatusMutation.isPending || !modalStatus || modalStatus === tx.status || modalReason.trim().length < 5}
+                      disabled={updateStatusMutation.isPending || !modalStatus || modalStatus === tx.status}
                       onClick={() => updateStatusMutation.mutate({ id: tx.id, status: modalStatus, reason: modalReason })}
                       data-testid="button-modal-apply-status"
                     >

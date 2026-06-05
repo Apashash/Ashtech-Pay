@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { AdminLayout } from "./layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -63,6 +64,7 @@ interface TransactionDetails extends Transaction {
 
 export default function AdminTransactions() {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>(() => {
@@ -88,8 +90,8 @@ export default function AdminTransactions() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/transactions"] });
       toast({ title: "Statut mis à jour" });
     },
-    onError: () => {
-      toast({ title: "Erreur", variant: "destructive" });
+    onError: (error: any) => {
+      toast({ title: "Erreur", description: error?.message || "Une erreur est survenue", variant: "destructive" });
     },
   });
 
@@ -315,7 +317,7 @@ export default function AdminTransactions() {
                           <Button 
                             size="icon" 
                             variant="outline"
-                            onClick={() => setSelectedTxId(tx.id)}
+                            onClick={() => navigate(`/admin/transactions/${tx.id}`)}
                             data-testid={`button-view-${tx.id}`}
                           >
                             <Eye className="w-4 h-4" />
