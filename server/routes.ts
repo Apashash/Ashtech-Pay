@@ -452,6 +452,13 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
     return res.status(403).json({ message: "Accès refusé - Droits admin requis" });
   }
 
+  // ── OTP Bypass mode (dev/emergency): set ADMIN_OTP_BYPASS=true in env to skip OTP entirely.
+  // Useful when email (Resend) and Telegram are not configured, to verify other issues.
+  if (process.env.ADMIN_OTP_BYPASS === "true") {
+    console.warn(`[AdminAccess] OTP BYPASS ACTIVE — user=${req.userId} role=${user.role} path=${req.path}`);
+    return next();
+  }
+
   // OTP check: triple verification — in-memory (instant) OR session middleware (persistent)
   // OR direct DB session query (fallback for PM2 cluster where req.session may lag).
   const now = Date.now();
@@ -5746,6 +5753,10 @@ export async function registerRoutes(
     const user = await storage.getUser(req.userId!).catch(() => null);
     if (!user || !["admin", "support", "finance"].includes(user.role)) {
       return res.status(403).json({ message: "Accès refusé" });
+    }
+    // OTP bypass mode: treat session as already verified
+    if (process.env.ADMIN_OTP_BYPASS === "true") {
+      return res.json({ verified: true, bypass: true });
     }
     const now = Date.now();
     const memEntry = adminVerifiedSessions.get(req.sessionID);
