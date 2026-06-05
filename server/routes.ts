@@ -176,6 +176,8 @@ declare module "express-session" {
   interface SessionData {
     userId: string;
     _avs?: number;
+    _otpCode?: string;
+    _otpExpiry?: number;
     clientIp?: string;
     userAgent?: string;
     loginAt?: string;
@@ -5809,9 +5811,16 @@ export async function registerRoutes(
       // Clear both verification stores (require fresh OTP on new request)
       adminVerifiedSessions.delete(req.sessionID);
       delete req.session._avs;
+      delete req.session._otpCode;
+      delete req.session._otpExpiry;
 
       const code = generateAdminOtp(); // 6 digits (1 000 000 combinations)
-      adminOtpStore.set(req.userId!, { code, expiresAt: Date.now() + 5 * 60 * 1000 });
+      const otpExpiry = Date.now() + 5 * 60 * 1000;
+      // Store in-memory (fast, same-process) AND session (PostgreSQL — survives PM2 multi-worker)
+      adminOtpStore.set(req.userId!, { code, expiresAt: otpExpiry });
+      req.session._otpCode = code;
+      req.session._otpExpiry = otpExpiry;
+      await new Promise<void>((resolve) => { req.session.save((err) => { if (err) console.error("[AdminOTP] session save warning:", err?.message); resolve(); }); });
       await sendAdminOtpEmail(user.email, user.fullName || user.username, code);
 
       // Send code via Telegram as backup channel
@@ -5868,19 +5877,53 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Code requis" });
       }
 
-      const stored = adminOtpStore.get(req.userId!);
-      if (!stored) {
+      // Resolve stored OTP: in-memory first (same-process, fast), then session (DB-backed, PM2 multi-worker)
+      let storedCode: string | undefined;
+      let storedExpiry: number | undefined;
+
+      const memStored = adminOtpStore.get(req.userId!);
+      if (memStored) {
+        storedCode = memStored.code;
+        storedExpiry = memStored.expiresAt;
+      } else if (req.session._otpCode && req.session._otpExpiry) {
+        // Fallback: read from session (handles PM2 worker routing mismatch)
+        storedCode = req.session._otpCode;
+        storedExpiry = req.session._otpExpiry;
+        console.log(`[AdminOTP] Code trouvé en session DB (fallback PM2) pour userId=${req.userId}`);
+      } else {
+        // Try reading directly from DB session table (extreme fallback: session middleware not yet hydrated)
+        try {
+          const dbRow = await sessionPool.query(
+            `SELECT sess FROM session WHERE sid = $1 AND expire > NOW() LIMIT 1`,
+            [req.sessionID]
+          );
+          if (dbRow.rows.length > 0) {
+            const sessData = typeof dbRow.rows[0].sess === "string"
+              ? JSON.parse(dbRow.rows[0].sess)
+              : dbRow.rows[0].sess;
+            if (sessData?._otpCode && sessData?._otpExpiry) {
+              storedCode = sessData._otpCode;
+              storedExpiry = sessData._otpExpiry;
+              console.log(`[AdminOTP] Code trouvé en session DB directe (fallback tier-3) pour userId=${req.userId}`);
+            }
+          }
+        } catch { /* continue */ }
+      }
+
+      if (!storedCode || !storedExpiry) {
         return res.status(400).json({ message: "Aucun code demandé. Veuillez demander un nouveau code." });
       }
-      if (Date.now() > stored.expiresAt) {
+      if (Date.now() > storedExpiry) {
         adminOtpStore.delete(req.userId!);
+        delete req.session._otpCode;
+        delete req.session._otpExpiry;
         return res.status(400).json({ message: "Code expiré. Veuillez demander un nouveau code." });
       }
 
       // Constant-time comparison to prevent timing attacks
       const submittedCode = code.trim();
-      const codesMatch = submittedCode.length === stored.code.length &&
-        crypto.timingSafeEqual(Buffer.from(submittedCode), Buffer.from(stored.code));
+      const codesMatch = submittedCode.length === storedCode.length &&
+        crypto.timingSafeEqual(Buffer.from(submittedCode), Buffer.from(storedCode));
 
       if (!codesMatch) {
         recordOtpFailure(req.userId!);
@@ -5892,8 +5935,10 @@ export async function registerRoutes(
         });
       }
 
-      // ── OTP valid — dual storage: in-memory (instant) + session (persistent)
+      // ── OTP valid — cleanup both stores
       adminOtpStore.delete(req.userId!);
+      delete req.session._otpCode;
+      delete req.session._otpExpiry;
       clearOtpFailures(req.userId!);
 
       const expiresAt = Date.now() + ADMIN_OTP_SESSION_TTL_MS;
