@@ -2,8 +2,8 @@
 node_modules
 .npm
 
-# ─── Build output — NEVER commit compiled server code ─────────────────────────
-dist/
+# ─── Build output — dist/ committed for Plesk deployment (no build step needed on server)
+# dist/
 
 # ─── Environment & secrets — NEVER commit ─────────────────────────────────────
 .env
