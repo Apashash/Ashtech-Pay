@@ -1,13 +1,46 @@
+# ─── Dependencies ─────────────────────────────────────────────────────────────
 node_modules
-.DS_Store
-server/public
-vite.config.ts.*
-*.tar.gz
+.npm
+
+# ─── Build output — NEVER commit compiled server code ─────────────────────────
+dist/
+
+# ─── Environment & secrets — NEVER commit ─────────────────────────────────────
 .env
-logs
-uploads
+.env.*
+!.env.example
+
+# ─── Replit local state (tokens, cache) ───────────────────────────────────────
 .local/afribapay_token.json
 .local/swychr_token.json
+.local/pixpay_token.json
+.cache
 
-# dist/ is intentionally NOT ignored — compiled files are committed to git
-# so Plesk only needs: git pull + pm2 restart (no build step on server)
+# ─── Uploads (user files — not source code) ───────────────────────────────────
+uploads/
+
+# ─── Logs ─────────────────────────────────────────────────────────────────────
+logs/
+*.log
+npm-debug.log*
+
+# ─── OS / Editor ──────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+vite.config.ts.*
+server/public
+
+# ─── Plesk / PM2 deployment files (not needed on Replit) ─────────────────────
+ecosystem.config.js
+ecosystem.config.cjs
+deploy.sh
+DEPLOIEMENT_PLESK.md
+
+# ─── Sensitive API documentation ──────────────────────────────────────────────
+Collection swychr api.md
+payin (1).yaml
+payout.yaml
+
+# ─── Archives ─────────────────────────────────────────────────────────────────
+*.tar.gz
+*.zip

@@ -979,25 +979,59 @@ export async function registerRoutes(
   });
 
   // Image proxy - streams image bytes through server to prevent cached signed URL expiry
-  app.get("/api/image-proxy", async (req, res) => {
+  // Security: requires authentication + strict path whitelist (no SSRF, no path traversal)
+  app.get("/api/image-proxy", requireAuth, async (req, res) => {
     try {
       const storagePath = req.query.path as string;
       if (!storagePath) return res.status(400).send("Path required");
 
+      // Strict allowlist: only accept relative storage paths (no URLs, no traversal)
+      // Valid: "payment-links/1234-image.png" or "kyc/5678-doc.pdf"
+      // Rejected: "http://...", "../etc/passwd", absolute paths, query strings
+      const ALLOWED_FOLDERS = ["payment-links", "kyc"];
+      const isRelativePath = !storagePath.startsWith("http") &&
+        !storagePath.startsWith("/") &&
+        !storagePath.includes("..") &&
+        !storagePath.includes("?") &&
+        !storagePath.includes("\0");
+      const startsWithAllowedFolder = ALLOWED_FOLDERS.some(f => storagePath.startsWith(f + "/"));
+
+      // Also allow full Supabase storage URLs (validated by regex in downloadFromSupabase)
+      const isSupabaseUrl = storagePath.startsWith("https://") &&
+        storagePath.includes(".supabase.co/storage/v1/object/");
+
+      if (!isRelativePath && !isSupabaseUrl) {
+        return res.status(400).send("Invalid path");
+      }
+      if (isRelativePath && !startsWithAllowedFolder) {
+        return res.status(400).send("Invalid storage folder");
+      }
+
       const result = await downloadFromSupabase(storagePath);
       if (!result) return res.status(404).send("Image not found");
 
+      // Only allow image and PDF content types
+      const ALLOWED_CONTENT_TYPES = [
+        "image/jpeg", "image/png", "image/gif", "image/webp",
+        "image/svg+xml", "application/pdf",
+      ];
+      if (!ALLOWED_CONTENT_TYPES.includes(result.contentType)) {
+        return res.status(415).send("Unsupported media type");
+      }
+
       const buffer = Buffer.from(await result.data.arrayBuffer());
       res.setHeader("Content-Type", result.contentType);
-      // Use ETag for efficient revalidation
-      const etag = `"${storagePath.replace(/[^a-zA-Z0-9]/g, '')}-${buffer.length}"`;
+      res.setHeader("Content-Disposition", "inline");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+
+      const etag = `"${storagePath.replace(/[^a-zA-Z0-9]/g, "")}-${buffer.length}"`;
       res.setHeader("ETag", etag);
-      
-      if (req.headers['if-none-match'] === etag) {
+
+      if (req.headers["if-none-match"] === etag) {
         return res.status(304).end();
       }
 
-      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      res.setHeader("Cache-Control", "private, max-age=86400");
       res.setHeader("Content-Length", buffer.length);
       res.end(buffer);
     } catch (error) {

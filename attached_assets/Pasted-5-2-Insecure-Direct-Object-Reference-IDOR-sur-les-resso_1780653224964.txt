@@ -1,0 +1,15 @@
+5.2 — Insecure Direct Object Reference (IDOR) sur les ressources KYC
+CWE-639 — Authorization Bypass Through User-Controlled Key  |  CVSS 6.8. Les chemins vers les documents d'identité (CNI, passeports, selfies) sont stockés en clair dans kyc_submissions et directement référençables via l'URL de stockage Supabase. En itérant sur les identifiants de soumission, un attaquant non authentifié peut accéder aux pièces d'identité de la totalité des 72 utilisateurs soumis au processus KYC.
+ 
+5.3 — Absence de chiffrement at-rest des champs sensibles
+CWE-312 — Cleartext Storage of Sensitive Information  |  CVSS 7.2. Les clés sk_live, pk_live et hp_live de la table hosted_page_configs sont stockées en clair dans la base de données. Ces secret keys permettent d'initier des transactions de paiement en dehors de la plateforme. Par ailleurs, les tokens de session et les données PII des utilisateurs (numéros de téléphone, emails) ne bénéficient d'aucun chiffrement at-rest.
+ 
+5.4 — Absence de validation d'intégrité du token de session
+CWE-345 — Insufficient Verification of Data Authenticity  |  CVSS 6.5. Le serveur d'application valide l'accès administrateur en lisant le flag adminOtpVerified directement depuis la table session sans signature cryptographique ni contrôle d'intégrité. L'absence de token JWT signé (HMAC-SHA256 ou RSA) pour encapsuler le statut de vérification rend tout mécanisme de session falsifiable dès lors que l'accès à la base de données est disponible.
+ 
+5.5 — Exposition des traces d'exécution en environnement de production
+CWE-209 — Generation of Error Message Containing Sensitive Information  |  CVSS 5.3. Des stack traces complètes et des messages d'erreur internes sont retournés en clair dans les réponses HTTP en cas d'exception (type d'erreur, chemin de fichier, version du runtime Node.js, structure des modules). Ces informations permettent à un attaquant de cartographier précisément l'environnement d'exécution et d'identifier les dépendances vulnérables.
+ 
+5.6 — Absence de politique CSP restrictive sur les endpoints d'API
+CWE-116 — Improper Encoding or Escaping of Output  |  CVSS 5.1. Bien que les en-têtes HTTP soient partiellement configurés sur le front-end (Content-Security-Policy: default-src 'self'), les endpoints REST de l'API Node.js ne retournent aucun en-tête de sécurité. Couplé à l'absence de validation des champs JSONB côté serveur, cela ouvre un vecteur potentiel d'injection au niveau des données stockées dans les champs de type JSONB (table session, champ sess).
+ 
