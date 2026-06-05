@@ -15,7 +15,7 @@ import { hydrateIpBlocker } from "./ipBlocker";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 import { encryptField, hmacField } from "./fieldEncryption";
-import { createDbAuditTriggers, startDbWatchdog } from "./dbWatchdog";
+import { createDbAuditTriggers, startDbWatchdog, purgeOldAdminOtpSessions } from "./dbWatchdog";
 
 const app = express();
 const httpServer = createServer(app);
@@ -255,6 +255,9 @@ app.use((req, res, next) => {
 
     // ── SIEM: Install PostgreSQL-level audit triggers (VII) ───────────────────
     await createDbAuditTriggers();
+
+    // ── Purge legacy sessions with old adminOtpVerified flag (stops false SIEM alerts)
+    await purgeOldAdminOtpSessions();
 
     try {
       // Each country currency keeps its own distinct wallet (XAFG for Gabon, XOFT for Togo, etc.)

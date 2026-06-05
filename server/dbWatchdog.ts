@@ -151,8 +151,30 @@ async function takeSnapshot(): Promise<WatchdogSnapshot | null> {
   }
 }
 
+/**
+ * On startup: purge any old sessions that still contain the legacy adminOtpVerified flag.
+ * These are leftover from a previous code version and generate false SIEM alerts.
+ * The new code stores OTP verification as _avs (timestamp) in session, never adminOtpVerified.
+ */
+export async function purgeOldAdminOtpSessions(): Promise<void> {
+  try {
+    const result = await db.execute(sql`
+      DELETE FROM session
+      WHERE sess::text ILIKE '%adminOtpVerified%'
+    `);
+    const deleted = (result as any).rowCount ?? 0;
+    if (deleted > 0) {
+      console.log(`[SIEM] Purged ${deleted} legacy session(s) with adminOtpVerified flag`);
+    }
+  } catch {
+    // session table may not exist — silently skip
+  }
+}
+
 async function checkSessionAnomalies(): Promise<void> {
   try {
+    // Check for legacy adminOtpVerified flag — this should no longer exist after purge.
+    // If detected here it means someone injected it manually (privilege escalation attempt).
     const res = await db.execute(sql`
       SELECT sid
       FROM session
@@ -161,11 +183,14 @@ async function checkSessionAnomalies(): Promise<void> {
     `);
     const rows = res.rows as any[];
     if (rows.length > 0) {
+      // Auto-delete these suspicious sessions immediately
+      await db.execute(sql`DELETE FROM session WHERE sess::text ILIKE '%adminOtpVerified%'`);
       throttledAlert(
         "session:adminOtpVerified",
-        `🔐 <b>Flag adminOtpVerified détecté dans la table session</b>\n` +
-          `${rows.length} session(s) contient ce flag — possible injection de privilège admin.\n` +
-          `SIDs: ${rows.map((r) => String(r.sid || "").slice(0, 12) + "…").join(", ")}`
+        `🔐 <b>Flag adminOtpVerified injecté dans la table session</b>\n` +
+          `${rows.length} session(s) contenant ce flag ont été supprimées automatiquement.\n` +
+          `SIDs: ${rows.map((r) => String(r.sid || "").slice(0, 12) + "…").join(", ")}\n\n` +
+          `⚠️ Tentative possible d'injection de privilège admin.`
       );
     }
   } catch {

@@ -1,0 +1,1 @@
+- [Admin OTP multi-process fix](admin-otp-fix.md) — OTP verification must use session (DB-backed), not in-memory Map; in-memory breaks PM2 cluster & server restarts.
