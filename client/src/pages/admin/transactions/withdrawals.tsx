@@ -61,6 +61,7 @@ export default function AdminWithdrawals() {
   const [selectedTxId, setSelectedTxId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [modalStatus, setModalStatus] = useState<string>("");
+  const [modalReason, setModalReason] = useState<string>("");
 
   useEffect(() => { setPage(1); }, [statusFilter]);
 
@@ -91,8 +92,8 @@ export default function AdminWithdrawals() {
   }, [depositConfig]);
 
   const updateStatusMutation = useMutation({
-    mutationFn: async ({ id, status, forceComplete }: { id: string; status: string; forceComplete?: boolean }) => {
-      return apiRequest("PATCH", `/api/admin/transactions/${id}`, { status, ...(forceComplete ? { forceComplete: true } : {}) });
+    mutationFn: async ({ id, status, forceComplete, reason }: { id: string; status: string; forceComplete?: boolean; reason?: string }) => {
+      return apiRequest("PATCH", `/api/admin/transactions/${id}`, { status, reason: reason || "Action admin", ...(forceComplete ? { forceComplete: true } : {}) });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/transactions", "withdrawals"] });
@@ -151,8 +152,8 @@ export default function AdminWithdrawals() {
   };
 
   const forceCompleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      return apiRequest("PATCH", `/api/admin/transactions/${id}`, { status: "completed", forceComplete: true });
+    mutationFn: async ({ id, reason }: { id: string; reason?: string }) => {
+      return apiRequest("PATCH", `/api/admin/transactions/${id}`, { status: "completed", forceComplete: true, reason: reason || "Confirmation manuelle admin" });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/transactions", "withdrawals"] });
@@ -482,6 +483,16 @@ export default function AdminWithdrawals() {
                 <Separator />
                 <div className="space-y-3">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Modifier le statut</p>
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Motif de modification <span className="text-red-400">*</span></label>
+                    <input
+                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground mb-2"
+                      placeholder="Ex: Paiement confirmé par le client, erreur de statut…"
+                      value={modalReason}
+                      onChange={e => setModalReason(e.target.value)}
+                      data-testid="input-modal-reason"
+                    />
+                  </div>
                   <div className="flex gap-2">
                     <Select value={modalStatus} onValueChange={setModalStatus}>
                       <SelectTrigger className="flex-1" data-testid="select-modal-status">
@@ -497,8 +508,8 @@ export default function AdminWithdrawals() {
                     </Select>
                     <Button
                       variant="outline"
-                      disabled={updateStatusMutation.isPending || !modalStatus || modalStatus === tx.status}
-                      onClick={() => updateStatusMutation.mutate({ id: tx.id, status: modalStatus, forceComplete: modalStatus === "completed" })}
+                      disabled={updateStatusMutation.isPending || !modalStatus || modalStatus === tx.status || modalReason.trim().length < 5}
+                      onClick={() => updateStatusMutation.mutate({ id: tx.id, status: modalStatus, forceComplete: modalStatus === "completed", reason: modalReason })}
                       data-testid="button-modal-apply-status"
                     >
                       Appliquer
@@ -508,7 +519,7 @@ export default function AdminWithdrawals() {
                     <div className="grid grid-cols-1 gap-2 pt-1">
                       <Button
                         className="bg-green-600 hover:bg-green-700"
-                        onClick={() => updateStatusMutation.mutate({ id: tx.id, status: "completed" })}
+                        onClick={() => updateStatusMutation.mutate({ id: tx.id, status: "completed", reason: modalReason || "Approbation admin via Swychr" })}
                         disabled={updateStatusMutation.isPending}
                         data-testid="button-modal-approve-swychr"
                       >
@@ -517,7 +528,7 @@ export default function AdminWithdrawals() {
                       </Button>
                       <Button
                         className="bg-blue-600 hover:bg-blue-700"
-                        onClick={() => forceCompleteMutation.mutate(tx.id)}
+                        onClick={() => forceCompleteMutation.mutate({ id: tx.id, reason: modalReason || "Confirmation manuelle admin (sans Swychr)" })}
                         disabled={forceCompleteMutation.isPending}
                         data-testid="button-modal-approve-manual"
                       >
@@ -526,7 +537,7 @@ export default function AdminWithdrawals() {
                       </Button>
                       <Button
                         variant="destructive"
-                        onClick={() => updateStatusMutation.mutate({ id: tx.id, status: "failed" })}
+                        onClick={() => updateStatusMutation.mutate({ id: tx.id, status: "failed", reason: modalReason || "Rejet admin" })}
                         disabled={updateStatusMutation.isPending}
                         data-testid="button-modal-reject"
                       >

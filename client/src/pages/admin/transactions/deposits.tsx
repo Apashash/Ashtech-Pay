@@ -72,6 +72,7 @@ export default function AdminDeposits() {
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [modalStatus, setModalStatus] = useState<string>("");
+  const [modalReason, setModalReason] = useState<string>("");
   const highlightRef = useRef<HTMLTableRowElement | null>(null);
 
   useEffect(() => { setPage(1); }, [statusFilter, typeFilter]);
@@ -116,8 +117,8 @@ export default function AdminDeposits() {
   }, [depositConfig]);
 
   const updateStatusMutation = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      return apiRequest("PATCH", `/api/admin/transactions/${id}`, { status });
+    mutationFn: async ({ id, status, reason }: { id: string; status: string; reason?: string }) => {
+      return apiRequest("PATCH", `/api/admin/transactions/${id}`, { status, reason: reason || "Action admin" });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/transactions", "deposits"] });
@@ -630,6 +631,16 @@ export default function AdminDeposits() {
                 <Separator />
                 <div className="space-y-3">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Modifier le statut</p>
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Motif de modification <span className="text-red-400">*</span></label>
+                    <input
+                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground mb-2"
+                      placeholder="Ex: Paiement reçu et confirmé, doublon détecté…"
+                      value={modalReason}
+                      onChange={e => setModalReason(e.target.value)}
+                      data-testid="input-modal-reason"
+                    />
+                  </div>
                   <div className="flex gap-2">
                     <Select value={modalStatus} onValueChange={setModalStatus}>
                       <SelectTrigger className="flex-1" data-testid="select-modal-status">
@@ -645,8 +656,8 @@ export default function AdminDeposits() {
                     </Select>
                     <Button
                       variant="outline"
-                      disabled={updateStatusMutation.isPending || !modalStatus || modalStatus === tx.status}
-                      onClick={() => updateStatusMutation.mutate({ id: tx.id, status: modalStatus })}
+                      disabled={updateStatusMutation.isPending || !modalStatus || modalStatus === tx.status || modalReason.trim().length < 5}
+                      onClick={() => updateStatusMutation.mutate({ id: tx.id, status: modalStatus, reason: modalReason })}
                       data-testid="button-modal-apply-status"
                     >
                       Appliquer
@@ -656,7 +667,7 @@ export default function AdminDeposits() {
                     <div className="grid grid-cols-2 gap-2 pt-1">
                       <Button
                         className="bg-green-600 hover:bg-green-700"
-                        onClick={() => updateStatusMutation.mutate({ id: tx.id, status: "completed" })}
+                        onClick={() => updateStatusMutation.mutate({ id: tx.id, status: "completed", reason: modalReason || "Validation dépôt admin" })}
                         disabled={updateStatusMutation.isPending}
                         data-testid="button-modal-approve"
                       >
@@ -665,7 +676,7 @@ export default function AdminDeposits() {
                       </Button>
                       <Button
                         variant="destructive"
-                        onClick={() => updateStatusMutation.mutate({ id: tx.id, status: "failed" })}
+                        onClick={() => updateStatusMutation.mutate({ id: tx.id, status: "failed", reason: modalReason || "Rejet dépôt admin" })}
                         disabled={updateStatusMutation.isPending}
                         data-testid="button-modal-reject"
                       >

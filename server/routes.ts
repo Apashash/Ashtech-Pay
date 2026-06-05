@@ -6065,37 +6065,129 @@ export async function registerRoutes(
   });
 
   // Admin: Update user balance
+  // Security: every mutation is fully audited (before/after), creates a compensating
+  // transaction record, and requires a mandatory justification reason.
   app.patch("/api/admin/users/:id/balance", requireAuth, requireAdmin, async (req, res) => {
     try {
-      const { amount, currency, type } = req.body; // type: 'set' or 'add'
+      const { amount, currency, type, reason } = req.body; // type: 'set' | 'add'
       const userId = req.params.id;
-      
+
+      // ── Mandatory justification (audit requirement — CWE-20 fix)
+      if (!reason || typeof reason !== "string" || reason.trim().length < 5) {
+        return res.status(400).json({ message: "Un motif de modification est obligatoire (min 5 caractères)." });
+      }
+
       const user = await storage.getUser(userId);
       if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
 
       const amountNum = parseFloat(amount);
       if (isNaN(amountNum)) return res.status(400).json({ message: "Montant invalide" });
 
-      const isPrimary = currency === (user.preferredCurrency || "XAF");
+      // ── Sanity bounds: no negative balance set, cap per-operation at 50 000 000 (50M)
+      const MAX_BALANCE_OP = 50_000_000;
+      if (type === "set" && amountNum < 0) {
+        return res.status(400).json({ message: "Le solde ne peut pas être négatif." });
+      }
+      if (Math.abs(amountNum) > MAX_BALANCE_OP) {
+        return res.status(400).json({ message: `Montant dépasse la limite par opération (${MAX_BALANCE_OP.toLocaleString()}).` });
+      }
+
+      const effectiveCurrency = currency || user.preferredCurrency || "XAF";
+      const isPrimary = effectiveCurrency === (user.preferredCurrency || "XAF");
+
+      // ── Capture BEFORE values for audit trail
+      const balanceBefore = isPrimary
+        ? parseFloat(user.balance ?? "0")
+        : parseFloat((await storage.getUserWallets(userId)).find(w => w.currency === effectiveCurrency)?.balance ?? "0");
+
+      let balanceAfter: number;
+
       if (isPrimary) {
+        let updated: any;
         if (type === "set") {
-          const updated = await storage.updateUser(userId, { balance: amountNum.toFixed(2) });
-          if (!updated) return res.status(500).json({ message: "Mise à jour échouée" });
-          const safeUser = (({ password: _pw, ...rest }) => rest)(updated as any);
-          res.json({ success: true, user: safeUser });
+          updated = await storage.updateUser(userId, { balance: amountNum.toFixed(2) });
+          balanceAfter = amountNum;
         } else {
-          const updated = await storage.updateUserBalance(userId, amountNum);
-          const safeUser = (({ password: _pw, ...rest }) => rest)(updated as any);
-          res.json({ success: true, user: safeUser });
+          updated = await storage.updateUserBalance(userId, amountNum);
+          balanceAfter = balanceBefore + amountNum;
         }
+        if (!updated) return res.status(500).json({ message: "Mise à jour échouée" });
+        const safeUser = (({ password: _pw, ...rest }) => rest)(updated as any);
+
+        // ── Compensating transaction record — full audit trail in transactions table
+        const delta = type === "set" ? (amountNum - balanceBefore) : amountNum;
+        await storage.createTransaction({
+          userId,
+          type: delta >= 0 ? "admin_credit" : "admin_debit",
+          amount: Math.abs(delta).toFixed(2),
+          currency: effectiveCurrency,
+          status: "completed",
+          description: `[Admin] ${reason.trim()} (${type === "set" ? "Solde défini" : "Ajustement"}: ${balanceBefore.toFixed(2)} → ${Math.max(0, balanceAfter).toFixed(2)} ${effectiveCurrency})`,
+          reference: `ADMIN-${Date.now()}`,
+          confirmedAt: new Date(),
+        });
+
+        // ── Admin log with before/after
+        const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
+        await storage.createAdminLog({
+          adminId: req.userId!,
+          action: "balance_update",
+          targetType: "user",
+          targetId: userId,
+          details: JSON.stringify({
+            currency: effectiveCurrency,
+            type,
+            before: balanceBefore,
+            after: Math.max(0, balanceAfter),
+            delta: parseFloat(delta.toFixed(2)),
+            reason: reason.trim(),
+            ip,
+          }),
+          ipAddress: ip,
+        });
+
+        return res.json({ success: true, user: safeUser });
       } else {
+        let wallet: any;
         if (type === "set") {
-          const wallet = await storage.setWalletBalance(userId, currency, amountNum);
-          res.json({ success: true, wallet });
+          wallet = await storage.setWalletBalance(userId, effectiveCurrency, amountNum);
+          balanceAfter = amountNum;
         } else {
-          const wallet = await storage.upsertWallet(userId, currency, amountNum);
-          res.json({ success: true, wallet });
+          wallet = await storage.upsertWallet(userId, effectiveCurrency, amountNum);
+          balanceAfter = balanceBefore + amountNum;
         }
+
+        const delta = type === "set" ? (amountNum - balanceBefore) : amountNum;
+        await storage.createTransaction({
+          userId,
+          type: delta >= 0 ? "admin_credit" : "admin_debit",
+          amount: Math.abs(delta).toFixed(2),
+          currency: effectiveCurrency,
+          status: "completed",
+          description: `[Admin] ${reason.trim()} (${type === "set" ? "Solde défini" : "Ajustement"}: ${balanceBefore.toFixed(2)} → ${Math.max(0, balanceAfter).toFixed(2)} ${effectiveCurrency})`,
+          reference: `ADMIN-${Date.now()}`,
+          confirmedAt: new Date(),
+        });
+
+        const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
+        await storage.createAdminLog({
+          adminId: req.userId!,
+          action: "balance_update",
+          targetType: "wallet",
+          targetId: userId,
+          details: JSON.stringify({
+            currency: effectiveCurrency,
+            type,
+            before: balanceBefore,
+            after: Math.max(0, balanceAfter),
+            delta: parseFloat(delta.toFixed(2)),
+            reason: reason.trim(),
+            ip,
+          }),
+          ipAddress: ip,
+        });
+
+        return res.json({ success: true, wallet });
       }
     } catch (error) {
       console.error("Update balance error:", error);
@@ -6126,24 +6218,34 @@ export async function registerRoutes(
     }
   });
 
-  // Admin: Update user
+  // Admin: Update user (profile/metadata fields only)
+  // Security: financial fields (balance) and security-critical fields (role, password)
+  // are explicitly stripped — they have dedicated hardened endpoints.
   app.patch("/api/admin/users/:id", requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
-      const updates = req.body;
-      
-      // Special handling for balance update to ensure it's treated as decimal
-      if (updates.balance !== undefined) {
-        updates.balance = parseFloat(updates.balance).toFixed(2);
+      const rawUpdates = req.body;
+
+      // ── Strip financial and security-critical fields (CWE-20 fix)
+      // balance → use PATCH /api/admin/users/:id/balance (audited, with before/after + transaction record)
+      // role    → use dedicated role-change endpoint (to be secured separately)
+      // password → never overwritten via generic patch
+      const BLOCKED_FIELDS = ["balance", "password", "role"] as const;
+      const blocked = BLOCKED_FIELDS.filter(f => rawUpdates[f] !== undefined);
+      if (blocked.length > 0) {
+        return res.status(400).json({
+          message: `Le(s) champ(s) "${blocked.join(", ")}" ne peuvent pas être modifiés via cet endpoint. Utilisez les endpoints dédiés.`,
+        });
       }
+
+      const updates = { ...rawUpdates };
 
       const user = await storage.updateUser(id, updates);
       if (!user) {
         return res.status(404).json({ message: "Utilisateur non trouvé" });
       }
       const { password, ...safeUser } = user;
-      
-      // Log admin action
+
       await storage.createAdminLog({
         adminId: req.userId!,
         action: "update_user",
@@ -6152,7 +6254,7 @@ export async function registerRoutes(
         details: JSON.stringify(updates),
         ipAddress: req.ip || null,
       });
-      
+
       res.json(safeUser);
     } catch (error) {
       console.error("Admin update user error:", error);
@@ -6490,18 +6592,53 @@ export async function registerRoutes(
   app.patch("/api/admin/transactions/:id", requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
-      const { status, forceComplete } = req.body;
-      
+      const { status, forceComplete, reason } = req.body;
+
+      // ── Mandatory justification for any status change (CWE-20 / audit trail)
+      if (!reason || typeof reason !== "string" || reason.trim().length < 5) {
+        return res.status(400).json({ message: "Un motif est obligatoire pour modifier le statut d'une transaction (min 5 caractères)." });
+      }
+
       // Get the current transaction to check previous status
       const existingTx = await storage.getTransactionById(id);
       if (!existingTx) {
         return res.status(404).json({ message: "Transaction non trouvée" });
       }
-      
-      // Prevent double-crediting: only credit if moving from pending to completed
+
+      // ── Terminal state immutability (CWE-20 fix — prevents retroactive fraud)
+      // completed and refunded are FINAL. Once money moved, status cannot be changed.
+      // forceComplete=true is only allowed for: pending → completed (admin manual override).
+      const TERMINAL_STATES = ["completed", "refunded"] as const;
+      const isCurrentlyTerminal = TERMINAL_STATES.includes(existingTx.status as any);
+
+      if (isCurrentlyTerminal) {
+        return res.status(409).json({
+          message: `Impossible de modifier une transaction en état "${existingTx.status}". Les états terminaux sont immuables.`,
+          currentStatus: existingTx.status,
+        });
+      }
+
+      // ── Valid state machine transitions (prevents nonsensical or fraudulent jumps)
+      const VALID_TRANSITIONS: Record<string, string[]> = {
+        pending:    ["completed", "failed", "cancelled"],
+        processing: ["completed", "failed", "pending"],
+        failed:     ["pending"],      // admin can re-queue a failed tx; completing it requires pending first
+        cancelled:  ["pending"],      // can uncancel to pending only
+      };
+
+      const allowed = VALID_TRANSITIONS[existingTx.status] ?? [];
+      if (!allowed.includes(status)) {
+        return res.status(400).json({
+          message: `Transition "${existingTx.status}" → "${status}" non autorisée. Transitions valides : ${allowed.join(", ") || "aucune"}.`,
+          currentStatus: existingTx.status,
+          requestedStatus: status,
+        });
+      }
+
+      // Prevent double-crediting: only credit if moving from pending/processing to completed
       const wasNotCompleted = existingTx.status !== "completed";
       const isNowCompleted = status === "completed";
-      
+
       const transaction = await storage.updateTransactionStatus(id, status);
       if (!transaction) {
         return res.status(404).json({ message: "Erreur lors de la mise à jour" });
@@ -6698,7 +6835,13 @@ export async function registerRoutes(
           action: "update_transaction",
           targetType: "transaction",
           targetId: id,
-          details: JSON.stringify({ status, balanceUpdated: wasNotCompleted && isNowCompleted }),
+          details: JSON.stringify({
+            from: existingTx.status,
+            to: status,
+            balanceUpdated: wasNotCompleted && isNowCompleted,
+            reason: reason.trim(),
+            forceComplete: !!forceComplete,
+          }),
           ipAddress: req.ip || null,
         });
       } catch (logErr: any) {

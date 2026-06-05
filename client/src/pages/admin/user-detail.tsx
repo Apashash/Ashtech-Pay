@@ -192,6 +192,7 @@ export default function AdminUserDetail() {
   const [newBalance, setNewBalance] = useState("");
   const [balanceCurrency, setBalanceCurrency] = useState("XAF");
   const [updateType, setUpdateType] = useState<"set" | "add">("set");
+  const [balanceReason, setBalanceReason] = useState("");
   const [balanceTab, setBalanceTab] = useState<"modifier" | "convertir">("modifier");
   const [convFrom, setConvFrom] = useState("");
   const [convTo, setConvTo] = useState("");
@@ -352,12 +353,12 @@ export default function AdminUserDetail() {
 
   const updateBalanceMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("PATCH", `/api/admin/users/${id}/balance`, { amount: newBalance, currency: balanceCurrency, type: updateType });
+      const res = await apiRequest("PATCH", `/api/admin/users/${id}/balance`, { amount: newBalance, currency: balanceCurrency, type: updateType, reason: balanceReason });
       const json = await res.json();
       if (!res.ok) throw new Error(json.message || "Erreur");
       return json;
     },
-    onSuccess: () => { invalidate(); toast({ title: "Solde mis à jour" }); setNewBalance(""); },
+    onSuccess: () => { invalidate(); toast({ title: "Solde mis à jour" }); setNewBalance(""); setBalanceReason(""); },
     onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
   });
 
@@ -942,7 +943,16 @@ export default function AdminUserDetail() {
                     <Input type="text" inputMode="decimal" value={newBalance} onChange={(e) => setNewBalance(e.target.value)} placeholder="0.00" />
                   </div>
                 </div>
-                <Button className="w-full" onClick={() => updateBalanceMutation.mutate()} disabled={updateBalanceMutation.isPending || !newBalance}>
+                <div className="space-y-1">
+                  <Label>Motif de modification <span className="text-red-400">*</span></Label>
+                  <Input
+                    value={balanceReason}
+                    onChange={(e) => setBalanceReason(e.target.value)}
+                    placeholder="Ex: Remboursement client, correction de solde…"
+                    data-testid="input-balance-reason"
+                  />
+                </div>
+                <Button className="w-full" onClick={() => updateBalanceMutation.mutate()} disabled={updateBalanceMutation.isPending || !newBalance || balanceReason.trim().length < 5}>
                   {updateBalanceMutation.isPending ? "Mise à jour..." : `Mettre à jour ${balanceCurrency}`}
                 </Button>
               </div>
