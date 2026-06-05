@@ -1,11 +1,10 @@
 # =============================================================================
 # .htaccess — Ashtech Pay — Blocage des fichiers source sensibles
 #
-# Ce fichier est lu automatiquement par Apache (Plesk Proxy mode).
-# Il bloque l'accès aux fichiers source AVANT que Node.js soit contacté.
+# Passenger (Plesk Node.js) gère le routage vers l'application.
+# Ce fichier bloque uniquement l'accès direct aux fichiers source.
 # =============================================================================
 
-# Activer le moteur de réécriture
 Options -Indexes
 RewriteEngine On
 
@@ -35,8 +34,3 @@ RewriteRule \.cjs\.map$ - [F,L]
 
 # ── Bloquer tous les fichiers cachés (commençant par un point) ───────────────
 RewriteRule (^|/)\. - [F,L]
-
-# ── Tout le reste → Node.js (port 5000) ─────────────────────────────────────
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule ^(.*)$ http://localhost:5000/$1 [P,L]
