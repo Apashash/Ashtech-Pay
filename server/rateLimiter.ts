@@ -124,3 +124,52 @@ export const publicPayLimiter = rateLimit({
   handler: (_req, res) =>
     reject(res, "Trop de requêtes. Réessayez dans une minute.", 60),
 });
+
+// ─── 8. Login : 10 tentatives / 15 min / IP (couche express-rate-limit) ──────
+// Complète le rate limiter custom in-memory déjà présent dans routes.ts.
+// Double couche : l'un protège au niveau middleware, l'autre suit par identifiant.
+export const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: getIp,
+  validate: sharedValidate,
+  handler: (_req, res) =>
+    reject(
+      res,
+      "Trop de tentatives de connexion. Réessayez dans 15 minutes.",
+      900
+    ),
+});
+
+// ─── 9. Confirmation OTP (AfribaPay) : 5 tentatives / 10 min / IP ────────────
+// Empêche le brute-force du code OTP à 6 chiffres (1 000 000 combinaisons).
+export const otpConfirmLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: getIp,
+  validate: sharedValidate,
+  handler: (_req, res) =>
+    reject(
+      res,
+      "Trop de tentatives OTP. Réessayez dans 10 minutes.",
+      600
+    ),
+});
+
+// ─── 10. Actions admin financières : 30 / minute / IP (couche supplémentaire) ─
+// Les endpoints admin sont déjà protégés par requireAdmin + OTP, mais cette
+// couche empêche le flooding automatisé même avec un token admin compromis.
+export const adminActionLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: getIp,
+  validate: sharedValidate,
+  handler: (_req, res) =>
+    reject(res, "Trop d'actions admin. Réessayez dans une minute.", 60),
+});

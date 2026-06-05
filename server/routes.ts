@@ -15,6 +15,9 @@ import {
   transferLimiter,
   passwordResetLimiter,
   publicPayLimiter,
+  loginLimiter,
+  otpConfirmLimiter,
+  adminActionLimiter,
 } from "./rateLimiter";
 import { 
   loginSchema, 
@@ -523,6 +526,12 @@ async function hashPassword(password: string): Promise<string> {
 async function verifyPassword(password: string, hash: string): Promise<boolean> {
   return bcrypt.compare(password, hash);
 }
+
+// ─── Dummy hash for timing-safe login (CWE-307 / user-enumeration fix) ────────
+// Always run bcrypt even when the user doesn't exist so that response time is
+// indistinguishable between "unknown email" and "wrong password" scenarios.
+// Pre-computed at startup — cost=10, same as real passwords.
+const DUMMY_BCRYPT_HASH = "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy";
 
 // ─── OTP context cache (keyed by transaction ref, expires after 15 min) ───────
 const otpContextCache = new Map<string, {
@@ -1329,7 +1338,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/auth/login", async (req, res) => {
+  app.post("/api/auth/login", loginLimiter, async (req, res) => {
     try {
       const ip = getClientIp(req);
       const rateCheck = checkAuthRateLimit(ip);
@@ -1370,7 +1379,14 @@ export async function registerRoutes(
       const data = loginSchema.parse(req.body);
 
       const user = await storage.getUserByEmailOrPhone(data.identifier);
-      if (!user || !(await verifyPassword(data.password, user.password))) {
+      // ── Timing-safe comparison (CWE-307 / user enumeration fix) ─────────────
+      // Always run bcrypt regardless of whether the user exists, so response
+      // time is identical for "unknown email" and "wrong password".
+      const passwordValid = user
+        ? await verifyPassword(data.password, user.password)
+        : (await bcrypt.compare(data.password, DUMMY_BCRYPT_HASH), false);
+
+      if (!user || !passwordValid) {
         const failure = await recordAuthFailure(ip, data.identifier);
         const remaining = failure.attemptsLeft;
         const msg = failure.blocked
@@ -6067,7 +6083,7 @@ export async function registerRoutes(
   // Admin: Update user balance
   // Security: every mutation is fully audited (before/after), creates a compensating
   // transaction record, and requires a mandatory justification reason.
-  app.patch("/api/admin/users/:id/balance", requireAuth, requireAdmin, async (req, res) => {
+  app.patch("/api/admin/users/:id/balance", requireAuth, requireAdmin, adminActionLimiter, async (req, res) => {
     try {
       const { amount, currency, type, reason } = req.body; // type: 'set' | 'add'
       const userId = req.params.id;
@@ -6589,7 +6605,7 @@ export async function registerRoutes(
   });
 
   // Admin: Update transaction status
-  app.patch("/api/admin/transactions/:id", requireAdmin, async (req, res) => {
+  app.patch("/api/admin/transactions/:id", requireAdmin, adminActionLimiter, async (req, res) => {
     try {
       const { id } = req.params;
       const { status, forceComplete, reason } = req.body;
@@ -9365,7 +9381,7 @@ export async function registerRoutes(
   // ─── AfribaPay OTP Confirm Routes ────────────────────────────────────────────
 
   // POST /api/deposits/confirm-otp — validate OTP for an AfribaPay deposit
-  app.post("/api/deposits/confirm-otp", requireAuth, async (req, res) => {
+  app.post("/api/deposits/confirm-otp", requireAuth, otpConfirmLimiter, async (req, res) => {
     try {
       const user = (req as any).user;
       const { ref, otpCode } = req.body;
@@ -9428,7 +9444,7 @@ export async function registerRoutes(
   });
 
   // POST /api/payment-links/:slug/confirm-otp — validate OTP for a payment link
-  app.post("/api/payment-links/:slug/confirm-otp", async (req, res) => {
+  app.post("/api/payment-links/:slug/confirm-otp", otpConfirmLimiter, async (req, res) => {
     try {
       const { ref, otpCode } = req.body;
 
