@@ -27,6 +27,35 @@ declare module "http" {
   }
 }
 
+// ── Security: Block access to source code files ───────────────────────────────
+// Prevents Vite dev server from serving server-side source files via HTTP.
+// Must run BEFORE all other middleware including Vite and static handlers.
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const p = req.path.toLowerCase();
+
+  // Block any path that exposes source directories or file types
+  const blocked =
+    p.startsWith("/server/") ||
+    p.startsWith("/shared/") ||
+    p.startsWith("/node_modules/") ||
+    p.startsWith("/.") ||                  // .env, .git, etc.
+    p.endsWith(".ts") ||
+    p.endsWith(".tsx") ||
+    p.endsWith(".env") ||
+    p.endsWith(".config.js") ||
+    p.endsWith(".config.ts") ||
+    p.endsWith("package.json") ||
+    p.endsWith("package-lock.json") ||
+    p.endsWith("drizzle.config.ts") ||
+    p.endsWith(".cjs") ||
+    p.endsWith(".map");
+
+  if (blocked) {
+    return res.status(404).end();
+  }
+  next();
+});
+
 // ── Security: Helmet HTTP headers ────────────────────────────────────────────
 app.use(
   helmet({
