@@ -15,6 +15,7 @@ import { hydrateIpBlocker } from "./ipBlocker";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 import { encryptField, hmacField } from "./fieldEncryption";
+import { createDbAuditTriggers, startDbWatchdog } from "./dbWatchdog";
 
 const app = express();
 const httpServer = createServer(app);
@@ -252,6 +253,9 @@ app.use((req, res, next) => {
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone)`);
     console.log("[Migration] Performance indexes ready");
 
+    // ── SIEM: Install PostgreSQL-level audit triggers (VII) ───────────────────
+    await createDbAuditTriggers();
+
     try {
       // Each country currency keeps its own distinct wallet (XAFG for Gabon, XOFT for Togo, etc.)
       // No same-family CFA wallet merging — removed intentionally
@@ -315,6 +319,7 @@ app.use((req, res, next) => {
       hydrateIpBlocker().catch(err =>
         console.error("[IpBlocker] Hydration error:", err)
       );
+      startDbWatchdog();
     },
   );
 })();
