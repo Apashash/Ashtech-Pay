@@ -188,11 +188,20 @@ declare module "express-session" {
 // Stores pending OTP codes. Never persisted to DB — cannot be injected via SQL.
 const adminOtpStore = new Map<string, { code: string; expiresAt: number }>();
 
-// ─── Admin OTP session TTL ────────────────────────────────────────────────────
-// Verification status stored in PostgreSQL-backed session under key "_avs" (expiry ms).
-// This survives server restarts and multi-process deployments.
-// The legacy in-memory adminVerifiedSessions approach broke in PM2 cluster mode.
+// ─── Admin OTP verified sessions — dual storage ───────────────────────────────
+// PRIMARY: in-memory Map (instant, no async — avoids race condition on refetchOtp)
+// BACKUP:  session._avs timestamp (PostgreSQL-backed — survives restarts & multi-process)
+// Both are checked on every otp-status request.
+const adminVerifiedSessions = new Map<string, { userId: string; expiresAt: number }>();
 const ADMIN_OTP_SESSION_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
+
+// Periodic cleanup of expired in-memory entries (every 10 min)
+setInterval(() => {
+  const now = Date.now();
+  for (const [sid, entry] of adminVerifiedSessions) {
+    if (entry.expiresAt <= now) adminVerifiedSessions.delete(sid);
+  }
+}, 10 * 60 * 1000);
 
 // ─── OTP brute-force rate limiter (in-memory, per-userId) ─────────────────────
 // Max 5 wrong attempts per 15 min window before lockout.
@@ -428,10 +437,13 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
     return res.status(403).json({ message: "Accès refusé - Droits admin requis" });
   }
 
-  // OTP check: verify against session-stored expiry (_avs = admin verified session).
-  // Stored in PostgreSQL-backed session — survives server restarts and multi-process deployments.
+  // OTP check: dual verification — in-memory (instant) OR session (persistent).
+  const now = Date.now();
+  const memEntry = adminVerifiedSessions.get(req.sessionID);
+  const memValid = !!(memEntry && memEntry.userId === req.userId && memEntry.expiresAt > now);
   const avsExp = req.session._avs;
-  const otpValid = typeof avsExp === "number" && avsExp > Date.now();
+  const sessionValid = typeof avsExp === "number" && avsExp > now;
+  const otpValid = memValid || sessionValid;
 
   if (!otpValid) {
     return res.status(403).json({ message: "Vérification OTP admin requise", requireOtp: true });
@@ -1476,7 +1488,8 @@ export async function registerRoutes(
       removeAuthToken(token);
     }
 
-    // session.destroy() clears _avs and all session data automatically
+    // Clear in-memory OTP verification + session
+    adminVerifiedSessions.delete(req.sessionID);
     req.session.destroy((err) => {
       if (err) {
         return res.status(500).json({ message: "Erreur lors de la déconnexion" });
@@ -5684,8 +5697,12 @@ export async function registerRoutes(
     if (!user || !["admin", "support", "finance"].includes(user.role)) {
       return res.status(403).json({ message: "Accès refusé" });
     }
+    const now = Date.now();
+    const memEntry = adminVerifiedSessions.get(req.sessionID);
+    const memValid = !!(memEntry && memEntry.userId === req.userId && memEntry.expiresAt > now);
     const avsExp = req.session._avs;
-    const verified = typeof avsExp === "number" && avsExp > Date.now();
+    const sessionValid = typeof avsExp === "number" && avsExp > now;
+    const verified = memValid || sessionValid;
     res.json({ verified });
   });
 
@@ -5701,7 +5718,8 @@ export async function registerRoutes(
       }
       // Invalidate any previous pending code before issuing a new one
       adminOtpStore.delete(req.userId!);
-      // Clear any existing verified session (require fresh OTP on new request)
+      // Clear both verification stores (require fresh OTP on new request)
+      adminVerifiedSessions.delete(req.sessionID);
       delete req.session._avs;
 
       const code = generateAdminOtp(); // 6 digits (1 000 000 combinations)
@@ -5786,13 +5804,21 @@ export async function registerRoutes(
         });
       }
 
-      // ── OTP valid — store expiry in PostgreSQL-backed session (_avs = admin verified session)
-      // Using the session (DB-backed) so verification survives server restarts & multi-process deployments.
+      // ── OTP valid — dual storage: in-memory (instant) + session (persistent)
       adminOtpStore.delete(req.userId!);
       clearOtpFailures(req.userId!);
 
-      req.session._avs = Date.now() + ADMIN_OTP_SESSION_TTL_MS;
-      // Express-session auto-saves the session when the response is sent — no explicit save needed.
+      const expiresAt = Date.now() + ADMIN_OTP_SESSION_TTL_MS;
+
+      // 1. In-memory Map — immediately available to otp-status on the same process (no race condition)
+      adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt });
+
+      // 2. Session (PostgreSQL) — survives restarts and works across multiple processes
+      req.session._avs = expiresAt;
+      // session.save() is called as background fire-and-forget — never block the response on it
+      req.session.save((err) => {
+        if (err) console.error("[AdminOTP] Session save warning (non-fatal):", err?.message);
+      });
 
       const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
 
