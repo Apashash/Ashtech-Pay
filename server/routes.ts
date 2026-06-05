@@ -5727,8 +5727,71 @@ export async function registerRoutes(
     const memValid = !!(memEntry && memEntry.userId === req.userId && memEntry.expiresAt > now);
     const avsExp = req.session._avs;
     const sessionValid = typeof avsExp === "number" && avsExp > now;
-    const verified = memValid || sessionValid;
+    let verified = memValid || sessionValid;
+
+    // Tier 3: direct DB session read — same fallback as requireAdmin.
+    // Handles PM2 cluster where req.session._avs may not be hydrated on this worker.
+    if (!verified && req.sessionID) {
+      try {
+        const dbRow = await sessionPool.query(
+          `SELECT sess FROM session WHERE sid = $1 AND expire > NOW() LIMIT 1`,
+          [req.sessionID]
+        );
+        if (dbRow.rows.length > 0) {
+          const sessData = typeof dbRow.rows[0].sess === "string"
+            ? JSON.parse(dbRow.rows[0].sess)
+            : dbRow.rows[0].sess;
+          const dbAvs = sessData?._avs;
+          if (typeof dbAvs === "number" && dbAvs > now) {
+            verified = true;
+            adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: dbAvs });
+          }
+        }
+      } catch {
+        // Tier 3 fallback failed — continue with verified = false
+      }
+    }
+
     res.json({ verified });
+  });
+
+  // GET /api/admin/debug-db — diagnostic endpoint (admin only, no OTP required)
+  // Helps identify DB connection issues in production (PM2 / Plesk).
+  app.get("/api/admin/debug-db", requireAuth, async (req, res) => {
+    const user = await storage.getUser(req.userId!).catch(() => null);
+    if (!user || !["admin", "support", "finance"].includes(user.role)) {
+      return res.status(403).json({ message: "Accès refusé" });
+    }
+    const results: Record<string, any> = {
+      env: {
+        hasSupabaseUrl: !!process.env.SUPABASE_DATABASE_URL,
+        hasDatabaseUrl: !!process.env.DATABASE_URL,
+        hasSessionSecret: !!process.env.SESSION_SECRET,
+        hasTrustProxy: !!process.env.TRUST_PROXY,
+        hasCookieSecure: !!process.env.COOKIE_SECURE,
+        pm2InstanceId: process.env.NODE_APP_INSTANCE || process.env.PM2_INSTANCE_ID || "not set",
+        nodeEnv: process.env.NODE_ENV || "not set",
+      },
+      db: { ok: false, error: null as string | null, userCount: null as number | null },
+      session: {
+        sessionId: req.sessionID ? req.sessionID.slice(0, 8) + "..." : "none",
+        hasUserId: !!req.session?.userId,
+        hasAvs: typeof req.session?._avs === "number",
+        avsValid: typeof req.session?._avs === "number" && (req.session._avs as number) > Date.now(),
+        memMapHit: !!adminVerifiedSessions.get(req.sessionID),
+      },
+    };
+
+    try {
+      const { pool: dbPool } = await import("./db");
+      const r = await dbPool.query("SELECT COUNT(*) as cnt FROM users");
+      results.db.ok = true;
+      results.db.userCount = parseInt(r.rows[0].cnt, 10);
+    } catch (e: any) {
+      results.db.error = e.message;
+    }
+
+    res.json(results);
   });
 
   // POST /api/admin/request-otp — generate & send 4-digit code to admin email
