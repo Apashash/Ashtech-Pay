@@ -152,6 +152,8 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   const [otpSent, setOtpSent] = useState(false);
   const [otpEmail, setOtpEmail] = useState("");
   const [otpError, setOtpError] = useState("");
+  const [otpSessionExpired, setOtpSessionExpired] = useState(false);
+  const otpVerifiedAtRef = useRef<number>(0);
   const otpRef0 = useRef<HTMLInputElement>(null);
   const otpRef1 = useRef<HTMLInputElement>(null);
   const otpRef2 = useRef<HTMLInputElement>(null);
@@ -189,6 +191,8 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     },
     onSuccess: () => {
       setOtpError("");
+      setOtpSessionExpired(false);
+      otpVerifiedAtRef.current = Date.now();
       // Force cache immediately so the OTP gate disappears without waiting for a refetch
       queryClient.setQueryData(["/api/admin/otp-status"], { verified: true });
     },
@@ -207,12 +211,14 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   }, [user, otpStatus]);
 
   // Listen for 403 requireOtp events from any admin API call (multi-process session issue)
+  // Grace period: ignore events within 2 minutes of OTP verification (avoids loop from background refetches)
   useEffect(() => {
     const handleOtpRequired = () => {
-      queryClient.setQueryData(["/api/admin/otp-status"], { verified: false });
-      setOtpSent(false);
-      setOtpCode(["", "", "", "", "", ""]);
-      setOtpError("");
+      const timeSinceVerified = Date.now() - otpVerifiedAtRef.current;
+      const GRACE_MS = 2 * 60 * 1000; // 2 minutes grace after OTP verification
+      if (timeSinceVerified < GRACE_MS) return; // ignore — background refetch race condition
+      // Show soft banner instead of immediately resetting the full OTP gate
+      setOtpSessionExpired(true);
     };
     window.addEventListener("admin-otp-required", handleOtpRequired);
     return () => window.removeEventListener("admin-otp-required", handleOtpRequired);
@@ -781,6 +787,26 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           </div>
         </header>
         <main className="flex-1 overflow-auto">
+          {otpSessionExpired && (
+            <div className="bg-amber-500/10 border-b border-amber-500/30 px-4 py-3 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
+                <ShieldBan className="w-4 h-4 shrink-0" />
+                <span>Votre session admin a expiré. Re-vérifiez votre identité pour continuer.</span>
+              </div>
+              <button
+                onClick={() => {
+                  setOtpSessionExpired(false);
+                  queryClient.setQueryData(["/api/admin/otp-status"], { verified: false });
+                  setOtpSent(false);
+                  setOtpCode(["", "", "", "", "", ""]);
+                  setOtpError("");
+                }}
+                className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-colors"
+              >
+                Re-vérifier
+              </button>
+            </div>
+          )}
           {children}
         </main>
       </div>
