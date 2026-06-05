@@ -342,6 +342,9 @@ export default function AdminUserDetail() {
     onSuccess: (data) => {
       sessionStorage.setItem("impersonatedBy", data.adminId || "admin");
       sessionStorage.setItem("impersonatedUsername", data.username);
+      // Sauvegarde du token admin AVANT de le remplacer — pour restauration fiable au retour
+      const currentToken = localStorage.getItem("ashtech_auth_token");
+      if (currentToken) sessionStorage.setItem("adminOriginalToken", currentToken);
       // Remplace le token admin par le token de l'utilisateur impersonné
       if (data.token) setAuthToken(data.token);
       queryClient.clear();

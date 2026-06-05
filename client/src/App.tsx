@@ -372,10 +372,21 @@ function ImpersonationBanner() {
 
   const handleExit = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    // Always clear sessionStorage first — button must disappear regardless
+
+    // 1. Restaure immédiatement le token admin depuis sessionStorage (sauvegardé au démarrage de l'impersonation)
+    //    Cela garantit le retour même si l'appel API échoue (session expirée, multi-process PM2, etc.)
+    const savedAdminToken = sessionStorage.getItem("adminOriginalToken");
+    if (savedAdminToken) {
+      localStorage.setItem("ashtech_auth_token", savedAdminToken);
+    }
+
+    // 2. Nettoyage sessionStorage
     sessionStorage.removeItem("impersonatedBy");
     sessionStorage.removeItem("impersonatedUsername");
     sessionStorage.removeItem("impersonationBannerPos");
+    sessionStorage.removeItem("adminOriginalToken");
+
+    // 3. Appel API pour synchroniser la session serveur (best-effort)
     try {
       const res = await fetch("/api/admin/impersonate/exit", {
         method: "POST",
@@ -384,13 +395,14 @@ function ImpersonationBanner() {
       });
       if (res.ok) {
         const data = await res.json();
-        // Restore admin token so Bearer auth works correctly
+        // Si le serveur retourne un nouveau token admin, on l'utilise (plus récent)
         if (data.token) {
           localStorage.setItem("ashtech_auth_token", data.token);
         }
       }
     } catch {}
-    // Always redirect to admin, even if API call failed (session already gone)
+
+    // 4. Redirection vers l'admin
     window.location.href = "/admin/users";
   };
 
