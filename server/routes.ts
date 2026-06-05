@@ -5815,9 +5815,12 @@ export async function registerRoutes(
 
       // 2. Session (PostgreSQL) — survives restarts and works across multiple processes
       req.session._avs = expiresAt;
-      // session.save() is called as background fire-and-forget — never block the response on it
-      req.session.save((err) => {
-        if (err) console.error("[AdminOTP] Session save warning (non-fatal):", err?.message);
+      // Await session save so the client's immediate refetch sees the verified state
+      await new Promise<void>((resolve) => {
+        req.session.save((err) => {
+          if (err) console.error("[AdminOTP] Session save warning (non-fatal):", err?.message);
+          resolve();
+        });
       });
 
       const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { 
   LayoutDashboard, 
@@ -130,6 +130,7 @@ const menuItems: MenuItem[] = [
 
 export function AdminLayout({ children }: AdminLayoutProps) {
   const [location, setLocation] = useLocation();
+  const queryClient = useQueryClient();
   const [sidebarOpen, setSidebarOpenState] = useState(() => {
     const stored = localStorage.getItem("admin_sidebar_open");
     return stored === null ? true : stored === "true";
@@ -187,12 +188,13 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       await apiRequest("POST", "/api/admin/verify-otp", { code });
     },
     onSuccess: () => {
-      refetchOtp();
       setOtpError("");
+      // Force cache immediately so the OTP gate disappears without waiting for a refetch
+      queryClient.setQueryData(["/api/admin/otp-status"], { verified: true });
     },
     onError: (error: Error) => {
       setOtpError(error.message || "Code incorrect");
-      setOtpCode(["", "", "", ""]);
+      setOtpCode(["", "", "", "", "", ""]);
       setTimeout(() => otpRefs[0].current?.focus(), 100);
     },
   });
