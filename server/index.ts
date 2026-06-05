@@ -28,27 +28,36 @@ declare module "http" {
 }
 
 // ── Security: Block access to source code files ───────────────────────────────
-// Prevents Vite dev server from serving server-side source files via HTTP.
-// Must run BEFORE all other middleware including Vite and static handlers.
+// In production: block .ts/.tsx and other source file types.
+// In development: only block server-side directories (Vite needs to serve client .ts/.tsx).
 app.use((req: Request, res: Response, next: NextFunction) => {
   const p = req.path.toLowerCase();
 
-  // Block any path that exposes source directories or file types
-  const blocked =
-    p.startsWith("/server/") ||
-    p.startsWith("/shared/") ||
-    p.startsWith("/node_modules/") ||
-    p.startsWith("/.") ||                  // .env, .git, etc.
-    p.endsWith(".ts") ||
-    p.endsWith(".tsx") ||
-    p.endsWith(".env") ||
-    p.endsWith(".config.js") ||
-    p.endsWith(".config.ts") ||
-    p.endsWith("package.json") ||
-    p.endsWith("package-lock.json") ||
-    p.endsWith("drizzle.config.ts") ||
-    p.endsWith(".cjs") ||
-    p.endsWith(".map");
+  const blocked = isProd
+    ? (
+        p.startsWith("/server/") ||
+        p.startsWith("/shared/") ||
+        p.startsWith("/node_modules/") ||
+        p.startsWith("/.") ||
+        p.endsWith(".ts") ||
+        p.endsWith(".tsx") ||
+        p.endsWith(".env") ||
+        p.endsWith(".config.js") ||
+        p.endsWith(".config.ts") ||
+        p.endsWith("package.json") ||
+        p.endsWith("package-lock.json") ||
+        p.endsWith("drizzle.config.ts") ||
+        p.endsWith(".cjs") ||
+        p.endsWith(".map")
+      )
+    : (
+        p.startsWith("/server/") ||
+        p.startsWith("/shared/") ||
+        p.startsWith("/node_modules/") ||
+        p.startsWith("/.") ||
+        p.endsWith(".env") ||
+        p.endsWith("package-lock.json")
+      );
 
   if (blocked) {
     return res.status(404).end();
