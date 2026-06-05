@@ -193,7 +193,8 @@ const adminOtpStore = new Map<string, { code: string; expiresAt: number }>();
 // ─── Admin OTP verified sessions — dual storage ───────────────────────────────
 // PRIMARY: in-memory Map (instant, no async — avoids race condition on refetchOtp)
 // BACKUP:  session._avs timestamp (PostgreSQL-backed — survives restarts & multi-process)
-// Both are checked on every otp-status request.
+// Keyed by userId (string) so OTP verification survives across requests even when
+// session cookies are broken (e.g. Cloudflare proxy / Safari ITP stripping cookies).
 const adminVerifiedSessions = new Map<string, { userId: string; expiresAt: number }>();
 const ADMIN_OTP_SESSION_TTL_MS = 3 * 24 * 60 * 60 * 1000; // 3 days — matches session maxAge
 
@@ -462,20 +463,24 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
   // OTP check: triple verification — in-memory (instant) OR session middleware (persistent)
   // OR direct DB session query (fallback for PM2 cluster where req.session may lag).
   const now = Date.now();
-  const memEntry = adminVerifiedSessions.get(req.sessionID);
-  const memValid = !!(memEntry && memEntry.userId === req.userId && memEntry.expiresAt > now);
+  // Keyed by userId — survives broken/missing session cookies (Cloudflare proxy, Safari ITP)
+  const memEntry = adminVerifiedSessions.get(String(req.userId));
+  const memValid = !!(memEntry && memEntry.expiresAt > now);
   const avsExp = req.session._avs;
   const sessionValid = typeof avsExp === "number" && avsExp > now;
   let otpValid = memValid || sessionValid;
 
-  // Tier 3: direct DB session read — handles PM2 cluster where req.session._avs
-  // might not be hydrated yet if a different worker saved the session.
+  // Tier 3: scan DB sessions for any session belonging to this userId with a valid _avs.
+  // Handles PM2 multi-worker AND broken cookies — doesn't need req.sessionID.
   let tier3Used = false;
-  if (!otpValid && req.sessionID) {
+  if (!otpValid) {
     try {
       const dbRow = await sessionPool.query(
-        `SELECT sess FROM session WHERE sid = $1 AND expire > NOW() LIMIT 1`,
-        [req.sessionID]
+        `SELECT sess FROM session WHERE expire > NOW()
+         AND (sess::jsonb->>'userId')::text = $1
+         AND (sess::jsonb->>'_avs') IS NOT NULL
+         ORDER BY expire DESC LIMIT 1`,
+        [String(req.userId)]
       );
       if (dbRow.rows.length > 0) {
         const sessData = typeof dbRow.rows[0].sess === "string"
@@ -485,16 +490,17 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
         if (typeof dbAvs === "number" && dbAvs > now) {
           otpValid = true;
           tier3Used = true;
-          adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: dbAvs });
+          // Cache in memory so subsequent requests on this process are instant
+          adminVerifiedSessions.set(String(req.userId), { userId: req.userId!, expiresAt: dbAvs });
         }
       }
     } catch (sessErr: any) {
-      console.error(`[AdminAccess] DB session fallback error — sid=${req.sessionID?.slice(0,8)}:`, sessErr?.message);
+      console.error(`[AdminAccess] DB session fallback error — userId=${req.userId}:`, sessErr?.message);
     }
   }
 
   if (!otpValid) {
-    console.warn(`[AdminAccess] OTP NOT VALID — user=${req.userId} role=${user.role} path=${req.path} mem=${memValid} session=${sessionValid} tier3Used=${tier3Used} sid=${req.sessionID?.slice(0,8)}`);
+    console.warn(`[AdminAccess] OTP NOT VALID — user=${req.userId} role=${user.role} path=${req.path} mem=${memValid} session=${sessionValid} tier3Used=${tier3Used}`);
     return res.status(403).json({ message: "Vérification OTP admin requise", requireOtp: true });
   }
 
@@ -1546,7 +1552,7 @@ export async function registerRoutes(
     }
 
     // Clear in-memory OTP verification + session
-    adminVerifiedSessions.delete(req.sessionID);
+    adminVerifiedSessions.delete(String(req.userId!));
     req.session.destroy((err) => {
       if (err) {
         return res.status(500).json({ message: "Erreur lors de la déconnexion" });
@@ -5759,19 +5765,22 @@ export async function registerRoutes(
       return res.json({ verified: true, bypass: true });
     }
     const now = Date.now();
-    const memEntry = adminVerifiedSessions.get(req.sessionID);
-    const memValid = !!(memEntry && memEntry.userId === req.userId && memEntry.expiresAt > now);
+    // Keyed by userId — works even when session cookies are broken
+    const memEntry = adminVerifiedSessions.get(String(req.userId));
+    const memValid = !!(memEntry && memEntry.expiresAt > now);
     const avsExp = req.session._avs;
     const sessionValid = typeof avsExp === "number" && avsExp > now;
     let verified = memValid || sessionValid;
 
-    // Tier 3: direct DB session read — same fallback as requireAdmin.
-    // Handles PM2 cluster where req.session._avs may not be hydrated on this worker.
-    if (!verified && req.sessionID) {
+    // Tier 3: scan all sessions by userId — works without req.sessionID
+    if (!verified) {
       try {
         const dbRow = await sessionPool.query(
-          `SELECT sess FROM session WHERE sid = $1 AND expire > NOW() LIMIT 1`,
-          [req.sessionID]
+          `SELECT sess FROM session WHERE expire > NOW()
+           AND (sess::jsonb->>'userId')::text = $1
+           AND (sess::jsonb->>'_avs') IS NOT NULL
+           ORDER BY expire DESC LIMIT 1`,
+          [String(req.userId)]
         );
         if (dbRow.rows.length > 0) {
           const sessData = typeof dbRow.rows[0].sess === "string"
@@ -5780,7 +5789,7 @@ export async function registerRoutes(
           const dbAvs = sessData?._avs;
           if (typeof dbAvs === "number" && dbAvs > now) {
             verified = true;
-            adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: dbAvs });
+            adminVerifiedSessions.set(String(req.userId), { userId: req.userId!, expiresAt: dbAvs });
           }
         }
       } catch {
@@ -5814,7 +5823,7 @@ export async function registerRoutes(
         hasUserId: !!req.session?.userId,
         hasAvs: typeof req.session?._avs === "number",
         avsValid: typeof req.session?._avs === "number" && (req.session._avs as number) > Date.now(),
-        memMapHit: !!adminVerifiedSessions.get(req.sessionID),
+        memMapHit: !!adminVerifiedSessions.get(String(req.userId)),
       },
     };
 
@@ -5835,8 +5844,8 @@ export async function registerRoutes(
     try {
       const user = await storage.getUser(req.userId!).catch(() => null);
       const now = Date.now();
-      const memEntry = adminVerifiedSessions.get(req.sessionID);
-      const memValid = !!(memEntry && memEntry.userId === req.userId && memEntry.expiresAt > now);
+      const memEntry = adminVerifiedSessions.get(String(req.userId));
+      const memValid = !!(memEntry && memEntry.expiresAt > now);
       const avsExp = req.session._avs;
       const sessionValid = typeof avsExp === "number" && (avsExp as number) > now;
 
@@ -5844,8 +5853,11 @@ export async function registerRoutes(
       let tier3Valid = false;
       try {
         const dbRow = await sessionPool.query(
-          `SELECT sess FROM session WHERE sid = $1 AND expire > NOW() LIMIT 1`,
-          [req.sessionID]
+          `SELECT sess FROM session WHERE expire > NOW()
+           AND (sess::jsonb->>'userId')::text = $1
+           AND (sess::jsonb->>'_avs') IS NOT NULL
+           ORDER BY expire DESC LIMIT 1`,
+          [String(req.userId)]
         );
         if (dbRow.rows.length > 0) {
           dbSessionData = typeof dbRow.rows[0].sess === "string"
@@ -5904,7 +5916,7 @@ export async function registerRoutes(
       // Invalidate any previous pending code before issuing a new one
       adminOtpStore.delete(req.userId!);
       // Clear both verification stores (require fresh OTP on new request)
-      adminVerifiedSessions.delete(req.sessionID);
+      adminVerifiedSessions.delete(String(req.userId!));
       delete req.session._avs;
       delete req.session._otpCode;
       delete req.session._otpExpiry;
@@ -6038,8 +6050,8 @@ export async function registerRoutes(
 
       const expiresAt = Date.now() + ADMIN_OTP_SESSION_TTL_MS;
 
-      // 1. In-memory Map — immediately available to otp-status on the same process (no race condition)
-      adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt });
+      // 1. In-memory Map — keyed by userId so it works even with broken session cookies
+      adminVerifiedSessions.set(String(req.userId!), { userId: req.userId!, expiresAt });
 
       // 2. Session (PostgreSQL) — survives restarts and works across multiple processes
       req.session._avs = expiresAt;
