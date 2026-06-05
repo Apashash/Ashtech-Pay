@@ -430,12 +430,25 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
 
 async function requireAdmin(req: Request, res: Response, next: NextFunction) {
   if (!req.userId) {
+    console.warn(`[AdminAccess] BLOCKED — no userId — path=${req.path} sid=${req.sessionID?.slice(0,8)}`);
     return res.status(401).json({ message: "Non autorisé" });
   }
 
   // Always re-fetch role from DB — never trust session cache (CWE-287 Vector 3 fix)
-  const user = await storage.getUser(req.userId);
-  if (!user || !["admin", "support", "finance"].includes(user.role)) {
+  let user: Awaited<ReturnType<typeof storage.getUser>>;
+  try {
+    user = await storage.getUser(req.userId);
+  } catch (dbErr: any) {
+    console.error(`[AdminAccess] DB ERROR fetching user ${req.userId} — path=${req.path}:`, dbErr?.message);
+    return res.status(500).json({ message: "Erreur serveur" });
+  }
+
+  if (!user) {
+    console.warn(`[AdminAccess] BLOCKED — user ${req.userId} not found in DB — path=${req.path}`);
+    return res.status(403).json({ message: "Accès refusé - Droits admin requis" });
+  }
+  if (!["admin", "support", "finance"].includes(user.role)) {
+    console.warn(`[AdminAccess] BLOCKED — user ${req.userId} has role="${user.role}" (not admin/support/finance) — path=${req.path}`);
     return res.status(403).json({ message: "Accès refusé - Droits admin requis" });
   }
 
@@ -450,6 +463,7 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
 
   // Tier 3: direct DB session read — handles PM2 cluster where req.session._avs
   // might not be hydrated yet if a different worker saved the session.
+  let tier3Used = false;
   if (!otpValid && req.sessionID) {
     try {
       const dbRow = await sessionPool.query(
@@ -463,19 +477,21 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
         const dbAvs = sessData?._avs;
         if (typeof dbAvs === "number" && dbAvs > now) {
           otpValid = true;
-          // Sync back to in-memory map so subsequent requests on this worker are fast
+          tier3Used = true;
           adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: dbAvs });
         }
       }
-    } catch {
-      // DB fallback failed — continue with otpValid = false
+    } catch (sessErr: any) {
+      console.error(`[AdminAccess] DB session fallback error — sid=${req.sessionID?.slice(0,8)}:`, sessErr?.message);
     }
   }
 
   if (!otpValid) {
+    console.warn(`[AdminAccess] OTP NOT VALID — user=${req.userId} role=${user.role} path=${req.path} mem=${memValid} session=${sessionValid} tier3Used=${tier3Used} sid=${req.sessionID?.slice(0,8)}`);
     return res.status(403).json({ message: "Vérification OTP admin requise", requireOtp: true });
   }
 
+  console.log(`[AdminAccess] OK — user=${req.userId} role=${user.role} path=${req.path} mem=${memValid} session=${sessionValid} t3=${tier3Used}`);
   next();
 }
 
@@ -5801,6 +5817,67 @@ export async function registerRoutes(
     }
 
     res.json(results);
+  });
+
+  // GET /api/admin/check-access — diagnostic without OTP; shows role, session, OTP state
+  app.get("/api/admin/check-access", requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.userId!).catch(() => null);
+      const now = Date.now();
+      const memEntry = adminVerifiedSessions.get(req.sessionID);
+      const memValid = !!(memEntry && memEntry.userId === req.userId && memEntry.expiresAt > now);
+      const avsExp = req.session._avs;
+      const sessionValid = typeof avsExp === "number" && (avsExp as number) > now;
+
+      let dbSessionData: any = null;
+      let tier3Valid = false;
+      try {
+        const dbRow = await sessionPool.query(
+          `SELECT sess FROM session WHERE sid = $1 AND expire > NOW() LIMIT 1`,
+          [req.sessionID]
+        );
+        if (dbRow.rows.length > 0) {
+          dbSessionData = typeof dbRow.rows[0].sess === "string"
+            ? JSON.parse(dbRow.rows[0].sess)
+            : dbRow.rows[0].sess;
+          const dbAvs = dbSessionData?._avs;
+          tier3Valid = typeof dbAvs === "number" && dbAvs > now;
+        }
+      } catch (e: any) {
+        dbSessionData = { error: e.message };
+      }
+
+      res.json({
+        userId: req.userId,
+        userFound: !!user,
+        userRole: user?.role || null,
+        isAdminRole: user ? ["admin", "support", "finance"].includes(user.role) : false,
+        otp: {
+          memValid,
+          sessionValid,
+          tier3Valid,
+          sessionAvsExpiry: avsExp ? new Date(avsExp as number).toISOString() : null,
+          tier3AvsExpiry: dbSessionData?._avs ? new Date(dbSessionData._avs).toISOString() : null,
+          overallValid: memValid || sessionValid || tier3Valid,
+        },
+        session: {
+          sid: req.sessionID ? req.sessionID.slice(0, 8) + "..." : "none",
+          hasOtpCode: !!(req.session._otpCode),
+          dbRowFound: dbSessionData !== null && !dbSessionData?.error,
+          dbError: dbSessionData?.error || null,
+        },
+        env: {
+          nodeEnv: process.env.NODE_ENV,
+          trustProxy: process.env.TRUST_PROXY || "not set",
+          cookieSameSite: process.env.COOKIE_SAMESITE || "not set (auto)",
+          cookieSecure: process.env.COOKIE_SECURE || "not set (auto=true)",
+          hasResendKey: !!process.env.RESEND_API_KEY,
+          hasTelegramToken: !!process.env.TELEGRAM_BOT_TOKEN,
+        },
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   // POST /api/admin/request-otp — generate & send 4-digit code to admin email
