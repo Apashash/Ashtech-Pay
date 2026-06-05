@@ -22,6 +22,9 @@ const EXTERNALS = [
 async function buildAll() {
   await rm("dist", { recursive: true, force: true });
 
+  // Force production mode so Replit dev plugins are excluded from the client bundle
+  process.env.NODE_ENV = "production";
+
   console.log("building client...");
   await viteBuild();
 
