@@ -684,13 +684,28 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserByApiKey(apiKey: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.apiKey, apiKey));
-    return user || undefined;
+    // Primary: look up by HMAC hash (api_key_hash) — constant-time, no cleartext in DB
+    const hash = hmacField(apiKey);
+    if (hash) {
+      const [byHash] = await db.select().from(users).where(eq(users.apiKeyHash, hash));
+      if (byHash) return byHash;
+    }
+    // Legacy fallback: plaintext api_key stored before encryption was introduced
+    const [legacy] = await db.select().from(users).where(eq(users.apiKey, apiKey));
+    return legacy || undefined;
   }
 
   async setUserApiKey(userId: string, apiKey: string): Promise<User | undefined> {
-    const [user] = await db.update(users).set({ apiKey }).where(eq(users.id, userId)).returning();
-    return user || undefined;
+    const encryptedKey = encryptField(apiKey);
+    const keyHash = hmacField(apiKey);
+    const [user] = await db
+      .update(users)
+      .set({ apiKey: encryptedKey, ...(keyHash ? { apiKeyHash: keyHash } : {}) })
+      .where(eq(users.id, userId))
+      .returning();
+    // Return with decrypted key for immediate display
+    if (user) return { ...user, apiKey };
+    return undefined;
   }
 
   async getPendingDepositTransactions(): Promise<Transaction[]> {

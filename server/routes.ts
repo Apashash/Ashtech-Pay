@@ -49,6 +49,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { uploadToSupabase, getSignedImageUrl, downloadFromSupabase } from "./supabase";
+import { decryptField } from "./fieldEncryption";
 import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, fetchPaymentLinkDetails, ASHTECH_MARGIN } from "./swychr";
 import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, getAfribaPayOtpInfo, confirmAfribaPayOtp } from "./afribapay";
 import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, initiatePixPayPayout, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType, getPixPayServiceId, PIXPAY_OTP_USSD_CODES } from "./pixpay";
@@ -2005,9 +2006,12 @@ export async function registerRoutes(
         const { randomBytes } = await import("crypto");
         const key = `ak_${randomBytes(24).toString("hex")}`;
         user = (await storage.setUserApiKey(userId, key)) || user;
+        // setUserApiKey returns the plaintext key directly — use as-is
+        return res.json({ apiKey: user.apiKey });
       }
 
-      res.json({ apiKey: user.apiKey });
+      // Decrypt existing key before returning to client
+      res.json({ apiKey: decryptField(user.apiKey) });
     } catch (error) {
       console.error("Get API key error:", error);
       res.status(500).json({ message: "Erreur serveur" });

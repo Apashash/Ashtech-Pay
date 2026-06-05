@@ -14,6 +14,7 @@ import { startDailyReportScheduler } from "./dailyReport";
 import { hydrateIpBlocker } from "./ipBlocker";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
+import { encryptField, hmacField } from "./fieldEncryption";
 
 const app = express();
 const httpServer = createServer(app);
@@ -161,9 +162,10 @@ app.use((req, res, next) => {
     `);
     await db.execute(sql`ALTER TABLE hosted_payment_sessions ADD COLUMN IF NOT EXISTS notify_url TEXT`);
     await db.execute(sql`ALTER TABLE payment_links ADD COLUMN IF NOT EXISTS notify_url TEXT`);
-    // 5.3 — field encryption: hp_live_hash for searchable HMAC lookup
+    // 5.3 — field encryption: searchable HMAC hash columns for hosted_page_configs and users
     await db.execute(sql`ALTER TABLE hosted_page_configs ADD COLUMN IF NOT EXISTS hp_live_hash TEXT UNIQUE`);
     await db.execute(sql`ALTER TABLE hosted_page_configs ADD COLUMN IF NOT EXISTS notify_url TEXT`);
+    await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS api_key_hash TEXT UNIQUE`);
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS "session" (
         "sid" varchar NOT NULL COLLATE "default",
@@ -185,6 +187,59 @@ app.use((req, res, next) => {
       ON wallets (user_id, currency)
     `);
     console.log("[Migration] Schema columns ready (api_key, notify_url, source, confirmed_at, hosted_page_configs, hosted_payment_sessions, payment_links.notify_url, token_revoked_before, conversion_requests.executed_at/by_id, user_notifications.type, wallets_unique_idx)");
+
+    // ── 5.3 Re-encrypt existing plaintext sensitive fields ────────────────────
+    // Runs at every startup — idempotent because encryptField() skips already-encrypted values.
+    try {
+      // hosted_page_configs: encrypt sk_live, pk_live, hp_live; populate hp_live_hash
+      const hpRows = await db.execute(sql`
+        SELECT id, sk_live, pk_live, hp_live FROM hosted_page_configs
+        WHERE sk_live IS NOT NULL OR pk_live IS NOT NULL OR hp_live IS NOT NULL
+      `);
+      let hpMigrated = 0;
+      for (const row of (hpRows as any).rows ?? []) {
+        const updates: Record<string, string | null> = {};
+        if (row.sk_live && !row.sk_live.startsWith("enc:"))
+          updates.sk_live = encryptField(row.sk_live);
+        if (row.pk_live && !row.pk_live.startsWith("enc:"))
+          updates.pk_live = encryptField(row.pk_live);
+        if (row.hp_live && !row.hp_live.startsWith("enc:")) {
+          updates.hp_live = encryptField(row.hp_live);
+          updates.hp_live_hash = hmacField(row.hp_live);
+        } else if (row.hp_live && !row.hp_live_hash) {
+          // Already encrypted but hash missing — backfill not possible without plaintext
+          // (will be set on next config save by the merchant)
+        }
+        if (Object.keys(updates).length > 0) {
+          const setClauses = Object.entries(updates)
+            .map(([k, v]) => `${k} = ${v === null ? "NULL" : `'${v}'`}`)
+            .join(", ");
+          await db.execute(sql.raw(`UPDATE hosted_page_configs SET ${setClauses} WHERE id = '${row.id}'`));
+          hpMigrated++;
+        }
+      }
+      if (hpMigrated > 0)
+        console.log(`[Migration] Re-encrypted ${hpMigrated} hosted_page_configs row(s)`);
+
+      // users: encrypt api_key; populate api_key_hash
+      const apiKeyRows = await db.execute(sql`
+        SELECT id, api_key FROM users
+        WHERE api_key IS NOT NULL AND api_key NOT LIKE 'enc:%'
+      `);
+      let akMigrated = 0;
+      for (const row of (apiKeyRows as any).rows ?? []) {
+        const encKey = encryptField(row.api_key);
+        const keyHash = hmacField(row.api_key);
+        await db.execute(sql.raw(
+          `UPDATE users SET api_key = '${encKey}', api_key_hash = '${keyHash}' WHERE id = '${row.id}'`
+        ));
+        akMigrated++;
+      }
+      if (akMigrated > 0)
+        console.log(`[Migration] Re-encrypted ${akMigrated} users.api_key row(s)`);
+    } catch (encErr: any) {
+      console.warn("[Migration] Re-encryption warning:", encErr?.message);
+    }
 
     // Performance indexes
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id)`);
