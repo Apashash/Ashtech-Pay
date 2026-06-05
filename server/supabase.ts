@@ -2,38 +2,39 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
 let supabase: SupabaseClient | null = null;
 
 function isValidUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
   } catch {
     return false;
   }
 }
 
 if (supabaseUrl && isValidUrl(supabaseUrl)) {
-  const key = supabaseServiceRoleKey || supabaseAnonKey;
-  if (key) {
+  if (!supabaseServiceRoleKey) {
+    console.warn(
+      "[Supabase] SUPABASE_SERVICE_ROLE_KEY not set. File uploads will fall back to local storage. " +
+      "Do NOT use the anon key for server-side operations."
+    );
+  } else {
     try {
-      supabase = createClient(supabaseUrl, key, {
+      supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
         auth: {
           autoRefreshToken: false,
           persistSession: false,
         },
       });
-      console.log(`Supabase client initialized successfully (using ${supabaseServiceRoleKey ? "service role" : "anon"} key)`);
+      console.log("Supabase client initialized successfully (using service role key)");
     } catch (error) {
-      console.warn("Failed to initialize Supabase client:", error);
+      console.warn("[Supabase] Failed to initialize client:", error);
     }
-  } else {
-    console.warn("Supabase key not configured. File uploads will use local storage.");
   }
 } else {
-  console.warn("Supabase credentials not configured or invalid. File uploads will use local storage.");
+  console.warn("[Supabase] Credentials not configured or invalid. File uploads will use local storage.");
 }
 
 export { supabase };
@@ -46,9 +47,7 @@ export async function uploadToSupabase(
   contentType: string,
   folder: string = "payment-links"
 ): Promise<{ url: string; path: string } | null> {
-  if (!supabase) {
-    return null;
-  }
+  if (!supabase) return null;
 
   const filePath = `${folder}/${Date.now()}-${filename}`;
 
@@ -61,7 +60,7 @@ export async function uploadToSupabase(
     });
 
   if (error) {
-    console.error("Supabase upload error:", error);
+    console.error("[Supabase] Upload error:", error);
     return null;
   }
 
@@ -71,13 +70,17 @@ export async function uploadToSupabase(
   };
 }
 
-export async function downloadFromSupabase(storagePath: string): Promise<{ data: Blob; contentType: string } | null> {
+export async function downloadFromSupabase(
+  storagePath: string
+): Promise<{ data: Blob; contentType: string } | null> {
   if (!supabase) return null;
 
   let cleanPath = storagePath;
 
   if (storagePath.startsWith("http")) {
-    const match = storagePath.match(/\/storage\/v1\/object\/(?:public|sign)\/[^/]+\/(.+?)(?:\?|$)/);
+    const match = storagePath.match(
+      /\/storage\/v1\/object\/(?:public|sign)\/[^/]+\/(.+?)(?:\?|$)/
+    );
     if (match) {
       cleanPath = decodeURIComponent(match[1]);
     } else {
@@ -90,7 +93,7 @@ export async function downloadFromSupabase(storagePath: string): Promise<{ data:
     .download(cleanPath);
 
   if (error || !data) {
-    console.error("Supabase download error:", error, "path:", cleanPath);
+    console.error("[Supabase] Download error:", error, "path:", cleanPath);
     return null;
   }
 
@@ -106,17 +109,21 @@ export async function downloadFromSupabase(storagePath: string): Promise<{ data:
   };
   const contentType = contentTypeMap[ext] ?? data.type ?? "application/octet-stream";
 
-  // Use a longer cache-control for the downloaded blob if possible
   return { data, contentType };
 }
 
-export async function getSignedImageUrl(storagePath: string, expiresIn = 86400): Promise<string | null> {
+export async function getSignedImageUrl(
+  storagePath: string,
+  expiresIn = 86400
+): Promise<string | null> {
   if (!supabase) return null;
 
   let cleanPath = storagePath;
 
   if (storagePath.startsWith("http")) {
-    const match = storagePath.match(/\/storage\/v1\/object\/(?:public|sign)\/[^/]+\/(.+?)(?:\?|$)/);
+    const match = storagePath.match(
+      /\/storage\/v1\/object\/(?:public|sign)\/[^/]+\/(.+?)(?:\?|$)/
+    );
     if (match) {
       cleanPath = decodeURIComponent(match[1]);
     } else {
@@ -129,7 +136,7 @@ export async function getSignedImageUrl(storagePath: string, expiresIn = 86400):
     .createSignedUrl(cleanPath, expiresIn);
 
   if (error || !data) {
-    console.error("Supabase signed URL error:", error, "path:", cleanPath);
+    console.error("[Supabase] Signed URL error:", error, "path:", cleanPath);
     return null;
   }
   return data.signedUrl;
