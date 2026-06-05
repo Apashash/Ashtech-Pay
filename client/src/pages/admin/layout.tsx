@@ -210,10 +210,10 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     newCode[idx] = digit;
     setOtpCode(newCode);
     setOtpError("");
-    if (digit && idx < 3) {
+    if (digit && idx < 5) {
       otpRefs[idx + 1].current?.focus();
     }
-    if (newCode.every(d => d !== "")) {
+    if (newCode.every(d => d !== "") && newCode.length === 6) {
       verifyOtpMutation.mutate(newCode.join(""));
     }
   }
@@ -221,6 +221,21 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   function handleOtpKeyDown(idx: number, e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Backspace" && !otpCode[idx] && idx > 0) {
       otpRefs[idx - 1].current?.focus();
+    }
+  }
+
+  function handleOtpPaste(e: React.ClipboardEvent<HTMLInputElement>) {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (!pasted) return;
+    const newCode = ["", "", "", "", "", ""];
+    pasted.split("").forEach((d, i) => { newCode[i] = d; });
+    setOtpCode(newCode);
+    setOtpError("");
+    const nextEmpty = pasted.length < 6 ? pasted.length : 5;
+    otpRefs[nextEmpty].current?.focus();
+    if (pasted.length === 6) {
+      verifyOtpMutation.mutate(pasted);
     }
   }
   // ────────────────────────────────────────────────────────────────────────────
@@ -333,36 +348,58 @@ export function AdminLayout({ children }: AdminLayoutProps) {
 
   // ─── OTP Gate ──────────────────────────────────────────────────────────────
   if (otpLoading || (!otpStatus?.verified)) {
+    const isBusy = otpLoading || requestOtpMutation.isPending || verifyOtpMutation.isPending;
+
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <div className="w-full max-w-sm">
-          <div className="bg-card border border-border rounded-2xl p-8 shadow-xl space-y-6">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-background via-background to-muted/30 p-4">
+        {/* Logo / brand bar */}
+        <div className="mb-8 flex items-center gap-2 select-none">
+          <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center shadow-lg">
+            <Shield className="w-5 h-5 text-primary-foreground" />
+          </div>
+          <span className="text-lg font-bold tracking-tight">AshTech Pay</span>
+          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary ml-1">Admin</span>
+        </div>
+
+        {/* Card */}
+        <div className="w-full max-w-md bg-card border border-border/60 rounded-3xl shadow-2xl overflow-hidden">
+          {/* Top accent bar */}
+          <div className="h-1 w-full bg-gradient-to-r from-primary/60 via-primary to-primary/60" />
+
+          <div className="p-8 space-y-7">
             {/* Header */}
-            <div className="text-center space-y-2">
-              <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
+            <div className="text-center space-y-3">
+              <div className="mx-auto w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center shadow-inner">
                 <KeyRound className="w-8 h-8 text-primary" />
               </div>
-              <h1 className="text-xl font-bold">Vérification Admin</h1>
-              <p className="text-sm text-muted-foreground">
-                {otpLoading || requestOtpMutation.isPending
-                  ? "Envoi du code en cours…"
-                  : otpSent
-                  ? <>Code envoyé à <strong>{otpEmail}</strong></>
-                  : "Préparation…"}
-              </p>
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight">Vérification en 2 étapes</h1>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {otpLoading || requestOtpMutation.isPending
+                    ? "Envoi du code de sécurité…"
+                    : otpSent
+                    ? <span>Code envoyé à <strong className="text-foreground">{otpEmail}</strong></span>
+                    : "Préparation de la session sécurisée…"}
+                </p>
+              </div>
             </div>
 
-            {/* Spinner while sending */}
+            {/* Loading state */}
             {(otpLoading || requestOtpMutation.isPending) && (
-              <div className="flex justify-center py-4">
-                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              <div className="flex flex-col items-center gap-3 py-6">
+                <div className="relative w-12 h-12">
+                  <div className="absolute inset-0 rounded-full border-4 border-primary/20" />
+                  <div className="absolute inset-0 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+                </div>
+                <p className="text-xs text-muted-foreground">Envoi en cours…</p>
               </div>
             )}
 
             {/* OTP input */}
             {otpSent && !requestOtpMutation.isPending && (
-              <div className="space-y-4">
-                <div className="flex justify-center gap-3">
+              <div className="space-y-6">
+                {/* Digits */}
+                <div className="flex justify-center gap-2.5">
                   {otpRefs.map((ref, i) => (
                     <input
                       key={i}
@@ -373,29 +410,58 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                       value={otpCode[i]}
                       onChange={e => handleOtpInput(i, e.target.value)}
                       onKeyDown={e => handleOtpKeyDown(i, e)}
-                      disabled={verifyOtpMutation.isPending}
-                      className="w-14 h-14 text-center text-2xl font-bold border-2 border-border rounded-xl bg-background focus:outline-none focus:border-primary transition-colors disabled:opacity-50"
+                      onPaste={i === 0 ? handleOtpPaste : undefined}
+                      disabled={isBusy}
+                      data-testid={`input-otp-${i}`}
+                      className={[
+                        "w-12 h-14 text-center text-2xl font-bold rounded-xl border-2 bg-background transition-all duration-150",
+                        "focus:outline-none focus:scale-105 focus:shadow-md",
+                        otpCode[i]
+                          ? "border-primary text-primary shadow-sm"
+                          : "border-border text-foreground",
+                        isBusy ? "opacity-50 cursor-not-allowed" : "hover:border-primary/50",
+                      ].join(" ")}
                     />
                   ))}
                 </div>
 
+                {/* Separator between 3+3 */}
+                <div className="flex justify-center -mt-3">
+                  <div className="flex gap-1 items-center">
+                    {[0,1,2].map(i => (
+                      <div key={i} className={`w-2 h-2 rounded-full transition-all duration-200 ${otpCode[i] ? "bg-primary" : "bg-border"}`} />
+                    ))}
+                    <div className="w-4 h-px bg-border mx-1" />
+                    {[3,4,5].map(i => (
+                      <div key={i} className={`w-2 h-2 rounded-full transition-all duration-200 ${otpCode[i] ? "bg-primary" : "bg-border"}`} />
+                    ))}
+                  </div>
+                </div>
+
+                {/* Verifying spinner */}
                 {verifyOtpMutation.isPending && (
-                  <div className="flex justify-center">
-                    <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                  <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                    <span>Vérification…</span>
                   </div>
                 )}
 
+                {/* Error */}
                 {otpError && (
-                  <p className="text-center text-sm text-destructive font-medium">{otpError}</p>
+                  <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-xl px-4 py-3">
+                    <ShieldBan className="w-4 h-4 shrink-0" />
+                    <span>{otpError}</span>
+                  </div>
                 )}
 
+                {/* Resend */}
                 <div className="text-center">
                   <button
-                    onClick={() => requestOtpMutation.mutate()}
-                    disabled={requestOtpMutation.isPending}
-                    className="text-sm text-primary hover:underline disabled:opacity-50"
+                    onClick={() => { setOtpCode(["", "", "", "", "", ""]); setOtpError(""); requestOtpMutation.mutate(); }}
+                    disabled={isBusy}
+                    className="text-sm text-primary hover:text-primary/80 hover:underline underline-offset-2 disabled:opacity-40 transition-colors"
                   >
-                    Renvoyer le code
+                    Renvoyer un nouveau code
                   </button>
                 </div>
               </div>
@@ -403,20 +469,28 @@ export function AdminLayout({ children }: AdminLayoutProps) {
 
             {/* Error sending */}
             {!otpSent && !requestOtpMutation.isPending && otpError && (
-              <div className="space-y-3">
-                <p className="text-center text-sm text-destructive">{otpError}</p>
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-xl px-4 py-3">
+                  <ShieldBan className="w-4 h-4 shrink-0" />
+                  <span>{otpError}</span>
+                </div>
                 <Button onClick={() => requestOtpMutation.mutate()} className="w-full">
                   Réessayer
                 </Button>
               </div>
             )}
 
-            <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 rounded-lg p-3">
-              <MailCheck className="w-4 h-4 shrink-0" />
-              <span>Le code à 6 chiffres expire dans 5 minutes.</span>
+            {/* Footer hint */}
+            <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 border border-border/40 rounded-xl px-4 py-3">
+              <Clock className="w-3.5 h-3.5 shrink-0 text-primary" />
+              <span>Le code à <strong>6 chiffres</strong> expire dans <strong>5 minutes</strong>. Vous pouvez coller directement depuis Telegram.</span>
             </div>
           </div>
         </div>
+
+        <p className="mt-6 text-xs text-muted-foreground">
+          © {new Date().getFullYear()} AshTech Pay — Session sécurisée
+        </p>
       </div>
     );
   }
