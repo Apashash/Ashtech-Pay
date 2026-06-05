@@ -1,6 +1,6 @@
 import { storage } from "./storage";
 import { checkSwychrPayoutStatus } from "./swychrPayout";
-import { checkAfribaPayStatus } from "./afribapay";
+import { checkAfribaPayStatus, checkAfribaPayoutStatus } from "./afribapay";
 import { checkPixPayStatus } from "./pixpay";
 import { sendWithdrawalApprovedEmail } from "./email";
 import { notifyWithdrawalAutoValidated, notifyWithdrawalFailed } from "./telegram";
@@ -171,7 +171,8 @@ async function processPayout(payout: PendingPayout, apiStatus: string) {
 
 async function checkProviderStatus(payout: PendingPayout): Promise<{ status: string; shouldRemove?: boolean }> {
   if (payout.provider === "afribapay") {
-    const result = await checkAfribaPayStatus(payout.reference, "order_id");
+    // Payouts (withdrawals/transfers) use the PAYOUT URL, not the payin URL
+    const result = await checkAfribaPayoutStatus(payout.reference, "order_id");
     return { status: result.status };
   }
 

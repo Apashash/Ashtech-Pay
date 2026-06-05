@@ -264,7 +264,7 @@ export async function initiateAfribaPayout(params: AfribaPayoutParams): Promise<
   }
 }
 
-// ─── Check status ─────────────────────────────────────────────────────────────
+// ─── Check payin status (deposits / payment links) ────────────────────────────
 export async function checkAfribaPayStatus(
   identifier: string,
   type: "order_id" | "transaction_id" = "order_id"
@@ -276,10 +276,9 @@ export async function checkAfribaPayStatus(
     const res = await fetch(url, { headers });
     const data = await res.json();
 
-    // Log full raw response every 10 calls to detect unexpected statuses
     const d = data.data;
     const rawStatus = (d?.status || d?.transaction_status || "").toUpperCase();
-    console.log(`[AfribaPay Status] ${param} → HTTP ${res.status} | raw_status="${rawStatus}" | data=${JSON.stringify(d)}`);
+    console.log(`[AfribaPay PayinStatus] ${param} → HTTP ${res.status} | raw_status="${rawStatus}" | data=${JSON.stringify(d)}`);
 
     if (rawStatus === "SUCCESS" || rawStatus === "COMPLETED" || rawStatus === "SUCCESSFUL"
         || rawStatus === "PAID" || rawStatus === "APPROVED") {
@@ -290,7 +289,37 @@ export async function checkAfribaPayStatus(
     }
     return { status: "pending", raw: data };
   } catch (err: any) {
-    console.error("[AfribaPay Status] Error:", err);
+    console.error("[AfribaPay PayinStatus] Error:", err);
+    return { status: "pending" };
+  }
+}
+
+// ─── Check payout status (withdrawals / transfers) ────────────────────────────
+export async function checkAfribaPayoutStatus(
+  identifier: string,
+  type: "order_id" | "transaction_id" = "order_id"
+): Promise<{ status: "completed" | "failed" | "pending"; raw?: any }> {
+  try {
+    const headers = await authHeaders();
+    const param = type === "transaction_id" ? `transaction_id=${identifier}` : `order_id=${identifier}`;
+    const url = `${AFRIBAPAY_PAYOUT_URL}/v1/status?${param}`;
+    const res = await fetch(url, { headers });
+    const data = await res.json();
+
+    const d = data.data;
+    const rawStatus = (d?.status || d?.transaction_status || d?.payout_status || "").toUpperCase();
+    console.log(`[AfribaPay PayoutStatus] ${param} → HTTP ${res.status} | raw_status="${rawStatus}" | data=${JSON.stringify(d)}`);
+
+    if (rawStatus === "SUCCESS" || rawStatus === "COMPLETED" || rawStatus === "SUCCESSFUL"
+        || rawStatus === "PAID" || rawStatus === "APPROVED" || rawStatus === "PROCESSED") {
+      return { status: "completed", raw: data };
+    } else if (rawStatus === "FAILED" || rawStatus === "ERROR" || rawStatus === "CANCELLED"
+               || rawStatus === "REJECTED" || rawStatus === "EXPIRED") {
+      return { status: "failed", raw: data };
+    }
+    return { status: "pending", raw: data };
+  } catch (err: any) {
+    console.error("[AfribaPay PayoutStatus] Error:", err);
     return { status: "pending" };
   }
 }

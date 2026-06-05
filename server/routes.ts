@@ -6957,17 +6957,16 @@ export async function registerRoutes(
         });
       }
       
-      // For withdrawals/transfer_out: trigger AccountPE payout when admin approves (unless forceComplete=true)
+      // For withdrawals/transfer_out: trigger payout when admin approves (unless forceComplete=true)
+      // Routes to AfribaPay or Swychr/AccountPE based on operator's paymentProvider
       if (wasNotCompleted && isNowCompleted && (transaction.type === "withdrawal" || transaction.type === "transfer_out") && !forceComplete) {
         try {
           let countryCode = "CM";
           if (transaction.recipientCountry) {
             const rc = transaction.recipientCountry.trim();
             if (rc.length === 2) {
-              // Already a country code (e.g. "CM")
               countryCode = rc.toUpperCase();
             } else {
-              // Country name — look up code
               const countries = await storage.getAllCountries();
               const c = countries.find(c => c.name.toLowerCase() === rc.toLowerCase());
               if (c?.code) countryCode = c.code;
@@ -6980,51 +6979,91 @@ export async function registerRoutes(
           const operatorId = transaction.operatorId;
           const operator = operatorId ? await storage.getOperator(operatorId) : null;
           const operatorName = (operator?.name || "").toUpperCase();
-          let finalPaymentMethod = resolvePaymentMethod(operatorName, countryCode);
+          const adminPaymentProvider = ((operator as any)?.paymentProvider || "swychr") as string;
 
-          // Fallback when operator is not found: try phone prefix detection, then bank transfer
-          if (!operator) {
-            if (transaction.paymentMethod === "bank_transfer") {
-              finalPaymentMethod = countryCode === "NG" ? "All Banks Transfer" : "bank_transfer";
-            } else {
-              const detected = detectMethodFromPhone(transaction.recipientPhone || "", countryCode);
-              if (detected) {
-                console.log(`[Admin] Operator not found — detected method from phone prefix: ${detected}`);
-                finalPaymentMethod = detected;
+          console.log(`[Admin] Payout params: country=${countryCode}, operatorId=${operatorId}, operatorName=${operatorName}, provider=${adminPaymentProvider}, txPaymentMethod=${transaction.paymentMethod}`);
+
+          let payoutResult: { success: boolean; transaction_id?: string; message?: string };
+          let pollerProvider: "swychr" | "afribapay" | "pixpay" = "swychr";
+          let pollerRef = payoutRef;
+
+          if (adminPaymentProvider === "afribapay") {
+            // ─── AfribaPay Payout ─────────────────────────────────────────────
+            const afribapayOperatorCode = resolveAfribaPayOperatorCode(operator, operatorName);
+            const afribapayCurrency = AFRIBAPAY_ISO_CURRENCY[countryCode] || (transaction.currency || "XAF");
+            console.log(`[Admin] AfribaPay payout | country=${countryCode} | currency=${afribapayCurrency} | operator=${afribapayOperatorCode}`);
+            const callbackUrl = `${process.env.APP_URL || ""}/api/afribapay/webhook`;
+
+            let localPhone = (transaction.recipientPhone || "").replace(/\s/g, "");
+            if (localPhone.startsWith("+")) localPhone = localPhone.slice(1);
+            const phonePrefixes: Record<string, string> = {
+              CM: "237", SN: "221", CI: "225", BF: "226", ML: "223",
+              GN: "224", BJ: "229", TG: "228", NE: "227", CD: "243",
+              CG: "242", CF: "236", TD: "235", GA: "241", GQ: "240",
+              MG: "261", RW: "250", KE: "254", TZ: "255", UG: "256",
+              GH: "233", NG: "234",
+            };
+            const pfx = phonePrefixes[countryCode];
+            if (pfx && localPhone.startsWith(pfx)) localPhone = localPhone.slice(pfx.length);
+
+            const afribaResult = await initiateAfribaPayout({
+              operator:     afribapayOperatorCode,
+              country:      countryCode,
+              phone_number: localPhone,
+              amount:       txAmount,
+              currency:     afribapayCurrency,
+              order_id:     payoutRef,
+              reference_id: payoutRef,
+              notify_url:   callbackUrl,
+            });
+            if (afribaResult.success && afribaResult.transaction_id) {
+              await storage.updateTransactionExternalReference(transaction.id, afribaResult.transaction_id);
+            }
+            payoutResult  = afribaResult;
+            pollerProvider = "afribapay";
+            pollerRef      = payoutRef; // AfribaPay is queried by order_id
+
+          } else {
+            // ─── Swychr / AccountPE Payout (default) ─────────────────────────
+            let finalPaymentMethod = resolvePaymentMethod(operatorName, countryCode);
+            if (!operator) {
+              if (transaction.paymentMethod === "bank_transfer") {
+                finalPaymentMethod = countryCode === "NG" ? "All Banks Transfer" : "bank_transfer";
+              } else {
+                const detected = detectMethodFromPhone(transaction.recipientPhone || "", countryCode);
+                if (detected) {
+                  console.log(`[Admin] Operator not found — detected method from phone prefix: ${detected}`);
+                  finalPaymentMethod = detected;
+                }
               }
             }
+            const swychrResult = await createSwychrPayout({
+              country_code:     countryCode,
+              beneficiary_name: transaction.recipientName || transaction.userId,
+              mobile_no:        formatInternationalPhone(transaction.recipientPhone || "", countryCode),
+              amount:           txAmount,
+              transaction_id:   payoutRef,
+              payment_method:   finalPaymentMethod as any,
+              remarks:          `Ashtech Pay - ${payoutRef}`,
+            });
+            payoutResult  = swychrResult;
+            pollerProvider = "swychr";
+            pollerRef      = swychrResult.transaction_id || payoutRef;
           }
 
-          console.log(`[Admin] Payout params: country=${countryCode}, operatorId=${operatorId}, operatorName=${operatorName}, resolved_method=${finalPaymentMethod}, txPaymentMethod=${transaction.paymentMethod}`);
-
-          const payoutResult = await createSwychrPayout({
-            country_code:     countryCode,
-            beneficiary_name: transaction.recipientName || transaction.userId,
-            mobile_no:        formatInternationalPhone(
-              transaction.recipientPhone || "",
-              countryCode
-            ),
-            amount:           txAmount,
-            transaction_id:   payoutRef,
-            payment_method:   finalPaymentMethod as any,
-            remarks:          `Ashtech Pay - ${payoutRef}`,
-          });
-
           if (payoutResult.success) {
-            console.log(`[Admin] Payout submitted OK for ${payoutRef} (ext: ${payoutResult.transaction_id})`);
-            const extTxId = payoutResult.transaction_id || payoutRef;
+            console.log(`[Admin] Payout submitted OK for ${payoutRef} via ${pollerProvider} (ext: ${payoutResult.transaction_id})`);
             addPendingPayout({
               transactionId: transaction.id,
-              reference:     extTxId,
+              reference:     pollerRef,
               userId:        transaction.userId,
               amount:        transaction.amount,
               totalDebited:  transaction.totalAmount || transaction.amount,
-              provider:      ((operator as any)?.paymentProvider || "swychr") as "swychr" | "afribapay" | "pixpay",
+              provider:      pollerProvider,
               countryCode:   countryCode,
               txType:        transaction.type,
               txCurrency:    transaction.currency || "XAF",
             });
-            // Send withdrawal approved email
             const txUser = await storage.getUser(transaction.userId).catch(() => null);
             if (txUser?.email) {
               sendWithdrawalApprovedEmail(
@@ -7045,17 +7084,17 @@ export async function registerRoutes(
               isRead:        false,
             });
           } else {
-            console.error(`[Admin] Payout failed for ${payoutRef}: ${payoutResult.message}`);
+            console.error(`[Admin] Payout failed for ${payoutRef} via ${pollerProvider}: ${payoutResult.message}`);
             await storage.updateTransactionStatus(id, "pending");
             const msg = (payoutResult.message || "").toLowerCase();
             const isInsufficientBalance = msg.includes("insuffi") || msg.includes("solde") || msg.includes("balance");
             if (isInsufficientBalance) {
               return res.status(400).json({
-                message: `Solde insuffisant sur le wallet Swychr. Connectez-vous à Swychr, effectuez la conversion/recharge nécessaire, puis réessayez.`,
+                message: `Solde insuffisant sur le wallet ${pollerProvider === "afribapay" ? "AfribaPay" : "Swychr"}. Rechargez puis réessayez.`,
               });
             }
             return res.status(400).json({
-              message: `Paiement AccountPE échoué: ${payoutResult.message}`,
+              message: `Paiement ${pollerProvider === "afribapay" ? "AfribaPay" : "AccountPE"} échoué: ${payoutResult.message}`,
             });
           }
         } catch (payoutErr: any) {
