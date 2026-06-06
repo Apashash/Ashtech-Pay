@@ -2425,7 +2425,7 @@ export async function registerRoutes(
   // Send money externally (with operator and fees)
   app.post("/api/transfers/send", requireAuth, transferLimiter, async (req, res) => {
     try {
-      const { recipientName, recipientPhone, countryId, operatorId, amount, description, sourceCurrency } = req.body;
+      const { recipientName, recipientPhone, countryId, operatorId, amount, description, sourceCurrency, feeBearer } = req.body;
 
       if (!recipientName || !recipientPhone || !countryId || !operatorId || !amount) {
         return res.status(400).json({ message: "Tous les champs sont requis" });
@@ -2512,9 +2512,12 @@ export async function registerRoutes(
         feeAmount = calculatedFee;
       }
 
-      // Transfer rule: user pays parsedAmount (total), fees deducted internally, net sent to recipient
-      const creditedAmount = parsedAmount - feeAmount;
-      const totalAmount = parsedAmount;
+      // Fee bearer logic:
+      // "sender" (default) = sender pays fees on top → debit amount+fee, recipient gets full amount
+      // "receiver" = fees deducted from received amount → debit amount, recipient gets amount-fee
+      const senderPaysFees = !feeBearer || feeBearer === "sender";
+      const creditedAmount = senderPaysFees ? parsedAmount : parsedAmount - feeAmount;
+      const totalAmount = senderPaysFees ? parsedAmount + feeAmount : parsedAmount;
 
       // Determine if debiting primary wallet or secondary wallet
       const isPrimaryTransfer = (txCurrency === (sender.preferredCurrency || "XAF"));

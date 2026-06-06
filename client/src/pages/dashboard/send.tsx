@@ -9,7 +9,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User, SupportedCurrency, Wallet } from "@shared/schema";
-import { Send, Globe, Loader2, ArrowRight, AlertCircle, Shield, CheckCircle2, Smartphone, TrendingDown, Wallet as WalletIcon } from "lucide-react";
+import { Send, Globe, Loader2, AlertCircle, Shield, CheckCircle2, Smartphone, TrendingDown, Wallet as WalletIcon, UserCheck, Users } from "lucide-react";
 import { SearchableSelectContent } from "@/components/ui/searchable-select-content";
 import { useLanguage } from "@/lib/language";
 import { BottomSheet, BottomSheetContent, BottomSheetHeader, BottomSheetTitle, BottomSheetFooter } from "@/components/ui/bottom-sheet";
@@ -120,6 +120,7 @@ export default function SendMoneyPage() {
   const amountValue = parseFloat(watchedAmount) || 0;
   const internalAmountValue = parseFloat(internalAmount) || 0;
 
+  const [feeBearer, setFeeBearer] = useState<"sender" | "receiver">("sender");
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pendingExternalData, setPendingExternalData] = useState<ExternalFormData | null>(null);
   const [showInternalConfirmDialog, setShowInternalConfirmDialog] = useState(false);
@@ -200,7 +201,7 @@ export default function SendMoneyPage() {
 
   const externalMutation = useMutation({
     mutationFn: async (data: ExternalFormData) => {
-      const res = await apiRequest("POST", "/api/transfers/send", { ...data, sourceCurrency: selectedWallet });
+      const res = await apiRequest("POST", "/api/transfers/send", { ...data, sourceCurrency: selectedWallet, feeBearer });
       const json = await res.json();
       if (!res.ok) throw new Error(json.message || "Erreur lors du transfert");
       return json;
@@ -222,9 +223,17 @@ export default function SendMoneyPage() {
 
   const currencyMismatch = !isInternal && selectedCountry && selectedWallet !== selectedCountry.currency;
 
+  // When sender pays fees: total deducted = amount + fee
+  const totalDebitedBySender = feeBearer === "sender"
+    ? amountValue + feePreview.feeAmount
+    : amountValue;
+  const netReceivedByRecipient = feeBearer === "sender"
+    ? amountValue
+    : amountValue - feePreview.feeAmount;
+
   const canSubmitExternal = amountValue >= minTransfer &&
     amountValue <= maxTransfer &&
-    amountValue <= balance &&
+    totalDebitedBySender <= balance &&
     amountValue > 0 &&
     watchedCountryId &&
     watchedOperatorId &&
@@ -539,6 +548,57 @@ export default function SendMoneyPage() {
                       )}
                     />
 
+                    {/* Fee bearer toggle */}
+                    {amountValue > 0 && selectedOperator && feePreview.feeAmount > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Qui paye les frais ?</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            data-testid="fee-bearer-sender"
+                            onClick={() => setFeeBearer("sender")}
+                            className={`relative flex flex-col items-center gap-1 py-3 px-2 rounded-xl border-2 transition-all text-center ${
+                              feeBearer === "sender"
+                                ? "border-primary bg-primary/8 shadow-sm"
+                                : "border-border bg-background hover:border-muted-foreground/40"
+                            }`}
+                          >
+                            {feeBearer === "sender" && (
+                              <span className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
+                                <span className="text-[9px] text-black font-bold">✓</span>
+                              </span>
+                            )}
+                            <UserCheck className={`w-5 h-5 ${feeBearer === "sender" ? "text-primary" : "text-muted-foreground"}`} />
+                            <span className={`text-xs font-semibold leading-tight ${feeBearer === "sender" ? "text-primary" : "text-foreground"}`}>
+                              Moi (l'envoyeur)
+                            </span>
+                            <span className="text-[10px] text-muted-foreground">Défaut</span>
+                          </button>
+                          <button
+                            type="button"
+                            data-testid="fee-bearer-receiver"
+                            onClick={() => setFeeBearer("receiver")}
+                            className={`relative flex flex-col items-center gap-1 py-3 px-2 rounded-xl border-2 transition-all text-center ${
+                              feeBearer === "receiver"
+                                ? "border-primary bg-primary/8 shadow-sm"
+                                : "border-border bg-background hover:border-muted-foreground/40"
+                            }`}
+                          >
+                            {feeBearer === "receiver" && (
+                              <span className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
+                                <span className="text-[9px] text-black font-bold">✓</span>
+                              </span>
+                            )}
+                            <Users className={`w-5 h-5 ${feeBearer === "receiver" ? "text-primary" : "text-muted-foreground"}`} />
+                            <span className={`text-xs font-semibold leading-tight ${feeBearer === "receiver" ? "text-primary" : "text-foreground"}`}>
+                              Le receveur
+                            </span>
+                            <span className="text-[10px] text-muted-foreground">Déduit du montant</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Fee preview inline */}
                     {amountValue > 0 && selectedOperator && (
                       <div className="rounded-xl border border-border bg-muted/20 overflow-hidden divide-y divide-border text-sm">
@@ -546,24 +606,36 @@ export default function SendMoneyPage() {
                           <span className="text-muted-foreground">{t.send.summaryAmount}</span>
                           <span className="font-semibold tabular-nums">{formatWalletBalance(amountValue, localCurrency)}</span>
                         </div>
-                        <div className="flex items-center justify-between px-4 py-2.5">
-                          <span className="text-muted-foreground flex items-center gap-1.5">
-                            <TrendingDown className="w-3.5 h-3.5" />
-                            {t.send.summaryFee}
-                            {feePreview.isLoading ? <Loader2 className="w-3 h-3 animate-spin ml-1" /> : feePreview.feePercentage > 0 ? ` (${feePreview.feePercentage}%)` : ""}
+                        {feePreview.feeAmount > 0 && (
+                          <div className="flex items-center justify-between px-4 py-2.5">
+                            <span className="text-muted-foreground flex items-center gap-1.5">
+                              <TrendingDown className="w-3.5 h-3.5" />
+                              {t.send.summaryFee}
+                              {feePreview.isLoading ? <Loader2 className="w-3 h-3 animate-spin ml-1" /> : feePreview.feePercentage > 0 ? ` (${feePreview.feePercentage}%)` : ""}
+                            </span>
+                            <span className="font-semibold text-orange-500 tabular-nums">
+                              {feeBearer === "sender" ? "+" : "-"} {formatWalletBalance(feePreview.feeAmount, localCurrency)}
+                            </span>
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between px-4 py-2.5 bg-muted/30">
+                          <span className="font-semibold">
+                            {feeBearer === "sender" ? "Débité de votre compte" : t.send.summaryNet}
                           </span>
-                          <span className="font-semibold text-orange-500 tabular-nums">
-                            - {formatWalletBalance(feePreview.feeAmount, localCurrency)}
+                          <span className="font-bold tabular-nums">
+                            {formatWalletBalance(totalDebitedBySender, localCurrency)}
                           </span>
                         </div>
-                        <div className="flex items-center justify-between px-4 py-2.5 bg-muted/30">
-                          <span className="font-semibold">{t.send.summaryNet}</span>
-                          <span className="font-bold tabular-nums">{formatWalletBalance(amountValue - feePreview.feeAmount, localCurrency)}</span>
+                        <div className="flex items-center justify-between px-4 py-2.5 bg-green-500/5">
+                          <span className="text-sm font-semibold text-green-600 dark:text-green-400">Net reçu par destinataire</span>
+                          <span className="font-bold text-green-500 tabular-nums">
+                            {formatWalletBalance(netReceivedByRecipient, localCurrency)}
+                          </span>
                         </div>
                         <div className="flex items-center justify-between px-4 py-2 text-xs text-muted-foreground">
                           <span>{t.send.balanceAfter}</span>
-                          <span className={amountValue > balance ? "text-red-500 font-semibold" : ""}>
-                            {formatWalletBalance(Math.max(0, balance - amountValue), localCurrency)}
+                          <span className={totalDebitedBySender > balance ? "text-red-500 font-semibold" : ""}>
+                            {formatWalletBalance(Math.max(0, balance - totalDebitedBySender), localCurrency)}
                           </span>
                         </div>
                       </div>
@@ -705,18 +777,28 @@ export default function SendMoneyPage() {
               <span className="text-sm font-medium">{selectedCountry?.name} · {selectedOperator?.name}</span>
             </div>
             <div className="flex items-center justify-between px-4 py-3.5">
+              <span className="text-sm text-muted-foreground">Frais payés par</span>
+              <span className="text-sm font-semibold">{feeBearer === "sender" ? "Moi (l'envoyeur)" : "Le receveur"}</span>
+            </div>
+            <div className="flex items-center justify-between px-4 py-3.5">
               <span className="text-sm text-muted-foreground">{t.send.confirmSentAmount}</span>
               <span className="text-sm font-bold tabular-nums">{formatWalletBalance(amountValue, selectedWallet)}</span>
             </div>
             {feePreview.feeAmount > 0 && (
               <div className="flex items-center justify-between px-4 py-3.5">
                 <span className="text-sm text-muted-foreground">{t.send.confirmFeePercent} ({feePreview.feePercentage}%)</span>
-                <span className="text-sm font-semibold text-red-500 tabular-nums">-{formatWalletBalance(feePreview.feeAmount, selectedWallet)}</span>
+                <span className="text-sm font-semibold text-orange-500 tabular-nums">
+                  {feeBearer === "sender" ? "+" : "-"}{formatWalletBalance(feePreview.feeAmount, selectedWallet)}
+                </span>
               </div>
             )}
+            <div className="flex items-center justify-between px-4 py-3.5">
+              <span className="text-sm font-semibold text-muted-foreground">Débité de votre compte</span>
+              <span className="text-sm font-bold tabular-nums">{formatWalletBalance(totalDebitedBySender, selectedWallet)}</span>
+            </div>
             <div className="flex items-center justify-between px-4 py-3.5 bg-green-500/5">
               <span className="text-sm font-semibold">{t.send.confirmNetReceived}</span>
-              <span className="text-base font-bold text-green-500 tabular-nums">{formatWalletBalance(amountValue - feePreview.feeAmount, selectedWallet)}</span>
+              <span className="text-base font-bold text-green-500 tabular-nums">{formatWalletBalance(netReceivedByRecipient, selectedWallet)}</span>
             </div>
           </div>
           <BottomSheetFooter>
