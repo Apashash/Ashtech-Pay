@@ -37,8 +37,24 @@ const SESSION_POOL_MAX = Math.max(1, Math.floor(8 / PM2_INSTANCES));
 
 console.log(`[DB] Pool limits — main: ${MAIN_POOL_MAX}, session: ${SESSION_POOL_MAX} (PM2 instances detected: ${PM2_INSTANCES})`);
 
+// Append application_name to the connection string so PostgreSQL triggers
+// can distinguish app connections from direct/external DB access.
+function addAppName(url: string, name: string): string {
+  try {
+    const u = new URL(url);
+    u.searchParams.set("application_name", name);
+    return u.toString();
+  } catch {
+    // Fallback: append via query string manually
+    const sep = url.includes("?") ? "&" : "?";
+    return `${url}${sep}application_name=${name}`;
+  }
+}
+
+const APP_DB_NAME = "ashtech_secure_app";
+
 export const pool = new Pool({
-  connectionString: databaseUrl,
+  connectionString: addAppName(databaseUrl, APP_DB_NAME),
   ssl: sslConfig,
   max: MAIN_POOL_MAX,
   idleTimeoutMillis: 30000,

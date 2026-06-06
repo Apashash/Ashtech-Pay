@@ -295,6 +295,40 @@ app.use((req, res, next) => {
     // ── SIEM: Install PostgreSQL-level audit triggers (VII) ───────────────────
     await createDbAuditTriggers();
 
+    // ── Security: Block direct DB modifications to sensitive columns ──────────
+    // Any connection whose application_name != 'ashtech_secure_app' (i.e. not
+    // the app server pool) is BLOCKED from changing is_banned, role, or
+    // is_verified on the users table. Direct psql / pgAdmin / script access
+    // will hit RAISE EXCEPTION and the change will be rolled back.
+    await db.execute(sql`
+      CREATE OR REPLACE FUNCTION ashtech_guard_sensitive_update()
+      RETURNS TRIGGER LANGUAGE plpgsql AS $$
+      DECLARE
+        app_name TEXT;
+      BEGIN
+        app_name := current_setting('application_name', true);
+        -- Allow only the official app server connection pool
+        IF app_name IS DISTINCT FROM 'ashtech_secure_app' THEN
+          -- Block any attempt to change is_banned, role, or is_verified
+          IF (NEW.is_banned IS DISTINCT FROM OLD.is_banned)
+            OR (NEW.role IS DISTINCT FROM OLD.role)
+            OR (NEW.is_verified IS DISTINCT FROM OLD.is_verified) THEN
+            RAISE EXCEPTION
+              '[AshTech Security] Modification directe des colonnes sensibles (is_banned, role, is_verified) bloquée. Utilisez l''interface admin. Source: %', app_name;
+          END IF;
+        END IF;
+        RETURN NEW;
+      END;
+      $$
+    `);
+    await db.execute(sql`DROP TRIGGER IF EXISTS ashtech_guard_sensitive ON users`);
+    await db.execute(sql`
+      CREATE TRIGGER ashtech_guard_sensitive
+      BEFORE UPDATE ON users
+      FOR EACH ROW EXECUTE FUNCTION ashtech_guard_sensitive_update()
+    `);
+    console.log("[Security] Sensitive-column guard trigger installed on users table");
+
     // ── Purge legacy sessions with old adminOtpVerified flag (stops false SIEM alerts)
     await purgeOldAdminOtpSessions();
 
