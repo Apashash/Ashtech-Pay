@@ -6203,6 +6203,8 @@ export async function registerRoutes(
 
   // POST /api/admin/totp/setup — generate a TOTP secret & return OTP URI for QR
   // Does NOT enable TOTP yet — admin must confirm with a valid code first.
+  // Stores the pending secret in DB (totp_secret, totpEnabled=false) instead of session
+  // to survive PM2 multi-process routing between setup and confirm requests.
   app.post("/api/admin/totp/setup", requireAuth, async (req, res) => {
     try {
       const user = await storage.getUser(req.userId!);
@@ -6220,9 +6222,10 @@ export async function registerRoutes(
         secret,
       });
       const uri = totp.toString();
-      // Store pending secret (not enabled yet) temporarily in session
-      req.session._totpPendingSecret = secret.base32;
-      await new Promise<void>((resolve) => req.session.save(() => resolve()));
+      // Store pending secret in DB (not yet enabled) — avoids PM2 session routing issues
+      const { encryptField } = await import("./fieldEncryption");
+      const encryptedPending = encryptField(secret.base32);
+      await storage.updateUser(req.userId!, { totpSecret: encryptedPending, totpEnabled: false });
       res.json({ uri, secret: secret.base32 });
     } catch (err: any) {
       console.error("[AdminTOTP] Setup error:", err?.message);
@@ -6241,7 +6244,12 @@ export async function registerRoutes(
       if (!code || typeof code !== "string" || !/^\d{6}$/.test(code.trim())) {
         return res.status(400).json({ message: "Code à 6 chiffres requis" });
       }
-      const pendingSecret = req.session._totpPendingSecret;
+      // Read pending secret from DB (stored by /setup route)
+      const { decryptField, encryptField } = await import("./fieldEncryption");
+      if (!user.totpSecret || user.totpEnabled) {
+        return res.status(400).json({ message: "Aucune configuration en cours. Recommencez la configuration." });
+      }
+      const pendingSecret = decryptField(user.totpSecret);
       if (!pendingSecret) {
         return res.status(400).json({ message: "Aucune configuration en cours. Recommencez la configuration." });
       }
@@ -6258,12 +6266,9 @@ export async function registerRoutes(
       if (delta === null) {
         return res.status(400).json({ message: "Code incorrect. Vérifiez l'heure de votre appareil et réessayez." });
       }
-      // Encrypt and save secret to DB, enable TOTP
-      const { encryptField } = await import("./fieldEncryption");
+      // Re-encrypt and enable TOTP
       const encryptedSecret = encryptField(pendingSecret);
       await storage.updateUser(req.userId!, { totpSecret: encryptedSecret, totpEnabled: true });
-      delete req.session._totpPendingSecret;
-      await new Promise<void>((resolve) => req.session.save(() => resolve()));
       storage.createAdminLog({
         adminId: req.userId!,
         action: "totp_enabled",
