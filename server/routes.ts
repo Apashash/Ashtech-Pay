@@ -134,10 +134,17 @@ function resolveAfribaPayOperatorCode(operatorRecord: any, operatorName: string)
   return AFRIBAPAY_OPERATOR_CODE_MAP[raw] || raw;
 }
 
-const uploadsDir = path.join(process.cwd(), "uploads");
+// UPLOADS_DIR env var allows a persistent path outside the deployment folder (e.g. on Plesk).
+// Default: <cwd>/uploads — but this is wiped on each deployment!
+// On production (Plesk), set UPLOADS_DIR to a stable absolute path like:
+//   /var/www/vhosts/ashtechpay.top/upload_data
+const uploadsDir = process.env.UPLOADS_DIR
+  ? path.resolve(process.env.UPLOADS_DIR)
+  : path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
+console.log(`[Uploads] Storage directory: ${uploadsDir}`);
 
 const fileStorage = multer.diskStorage({
   destination: (_req, _file, cb) => {
@@ -839,10 +846,11 @@ async function resolveFileUrl(filePath: string): Promise<string | null> {
   if (!filePath) return null;
   // Already a full URL (Supabase public/signed URL)
   if (filePath.startsWith("http")) return filePath;
+  // Determine the base domain: prefer APP_URL (production), fallback REPLIT_DEV_DOMAIN (dev)
+  const appUrl = process.env.APP_URL || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : null);
   // Local /uploads/ path
   if (filePath.startsWith("/uploads/")) {
-    const domain = process.env.REPLIT_DEV_DOMAIN;
-    return domain ? `https://${domain}${filePath}` : null;
+    return appUrl ? `${appUrl}${filePath}` : null;
   }
   // Supabase storage path (e.g. "kyc/timestamp-file.jpg")
   try {
@@ -851,8 +859,7 @@ async function resolveFileUrl(filePath: string): Promise<string | null> {
     if (signed) return signed;
   } catch {}
   // Fallback: treat as local uploads
-  const domain = process.env.REPLIT_DEV_DOMAIN;
-  return domain ? `https://${domain}/uploads/${filePath}` : null;
+  return appUrl ? `${appUrl}/uploads/${filePath}` : null;
 }
 
 export async function registerRoutes(
