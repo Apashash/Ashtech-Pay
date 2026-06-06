@@ -216,8 +216,8 @@ export function AdminLayout({ children }: AdminLayoutProps) {
 
   const setupTotpMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/admin/totp/setup", {}) as unknown as { uri: string; secret: string };
-      return res;
+      const res = await apiRequest("POST", "/api/admin/totp/setup", {});
+      return await res.json() as { uri: string; secret: string };
     },
     onSuccess: (data) => {
       setTotpSetupUri(data.uri);
