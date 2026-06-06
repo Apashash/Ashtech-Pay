@@ -8,6 +8,35 @@
 Options -Indexes
 RewriteEngine On
 
+# ── Bloquer les scanners de bots / WordPress / exploits connus ───────────────
+RewriteRule ^wp-admin(/.*)?$ - [R=404,L]
+RewriteRule ^wp-login\.php$ - [R=404,L]
+RewriteRule ^wp-config\.php$ - [R=404,L]
+RewriteRule ^xmlrpc\.php$ - [R=404,L]
+RewriteRule ^phpmyadmin(/.*)?$ - [R=404,L]
+RewriteRule ^pma(/.*)?$ - [R=404,L]
+RewriteRule ^admin\.php$ - [R=404,L]
+RewriteRule ^administrator(/.*)?$ - [R=404,L]
+RewriteRule ^shell\.php$ - [R=404,L]
+RewriteRule ^c99\.php$ - [R=404,L]
+RewriteRule ^r57\.php$ - [R=404,L]
+RewriteRule ^cmd\.php$ - [R=404,L]
+RewriteRule ^eval\.php$ - [R=404,L]
+RewriteRule ^webshell\.php$ - [R=404,L]
+RewriteRule ^setup\.php$ - [R=404,L]
+RewriteRule ^install\.php$ - [R=404,L]
+RewriteRule ^config\.php$ - [R=404,L]
+RewriteRule ^database\.php$ - [R=404,L]
+RewriteRule ^backup\.(zip|sql|tar\.gz)$ - [R=404,L]
+RewriteRule ^dump\.sql$ - [R=404,L]
+RewriteRule ^db\.sql$ - [R=404,L]
+RewriteRule ^cgi-bin(/.*)?$ - [R=404,L]
+RewriteRule ^vendor/phpunit(/.*)?$ - [R=404,L]
+RewriteRule ^telescope(/.*)?$ - [R=404,L]
+RewriteRule ^horizon(/.*)?$ - [R=404,L]
+RewriteRule ^actuator(/.*)?$ - [R=404,L]
+RewriteRule ^\.htpasswd$ - [R=404,L]
+
 # ── Bloquer les dossiers source serveur ──────────────────────────────────────
 RewriteRule ^server/ - [F,L]
 RewriteRule ^shared/ - [F,L]
