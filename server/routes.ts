@@ -6722,29 +6722,33 @@ export async function registerRoutes(
           amount: Math.abs(delta).toFixed(2),
           currency: effectiveCurrency,
           status: "completed",
-          description: `[Admin] ${reason.trim()} (${type === "set" ? "Solde défini" : "Ajustement"}: ${balanceBefore.toFixed(2)} → ${Math.max(0, balanceAfter).toFixed(2)} ${effectiveCurrency})`,
+          description: `[Admin] ${(reason || "").trim()} (${type === "set" ? "Solde défini" : "Ajustement"}: ${balanceBefore.toFixed(2)} → ${Math.max(0, balanceAfter).toFixed(2)} ${effectiveCurrency})`,
           reference: `ADMIN-${Date.now()}`,
           confirmedAt: new Date(),
         });
 
         // ── Admin log with before/after
         const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
-        await storage.createAdminLog({
-          adminId: req.userId!,
-          action: "balance_update",
-          targetType: "user",
-          targetId: userId,
-          details: JSON.stringify({
-            currency: effectiveCurrency,
-            type,
-            before: balanceBefore,
-            after: Math.max(0, balanceAfter),
-            delta: parseFloat(delta.toFixed(2)),
-            reason: reason.trim(),
-            ip,
-          }),
-          ipAddress: ip,
-        });
+        try {
+          await storage.createAdminLog({
+            adminId: req.userId!,
+            action: "balance_update",
+            targetType: "user",
+            targetId: userId,
+            details: JSON.stringify({
+              currency: effectiveCurrency,
+              type,
+              before: balanceBefore,
+              after: Math.max(0, balanceAfter),
+              delta: parseFloat(delta.toFixed(2)),
+              reason: (reason || "").trim(),
+              ip,
+            }),
+            ipAddress: ip,
+          });
+        } catch (logErr: any) {
+          console.error("[BalanceUpdate] Admin log failed (non-fatal):", logErr?.message);
+        }
 
         return res.json({ success: true, user: safeUser });
       } else {
@@ -6764,28 +6768,32 @@ export async function registerRoutes(
           amount: Math.abs(delta).toFixed(2),
           currency: effectiveCurrency,
           status: "completed",
-          description: `[Admin] ${reason.trim()} (${type === "set" ? "Solde défini" : "Ajustement"}: ${balanceBefore.toFixed(2)} → ${Math.max(0, balanceAfter).toFixed(2)} ${effectiveCurrency})`,
+          description: `[Admin] ${(reason || "").trim()} (${type === "set" ? "Solde défini" : "Ajustement"}: ${balanceBefore.toFixed(2)} → ${Math.max(0, balanceAfter).toFixed(2)} ${effectiveCurrency})`,
           reference: `ADMIN-${Date.now()}`,
           confirmedAt: new Date(),
         });
 
         const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
-        await storage.createAdminLog({
-          adminId: req.userId!,
-          action: "balance_update",
-          targetType: "wallet",
-          targetId: userId,
-          details: JSON.stringify({
-            currency: effectiveCurrency,
-            type,
-            before: balanceBefore,
-            after: Math.max(0, balanceAfter),
-            delta: parseFloat(delta.toFixed(2)),
-            reason: reason.trim(),
-            ip,
-          }),
-          ipAddress: ip,
-        });
+        try {
+          await storage.createAdminLog({
+            adminId: req.userId!,
+            action: "balance_update",
+            targetType: "wallet",
+            targetId: userId,
+            details: JSON.stringify({
+              currency: effectiveCurrency,
+              type,
+              before: balanceBefore,
+              after: Math.max(0, balanceAfter),
+              delta: parseFloat(delta.toFixed(2)),
+              reason: (reason || "").trim(),
+              ip,
+            }),
+            ipAddress: ip,
+          });
+        } catch (logErr: any) {
+          console.error("[BalanceUpdate] Admin log failed (non-fatal):", logErr?.message);
+        }
 
         return res.json({ success: true, wallet });
       }
