@@ -94,8 +94,16 @@ async function startListenClient(): Promise<void> {
         if (table === "users" && op === "UPDATE" && changedCols.length > 0) {
           const heartbeatCols = new Set([
             "last_seen_at", "last_login_at", "reset_token", "reset_token_expiry",
+            // Startup migration: re-encryption of api_key field
+            "api_key", "api_key_hash",
           ]);
           if (changedCols.every((c) => heartbeatCols.has(c))) return;
+        }
+
+        // Suppress startup migration updates on hosted_page_configs (field re-encryption)
+        if (table === "hosted_page_configs" && op === "UPDATE" && changedCols.length > 0) {
+          const migrationCols = new Set(["sk_live", "pk_live", "hp_live", "hp_live_hash"]);
+          if (changedCols.every((c) => migrationCols.has(c))) return;
         }
 
         const colsLine =
