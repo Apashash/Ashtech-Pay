@@ -117,7 +117,7 @@ export default function AdminKYC() {
   const { data: submissions, isLoading } = useQuery<KycSubmission[]>({
     queryKey: ["/api/admin/kyc", statusFilter],
     queryFn: async () => {
-      const response = await fetch(`/api/admin/kyc${statusFilter ? `?status=${statusFilter}` : ""}`, {
+      const response = await fetch(`/api/admin/kyc${statusFilter && statusFilter !== "all" ? `?status=${statusFilter}` : ""}`, {
         credentials: "include",
         headers: getAuthHeaders(),
       });
