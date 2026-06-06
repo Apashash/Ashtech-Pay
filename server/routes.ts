@@ -1270,6 +1270,37 @@ export async function registerRoutes(
   });
 
   // ─── Geo Check Endpoint ──────────────────────────────────────────────────────
+  // GET /api/img — public image redirect to Supabase CDN (no auth required).
+  // Since the Supabase "uploads" bucket is PUBLIC, we redirect directly to the CDN URL.
+  // Path validation (allowlist) is still enforced to prevent SSRF.
+  app.get("/api/img", async (req, res) => {
+    const storagePath = req.query.path as string;
+    if (!storagePath) return res.status(400).send("Path required");
+
+    const ALLOWED_FOLDERS = ["payment-links", "kyc"];
+    const isValid =
+      !storagePath.startsWith("http") &&
+      !storagePath.startsWith("/") &&
+      !storagePath.includes("..") &&
+      !storagePath.includes("?") &&
+      !storagePath.includes("\0") &&
+      ALLOWED_FOLDERS.some(f => storagePath.startsWith(f + "/"));
+
+    if (!isValid) return res.status(400).send("Invalid path");
+
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const bucket = process.env.SUPABASE_STORAGE_BUCKET || "uploads";
+
+    if (!supabaseUrl) {
+      // No Supabase configured — try local fallback
+      return res.status(404).send("Storage not configured");
+    }
+
+    const publicUrl = `${supabaseUrl}/storage/v1/object/public/${bucket}/${storagePath}`;
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    return res.redirect(302, publicUrl);
+  });
+
   app.get("/api/public/geo", async (req, res) => {
     try {
       const ip = getClientIp(req);

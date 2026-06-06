@@ -4,5 +4,6 @@ export function getImageSrc(pathOrUrl: string | null | undefined): string {
   if (pathOrUrl.startsWith("/uploads/")) return pathOrUrl;
 
   // For Supabase storage paths (e.g. "payment-links/xxx.jpg", "kyc/xxx.jpg")
-  return `/api/image-proxy?path=${encodeURIComponent(pathOrUrl)}`;
+  // Use /api/img (no auth required) — redirects to Supabase public CDN URL.
+  return `/api/img?path=${encodeURIComponent(pathOrUrl)}`;
 }
