@@ -1083,13 +1083,14 @@ export class DatabaseStorage implements IStorage {
       return t.status === "completed";
     });
 
-    type Bucket = { date: string; deposit: number; withdrawal: number; payment_link: number; transfer: number; depositVol: number; withdrawalVol: number; paymentLinkVol: number; transferVol: number };
-    const empty = (): Bucket => ({ date: "", deposit: 0, withdrawal: 0, payment_link: 0, transfer: 0, depositVol: 0, withdrawalVol: 0, paymentLinkVol: 0, transferVol: 0 });
+    type Bucket = { date: string; deposit: number; withdrawal: number; payment_link: number; transfer: number; api_deposit: number; depositVol: number; withdrawalVol: number; paymentLinkVol: number; transferVol: number; apiDepositVol: number };
+    const empty = (): Bucket => ({ date: "", deposit: 0, withdrawal: 0, payment_link: 0, transfer: 0, api_deposit: 0, depositVol: 0, withdrawalVol: 0, paymentLinkVol: 0, transferVol: 0, apiDepositVol: 0 });
     const buckets: Record<string, Bucket> = {};
 
     const addTx = (b: Bucket, tx: typeof filtered[0]) => {
       const vol = toXAF(parseFloat(tx.amount || "0"), tx.currency || "XAF");
-      if (tx.type === "deposit") { b.deposit += 1; b.depositVol += vol; }
+      if (tx.type === "deposit" && tx.source === "api") { b.api_deposit += 1; b.apiDepositVol += vol; }
+      else if (tx.type === "deposit") { b.deposit += 1; b.depositVol += vol; }
       else if (tx.type === "withdrawal") { b.withdrawal += 1; b.withdrawalVol += vol; }
       else if (tx.type === "payment_link") { b.payment_link += 1; b.paymentLinkVol += vol; }
       else if (tx.type === "transfer_out") { b.transfer += 1; b.transferVol += vol; }
