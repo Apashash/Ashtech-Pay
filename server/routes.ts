@@ -1445,21 +1445,20 @@ export async function registerRoutes(
 
       // Generate auth token for token-based auth (works in iframes where cookies fail)
       const authToken = storeAuthToken(user.id);
-      
-      req.session.userId = user.id;
-      req.session.clientIp = ip;
-      req.session.userAgent = req.headers["user-agent"] || "";
-      req.session.loginAt = new Date().toISOString();
-      req.session.tokenIssuedAt = extractTokenTimestamp(authToken);
 
-      // Explicitly save session before responding
-      req.session.save((err) => {
-        if (err) {
-          console.error("Session save error:", err);
-          // Even if session fails, we have the token
-        }
-        const { password: _, ...safeUser } = user;
-        res.json({ user: safeUser, token: authToken });
+      req.session.regenerate((regenErr) => {
+        if (regenErr) console.error("Session regenerate error (register):", regenErr);
+        req.session.userId = user.id;
+        req.session.clientIp = ip;
+        req.session.userAgent = req.headers["user-agent"] || "";
+        req.session.loginAt = new Date().toISOString();
+        req.session.tokenIssuedAt = extractTokenTimestamp(authToken);
+        delete req.session._avs;
+        req.session.save((err) => {
+          if (err) console.error("Session save error (register):", err);
+          const { password: _, ...safeUser } = user;
+          res.json({ user: safeUser, token: authToken });
+        });
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -1570,21 +1569,27 @@ export async function registerRoutes(
 
       // Generate auth token for token-based auth (works in iframes where cookies fail)
       const authToken = storeAuthToken(user.id);
-      
-      req.session.userId = user.id;
-      req.session.clientIp = ip;
-      req.session.userAgent = req.headers["user-agent"] || "";
-      req.session.loginAt = new Date().toISOString();
-      req.session.tokenIssuedAt = extractTokenTimestamp(authToken);
 
-      // Explicitly save session before responding
-      req.session.save((err) => {
-        if (err) {
-          console.error("Session save error:", err);
-          // Even if session fails, we have the token
-        }
-        const { password: _, ...safeUser } = user;
-        res.json({ user: safeUser, token: authToken });
+      // Regenerate session on every login — prevents session fixation AND ensures _avs
+      // from a previous admin OTP verification never carries over into the new session,
+      // even if the previous logout/destroy failed silently (e.g. DB timeout).
+      req.session.regenerate((regenErr) => {
+        if (regenErr) console.error("Session regenerate error (login):", regenErr);
+        req.session.userId = user.id;
+        req.session.clientIp = ip;
+        req.session.userAgent = req.headers["user-agent"] || "";
+        req.session.loginAt = new Date().toISOString();
+        req.session.tokenIssuedAt = extractTokenTimestamp(authToken);
+        // Belt-and-suspenders: explicitly clear any stale OTP verification state
+        delete req.session._avs;
+        delete (req.session as any)._otpCode;
+        delete (req.session as any)._otpExpiry;
+
+        req.session.save((err) => {
+          if (err) console.error("Session save error (login):", err);
+          const { password: _, ...safeUser } = user;
+          res.json({ user: safeUser, token: authToken });
+        });
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
