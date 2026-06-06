@@ -197,6 +197,7 @@ export default function AdminUserDetail() {
   const [convFrom, setConvFrom] = useState("");
   const [convTo, setConvTo] = useState("");
   const [convAmount, setConvAmount] = useState("");
+  const [convProvider, setConvProvider] = useState<"swychr" | "pixpay" | "afribapay">("swychr");
 
   const authHeaders = localStorage.getItem("ashtech_auth_token")
     ? { Authorization: `Bearer ${localStorage.getItem("ashtech_auth_token")}` }
@@ -253,7 +254,12 @@ export default function AdminUserDetail() {
     ...(wallets || []).filter((w: any) => w.currency !== user.preferredCurrency).map((w: any) => ({ currency: w.currency, balance: w.balance, isPrimary: false })),
   ] : [];
 
-  const convFeePercent = depositConfig?.conversionFeePercentSwychr ?? depositConfig?.conversionFeePercent ?? 6;
+  const convFeeByProvider = {
+    swychr: depositConfig?.conversionFeePercentSwychr ?? depositConfig?.conversionFeePercent ?? 6,
+    pixpay: (depositConfig as any)?.conversionFeePercentPixpay ?? depositConfig?.conversionFeePercent ?? 6,
+    afribapay: (depositConfig as any)?.conversionFeePercentAfribapay ?? depositConfig?.conversionFeePercent ?? 6,
+  };
+  const convFeePercent = convFeeByProvider[convProvider] ?? 6;
 
   const getWalletBalance = (currency: string) => {
     if (!user) return "0.00";
@@ -363,7 +369,7 @@ export default function AdminUserDetail() {
 
   const convertMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", `/api/admin/users/${id}/convert`, { fromCurrency: convFrom, toCurrency: convTo, amount: convAmount });
+      const res = await apiRequest("POST", `/api/admin/users/${id}/convert`, { fromCurrency: convFrom, toCurrency: convTo, amount: convAmount, provider: convProvider });
       const json = await res.json();
       if (!res.ok) throw new Error(json.message || "Erreur");
       return json;
@@ -957,6 +963,19 @@ export default function AdminUserDetail() {
               </div>
             </TabsContent>
             <TabsContent value="convertir" className="space-y-4 mt-4">
+              <div className="space-y-1">
+                <Label>Fournisseur</Label>
+                <Select value={convProvider} onValueChange={(v) => setConvProvider(v as any)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="swychr">Swychr — {convFeeByProvider.swychr}%</SelectItem>
+                    <SelectItem value="pixpay">Pixpay — {convFeeByProvider.pixpay}%</SelectItem>
+                    <SelectItem value="afribapay">Afribapay — {convFeeByProvider.afribapay}%</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="rounded-lg border bg-primary/5 p-3 text-sm text-muted-foreground">
                 Frais de conversion : <span className="font-semibold text-primary">{convFeePercent}%</span>
               </div>

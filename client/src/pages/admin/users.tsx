@@ -102,6 +102,7 @@ export default function AdminUsers() {
   const [convFrom, setConvFrom] = useState("");
   const [convTo, setConvTo] = useState("");
   const [convAmount, setConvAmount] = useState("");
+  const [convProvider, setConvProvider] = useState<"swychr" | "pixpay" | "afribapay">("swychr");
   const [blockWithdrawalModal, setBlockWithdrawalModal] = useState<User | null>(null);
   const [blockWithdrawalReason, setBlockWithdrawalReason] = useState("");
   const [filter, setFilter] = useState("all");
@@ -183,7 +184,12 @@ export default function AdminUsers() {
       .map((w: any) => ({ currency: w.currency, balance: w.balance, isPrimary: false })),
   ] : [];
 
-  const convFeePercent = depositConfig?.conversionFeePercentSwychr ?? depositConfig?.conversionFeePercent ?? 6;
+  const convFeeByProvider = {
+    swychr: depositConfig?.conversionFeePercentSwychr ?? depositConfig?.conversionFeePercent ?? 6,
+    pixpay: (depositConfig as any)?.conversionFeePercentPixpay ?? depositConfig?.conversionFeePercent ?? 6,
+    afribapay: (depositConfig as any)?.conversionFeePercentAfribapay ?? depositConfig?.conversionFeePercent ?? 6,
+  };
+  const convFeePercent = convFeeByProvider[convProvider] ?? 6;
 
   const convPreview = (() => {
     if (!convFrom || !convTo || !convAmount || convFrom === convTo) return null;
@@ -1125,6 +1131,19 @@ export default function AdminUsers() {
               </TabsContent>
 
               <TabsContent value="convertir" className="space-y-4 mt-4">
+                <div className="space-y-1">
+                  <Label>Fournisseur</Label>
+                  <Select value={convProvider} onValueChange={(v) => setConvProvider(v as any)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="swychr">Swychr — {convFeeByProvider.swychr}%</SelectItem>
+                      <SelectItem value="pixpay">Pixpay — {convFeeByProvider.pixpay}%</SelectItem>
+                      <SelectItem value="afribapay">Afribapay — {convFeeByProvider.afribapay}%</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div className="rounded-lg border bg-primary/5 p-3 text-sm text-muted-foreground">
                   Frais de conversion appliqués : <span className="font-semibold text-primary">{convFeePercent}%</span>
                   <span className="text-xs ml-1">(configurés dans les paramètres admin)</span>
@@ -1205,6 +1224,7 @@ export default function AdminUsers() {
                     fromCurrency: convFrom,
                     toCurrency: convTo,
                     amount: convAmount,
+                    provider: convProvider,
                   })}
                   disabled={adminConvertMutation.isPending || !convFrom || !convTo || !convAmount || convFrom === convTo || (convPreview ? !convPreview.sufficient : false)}
                 >

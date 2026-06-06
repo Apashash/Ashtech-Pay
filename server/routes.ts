@@ -3967,11 +3967,12 @@ export async function registerRoutes(
         return res.status(400).json({ message: `Solde insuffisant en ${fromCurrency} (disponible: ${sourceBalance.toFixed(2)})` });
       }
 
-      // Frais fournisseur + marge Ashtech (même logique que le flux utilisateur)
-      // Pour les conversions admin on utilise "swychr" comme fournisseur par défaut
+      // Frais fournisseur + marge Ashtech — admin peut choisir le provider
+      const ALLOWED_PROVIDERS = ["swychr", "pixpay", "afribapay"];
+      const adminProvider = ALLOWED_PROVIDERS.includes(req.body.provider) ? req.body.provider : "swychr";
       const [adminProviderFeeSetting, adminAshtechFeeSetting] = await Promise.all([
-        storage.getSetting("conversion_provider_fee_swychr"),
-        storage.getSetting("conversion_ashtech_fee_swychr"),
+        storage.getSetting(`conversion_provider_fee_${adminProvider}`),
+        storage.getSetting(`conversion_ashtech_fee_${adminProvider}`),
       ]);
       const adminProviderFeePercent = adminProviderFeeSetting ? parseFloat(adminProviderFeeSetting.value) : 4;
       const adminAshtechFeePercent = adminAshtechFeeSetting ? parseFloat(adminAshtechFeeSetting.value) : 2;
