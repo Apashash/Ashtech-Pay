@@ -188,6 +188,7 @@ declare module "express-session" {
     _avs?: number;
     _otpCode?: string;
     _otpExpiry?: number;
+    _totpPendingSecret?: string;
     clientIp?: string;
     userAgent?: string;
     loginAt?: string;
@@ -5814,7 +5815,7 @@ export async function registerRoutes(
     }
     // OTP bypass mode: treat session as already verified
     if (process.env.ADMIN_OTP_BYPASS === "true") {
-      return res.json({ verified: true, bypass: true });
+      return res.json({ verified: true, bypass: true, totpEnabled: !!user.totpEnabled });
     }
     const now = Date.now();
     // Keyed by userId — works even when session cookies are broken
@@ -5849,7 +5850,7 @@ export async function registerRoutes(
       }
     }
 
-    res.json({ verified });
+    res.json({ verified, totpEnabled: !!user.totpEnabled });
   });
 
   // GET /api/admin/debug-storage — tests Supabase Storage connection (admin only)
@@ -6181,6 +6182,211 @@ export async function registerRoutes(
       res.json({ success: true });
     } catch (error: any) {
       console.error("Admin OTP verify error:", error.message);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // ─── Admin TOTP (Google Authenticator) Routes ────────────────────────────────
+
+  // GET /api/admin/totp/status — check if TOTP is configured for this admin
+  app.get("/api/admin/totp/status", requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.userId!);
+      if (!user || !["admin", "support", "finance"].includes(user.role)) {
+        return res.status(403).json({ message: "Accès refusé" });
+      }
+      res.json({ enabled: !!user.totpEnabled });
+    } catch (err: any) {
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // POST /api/admin/totp/setup — generate a TOTP secret & return OTP URI for QR
+  // Does NOT enable TOTP yet — admin must confirm with a valid code first.
+  app.post("/api/admin/totp/setup", requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.userId!);
+      if (!user || !["admin", "support", "finance"].includes(user.role)) {
+        return res.status(403).json({ message: "Accès refusé" });
+      }
+      const { TOTP, Secret } = await import("otpauth");
+      const secret = new Secret({ size: 20 });
+      const totp = new TOTP({
+        issuer: "AshTech Pay Admin",
+        label: user.email || user.username,
+        algorithm: "SHA1",
+        digits: 6,
+        period: 30,
+        secret,
+      });
+      const uri = totp.toString();
+      // Store pending secret (not enabled yet) temporarily in session
+      req.session._totpPendingSecret = secret.base32;
+      await new Promise<void>((resolve) => req.session.save(() => resolve()));
+      res.json({ uri, secret: secret.base32 });
+    } catch (err: any) {
+      console.error("[AdminTOTP] Setup error:", err?.message);
+      res.status(500).json({ message: "Erreur lors de la génération du secret TOTP" });
+    }
+  });
+
+  // POST /api/admin/totp/confirm — verify first code and permanently enable TOTP
+  app.post("/api/admin/totp/confirm", requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.userId!);
+      if (!user || !["admin", "support", "finance"].includes(user.role)) {
+        return res.status(403).json({ message: "Accès refusé" });
+      }
+      const { code } = req.body as { code: string };
+      if (!code || typeof code !== "string" || !/^\d{6}$/.test(code.trim())) {
+        return res.status(400).json({ message: "Code à 6 chiffres requis" });
+      }
+      const pendingSecret = req.session._totpPendingSecret;
+      if (!pendingSecret) {
+        return res.status(400).json({ message: "Aucune configuration en cours. Recommencez la configuration." });
+      }
+      const { TOTP, Secret } = await import("otpauth");
+      const totp = new TOTP({
+        issuer: "AshTech Pay Admin",
+        label: user.email || user.username,
+        algorithm: "SHA1",
+        digits: 6,
+        period: 30,
+        secret: Secret.fromBase32(pendingSecret),
+      });
+      const delta = totp.validate({ token: code.trim(), window: 1 });
+      if (delta === null) {
+        return res.status(400).json({ message: "Code incorrect. Vérifiez l'heure de votre appareil et réessayez." });
+      }
+      // Encrypt and save secret to DB, enable TOTP
+      const { encryptField } = await import("./fieldEncryption");
+      const encryptedSecret = encryptField(pendingSecret);
+      await storage.updateUser(req.userId!, { totpSecret: encryptedSecret, totpEnabled: true });
+      delete req.session._totpPendingSecret;
+      await new Promise<void>((resolve) => req.session.save(() => resolve()));
+      storage.createAdminLog({
+        adminId: req.userId!,
+        action: "totp_enabled",
+        targetType: "user",
+        targetId: req.userId!,
+        details: "TOTP (Google Authenticator) activé",
+        ipAddress: req.ip || null,
+      }).catch(() => {});
+      console.log(`[AdminTOTP] TOTP activé pour ${user.email}`);
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error("[AdminTOTP] Confirm error:", err?.message);
+      res.status(500).json({ message: "Erreur lors de l'activation du TOTP" });
+    }
+  });
+
+  // POST /api/admin/totp/verify — verify TOTP code during login (sets admin session)
+  app.post("/api/admin/totp/verify", requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.userId!);
+      if (!user || !["admin", "support", "finance"].includes(user.role)) {
+        return res.status(403).json({ message: "Accès refusé" });
+      }
+      if (!user.totpEnabled || !user.totpSecret) {
+        return res.status(400).json({ message: "TOTP non configuré pour ce compte" });
+      }
+      const rateCheck = checkOtpRateLimit(req.userId!);
+      if (!rateCheck.allowed) {
+        return res.status(429).json({
+          message: `Trop de tentatives. Réessayez dans ${Math.ceil((rateCheck.retryAfter ?? 900) / 60)} minute(s).`,
+          retryAfter: rateCheck.retryAfter,
+        });
+      }
+      const { code } = req.body as { code: string };
+      if (!code || typeof code !== "string" || !/^\d{6}$/.test(code.trim())) {
+        return res.status(400).json({ message: "Code à 6 chiffres requis" });
+      }
+      const { TOTP, Secret } = await import("otpauth");
+      const { decryptField } = await import("./fieldEncryption");
+      const plainSecret = decryptField(user.totpSecret);
+      if (!plainSecret) {
+        return res.status(500).json({ message: "Erreur de configuration TOTP. Contactez le support." });
+      }
+      const totp = new TOTP({
+        issuer: "AshTech Pay Admin",
+        label: user.email || user.username,
+        algorithm: "SHA1",
+        digits: 6,
+        period: 30,
+        secret: Secret.fromBase32(plainSecret),
+      });
+      const delta = totp.validate({ token: code.trim(), window: 1 });
+      if (delta === null) {
+        recordOtpFailure(req.userId!);
+        const remaining = OTP_MAX_ATTEMPTS - (otpAttempts.get(req.userId!)?.count ?? OTP_MAX_ATTEMPTS);
+        return res.status(400).json({
+          message: remaining > 0
+            ? `Code incorrect. ${remaining} tentative(s) restante(s).`
+            : "Code incorrect. Compte temporairement verrouillé.",
+        });
+      }
+      clearOtpFailures(req.userId!);
+      const expiresAt = Date.now() + ADMIN_OTP_SESSION_TTL_MS;
+      adminVerifiedSessions.set(String(req.userId!), { userId: req.userId!, expiresAt });
+      req.session._avs = expiresAt;
+      await new Promise<void>((resolve) => req.session.save((err) => {
+        if (err) console.error("[AdminTOTP] Session save warning:", err?.message);
+        resolve();
+      }));
+      const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
+      storage.createAdminLog({
+        adminId: req.userId!,
+        action: "totp_verified",
+        targetType: "user",
+        targetId: req.userId!,
+        details: `Authentification TOTP réussie depuis IP ${ip}`,
+        ipAddress: req.ip || null,
+      }).catch(() => {});
+      notifyAdminLoginSuccess({ adminName: user.fullName || user.username, adminEmail: user.email || "", ip }).catch(() => {});
+      console.log(`[AdminTOTP] Admin ${user.email?.replace(/(.{2}).+(@.+)/, "$1***$2")} vérifié (TOTP) depuis ${ip}`);
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error("[AdminTOTP] Verify error:", err?.message);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // POST /api/admin/totp/disable — disable TOTP (requires current valid TOTP code)
+  app.post("/api/admin/totp/disable", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.userId!);
+      if (!user || !user.totpEnabled || !user.totpSecret) {
+        return res.status(400).json({ message: "TOTP non activé" });
+      }
+      const { code } = req.body as { code: string };
+      if (!code || !/^\d{6}$/.test(code.trim())) {
+        return res.status(400).json({ message: "Code TOTP requis pour désactiver" });
+      }
+      const { TOTP, Secret } = await import("otpauth");
+      const { decryptField } = await import("./fieldEncryption");
+      const plainSecret = decryptField(user.totpSecret);
+      if (!plainSecret) return res.status(500).json({ message: "Erreur de configuration TOTP" });
+      const totp = new TOTP({
+        issuer: "AshTech Pay Admin",
+        label: user.email || user.username,
+        algorithm: "SHA1", digits: 6, period: 30,
+        secret: Secret.fromBase32(plainSecret),
+      });
+      if (totp.validate({ token: code.trim(), window: 1 }) === null) {
+        return res.status(400).json({ message: "Code TOTP incorrect" });
+      }
+      await storage.updateUser(req.userId!, { totpSecret: null, totpEnabled: false });
+      storage.createAdminLog({
+        adminId: req.userId!,
+        action: "totp_disabled",
+        targetType: "user",
+        targetId: req.userId!,
+        details: "TOTP désactivé",
+        ipAddress: req.ip || null,
+      }).catch(() => {});
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error("[AdminTOTP] Disable error:", err?.message);
       res.status(500).json({ message: "Erreur serveur" });
     }
   });

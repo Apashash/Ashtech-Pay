@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { QRCodeSVG } from "qrcode.react";
 import { 
   LayoutDashboard, 
   Users, 
@@ -33,6 +34,11 @@ import {
   Loader2,
   MailCheck,
   ShieldBan,
+  Smartphone,
+  ScanLine,
+  ShieldCheck,
+  Copy,
+  CheckCircle2,
 } from "lucide-react";
 import { 
   Dialog, 
@@ -162,11 +168,126 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   const otpRef5 = useRef<HTMLInputElement>(null);
   const otpRefs = [otpRef0, otpRef1, otpRef2, otpRef3, otpRef4, otpRef5];
 
-  const { data: otpStatus, isLoading: otpLoading, refetch: refetchOtp } = useQuery<{ verified: boolean }>({
+  const { data: otpStatus, isLoading: otpLoading, refetch: refetchOtp } = useQuery<{ verified: boolean; totpEnabled?: boolean }>({
     queryKey: ["/api/admin/otp-status"],
     enabled: !!user && ["admin", "support", "finance"].includes((user as any).role),
     retry: false,
   });
+
+  // ─── TOTP verification (Google Authenticator) ────────────────────────────────
+  const [totpCode, setTotpCode] = useState(["", "", "", "", "", ""]);
+  const [totpError, setTotpError] = useState("");
+  const totpRef0 = useRef<HTMLInputElement>(null);
+  const totpRef1 = useRef<HTMLInputElement>(null);
+  const totpRef2 = useRef<HTMLInputElement>(null);
+  const totpRef3 = useRef<HTMLInputElement>(null);
+  const totpRef4 = useRef<HTMLInputElement>(null);
+  const totpRef5 = useRef<HTMLInputElement>(null);
+  const totpRefs = [totpRef0, totpRef1, totpRef2, totpRef3, totpRef4, totpRef5];
+
+  // ─── TOTP setup modal ────────────────────────────────────────────────────────
+  const [showTotpSetup, setShowTotpSetup] = useState(false);
+  const [totpSetupUri, setTotpSetupUri] = useState("");
+  const [totpSetupSecret, setTotpSetupSecret] = useState("");
+  const [totpSetupConfirmCode, setTotpSetupConfirmCode] = useState("");
+  const [totpSetupError, setTotpSetupError] = useState("");
+  const [totpSetupStep, setTotpSetupStep] = useState<"qr" | "done">("qr");
+  const [totpSecretCopied, setTotpSecretCopied] = useState(false);
+  const [showTotpDisable, setShowTotpDisable] = useState(false);
+  const [totpDisableCode, setTotpDisableCode] = useState("");
+  const [totpDisableError, setTotpDisableError] = useState("");
+
+  const verifyTotpMutation = useMutation({
+    mutationFn: async (code: string) => {
+      await apiRequest("POST", "/api/admin/totp/verify", { code });
+    },
+    onSuccess: () => {
+      setTotpError("");
+      setTotpCode(["", "", "", "", "", ""]);
+      otpVerifiedAtRef.current = Date.now();
+      queryClient.setQueryData(["/api/admin/otp-status"], { verified: true, totpEnabled: true });
+    },
+    onError: (error: Error) => {
+      setTotpError(error.message || "Code incorrect");
+      setTotpCode(["", "", "", "", "", ""]);
+      setTimeout(() => totpRefs[0].current?.focus(), 100);
+    },
+  });
+
+  const setupTotpMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/totp/setup", {}) as unknown as { uri: string; secret: string };
+      return res;
+    },
+    onSuccess: (data) => {
+      setTotpSetupUri(data.uri);
+      setTotpSetupSecret(data.secret);
+      setTotpSetupStep("qr");
+      setTotpSetupError("");
+      setTotpSetupConfirmCode("");
+    },
+    onError: (err: Error) => {
+      setTotpSetupError(err.message || "Erreur lors de la génération");
+    },
+  });
+
+  const confirmTotpMutation = useMutation({
+    mutationFn: async (code: string) => {
+      await apiRequest("POST", "/api/admin/totp/confirm", { code });
+    },
+    onSuccess: () => {
+      setTotpSetupStep("done");
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/otp-status"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/totp/status"] });
+    },
+    onError: (err: Error) => {
+      setTotpSetupError(err.message || "Code incorrect");
+    },
+  });
+
+  const disableTotpMutation = useMutation({
+    mutationFn: async (code: string) => {
+      await apiRequest("POST", "/api/admin/totp/disable", { code });
+    },
+    onSuccess: () => {
+      setShowTotpDisable(false);
+      setTotpDisableCode("");
+      setTotpDisableError("");
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/otp-status"] });
+      toast({ title: "TOTP désactivé", description: "L'authentificator a été retiré." });
+    },
+    onError: (err: Error) => {
+      setTotpDisableError(err.message || "Code incorrect");
+    },
+  });
+
+  function handleTotpInput(idx: number, val: string) {
+    const digit = val.replace(/\D/g, "").slice(-1);
+    const newCode = [...totpCode];
+    newCode[idx] = digit;
+    setTotpCode(newCode);
+    setTotpError("");
+    if (digit && idx < 5) totpRefs[idx + 1].current?.focus();
+    if (newCode.every(d => d !== "") && newCode.length === 6) {
+      verifyTotpMutation.mutate(newCode.join(""));
+    }
+  }
+  function handleTotpKeyDown(idx: number, e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Backspace" && !totpCode[idx] && idx > 0) totpRefs[idx - 1].current?.focus();
+  }
+  function handleTotpPaste(e: React.ClipboardEvent<HTMLInputElement>) {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (!pasted) return;
+    const newCode = ["", "", "", "", "", ""];
+    pasted.split("").forEach((d, i) => { newCode[i] = d; });
+    setTotpCode(newCode);
+    setTotpError("");
+    const nextEmpty = pasted.length < 6 ? pasted.length : 5;
+    totpRefs[nextEmpty].current?.focus();
+    if (pasted.length === 6) verifyTotpMutation.mutate(pasted);
+  }
+  // ────────────────────────────────────────────────────────────────────────────
 
   const requestOtpMutation = useMutation({
     mutationFn: async () => {
@@ -203,9 +324,9 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     },
   });
 
-  // Auto-request OTP when admin user is confirmed and not yet verified
+  // Auto-request OTP when admin user is confirmed, not yet verified, and TOTP not enabled
   useEffect(() => {
-    if (user && ["admin", "support", "finance"].includes((user as any).role) && otpStatus && !otpStatus.verified && !otpSent && !requestOtpMutation.isPending) {
+    if (user && ["admin", "support", "finance"].includes((user as any).role) && otpStatus && !otpStatus.verified && !otpSent && !requestOtpMutation.isPending && !otpStatus.totpEnabled) {
       requestOtpMutation.mutate();
     }
   }, [user, otpStatus]);
@@ -370,9 +491,10 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     );
   }
 
-  // ─── OTP Gate ──────────────────────────────────────────────────────────────
+  // ─── OTP / TOTP Gate ────────────────────────────────────────────────────────
   if (otpLoading || (!otpStatus?.verified)) {
-    const isBusy = otpLoading || requestOtpMutation.isPending || verifyOtpMutation.isPending;
+    const usesTotp = !!(otpStatus?.totpEnabled);
+    const isBusy = otpLoading || requestOtpMutation.isPending || verifyOtpMutation.isPending || verifyTotpMutation.isPending;
 
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-background via-background to-muted/30 p-4">
@@ -387,19 +509,22 @@ export function AdminLayout({ children }: AdminLayoutProps) {
 
         {/* Card */}
         <div className="w-full max-w-md bg-card border border-border/60 rounded-3xl shadow-2xl overflow-hidden">
-          {/* Top accent bar */}
           <div className="h-1 w-full bg-gradient-to-r from-primary/60 via-primary to-primary/60" />
 
           <div className="p-8 space-y-7">
             {/* Header */}
             <div className="text-center space-y-3">
               <div className="mx-auto w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center shadow-inner">
-                <KeyRound className="w-8 h-8 text-primary" />
+                {usesTotp ? <Smartphone className="w-8 h-8 text-primary" /> : <KeyRound className="w-8 h-8 text-primary" />}
               </div>
               <div>
                 <h1 className="text-2xl font-bold tracking-tight">Vérification en 2 étapes</h1>
                 <p className="text-sm text-muted-foreground mt-1">
-                  {otpLoading || requestOtpMutation.isPending
+                  {otpLoading
+                    ? "Chargement…"
+                    : usesTotp
+                    ? "Entrez le code de votre application Authenticator"
+                    : requestOtpMutation.isPending
                     ? "Envoi du code de sécurité…"
                     : otpSent
                     ? <span>Code envoyé à <strong className="text-foreground">{otpEmail}</strong></span>
@@ -408,107 +533,147 @@ export function AdminLayout({ children }: AdminLayoutProps) {
               </div>
             </div>
 
-            {/* Loading state */}
-            {(otpLoading || requestOtpMutation.isPending) && (
-              <div className="flex flex-col items-center gap-3 py-6">
-                <div className="relative w-12 h-12">
-                  <div className="absolute inset-0 rounded-full border-4 border-primary/20" />
-                  <div className="absolute inset-0 rounded-full border-4 border-primary border-t-transparent animate-spin" />
-                </div>
-                <p className="text-xs text-muted-foreground">Envoi en cours…</p>
-              </div>
-            )}
-
-            {/* OTP input */}
-            {otpSent && !requestOtpMutation.isPending && (
+            {/* ── TOTP mode ── */}
+            {usesTotp && !otpLoading && (
               <div className="space-y-6">
-                {/* Digits */}
                 <div className="flex justify-center gap-2.5">
-                  {otpRefs.map((ref, i) => (
+                  {totpRefs.map((ref, i) => (
                     <input
                       key={i}
                       ref={ref}
                       type="text"
                       inputMode="numeric"
                       maxLength={1}
-                      value={otpCode[i]}
-                      onChange={e => handleOtpInput(i, e.target.value)}
-                      onKeyDown={e => handleOtpKeyDown(i, e)}
-                      onPaste={i === 0 ? handleOtpPaste : undefined}
-                      disabled={isBusy}
-                      data-testid={`input-otp-${i}`}
+                      value={totpCode[i]}
+                      onChange={e => handleTotpInput(i, e.target.value)}
+                      onKeyDown={e => handleTotpKeyDown(i, e)}
+                      onPaste={i === 0 ? handleTotpPaste : undefined}
+                      disabled={verifyTotpMutation.isPending}
+                      autoFocus={i === 0}
+                      data-testid={`input-totp-${i}`}
                       className={[
                         "w-12 h-14 text-center text-2xl font-bold rounded-xl border-2 bg-background transition-all duration-150",
                         "focus:outline-none focus:scale-105 focus:shadow-md",
-                        otpCode[i]
-                          ? "border-primary text-primary shadow-sm"
-                          : "border-border text-foreground",
-                        isBusy ? "opacity-50 cursor-not-allowed" : "hover:border-primary/50",
+                        totpCode[i] ? "border-primary text-primary shadow-sm" : "border-border text-foreground",
+                        verifyTotpMutation.isPending ? "opacity-50 cursor-not-allowed" : "hover:border-primary/50",
                       ].join(" ")}
                     />
                   ))}
                 </div>
-
-                {/* Separator between 3+3 */}
                 <div className="flex justify-center -mt-3">
                   <div className="flex gap-1 items-center">
-                    {[0,1,2].map(i => (
-                      <div key={i} className={`w-2 h-2 rounded-full transition-all duration-200 ${otpCode[i] ? "bg-primary" : "bg-border"}`} />
-                    ))}
+                    {[0,1,2].map(i => <div key={i} className={`w-2 h-2 rounded-full transition-all duration-200 ${totpCode[i] ? "bg-primary" : "bg-border"}`} />)}
                     <div className="w-4 h-px bg-border mx-1" />
-                    {[3,4,5].map(i => (
-                      <div key={i} className={`w-2 h-2 rounded-full transition-all duration-200 ${otpCode[i] ? "bg-primary" : "bg-border"}`} />
-                    ))}
+                    {[3,4,5].map(i => <div key={i} className={`w-2 h-2 rounded-full transition-all duration-200 ${totpCode[i] ? "bg-primary" : "bg-border"}`} />)}
                   </div>
                 </div>
-
-                {/* Verifying spinner */}
-                {verifyOtpMutation.isPending && (
+                {verifyTotpMutation.isPending && (
                   <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
                     <Loader2 className="w-4 h-4 animate-spin text-primary" />
                     <span>Vérification…</span>
                   </div>
                 )}
-
-                {/* Error */}
-                {otpError && (
+                {totpError && (
                   <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-xl px-4 py-3">
                     <ShieldBan className="w-4 h-4 shrink-0" />
-                    <span>{otpError}</span>
+                    <span>{totpError}</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 border border-border/40 rounded-xl px-4 py-3">
+                  <ScanLine className="w-3.5 h-3.5 shrink-0 text-primary" />
+                  <span>Ouvrez <strong>Google Authenticator</strong> ou <strong>Authy</strong> et entrez le code à 6 chiffres affiché.</span>
+                </div>
+              </div>
+            )}
+
+            {/* ── Email OTP mode ── */}
+            {!usesTotp && (
+              <>
+                {/* Loading state */}
+                {(otpLoading || requestOtpMutation.isPending) && (
+                  <div className="flex flex-col items-center gap-3 py-6">
+                    <div className="relative w-12 h-12">
+                      <div className="absolute inset-0 rounded-full border-4 border-primary/20" />
+                      <div className="absolute inset-0 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+                    </div>
+                    <p className="text-xs text-muted-foreground">Envoi en cours…</p>
                   </div>
                 )}
 
-                {/* Resend */}
-                <div className="text-center">
-                  <button
-                    onClick={() => { setOtpCode(["", "", "", "", "", ""]); setOtpError(""); requestOtpMutation.mutate(); }}
-                    disabled={isBusy}
-                    className="text-sm text-primary hover:text-primary/80 hover:underline underline-offset-2 disabled:opacity-40 transition-colors"
-                  >
-                    Renvoyer un nouveau code
-                  </button>
-                </div>
-              </div>
-            )}
+                {/* OTP input */}
+                {otpSent && !requestOtpMutation.isPending && (
+                  <div className="space-y-6">
+                    <div className="flex justify-center gap-2.5">
+                      {otpRefs.map((ref, i) => (
+                        <input
+                          key={i}
+                          ref={ref}
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={1}
+                          value={otpCode[i]}
+                          onChange={e => handleOtpInput(i, e.target.value)}
+                          onKeyDown={e => handleOtpKeyDown(i, e)}
+                          onPaste={i === 0 ? handleOtpPaste : undefined}
+                          disabled={isBusy}
+                          data-testid={`input-otp-${i}`}
+                          className={[
+                            "w-12 h-14 text-center text-2xl font-bold rounded-xl border-2 bg-background transition-all duration-150",
+                            "focus:outline-none focus:scale-105 focus:shadow-md",
+                            otpCode[i] ? "border-primary text-primary shadow-sm" : "border-border text-foreground",
+                            isBusy ? "opacity-50 cursor-not-allowed" : "hover:border-primary/50",
+                          ].join(" ")}
+                        />
+                      ))}
+                    </div>
+                    <div className="flex justify-center -mt-3">
+                      <div className="flex gap-1 items-center">
+                        {[0,1,2].map(i => <div key={i} className={`w-2 h-2 rounded-full transition-all duration-200 ${otpCode[i] ? "bg-primary" : "bg-border"}`} />)}
+                        <div className="w-4 h-px bg-border mx-1" />
+                        {[3,4,5].map(i => <div key={i} className={`w-2 h-2 rounded-full transition-all duration-200 ${otpCode[i] ? "bg-primary" : "bg-border"}`} />)}
+                      </div>
+                    </div>
+                    {verifyOtpMutation.isPending && (
+                      <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                        <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                        <span>Vérification…</span>
+                      </div>
+                    )}
+                    {otpError && (
+                      <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-xl px-4 py-3">
+                        <ShieldBan className="w-4 h-4 shrink-0" />
+                        <span>{otpError}</span>
+                      </div>
+                    )}
+                    <div className="text-center">
+                      <button
+                        onClick={() => { setOtpCode(["", "", "", "", "", ""]); setOtpError(""); requestOtpMutation.mutate(); }}
+                        disabled={isBusy}
+                        className="text-sm text-primary hover:text-primary/80 hover:underline underline-offset-2 disabled:opacity-40 transition-colors"
+                      >
+                        Renvoyer un nouveau code
+                      </button>
+                    </div>
+                  </div>
+                )}
 
-            {/* Error sending */}
-            {!otpSent && !requestOtpMutation.isPending && otpError && (
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-xl px-4 py-3">
-                  <ShieldBan className="w-4 h-4 shrink-0" />
-                  <span>{otpError}</span>
-                </div>
-                <Button onClick={() => requestOtpMutation.mutate()} className="w-full">
-                  Réessayer
-                </Button>
-              </div>
-            )}
+                {/* Error sending */}
+                {!otpSent && !requestOtpMutation.isPending && otpError && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-xl px-4 py-3">
+                      <ShieldBan className="w-4 h-4 shrink-0" />
+                      <span>{otpError}</span>
+                    </div>
+                    <Button onClick={() => requestOtpMutation.mutate()} className="w-full">Réessayer</Button>
+                  </div>
+                )}
 
-            {/* Footer hint */}
-            <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 border border-border/40 rounded-xl px-4 py-3">
-              <Clock className="w-3.5 h-3.5 shrink-0 text-primary" />
-              <span>Le code à <strong>6 chiffres</strong> expire dans <strong>5 minutes</strong>. Vous pouvez coller directement depuis Telegram.</span>
-            </div>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 border border-border/40 rounded-xl px-4 py-3">
+                  <Clock className="w-3.5 h-3.5 shrink-0 text-primary" />
+                  <span>Le code à <strong>6 chiffres</strong> expire dans <strong>5 minutes</strong>. Vous pouvez coller directement depuis Telegram.</span>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -665,7 +830,30 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           </nav>
         </ScrollArea>
 
-        <div className="p-4 border-t border-border">
+        <div className="p-3 border-t border-border space-y-2">
+          {/* TOTP Security Button */}
+          <Button
+            variant="ghost"
+            className={cn("w-full justify-start gap-3 px-3 text-sm", otpStatus?.totpEnabled ? "text-green-500 hover:text-green-400" : "text-amber-500 hover:text-amber-400")}
+            onClick={() => {
+              if (otpStatus?.totpEnabled) {
+                setShowTotpDisable(true);
+              } else {
+                setShowTotpSetup(true);
+                setTotpSetupStep("qr");
+                setTotpSetupUri("");
+                setTotpSetupSecret("");
+                setTotpSetupError("");
+                setupTotpMutation.mutate();
+              }
+            }}
+            data-testid="button-totp-setup"
+          >
+            {otpStatus?.totpEnabled
+              ? <><ShieldCheck className="w-4 h-4" /> Authenticator actif</>
+              : <><Smartphone className="w-4 h-4" /> Activer l'Authenticator</>
+            }
+          </Button>
           <Link href="/dashboard">
             <Button 
               variant="outline" 
@@ -814,6 +1002,156 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           {children}
         </main>
       </div>
+
+      {/* ── TOTP Setup Modal ─────────────────────────────────────────────────── */}
+      <Dialog open={showTotpSetup} onOpenChange={(open) => { setShowTotpSetup(open); if (!open) { setTotpSetupStep("qr"); setTotpSetupUri(""); setTotpSetupSecret(""); setTotpSetupConfirmCode(""); setTotpSetupError(""); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Smartphone className="w-5 h-5 text-primary" />
+              {totpSetupStep === "done" ? "Authenticator activé !" : "Activer l'Authenticator"}
+            </DialogTitle>
+            <DialogDescription>
+              {totpSetupStep === "done"
+                ? "Google Authenticator est maintenant actif. Vous en aurez besoin à chaque connexion au panel admin."
+                : "Scannez le QR code avec Google Authenticator ou Authy, puis confirmez avec le code généré."}
+            </DialogDescription>
+          </DialogHeader>
+
+          {totpSetupStep === "done" ? (
+            <div className="py-6 flex flex-col items-center gap-4 text-center">
+              <div className="w-16 h-16 rounded-full bg-green-500/10 border border-green-500/20 flex items-center justify-center">
+                <CheckCircle2 className="w-8 h-8 text-green-500" />
+              </div>
+              <p className="text-sm text-muted-foreground">À partir de maintenant, chaque connexion au panel admin nécessitera votre application Authenticator.</p>
+              <Button className="w-full" onClick={() => setShowTotpSetup(false)}>Fermer</Button>
+            </div>
+          ) : (
+            <div className="space-y-5 py-2">
+              {setupTotpMutation.isPending && (
+                <div className="flex flex-col items-center gap-3 py-6">
+                  <div className="relative w-10 h-10">
+                    <div className="absolute inset-0 rounded-full border-4 border-primary/20" />
+                    <div className="absolute inset-0 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+                  </div>
+                  <p className="text-xs text-muted-foreground">Génération du secret…</p>
+                </div>
+              )}
+
+              {totpSetupUri && !setupTotpMutation.isPending && (
+                <>
+                  {/* Step 1: QR Code */}
+                  <div className="space-y-3">
+                    <p className="text-sm font-medium">1. Scannez ce QR code</p>
+                    <div className="flex justify-center p-4 bg-white rounded-2xl border border-border">
+                      <QRCodeSVG value={totpSetupUri} size={180} level="M" />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground">Ou entrez ce code manuellement :</p>
+                      <div className="flex items-center gap-2 bg-muted/50 border border-border rounded-lg px-3 py-2">
+                        <code className="text-xs font-mono flex-1 break-all select-all text-foreground">{totpSetupSecret}</code>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 w-7 p-0 shrink-0"
+                          onClick={() => { navigator.clipboard.writeText(totpSetupSecret); setTotpSecretCopied(true); setTimeout(() => setTotpSecretCopied(false), 2000); }}
+                          data-testid="button-copy-totp-secret"
+                        >
+                          {totpSecretCopied ? <CheckCircle2 className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Step 2: Confirm code */}
+                  <div className="space-y-3">
+                    <p className="text-sm font-medium">2. Entrez le code généré pour confirmer</p>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      placeholder="123456"
+                      value={totpSetupConfirmCode}
+                      onChange={(e) => { setTotpSetupConfirmCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setTotpSetupError(""); }}
+                      className="text-center text-xl font-mono tracking-widest"
+                      data-testid="input-totp-confirm"
+                    />
+                    {totpSetupError && (
+                      <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2">
+                        <ShieldBan className="w-4 h-4 shrink-0" />
+                        <span>{totpSetupError}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <Button
+                    className="w-full"
+                    disabled={totpSetupConfirmCode.length !== 6 || confirmTotpMutation.isPending}
+                    onClick={() => confirmTotpMutation.mutate(totpSetupConfirmCode)}
+                    data-testid="button-totp-confirm"
+                  >
+                    {confirmTotpMutation.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Vérification…</> : "Activer l'Authenticator"}
+                  </Button>
+                </>
+              )}
+
+              {setupTotpMutation.isError && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2">
+                    <ShieldBan className="w-4 h-4 shrink-0" />
+                    <span>{(setupTotpMutation.error as Error)?.message || "Erreur de génération"}</span>
+                  </div>
+                  <Button variant="outline" className="w-full" onClick={() => setupTotpMutation.mutate()}>Réessayer</Button>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── TOTP Disable Modal ───────────────────────────────────────────────── */}
+      <Dialog open={showTotpDisable} onOpenChange={(open) => { setShowTotpDisable(open); if (!open) { setTotpDisableCode(""); setTotpDisableError(""); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <ShieldBan className="w-5 h-5" />
+              Désactiver l'Authenticator
+            </DialogTitle>
+            <DialogDescription>
+              Entrez un code valide depuis votre application Authenticator pour confirmer la désactivation.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <Input
+              type="text"
+              inputMode="numeric"
+              maxLength={6}
+              placeholder="123456"
+              value={totpDisableCode}
+              onChange={(e) => { setTotpDisableCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setTotpDisableError(""); }}
+              className="text-center text-xl font-mono tracking-widest"
+              data-testid="input-totp-disable-code"
+            />
+            {totpDisableError && (
+              <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2">
+                <ShieldBan className="w-4 h-4 shrink-0" />
+                <span>{totpDisableError}</span>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowTotpDisable(false)}>Annuler</Button>
+            <Button
+              variant="destructive"
+              disabled={totpDisableCode.length !== 6 || disableTotpMutation.isPending}
+              onClick={() => disableTotpMutation.mutate(totpDisableCode)}
+              data-testid="button-totp-disable-confirm"
+            >
+              {disableTotpMutation.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Désactivation…</> : "Désactiver"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showPusdConvert} onOpenChange={setShowPusdConvert}>
         <DialogContent>

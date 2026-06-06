@@ -28,6 +28,8 @@ export const users = pgTable("users", {
   apiKeyHash: text("api_key_hash").unique(),
   apiEnabled: boolean("api_enabled").default(false),
   registrationIp: text("registration_ip"),
+  totpSecret: text("totp_secret"),
+  totpEnabled: boolean("totp_enabled").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
