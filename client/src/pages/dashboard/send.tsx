@@ -570,9 +570,8 @@ export default function SendMoneyPage() {
                             )}
                             <UserCheck className={`w-5 h-5 ${feeBearer === "sender" ? "text-primary" : "text-muted-foreground"}`} />
                             <span className={`text-xs font-semibold leading-tight ${feeBearer === "sender" ? "text-primary" : "text-foreground"}`}>
-                              Moi (l'envoyeur)
+                              Moi
                             </span>
-                            <span className="text-[10px] text-muted-foreground">Défaut</span>
                           </button>
                           <button
                             type="button"
@@ -593,7 +592,6 @@ export default function SendMoneyPage() {
                             <span className={`text-xs font-semibold leading-tight ${feeBearer === "receiver" ? "text-primary" : "text-foreground"}`}>
                               Le receveur
                             </span>
-                            <span className="text-[10px] text-muted-foreground">Déduit du montant</span>
                           </button>
                         </div>
                       </div>
