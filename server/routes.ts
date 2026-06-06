@@ -1171,6 +1171,18 @@ export async function registerRoutes(
         }
       }
 
+      // ── Public bucket fast path: redirect directly to Supabase CDN URL ──────
+      // Since the Supabase "uploads" bucket is PUBLIC, we can serve the file via
+      // a 302 redirect to the public URL instead of proxying bytes through the server.
+      // Auth/IDOR checks above still apply — this only resolves after access is granted.
+      const supabasePublicBase = process.env.SUPABASE_URL;
+      if (supabasePublicBase && isRelativePath) {
+        const publicUrl = `${supabasePublicBase}/storage/v1/object/public/${STORAGE_BUCKET}/${storagePath}`;
+        res.setHeader("Cache-Control", "public, max-age=3600");
+        return res.redirect(302, publicUrl);
+      }
+
+      // Fallback: download through server (private bucket or no SUPABASE_URL)
       const result = await downloadFromSupabase(storagePath);
       if (!result) return res.status(404).send("Image not found");
 
