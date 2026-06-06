@@ -172,6 +172,8 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     queryKey: ["/api/admin/otp-status"],
     enabled: !!user && ["admin", "support", "finance"].includes((user as any).role),
     retry: false,
+    staleTime: 0,
+    gcTime: 0,
   });
 
   // ─── TOTP verification (Google Authenticator) ────────────────────────────────
@@ -205,7 +207,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       setTotpError("");
       setTotpCode(["", "", "", "", "", ""]);
       otpVerifiedAtRef.current = Date.now();
-      queryClient.setQueryData(["/api/admin/otp-status"], { verified: true, totpEnabled: true });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/otp-status"] });
     },
     onError: (error: Error) => {
       setTotpError(error.message || "Code incorrect");
@@ -314,8 +316,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       setOtpError("");
       setOtpSessionExpired(false);
       otpVerifiedAtRef.current = Date.now();
-      // Force cache immediately so the OTP gate disappears without waiting for a refetch
-      queryClient.setQueryData(["/api/admin/otp-status"], { verified: true });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/otp-status"] });
     },
     onError: (error: Error) => {
       setOtpError(error.message || "Code incorrect");
