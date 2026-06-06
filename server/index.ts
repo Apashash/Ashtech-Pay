@@ -12,6 +12,7 @@ import { seedWithdrawalTransferFees } from "./seedWithdrawalTransferFees";
 import { startCleanupScheduler } from "./cleanup";
 import { startDailyReportScheduler } from "./dailyReport";
 import { hydrateIpBlocker } from "./ipBlocker";
+import { hydrateBotBans } from "./botGuard";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 import { encryptField, hmacField } from "./fieldEncryption";
@@ -359,6 +360,9 @@ app.use((req, res, next) => {
       startDailyReportScheduler();
       hydrateIpBlocker().catch(err =>
         console.error("[IpBlocker] Hydration error:", err)
+      );
+      hydrateBotBans().catch(err =>
+        console.error("[BotGuard] Hydration error:", err)
       );
       startDbWatchdog();
     },

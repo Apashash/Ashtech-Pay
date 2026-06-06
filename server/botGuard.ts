@@ -1,8 +1,19 @@
 import type { Request, Response, NextFunction } from "express";
+import { db } from "./db";
+import { platformSettings } from "@shared/schema";
+import { like, eq } from "drizzle-orm";
+import { sendMessage } from "./telegram";
 
 // ─── In-memory IP ban store ────────────────────────────────────────────────
 // Map<ip, unbanTimestamp (ms)>
 const bannedIPs = new Map<string, number>();
+
+// DB key prefix for persisted bot bans
+const BOT_BAN_PREFIX = "botban:";
+
+// Telegram alert throttle — max 1 alert per IP per 10 minutes
+const alertCooldown = new Map<string, number>();
+const ALERT_COOLDOWN_MS = 10 * 60 * 1000;
 
 // Nettoyage automatique des bans expirés toutes les heures
 setInterval(() => {
@@ -20,6 +31,72 @@ function getIp(req: Request): string {
     return raw.split(",")[0].trim();
   }
   return req.ip || "unknown";
+}
+
+// ─── Persist ban to DB (fire-and-forget) ──────────────────────────────────
+async function persistBan(ip: string, until: number, path: string): Promise<void> {
+  try {
+    const key = `${BOT_BAN_PREFIX}${ip}`;
+    const value = JSON.stringify({ until, path, bannedAt: Date.now() });
+    const existing = await db.select().from(platformSettings).where(eq(platformSettings.key, key)).limit(1);
+    if (existing.length > 0) {
+      await db.update(platformSettings).set({ value, updatedAt: new Date() }).where(eq(platformSettings.key, key));
+    } else {
+      await db.insert(platformSettings).values({ key, value, description: "Bot honeypot ban (auto)" });
+    }
+  } catch (err: any) {
+    console.warn("[BotGuard] DB persist error:", err?.message);
+  }
+}
+
+// ─── Remove ban from DB ────────────────────────────────────────────────────
+async function removeBanFromDb(ip: string): Promise<void> {
+  try {
+    await db.delete(platformSettings).where(eq(platformSettings.key, `${BOT_BAN_PREFIX}${ip}`));
+  } catch {}
+}
+
+// ─── Send throttled Telegram alert ────────────────────────────────────────
+function sendBotAlert(ip: string, path: string, reason: string, durationH: number): void {
+  const last = alertCooldown.get(ip) || 0;
+  if (Date.now() - last < ALERT_COOLDOWN_MS) return;
+  alertCooldown.set(ip, Date.now());
+
+  const timestamp = new Date().toLocaleString("fr-FR", { timeZone: "Africa/Douala" });
+  const msg =
+    `🤖 <b>Bot/Scanner bloqué</b>\n\n` +
+    `🔴 IP: <code>${ip}</code>\n` +
+    `📂 Chemin: <code>${path}</code>\n` +
+    `⚠️ Raison: ${reason}\n` +
+    `⏱️ Banni pour: <b>${durationH}h</b>\n` +
+    `🕐 ${timestamp}`;
+
+  sendMessage(msg).catch(() => {});
+}
+
+// ─── Load persisted bans from DB on startup ───────────────────────────────
+export async function hydrateBotBans(): Promise<void> {
+  try {
+    const rows = await db.select().from(platformSettings).where(like(platformSettings.key, `${BOT_BAN_PREFIX}%`));
+    const now = Date.now();
+    let loaded = 0;
+    for (const row of rows) {
+      try {
+        const data = JSON.parse(row.value);
+        const ip = row.key.slice(BOT_BAN_PREFIX.length);
+        if (data.until && now < data.until) {
+          bannedIPs.set(ip, data.until);
+          loaded++;
+        } else {
+          // expired — clean up
+          await db.delete(platformSettings).where(eq(platformSettings.key, row.key));
+        }
+      } catch {}
+    }
+    console.log(`[BotGuard] Hydrated ${loaded} persisted bot ban(s) from DB.`);
+  } catch (err: any) {
+    console.warn("[BotGuard] Hydration error:", err?.message);
+  }
 }
 
 // ─── User-Agents de bots connus / outils d'attaque ────────────────────────
@@ -189,7 +266,8 @@ const EXEMPT_IPS = ["127.0.0.1", "::1", "::ffff:127.0.0.1"];
 
 // ─── Exports publics ──────────────────────────────────────────────────────
 export function banIp(ip: string, durationMs = 24 * 60 * 60 * 1000): void {
-  bannedIPs.set(ip, Date.now() + durationMs);
+  const until = Date.now() + durationMs;
+  bannedIPs.set(ip, until);
   console.warn(`[BotGuard] 🔴 IP bannie: ${ip} pour ${Math.round(durationMs / 3600000)}h`);
 }
 
@@ -198,6 +276,7 @@ export function isIpBanned(ip: string): boolean {
   if (!until) return false;
   if (Date.now() > until) {
     bannedIPs.delete(ip);
+    removeBanFromDb(ip).catch(() => {});
     return false;
   }
   return true;
@@ -230,22 +309,34 @@ export function botGuard(req: Request, res: Response, next: NextFunction): void 
     return;
   }
 
-  // 2. Honeypot trap — ban 48h immédiat (sauf loopback)
+  // 2. Honeypot trap — ban 48h immédiat + persist DB + alerte Telegram (sauf loopback)
   const isHoneypot = HONEYPOT_PATHS.some(
     (p) => pathLower === p.toLowerCase() || pathLower.startsWith(p.toLowerCase() + "/")
   );
   if (isHoneypot) {
-    if (!isLoopback) banIp(ip, 48 * 60 * 60 * 1000);
     console.warn(`[BotGuard] 🍯 Honeypot touché: ${ip} → ${rawPath}`);
+    if (!isLoopback) {
+      const durationMs = 48 * 60 * 60 * 1000;
+      const until = Date.now() + durationMs;
+      bannedIPs.set(ip, until);
+      persistBan(ip, until, rawPath).catch(() => {});
+      sendBotAlert(ip, rawPath, "Honeypot WordPress/PHP scan", 48);
+    }
     res.status(404).send("Not Found");
     return;
   }
 
-  // 3. Patterns de chemins suspects (injection / traversal) → ban 24h
+  // 3. Patterns de chemins suspects (injection / traversal) → ban 24h + persist + alerte
   const isSuspiciousPath = SUSPICIOUS_PATH_PATTERNS.some((p) => p.test(rawPath));
   if (isSuspiciousPath) {
-    if (!isLoopback) banIp(ip, 24 * 60 * 60 * 1000);
     console.warn(`[BotGuard] ⚠️ Chemin suspect: ${ip} → ${rawPath}`);
+    if (!isLoopback) {
+      const durationMs = 24 * 60 * 60 * 1000;
+      const until = Date.now() + durationMs;
+      bannedIPs.set(ip, until);
+      persistBan(ip, until, rawPath).catch(() => {});
+      sendBotAlert(ip, rawPath, "Injection/traversal path", 24);
+    }
     res.status(400).json({ message: "Requête invalide." });
     return;
   }
@@ -261,9 +352,13 @@ export function botGuard(req: Request, res: Response, next: NextFunction): void 
         return;
       }
 
-      // UA d'outil malveillant connu → ban 12h
+      // UA d'outil malveillant connu → ban 12h + persist + alerte
       if (BAD_UA_PATTERNS.some((p) => p.test(uaLower))) {
-        banIp(ip, 12 * 60 * 60 * 1000);
+        const durationMs = 12 * 60 * 60 * 1000;
+        const until = Date.now() + durationMs;
+        bannedIPs.set(ip, until);
+        persistBan(ip, until, rawPath).catch(() => {});
+        sendBotAlert(ip, rawPath, `User-Agent malveillant: ${ua.slice(0, 60)}`, 12);
         console.warn(`[BotGuard] 🤖 Bot bloqué: ${ip} UA="${ua.slice(0, 80)}"`);
         res.status(403).json({ message: "Accès refusé." });
         return;
