@@ -118,11 +118,12 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
-  pending:    ["completed", "failed", "cancelled"],
-  processing: ["completed", "failed", "pending"],
-  failed:     ["pending"],
-  cancelled:  ["pending"],
-  completed:  ["pending", "failed", "cancelled"],
+  pending:         ["completed", "failed", "cancelled"],
+  pending_manual:  ["completed", "failed", "cancelled"],
+  processing:      ["completed", "failed", "pending"],
+  failed:          ["pending"],
+  cancelled:       ["pending"],
+  completed:       ["pending", "failed", "cancelled"],
 };
 
 export default function AdminTransactionDetail() {
@@ -204,7 +205,12 @@ export default function AdminTransactionDetail() {
       setConfirmRevert(true);
       return;
     }
-    updateStatusMutation.mutate({ status: modalStatus, reason: modalReason });
+    const isWithdrawalOrTransfer = tx.type === "withdrawal" || tx.type === "transfer_out";
+    updateStatusMutation.mutate({
+      status: modalStatus,
+      reason: modalReason,
+      ...(isWithdrawalOrTransfer ? { forceComplete: true } : {}),
+    });
   };
 
   return (
@@ -387,12 +393,12 @@ export default function AdminTransactionDetail() {
                   />
                 </div>
 
-                {/* Quick action buttons for pending */}
-                {tx.status === "pending" && (
+                {/* Quick action buttons for pending / pending_manual */}
+                {(tx.status === "pending" || tx.status === "pending_manual") && (
                   <div className="grid grid-cols-2 gap-2">
                     <Button
                       className="bg-green-600 hover:bg-green-700"
-                      onClick={() => updateStatusMutation.mutate({ status: "completed", reason: modalReason || "Validation admin" })}
+                      onClick={() => updateStatusMutation.mutate({ status: "completed", reason: modalReason || "Validation admin", forceComplete: true })}
                       disabled={updateStatusMutation.isPending}
                       data-testid="button-quick-approve"
                     >
@@ -400,7 +406,7 @@ export default function AdminTransactionDetail() {
                     </Button>
                     <Button
                       variant="destructive"
-                      onClick={() => updateStatusMutation.mutate({ status: "failed", reason: modalReason || "Rejet admin" })}
+                      onClick={() => updateStatusMutation.mutate({ status: "failed", reason: modalReason || "Rejet admin", forceComplete: true })}
                       disabled={updateStatusMutation.isPending}
                       data-testid="button-quick-reject"
                     >

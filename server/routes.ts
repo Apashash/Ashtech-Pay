@@ -7003,11 +7003,12 @@ export async function registerRoutes(
 
       // ── Valid state machine transitions
       const VALID_TRANSITIONS: Record<string, string[]> = {
-        pending:    ["completed", "failed", "cancelled"],
-        processing: ["completed", "failed", "pending"],
-        failed:     ["pending"],
-        cancelled:  ["pending"],
-        completed:  ["pending", "failed", "cancelled"],
+        pending:         ["completed", "failed", "cancelled"],
+        pending_manual:  ["completed", "failed", "cancelled"],
+        processing:      ["completed", "failed", "pending"],
+        failed:          ["pending"],
+        cancelled:       ["pending"],
+        completed:       ["pending", "failed", "cancelled"],
       };
 
       const allowed = VALID_TRANSITIONS[existingTx.status] ?? [];
