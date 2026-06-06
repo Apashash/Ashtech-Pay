@@ -123,13 +123,9 @@ export default function AdminUsers() {
     enabled: !!balanceModal,
   });
 
-  const { data: conversionFeeSetting } = useQuery<{ value: string }>({
-    queryKey: ["/api/settings/conversion_fee_percent"],
+  const { data: depositConfig } = useQuery<{ conversionFeePercentSwychr?: number; conversionFeePercent?: number }>({
+    queryKey: ["/api/public/deposit-config"],
     enabled: !!balanceModal,
-    queryFn: async () => {
-      const res = await apiRequest("GET", "/api/settings/conversion_fee_percent");
-      return res.json();
-    },
   });
 
   const { data: viewUserWallets } = useQuery<any[]>({
@@ -187,7 +183,7 @@ export default function AdminUsers() {
       .map((w: any) => ({ currency: w.currency, balance: w.balance, isPrimary: false })),
   ] : [];
 
-  const convFeePercent = conversionFeeSetting?.value ? parseFloat(conversionFeeSetting.value) : 6;
+  const convFeePercent = depositConfig?.conversionFeePercentSwychr ?? depositConfig?.conversionFeePercent ?? 6;
 
   const convPreview = (() => {
     if (!convFrom || !convTo || !convAmount || convFrom === convTo) return null;

@@ -220,12 +220,8 @@ export default function AdminUserDetail() {
     queryKey: ["/api/public/exchange-rates"],
   });
 
-  const { data: conversionFeeSetting } = useQuery<{ value: string }>({
-    queryKey: ["/api/settings/conversion_fee_percent"],
-    queryFn: async () => {
-      const res = await apiRequest("GET", "/api/settings/conversion_fee_percent");
-      return res.json();
-    },
+  const { data: depositConfig } = useQuery<{ conversionFeePercentSwychr?: number; conversionFeePercent?: number }>({
+    queryKey: ["/api/public/deposit-config"],
   });
 
   const { data: txData, isLoading: txLoading } = useQuery<{ data: Transaction[]; total: number; pages: number }>({
@@ -257,7 +253,7 @@ export default function AdminUserDetail() {
     ...(wallets || []).filter((w: any) => w.currency !== user.preferredCurrency).map((w: any) => ({ currency: w.currency, balance: w.balance, isPrimary: false })),
   ] : [];
 
-  const convFeePercent = conversionFeeSetting?.value ? parseFloat(conversionFeeSetting.value) : 6;
+  const convFeePercent = depositConfig?.conversionFeePercentSwychr ?? depositConfig?.conversionFeePercent ?? 6;
 
   const getWalletBalance = (currency: string) => {
     if (!user) return "0.00";
