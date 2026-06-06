@@ -269,7 +269,7 @@ export default function AdminUsers() {
 
   const setRoleMutation = useMutation({
     mutationFn: async ({ id, role }: { id: string; role: string }) => {
-      return apiRequest("PATCH", `/api/admin/users/${id}`, { role });
+      return apiRequest("PATCH", `/api/admin/users/${id}/role`, { role });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
@@ -282,7 +282,15 @@ export default function AdminUsers() {
 
   const updateUserMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: { fullName?: string; email?: string; phone?: string; role?: string } }) => {
-      return apiRequest("PATCH", `/api/admin/users/${id}`, data);
+      const { role, ...rest } = data;
+      const promises: Promise<any>[] = [];
+      if (Object.keys(rest).length > 0) {
+        promises.push(apiRequest("PATCH", `/api/admin/users/${id}`, rest));
+      }
+      if (role !== undefined) {
+        promises.push(apiRequest("PATCH", `/api/admin/users/${id}/role`, { role }));
+      }
+      await Promise.all(promises);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });

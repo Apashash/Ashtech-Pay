@@ -295,7 +295,17 @@ export default function AdminUserDetail() {
   });
 
   const updateUserMutation = useMutation({
-    mutationFn: async (data: object) => apiRequest("PATCH", `/api/admin/users/${id}`, data),
+    mutationFn: async (data: { fullName?: string; email?: string; phone?: string; role?: string }) => {
+      const { role, ...rest } = data;
+      const promises: Promise<any>[] = [];
+      if (Object.keys(rest).length > 0) {
+        promises.push(apiRequest("PATCH", `/api/admin/users/${id}`, rest));
+      }
+      if (role !== undefined) {
+        promises.push(apiRequest("PATCH", `/api/admin/users/${id}/role`, { role }));
+      }
+      await Promise.all(promises);
+    },
     onSuccess: () => { invalidate(); toast({ title: "Utilisateur mis à jour" }); setEditModal(false); },
     onError: () => toast({ title: "Erreur", variant: "destructive" }),
   });
