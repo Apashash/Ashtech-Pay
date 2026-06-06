@@ -107,10 +107,7 @@ export default function AdminKYC() {
     const params = new URLSearchParams(window.location.search);
     return params.get("search") || "";
   });
-  const [statusFilter, setStatusFilter] = useState<string>(() => {
-    const params = new URLSearchParams(window.location.search);
-    return params.get("search") ? "all" : "pending";
-  });
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [viewSubmission, setViewSubmission] = useState<KycSubmission | null>(null);
   const [rejectModal, setRejectModal] = useState<KycSubmission | null>(null);
   const [rejectNote, setRejectNote] = useState("");
