@@ -108,6 +108,8 @@ export default function AdminKYC() {
     return params.get("search") || "";
   });
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 20;
   const [viewSubmission, setViewSubmission] = useState<KycSubmission | null>(null);
   const [rejectModal, setRejectModal] = useState<KycSubmission | null>(null);
   const [rejectNote, setRejectNote] = useState("");
@@ -191,6 +193,9 @@ export default function AdminKYC() {
     );
   });
 
+  const totalPages = Math.max(1, Math.ceil((filteredSubmissions?.length || 0) / PAGE_SIZE));
+  const paginatedSubmissions = filteredSubmissions?.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   return (
     <AdminLayout>
       <div className="p-4 md:p-6 space-y-6">
@@ -229,12 +234,12 @@ export default function AdminKYC() {
                 <Input
                   placeholder="Rechercher nom, email, téléphone..."
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                   className="pl-10"
                   data-testid="input-search-kyc"
                 />
               </div>
-              <Tabs value={statusFilter} onValueChange={setStatusFilter} className="w-full sm:w-auto">
+              <Tabs value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }} className="w-full sm:w-auto">
                 <TabsList className="w-full sm:w-auto">
                   <TabsTrigger value="" className="flex-1 sm:flex-none text-xs sm:text-sm">Tous</TabsTrigger>
                   <TabsTrigger value="pending" className="gap-1 flex-1 sm:flex-none text-xs sm:text-sm">
@@ -271,7 +276,7 @@ export default function AdminKYC() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredSubmissions.map((sub) => (
+                    {paginatedSubmissions!.map((sub) => (
                       <TableRow key={sub.id} data-testid={`row-kyc-${sub.id}`}>
                         <TableCell className="max-w-[160px]">
                           <div className="space-y-0.5">
@@ -358,6 +363,32 @@ export default function AdminKYC() {
                     ))}
                   </TableBody>
                 </Table>
+              </div>
+            )}
+
+            {/* Pagination */}
+            {(filteredSubmissions?.length || 0) > PAGE_SIZE && (
+              <div className="flex items-center justify-between px-4 py-3 border-t">
+                <p className="text-xs text-muted-foreground">
+                  {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filteredSubmissions!.length)} sur {filteredSubmissions!.length}
+                </p>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                    className="px-3 py-1 rounded text-sm border border-border disabled:opacity-40 hover:bg-muted transition-colors"
+                  >
+                    ‹ Préc
+                  </button>
+                  <span className="px-3 py-1 text-sm font-medium">{page} / {totalPages}</span>
+                  <button
+                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                    disabled={page === totalPages}
+                    className="px-3 py-1 rounded text-sm border border-border disabled:opacity-40 hover:bg-muted transition-colors"
+                  >
+                    Suiv ›
+                  </button>
+                </div>
               </div>
             )}
           </CardContent>
