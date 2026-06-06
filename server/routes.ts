@@ -5808,6 +5808,57 @@ export async function registerRoutes(
     res.json({ verified });
   });
 
+  // GET /api/admin/debug-storage — tests Supabase Storage connection (admin only)
+  app.get("/api/admin/debug-storage", requireAuth, async (req, res) => {
+    const user = await storage.getUser(req.userId!).catch(() => null);
+    if (!user || !["admin", "support", "finance"].includes(user.role)) {
+      return res.status(403).json({ message: "Accès refusé" });
+    }
+    const { supabase: sbClient, STORAGE_BUCKET: bucket, listSupabaseBuckets, testDownload } = await import("./supabase");
+    const result: Record<string, any> = {
+      env: {
+        SUPABASE_URL: process.env.SUPABASE_URL ? `${process.env.SUPABASE_URL.slice(0, 30)}...` : "NOT SET",
+        SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ? "SET (hidden)" : "NOT SET",
+        SUPABASE_STORAGE_BUCKET: process.env.SUPABASE_STORAGE_BUCKET || "(default: uploads)",
+        clientInitialized: !!sbClient,
+        configuredBucket: bucket,
+      },
+      buckets: null as any,
+      bucketTest: null as any,
+      sampleFileTest: null as any,
+    };
+
+    if (sbClient) {
+      // List all buckets
+      result.buckets = await listSupabaseBuckets();
+
+      // Try listing files in the configured bucket
+      try {
+        const { data: files, error: listErr } = await sbClient.storage.from(bucket).list("kyc", { limit: 3 });
+        result.bucketTest = listErr
+          ? { ok: false, error: listErr.message }
+          : { ok: true, fileCount: files?.length ?? 0, sampleFiles: files?.map(f => f.name) };
+      } catch (e: any) {
+        result.bucketTest = { ok: false, error: e.message };
+      }
+
+      // Test download of first real KYC file from DB
+      try {
+        const kycRows = await db.execute(sql`SELECT document_front_path FROM kyc_submissions WHERE document_front_path NOT LIKE '/uploads/%' LIMIT 1`);
+        const firstPath = (kycRows as any).rows?.[0]?.document_front_path;
+        if (firstPath) {
+          result.sampleFileTest = { path: firstPath, ...(await testDownload(bucket, firstPath)) };
+        } else {
+          result.sampleFileTest = { note: "No non-local KYC paths in DB" };
+        }
+      } catch (e: any) {
+        result.sampleFileTest = { error: e.message };
+      }
+    }
+
+    res.json(result);
+  });
+
   // GET /api/admin/debug-db — diagnostic endpoint (admin only, no OTP required)
   // Helps identify DB connection issues in production (PM2 / Plesk).
   app.get("/api/admin/debug-db", requireAuth, async (req, res) => {

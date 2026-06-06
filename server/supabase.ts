@@ -28,18 +28,25 @@ if (supabaseUrl && isValidUrl(supabaseUrl)) {
           persistSession: false,
         },
       });
-      console.log("Supabase client initialized successfully (using service role key)");
+      console.log("[Supabase] Client initialized successfully (service role key)");
+      console.log(`[Supabase] URL: ${supabaseUrl}`);
+      console.log(`[Supabase] Storage bucket: ${process.env.SUPABASE_STORAGE_BUCKET || "uploads"}`);
     } catch (error) {
       console.warn("[Supabase] Failed to initialize client:", error);
     }
   }
 } else {
-  console.warn("[Supabase] Credentials not configured or invalid. File uploads will use local storage.");
+  if (!supabaseUrl) {
+    console.warn("[Supabase] SUPABASE_URL not set. File uploads will use local storage.");
+  } else {
+    console.warn(`[Supabase] SUPABASE_URL invalid: "${supabaseUrl}". Must be https://xxx.supabase.co`);
+  }
 }
 
 export { supabase };
 
-export const STORAGE_BUCKET = "uploads";
+// Bucket name: override with SUPABASE_STORAGE_BUCKET env var if your bucket has a different name
+export const STORAGE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET || "uploads";
 
 export async function uploadToSupabase(
   fileBuffer: Buffer,
@@ -73,7 +80,10 @@ export async function uploadToSupabase(
 export async function downloadFromSupabase(
   storagePath: string
 ): Promise<{ data: Blob; contentType: string } | null> {
-  if (!supabase) return null;
+  if (!supabase) {
+    console.error("[Supabase] downloadFromSupabase called but client is null (check SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY)");
+    return null;
+  }
 
   let cleanPath = storagePath;
 
@@ -93,7 +103,7 @@ export async function downloadFromSupabase(
     .download(cleanPath);
 
   if (error || !data) {
-    console.error("[Supabase] Download error:", error, "path:", cleanPath);
+    console.error(`[Supabase] Download error — bucket="${STORAGE_BUCKET}" path="${cleanPath}":`, error?.message || "no data");
     return null;
   }
 
@@ -140,4 +150,25 @@ export async function getSignedImageUrl(
     return null;
   }
   return data.signedUrl;
+}
+
+/**
+ * Lists all available buckets — used by the admin debug endpoint.
+ */
+export async function listSupabaseBuckets(): Promise<{ name: string; public: boolean }[] | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase.storage.listBuckets();
+  if (error || !data) return null;
+  return data.map(b => ({ name: b.name, public: b.public }));
+}
+
+/**
+ * Test-download a single file from a given bucket+path — used by admin debug endpoint.
+ */
+export async function testDownload(bucket: string, filePath: string): Promise<{ ok: boolean; error?: string; size?: number }> {
+  if (!supabase) return { ok: false, error: "Supabase client not initialized" };
+  const { data, error } = await supabase.storage.from(bucket).download(filePath);
+  if (error || !data) return { ok: false, error: error?.message || "no data" };
+  const buf = await data.arrayBuffer();
+  return { ok: true, size: buf.byteLength };
 }
