@@ -483,65 +483,46 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
 
   // Tier 3: look up THIS session in the DB by sessionID — handles PM2 multi-worker where
   // req.session may not be loaded by the current worker, but sessionID is always in the cookie.
-  // Keyed by sessionID (not userId) to prevent cross-session verification leak.
+  // Keyed by sessionID only (not userId) to prevent cross-session / cross-browser verification.
+  // Retries once on transient connection errors (Supabase pool contention under PM2).
   let tier3Used = false;
   if (!otpValid && req.sessionID) {
-    try {
-      const dbRow = await sessionPool.query(
-        `SELECT sess FROM session WHERE sid = $1 AND expire > NOW()`,
-        [req.sessionID]
-      );
-      if (dbRow.rows.length > 0) {
-        const sessData = typeof dbRow.rows[0].sess === "string"
-          ? JSON.parse(dbRow.rows[0].sess)
-          : dbRow.rows[0].sess;
-        const dbAvs = sessData?._avs;
-        if (typeof dbAvs === "number" && dbAvs > now) {
-          otpValid = true;
-          tier3Used = true;
-          // Cache in memory so subsequent requests on this process are instant
-          adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: dbAvs });
+    for (let attempt = 0; attempt < 2 && !otpValid; attempt++) {
+      try {
+        const dbRow = await sessionPool.query(
+          `SELECT sess FROM session WHERE sid = $1 AND expire > NOW()`,
+          [req.sessionID]
+        );
+        if (dbRow.rows.length > 0) {
+          const sessData = typeof dbRow.rows[0].sess === "string"
+            ? JSON.parse(dbRow.rows[0].sess)
+            : dbRow.rows[0].sess;
+          const dbAvs = sessData?._avs;
+          if (typeof dbAvs === "number" && dbAvs > now) {
+            otpValid = true;
+            tier3Used = true;
+            // Cache in memory so subsequent requests on this process are instant
+            adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: dbAvs });
+          }
+        }
+        break; // query succeeded, no retry needed
+      } catch (sessErr: any) {
+        if (attempt === 0) {
+          // Wait 200ms then retry once (handles transient pool timeout under PM2 load)
+          await new Promise(r => setTimeout(r, 200));
+        } else {
+          console.error(`[AdminAccess] DB session fallback error — userId=${req.userId}:`, sessErr?.message);
         }
       }
-    } catch (sessErr: any) {
-      console.error(`[AdminAccess] DB session fallback error — userId=${req.userId}:`, sessErr?.message);
-    }
-  }
-
-  // Tier 4: search by userId across ALL active sessions with _avs set.
-  // Mirrors the otp-status Tier 4 — catches PM2 routing where req.sessionID cookie
-  // differs from the session that was OTP-verified (e.g. Bearer-token requests or
-  // Cloudflare proxy assigning a new sessionID on a different worker).
-  let tier4Used = false;
-  if (!otpValid && req.userId) {
-    try {
-      const userRow = await sessionPool.query(
-        `SELECT sess FROM session WHERE (sess::jsonb->>'userId') = $1 AND (sess::jsonb->>'_avs') IS NOT NULL AND expire > NOW() ORDER BY expire DESC LIMIT 1`,
-        [req.userId]
-      );
-      if (userRow.rows.length > 0) {
-        const sessData = typeof userRow.rows[0].sess === "string"
-          ? JSON.parse(userRow.rows[0].sess)
-          : userRow.rows[0].sess;
-        const dbAvs = sessData?._avs;
-        if (typeof dbAvs === "number" && dbAvs > now) {
-          otpValid = true;
-          tier4Used = true;
-          // Cache in memory so subsequent requests on this process are instant
-          adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: dbAvs });
-        }
-      }
-    } catch (sessErr: any) {
-      console.error(`[AdminAccess] DB session userId fallback error — userId=${req.userId}:`, sessErr?.message);
     }
   }
 
   if (!otpValid) {
-    console.warn(`[AdminAccess] OTP NOT VALID — user=${req.userId} role=${user.role} path=${req.path} mem=${memValid} session=${sessionValid} t3=${tier3Used} t4=${tier4Used}`);
+    console.warn(`[AdminAccess] OTP NOT VALID — user=${req.userId} role=${user.role} path=${req.path} mem=${memValid} session=${sessionValid} t3=${tier3Used}`);
     return res.status(403).json({ message: "Vérification OTP admin requise", requireOtp: true });
   }
 
-  console.log(`[AdminAccess] OK — user=${req.userId} role=${user.role} path=${req.path} mem=${memValid} session=${sessionValid} t3=${tier3Used} t4=${tier4Used}`);
+  console.log(`[AdminAccess] OK — user=${req.userId} role=${user.role} path=${req.path} mem=${memValid} session=${sessionValid} t3=${tier3Used}`);
   next();
 }
 
@@ -5861,49 +5842,31 @@ export async function registerRoutes(
 
     // Tier 3: look up THIS session in DB by sessionID — handles PM2 multi-worker
     // where req.session may lag on a different worker but the cookie is always correct.
+    // Keyed by sessionID only — prevents cross-browser / cross-session OTP bypass.
+    // Retries once on transient pool errors (Supabase connection contention under PM2).
     if (!verified && req.sessionID) {
-      try {
-        const dbRow = await sessionPool.query(
-          `SELECT sess FROM session WHERE sid = $1 AND expire > NOW()`,
-          [req.sessionID]
-        );
-        if (dbRow.rows.length > 0) {
-          const sessData = typeof dbRow.rows[0].sess === "string"
-            ? JSON.parse(dbRow.rows[0].sess)
-            : dbRow.rows[0].sess;
-          const dbAvs = sessData?._avs;
-          if (typeof dbAvs === "number" && dbAvs > now) {
-            verified = true;
-            adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: dbAvs });
+      for (let attempt = 0; attempt < 2 && !verified; attempt++) {
+        try {
+          const dbRow = await sessionPool.query(
+            `SELECT sess FROM session WHERE sid = $1 AND expire > NOW()`,
+            [req.sessionID]
+          );
+          if (dbRow.rows.length > 0) {
+            const sessData = typeof dbRow.rows[0].sess === "string"
+              ? JSON.parse(dbRow.rows[0].sess)
+              : dbRow.rows[0].sess;
+            const dbAvs = sessData?._avs;
+            if (typeof dbAvs === "number" && dbAvs > now) {
+              verified = true;
+              adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: dbAvs });
+            }
+          }
+          break;
+        } catch {
+          if (attempt === 0) {
+            await new Promise(r => setTimeout(r, 200));
           }
         }
-      } catch {
-        // Tier 3 fallback failed — continue to Tier 4
-      }
-    }
-
-    // Tier 4: Bearer-token requests create a new session (different sessionID than the one
-    // that was OTP-verified). Search by userId across all active sessions with _avs set.
-    // This catches the case where the cookie is not sent with the refetch.
-    if (!verified && req.userId) {
-      try {
-        const userRow = await sessionPool.query(
-          `SELECT sess FROM session WHERE (sess::jsonb->>'userId') = $1 AND (sess::jsonb->>'_avs') IS NOT NULL AND expire > NOW() ORDER BY expire DESC LIMIT 1`,
-          [req.userId]
-        );
-        if (userRow.rows.length > 0) {
-          const sessData = typeof userRow.rows[0].sess === "string"
-            ? JSON.parse(userRow.rows[0].sess)
-            : userRow.rows[0].sess;
-          const dbAvs = sessData?._avs;
-          if (typeof dbAvs === "number" && dbAvs > now) {
-            verified = true;
-            // Populate in-memory cache for this session too
-            adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: dbAvs });
-          }
-        }
-      } catch {
-        // Tier 4 fallback failed — continue with verified = false
       }
     }
 

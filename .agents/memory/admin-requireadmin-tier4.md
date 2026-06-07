@@ -1,31 +1,28 @@
 ---
-name: Admin requireAdmin Tier 4
-description: requireAdmin middleware was missing Tier 4 OTP check (search by userId), causing 403 on PM2 multi-process deployments and showing all zeros on admin dashboard.
+name: Admin OTP Tier 4 Security Issue
+description: Adding Tier 4 (userId search) to requireAdmin or otp-status creates a cross-browser/cross-session OTP bypass. Use Tier 3 (sessionID) with retry instead.
 ---
 
 ## The Rule
-`requireAdmin` middleware must have the same 4-tier OTP verification as the `otp-status` endpoint.
+Never add a Tier 4 (search by `userId` across all sessions) to `requireAdmin` or `otp-status`. It allows any browser with the same account to bypass OTP entirely.
 
-## The 4 Tiers
+## The 3 Correct Tiers (requireAdmin and otp-status)
 1. In-memory `adminVerifiedSessions` Map (instant, same process)
 2. `req.session._avs` timestamp (session middleware, DB-backed)
-3. Direct DB query by `sessionID` (handles PM2 worker routing mismatch)
-4. Direct DB query by `userId` across all sessions with `_avs` set (handles Bearer-token requests or proxy assigning different sessionID)
+3. Direct DB query by `sessionID` only — with **one retry (200ms wait)** to handle transient Supabase pool contention under PM2
 
-## Why
-On Plesk with PM2 multi-process: `otp-status` returned `verified: true` (had Tier 4), so the admin dashboard rendered. But `requireAdmin` only had Tiers 1-3 — if sessionID lookup failed (different worker), it returned 403. This caused all admin API calls (`/api/admin/stats`, etc.) to silently fail, showing zeros everywhere despite the user being past the OTP gate.
+## Why Tier 4 Is Dangerous
+Tier 4 searches the session table by `userId` across ALL active sessions with `_avs` set. If Browser A has verified OTP, Browser B (same user, different session) gets admin access without being asked for OTP. This is a cross-session bypass.
 
-Symptom: Admin dashboard shows all zeros when `ADMIN_OTP_BYPASS=false`, works fine when `=true`.
+## Root Cause of PM2 Failures
+On Plesk with PM2 multi-process + Supabase free tier (25 connection limit):
+- Multiple PM2 workers × 2 pools each can exhaust Supabase connections
+- Tier 3 sessionPool.query() fails transiently → added 1 retry with 200ms delay
+- This is sufficient — same sessionID is always in the cookie, DB lookup finds it when pool is available
 
 ## How to Apply
-When modifying OTP verification logic in `requireAdmin` (server/routes.ts ~line 488), always ensure Tier 4 is present:
-```typescript
-if (!otpValid && req.userId) {
-  const userRow = await sessionPool.query(
-    `SELECT sess FROM session WHERE (sess::jsonb->>'userId') = $1 AND (sess::jsonb->>'_avs') IS NOT NULL AND expire > NOW() ORDER BY expire DESC LIMIT 1`,
-    [req.userId]
-  );
-  // parse and validate _avs timestamp...
-}
-```
-Keep this in sync with `otp-status` Tier 4 (server/routes.ts ~line 5860).
+When debugging "admin shows zeros with OTP bypass=false":
+1. Check if Tier 3 is failing (look for `[AdminAccess] DB session fallback error` in logs)
+2. If yes: it's a pool connection exhaustion issue — reduce PM2_INSTANCES or upgrade Supabase plan
+3. NEVER add Tier 4 as a fix — it's a security hole
+4. The retry loop in Tier 3 handles transient failures safely
