@@ -6046,7 +6046,7 @@ export async function registerRoutes(
       delete req.session._otpExpiry;
 
       const code = generateAdminOtp(); // 6 digits (1 000 000 combinations)
-      const otpExpiry = Date.now() + 5 * 60 * 1000;
+      const otpExpiry = Date.now() + 15 * 60 * 1000; // 15 min — enough time to check server logs
       // Store in-memory (fast, same-process) AND session (PostgreSQL — survives PM2 multi-worker)
       adminOtpStore.set(req.userId!, { code, expiresAt: otpExpiry });
       req.session._otpCode = code;
