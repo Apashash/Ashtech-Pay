@@ -508,12 +508,40 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
     }
   }
 
+  // Tier 4: search by userId across ALL active sessions with _avs set.
+  // Mirrors the otp-status Tier 4 — catches PM2 routing where req.sessionID cookie
+  // differs from the session that was OTP-verified (e.g. Bearer-token requests or
+  // Cloudflare proxy assigning a new sessionID on a different worker).
+  let tier4Used = false;
+  if (!otpValid && req.userId) {
+    try {
+      const userRow = await sessionPool.query(
+        `SELECT sess FROM session WHERE (sess::jsonb->>'userId') = $1 AND (sess::jsonb->>'_avs') IS NOT NULL AND expire > NOW() ORDER BY expire DESC LIMIT 1`,
+        [req.userId]
+      );
+      if (userRow.rows.length > 0) {
+        const sessData = typeof userRow.rows[0].sess === "string"
+          ? JSON.parse(userRow.rows[0].sess)
+          : userRow.rows[0].sess;
+        const dbAvs = sessData?._avs;
+        if (typeof dbAvs === "number" && dbAvs > now) {
+          otpValid = true;
+          tier4Used = true;
+          // Cache in memory so subsequent requests on this process are instant
+          adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: dbAvs });
+        }
+      }
+    } catch (sessErr: any) {
+      console.error(`[AdminAccess] DB session userId fallback error — userId=${req.userId}:`, sessErr?.message);
+    }
+  }
+
   if (!otpValid) {
-    console.warn(`[AdminAccess] OTP NOT VALID — user=${req.userId} role=${user.role} path=${req.path} mem=${memValid} session=${sessionValid} tier3Used=${tier3Used}`);
+    console.warn(`[AdminAccess] OTP NOT VALID — user=${req.userId} role=${user.role} path=${req.path} mem=${memValid} session=${sessionValid} t3=${tier3Used} t4=${tier4Used}`);
     return res.status(403).json({ message: "Vérification OTP admin requise", requireOtp: true });
   }
 
-  console.log(`[AdminAccess] OK — user=${req.userId} role=${user.role} path=${req.path} mem=${memValid} session=${sessionValid} t3=${tier3Used}`);
+  console.log(`[AdminAccess] OK — user=${req.userId} role=${user.role} path=${req.path} mem=${memValid} session=${sessionValid} t3=${tier3Used} t4=${tier4Used}`);
   next();
 }
 

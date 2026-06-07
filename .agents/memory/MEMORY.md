@@ -1,1 +1,2 @@
 - [Admin OTP multi-process fix](admin-otp-fix.md) — OTP verification must use session (DB-backed), not in-memory Map; in-memory breaks PM2 cluster & server restarts.
+- [Admin requireAdmin Tier 4](admin-requireadmin-tier4.md) — requireAdmin middleware must have 4 tiers matching otp-status; missing Tier 4 (search by userId) causes 403 on PM2 → admin dashboard shows all zeros.

@@ -1,6 +1,5 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
-import dns from "dns";
 import * as schema from "@shared/schema";
 
 const { Pool } = pg;
@@ -27,118 +26,63 @@ const sslConfig = databaseUrl.includes("localhost") ||
   : { rejectUnauthorized: false };
 
 // Max connections per pool, per worker process.
+// Supabase free tier: 25 total connections.
+// Formula: floor(25 / PM2_workers / 2_pools) with margin.
+// With PM2_instances=2: 2 × (4+2) = 12 — safe.
+// With PM2_instances=4: 4 × (3+2) = 20 — safe.
+// Default: 3 + 2 = 5 per worker; supports up to 4 PM2 workers safely.
 const PM2_INSTANCES = parseInt(process.env.PM2_INSTANCES || process.env.NODE_APP_INSTANCE || "1", 10) || 1;
 const MAIN_POOL_MAX = Math.max(2, Math.floor(15 / PM2_INSTANCES));
 const SESSION_POOL_MAX = Math.max(1, Math.floor(8 / PM2_INSTANCES));
 
 console.log(`[DB] Pool limits — main: ${MAIN_POOL_MAX}, session: ${SESSION_POOL_MAX} (PM2 instances detected: ${PM2_INSTANCES})`);
 
-// Append application_name to the connection string
+// Append application_name to the connection string so PostgreSQL triggers
+// can distinguish app connections from direct/external DB access.
 function addAppName(url: string, name: string): string {
   try {
     const u = new URL(url);
     u.searchParams.set("application_name", name);
     return u.toString();
   } catch {
+    // Fallback: append via query string manually
     const sep = url.includes("?") ? "&" : "?";
     return `${url}${sep}application_name=${name}`;
   }
 }
 
-// Replace hostname in URL with its IPv4 address to avoid IPv6 issues on Replit
-async function resolveToIPv4(url: string): Promise<string> {
-  try {
-    const parsed = new URL(url);
-    const hostname = parsed.hostname;
-    // Skip resolution for IP addresses or localhost
-    if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname) || hostname === "localhost") {
-      return url;
-    }
-    const addresses = await new Promise<string[]>((resolve, reject) => {
-      dns.resolve4(hostname, (err, addrs) => {
-        if (err) reject(err);
-        else resolve(addrs);
-      });
-    });
-    if (addresses.length > 0) {
-      parsed.hostname = addresses[0];
-      console.log(`[DB] Resolved ${hostname} → ${addresses[0]} (IPv4 forced)`);
-      return parsed.toString();
-    }
-  } catch (err: any) {
-    console.warn(`[DB] IPv4 resolution failed for host, using original URL: ${err.message}`);
-  }
-  return url;
-}
-
 const APP_DB_NAME = "ashtech_secure_app";
 
-// Build pools after resolving hostname to IPv4
-async function buildPools() {
-  const resolvedUrl = await resolveToIPv4(databaseUrl!);
-  const mainUrl = addAppName(resolvedUrl, APP_DB_NAME);
-
-  const mainPool = new Pool({
-    connectionString: mainUrl,
-    ssl: sslConfig,
-    max: MAIN_POOL_MAX,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 8000,
-  });
-
-  mainPool.on("error", (err) => {
-    console.error("[DB] Pool error (main):", err.message);
-  });
-
-  const sessionDatabaseUrl = process.env.DIRECT_DATABASE_URL || resolvedUrl;
-  const sessPool = new Pool({
-    connectionString: sessionDatabaseUrl,
-    ssl: sslConfig,
-    max: SESSION_POOL_MAX,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 8000,
-  });
-
-  sessPool.on("error", (err) => {
-    console.error("[DB] Pool error (session):", err.message);
-  });
-
-  // Test connection at startup
-  mainPool.query("SELECT 1").then(() => {
-    console.log("[DB] Main pool connection OK");
-  }).catch((err) => {
-    console.error("[DB] CRITICAL: Main pool connection FAILED:", err.message);
-  });
-
-  return { mainPool, sessPool };
-}
-
-// We export lazily-initialized pools. The pools are ready before any route
-// handler runs because the server awaits the top-level async IIFE in index.ts.
-let _pool: pg.Pool;
-let _sessionPool: pg.Pool;
-let _db: ReturnType<typeof drizzle<typeof schema>>;
-
-export const poolReady = buildPools().then(({ mainPool, sessPool }) => {
-  _pool = mainPool;
-  _sessionPool = sessPool;
-  _db = drizzle(mainPool, { schema });
+export const pool = new Pool({
+  connectionString: addAppName(databaseUrl, APP_DB_NAME),
+  ssl: sslConfig,
+  max: MAIN_POOL_MAX,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
 });
 
-export const pool: pg.Pool = new Proxy({} as pg.Pool, {
-  get(_target, prop) {
-    return (_pool as any)[prop];
-  },
+pool.on("error", (err) => {
+  console.error("[DB] Pool error (main):", err.message);
 });
 
-export const sessionPool: pg.Pool = new Proxy({} as pg.Pool, {
-  get(_target, prop) {
-    return (_sessionPool as any)[prop];
-  },
+export const db = drizzle(pool, { schema });
+
+const sessionDatabaseUrl = process.env.DIRECT_DATABASE_URL || databaseUrl;
+export const sessionPool = new Pool({
+  connectionString: sessionDatabaseUrl,
+  ssl: sslConfig,
+  max: SESSION_POOL_MAX,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
 });
 
-export const db: ReturnType<typeof drizzle<typeof schema>> = new Proxy({} as any, {
-  get(_target, prop) {
-    return (_db as any)[prop];
-  },
+sessionPool.on("error", (err) => {
+  console.error("[DB] Pool error (session):", err.message);
+});
+
+// Test connection at startup
+pool.query("SELECT 1").then(() => {
+  console.log("[DB] Main pool connection OK");
+}).catch((err) => {
+  console.error("[DB] CRITICAL: Main pool connection FAILED:", err.message);
 });
