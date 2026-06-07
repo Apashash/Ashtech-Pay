@@ -157,6 +157,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   const [otpCode, setOtpCode] = useState(["", "", "", "", "", ""]);
   const [otpSent, setOtpSent] = useState(false);
   const [otpEmail, setOtpEmail] = useState("");
+  const [otpNoChannel, setOtpNoChannel] = useState(false);
   const [otpError, setOtpError] = useState("");
   const [otpSessionExpired, setOtpSessionExpired] = useState(false);
   const otpVerifiedAtRef = useRef<number>(0);
@@ -294,11 +295,12 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   const requestOtpMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/admin/request-otp", {});
-      return res as { sent: boolean; email: string };
+      return await res.json() as { sent: boolean; email: string; noChannel?: boolean };
     },
     onSuccess: (data) => {
       setOtpSent(true);
-      setOtpEmail(data.email);
+      setOtpEmail(data.email || "");
+      setOtpNoChannel(!!data.noChannel);
       setOtpError("");
       setOtpCode(["", "", "", "", "", ""]);
       setTimeout(() => otpRefs[0].current?.focus(), 100);
@@ -528,7 +530,9 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                     : requestOtpMutation.isPending
                     ? "Envoi du code de sécurité…"
                     : otpSent
-                    ? <span>Code envoyé à <strong className="text-foreground">{otpEmail}</strong></span>
+                    ? otpNoChannel
+                      ? <span className="text-amber-400 font-medium">Aucun canal configuré — consultez les logs serveur</span>
+                      : <span>Code envoyé à <strong className="text-foreground">{otpEmail}</strong></span>
                     : "Préparation de la session sécurisée…"}
                 </p>
               </div>
@@ -638,6 +642,12 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                       <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
                         <Loader2 className="w-4 h-4 animate-spin text-primary" />
                         <span>Vérification…</span>
+                      </div>
+                    )}
+                    {otpNoChannel && (
+                      <div className="flex items-start gap-2 text-xs text-amber-400 bg-amber-400/10 border border-amber-400/25 rounded-xl px-4 py-3">
+                        <ShieldBan className="w-4 h-4 shrink-0 mt-0.5" />
+                        <span>Aucun canal e-mail ou Telegram configuré. Le code s'affiche dans les <strong>logs du serveur</strong> (console Replit).</span>
                       </div>
                     )}
                     {otpError && (

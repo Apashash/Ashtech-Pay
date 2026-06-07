@@ -6052,6 +6052,7 @@ export async function registerRoutes(
       req.session._otpCode = code;
       req.session._otpExpiry = otpExpiry;
       await new Promise<void>((resolve) => { req.session.save((err) => { if (err) console.error("[AdminOTP] session save warning:", err?.message); resolve(); }); });
+      // Send via email (silently skipped if RESEND_API_KEY not set)
       await sendAdminOtpEmail(user.email, user.fullName || user.username, code);
 
       // Send code via Telegram as backup channel
@@ -6069,11 +6070,21 @@ export async function registerRoutes(
         }).catch(() => {});
       }
 
+      // ── Emergency fallback: if NO delivery channel is configured, log code to server console ──
+      // This allows admins to retrieve the code from Replit/server logs when email & Telegram are not set up.
+      const hasEmail = !!process.env.RESEND_API_KEY;
+      const hasTelegram = !!(botToken && chatId);
+      const noChannel = !hasEmail && !hasTelegram;
+      if (noChannel) {
+        console.warn(`[AdminOTP] ⚠ AUCUN CANAL DE LIVRAISON — Code OTP pour ${user.email}: ${code} (expire dans 5 min)`);
+        console.warn(`[AdminOTP] ⚠ Configurez RESEND_API_KEY ou TELEGRAM_BOT_TOKEN+TELEGRAM_CHAT_ID pour activer la livraison.`);
+      }
+
       // Log to admin_logs — do NOT log the OTP code itself
       const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
       storage.createAdminLog({ adminId: req.userId!, action: "otp_requested", details: `OTP demandé depuis IP ${ip}` }).catch(() => {});
-      console.log(`[AdminOTP] Code envoyé à ${user.email.replace(/(.{2}).+(@.+)/, "$1***$2")}`);
-      res.json({ sent: true, email: user.email.replace(/(.{2}).+(@.+)/, "$1***$2") });
+      console.log(`[AdminOTP] Code généré pour ${user.email.replace(/(.{2}).+(@.+)/, "$1***$2")} — email=${hasEmail} telegram=${hasTelegram}`);
+      res.json({ sent: true, email: user.email.replace(/(.{2}).+(@.+)/, "$1***$2"), noChannel });
     } catch (error: any) {
       console.error("Admin OTP request error:", error.message);
       res.status(500).json({ message: "Erreur lors de l'envoi du code" });
