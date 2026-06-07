@@ -172,8 +172,8 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     queryKey: ["/api/admin/otp-status"],
     enabled: !!user && ["admin", "support", "finance"].includes((user as any).role),
     retry: false,
-    staleTime: 0,
-    gcTime: 0,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
   });
 
   // ─── TOTP verification (Google Authenticator) ────────────────────────────────
