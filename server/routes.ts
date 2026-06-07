@@ -5850,7 +5850,32 @@ export async function registerRoutes(
           }
         }
       } catch {
-        // Tier 3 fallback failed — continue with verified = false
+        // Tier 3 fallback failed — continue to Tier 4
+      }
+    }
+
+    // Tier 4: Bearer-token requests create a new session (different sessionID than the one
+    // that was OTP-verified). Search by userId across all active sessions with _avs set.
+    // This catches the case where the cookie is not sent with the refetch.
+    if (!verified && req.userId) {
+      try {
+        const userRow = await sessionPool.query(
+          `SELECT sess FROM session WHERE (sess::jsonb->>'userId') = $1 AND (sess::jsonb->>'_avs') IS NOT NULL AND expire > NOW() ORDER BY expire DESC LIMIT 1`,
+          [req.userId]
+        );
+        if (userRow.rows.length > 0) {
+          const sessData = typeof userRow.rows[0].sess === "string"
+            ? JSON.parse(userRow.rows[0].sess)
+            : userRow.rows[0].sess;
+          const dbAvs = sessData?._avs;
+          if (typeof dbAvs === "number" && dbAvs > now) {
+            verified = true;
+            // Populate in-memory cache for this session too
+            adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: dbAvs });
+          }
+        }
+      } catch {
+        // Tier 4 fallback failed — continue with verified = false
       }
     }
 
