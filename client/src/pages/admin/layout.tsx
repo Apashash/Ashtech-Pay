@@ -169,12 +169,13 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   const otpRef5 = useRef<HTMLInputElement>(null);
   const otpRefs = [otpRef0, otpRef1, otpRef2, otpRef3, otpRef4, otpRef5];
 
-  const { data: otpStatus, isLoading: otpLoading, refetch: refetchOtp } = useQuery<{ verified: boolean; totpEnabled?: boolean }>({
+  const { data: otpStatus, isLoading: otpLoading, refetch: refetchOtp } = useQuery<{ verified: boolean; totpEnabled?: boolean; bypass?: boolean }>({
     queryKey: ["/api/admin/otp-status"],
     enabled: !!user && ["admin", "support", "finance"].includes((user as any).role),
     retry: false,
-    staleTime: 5 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
+    staleTime: 0,
+    refetchOnMount: true,
+    gcTime: 10 * 60 * 1000,
   });
 
   // ─── TOTP verification (Google Authenticator) ────────────────────────────────

@@ -6388,10 +6388,15 @@ export async function registerRoutes(
   });
 
   // POST /api/admin/totp/disable — disable TOTP (requires current valid TOTP code)
-  app.post("/api/admin/totp/disable", requireAuth, requireAdmin, async (req, res) => {
+  // Note: requireAdmin is intentionally NOT used here — the TOTP code itself is the proof of ownership.
+  // requireAdmin would block on PM2 multi-worker when session isn't found on the current worker.
+  app.post("/api/admin/totp/disable", requireAuth, async (req, res) => {
     try {
       const user = await storage.getUser(req.userId!);
-      if (!user || !user.totpEnabled || !user.totpSecret) {
+      if (!user || !["admin", "support", "finance"].includes(user.role)) {
+        return res.status(403).json({ message: "Accès refusé" });
+      }
+      if (!user.totpEnabled || !user.totpSecret) {
         return res.status(400).json({ message: "TOTP non activé" });
       }
       const { code } = req.body as { code: string };
