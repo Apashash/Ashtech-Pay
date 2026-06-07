@@ -207,6 +207,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       setTotpError("");
       setTotpCode(["", "", "", "", "", ""]);
       otpVerifiedAtRef.current = Date.now();
+      queryClient.setQueryData(["/api/admin/otp-status"], (old: any) => ({ ...(old || {}), verified: true }));
       queryClient.invalidateQueries({ queryKey: ["/api/admin/otp-status"] });
     },
     onError: (error: Error) => {
@@ -316,6 +317,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       setOtpError("");
       setOtpSessionExpired(false);
       otpVerifiedAtRef.current = Date.now();
+      queryClient.setQueryData(["/api/admin/otp-status"], (old: any) => ({ ...(old || {}), verified: true }));
       queryClient.invalidateQueries({ queryKey: ["/api/admin/otp-status"] });
     },
     onError: (error: Error) => {
