@@ -157,6 +157,25 @@ const fileStorage = multer.diskStorage({
   },
 });
 
+// ─── FIX-10: Validation des fichiers par magic bytes ─────────────────────────
+// Le Content-Type déclaré par le client peut être falsifié. On vérifie les
+// vrais octets du fichier (magic bytes) pour détecter le vrai format.
+function validateFileMagicBytes(buffer: Buffer): { valid: boolean; detected: string } {
+  if (buffer.length < 4) return { valid: false, detected: "too_short" };
+  // JPEG: FF D8 FF
+  if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return { valid: true, detected: "image/jpeg" };
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) return { valid: true, detected: "image/png" };
+  // GIF: GIF87a ou GIF89a
+  if (buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x38) return { valid: true, detected: "image/gif" };
+  // WebP: RIFF....WEBP
+  if (buffer.length >= 12 && buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46 &&
+      buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50) return { valid: true, detected: "image/webp" };
+  // PDF: %PDF
+  if (buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46) return { valid: true, detected: "application/pdf" };
+  return { valid: false, detected: "unknown" };
+}
+
 const memoryUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 },
@@ -196,6 +215,12 @@ declare module "express-session" {
     impersonatedBy?: string;
   }
 }
+
+// ─── FIX-1: Secret de développement unique par démarrage de processus ─────────
+// En production, SESSION_SECRET est obligatoire (index.ts quitte si absent).
+// En dev, ce secret aléatoire garantit que sessions ET tokens Bearer utilisent
+// la même clé — cohérence entre les deux mécanismes d'authentification.
+const _DEV_TOKEN_SECRET = crypto.randomBytes(32).toString("hex");
 
 // ─── Admin OTP store (in-memory, per-userId) ──────────────────────────────────
 // Stores pending OTP codes. Never persisted to DB — cannot be injected via SQL.
@@ -248,14 +273,15 @@ function clearOtpFailures(userId: string): void {
 }
 
 function generateAdminOtp(): string {
-  // 6 digits — 1 million combinations vs 10 000 with 4 digits
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  // FIX-5: crypto.randomInt() est cryptographiquement sécurisé (CSPRNG).
+  // Math.random() est prévisible et ne doit pas être utilisé pour des codes OTP.
+  return crypto.randomInt(100000, 1000000).toString();
 }
 
 const TOKEN_EXPIRY_MS = 3 * 24 * 60 * 60 * 1000;
 
 function getTokenSecret(): string {
-  return process.env.SESSION_SECRET || "ashtech-fallback-secret-key";
+  return process.env.SESSION_SECRET || _DEV_TOKEN_SECRET;
 }
 
 function storeAuthToken(userId: string): string {
@@ -1000,17 +1026,50 @@ export async function registerRoutes(
     next();
   });
 
+  // ─── FIX-9: Protection CSRF par vérification de l'Origin ─────────────────────
+  // sameSite:"none" (nécessaire pour les iframes de paiement hébergé) permet aux
+  // navigateurs d'envoyer les cookies cross-origin. On bloque donc les requêtes
+  // mutantes (POST/PATCH/PUT/DELETE) dont l'Origin n'est pas dans la liste autorisée.
+  // Endpoints webhook et paiement public exemptés (appelés par des serveurs, pas des navigateurs).
+  const CSRF_EXEMPT_PREFIXES = [
+    "/api/swychr/webhook", "/api/afribapay/webhook", "/api/pixpay/webhook",
+    "/api/telegram/webhook", "/api/payment-links/", "/api/public/",
+    "/api/v1/hosted-payment", "/api/public/hosted-session",
+  ];
+  app.use((req, res, next) => {
+    if (!["POST", "PATCH", "PUT", "DELETE"].includes(req.method)) return next();
+    if (!req.path.startsWith("/api/")) return next();
+    const isExempt = CSRF_EXEMPT_PREFIXES.some(p => req.path.startsWith(p));
+    if (isExempt) return next();
+
+    const origin = req.headers.origin;
+    const referer = req.headers.referer;
+    const source = origin || (referer ? new URL(referer).origin : null);
+
+    // Pas d'Origin = requête serveur-à-serveur (Bearer token) ou navigateur ancien — laisser passer
+    if (!source) return next();
+
+    const isProd = process.env.NODE_ENV === "production";
+    if (isProd && !allowedOrigins.has(source)) {
+      console.warn(`[CSRF] Requête bloquée — Origin non autorisé: ${source} → ${req.method} ${req.path}`);
+      return res.status(403).json({ message: "Requête invalide (origine non autorisée)" });
+    }
+    next();
+  });
+
   // Session middleware
   const sessionSecret = process.env.SESSION_SECRET;
   if (!sessionSecret) {
-    console.warn("[Session] WARNING: SESSION_SECRET env var not set. Sessions will not persist across restarts. Please set SESSION_SECRET in your environment.");
+    console.warn("[Session] WARNING: SESSION_SECRET env var not set. Using per-process dev secret (tokens reset on restart). Set SESSION_SECRET in production.");
   }
   const isSecureProxy = process.env.TRUST_PROXY === "true" || !!process.env.REPL_ID;
   const cookieSecure = process.env.COOKIE_SECURE !== "false";
   const cookieSameSite = (process.env.COOKIE_SAMESITE as "none" | "lax" | "strict") || (isSecureProxy ? "none" : "lax");
   app.use(
     session({
-      secret: sessionSecret || crypto.randomBytes(32).toString("hex"),
+      // FIX-1: utilise _DEV_TOKEN_SECRET (même valeur que getTokenSecret()) en dev
+      // pour que sessions cookie et tokens Bearer soient cohérents dans le même processus.
+      secret: sessionSecret || _DEV_TOKEN_SECRET,
       resave: false,
       saveUninitialized: false,
       store: new SessionStore({
@@ -1229,6 +1288,14 @@ export async function registerRoutes(
     try {
       if (!req.file) {
         return res.status(400).json({ error: "Aucun fichier fourni" });
+      }
+
+      // FIX-10: Vérification des magic bytes — rejette les fichiers dont le contenu
+      // ne correspond pas à leur extension déclarée (ex: .exe renommé en .jpg).
+      const magicCheck = validateFileMagicBytes(req.file.buffer);
+      if (!magicCheck.valid) {
+        console.warn(`[Upload] Magic bytes invalides pour ${req.file.originalname} — détecté: ${magicCheck.detected}, déclaré: ${req.file.mimetype}`);
+        return res.status(400).json({ error: "Le contenu du fichier ne correspond pas à son type déclaré" });
       }
 
       const folder = (req.query.folder as string) || "payment-links";
@@ -4081,10 +4148,22 @@ export async function registerRoutes(
     }
   });
 
-  // Public settings
+  // Public settings — FIX-8: seules les clés explicitement autorisées sont lisibles sans auth.
+  // Toute autre clé (fx_rate_*, botban:*, sk_live, clés internes...) nécessite requireAdmin.
+  const PUBLIC_SETTINGS_ALLOWLIST = new Set([
+    "app_name", "app_logo", "app_favicon", "contact_email", "contact_phone",
+    "support_whatsapp", "support_telegram", "maintenance_enabled", "maintenance_message",
+    "public_announcement", "public_notice", "terms_url", "privacy_url",
+    "min_deposit", "max_deposit", "min_withdrawal", "max_withdrawal",
+    "registration_enabled", "kyc_required",
+  ]);
   app.get("/api/settings/:key", async (req, res) => {
     try {
-      const setting = await storage.getSetting(req.params.key);
+      const key = req.params.key;
+      if (!PUBLIC_SETTINGS_ALLOWLIST.has(key)) {
+        return res.status(403).json({ message: "Accès refusé" });
+      }
+      const setting = await storage.getSetting(key);
       res.json(setting || { value: "" });
     } catch (error) {
       res.status(500).json({ message: "Erreur serveur" });
@@ -5770,7 +5849,9 @@ export async function registerRoutes(
   });
 
   // Complete a payment (simulate webhook from payment gateway)
-  app.post("/api/payment-intents/:reference/complete", async (req, res) => {
+  // FIX-4: cet endpoint crédite le wallet d'un marchand — il doit être admin-only.
+  // Avant le fix, n'importe qui connaissant une référence pouvait créditer un compte gratuitement.
+  app.post("/api/payment-intents/:reference/complete", requireAuth, requireAdmin, async (req, res) => {
     try {
       const intent = await storage.getPaymentIntentByReference(req.params.reference);
       if (!intent) {
@@ -5874,11 +5955,8 @@ export async function registerRoutes(
   });
 
   // GET /api/admin/debug-storage — tests Supabase Storage connection (admin only)
-  app.get("/api/admin/debug-storage", requireAuth, async (req, res) => {
-    const user = await storage.getUser(req.userId!).catch(() => null);
-    if (!user || !["admin", "support", "finance"].includes(user.role)) {
-      return res.status(403).json({ message: "Accès refusé" });
-    }
+  // FIX-3: requireAdmin ajouté dans la chaîne middleware (plus seulement vérifié en interne).
+  app.get("/api/admin/debug-storage", requireAuth, requireAdmin, async (req, res) => {
     const { supabase: sbClient, STORAGE_BUCKET: bucket, listSupabaseBuckets, testDownload } = await import("./supabase");
     const result: Record<string, any> = {
       env: {
@@ -5924,13 +6002,9 @@ export async function registerRoutes(
     res.json(result);
   });
 
-  // GET /api/admin/debug-db — diagnostic endpoint (admin only, no OTP required)
-  // Helps identify DB connection issues in production (PM2 / Plesk).
-  app.get("/api/admin/debug-db", requireAuth, async (req, res) => {
-    const user = await storage.getUser(req.userId!).catch(() => null);
-    if (!user || !["admin", "support", "finance"].includes(user.role)) {
-      return res.status(403).json({ message: "Accès refusé" });
-    }
+  // GET /api/admin/debug-db — diagnostic endpoint (admin only)
+  // FIX-3: requireAdmin ajouté dans la chaîne middleware.
+  app.get("/api/admin/debug-db", requireAuth, requireAdmin, async (req, res) => {
     const results: Record<string, any> = {
       env: {
         hasSupabaseUrl: !!process.env.SUPABASE_DATABASE_URL,
@@ -5964,7 +6038,8 @@ export async function registerRoutes(
   });
 
   // GET /api/admin/check-access — diagnostic without OTP; shows role, session, OTP state
-  app.get("/api/admin/check-access", requireAuth, async (req, res) => {
+  // FIX-3: requireAdmin ajouté dans la chaîne middleware.
+  app.get("/api/admin/check-access", requireAuth, requireAdmin, async (req, res) => {
     try {
       const user = await storage.getUser(req.userId!).catch(() => null);
       const now = Date.now();

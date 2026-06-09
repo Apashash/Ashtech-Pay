@@ -22,6 +22,18 @@ const app = express();
 const httpServer = createServer(app);
 const isProd = process.env.NODE_ENV === "production";
 
+// ── FIX-1: SESSION_SECRET est obligatoire en production ───────────────────────
+// Sans lui, les tokens Bearer peuvent être forgés par quiconque lit le code source.
+if (isProd && !process.env.SESSION_SECRET) {
+  console.error("[SECURITY] FATAL: SESSION_SECRET env var must be set in production. Exiting.");
+  process.exit(1);
+}
+
+// ── FIX-6: Trust proxy — nécessaire pour que req.ip soit fiable derrière Replit/Nginx ──
+// Sans cela, X-Forwarded-For peut être forgé par le client pour contourner les rate limiters.
+const isSecureEnv = process.env.TRUST_PROXY === "true" || !!process.env.REPL_ID;
+app.set("trust proxy", isSecureEnv ? 1 : false);
+
 declare module "http" {
   interface IncomingMessage {
     rawBody: unknown;

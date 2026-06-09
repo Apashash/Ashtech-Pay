@@ -1,13 +1,11 @@
 import rateLimit from "express-rate-limit";
 import type { Request, Response } from "express";
 
-// ─── Helper: extract real client IP (handles proxies / Apache / Nginx / IPv6) ─
+// ─── Helper: extract real client IP ──────────────────────────────────────────
+// FIX-6: maintenant que app.set("trust proxy", 1) est configuré dans index.ts,
+// Express résout lui-même req.ip depuis X-Forwarded-For de façon sécurisée.
+// On ne parse plus manuellement X-Forwarded-For : un client ne peut pas forger req.ip.
 function getIp(req: Request): string {
-  const fwd = req.headers["x-forwarded-for"];
-  if (fwd) {
-    const raw = Array.isArray(fwd) ? fwd[0] : fwd;
-    return raw.split(",")[0].trim();
-  }
   return req.ip || req.socket?.remoteAddress || "unknown";
 }
 

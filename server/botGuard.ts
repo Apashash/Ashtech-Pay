@@ -24,12 +24,9 @@ setInterval(() => {
 }, 60 * 60 * 1000);
 
 // ─── Helper: IP réelle derrière proxy ─────────────────────────────────────
+// FIX-6: app.set("trust proxy", 1) dans index.ts rend req.ip fiable.
+// Plus besoin de parser X-Forwarded-For manuellement (spoofable sinon).
 function getIp(req: Request): string {
-  const fwd = req.headers["x-forwarded-for"];
-  if (fwd) {
-    const raw = Array.isArray(fwd) ? fwd[0] : fwd;
-    return raw.split(",")[0].trim();
-  }
   return req.ip || "unknown";
 }
 
