@@ -2695,3 +2695,99 @@ export async function notifyNewUser(opts: {
     `🕐 Heure : ${now()}`;
   await sendMessage(msg);
 }
+
+// ─── AUDIT / ÉVÉNEMENTS DE SÉCURITÉ ──────────────────────────────────────────
+
+const AUDIT_EMOJIS: Record<string, string> = {
+  login_success:      "✅",
+  login_failed:       "⚠️",
+  logout:             "🚪",
+  register:           "🎉",
+  password_changed:   "🔑",
+  password_reset:     "🔄",
+  withdrawal_created: "💸",
+  withdrawal_failed:  "❌",
+  transfer_sent:      "➡️",
+  transfer_failed:    "❌",
+  deposit_initiated:  "📥",
+  payment_link_paid:  "💰",
+  role_changed:       "🛡️",
+  user_banned:        "🚫",
+  user_unbanned:      "✅",
+  kyc_approved:       "🟢",
+  kyc_rejected:       "🔴",
+  session_revoked:    "🔒",
+  settings_updated:   "⚙️",
+};
+
+const AUDIT_LABELS: Record<string, string> = {
+  login_success:      "CONNEXION RÉUSSIE",
+  login_failed:       "CONNEXION ÉCHOUÉE",
+  logout:             "DÉCONNEXION",
+  register:           "INSCRIPTION",
+  password_changed:   "MOT DE PASSE MODIFIÉ",
+  password_reset:     "RÉINIT. MOT DE PASSE",
+  withdrawal_created: "RETRAIT CRÉÉ",
+  withdrawal_failed:  "RETRAIT ÉCHOUÉ",
+  transfer_sent:      "VIREMENT ENVOYÉ",
+  transfer_failed:    "VIREMENT ÉCHOUÉ",
+  deposit_initiated:  "DÉPÔT INITIÉ",
+  payment_link_paid:  "LIEN DE PAIEMENT PAYÉ",
+  role_changed:       "RÔLE MODIFIÉ",
+  user_banned:        "UTILISATEUR BANNI",
+  user_unbanned:      "UTILISATEUR DÉBANNI",
+  kyc_approved:       "KYC APPROUVÉ",
+  kyc_rejected:       "KYC REJETÉ",
+  session_revoked:    "SESSION RÉVOQUÉE",
+  settings_updated:   "PARAMÈTRES MODIFIÉS",
+};
+
+export async function notifyAuditEvent(opts: {
+  action: string;
+  actorType: "user" | "admin" | "system";
+  userId?: string | null;
+  userName?: string | null;
+  userEmail?: string | null;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  success: boolean;
+  details?: Record<string, unknown> | null;
+}): Promise<void> {
+  const emoji = AUDIT_EMOJIS[opts.action] ?? "📋";
+  const label = AUDIT_LABELS[opts.action] ?? opts.action.toUpperCase().replace(/_/g, " ");
+  const statusEmoji = opts.success ? "✅" : "❌";
+  const actorLabel = opts.actorType === "admin" ? "Admin" : opts.actorType === "system" ? "Système" : "Utilisateur";
+
+  // Lignes optionnelles détails
+  const detailLines: string[] = [];
+  if (opts.details) {
+    const skip = new Set(["role", "reason", "newRole"]); // certains apparaissent déjà dans le label
+    for (const [k, v] of Object.entries(opts.details)) {
+      if (v === null || v === undefined || v === "") continue;
+      if (k === "amount" && opts.details.currency)
+        detailLines.push(`💰 Montant : <b>${Number(v).toLocaleString("fr-FR")} ${opts.details.currency}</b>`);
+      else if (k === "currency" || k === "reference")
+        continue; // déjà inclus dans amount ou pas utile ici
+      else if (k === "newRole")
+        detailLines.push(`🔖 Nouveau rôle : <b>${v}</b>`);
+      else if (k === "reason")
+        detailLines.push(`📝 Raison : ${v}`);
+      else if (k === "affectedUserId")
+        detailLines.push(`🎯 Utilisateur cible : <code>${v}</code>`);
+    }
+  }
+
+  const msg =
+    `${emoji} <b>${label}</b>\n` +
+    `──────────────────\n` +
+    `${statusEmoji} Statut : ${opts.success ? "Succès" : "Échec"}\n` +
+    `👤 Acteur : ${actorLabel}\n` +
+    (opts.userName  ? `🙍 Nom : <b>${opts.userName}</b>\n`      : "") +
+    (opts.userEmail ? `📧 Email : ${opts.userEmail}\n`           : "") +
+    (opts.userId    ? `🆔 ID : <code>${opts.userId}</code>\n`    : "") +
+    (opts.ipAddress ? `🌐 IP : <code>${opts.ipAddress}</code>\n` : "") +
+    (detailLines.length ? detailLines.join("\n") + "\n" : "") +
+    `🕐 Heure : ${now()}`;
+
+  await sendMessage(msg);
+}

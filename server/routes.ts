@@ -1535,6 +1535,8 @@ export async function registerRoutes(
           if (err) console.error("Session save error (register):", err);
           audit(req, AUDIT.REGISTER, {
             userId: user.id,
+            userName: user.fullName || user.username,
+            userEmail: user.email || undefined,
             details: { country: (user as any).country ?? null },
           });
           const { password: _, ...safeUser } = user;
@@ -1675,6 +1677,8 @@ export async function registerRoutes(
           if (err) console.error("Session save error (login):", err);
           audit(req, AUDIT.LOGIN_SUCCESS, {
             userId: user.id,
+            userName: user.fullName || user.username,
+            userEmail: user.email || undefined,
             details: { role: user.role },
           });
           const { password: _, ...safeUser } = user;
@@ -2195,7 +2199,13 @@ export async function registerRoutes(
 
       await storage.updatePassword(userId, entry.newPasswordHash);
       passwordChangeOtpStore.delete(userId);
-      audit(req, AUDIT.PASSWORD_CHANGED, { userId });
+      // Récupérer nom/email pour la notif Telegram (best-effort)
+      const pwdUser = await storage.getUser(userId).catch(() => null);
+      audit(req, AUDIT.PASSWORD_CHANGED, {
+        userId,
+        userName: pwdUser ? (pwdUser.fullName || pwdUser.username) : undefined,
+        userEmail: pwdUser?.email || undefined,
+      });
       res.json({ message: "Mot de passe modifié avec succès" });
     } catch (err) {
       console.error("[PasswordChange] confirm error:", err);
@@ -7040,12 +7050,21 @@ export async function registerRoutes(
         details: JSON.stringify({ role }),
         ipAddress: req.ip || null,
       });
+      // Récupérer info admin + utilisateur cible pour la notif
+      const roleAdmin = await storage.getUser(req.userId!).catch(() => null);
       audit(req, AUDIT.ROLE_CHANGED, {
         userId: req.userId!,
+        userName: roleAdmin ? (roleAdmin.fullName || roleAdmin.username) : undefined,
+        userEmail: roleAdmin?.email || undefined,
         actorType: "admin",
         targetType: "user",
         targetId: id,
-        details: { newRole: role },
+        details: {
+          newRole: role,
+          targetUserId: id,
+          targetUserEmail: user.email || undefined,
+          targetUserName: user.fullName || user.username,
+        },
       });
       const { password, ...safeUser } = user;
       res.json(safeUser);
@@ -7073,12 +7092,20 @@ export async function registerRoutes(
         details: JSON.stringify({ reason }),
         ipAddress: req.ip || null,
       });
+      const banAdmin = await storage.getUser(req.userId!).catch(() => null);
       audit(req, AUDIT.USER_BANNED, {
         userId: req.userId!,
+        userName: banAdmin ? (banAdmin.fullName || banAdmin.username) : undefined,
+        userEmail: banAdmin?.email || undefined,
         actorType: "admin",
         targetType: "user",
         targetId: id,
-        details: { reason },
+        details: {
+          reason,
+          targetUserId: id,
+          targetUserEmail: user.email || undefined,
+          targetUserName: user.fullName || user.username,
+        },
       });
       const { password, ...safeUser } = user;
       res.json(safeUser);
@@ -7104,11 +7131,19 @@ export async function registerRoutes(
         targetId: id,
         ipAddress: req.ip || null,
       });
+      const unbanAdmin = await storage.getUser(req.userId!).catch(() => null);
       audit(req, AUDIT.USER_UNBANNED, {
         userId: req.userId!,
+        userName: unbanAdmin ? (unbanAdmin.fullName || unbanAdmin.username) : undefined,
+        userEmail: unbanAdmin?.email || undefined,
         actorType: "admin",
         targetType: "user",
         targetId: id,
+        details: {
+          targetUserId: id,
+          targetUserEmail: user.email || undefined,
+          targetUserName: user.fullName || user.username,
+        },
       });
       const { password, ...safeUser } = user;
       res.json(safeUser);
