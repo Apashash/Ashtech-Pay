@@ -10,6 +10,7 @@ import {
   supportTickets,
   ticketMessages,
   adminLogs,
+  auditLogs,
   platformSettings,
   withdrawalNumbers,
   withdrawalNumberChanges,
@@ -38,6 +39,8 @@ import {
   type InsertTicketMessage,
   type AdminLog,
   type InsertAdminLog,
+  type AuditLog,
+  type InsertAuditLog,
   type PlatformSetting,
   type InsertPlatformSetting,
   type WithdrawalNumber,
@@ -174,6 +177,17 @@ export interface IStorage {
   // Admin: Logs
   createAdminLog(log: InsertAdminLog): Promise<AdminLog>;
   getAdminLogs(limit?: number): Promise<AdminLog[]>;
+  createAuditLog(log: InsertAuditLog): Promise<AuditLog>;
+  getAuditLogs(filters?: {
+    userId?: string;
+    action?: string;
+    actorType?: string;
+    success?: boolean;
+    dateFrom?: Date;
+    dateTo?: Date;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ logs: AuditLog[]; total: number }>;
   
   // Admin: Platform settings
   getAllSettings(): Promise<PlatformSetting[]>;
@@ -947,6 +961,44 @@ export class DatabaseStorage implements IStorage {
 
   async getAdminLogs(limit: number = 100): Promise<AdminLog[]> {
     return await db.select().from(adminLogs).orderBy(desc(adminLogs.createdAt)).limit(limit);
+  }
+
+  async createAuditLog(log: InsertAuditLog): Promise<AuditLog> {
+    const [newLog] = await db.insert(auditLogs).values(log).returning();
+    return newLog;
+  }
+
+  async getAuditLogs(filters: {
+    userId?: string;
+    action?: string;
+    actorType?: string;
+    success?: boolean;
+    dateFrom?: Date;
+    dateTo?: Date;
+    limit?: number;
+    offset?: number;
+  } = {}): Promise<{ logs: AuditLog[]; total: number }> {
+    const { userId, action, actorType, success, dateFrom, dateTo, limit = 50, offset = 0 } = filters;
+    const conditions = [];
+    if (userId)    conditions.push(eq(auditLogs.userId, userId));
+    if (action)    conditions.push(eq(auditLogs.action, action));
+    if (actorType) conditions.push(eq(auditLogs.actorType, actorType));
+    if (success !== undefined) conditions.push(eq(auditLogs.success, success));
+    if (dateFrom)  conditions.push(sql`${auditLogs.createdAt} >= ${dateFrom}`);
+    if (dateTo)    conditions.push(sql`${auditLogs.createdAt} <= ${dateTo}`);
+
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const [logs, countRows] = await Promise.all([
+      db.select().from(auditLogs)
+        .where(where)
+        .orderBy(desc(auditLogs.createdAt))
+        .limit(limit)
+        .offset(offset),
+      db.select({ count: count() }).from(auditLogs).where(where),
+    ]);
+
+    return { logs, total: Number(countRows[0]?.count ?? 0) };
   }
   
   // Admin: Platform settings

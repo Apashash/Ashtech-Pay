@@ -1,6 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { audit, AUDIT } from "./auditLogger";
 import {
   checkAuthRateLimit,
   recordAuthFailure,
@@ -1532,6 +1533,10 @@ export async function registerRoutes(
         delete req.session._avs;
         req.session.save((err) => {
           if (err) console.error("Session save error (register):", err);
+          audit(req, AUDIT.REGISTER, {
+            userId: user.id,
+            details: { country: (user as any).country ?? null },
+          });
           const { password: _, ...safeUser } = user;
           res.json({ user: safeUser, token: authToken });
         });
@@ -1594,6 +1599,11 @@ export async function registerRoutes(
         : (await bcrypt.compare(data.password, DUMMY_BCRYPT_HASH), false);
 
       if (!user || !passwordValid) {
+        audit(req, AUDIT.LOGIN_FAILED, {
+          userId: user?.id ?? null,
+          success: false,
+          details: { identifier: data.identifier, reason: !user ? "unknown_identifier" : "wrong_password" },
+        });
         const failure = await recordAuthFailure(ip, data.identifier);
         const remaining = failure.attemptsLeft;
         const msg = failure.blocked
@@ -1663,6 +1673,10 @@ export async function registerRoutes(
 
         req.session.save((err) => {
           if (err) console.error("Session save error (login):", err);
+          audit(req, AUDIT.LOGIN_SUCCESS, {
+            userId: user.id,
+            details: { role: user.role },
+          });
           const { password: _, ...safeUser } = user;
           res.json({ user: safeUser, token: authToken });
         });
@@ -1683,6 +1697,9 @@ export async function registerRoutes(
       const token = authHeader.substring(7);
       removeAuthToken(token);
     }
+
+    const logoutUserId = req.userId ?? null;
+    audit(req, AUDIT.LOGOUT, { userId: logoutUserId });
 
     // Clear in-memory OTP verification for THIS session + destroy session
     adminVerifiedSessions.delete(req.sessionID);
@@ -2178,7 +2195,7 @@ export async function registerRoutes(
 
       await storage.updatePassword(userId, entry.newPasswordHash);
       passwordChangeOtpStore.delete(userId);
-
+      audit(req, AUDIT.PASSWORD_CHANGED, { userId });
       res.json({ message: "Mot de passe modifié avec succès" });
     } catch (err) {
       console.error("[PasswordChange] confirm error:", err);
@@ -2799,6 +2816,18 @@ export async function registerRoutes(
         console.error(`[Transfer] Payout error for ${reference}:`, payoutErr.message);
       }
 
+      audit(req, AUDIT.TRANSFER_SENT, {
+        userId: senderId,
+        details: {
+          amount: parsedAmount,
+          currency: txCurrency,
+          reference,
+          feeAmount,
+          totalAmount,
+          recipientName,
+          recipientPhone,
+        },
+      });
       res.json({
         message: "Votre transfert est en cours de traitement",
         transaction,
@@ -3725,6 +3754,16 @@ export async function registerRoutes(
         console.error(`[Withdrawal] Payout error for ${withdrawalRef}:`, payoutErr.message);
       }
 
+      audit(req, AUDIT.WITHDRAWAL_CREATED, {
+        userId,
+        details: {
+          amount,
+          currency: withdrawalCurrency,
+          reference: withdrawalRef,
+          feeAmount,
+          totalDebited: totalAmount,
+        },
+      });
       res.json({ 
         transaction,
         feeDetails: {
@@ -7001,6 +7040,13 @@ export async function registerRoutes(
         details: JSON.stringify({ role }),
         ipAddress: req.ip || null,
       });
+      audit(req, AUDIT.ROLE_CHANGED, {
+        userId: req.userId!,
+        actorType: "admin",
+        targetType: "user",
+        targetId: id,
+        details: { newRole: role },
+      });
       const { password, ...safeUser } = user;
       res.json(safeUser);
     } catch (error) {
@@ -7027,7 +7073,13 @@ export async function registerRoutes(
         details: JSON.stringify({ reason }),
         ipAddress: req.ip || null,
       });
-      
+      audit(req, AUDIT.USER_BANNED, {
+        userId: req.userId!,
+        actorType: "admin",
+        targetType: "user",
+        targetId: id,
+        details: { reason },
+      });
       const { password, ...safeUser } = user;
       res.json(safeUser);
     } catch (error) {
@@ -7052,7 +7104,12 @@ export async function registerRoutes(
         targetId: id,
         ipAddress: req.ip || null,
       });
-      
+      audit(req, AUDIT.USER_UNBANNED, {
+        userId: req.userId!,
+        actorType: "admin",
+        targetType: "user",
+        targetId: id,
+      });
       const { password, ...safeUser } = user;
       res.json(safeUser);
     } catch (error) {
@@ -8482,6 +8539,29 @@ export async function registerRoutes(
     }
   });
 
+  // Admin: Audit logs (connexion, retrait, rôle, KYC…)
+  app.get("/api/admin/audit-logs", requireAdmin, async (req, res) => {
+    try {
+      const limit  = Math.min(parseInt(req.query.limit  as string) || 50, 200);
+      const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
+      const filters: Parameters<typeof storage.getAuditLogs>[0] = { limit, offset };
+
+      if (req.query.userId)    filters.userId    = req.query.userId    as string;
+      if (req.query.action)    filters.action    = req.query.action    as string;
+      if (req.query.actorType) filters.actorType = req.query.actorType as string;
+      if (req.query.dateFrom)  filters.dateFrom  = new Date(req.query.dateFrom as string);
+      if (req.query.dateTo)    filters.dateTo    = new Date(req.query.dateTo   as string);
+      if (req.query.success !== undefined)
+        filters.success = req.query.success === "true";
+
+      const result = await storage.getAuditLogs(filters);
+      res.json(result);
+    } catch (error) {
+      console.error("Admin audit logs error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   // Admin: Déconnecter TOUS les utilisateurs
   app.delete("/api/admin/sessions/all", requireAuth, requireAdmin, async (req, res) => {
     try {
@@ -9499,7 +9579,13 @@ export async function registerRoutes(
         details: JSON.stringify({ note }),
         ipAddress: req.ip || null,
       });
-      
+      audit(req, AUDIT.KYC_APPROVED, {
+        userId: req.userId!,
+        actorType: "admin",
+        targetType: "kyc_submission",
+        targetId: req.params.id,
+        details: { affectedUserId: submission.userId, note: note || null },
+      });
       res.json(submission);
     } catch (error) {
       console.error("Approve KYC error:", error);
@@ -9555,6 +9641,13 @@ export async function registerRoutes(
         targetId: req.params.id,
         details: JSON.stringify({ note }),
         ipAddress: req.ip || null,
+      });
+      audit(req, AUDIT.KYC_REJECTED, {
+        userId: req.userId!,
+        actorType: "admin",
+        targetType: "kyc_submission",
+        targetId: req.params.id,
+        details: { affectedUserId: submission.userId, reason: note },
       });
       
       res.json(submission);

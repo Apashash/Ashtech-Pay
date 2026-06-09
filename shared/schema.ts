@@ -585,6 +585,24 @@ export const insertTicketMessageSchema = createInsertSchema(ticketMessages).omit
 export const insertAdminLogSchema = createInsertSchema(adminLogs).omit({ id: true, createdAt: true });
 export const insertPlatformSettingSchema = createInsertSchema(platformSettings).omit({ id: true, updatedAt: true });
 
+// ── Audit logs (user + admin security events) ────────────────────────────────
+export const auditLogs = pgTable("audit_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id"),        // nullable — anonyme ou système
+  actorType: text("actor_type").notNull().default("user"), // 'user' | 'admin' | 'system'
+  action: text("action").notNull(),
+  targetType: text("target_type"),
+  targetId: varchar("target_id"),
+  details: text("details"),          // JSON string
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  success: boolean("success").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({ id: true, createdAt: true });
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
+
 // User notifications table
 export const userNotifications = pgTable("user_notifications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
