@@ -280,10 +280,18 @@ app.use((req, res, next) => {
           // (will be set on next config save by the merchant)
         }
         if (Object.keys(updates).length > 0) {
-          const setClauses = Object.entries(updates)
-            .map(([k, v]) => `${k} = ${v === null ? "NULL" : `'${v}'`}`)
-            .join(", ");
-          await db.execute(sql.raw(`UPDATE hosted_page_configs SET ${setClauses} WHERE id = '${row.id}'`));
+          // Use parameterized updates to avoid sql.raw injection risk
+          const allowedCols = new Set(["sk_live", "pk_live", "hp_live", "hp_live_hash"]);
+          for (const [k] of Object.entries(updates)) {
+            if (!allowedCols.has(k)) delete updates[k]; // strip unexpected keys
+          }
+          const setFragments = Object.entries(updates).map(([k, v]) =>
+            v === null ? sql.raw(`${k} = NULL`) : sql`${sql.raw(k)} = ${v}`
+          );
+          if (setFragments.length > 0) {
+            const setPart = sql.join(setFragments, sql.raw(", "));
+            await db.execute(sql`UPDATE hosted_page_configs SET ${setPart} WHERE id = ${row.id}`);
+          }
           hpMigrated++;
         }
       }
@@ -299,9 +307,9 @@ app.use((req, res, next) => {
       for (const row of (apiKeyRows as any).rows ?? []) {
         const encKey = encryptField(row.api_key);
         const keyHash = hmacField(row.api_key);
-        await db.execute(sql.raw(
-          `UPDATE users SET api_key = '${encKey}', api_key_hash = '${keyHash}' WHERE id = '${row.id}'`
-        ));
+        await db.execute(
+          sql`UPDATE users SET api_key = ${encKey}, api_key_hash = ${keyHash} WHERE id = ${row.id}`
+        );
         akMigrated++;
       }
       if (akMigrated > 0)

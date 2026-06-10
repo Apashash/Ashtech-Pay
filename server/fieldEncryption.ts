@@ -65,7 +65,7 @@ export function decryptField(value: string | null | undefined): string | null {
     const iv = Buffer.from(ivHex, "hex");
     const authTag = Buffer.from(authTagHex, "hex");
     const ciphertext = Buffer.from(ciphertextHex, "hex");
-    const decipher = crypto.createDecipheriv(ALGO, key, iv) as crypto.DecipherGCM;
+    const decipher = crypto.createDecipheriv(ALGO, key, iv, { authTagLength: 16 }) as crypto.DecipherGCM;
     decipher.setAuthTag(authTag);
     return decipher.update(ciphertext).toString("utf8") + decipher.final("utf8");
   } catch (err: any) {

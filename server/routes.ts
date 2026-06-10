@@ -461,7 +461,7 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
     });
   }
   if (!req.userId) {
-    console.log("Auth failed - No userId. Session ID:", req.sessionID, "Cookies:", req.headers.cookie ? "present" : "none", "Auth header:", req.headers.authorization ? "present" : "none");
+    console.log("Auth failed - No userId. Cookies:", req.headers.cookie ? "present" : "none", "Auth header:", req.headers.authorization ? "present" : "none");
     return res.status(401).json({ message: "Non autorisé" });
   }
   next();
@@ -1324,7 +1324,9 @@ export async function registerRoutes(
       } else {
         // Fallback: write buffer to disk
         const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-        const ext = path.extname(req.file.originalname);
+        // Sanitize extension — only allow alphanumeric to prevent path traversal
+        const rawExt = path.extname(req.file.originalname).toLowerCase();
+        const ext = /^\.[a-z0-9]+$/.test(rawExt) ? rawExt : "";
         const filename = `${uniqueSuffix}${ext}`;
         const diskPath = path.join(uploadsDir, filename);
         fs.writeFileSync(diskPath, req.file.buffer);
