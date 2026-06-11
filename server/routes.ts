@@ -5029,7 +5029,7 @@ export async function registerRoutes(
                 f => !f.operatorId && !f.countryId && f.transactionType === "deposit" && f.isActive
               );
             }
-            const provider = (op as any).paymentProvider || "swychr";
+            const provider = (op as any).depositPaymentProvider || (op as any).paymentProvider || "swychr";
             const afribaRate = operatorFee ? parseFloat((operatorFee as any).afribapayFee || "0") : 0;
             const pixpayRate = operatorFee ? parseFloat((operatorFee as any).pixpayFee || "0") : 0;
             const marginRate = operatorFee ? parseFloat((operatorFee as any).ashtechMargin || "0") : 0;
