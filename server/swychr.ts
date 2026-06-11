@@ -82,6 +82,27 @@ export function computeSwychrFees(grossAmount: number, countryCode: string, asht
 let cachedToken: string | null = null;
 let tokenExpiry: Date | null = null;
 
+/** Force-clear the token cache so the next call re-authenticates. */
+export function clearSwychrTokenCache(): void {
+  cachedToken  = null;
+  tokenExpiry  = null;
+  try {
+    if (fs.existsSync(TOKEN_FILE)) fs.unlinkSync(TOKEN_FILE);
+  } catch { /* ignore */ }
+  console.log("[Swychr] Token cache cleared — will re-authenticate on next request");
+}
+
+/** Returns true if the error looks like a token-invalidation response from Swychr. */
+function isTokenInvalidError(msg?: string | null): boolean {
+  if (!msg) return false;
+  const lower = msg.toLowerCase();
+  return lower.includes("security token") ||
+         lower.includes("token is not valid") ||
+         lower.includes("unauthorized") ||
+         lower.includes("unauthenticated") ||
+         lower.includes("token expired");
+}
+
 function parseJwtExp(token: string): Date | null {
   try {
     const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64").toString());
@@ -128,6 +149,9 @@ loadPersistedToken();
 export async function getSwychrToken(): Promise<string> {
   if (cachedToken && tokenExpiry && new Date() < tokenExpiry) {
     return cachedToken;
+  }
+  if (!SWYCHR_EMAIL || !SWYCHR_PASSWORD) {
+    throw new Error("Swychr non configuré — SWYCHR_EMAIL et SWYCHR_PASSWORD sont requis");
   }
   const res = await fetch(`${SWYCHR_BASE_URL}/admin/auth`, {
     method: "POST",
@@ -182,40 +206,54 @@ export interface SwychrCreateLinkResponse {
  *
  * pass_digital_charge: true → Swychr adds its fee on top, client pays ~grossAmount
  */
+async function doCreateSwychrPaymentLink(
+  params: SwychrCreateLinkParams,
+  token: string,
+): Promise<{ res: Response; data: any }> {
+  const fees = computeSwychrFees(params.grossAmount, params.country_code);
+  console.log(
+    `[Swychr] Creating link: gross=${params.grossAmount}, swychrFee=${fees.swychrFeeAmount}, ` +
+    `ashtechFee=${fees.ashtechFeeAmount}, credited=${fees.creditedAmount}, totalFee=${fees.totalFeeRate}%`
+  );
+  const res = await fetch(`${SWYCHR_BASE_URL}/create_payment_links`, {
+    method: "POST",
+    headers: {
+      "Content-Type":    "application/json",
+      "Authorization":   `Bearer ${token}`,
+      "Idempotency-Key": params.transaction_id,
+    },
+    body: JSON.stringify({
+      country_code:        params.country_code,
+      name:                params.name,
+      email:               params.email,
+      mobile:              params.mobile,
+      amount:              params.grossAmount,
+      currency:            params.currency,
+      transaction_id:      params.transaction_id,
+      description:         params.description,
+      pass_digital_charge: false,
+      callback_url:        params.callback_url,
+    }),
+  });
+  const data = await res.json();
+  return { res, data };
+}
+
 export async function createSwychrPaymentLink(
   params: SwychrCreateLinkParams
 ): Promise<SwychrCreateLinkResponse> {
   try {
-    const token = await getSwychrToken();
-    const fees  = computeSwychrFees(params.grossAmount, params.country_code);
+    const fees = computeSwychrFees(params.grossAmount, params.country_code);
+    let token = await getSwychrToken();
+    let { res, data } = await doCreateSwychrPaymentLink(params, token);
 
-    console.log(
-      `[Swychr] Creating link: gross=${params.grossAmount}, swychrFee=${fees.swychrFeeAmount}, ` +
-      `ashtechFee=${fees.ashtechFeeAmount}, credited=${fees.creditedAmount}, totalFee=${fees.totalFeeRate}%`
-    );
-
-    const res = await fetch(`${SWYCHR_BASE_URL}/create_payment_links`, {
-      method: "POST",
-      headers: {
-        "Content-Type":    "application/json",
-        "Authorization":   `Bearer ${token}`,
-        "Idempotency-Key": params.transaction_id,
-      },
-      body: JSON.stringify({
-        country_code:        params.country_code,
-        name:                params.name,
-        email:               params.email,
-        mobile:              params.mobile,
-        amount:              params.grossAmount,
-        currency:            params.currency,
-        transaction_id:      params.transaction_id,
-        description:         params.description,
-        pass_digital_charge: false,
-        callback_url:        params.callback_url,
-      }),
-    });
-
-    const data = await res.json();
+    // ── Auto-retry if Swychr signals the token is invalid/revoked ─────────────
+    if ((!res.ok || !data.data?.id) && (res.status === 401 || isTokenInvalidError(data?.message))) {
+      console.warn(`[Swychr] Token rejected (${res.status} — "${data?.message}") — clearing cache and retrying…`);
+      clearSwychrTokenCache();
+      token = await getSwychrToken();
+      ({ res, data } = await doCreateSwychrPaymentLink(params, token));
+    }
 
     if (!res.ok || !data.data?.id) {
       console.error("[Swychr] Create link failed:", JSON.stringify(data));
@@ -223,7 +261,7 @@ export async function createSwychrPaymentLink(
     }
 
     const id           = data.data.id as number;
-    const payment_link = data.data.payment_link as string; // always present in /payin/ response
+    const payment_link = data.data.payment_link as string;
 
     console.log(`[Swychr] Payment link created: id=${id}, url=${payment_link}`);
     return {
@@ -259,29 +297,37 @@ export interface SwychrStatusResponse {
  *   1 = completed (payment received)
  *   2 = failed/expired
  */
+async function doCheckSwychrStatus(transaction_id: string, token: string) {
+  const res = await fetch(`${SWYCHR_BASE_URL}/payment_link_status`, {
+    method:  "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+    body: JSON.stringify({ transaction_id }),
+  });
+  const json = await res.json().catch(() => ({}));
+  return { res, json };
+}
+
 export async function checkSwychrPaymentStatus(
   transaction_id: string
 ): Promise<SwychrStatusResponse> {
   try {
-    const token = await getSwychrToken();
-    const res = await fetch(`${SWYCHR_BASE_URL}/payment_link_status`, {
-      method:  "POST",
-      headers: {
-        "Content-Type":  "application/json",
-        "Authorization": `Bearer ${token}`,
-      },
-      body: JSON.stringify({ transaction_id }),
-    });
+    let token = await getSwychrToken();
+    let { res, json } = await doCheckSwychrStatus(transaction_id, token);
+
+    // ── Auto-retry on token invalidation ──────────────────────────────────────
+    if (!res.ok && (res.status === 401 || isTokenInvalidError(json?.message))) {
+      console.warn(`[Swychr] Status check token rejected — clearing cache and retrying…`);
+      clearSwychrTokenCache();
+      token = await getSwychrToken();
+      ({ res, json } = await doCheckSwychrStatus(transaction_id, token));
+    }
 
     if (!res.ok) {
       return { success: false, message: `HTTP ${res.status}` };
     }
 
-    const json   = await res.json();
-    const attrs  = json.data?.data?.attributes;
-
+    const attrs = json.data?.data?.attributes;
     if (!attrs) {
-      // Empty data means still pending (as shown in doc sample)
       return { success: true, status: "pending", rawStatus: null, data: {} };
     }
 
@@ -326,12 +372,24 @@ export async function fetchPaymentLinkDetails(
   transaction_id: string
 ): Promise<SwychrPaymentDetails | null> {
   try {
-    const token = await getSwychrToken();
-    const res = await fetch(`${SWYCHR_BASE_URL}/payment_link_status`, {
+    let token = await getSwychrToken();
+    let res = await fetch(`${SWYCHR_BASE_URL}/payment_link_status`, {
       method:  "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
       body: JSON.stringify({ transaction_id }),
     });
+
+    // ── Auto-retry on token invalidation ──────────────────────────────────────
+    if (!res.ok && res.status === 401) {
+      clearSwychrTokenCache();
+      token = await getSwychrToken();
+      res = await fetch(`${SWYCHR_BASE_URL}/payment_link_status`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ transaction_id }),
+      });
+    }
+
     if (!res.ok) return null;
     const json  = await res.json();
     const attrs = json.data?.data?.attributes;
