@@ -8,6 +8,7 @@ import {
   clearAuthAttempts,
   getBlockedIps,
   unblockByIdentifier,
+  blockIpManually,
 } from "./ipBlocker";
 import {
   registerLimiter,
@@ -247,6 +248,34 @@ setInterval(() => {
     if (entry.expiresAt <= now) pendingAdminLogins.delete(token);
   }
 }, 2 * 60 * 1000);
+
+// ─── Admin IP Whitelist ────────────────────────────────────────────────────────
+// Stored in platform_settings (key="admin_ip_whitelist", value=JSON array).
+// If list is empty → no restriction (feature disabled).
+// If non-empty → ONLY listed IPs may access admin routes.
+let _adminIpWhitelist: string[] = [];
+let _adminIpWhitelistLoadedAt = 0;
+const ADMIN_IP_WHITELIST_TTL = 20_000; // 20s cache
+
+async function loadAdminIpWhitelist(): Promise<string[]> {
+  const now = Date.now();
+  if (now - _adminIpWhitelistLoadedAt < ADMIN_IP_WHITELIST_TTL) return _adminIpWhitelist;
+  try {
+    const setting = await storage.getSetting("admin_ip_whitelist");
+    _adminIpWhitelist = setting ? JSON.parse(setting.value) : [];
+  } catch { /* keep stale */ }
+  _adminIpWhitelistLoadedAt = now;
+  return _adminIpWhitelist;
+}
+
+function invalidateAdminIpWhitelistCache() {
+  _adminIpWhitelistLoadedAt = 0;
+}
+
+function isIpAllowed(ip: string, list: string[]): boolean {
+  if (!list.length) return true; // empty list = no restriction
+  return list.some(a => a.trim() === ip.trim());
+}
 
 // ─── Admin OTP verified sessions — dual storage ───────────────────────────────
 // PRIMARY: in-memory Map (instant, no async — avoids race condition on refetchOtp)
@@ -568,6 +597,21 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
   if (!otpValid) {
     console.warn(`[AdminAccess] OTP NOT VALID — user=${req.userId} role=${user.role} path=${req.path} mem=${memValid} session=${sessionValid} t3=${tier3Used}`);
     return res.status(403).json({ message: "Vérification OTP admin requise", requireOtp: true });
+  }
+
+  // ── IP Whitelist check (runs on every admin request) ──────────────────────────
+  // If the whitelist is non-empty and the request IP is NOT in it → instant ban + kick.
+  const whitelist = await loadAdminIpWhitelist();
+  if (whitelist.length > 0) {
+    const currentIp = getClientIp(req);
+    if (!isIpAllowed(currentIp, whitelist)) {
+      console.warn(`[AdminAccess] IP WHITELIST VIOLATION — user=${req.userId} ip=${currentIp} path=${req.path}`);
+      const banUntil = Date.now() + 72 * 60 * 60 * 1000;
+      blockIpManually(currentIp, 72 * 60 * 60 * 1000, `admin_ip_whitelist_violation:${req.userId}`).catch(() => {});
+      revokeSessionsByIp(currentIp, banUntil).catch(() => {});
+      if (req.userId) destroyUserSessions(req.userId, banUntil).catch(() => {});
+      return res.status(403).json({ message: "Accès refusé — IP non autorisée.", ipBlocked: true });
+    }
   }
 
   console.log(`[AdminAccess] OK — user=${req.userId} role=${user.role} path=${req.path} mem=${memValid} session=${sessionValid} t3=${tier3Used}`);
@@ -1455,6 +1499,94 @@ export async function registerRoutes(
     const ip = decodeURIComponent(req.params.ip);
     await clearAuthAttempts(ip);
     res.json({ ok: true, message: `IP ${ip} débloquée.` });
+  });
+
+  // ── Admin IP Whitelist endpoints ─────────────────────────────────────────────
+
+  // GET — return the current request IP (helper for UI "add my IP" button)
+  app.get("/api/admin/my-ip", requireAuth, requireAdmin, (req, res) => {
+    res.json({ ip: getClientIp(req) });
+  });
+
+  // GET — list whitelist
+  app.get("/api/admin/ip-whitelist", requireAuth, requireAdmin, async (_req, res) => {
+    try {
+      const setting = await storage.getSetting("admin_ip_whitelist");
+      const ips: string[] = setting ? JSON.parse(setting.value) : [];
+      res.json({ ips });
+    } catch {
+      res.json({ ips: [] });
+    }
+  });
+
+  // POST — add IP to whitelist
+  app.post("/api/admin/ip-whitelist", requireAuth, requireAdmin, async (req, res) => {
+    const { ip } = req.body;
+    if (!ip || typeof ip !== "string") return res.status(400).json({ message: "IP requise." });
+    const trimmed = ip.trim();
+    // Accept IPv4 and IPv6 basics — just reject obviously wrong formats
+    if (!trimmed || trimmed.length > 45) return res.status(400).json({ message: "Format IP invalide." });
+    const ipv4Re = /^(\d{1,3}\.){3}\d{1,3}$/;
+    const ipv6Re = /^[0-9a-fA-F:]{3,39}$/;
+    if (!ipv4Re.test(trimmed) && !ipv6Re.test(trimmed)) {
+      return res.status(400).json({ message: "Format IP invalide (ex: 1.2.3.4)." });
+    }
+    try {
+      const setting = await storage.getSetting("admin_ip_whitelist");
+      const list: string[] = setting ? JSON.parse(setting.value) : [];
+      if (list.includes(trimmed)) return res.status(400).json({ message: "Cette IP est déjà dans la liste." });
+      list.push(trimmed);
+      await storage.setSetting("admin_ip_whitelist", JSON.stringify(list));
+      invalidateAdminIpWhitelistCache();
+      res.json({ ips: list });
+    } catch {
+      res.status(500).json({ message: "Erreur serveur." });
+    }
+  });
+
+  // DELETE — remove IP from whitelist
+  app.delete("/api/admin/ip-whitelist/:ip", requireAuth, requireAdmin, async (req, res) => {
+    const ip = decodeURIComponent(req.params.ip);
+    try {
+      const setting = await storage.getSetting("admin_ip_whitelist");
+      let list: string[] = setting ? JSON.parse(setting.value) : [];
+      list = list.filter(i => i !== ip);
+      await storage.setSetting("admin_ip_whitelist", JSON.stringify(list));
+      invalidateAdminIpWhitelistCache();
+      res.json({ ips: list });
+    } catch {
+      res.status(500).json({ message: "Erreur serveur." });
+    }
+  });
+
+  // GET — IP check (polled every 3s by admin frontend)
+  // Uses requireAuth only — NOT requireAdmin (to avoid circular IP ban on self-check).
+  // If IP not whitelisted → destroy session + ban 72h → return { kicked: true }.
+  app.get("/api/admin/ip-check", requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.userId!);
+      if (!user || !["admin", "support", "finance"].includes(user.role)) {
+        return res.json({ allowed: true, whitelistActive: false });
+      }
+      const whitelist = await loadAdminIpWhitelist();
+      if (!whitelist.length) return res.json({ allowed: true, whitelistActive: false });
+
+      const ip = getClientIp(req);
+      if (!isIpAllowed(ip, whitelist)) {
+        console.warn(`[IpWhitelist] POLL VIOLATION — user=${req.userId} ip=${ip} — banning 72h + destroying sessions`);
+        const banUntil = Date.now() + 72 * 60 * 60 * 1000;
+        await blockIpManually(ip, 72 * 60 * 60 * 1000, `admin_ip_poll_violation:${req.userId}`);
+        revokeSessionsByIp(ip, banUntil).catch(() => {});
+        destroyUserSessions(req.userId!, banUntil).catch(() => {});
+        // Destroy current session immediately
+        req.session.destroy(() => {});
+        return res.status(403).json({ kicked: true, message: "IP non autorisée. Session fermée et IP bannie 72h." });
+      }
+
+      res.json({ allowed: true, whitelistActive: true, ip });
+    } catch {
+      res.status(500).json({ message: "Erreur serveur." });
+    }
   });
 
   app.post("/api/auth/register", registerLimiter, async (req, res) => {

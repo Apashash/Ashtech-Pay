@@ -149,6 +149,20 @@ export async function unblockByIdentifier(identifier: string): Promise<{ unblock
   return { unblocked: toUnblock.length, ips: toUnblock };
 }
 
+// ── Manual block with custom duration (e.g. admin IP whitelist violation) ─────
+export async function blockIpManually(ip: string, durationMs: number, reason: string): Promise<void> {
+  const now = Date.now();
+  const blockedUntil = now + durationMs;
+  const record: IpRecord = {
+    count: MAX_AUTH_ATTEMPTS,
+    blockedUntil,
+    identifier: reason,
+    blockedAt: now,
+  };
+  cache.set(ip, record);
+  await persist(ip, record);
+}
+
 export function getBlockedIps(): { ip: string; identifier: string; blockedUntil: number; blockedAt: number }[] {
   const now = Date.now();
   const result: { ip: string; identifier: string; blockedUntil: number; blockedAt: number }[] = [];

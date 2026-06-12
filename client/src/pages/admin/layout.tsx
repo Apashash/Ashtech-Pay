@@ -480,6 +480,35 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     }
   }, [isLoading, user, setLocation]);
 
+  // ─── Admin IP Whitelist polling — every 3s ───────────────────────────────────
+  // If the server-side whitelist is active and our IP is no longer allowed,
+  // the server returns { kicked: true } → force logout + redirect.
+  useEffect(() => {
+    if (!user || !["admin", "support", "finance"].includes((user as any).role)) return;
+
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const res = await fetch("/api/admin/ip-check", {
+          credentials: "include",
+          headers: { Authorization: `Bearer ${localStorage.getItem("ashtech_auth_token") || ""}` },
+        });
+        if (cancelled) return;
+        if (res.status === 403) {
+          const data = await res.json().catch(() => ({}));
+          if (data.kicked || data.ipBlocked) {
+            queryClient.clear();
+            localStorage.removeItem("ashtech_auth_token");
+            window.location.href = "/login?kicked=1";
+          }
+        }
+      } catch { /* network error — ignore, will retry */ }
+    };
+
+    const interval = setInterval(check, 3000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [user]);
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
