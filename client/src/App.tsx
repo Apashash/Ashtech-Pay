@@ -9,6 +9,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { LanguageProvider } from "@/lib/language";
 import LandingPage from "@/pages/landing";
 import LoginPage from "@/pages/login";
+import AdminLoginOtpPage from "@/pages/admin-login-otp";
 import RegisterPage from "@/pages/register";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
@@ -146,6 +147,7 @@ function Router() {
       <Route path="/login">
         <BlockGuard><LoginPage /></BlockGuard>
       </Route>
+      <Route path="/admin-login-otp" component={AdminLoginOtpPage} />
       <Route path="/register">
         <BlockGuard><RegisterPage /></BlockGuard>
       </Route>

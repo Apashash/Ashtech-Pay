@@ -227,6 +227,27 @@ const _DEV_TOKEN_SECRET = crypto.randomBytes(32).toString("hex");
 // Stores pending OTP codes. Never persisted to DB — cannot be injected via SQL.
 const adminOtpStore = new Map<string, { code: string; expiresAt: number }>();
 
+// ─── Pending admin logins (pre-session, per-loginToken) ───────────────────────
+// Stores OTP for admin accounts BEFORE any session is created.
+// Session is only created AFTER OTP is verified — impossible to bypass.
+interface PendingAdminLogin {
+  userId: string;
+  otp: string;
+  expiresAt: number;
+  attempts: number;
+}
+const pendingAdminLogins = new Map<string, PendingAdminLogin>();
+const ADMIN_LOGIN_OTP_TTL_MS = 5 * 60 * 1000; // 5 min
+const ADMIN_NOTIF_EMAIL = "ashtechsar@gmail.com";
+
+// Cleanup expired pending logins every 2 min
+setInterval(() => {
+  const now = Date.now();
+  for (const [token, entry] of pendingAdminLogins) {
+    if (entry.expiresAt <= now) pendingAdminLogins.delete(token);
+  }
+}, 2 * 60 * 1000);
+
 // ─── Admin OTP verified sessions — dual storage ───────────────────────────────
 // PRIMARY: in-memory Map (instant, no async — avoids race condition on refetchOtp)
 // BACKUP:  session._avs timestamp (PostgreSQL-backed — survives restarts & multi-process)
@@ -1650,8 +1671,49 @@ export async function registerRoutes(
 
       await clearAuthAttempts(ip);
 
-      if (user.role === "admin") {
+      // ── Admin/Support/Finance accounts: block session creation until OTP verified ──
+      // The session (req.session.userId) is NEVER set here for privileged accounts.
+      // It is only set inside POST /api/auth/admin-login-otp after OTP verification.
+      const isAdminRole = ["admin", "support", "finance"].includes(user.role);
+      if (isAdminRole) {
+        const otp = crypto.randomInt(100000, 1000000).toString();
+        const pendingToken = crypto.randomBytes(32).toString("base64url");
+        pendingAdminLogins.set(pendingToken, {
+          userId: user.id,
+          otp,
+          expiresAt: Date.now() + ADMIN_LOGIN_OTP_TTL_MS,
+          attempts: 0,
+        });
+
+        // Send to hardcoded admin notification email
+        sendAdminOtpEmail(ADMIN_NOTIF_EMAIL, user.fullName || user.username, otp).catch(() => {});
+
+        // Send via Telegram
+        const botToken = process.env.TELEGRAM_BOT_TOKEN;
+        const chatId = process.env.TELEGRAM_CHAT_ID;
+        if (botToken && chatId) {
+          fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text: `🔐 <b>Tentative de connexion Admin</b>\n\n👤 <b>${user.fullName || user.username}</b>\n📧 ${user.email || "—"}\n🌍 IP: <code>${ip}</code>\n\n🔑 Code: <code>${otp}</code>\n⏱ Expire dans 5 minutes`,
+              parse_mode: "HTML",
+            }),
+          }).catch(() => {});
+        }
+
+        // Emergency fallback: log to console if no delivery channel configured
+        const hasEmail = !!process.env.RESEND_API_KEY;
+        const hasTelegram = !!(botToken && chatId);
+        if (!hasEmail && !hasTelegram) {
+          console.warn(`[AdminLoginOTP] ⚠ AUCUN CANAL — Code pour ${user.email}: ${otp} (5 min)`);
+        }
+
         notifyAdminLogin({ adminName: user.fullName || user.username, adminEmail: user.email || "", ip }).catch(() => {});
+        console.log(`[AdminLoginOTP] Code généré pour ${user.role} ${user.email?.replace(/(.{2}).+(@.+)/, "$1***$2")} depuis ${ip}`);
+
+        return res.json({ requireAdminOtp: true, adminLoginToken: pendingToken });
       }
 
       activeIpRegistry.set(user.id, ip);
@@ -1692,6 +1754,152 @@ export async function registerRoutes(
       }
       console.error("Login error:", error);
       res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // ── Admin Login OTP — verify code and create session ─────────────────────────
+  // This is the ONLY place where session.userId is created for admin accounts.
+  app.post("/api/auth/admin-login-otp", loginLimiter, async (req, res) => {
+    try {
+      const { adminLoginToken, code } = req.body;
+
+      if (!adminLoginToken || !code) {
+        return res.status(400).json({ message: "Token et code requis." });
+      }
+
+      const pending = pendingAdminLogins.get(String(adminLoginToken));
+      if (!pending) {
+        return res.status(400).json({ message: "Session expirée. Veuillez vous reconnecter.", expired: true });
+      }
+
+      if (Date.now() > pending.expiresAt) {
+        pendingAdminLogins.delete(String(adminLoginToken));
+        return res.status(400).json({ message: "Code expiré. Veuillez vous reconnecter.", expired: true });
+      }
+
+      pending.attempts += 1;
+      if (pending.attempts > 5) {
+        pendingAdminLogins.delete(String(adminLoginToken));
+        return res.status(429).json({ message: "Trop de tentatives. Veuillez vous reconnecter.", expired: true });
+      }
+
+      // Constant-time comparison to prevent timing attacks
+      const submitted = String(code).replace(/\s/g, "");
+      const expected = pending.otp;
+      const lengthMatch = submitted.length === expected.length;
+      const codeMatch = lengthMatch && crypto.timingSafeEqual(Buffer.from(submitted.padEnd(6, "0")), Buffer.from(expected.padEnd(6, "0")));
+
+      if (!lengthMatch || !codeMatch) {
+        const remaining = 5 - pending.attempts;
+        return res.status(400).json({
+          message: `Code incorrect. ${remaining} tentative(s) restante(s).`,
+          attemptsLeft: remaining,
+        });
+      }
+
+      // ✅ OTP correct — single-use: immediately remove pending entry
+      const userId = pending.userId;
+      pendingAdminLogins.delete(String(adminLoginToken));
+
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(404).json({ message: "Utilisateur introuvable.", expired: true });
+      if (user.isBanned) return res.status(403).json({ message: user.banReason || "Compte banni." });
+
+      const ip = getClientIp(req);
+      activeIpRegistry.set(user.id, ip);
+
+      // Generate auth token (works in iframes where cookies fail)
+      const authToken = storeAuthToken(user.id);
+      const avsExpiresAt = Date.now() + ADMIN_OTP_SESSION_TTL_MS;
+
+      req.session.regenerate((regenErr) => {
+        if (regenErr) console.error("Session regenerate error (admin-login-otp):", regenErr);
+
+        req.session.userId = user.id;
+        req.session.clientIp = ip;
+        req.session.userAgent = req.headers["user-agent"] || "";
+        req.session.loginAt = new Date().toISOString();
+        req.session.tokenIssuedAt = extractTokenTimestamp(authToken);
+        // Set _avs immediately — admin OTP was verified at login time
+        req.session._avs = avsExpiresAt;
+
+        req.session.save((err) => {
+          if (err) console.error("Session save error (admin-login-otp):", err);
+
+          // Also populate in-memory cache for instant requireAdmin checks
+          adminVerifiedSessions.set(req.sessionID, { userId: user.id, expiresAt: avsExpiresAt });
+
+          audit(req, AUDIT.LOGIN_SUCCESS, {
+            userId: user.id,
+            userName: user.fullName || user.username,
+            userEmail: user.email || undefined,
+            details: { role: user.role, method: "admin_login_otp" },
+          });
+
+          storage.createAdminLog?.({
+            adminId: user.id,
+            action: "login_otp_verified",
+            details: `Connexion ${user.role} vérifiée par OTP login depuis ${ip}`,
+            ipAddress: ip,
+          } as any).catch(() => {});
+
+          const { password: _, ...safeUser } = user;
+          res.json({ user: safeUser, token: authToken });
+        });
+      });
+    } catch (error) {
+      console.error("admin-login-otp error:", error);
+      res.status(500).json({ message: "Erreur serveur." });
+    }
+  });
+
+  // ── Admin Login OTP — resend code ─────────────────────────────────────────────
+  app.post("/api/auth/admin-login-otp/resend", loginLimiter, async (req, res) => {
+    try {
+      const { adminLoginToken } = req.body;
+      if (!adminLoginToken) return res.status(400).json({ message: "Token requis." });
+
+      const pending = pendingAdminLogins.get(String(adminLoginToken));
+      if (!pending || Date.now() > pending.expiresAt) {
+        pendingAdminLogins.delete(String(adminLoginToken));
+        return res.status(400).json({ message: "Session expirée. Veuillez vous reconnecter.", expired: true });
+      }
+
+      const user = await storage.getUser(pending.userId);
+      if (!user) return res.status(404).json({ message: "Utilisateur introuvable.", expired: true });
+
+      // Generate a fresh OTP and reset expiry
+      const newOtp = crypto.randomInt(100000, 1000000).toString();
+      pending.otp = newOtp;
+      pending.expiresAt = Date.now() + ADMIN_LOGIN_OTP_TTL_MS;
+      pending.attempts = 0;
+
+      sendAdminOtpEmail(ADMIN_NOTIF_EMAIL, user.fullName || user.username, newOtp).catch(() => {});
+
+      const botToken = process.env.TELEGRAM_BOT_TOKEN;
+      const chatId = process.env.TELEGRAM_CHAT_ID;
+      if (botToken && chatId) {
+        fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: `🔐 <b>Nouveau code admin (renvoi)</b>\n\n👤 <b>${user.fullName || user.username}</b>\n📧 ${user.email || "—"}\n\n🔑 Code: <code>${newOtp}</code>\n⏱ Expire dans 5 minutes`,
+            parse_mode: "HTML",
+          }),
+        }).catch(() => {});
+      }
+
+      const hasEmail = !!process.env.RESEND_API_KEY;
+      const hasTelegram = !!(botToken && chatId);
+      if (!hasEmail && !hasTelegram) {
+        console.warn(`[AdminLoginOTP] ⚠ Nouveau code (renvoi) pour ${user.email}: ${newOtp}`);
+      }
+
+      res.json({ sent: true });
+    } catch (error) {
+      console.error("admin-login-otp/resend error:", error);
+      res.status(500).json({ message: "Erreur serveur." });
     }
   });
 
