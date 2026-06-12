@@ -22,11 +22,19 @@ const app = express();
 const httpServer = createServer(app);
 const isProd = process.env.NODE_ENV === "production";
 
-// ── FIX-1: SESSION_SECRET est obligatoire en production ───────────────────────
-// Sans lui, les tokens Bearer peuvent être forgés par quiconque lit le code source.
-if (isProd && !process.env.SESSION_SECRET) {
-  console.error("[SECURITY] FATAL: SESSION_SECRET env var must be set in production. Exiting.");
-  process.exit(1);
+// ── FIX-1: SESSION_SECRET est obligatoire en production ET en multi-worker PM2 ─
+// Sans lui, chaque worker PM2 génère sa propre clé aléatoire (_DEV_TOKEN_SECRET).
+// → sessions cookie et Bearer tokens créés sur Worker A sont invalides sur Worker B.
+// → déconnexion immédiate après login (singleDeviceKick).
+const pm2Count = Math.max(1, parseInt(process.env.PM2_INSTANCES || "1", 10) || 1);
+const isMultiWorker = pm2Count > 1;
+if ((isProd || isMultiWorker) && !process.env.SESSION_SECRET) {
+  console.error("[SECURITY] FATAL: SESSION_SECRET env var must be set in production or multi-worker PM2.");
+  console.error("[SECURITY] Without SESSION_SECRET, each PM2 worker uses a different random key.");
+  console.error("[SECURITY] This causes immediate logout after login (token cross-worker mismatch).");
+  if (isProd) process.exit(1);
+  // In dev with PM2: warn loudly but don't exit (allows single-worker dev to work)
+  console.error("[SECURITY] WARNING: Running multi-worker without SESSION_SECRET — sessions WILL break across workers!");
 }
 
 // ── FIX-6: Trust proxy — nécessaire pour que req.ip soit fiable derrière Replit/Nginx ──
