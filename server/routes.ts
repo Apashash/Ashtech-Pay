@@ -541,9 +541,12 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
     return res.status(403).json({ message: "Accès refusé - Droits admin requis" });
   }
 
-  // ── OTP Bypass mode (dev/emergency): set ADMIN_OTP_BYPASS=true in env to skip OTP entirely.
-  // Useful when email (Resend) and Telegram are not configured, to verify other issues.
-  if (process.env.ADMIN_OTP_BYPASS === "true") {
+  // ── OTP Bypass mode: requires BOTH ADMIN_OTP_BYPASS=true AND a matching ADMIN_OTP_BYPASS_TOKEN secret.
+  // A simple "=true" alone is not enough — prevents accidental activation in production.
+  const bypassEnabled = process.env.ADMIN_OTP_BYPASS === "true";
+  const bypassToken = process.env.ADMIN_OTP_BYPASS_TOKEN;
+  const requestToken = req.headers["x-admin-bypass-token"];
+  if (bypassEnabled && bypassToken && requestToken && requestToken === bypassToken) {
     console.warn(`[AdminAccess] OTP BYPASS ACTIVE — user=${req.userId} role=${user.role} path=${req.path}`);
     return next();
   }
@@ -1572,14 +1575,11 @@ export async function registerRoutes(
 
       const ip = getClientIp(req);
       if (!isIpAllowed(ip, whitelist)) {
-        console.warn(`[IpWhitelist] POLL VIOLATION — user=${req.userId} ip=${ip} — banning 72h + destroying sessions`);
-        const banUntil = Date.now() + 72 * 60 * 60 * 1000;
-        await blockIpManually(ip, 72 * 60 * 60 * 1000, `admin_ip_poll_violation:${req.userId}`);
-        revokeSessionsByIp(ip, banUntil).catch(() => {});
-        destroyUserSessions(req.userId!, banUntil).catch(() => {});
-        // Destroy current session immediately
+        // SECURITY: Only destroy the current session — do NOT ban the IP.
+        // Banning would permanently lock out the admin if their IP changes (mobile, VPN, etc.)
+        console.warn(`[IpWhitelist] POLL REJECT — user=${req.userId} ip=${ip} — session destroyed (no ban)`);
         req.session.destroy(() => {});
-        return res.status(403).json({ kicked: true, message: "IP non autorisée. Session fermée et IP bannie 72h." });
+        return res.status(403).json({ kicked: true, message: "IP non autorisée. Session fermée." });
       }
 
       res.json({ allowed: true, whitelistActive: true, ip });
@@ -6535,14 +6535,12 @@ export async function registerRoutes(
         }).catch(() => {});
       }
 
-      // ── Emergency fallback: if NO delivery channel is configured, log code to server console ──
-      // This allows admins to retrieve the code from Replit/server logs when email & Telegram are not set up.
       const hasEmail = !!process.env.RESEND_API_KEY;
       const hasTelegram = !!(botToken && chatId);
       const noChannel = !hasEmail && !hasTelegram;
       if (noChannel) {
-        console.warn(`[AdminOTP] ⚠ AUCUN CANAL DE LIVRAISON — Code OTP pour ${user.email}: ${code} (expire dans 5 min)`);
-        console.warn(`[AdminOTP] ⚠ Configurez RESEND_API_KEY ou TELEGRAM_BOT_TOKEN+TELEGRAM_CHAT_ID pour activer la livraison.`);
+        // SECURITY: Never log OTP codes — configure RESEND_API_KEY or TELEGRAM_BOT_TOKEN+TELEGRAM_CHAT_ID
+        console.warn(`[AdminOTP] ⚠ AUCUN CANAL DE LIVRAISON configuré. Ajoutez RESEND_API_KEY ou TELEGRAM_BOT_TOKEN+TELEGRAM_CHAT_ID.`);
       }
 
       // Log to admin_logs — do NOT log the OTP code itself
@@ -6898,7 +6896,7 @@ export async function registerRoutes(
   });
 
   // Admin: Get dashboard stats
-  app.get("/api/admin/stats", requireAdmin, async (req, res) => {
+  app.get("/api/admin/stats", requireAuth, requireAdmin, async (req, res) => {
     try {
       const period = (req.query.period as string) || "this_month";
       const validPeriods = ["last_year", "this_year", "last_month", "this_month", "last_week", "this_week", "yesterday", "today"];
@@ -6912,7 +6910,7 @@ export async function registerRoutes(
   });
 
   // Admin: Volume par pays
-  app.get("/api/admin/stats/by-country", requireAdmin, async (req, res) => {
+  app.get("/api/admin/stats/by-country", requireAuth, requireAdmin, async (req, res) => {
     try {
       const result = await storage.getStatsByCountry();
       res.json(result);
@@ -6923,7 +6921,7 @@ export async function registerRoutes(
   });
 
   // Admin: Activité récente (30 derniers jours)
-  app.get("/api/admin/stats/activity", requireAdmin, async (req, res) => {
+  app.get("/api/admin/stats/activity", requireAuth, requireAdmin, async (req, res) => {
     try {
       const period = typeof req.query.period === "string" ? req.query.period : "this_month";
       const result = await storage.getStatsActivity(period);
@@ -6935,7 +6933,7 @@ export async function registerRoutes(
   });
 
   // Admin: Reset stats (store current timestamp as reset baseline)
-  app.post("/api/admin/reset-stats", requireAdmin, async (req, res) => {
+  app.post("/api/admin/reset-stats", requireAuth, requireAdmin, async (req, res) => {
     try {
       await storage.resetStats();
       res.json({ message: "Statistiques réinitialisées avec succès" });
@@ -6946,7 +6944,7 @@ export async function registerRoutes(
   });
 
   // Admin: Total balances across all user wallets
-  app.get("/api/admin/stats/total-balances", requireAdmin, async (req, res) => {
+  app.get("/api/admin/stats/total-balances", requireAuth, requireAdmin, async (req, res) => {
     try {
       const fxRates = await loadFxRates();
 
@@ -6993,7 +6991,7 @@ export async function registerRoutes(
   });
 
   // Admin: Combined layout stats (replaces 7 separate polling requests)
-  app.get("/api/admin/layout-stats", requireAdmin, async (req, res) => {
+  app.get("/api/admin/layout-stats", requireAuth, requireAdmin, async (req, res) => {
     try {
       const stats = await (storage as any).getAdminLayoutStats();
       res.json(stats);
@@ -7004,7 +7002,7 @@ export async function registerRoutes(
   });
 
   // Admin: Get pending notifications
-  app.get("/api/admin/notifications", requireAdmin, async (req, res) => {
+  app.get("/api/admin/notifications", requireAuth, requireAdmin, async (req, res) => {
     try {
       const notifications = await storage.getPendingNotifications();
       res.json(notifications);
@@ -7015,7 +7013,7 @@ export async function registerRoutes(
   });
 
   // Fix user currencies based on country
-  app.post("/api/admin/fix-currencies", requireAdmin, async (req, res) => {
+  app.post("/api/admin/fix-currencies", requireAuth, requireAdmin, async (req, res) => {
     try {
       const usersResult = await storage.getAllUsers();
       let updatedCount = 0;
@@ -7057,7 +7055,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/admin/users/:id", requireAdmin, async (req, res) => {
+  app.get("/api/admin/users/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
       const user = await storage.getUser(id);
@@ -7076,7 +7074,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/admin/users", requireAdmin, async (req, res) => {
+  app.get("/api/admin/users", requireAuth, requireAdmin, async (req, res) => {
     try {
       const page = Math.max(1, parseInt(req.query.page as string) || 1);
       const limit = Math.min(100, parseInt(req.query.limit as string) || 50);
@@ -7142,7 +7140,7 @@ export async function registerRoutes(
   });
 
   // Admin: Manual Fiat to PUSD conversion
-  app.post("/api/admin/convert-fiat-to-pusd", requireAdmin, async (req, res) => {
+  app.post("/api/admin/convert-fiat-to-pusd", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { countryCode, amount } = req.body;
       if (!countryCode || !amount) {
@@ -7329,7 +7327,7 @@ export async function registerRoutes(
   // Admin: Update user (profile/metadata fields only)
   // Security: financial fields (balance) and security-critical fields (role, password)
   // are explicitly stripped — they have dedicated hardened endpoints.
-  app.patch("/api/admin/users/:id", requireAdmin, async (req, res) => {
+  app.patch("/api/admin/users/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
       const rawUpdates = req.body;
@@ -7371,7 +7369,7 @@ export async function registerRoutes(
   });
 
   // Admin: Change user role
-  app.patch("/api/admin/users/:id/role", requireAdmin, async (req, res) => {
+  app.patch("/api/admin/users/:id/role", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
       const { role } = req.body;
@@ -7416,7 +7414,7 @@ export async function registerRoutes(
   });
 
   // Admin: Ban user
-  app.post("/api/admin/users/:id/ban", requireAdmin, async (req, res) => {
+  app.post("/api/admin/users/:id/ban", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
       const { reason } = req.body;
@@ -7457,7 +7455,7 @@ export async function registerRoutes(
   });
 
   // Admin: Unban user
-  app.post("/api/admin/users/:id/unban", requireAdmin, async (req, res) => {
+  app.post("/api/admin/users/:id/unban", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
       const user = await storage.unbanUser(id);
@@ -7495,7 +7493,7 @@ export async function registerRoutes(
   });
 
   // Admin: Block user withdrawals & transfers
-  app.post("/api/admin/users/:id/block-withdrawal", requireAdmin, async (req, res) => {
+  app.post("/api/admin/users/:id/block-withdrawal", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
       const { reason } = req.body;
@@ -7521,7 +7519,7 @@ export async function registerRoutes(
   });
 
   // Admin: Unblock user withdrawals & transfers
-  app.post("/api/admin/users/:id/unblock-withdrawal", requireAdmin, async (req, res) => {
+  app.post("/api/admin/users/:id/unblock-withdrawal", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
       const user = await storage.updateUser(id, {
@@ -7590,8 +7588,13 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Vous n'êtes pas en mode impersonation." });
       }
 
+      // SECURITY: verify the original admin still exists and has admin role
       const admin = await storage.getUser(originalAdminId);
       if (!admin) return res.status(404).json({ message: "Compte admin introuvable" });
+      if (!["admin", "support", "finance"].includes(admin.role)) {
+        req.session.destroy(() => {});
+        return res.status(403).json({ message: "Accès refusé — droits admin requis." });
+      }
 
       req.session.userId = originalAdminId;
       req.session.impersonatedBy = undefined;
@@ -7610,7 +7613,7 @@ export async function registerRoutes(
   });
 
   // Admin: Delete user
-  app.delete("/api/admin/users/:id", requireAdmin, async (req, res) => {
+  app.delete("/api/admin/users/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
       const user = await storage.getUser(id);
@@ -7637,7 +7640,7 @@ export async function registerRoutes(
   });
 
   // Admin: Get all transactions with user info
-  app.get("/api/admin/transactions", requireAdmin, async (req, res) => {
+  app.get("/api/admin/transactions", requireAuth, requireAdmin, async (req, res) => {
     try {
       const page = Math.max(1, parseInt(req.query.page as string) || 1);
       const limit = Math.min(100, parseInt(req.query.limit as string) || 50);
@@ -7684,7 +7687,7 @@ export async function registerRoutes(
   });
 
   // Admin: Get transaction details by ID
-  app.get("/api/admin/transactions/:id/details", requireAdmin, async (req, res) => {
+  app.get("/api/admin/transactions/:id/details", requireAuth, requireAdmin, async (req, res) => {
     try {
       const transaction = await storage.getTransactionById(req.params.id);
       if (!transaction) {
@@ -7750,7 +7753,7 @@ export async function registerRoutes(
   });
 
   // Admin: Search transaction by reference
-  app.get("/api/admin/transactions/reference/:reference", requireAdmin, async (req, res) => {
+  app.get("/api/admin/transactions/reference/:reference", requireAuth, requireAdmin, async (req, res) => {
     try {
       const transaction = await storage.getTransactionByReference(req.params.reference);
       if (!transaction) {
@@ -7769,7 +7772,7 @@ export async function registerRoutes(
   });
 
   // Admin: Update transaction status
-  app.patch("/api/admin/transactions/:id", requireAdmin, adminActionLimiter, async (req, res) => {
+  app.patch("/api/admin/transactions/:id", requireAuth, requireAdmin, adminActionLimiter, async (req, res) => {
     try {
       const { id } = req.params;
       const { status, forceComplete, reason } = req.body;
@@ -8096,7 +8099,7 @@ export async function registerRoutes(
   });
 
   // Admin: Countries CRUD
-  app.get("/api/admin/countries", requireAdmin, async (req, res) => {
+  app.get("/api/admin/countries", requireAuth, requireAdmin, async (req, res) => {
     try {
       const countries = await storage.getAllCountries();
       res.json(countries);
@@ -8106,7 +8109,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/admin/countries", requireAdmin, async (req, res) => {
+  app.post("/api/admin/countries", requireAuth, requireAdmin, async (req, res) => {
     try {
       console.log("Creating country with data:", JSON.stringify(req.body));
       const country = await storage.createCountry(req.body);
@@ -8127,7 +8130,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/admin/countries/:id", requireAdmin, async (req, res) => {
+  app.patch("/api/admin/countries/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
       const country = await storage.updateCountry(req.params.id, req.body);
       if (!country) {
@@ -8150,7 +8153,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/admin/countries/:id", requireAdmin, async (req, res) => {
+  app.delete("/api/admin/countries/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
       await storage.deleteCountry(req.params.id);
       
@@ -8170,7 +8173,7 @@ export async function registerRoutes(
   });
 
   // Admin: Toggle all operators for a country
-  app.post("/api/admin/countries/:id/toggle-operators", requireAdmin, async (req, res) => {
+  app.post("/api/admin/countries/:id/toggle-operators", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { isActive } = req.body;
       const operators = await storage.getOperatorsByCountry(req.params.id);
@@ -8196,7 +8199,7 @@ export async function registerRoutes(
   });
 
   // Admin: Operators CRUD
-  app.get("/api/admin/operators", requireAdmin, async (req, res) => {
+  app.get("/api/admin/operators", requireAuth, requireAdmin, async (req, res) => {
     try {
       const operators = await storage.getAllOperators();
       res.json(operators);
@@ -8206,7 +8209,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/admin/operators", requireAdmin, async (req, res) => {
+  app.post("/api/admin/operators", requireAuth, requireAdmin, async (req, res) => {
     try {
       const operator = await storage.createOperator(req.body);
       
@@ -8229,7 +8232,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/admin/operators/:id", requireAdmin, async (req, res) => {
+  app.patch("/api/admin/operators/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
       const operator = await storage.updateOperator(req.params.id, req.body);
       if (!operator) {
@@ -8252,7 +8255,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/admin/operators/:id", requireAdmin, async (req, res) => {
+  app.delete("/api/admin/operators/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
       await storage.deleteOperator(req.params.id);
       
@@ -8272,7 +8275,7 @@ export async function registerRoutes(
   });
 
   // Admin: Copier tous les frais retrait → envoi (transfer)
-  app.post("/api/admin/fees/sync-withdrawals-to-transfers", requireAdmin, async (req, res) => {
+  app.post("/api/admin/fees/sync-withdrawals-to-transfers", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { operatorId } = req.body || {};
       const allFees = await storage.getAllFees();
@@ -8335,7 +8338,7 @@ export async function registerRoutes(
   });
 
   // Admin: Copier tous les frais envoi → retrait (sens inverse)
-  app.post("/api/admin/fees/sync-transfers-to-withdrawals", requireAdmin, async (req, res) => {
+  app.post("/api/admin/fees/sync-transfers-to-withdrawals", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { operatorId } = req.body || {};
       const allFees = await storage.getAllFees();
@@ -8384,7 +8387,7 @@ export async function registerRoutes(
   });
 
   // Admin: Fees CRUD
-  app.get("/api/admin/fees", requireAdmin, async (req, res) => {
+  app.get("/api/admin/fees", requireAuth, requireAdmin, async (req, res) => {
     try {
       const fees = await storage.getAllFees();
       res.json(fees);
@@ -8394,7 +8397,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/admin/fees", requireAdmin, async (req, res) => {
+  app.post("/api/admin/fees", requireAuth, requireAdmin, async (req, res) => {
     try {
       const fee = await storage.createFee(req.body);
       
@@ -8414,7 +8417,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/admin/fees/:id", requireAdmin, async (req, res) => {
+  app.patch("/api/admin/fees/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { ashtechMargin, feeValue, isActive, minFee } = req.body;
       const fee = await storage.getFee(req.params.id);
@@ -8467,7 +8470,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/admin/fees/:id", requireAdmin, async (req, res) => {
+  app.delete("/api/admin/fees/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
       await storage.deleteFee(req.params.id);
       
@@ -8487,7 +8490,7 @@ export async function registerRoutes(
   });
 
   // Admin: Support ticket stats
-  app.get("/api/admin/tickets/stats", requireAdmin, async (req, res) => {
+  app.get("/api/admin/tickets/stats", requireAuth, requireAdmin, async (req, res) => {
     try {
       const tickets = await storage.getAllTickets();
       const openCount = tickets.filter(t => t.status === "open" || t.status === "in_progress").length;
@@ -8499,7 +8502,7 @@ export async function registerRoutes(
   });
 
   // Admin: Support tickets
-  app.get("/api/admin/tickets", requireAdmin, async (req, res) => {
+  app.get("/api/admin/tickets", requireAuth, requireAdmin, async (req, res) => {
     try {
       const tickets = await storage.getAllTickets();
       res.json(tickets);
@@ -8509,7 +8512,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/admin/tickets/:id", requireAdmin, async (req, res) => {
+  app.get("/api/admin/tickets/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
       const ticket = await storage.getTicket(req.params.id);
       if (!ticket) {
@@ -8530,7 +8533,7 @@ export async function registerRoutes(
   });
 
   // Admin: Delete all tickets
-  app.delete("/api/admin/tickets", requireAdmin, async (req, res) => {
+  app.delete("/api/admin/tickets", requireAuth, requireAdmin, async (req, res) => {
     try {
       await storage.deleteAllTickets();
       
@@ -8551,7 +8554,7 @@ export async function registerRoutes(
   });
 
   // Admin: Delete ticket
-  app.delete("/api/admin/tickets/:id", requireAdmin, async (req, res) => {
+  app.delete("/api/admin/tickets/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
       await storage.deleteTicket(req.params.id);
       
@@ -8571,7 +8574,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/admin/tickets/:id", requireAdmin, async (req, res) => {
+  app.patch("/api/admin/tickets/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
       const ticket = await storage.updateTicket(req.params.id, req.body);
       if (!ticket) {
@@ -8594,7 +8597,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/admin/tickets/:id/messages", requireAdmin, async (req, res) => {
+  app.post("/api/admin/tickets/:id/messages", requireAuth, requireAdmin, async (req, res) => {
     try {
       const ticket = await storage.getTicket(req.params.id);
       if (!ticket) return res.status(404).json({ message: "Ticket non trouvé" });
@@ -8841,7 +8844,7 @@ export async function registerRoutes(
   });
 
   // Admin: Mark ticket messages as read (admin side)
-  app.post("/api/admin/tickets/:id/read", requireAdmin, async (req, res) => {
+  app.post("/api/admin/tickets/:id/read", requireAuth, requireAdmin, async (req, res) => {
     try {
       await storage.markTicketMessagesReadByAdmin(req.params.id);
       const ticket = await storage.getTicket(req.params.id);
@@ -8870,7 +8873,7 @@ export async function registerRoutes(
   });
 
   // Admin: Send typing indicator
-  app.post("/api/admin/tickets/:id/typing", requireAdmin, async (req, res) => {
+  app.post("/api/admin/tickets/:id/typing", requireAuth, requireAdmin, async (req, res) => {
     try {
       const ticket = await storage.getTicket(req.params.id);
       if (!ticket) return res.status(404).json({ message: "Ticket non trouvé" });
@@ -8894,7 +8897,7 @@ export async function registerRoutes(
   });
 
   // Admin: Unread ticket messages count
-  app.get("/api/admin/tickets/unread-count", requireAdmin, async (_req, res) => {
+  app.get("/api/admin/tickets/unread-count", requireAuth, requireAdmin, async (_req, res) => {
     try {
       const count = await storage.countUnreadUserMessagesForAdmin();
       res.json({ count });
@@ -8904,7 +8907,7 @@ export async function registerRoutes(
   });
 
   // Admin: Activity logs
-  app.get("/api/admin/logs", requireAdmin, async (req, res) => {
+  app.get("/api/admin/logs", requireAuth, requireAdmin, async (req, res) => {
     try {
       const limit = parseInt(req.query.limit as string) || 100;
       const logs = await storage.getAdminLogs(limit);
@@ -8916,7 +8919,7 @@ export async function registerRoutes(
   });
 
   // Admin: Audit logs (connexion, retrait, rôle, KYC…)
-  app.get("/api/admin/audit-logs", requireAdmin, async (req, res) => {
+  app.get("/api/admin/audit-logs", requireAuth, requireAdmin, async (req, res) => {
     try {
       const limit  = Math.min(parseInt(req.query.limit  as string) || 50, 200);
       const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
@@ -9009,7 +9012,7 @@ export async function registerRoutes(
   });
 
   // Admin: Platform settings
-  app.get("/api/admin/settings", requireAdmin, async (req, res) => {
+  app.get("/api/admin/settings", requireAuth, requireAdmin, async (req, res) => {
     try {
       const settings = await storage.getAllSettings();
       res.json(settings);
@@ -9019,7 +9022,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/admin/settings", requireAdmin, async (req, res) => {
+  app.post("/api/admin/settings", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { key, value, description } = req.body;
       
@@ -9046,7 +9049,7 @@ export async function registerRoutes(
   });
 
   // Bulk save all settings
-  app.post("/api/admin/settings/bulk", requireAdmin, async (req, res) => {
+  app.post("/api/admin/settings/bulk", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { settings } = req.body;
       
@@ -9079,7 +9082,7 @@ export async function registerRoutes(
   });
 
   // Admin: Get all payment links
-  app.get("/api/admin/payment-links", requireAdmin, async (req, res) => {
+  app.get("/api/admin/payment-links", requireAuth, requireAdmin, async (req, res) => {
     try {
       const links = await storage.getAllPaymentLinks();
       const linksWithUsers = await Promise.all(
@@ -9104,7 +9107,7 @@ export async function registerRoutes(
   });
 
   // Admin: Update payment link
-  app.patch("/api/admin/payment-links/:id", requireAdmin, async (req, res) => {
+  app.patch("/api/admin/payment-links/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
       const link = await storage.updatePaymentLink(req.params.id, req.body);
       if (!link) {
@@ -9128,7 +9131,7 @@ export async function registerRoutes(
   });
 
   // Admin: Count pending withdrawal number changes (for sidebar badge)
-  app.get("/api/admin/withdrawal-number-changes/count", requireAdmin, async (req, res) => {
+  app.get("/api/admin/withdrawal-number-changes/count", requireAuth, requireAdmin, async (req, res) => {
     try {
       const changes = await storage.getPendingWithdrawalNumberChanges();
       res.json({ count: changes.length });
@@ -9139,7 +9142,7 @@ export async function registerRoutes(
   });
 
   // Admin: Get pending withdrawal number changes
-  app.get("/api/admin/withdrawal-number-changes", requireAdmin, async (req, res) => {
+  app.get("/api/admin/withdrawal-number-changes", requireAuth, requireAdmin, async (req, res) => {
     try {
       const changes = await storage.getPendingWithdrawalNumberChanges();
       const changesWithDetails = await Promise.all(
@@ -9168,7 +9171,7 @@ export async function registerRoutes(
   });
 
   // Admin: Approve withdrawal number change
-  app.post("/api/admin/withdrawal-number-changes/:id/approve", requireAdmin, async (req, res) => {
+  app.post("/api/admin/withdrawal-number-changes/:id/approve", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { note } = req.body;
       const change = await storage.approveWithdrawalNumberChange(
@@ -9211,7 +9214,7 @@ export async function registerRoutes(
   });
 
   // Admin: Reject withdrawal number change
-  app.post("/api/admin/withdrawal-number-changes/:id/reject", requireAdmin, async (req, res) => {
+  app.post("/api/admin/withdrawal-number-changes/:id/reject", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { note } = req.body;
       const change = await storage.rejectWithdrawalNumberChange(
@@ -9243,7 +9246,7 @@ export async function registerRoutes(
   // ============= ADMIN: PENDING MANUAL PAYOUTS =============
 
   // GET /api/admin/pending-payouts — list all pending_manual withdrawals & transfers
-  app.get("/api/admin/pending-payouts", requireAdmin, async (_req, res) => {
+  app.get("/api/admin/pending-payouts", requireAuth, requireAdmin, async (_req, res) => {
     try {
       const txs = await storage.getPendingManualPayouts();
       const enriched = await Promise.all(txs.map(async (t) => {
@@ -9265,7 +9268,7 @@ export async function registerRoutes(
   });
 
   // POST /api/admin/pending-payouts/:id/execute — execute with chosen provider
-  app.post("/api/admin/pending-payouts/:id/execute", requireAdmin, async (req, res) => {
+  app.post("/api/admin/pending-payouts/:id/execute", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { provider } = req.body as { provider: "swychr" | "afribapay" | "pixpay" };
       if (!provider || !["swychr","afribapay","pixpay"].includes(provider)) {
@@ -9403,7 +9406,7 @@ export async function registerRoutes(
   });
 
   // POST /api/admin/pending-payouts/:id/confirm — mark as completed without calling any provider
-  app.post("/api/admin/pending-payouts/:id/confirm", requireAdmin, async (req, res) => {
+  app.post("/api/admin/pending-payouts/:id/confirm", requireAuth, requireAdmin, async (req, res) => {
     try {
       const tx = await storage.getTransactionById(req.params.id);
       if (!tx || tx.status !== "pending_manual") {
@@ -9461,7 +9464,7 @@ export async function registerRoutes(
   });
 
   // POST /api/admin/pending-payouts/:id/refund — cancel and refund user
-  app.post("/api/admin/pending-payouts/:id/refund", requireAdmin, async (req, res) => {
+  app.post("/api/admin/pending-payouts/:id/refund", requireAuth, requireAdmin, async (req, res) => {
     try {
       const tx = await storage.getTransactionById(req.params.id);
       if (!tx || tx.status !== "pending_manual") {
@@ -9611,7 +9614,7 @@ export async function registerRoutes(
   // ============= ADMIN GLOBAL MESSAGES =============
 
   // Get all global messages (admin)
-  app.get("/api/admin/global-messages", requireAdmin, async (req, res) => {
+  app.get("/api/admin/global-messages", requireAuth, requireAdmin, async (req, res) => {
     try {
       const messages = await storage.getAllGlobalMessages();
       res.json(messages);
@@ -9622,7 +9625,7 @@ export async function registerRoutes(
   });
 
   // Create global message
-  app.post("/api/admin/global-messages", requireAdmin, async (req, res) => {
+  app.post("/api/admin/global-messages", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { title, message, expiresAt } = req.body;
       
@@ -9655,7 +9658,7 @@ export async function registerRoutes(
   });
 
   // Update global message
-  app.patch("/api/admin/global-messages/:id", requireAdmin, async (req, res) => {
+  app.patch("/api/admin/global-messages/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { title, message, isActive, expiresAt } = req.body;
       
@@ -9688,7 +9691,7 @@ export async function registerRoutes(
   });
 
   // Delete global message
-  app.delete("/api/admin/global-messages/:id", requireAdmin, async (req, res) => {
+  app.delete("/api/admin/global-messages/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
       await storage.deleteGlobalMessage(req.params.id);
       
@@ -9802,7 +9805,7 @@ export async function registerRoutes(
   });
 
   // Admin: Get all KYC submissions
-  app.get("/api/admin/kyc", requireAdmin, async (req, res) => {
+  app.get("/api/admin/kyc", requireAuth, requireAdmin, async (req, res) => {
     try {
       const status = req.query.status as string | undefined;
       const submissions = await storage.getAllKycSubmissions(status);
@@ -9868,7 +9871,7 @@ export async function registerRoutes(
   });
 
   // Admin: Get KYC stats
-  app.get("/api/admin/kyc/stats", requireAdmin, async (req, res) => {
+  app.get("/api/admin/kyc/stats", requireAuth, requireAdmin, async (req, res) => {
     try {
       const pending = await storage.countKycByStatus("pending");
       const approved = await storage.countKycByStatus("approved");
@@ -9882,7 +9885,7 @@ export async function registerRoutes(
   });
 
   // Admin: Get single KYC submission
-  app.get("/api/admin/kyc/:id", requireAdmin, async (req, res) => {
+  app.get("/api/admin/kyc/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
       const submission = await storage.getKycSubmissionById(req.params.id);
       if (!submission) {
@@ -9910,7 +9913,7 @@ export async function registerRoutes(
   });
 
   // Admin: Approve KYC submission
-  app.post("/api/admin/kyc/:id/approve", requireAdmin, async (req, res) => {
+  app.post("/api/admin/kyc/:id/approve", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { note } = req.body;
       const submission = await storage.approveKycSubmission(
@@ -9970,7 +9973,7 @@ export async function registerRoutes(
   });
 
   // Admin: Reject KYC submission
-  app.post("/api/admin/kyc/:id/reject", requireAdmin, async (req, res) => {
+  app.post("/api/admin/kyc/:id/reject", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { note } = req.body;
       
@@ -10795,7 +10798,7 @@ export async function registerRoutes(
   // ─── AfribaPay Admin Routes ───────────────────────────────────────────────
 
   // GET /api/admin/afribapay/countries — fetch live AfribaPay country list
-  app.get("/api/admin/afribapay/countries", requireAdmin, async (_req, res) => {
+  app.get("/api/admin/afribapay/countries", requireAuth, requireAdmin, async (_req, res) => {
     try {
       const countries = await fetchAfribaPayCountries();
       res.json({ success: true, data: countries });
@@ -10806,7 +10809,7 @@ export async function registerRoutes(
   });
 
   // PATCH /api/admin/operators/:id/provider — set provider: swychr | afribapay | pixpay
-  app.patch("/api/admin/operators/:id/provider", requireAdmin, async (req, res) => {
+  app.patch("/api/admin/operators/:id/provider", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
       const { paymentProvider, afribapayOperatorCode, pixpayServiceId } = req.body;
@@ -10846,7 +10849,7 @@ export async function registerRoutes(
   });
 
   // PATCH /api/admin/operators/:id/deposit-provider — fournisseur spécifique aux dépôts (indépendant du retrait/envoi)
-  app.patch("/api/admin/operators/:id/deposit-provider", requireAdmin, async (req, res) => {
+  app.patch("/api/admin/operators/:id/deposit-provider", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
       const { depositPaymentProvider, afribapayOperatorCode } = req.body;
@@ -10866,7 +10869,7 @@ export async function registerRoutes(
   });
 
   // PATCH /api/admin/fees/:id/afribapay — update AfribaPay fee rate for a fee entry
-  app.patch("/api/admin/fees/:id/afribapay", requireAdmin, async (req, res) => {
+  app.patch("/api/admin/fees/:id/afribapay", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
       const { afribapayFee, ashtechMargin, isActive, minFee } = req.body;
@@ -10907,7 +10910,7 @@ export async function registerRoutes(
   });
 
   // PATCH /api/admin/fees/:id/pixpay — update PixPay fee rate for a fee entry
-  app.patch("/api/admin/fees/:id/pixpay", requireAdmin, async (req, res) => {
+  app.patch("/api/admin/fees/:id/pixpay", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
       const { pixpayFee, ashtechMargin, isActive, minFee } = req.body;
@@ -10948,7 +10951,7 @@ export async function registerRoutes(
   });
 
   // GET /api/admin/pixpay/operators — list operators that use PixPay
-  app.get("/api/admin/pixpay/operators", requireAdmin, async (req, res) => {
+  app.get("/api/admin/pixpay/operators", requireAuth, requireAdmin, async (req, res) => {
     try {
       const allOperators = await storage.getOperators();
       const pixpayOperators = allOperators.filter((op: any) => op.paymentProvider === "pixpay");
@@ -10960,7 +10963,7 @@ export async function registerRoutes(
   });
 
   // GET /api/admin/pixpay/supported-countries — list all PixPay supported countries
-  app.get("/api/admin/pixpay/supported-countries", requireAdmin, async (_req, res) => {
+  app.get("/api/admin/pixpay/supported-countries", requireAuth, requireAdmin, async (_req, res) => {
     res.json(PIXPAY_SUPPORTED_COUNTRIES);
   });
 
