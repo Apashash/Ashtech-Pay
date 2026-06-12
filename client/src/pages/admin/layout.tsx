@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiRequest, setAdminOtpToken } from "@/lib/queryClient";
+import { apiRequest, setAdminOtpToken, getAuthHeaders } from "@/lib/queryClient";
 import { QRCodeSVG } from "qrcode.react";
 import { 
   LayoutDashboard, 
@@ -495,7 +495,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       try {
         const res = await fetch("/api/admin/ip-check", {
           credentials: "include",
-          headers: { Authorization: `Bearer ${localStorage.getItem("ashtech_auth_token") || ""}` },
+          headers: getAuthHeaders(),
         });
         if (cancelled) return;
         if (res.status === 403) {

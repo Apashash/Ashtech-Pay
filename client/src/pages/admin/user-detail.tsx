@@ -199,9 +199,7 @@ export default function AdminUserDetail() {
   const [convAmount, setConvAmount] = useState("");
   const [convProvider, setConvProvider] = useState<"swychr" | "pixpay" | "afribapay">("swychr");
 
-  const authHeaders = localStorage.getItem("ashtech_auth_token")
-    ? { Authorization: `Bearer ${localStorage.getItem("ashtech_auth_token")}` }
-    : {};
+  const authHeaders = getAuthHeaders();
 
   const { data: user, isLoading, refetch } = useQuery<User>({
     queryKey: [`/api/admin/users/${id}`],

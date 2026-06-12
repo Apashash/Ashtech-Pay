@@ -58,7 +58,7 @@ import {
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { formatCurrency } from "@/lib/currency";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, getAuthHeaders } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { ALL_FX_CURRENCIES, COUNTRY_CURRENCIES as SHARED_COUNTRY_CURRENCIES } from "@shared/schema";
 
@@ -218,7 +218,7 @@ export default function AdminUsers() {
       const params = new URLSearchParams({ page: String(page), limit: "50" });
       if (debouncedSearch) params.set("search", debouncedSearch);
       if (filter && filter !== "all") params.set("filter", filter);
-      const res = await fetch(`/api/admin/users?${params}`, { credentials: "include", headers: { ...(localStorage.getItem("ashtech_auth_token") ? { Authorization: `Bearer ${localStorage.getItem("ashtech_auth_token")}` } : {}) } });
+      const res = await fetch(`/api/admin/users?${params}`, { credentials: "include", headers: getAuthHeaders() });
       if (!res.ok) throw new Error("Erreur");
       return res.json();
     },

@@ -41,7 +41,7 @@ import {
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { formatCurrency } from "@/lib/currency";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, getAuthHeaders } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Transaction, SupportedCurrency } from "@shared/schema";
 
@@ -70,8 +70,7 @@ export default function AdminTransfers() {
     queryFn: async () => {
       const p = new URLSearchParams({ page: String(page), limit: "50", type: "transfer_out,transfer_in" });
       if (statusFilter !== "all") p.set("status", statusFilter);
-      const token = localStorage.getItem("ashtech_auth_token");
-      const res = await fetch(`/api/admin/transactions?${p}`, { credentials: "include", headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      const res = await fetch(`/api/admin/transactions?${p}`, { credentials: "include", headers: getAuthHeaders() });
       if (!res.ok) throw new Error("Erreur");
       return res.json();
     },
