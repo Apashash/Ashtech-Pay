@@ -1,3 +1,4 @@
 - [Admin OTP multi-process fix](admin-otp-fix.md) — OTP verification must use session (DB-backed), not in-memory Map; in-memory breaks PM2 cluster & server restarts.
 - [Admin requireAdmin Tier 4](admin-requireadmin-tier4.md) — requireAdmin middleware must have 4 tiers matching otp-status; missing Tier 4 (search by userId) causes 403 on PM2 → admin dashboard shows all zeros.
 - [TOTP disable no requireAdmin](totp-disable-no-requireadmin.md) — POST /api/admin/totp/disable must NOT use requireAdmin; the TOTP code itself is the proof of ownership; requireAdmin blocks on PM2 multi-worker when session isn't on the current worker.
+- [Admin HMAC OTP token (Tier 4)](admin-hmac-otp-token.md) — PM2 multi-worker + broken session cookies (Cloudflare proxy) cause all 3 session tiers to fail → admin dashboard shows all zeros. Fix: signed HMAC-SHA256 token stored in localStorage, sent as X-Admin-OTP-Token header, verified stateless in requireAdmin Tier 4.
