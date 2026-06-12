@@ -600,16 +600,14 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
   }
 
   // ── IP Whitelist check (runs on every admin request) ──────────────────────────
-  // If the whitelist is non-empty and the request IP is NOT in it → instant ban + kick.
+  // If the whitelist is non-empty and the request IP is NOT in it → reject with 403.
+  // NOTE: we do NOT ban the IP here — the admin may simply be connecting from a new
+  // connection (VPN, mobile data, etc.). Banning would lock out legitimate admins.
   const whitelist = await loadAdminIpWhitelist();
   if (whitelist.length > 0) {
     const currentIp = getClientIp(req);
     if (!isIpAllowed(currentIp, whitelist)) {
-      console.warn(`[AdminAccess] IP WHITELIST VIOLATION — user=${req.userId} ip=${currentIp} path=${req.path}`);
-      const banUntil = Date.now() + 72 * 60 * 60 * 1000;
-      blockIpManually(currentIp, 72 * 60 * 60 * 1000, `admin_ip_whitelist_violation:${req.userId}`).catch(() => {});
-      revokeSessionsByIp(currentIp, banUntil).catch(() => {});
-      if (req.userId) destroyUserSessions(req.userId, banUntil).catch(() => {});
+      console.warn(`[AdminAccess] IP WHITELIST REJECT — user=${req.userId} ip=${currentIp} path=${req.path}`);
       return res.status(403).json({ message: "Accès refusé — IP non autorisée.", ipBlocked: true });
     }
   }
@@ -1504,7 +1502,8 @@ export async function registerRoutes(
   // ── Admin IP Whitelist endpoints ─────────────────────────────────────────────
 
   // GET — return the current request IP (helper for UI "add my IP" button)
-  app.get("/api/admin/my-ip", requireAuth, requireAdmin, (req, res) => {
+  // requireAuth only (NOT requireAdmin) so the admin can see their IP even if blocked by whitelist
+  app.get("/api/admin/my-ip", requireAuth, (req, res) => {
     res.json({ ip: getClientIp(req) });
   });
 
