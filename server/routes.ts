@@ -564,34 +564,39 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
   // Tier 3: look up THIS session in the DB by sessionID — handles PM2 multi-worker where
   // req.session may not be loaded by the current worker, but sessionID is always in the cookie.
   // Keyed by sessionID only (not userId) to prevent cross-session / cross-browser verification.
-  // Retries once on transient connection errors (Supabase pool contention under PM2).
+  // Tries sessionPool first (3 attempts with backoff), then falls back to main pool if sessionPool
+  // is exhausted (happens when PM2_INSTANCES is not set correctly on the production server).
   let tier3Used = false;
   if (!otpValid && req.sessionID) {
-    for (let attempt = 0; attempt < 2 && !otpValid; attempt++) {
-      try {
-        const dbRow = await sessionPool.query(
-          `SELECT sess FROM session WHERE sid = $1 AND expire > NOW()`,
-          [req.sessionID]
-        );
-        if (dbRow.rows.length > 0) {
-          const sessData = typeof dbRow.rows[0].sess === "string"
-            ? JSON.parse(dbRow.rows[0].sess)
-            : dbRow.rows[0].sess;
-          const dbAvs = sessData?._avs;
-          if (typeof dbAvs === "number" && dbAvs > now) {
-            otpValid = true;
-            tier3Used = true;
-            // Cache in memory so subsequent requests on this process are instant
-            adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: dbAvs });
+    const poolsToTry = [sessionPool, pool];
+    outer: for (const queryPool of poolsToTry) {
+      for (let attempt = 0; attempt < 2 && !otpValid; attempt++) {
+        try {
+          const dbRow = await queryPool.query(
+            `SELECT sess FROM session WHERE sid = $1 AND expire > NOW()`,
+            [req.sessionID]
+          );
+          if (dbRow.rows.length > 0) {
+            const sessData = typeof dbRow.rows[0].sess === "string"
+              ? JSON.parse(dbRow.rows[0].sess)
+              : dbRow.rows[0].sess;
+            const dbAvs = sessData?._avs;
+            if (typeof dbAvs === "number" && dbAvs > now) {
+              otpValid = true;
+              tier3Used = true;
+              // Cache in memory so subsequent requests on this process are instant
+              adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: dbAvs });
+            }
           }
-        }
-        break; // query succeeded, no retry needed
-      } catch (sessErr: any) {
-        if (attempt === 0) {
-          // Wait 200ms then retry once (handles transient pool timeout under PM2 load)
-          await new Promise(r => setTimeout(r, 200));
-        } else {
-          console.error(`[AdminAccess] DB session fallback error — userId=${req.userId}:`, sessErr?.message);
+          break outer; // query succeeded on this pool — no need to try next
+        } catch (sessErr: any) {
+          if (attempt === 0) {
+            // Wait then retry once (handles transient pool timeout under PM2 load)
+            await new Promise(r => setTimeout(r, 200));
+          } else {
+            // Both attempts failed on this pool — try the other pool
+            console.warn(`[AdminAccess] DB session fallback warn (pool=${queryPool === sessionPool ? "session" : "main"}) — userId=${req.userId}:`, sessErr?.message);
+          }
         }
       }
     }
@@ -6314,28 +6319,31 @@ export async function registerRoutes(
     // Tier 3: look up THIS session in DB by sessionID — handles PM2 multi-worker
     // where req.session may lag on a different worker but the cookie is always correct.
     // Keyed by sessionID only — prevents cross-browser / cross-session OTP bypass.
-    // Retries once on transient pool errors (Supabase connection contention under PM2).
+    // Tries sessionPool first then falls back to main pool if sessionPool is exhausted.
     if (!verified && req.sessionID) {
-      for (let attempt = 0; attempt < 2 && !verified; attempt++) {
-        try {
-          const dbRow = await sessionPool.query(
-            `SELECT sess FROM session WHERE sid = $1 AND expire > NOW()`,
-            [req.sessionID]
-          );
-          if (dbRow.rows.length > 0) {
-            const sessData = typeof dbRow.rows[0].sess === "string"
-              ? JSON.parse(dbRow.rows[0].sess)
-              : dbRow.rows[0].sess;
-            const dbAvs = sessData?._avs;
-            if (typeof dbAvs === "number" && dbAvs > now) {
-              verified = true;
-              adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: dbAvs });
+      const poolsToTry = [sessionPool, pool];
+      otpStatusOuter: for (const queryPool of poolsToTry) {
+        for (let attempt = 0; attempt < 2 && !verified; attempt++) {
+          try {
+            const dbRow = await queryPool.query(
+              `SELECT sess FROM session WHERE sid = $1 AND expire > NOW()`,
+              [req.sessionID]
+            );
+            if (dbRow.rows.length > 0) {
+              const sessData = typeof dbRow.rows[0].sess === "string"
+                ? JSON.parse(dbRow.rows[0].sess)
+                : dbRow.rows[0].sess;
+              const dbAvs = sessData?._avs;
+              if (typeof dbAvs === "number" && dbAvs > now) {
+                verified = true;
+                adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: dbAvs });
+              }
             }
-          }
-          break;
-        } catch {
-          if (attempt === 0) {
-            await new Promise(r => setTimeout(r, 200));
+            break otpStatusOuter;
+          } catch {
+            if (attempt === 0) {
+              await new Promise(r => setTimeout(r, 200));
+            }
           }
         }
       }
