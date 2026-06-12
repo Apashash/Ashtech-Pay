@@ -517,6 +517,36 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
+// ── Admin OTP signed token (Tier 4) ─────────────────────────────────────────
+// Signed HMAC-SHA256 token stored in localStorage, sent as X-Admin-OTP-Token header.
+// Survives PM2 multi-worker routing, blocked cookies, and Cloudflare proxy.
+// Format: base64url({ payload: "userId:expiresAt", sig: "hmac-hex" })
+const ADMIN_TOKEN_SECRET = () => process.env.SESSION_SECRET || process.env.ADMIN_OTP_TOKEN_SECRET || "ashtech-admin-fallback-secret-change-in-prod";
+
+function signAdminOtpToken(userId: string, expiresAt: number): string {
+  const payload = `${userId}:${expiresAt}`;
+  const sig = crypto.createHmac("sha256", ADMIN_TOKEN_SECRET()).update(payload).digest("hex");
+  return Buffer.from(JSON.stringify({ payload, sig })).toString("base64url");
+}
+
+function verifyAdminOtpToken(token: string, userId: string): { valid: boolean; expiresAt: number } {
+  try {
+    const decoded = JSON.parse(Buffer.from(token, "base64url").toString("utf8"));
+    const { payload, sig } = decoded;
+    if (typeof payload !== "string" || typeof sig !== "string") return { valid: false, expiresAt: 0 };
+    const [tokenUserId, expiresAtStr] = payload.split(":");
+    const expiresAt = parseInt(expiresAtStr, 10);
+    if (isNaN(expiresAt)) return { valid: false, expiresAt: 0 };
+    const expectedSig = crypto.createHmac("sha256", ADMIN_TOKEN_SECRET()).update(payload).digest("hex");
+    if (!crypto.timingSafeEqual(Buffer.from(sig, "hex"), Buffer.from(expectedSig, "hex"))) return { valid: false, expiresAt: 0 };
+    if (tokenUserId !== userId) return { valid: false, expiresAt: 0 };
+    if (expiresAt <= Date.now()) return { valid: false, expiresAt };
+    return { valid: true, expiresAt };
+  } catch {
+    return { valid: false, expiresAt: 0 };
+  }
+}
+
 async function requireAdmin(req: Request, res: Response, next: NextFunction) {
   if (!req.userId) {
     console.warn(`[AdminAccess] BLOCKED — no userId — path=${req.path} sid=${req.sessionID?.slice(0,8)}`);
@@ -602,9 +632,28 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
     }
   }
 
+  // Tier 4: X-Admin-OTP-Token header — HMAC-signed token stored in localStorage.
+  // Survives PM2 multi-worker (no shared memory), broken session cookies (Cloudflare proxy,
+  // Safari ITP, iframe), and server restarts (signature is stateless / verified with secret).
+  let tier4Used = false;
   if (!otpValid) {
-    console.warn(`[AdminAccess] OTP NOT VALID — user=${req.userId} role=${user.role} path=${req.path} mem=${memValid} session=${sessionValid} t3=${tier3Used}`);
+    const headerToken = req.headers["x-admin-otp-token"] as string | undefined;
+    if (headerToken) {
+      const result = verifyAdminOtpToken(headerToken, req.userId!);
+      if (result.valid) {
+        otpValid = true;
+        tier4Used = true;
+        adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: result.expiresAt });
+      }
+    }
+  }
+
+  if (!otpValid) {
+    console.warn(`[AdminAccess] OTP NOT VALID — user=${req.userId} role=${user.role} path=${req.path} mem=${memValid} session=${sessionValid} t3=${tier3Used} t4=false`);
     return res.status(403).json({ message: "Vérification OTP admin requise", requireOtp: true });
+  }
+  if (tier4Used) {
+    console.log(`[AdminAccess] OK (Tier4/token) — user=${req.userId} role=${user.role} path=${req.path}`);
   }
 
   // ── IP Whitelist check (runs on every admin request) ──────────────────────────
@@ -2078,7 +2127,8 @@ export async function registerRoutes(
           } as any).catch(() => {});
 
           const { password: _, ...safeUser } = user;
-          res.json({ user: safeUser, token: authToken });
+          const adminOtpToken = signAdminOtpToken(user.id, avsExpiresAt);
+          res.json({ user: safeUser, token: authToken, adminOtpToken });
         });
       });
     } catch (error) {
@@ -6447,7 +6497,19 @@ export async function registerRoutes(
       }
     }
 
-    res.json({ verified, totpEnabled: !!user.totpEnabled });
+  // Tier 4: X-Admin-OTP-Token header (same as requireAdmin)
+  if (!verified) {
+    const headerToken = req.headers["x-admin-otp-token"] as string | undefined;
+    if (headerToken) {
+      const result = verifyAdminOtpToken(headerToken, req.userId!);
+      if (result.valid) {
+        verified = true;
+        adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: result.expiresAt });
+      }
+    }
+  }
+
+  res.json({ verified, totpEnabled: !!user.totpEnabled });
   });
 
   // GET /api/admin/debug-storage — tests Supabase Storage connection (admin only)
@@ -6857,7 +6919,8 @@ export async function registerRoutes(
       console.log(`[AdminOTP] Admin ${user.email?.replace(/(.{2}).+(@.+)/, "$1***$2")} vérifié depuis ${ip}`);
       notifyAdminLoginSuccess({ adminName: user.fullName || user.username, adminEmail: user.email || "", ip }).catch(() => {});
 
-      res.json({ success: true });
+      const adminOtpToken = signAdminOtpToken(req.userId!, expiresAt);
+      res.json({ success: true, adminOtpToken });
     } catch (error: any) {
       console.error("Admin OTP verify error:", error.message);
       res.status(500).json({ message: "Erreur serveur" });
@@ -7027,7 +7090,8 @@ export async function registerRoutes(
       }).catch(() => {});
       notifyAdminLoginSuccess({ adminName: user.fullName || user.username, adminEmail: user.email || "", ip }).catch(() => {});
       console.log(`[AdminTOTP] Admin ${user.email?.replace(/(.{2}).+(@.+)/, "$1***$2")} vérifié (TOTP) depuis ${ip}`);
-      res.json({ success: true });
+      const adminOtpToken = signAdminOtpToken(req.userId!, expiresAt);
+      res.json({ success: true, adminOtpToken });
     } catch (err: any) {
       console.error("[AdminTOTP] Verify error:", err?.message);
       res.status(500).json({ message: "Erreur serveur" });

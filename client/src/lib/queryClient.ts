@@ -2,6 +2,7 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
 // Token storage for authentication (workaround for blocked cookies in iframes)
 const AUTH_TOKEN_KEY = 'ashtech_auth_token';
+const ADMIN_OTP_TOKEN_KEY = 'ashtech_admin_otp_token';
 
 export function getAuthToken(): string | null {
   return localStorage.getItem(AUTH_TOKEN_KEY);
@@ -15,12 +16,25 @@ export function removeAuthToken(): void {
   localStorage.removeItem(AUTH_TOKEN_KEY);
 }
 
+export function getAdminOtpToken(): string | null {
+  return localStorage.getItem(ADMIN_OTP_TOKEN_KEY);
+}
+
+export function setAdminOtpToken(token: string): void {
+  localStorage.setItem(ADMIN_OTP_TOKEN_KEY, token);
+}
+
+export function removeAdminOtpToken(): void {
+  localStorage.removeItem(ADMIN_OTP_TOKEN_KEY);
+}
+
 export function getAuthHeaders(): HeadersInit {
   const token = getAuthToken();
-  if (token) {
-    return { 'Authorization': `Bearer ${token}` };
-  }
-  return {};
+  const adminOtpToken = getAdminOtpToken();
+  const headers: Record<string, string> = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (adminOtpToken) headers['X-Admin-OTP-Token'] = adminOtpToken;
+  return headers;
 }
 
 async function throwIfResNotOk(res: Response) {

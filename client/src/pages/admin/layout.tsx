@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, setAdminOtpToken } from "@/lib/queryClient";
 import { QRCodeSVG } from "qrcode.react";
 import { 
   LayoutDashboard, 
@@ -204,9 +204,11 @@ export function AdminLayout({ children }: AdminLayoutProps) {
 
   const verifyTotpMutation = useMutation({
     mutationFn: async (code: string) => {
-      await apiRequest("POST", "/api/admin/totp/verify", { code });
+      const res = await apiRequest("POST", "/api/admin/totp/verify", { code });
+      return await res.json() as { success: boolean; adminOtpToken?: string };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      if (data.adminOtpToken) setAdminOtpToken(data.adminOtpToken);
       setTotpError("");
       setTotpCode(["", "", "", "", "", ""]);
       otpVerifiedAtRef.current = Date.now();
@@ -314,9 +316,11 @@ export function AdminLayout({ children }: AdminLayoutProps) {
 
   const verifyOtpMutation = useMutation({
     mutationFn: async (code: string) => {
-      await apiRequest("POST", "/api/admin/verify-otp", { code });
+      const res = await apiRequest("POST", "/api/admin/verify-otp", { code });
+      return await res.json() as { success: boolean; adminOtpToken?: string };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      if (data.adminOtpToken) setAdminOtpToken(data.adminOtpToken);
       setOtpError("");
       setOtpSessionExpired(false);
       otpVerifiedAtRef.current = Date.now();
