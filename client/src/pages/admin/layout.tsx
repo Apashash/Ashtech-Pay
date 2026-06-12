@@ -499,7 +499,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           if (data.kicked || data.ipBlocked) {
             queryClient.clear();
             localStorage.removeItem("ashtech_auth_token");
-            window.location.href = "/login?kicked=1";
+            window.location.href = "/login?kicked=ip";
           }
         }
       } catch { /* network error — ignore, will retry */ }

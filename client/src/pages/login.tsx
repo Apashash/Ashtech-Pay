@@ -68,12 +68,11 @@ export default function LoginPage() {
   const { toast } = useToast();
   const { t } = useLanguage();
   const [showPassword, setShowPassword] = useState(false);
-  const [kicked, setKicked] = useState(() => {
-    if (typeof window !== "undefined") {
-      return new URLSearchParams(window.location.search).get("kicked") === "1";
-    }
-    return false;
-  });
+  const kickedParam = typeof window !== "undefined"
+    ? new URLSearchParams(window.location.search).get("kicked")
+    : null;
+  const [kicked, setKicked] = useState(() => kickedParam === "1" || kickedParam === "ip");
+  const kickedByIp = kickedParam === "ip";
 
   const [blockedUntil, setBlockedUntil] = useState<number | null>(() => loadRateLimit());
   const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
@@ -196,12 +195,20 @@ export default function LoginPage() {
 
         <div className="bg-card border border-border rounded-2xl p-8">
           {kicked && !checking && !isBlocked && !vpnDetected && (
-            <div className="flex items-start gap-3 bg-blue-500/10 border border-blue-500/25 rounded-xl px-4 py-3 mb-5">
-              <MonitorSmartphone className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+            <div className={`flex items-start gap-3 rounded-xl px-4 py-3 mb-5 ${kickedByIp ? "bg-red-500/10 border border-red-500/25" : "bg-blue-500/10 border border-blue-500/25"}`}>
+              {kickedByIp
+                ? <ShieldAlert className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                : <MonitorSmartphone className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+              }
               <div>
-                <p className="text-sm font-semibold text-blue-400">Compte connecté sur un autre appareil</p>
+                <p className={`text-sm font-semibold ${kickedByIp ? "text-red-400" : "text-blue-400"}`}>
+                  {kickedByIp ? "Adresse IP non autorisée" : "Compte connecté sur un autre appareil"}
+                </p>
                 <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                  Votre session a été fermée car votre compte vient d'être connecté sur un autre navigateur ou appareil.
+                  {kickedByIp
+                    ? "Votre session a été fermée car votre adresse IP n'est pas dans la liste blanche d'administration. Contactez l'administrateur pour ajouter votre IP."
+                    : "Votre session a été fermée car votre compte vient d'être connecté sur un autre navigateur ou appareil."
+                  }
                 </p>
               </div>
             </div>

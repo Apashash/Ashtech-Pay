@@ -1965,6 +1965,18 @@ export async function registerRoutes(
       if (user.isBanned) return res.status(403).json({ message: user.banReason || "Compte banni." });
 
       const ip = getClientIp(req);
+
+      // Check IP whitelist BEFORE creating session — block at login time, not 3s later
+      const whitelist = await loadAdminIpWhitelist();
+      if (whitelist.length > 0 && !isIpAllowed(ip, whitelist)) {
+        console.warn(`[IpWhitelist] LOGIN REJECT — user=${userId} ip=${ip} — not in whitelist`);
+        return res.status(403).json({
+          kicked: true,
+          ipNotWhitelisted: true,
+          message: `Accès refusé. Votre adresse IP (${ip}) n'est pas dans la liste blanche d'administration.`,
+        });
+      }
+
       activeIpRegistry.set(user.id, ip);
 
       // Generate auth token (works in iframes where cookies fail)

@@ -71,6 +71,11 @@ export default function AdminLoginOtpPage() {
     },
     onError: (error: any) => {
       setCode("");
+      if (error.ipNotWhitelisted) {
+        sessionStorage.removeItem("adminLoginToken");
+        window.location.href = "/login?kicked=ip";
+        return;
+      }
       if (error.expired) {
         sessionStorage.removeItem("adminLoginToken");
         toast({

@@ -42,8 +42,16 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <script type="module" crossorigin src="/assets/index-pbLZxHxi.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-D3rJsHU7.css">
+  <script>
+    (function() {
+      try {
+        var t = localStorage.getItem('ashtech-theme-v2');
+        if (t === 'dark') document.documentElement.classList.add('dark');
+      } catch(e) {}
+    })();
+  </script>
+    <script type="module" crossorigin src="/assets/index-CZZl9x_K.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-BZXUAw42.css">
   </head>
   <body>
     <div id="root"></div>
