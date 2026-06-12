@@ -53,7 +53,7 @@ TRUST_PROXY = "true"
 COOKIE_SECURE = "false"
 COOKIE_SAMESITE = "lax"
 APP_URL = "https://ashtechpay.top"
-ADMIN_OTP_BYPASS = "true"
+ADMIN_OTP_BYPASS = "false"
 
 [userenv.development]
 

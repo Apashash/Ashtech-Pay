@@ -555,9 +555,10 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
 
 function generateSlug(): string {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  const bytes = crypto.randomBytes(8);
   let result = "";
   for (let i = 0; i < 8; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
+    result += chars[bytes[i] % chars.length];
   }
   return result;
 }
@@ -567,7 +568,7 @@ function generateTransactionReference(type: string): string {
   const prefix = "ASHPAY";
   const typeCode = type.toUpperCase().substring(0, 3); // DEP, WIT, TRA, PAY
   const timestamp = Date.now().toString(36).toUpperCase();
-  const random = Math.random().toString(36).substring(2, 6).toUpperCase();
+  const random = crypto.randomBytes(3).toString("hex").toUpperCase();
   return `${prefix}-${typeCode}-${timestamp}-${random}`;
 }
 
@@ -1226,13 +1227,11 @@ export async function registerRoutes(
         const isAdminRole = requestingUser && ["admin", "support", "finance"].includes(requestingUser.role);
         if (!isAdminRole) {
           // Verify the path belongs to a KYC submission owned by this user
+          // FIX: exact path comparison only — no suffix/filename matching (IDOR)
           const kycSub = await storage.getKycSubmissionByUserId(req.userId!);
           const ownedPaths = [kycSub?.documentFrontPath, kycSub?.documentBackPath, kycSub?.selfiePath]
             .filter(Boolean) as string[];
-          // Normalize: strip "kyc/" prefix from stored paths if present
-          const normalizedOwned = ownedPaths.map(p => p.startsWith("kyc/") ? p : p);
-          const requestedNorm = storagePath;
-          const isOwned = normalizedOwned.some(p => p === requestedNorm || p.endsWith("/" + requestedNorm.split("/").pop()!));
+          const isOwned = ownedPaths.some(p => p === storagePath);
           if (!isOwned) {
             return res.status(403).send("Accès refusé");
           }
@@ -2159,7 +2158,8 @@ export async function registerRoutes(
       }
 
       const newHash = await bcrypt.hash(newPassword, 10);
-      const otp = String(Math.floor(1000 + Math.random() * 9000));
+      // FIX: crypto.randomInt (CSPRNG) — 6 chiffres = 1 000 000 combinaisons
+      const otp = crypto.randomInt(100000, 1000000).toString();
       const expiresAt = Date.now() + 10 * 60 * 1000;
 
       passwordChangeOtpStore.set(userId, { otp, newPasswordHash: newHash, expiresAt, attempts: 0 });
