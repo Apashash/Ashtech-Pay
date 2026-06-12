@@ -238,7 +238,7 @@ interface PendingAdminLogin {
 }
 const pendingAdminLogins = new Map<string, PendingAdminLogin>();
 const ADMIN_LOGIN_OTP_TTL_MS = 5 * 60 * 1000; // 5 min
-const ADMIN_NOTIF_EMAIL = "ashtechsar@gmail.com";
+const ADMIN_NOTIF_EMAIL = "ashtechsarl@gmail.com";
 
 // Cleanup expired pending logins every 2 min
 setInterval(() => {

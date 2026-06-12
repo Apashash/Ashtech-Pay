@@ -168,7 +168,7 @@ export default function AdminLoginOtpPage() {
             <h1 className="text-xl font-bold text-foreground mb-1">Vérification requise</h1>
             <p className="text-sm text-muted-foreground leading-relaxed">
               Un code à 6 chiffres a été envoyé à{" "}
-              <span className="font-semibold text-foreground">ashtechsar@gmail.com</span>{" "}
+              <span className="font-semibold text-foreground">ashtechsarl@gmail.com</span>{" "}
               et sur{" "}
               <span className="font-semibold text-foreground">Telegram</span>.
             </p>
