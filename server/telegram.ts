@@ -1390,6 +1390,33 @@ export async function handleTelegramUpdate(
     cancelConversion: (conversionId: string) => Promise<{ fromAmount: string; fromCurrency: string; userName: string } | null>;
   }
 ): Promise<void> {
+  // ── Filtre admin : ignore tout message qui ne vient pas du CHAT_ID autorisé ──
+  if (CHAT_ID) {
+    const incomingChatId =
+      String(update.message?.chat?.id ?? "") ||
+      String(update.callback_query?.message?.chat?.id ?? "") ||
+      String(update.edited_message?.chat?.id ?? "") ||
+      String(update.channel_post?.chat?.id ?? "");
+
+    if (incomingChatId && incomingChatId !== String(CHAT_ID)) {
+      // Répondre une seule fois "bot non disponible" pour ne pas révéler son existence
+      if (update.message?.chat?.id) {
+        await callBotApi("sendMessage", {
+          chat_id: update.message.chat.id,
+          text: "🤖 Ce bot est privé et n'est pas disponible.",
+        });
+      }
+      if (update.callback_query?.id) {
+        await callBotApi("answerCallbackQuery", {
+          callback_query_id: update.callback_query.id,
+          text: "Accès refusé.",
+          show_alert: true,
+        });
+      }
+      return; // Ignorer complètement
+    }
+  }
+
   // ── Callback query (button press) ──
   if (update.callback_query) {
     const cq = update.callback_query;
