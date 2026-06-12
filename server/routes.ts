@@ -1138,6 +1138,28 @@ export async function registerRoutes(
   const isSecureProxy = process.env.TRUST_PROXY === "true" || !!process.env.REPL_ID;
   const cookieSecure = process.env.COOKIE_SECURE !== "false";
   const cookieSameSite = (process.env.COOKIE_SAMESITE as "none" | "lax" | "strict") || (isSecureProxy ? "none" : "lax");
+  // Resilient session pool: tries sessionPool first, falls back to main pool if exhausted.
+  // This prevents session save failures when PM2_INSTANCES is misconfigured on production
+  // and sessionPool runs out of connections (which causes 401 right after login).
+  const resilientSessionPool = {
+    query: async (...args: Parameters<typeof sessionPool.query>) => {
+      try {
+        return await sessionPool.query(...args as [any]);
+      } catch (err: any) {
+        if (
+          err?.code === "53300" || // too_many_connections
+          err?.message?.includes("timeout") ||
+          err?.message?.includes("pool") ||
+          err?.message?.includes("connect")
+        ) {
+          console.warn("[SessionStore] sessionPool exhausted — falling back to main pool:", err.message);
+          return await pool.query(...args as [any]);
+        }
+        throw err;
+      }
+    },
+  };
+
   app.use(
     session({
       // FIX-1: utilise _DEV_TOKEN_SECRET (même valeur que getTokenSecret()) en dev
@@ -1146,7 +1168,7 @@ export async function registerRoutes(
       resave: false,
       saveUninitialized: false,
       store: new SessionStore({
-        pool: sessionPool,
+        pool: resilientSessionPool as any,
         tableName: "session",
         errorLog: (err: Error) => console.error("[SessionStore]", err.message),
       }),
