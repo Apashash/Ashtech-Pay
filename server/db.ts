@@ -64,8 +64,31 @@ export const pool = new Pool({
   connectionTimeoutMillis: 5000,
 });
 
+// ── Error tracking per pool (for /api/admin/pool-status diagnostic) ─────────
+export const poolStats = {
+  main: {
+    max: MAIN_POOL_MAX,
+    pm2Instances: PM2_INSTANCES,
+    errors: 0,
+    lastError: null as string | null,
+    lastErrorAt: null as number | null,
+    fallbackUsed: 0,
+  },
+  session: {
+    max: SESSION_POOL_MAX,
+    pm2Instances: PM2_INSTANCES,
+    errors: 0,
+    lastError: null as string | null,
+    lastErrorAt: null as number | null,
+    fallbackToMain: 0,
+  },
+};
+
 pool.on("error", (err) => {
   console.error("[DB] Pool error (main):", err.message);
+  poolStats.main.errors++;
+  poolStats.main.lastError = err.message;
+  poolStats.main.lastErrorAt = Date.now();
 });
 
 export const db = drizzle(pool, { schema });
@@ -81,6 +104,9 @@ export const sessionPool = new Pool({
 
 sessionPool.on("error", (err) => {
   console.error("[DB] Pool error (session):", err.message);
+  poolStats.session.errors++;
+  poolStats.session.lastError = err.message;
+  poolStats.session.lastErrorAt = Date.now();
 });
 
 // Test connection at startup

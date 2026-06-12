@@ -46,7 +46,7 @@ import crypto from "crypto";
 import { z } from "zod";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
-import { pool, db, sessionPool } from "./db";
+import { pool, db, sessionPool, poolStats } from "./db";
 import { transactions as transactionsTable, users as usersTable, wallets as walletsTable } from "@shared/schema";
 import { desc, eq, sql as drizzleSql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
@@ -1153,6 +1153,7 @@ export async function registerRoutes(
           err?.message?.includes("connect")
         ) {
           console.warn("[SessionStore] sessionPool exhausted — falling back to main pool:", err.message);
+          poolStats.session.fallbackToMain++;
           return await pool.query(...args as [any]);
         }
         throw err;
@@ -6455,6 +6456,84 @@ export async function registerRoutes(
     }
 
     res.json(results);
+  });
+
+  // GET /api/admin/pool-status — live DB pool diagnostics (admin only)
+  // Shows real-time connection counts, config, errors and fallback usage for both pools.
+  app.get("/api/admin/pool-status", requireAuth, requireAdmin, async (req, res) => {
+    const workerIndex = process.env.NODE_APP_INSTANCE ?? process.env.PM2_INSTANCE_ID ?? "0";
+    const pm2Instances = parseInt(process.env.PM2_INSTANCES || "1", 10) || 1;
+    const hasSessionSecret = !!process.env.SESSION_SECRET;
+
+    // Run a quick latency probe on each pool
+    const probePool = async (p: typeof pool): Promise<{ ok: boolean; latencyMs: number; error?: string }> => {
+      const start = Date.now();
+      try {
+        await p.query("SELECT 1");
+        return { ok: true, latencyMs: Date.now() - start };
+      } catch (e: any) {
+        return { ok: false, latencyMs: Date.now() - start, error: e.message };
+      }
+    };
+
+    const [mainProbe, sessionProbe] = await Promise.all([
+      probePool(pool),
+      probePool(sessionPool),
+    ]);
+
+    const totalMax = (poolStats.main.max + poolStats.session.max) * pm2Instances;
+    const health = mainProbe.ok && sessionProbe.ok && hasSessionSecret ? "ok" : "degraded";
+    const warnings: string[] = [];
+    if (!hasSessionSecret) warnings.push("SESSION_SECRET manquant — tokens différents par worker → déconnexions immédiates avec PM2 multi-worker");
+    if (pm2Instances > 1 && !hasSessionSecret) warnings.push("CRITIQUE: multi-worker PM2 sans SESSION_SECRET");
+    if (poolStats.session.fallbackToMain > 0) warnings.push(`SessionPool épuisé ${poolStats.session.fallbackToMain}× depuis démarrage — fallback sur pool principal activé`);
+    if (!mainProbe.ok) warnings.push(`Pool principal inaccessible: ${mainProbe.error}`);
+    if (!sessionProbe.ok) warnings.push(`SessionPool inaccessible: ${sessionProbe.error}`);
+    if (mainProbe.latencyMs > 1000) warnings.push(`Latence pool principal élevée: ${mainProbe.latencyMs}ms`);
+
+    res.json({
+      health,
+      worker: { index: workerIndex, pm2Instances, pid: process.pid },
+      config: {
+        sessionSecretSet: hasSessionSecret,
+        trustProxy: process.env.TRUST_PROXY || "not set",
+        nodeEnv: process.env.NODE_ENV || "not set",
+        pm2Instances,
+      },
+      pools: {
+        main: {
+          max: poolStats.main.max,
+          total: pool.totalCount,
+          active: pool.totalCount - pool.idleCount,
+          idle: pool.idleCount,
+          waiting: pool.waitingCount,
+          probe: mainProbe,
+          errors: poolStats.main.errors,
+          lastError: poolStats.main.lastError,
+          lastErrorAt: poolStats.main.lastErrorAt
+            ? new Date(poolStats.main.lastErrorAt).toISOString()
+            : null,
+        },
+        session: {
+          max: poolStats.session.max,
+          total: sessionPool.totalCount,
+          active: sessionPool.totalCount - sessionPool.idleCount,
+          idle: sessionPool.idleCount,
+          waiting: sessionPool.waitingCount,
+          probe: sessionProbe,
+          errors: poolStats.session.errors,
+          lastError: poolStats.session.lastError,
+          lastErrorAt: poolStats.session.lastErrorAt
+            ? new Date(poolStats.session.lastErrorAt).toISOString()
+            : null,
+          fallbackToMain: poolStats.session.fallbackToMain,
+        },
+      },
+      totalMaxAllWorkers: totalMax,
+      warnings,
+      uptime: Math.floor(process.uptime()),
+      timestamp: new Date().toISOString(),
+    });
   });
 
   // GET /api/admin/check-access — diagnostic without OTP; shows role, session, OTP state
