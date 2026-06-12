@@ -1536,7 +1536,7 @@ export async function registerRoutes(
       const list: string[] = setting ? JSON.parse(setting.value) : [];
       if (list.includes(trimmed)) return res.status(400).json({ message: "Cette IP est déjà dans la liste." });
       list.push(trimmed);
-      await storage.setSetting("admin_ip_whitelist", JSON.stringify(list));
+      await storage.upsertSetting("admin_ip_whitelist", JSON.stringify(list));
       invalidateAdminIpWhitelistCache();
       res.json({ ips: list });
     } catch {
@@ -1551,7 +1551,7 @@ export async function registerRoutes(
       const setting = await storage.getSetting("admin_ip_whitelist");
       let list: string[] = setting ? JSON.parse(setting.value) : [];
       list = list.filter(i => i !== ip);
-      await storage.setSetting("admin_ip_whitelist", JSON.stringify(list));
+      await storage.upsertSetting("admin_ip_whitelist", JSON.stringify(list));
       invalidateAdminIpWhitelistCache();
       res.json({ ips: list });
     } catch {
