@@ -85,12 +85,29 @@ interface AdminStats {
   statsResetAt: string | null;
 }
 
+interface SessionInfo {
+  otpValid: boolean;
+  tier1_memory: boolean;
+  tier2_session: boolean;
+  tier3_db: boolean;
+  tier3_dbError: string | null;
+  ip: string;
+  whitelistActive: boolean;
+  ipAllowed: boolean;
+  whitelistCount: number;
+  role: string;
+  totpEnabled: boolean;
+  timestamp: string;
+}
+
 export default function AdminDashboard() {
   const [period, setPeriod] = useState<StatsPeriod>("this_month");
   const [showResetDialog, setShowResetDialog] = useState(false);
+  const [diagInfo, setDiagInfo] = useState<SessionInfo | null>(null);
+  const [diagLoading, setDiagLoading] = useState(false);
   const { toast } = useToast();
   
-  const { data: stats, isLoading } = useQuery<AdminStats>({
+  const { data: stats, isLoading, error: statsError, refetch: refetchStats } = useQuery<AdminStats>({
     queryKey: [`/api/admin/stats?period=${period}`],
   });
 
@@ -252,6 +269,59 @@ export default function AdminDashboard() {
   return (
     <AdminLayout>
       <div className="p-6 space-y-6">
+        {statsError && (
+          <div className="rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 overflow-hidden">
+            <div className="flex items-start gap-3 p-4">
+              <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm">Erreur de chargement des statistiques</p>
+                <p className="text-xs mt-1 text-red-300 break-words">{(statsError as Error).message || "Erreur inconnue"}</p>
+                <p className="text-xs mt-1 text-red-300/70">Cause possible : IP non autorisée, session OTP expirée, ou problème réseau.</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button size="sm" variant="outline" className="border-red-500/40 text-red-400 hover:bg-red-500/10" disabled={diagLoading} onClick={async () => {
+                  setDiagLoading(true);
+                  setDiagInfo(null);
+                  try {
+                    const res = await apiRequest("GET", "/api/admin/session-info");
+                    const data = await res.json();
+                    setDiagInfo(data);
+                  } catch (e: any) {
+                    toast({ title: "Diagnostic échoué", description: e.message, variant: "destructive" });
+                  } finally {
+                    setDiagLoading(false);
+                  }
+                }}>
+                  {diagLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : "Diagnostic"}
+                </Button>
+                <Button size="sm" variant="outline" className="border-red-500/40 text-red-400 hover:bg-red-500/10" onClick={() => refetchStats()}>
+                  <RefreshCw className="w-3.5 h-3.5 mr-1" />
+                  Réessayer
+                </Button>
+              </div>
+            </div>
+            {diagInfo && (
+              <div className="border-t border-red-500/20 p-4 bg-black/20 text-xs space-y-1 font-mono">
+                <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+                  <span className="text-red-300/70">OTP Valide :</span>
+                  <span className={diagInfo.otpValid ? "text-green-400" : "text-red-400"}>{diagInfo.otpValid ? "✓ Oui" : "✗ Non"}</span>
+                  <span className="text-red-300/70">Tier 1 (mémoire) :</span>
+                  <span className={diagInfo.tier1_memory ? "text-green-400" : "text-amber-400"}>{diagInfo.tier1_memory ? "✓" : "✗"}</span>
+                  <span className="text-red-300/70">Tier 2 (session) :</span>
+                  <span className={diagInfo.tier2_session ? "text-green-400" : "text-amber-400"}>{diagInfo.tier2_session ? "✓" : "✗"}</span>
+                  <span className="text-red-300/70">Tier 3 (base de données) :</span>
+                  <span className={diagInfo.tier3_db ? "text-green-400" : "text-amber-400"}>{diagInfo.tier3_db ? "✓" : diagInfo.tier3_dbError ? `✗ ${diagInfo.tier3_dbError}` : "✗"}</span>
+                  <span className="text-red-300/70">IP actuelle :</span>
+                  <span className="text-red-200">{diagInfo.ip}</span>
+                  <span className="text-red-300/70">Whitelist IP active :</span>
+                  <span className={diagInfo.whitelistActive ? "text-amber-400" : "text-green-400"}>{diagInfo.whitelistActive ? `Oui (${diagInfo.whitelistCount} IP)` : "Non"}</span>
+                  <span className="text-red-300/70">IP autorisée :</span>
+                  <span className={diagInfo.ipAllowed ? "text-green-400" : "text-red-400 font-bold"}>{diagInfo.ipAllowed ? "✓ Oui" : "✗ Non — ajoutez votre IP dans Paramètres → IP Whitelist"}</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
             <h1 className="text-2xl font-bold">Dashboard Administrateur</h1>

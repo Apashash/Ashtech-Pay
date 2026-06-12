@@ -1616,6 +1616,69 @@ export async function registerRoutes(
     }
   });
 
+  // GET /api/admin/session-info — diagnostic endpoint (requireAuth only, NO requireAdmin)
+  // Returns session OTP state, IP whitelist status, and pool health so admins can debug
+  // "all zeros" issues without needing server logs.
+  app.get("/api/admin/session-info", requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.userId!).catch(() => null);
+      if (!user || !["admin", "support", "finance"].includes(user.role)) {
+        return res.status(403).json({ message: "Accès refusé" });
+      }
+      const now = Date.now();
+      const memEntry = adminVerifiedSessions.get(req.sessionID);
+      const memValid = !!(memEntry && memEntry.expiresAt > now);
+      const avsExp = req.session._avs;
+      const sessionValid = typeof avsExp === "number" && avsExp > now;
+      const avsExpiredAt = typeof avsExp === "number" && avsExp <= now ? new Date(avsExp).toISOString() : null;
+
+      // Tier 3: DB query
+      let dbValid = false;
+      let dbError: string | null = null;
+      try {
+        const dbRow = await sessionPool.query(
+          `SELECT sess FROM session WHERE sid = $1 AND expire > NOW()`,
+          [req.sessionID]
+        );
+        if (dbRow.rows.length > 0) {
+          const sessData = typeof dbRow.rows[0].sess === "string"
+            ? JSON.parse(dbRow.rows[0].sess)
+            : dbRow.rows[0].sess;
+          const dbAvs = sessData?._avs;
+          dbValid = typeof dbAvs === "number" && dbAvs > now;
+        }
+      } catch (e: any) {
+        dbError = e?.message || "Unknown error";
+      }
+
+      // IP whitelist
+      const whitelist = await loadAdminIpWhitelist().catch(() => [] as string[]);
+      const currentIp = getClientIp(req);
+      const whitelistActive = whitelist.length > 0;
+      const ipAllowed = !whitelistActive || isIpAllowed(currentIp, whitelist);
+
+      res.json({
+        userId: req.userId,
+        role: user.role,
+        sessionId: req.sessionID?.slice(0, 12) + "…",
+        tier1_memory: memValid,
+        tier2_session: sessionValid,
+        tier2_avsExpiredAt: avsExpiredAt,
+        tier3_db: dbValid,
+        tier3_dbError: dbError,
+        otpValid: memValid || sessionValid || dbValid,
+        ip: currentIp,
+        whitelistActive,
+        ipAllowed,
+        whitelistCount: whitelist.length,
+        totpEnabled: !!user.totpEnabled,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (e: any) {
+      res.status(500).json({ message: "Erreur serveur", error: e?.message });
+    }
+  });
+
   app.post("/api/auth/register", registerLimiter, async (req, res) => {
     try {
       const ip = getClientIp(req);

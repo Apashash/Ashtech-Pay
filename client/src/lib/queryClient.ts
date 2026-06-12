@@ -39,6 +39,11 @@ async function throwIfResNotOk(res: Response) {
       if (json.requireOtp && res.status === 403) {
         window.dispatchEvent(new CustomEvent("admin-otp-required"));
       }
+      if (json.ipBlocked && res.status === 403) {
+        removeAuthToken();
+        window.dispatchEvent(new CustomEvent("admin-ip-blocked", { detail: { message: json.message } }));
+        window.location.href = "/login?kicked=ip";
+      }
       throw Object.assign(new Error(json.message || text), json);
     } catch (e) {
       if (e instanceof SyntaxError) {
