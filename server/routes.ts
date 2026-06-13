@@ -2485,14 +2485,15 @@ export async function registerRoutes(
         try { await sessionPool.query("SELECT 1"); } catch { qPool = pool; }
 
         const check = await qPool.query(
-          `SELECT sid, (sess->>'tokenIssuedAt')::bigint AS token_ts FROM session WHERE sid = $1 AND sess->>'userId' = $2`,
+          `SELECT sid, sess->>'tokenIssuedAt' AS token_ts FROM session WHERE sid = $1 AND sess->>'userId' = $2`,
           [targetSid, userId]
         );
         if (check.rows.length === 0) {
           return res.status(404).json({ message: "Session introuvable." });
         }
 
-        const tokenTs = check.rows[0]?.token_ts;
+        const rawTs = check.rows[0]?.token_ts;
+        const tokenTs = rawTs ? parseInt(rawTs, 10) : null;
         if (tokenTs) {
           if (!revokedSpecificTokenTs.has(userId)) revokedSpecificTokenTs.set(userId, new Set());
           revokedSpecificTokenTs.get(userId)!.add(Number(tokenTs));
