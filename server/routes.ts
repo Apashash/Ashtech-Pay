@@ -441,7 +441,12 @@ function extractUserId(req: Request, _res: Response, next: NextFunction) {
         userId = id;
         // Persister le userId dans la session si absent (bearer token sur nouvel appareil)
         // → l'appareil apparaîtra dans la liste des sessions connectées
-        if (req.session && !req.session.userId) {
+        // EXCEPTION: ne pas créer de session éphémère pour les endpoints de gestion de sessions
+        // eux-mêmes — sinon chaque appel GET /api/user/sessions recrée immédiatement une session
+        // dans Supabase après une déconnexion, faisant réapparaître l'appareil dans la liste.
+        const isSessionMgmtPath = req.path === "/api/user/sessions" ||
+          req.path.startsWith("/api/user/sessions/");
+        if (!isSessionMgmtPath && req.session && !req.session.userId) {
           req.session.userId = id;
           if (!req.session.clientIp) req.session.clientIp = getClientIp(req);
           if (!req.session.userAgent) req.session.userAgent = req.headers["user-agent"] || "";
@@ -795,6 +800,23 @@ const revokedTokensBefore = new Map<string, number>();
 const revokedSpecificTokenTs = new Map<string, Set<number>>();
 // Map userId → dernière IP de connexion connue
 const activeIpRegistry = new Map<string, string>();
+
+// ─── Ring buffer : 100 dernières erreurs sur les opérations de session ────────
+interface SessionOpError {
+  at: string;           // ISO timestamp
+  op: string;           // "disconnect_one" | "disconnect_all" | "list"
+  userId?: string;
+  targetSid?: string;
+  pool: string;         // "session" | "main" | "both_failed"
+  error: string;
+  stack?: string;
+}
+const SESSION_OP_ERRORS_MAX = 100;
+const sessionOpErrors: SessionOpError[] = [];
+function pushSessionError(e: SessionOpError) {
+  sessionOpErrors.push(e);
+  if (sessionOpErrors.length > SESSION_OP_ERRORS_MAX) sessionOpErrors.shift();
+}
 
 async function destroyUserSessions(userId: string, blockedUntil: number): Promise<void> {
   try {
@@ -2360,6 +2382,7 @@ export async function registerRoutes(
   app.get("/api/user/sessions", requireAuth, async (req, res) => {
     try {
       let rows: any[] = [];
+      let usedPool = "session";
       try {
         const result = await sessionPool.query(
           `SELECT sid, sess, expire FROM session WHERE sess->>'userId' = $1 ORDER BY expire DESC`,
@@ -2367,8 +2390,20 @@ export async function registerRoutes(
         );
         rows = result.rows || [];
       } catch (dbErr: any) {
-        console.error("[Sessions] Impossible de lire la table session:", dbErr?.message);
-        return res.json([]);
+        // Fallback to main pool
+        usedPool = "main";
+        try {
+          const result2 = await pool.query(
+            `SELECT sid, sess, expire FROM session WHERE sess->>'userId' = $1 ORDER BY expire DESC`,
+            [req.userId]
+          );
+          rows = result2.rows || [];
+        } catch (dbErr2: any) {
+          usedPool = "both_failed";
+          pushSessionError({ at: new Date().toISOString(), op: "list", userId: req.userId, pool: "both_failed", error: dbErr2?.message || String(dbErr2) });
+          console.error("[Sessions] Impossible de lire la table session:", dbErr2?.message);
+          return res.json([]);
+        }
       }
 
       // Detect current session by token timestamp (reliable on Cloudflare proxy / Bearer-only auth)
@@ -2545,6 +2580,7 @@ export async function registerRoutes(
         }
       } catch (sessErr: any) {
         const detail = sessErr?.message || String(sessErr);
+        pushSessionError({ at: new Date().toISOString(), op: "disconnect_one", userId, targetSid, pool: "both_failed", error: detail, stack: sessErr?.stack });
         console.error("[Sessions] Erreur déconnexion appareil:", detail, sessErr?.stack);
         return res.status(500).json({ message: `Erreur déconnexion: ${detail}` });
       }
@@ -2552,6 +2588,7 @@ export async function registerRoutes(
       res.json({ ok: true });
     } catch (error: any) {
       const detail = error?.message || String(error);
+      pushSessionError({ at: new Date().toISOString(), op: "disconnect_one", pool: "both_failed", error: detail, stack: error?.stack });
       console.error("[Sessions] Déconnexion appareil erreur:", detail, error?.stack);
       res.status(500).json({ message: `Erreur déconnexion: ${detail}` });
     }
@@ -6752,6 +6789,68 @@ export async function registerRoutes(
       totalMaxAllWorkers: totalMax,
       warnings,
       uptime: Math.floor(process.uptime()),
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // GET /api/admin/session-errors — diagnostic en temps réel des erreurs de sessions
+  // Affiche le buffer circulaire des 100 dernières erreurs + probe live des pools + sessions brutes en DB
+  app.get("/api/admin/session-errors", requireAuth, requireAdmin, async (req, res) => {
+    const workerIndex = process.env.NODE_APP_INSTANCE ?? "0";
+
+    // Probe live des deux pools
+    const probePool = async (p: typeof pool, name: string) => {
+      const t = Date.now();
+      try { await p.query("SELECT 1"); return { name, ok: true, latencyMs: Date.now() - t }; }
+      catch (e: any) { return { name, ok: false, latencyMs: Date.now() - t, error: e.message }; }
+    };
+    const [mainProbe, sessionProbe] = await Promise.all([
+      probePool(pool, "main"),
+      probePool(sessionPool, "session"),
+    ]);
+
+    // Compte total des sessions en DB (optionnel, pour vérifier le volume)
+    let totalSessionsInDb: number | null = null;
+    let recentSessionsInDb: any[] | null = null;
+    const targetUserId = req.query.userId as string | undefined;
+    try {
+      const countRes = await pool.query(`SELECT COUNT(*) AS cnt FROM session`);
+      totalSessionsInDb = parseInt(countRes.rows[0]?.cnt ?? "0", 10);
+
+      if (targetUserId) {
+        // Sessions brutes pour un userId donné (pour debug ciblé)
+        const rawRes = await pool.query(
+          `SELECT sid,
+                  sess->>'userId'       AS user_id,
+                  sess->>'loginAt'      AS login_at,
+                  sess->>'clientIp'     AS client_ip,
+                  sess->>'userAgent'    AS user_agent,
+                  sess->>'tokenIssuedAt' AS token_ts,
+                  expire
+           FROM session
+           WHERE sess->>'userId' = $1
+           ORDER BY expire DESC
+           LIMIT 20`,
+          [targetUserId]
+        );
+        recentSessionsInDb = rawRes.rows;
+      }
+    } catch (e: any) {
+      recentSessionsInDb = [{ error: e.message }];
+    }
+
+    res.json({
+      worker: { index: workerIndex, pid: process.pid },
+      pools: { main: mainProbe, session: sessionProbe },
+      poolStats: {
+        main: { errors: poolStats.main.errors, lastError: poolStats.main.lastError, lastErrorAt: poolStats.main.lastErrorAt ? new Date(poolStats.main.lastErrorAt).toISOString() : null },
+        session: { errors: poolStats.session.errors, lastError: poolStats.session.lastError, lastErrorAt: poolStats.session.lastErrorAt ? new Date(poolStats.session.lastErrorAt).toISOString() : null, fallbackToMain: poolStats.session.fallbackToMain },
+      },
+      sessionOpErrors: sessionOpErrors.slice().reverse(), // plus récent en premier
+      totalSessionOpErrors: sessionOpErrors.length,
+      totalSessionsInDb,
+      recentSessionsInDb,
+      tip: recentSessionsInDb === null ? "Ajoutez ?userId=<id> pour voir les sessions brutes d'un utilisateur" : undefined,
       timestamp: new Date().toISOString(),
     });
   });

@@ -168,6 +168,10 @@ function ConnectedDevicesSection() {
     },
     onSuccess: (data) => {
       if (data.token) setAuthToken(data.token);
+      // Retirer immédiatement tous les autres appareils du cache
+      queryClient.setQueryData<DeviceSession[]>(["/api/user/sessions"], (old) =>
+        (old ?? []).filter((s) => s.isCurrent)
+      );
       refetch();
       toast({
         title: "Appareils déconnectés",
