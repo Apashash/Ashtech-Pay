@@ -228,25 +228,45 @@ const _DEV_TOKEN_SECRET = crypto.randomBytes(32).toString("hex");
 // Stores pending OTP codes. Never persisted to DB — cannot be injected via SQL.
 const adminOtpStore = new Map<string, { code: string; expiresAt: number }>();
 
-// ─── Pending admin logins (pre-session, per-loginToken) ───────────────────────
+// ─── Pending admin logins — DB-backed (survives PM2 worker restarts) ──────────
 // Stores OTP for admin accounts BEFORE any session is created.
 // Session is only created AFTER OTP is verified — impossible to bypass.
+// Previously in-memory Map; moved to DB so all PM2 workers share state.
 interface PendingAdminLogin {
   userId: string;
   otp: string;
   expiresAt: number;
   attempts: number;
 }
-const pendingAdminLogins = new Map<string, PendingAdminLogin>();
 const ADMIN_LOGIN_OTP_TTL_MS = 5 * 60 * 1000; // 5 min
 const ADMIN_NOTIF_EMAIL = "ashtechsarl@gmail.com";
 
-// Cleanup expired pending logins every 2 min
+async function setPendingAdminLogin(token: string, entry: PendingAdminLogin): Promise<void> {
+  await pool.query(
+    `INSERT INTO admin_pending_logins (token, user_id, otp, expires_at, attempts)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (token) DO UPDATE SET user_id=$2, otp=$3, expires_at=$4, attempts=$5`,
+    [token, entry.userId, entry.otp, entry.expiresAt, entry.attempts]
+  );
+}
+
+async function getPendingAdminLogin(token: string): Promise<PendingAdminLogin | null> {
+  const r = await pool.query(
+    `SELECT user_id, otp, expires_at, attempts FROM admin_pending_logins WHERE token = $1`,
+    [token]
+  );
+  if (!r.rows[0]) return null;
+  const row = r.rows[0];
+  return { userId: row.user_id, otp: row.otp, expiresAt: Number(row.expires_at), attempts: Number(row.attempts) };
+}
+
+async function deletePendingAdminLogin(token: string): Promise<void> {
+  await pool.query(`DELETE FROM admin_pending_logins WHERE token = $1`, [token]);
+}
+
+// Cleanup expired entries every 2 min (all workers run this, but DELETE is idempotent)
 setInterval(() => {
-  const now = Date.now();
-  for (const [token, entry] of pendingAdminLogins) {
-    if (entry.expiresAt <= now) pendingAdminLogins.delete(token);
-  }
+  pool.query(`DELETE FROM admin_pending_logins WHERE expires_at <= $1`, [Date.now()]).catch(() => {});
 }, 2 * 60 * 1000);
 
 // ─── Admin IP Whitelist ────────────────────────────────────────────────────────
@@ -1982,7 +2002,7 @@ export async function registerRoutes(
       if (isAdminRole) {
         const otp = crypto.randomInt(100000, 1000000).toString();
         const pendingToken = crypto.randomBytes(32).toString("base64url");
-        pendingAdminLogins.set(pendingToken, {
+        await setPendingAdminLogin(pendingToken, {
           userId: user.id,
           otp,
           expiresAt: Date.now() + ADMIN_LOGIN_OTP_TTL_MS,
@@ -2071,21 +2091,23 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Token et code requis." });
       }
 
-      const pending = pendingAdminLogins.get(String(adminLoginToken));
+      const pending = await getPendingAdminLogin(String(adminLoginToken));
       if (!pending) {
         return res.status(400).json({ message: "Session expirée. Veuillez vous reconnecter.", expired: true });
       }
 
       if (Date.now() > pending.expiresAt) {
-        pendingAdminLogins.delete(String(adminLoginToken));
+        await deletePendingAdminLogin(String(adminLoginToken));
         return res.status(400).json({ message: "Code expiré. Veuillez vous reconnecter.", expired: true });
       }
 
       pending.attempts += 1;
       if (pending.attempts > 5) {
-        pendingAdminLogins.delete(String(adminLoginToken));
+        await deletePendingAdminLogin(String(adminLoginToken));
         return res.status(429).json({ message: "Trop de tentatives. Veuillez vous reconnecter.", expired: true });
       }
+      // Persist incremented attempt count so all workers see it
+      await setPendingAdminLogin(String(adminLoginToken), pending);
 
       // Constant-time comparison to prevent timing attacks
       const submitted = String(code).replace(/\s/g, "");
@@ -2103,7 +2125,7 @@ export async function registerRoutes(
 
       // ✅ OTP correct — single-use: immediately remove pending entry
       const userId = pending.userId;
-      pendingAdminLogins.delete(String(adminLoginToken));
+      await deletePendingAdminLogin(String(adminLoginToken));
 
       const user = await storage.getUser(userId);
       if (!user) return res.status(404).json({ message: "Utilisateur introuvable.", expired: true });
@@ -2176,9 +2198,9 @@ export async function registerRoutes(
       const { adminLoginToken } = req.body;
       if (!adminLoginToken) return res.status(400).json({ message: "Token requis." });
 
-      const pending = pendingAdminLogins.get(String(adminLoginToken));
+      const pending = await getPendingAdminLogin(String(adminLoginToken));
       if (!pending || Date.now() > pending.expiresAt) {
-        pendingAdminLogins.delete(String(adminLoginToken));
+        await deletePendingAdminLogin(String(adminLoginToken));
         return res.status(400).json({ message: "Session expirée. Veuillez vous reconnecter.", expired: true });
       }
 
@@ -2190,6 +2212,7 @@ export async function registerRoutes(
       pending.otp = newOtp;
       pending.expiresAt = Date.now() + ADMIN_LOGIN_OTP_TTL_MS;
       pending.attempts = 0;
+      await setPendingAdminLogin(String(adminLoginToken), pending);
 
       sendAdminOtpEmail(ADMIN_NOTIF_EMAIL, user.fullName || user.username, newOtp).catch(() => {});
 

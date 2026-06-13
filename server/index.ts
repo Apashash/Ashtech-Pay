@@ -235,6 +235,16 @@ app.use((req, res, next) => {
       ) WITH (OIDS=FALSE)
     `);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire")`);
+    // admin_pending_logins — survives PM2 worker restarts (replaces in-memory Map)
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS admin_pending_logins (
+        token TEXT PRIMARY KEY,
+        user_id VARCHAR NOT NULL,
+        otp TEXT NOT NULL,
+        expires_at BIGINT NOT NULL,
+        attempts INT NOT NULL DEFAULT 0
+      )
+    `);
     await db.execute(sql`ALTER TABLE operators ADD COLUMN IF NOT EXISTS deposit_payment_provider TEXT`);
     await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS token_revoked_before BIGINT DEFAULT 0`);
     await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS withdrawal_blocked BOOLEAN DEFAULT FALSE`);
