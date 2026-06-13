@@ -44,27 +44,27 @@ const ACTION_LABELS: Record<string, string> = {
 };
 
 const ACTION_ICONS: Record<string, JSX.Element> = {
-  login_success:      <LogIn className="w-4 h-4 text-green-400" />,
-  login_failed:       <LogIn className="w-4 h-4 text-red-400" />,
-  logout:             <LogOut className="w-4 h-4 text-gray-400" />,
-  register:           <UserPlus className="w-4 h-4 text-blue-400" />,
-  password_changed:   <Key className="w-4 h-4 text-yellow-400" />,
-  password_reset:     <Key className="w-4 h-4 text-orange-400" />,
-  withdrawal_created: <ArrowDownCircle className="w-4 h-4 text-purple-400" />,
-  withdrawal_failed:  <ArrowDownCircle className="w-4 h-4 text-red-400" />,
-  transfer_sent:      <ArrowRightCircle className="w-4 h-4 text-cyan-400" />,
-  transfer_failed:    <ArrowRightCircle className="w-4 h-4 text-red-400" />,
-  kyc_approved:       <ShieldCheck className="w-4 h-4 text-green-400" />,
-  kyc_rejected:       <ShieldX className="w-4 h-4 text-red-400" />,
-  user_banned:        <UserX className="w-4 h-4 text-red-400" />,
-  user_unbanned:      <UserCheck className="w-4 h-4 text-green-400" />,
-  role_changed:       <Shield className="w-4 h-4 text-yellow-400" />,
+  login_success:      <LogIn className="w-4 h-4 text-green-500" />,
+  login_failed:       <LogIn className="w-4 h-4 text-red-500" />,
+  logout:             <LogOut className="w-4 h-4 text-gray-500" />,
+  register:           <UserPlus className="w-4 h-4 text-blue-500" />,
+  password_changed:   <Key className="w-4 h-4 text-yellow-500" />,
+  password_reset:     <Key className="w-4 h-4 text-orange-500" />,
+  withdrawal_created: <ArrowDownCircle className="w-4 h-4 text-purple-500" />,
+  withdrawal_failed:  <ArrowDownCircle className="w-4 h-4 text-red-500" />,
+  transfer_sent:      <ArrowRightCircle className="w-4 h-4 text-cyan-500" />,
+  transfer_failed:    <ArrowRightCircle className="w-4 h-4 text-red-500" />,
+  kyc_approved:       <ShieldCheck className="w-4 h-4 text-green-500" />,
+  kyc_rejected:       <ShieldX className="w-4 h-4 text-red-500" />,
+  user_banned:        <UserX className="w-4 h-4 text-red-500" />,
+  user_unbanned:      <UserCheck className="w-4 h-4 text-green-500" />,
+  role_changed:       <Shield className="w-4 h-4 text-yellow-500" />,
 };
 
 const ACTOR_COLORS: Record<string, string> = {
-  user:   "bg-blue-500/20 text-blue-300 border-blue-500/30",
-  admin:  "bg-yellow-500/20 text-yellow-300 border-yellow-500/30",
-  system: "bg-gray-500/20 text-gray-300 border-gray-500/30",
+  user:   "bg-blue-50 text-blue-700 border-blue-200",
+  admin:  "bg-yellow-50 text-yellow-700 border-yellow-200",
+  system: "bg-gray-100 text-gray-600 border-gray-200",
 };
 
 const PAGE_SIZE = 50;
@@ -126,7 +126,7 @@ export default function AdminAuditLogs() {
       <div className="p-6 space-y-6">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Shield className="w-6 h-6 text-yellow-400" />
+            <Shield className="w-6 h-6 text-yellow-500" />
             Audit de sécurité
           </h1>
           <p className="text-muted-foreground mt-1">
@@ -139,10 +139,10 @@ export default function AdminAuditLogs() {
           {[
             { label: "Total événements", value: total, icon: <Shield className="w-4 h-4" /> },
             { label: "Sur cette page", value: logs.length, icon: <RefreshCw className="w-4 h-4" /> },
-            { label: "Succès", value: logs.filter(l => l.success).length, icon: <CheckCircle2 className="w-4 h-4 text-green-400" /> },
-            { label: "Échecs", value: logs.filter(l => !l.success).length, icon: <AlertCircle className="w-4 h-4 text-red-400" /> },
+            { label: "Succès", value: logs.filter(l => l.success).length, icon: <CheckCircle2 className="w-4 h-4 text-green-500" /> },
+            { label: "Échecs", value: logs.filter(l => !l.success).length, icon: <AlertCircle className="w-4 h-4 text-red-500" /> },
           ].map(s => (
-            <Card key={s.label} className="bg-[#1E2329] border-[#2B3139]">
+            <Card key={s.label}>
               <CardContent className="pt-4 pb-4">
                 <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
                   {s.icon} {s.label}
@@ -153,7 +153,7 @@ export default function AdminAuditLogs() {
           ))}
         </div>
 
-        <Card className="bg-[#1E2329] border-[#2B3139]">
+        <Card>
           <CardHeader>
             <div className="flex flex-wrap gap-3 items-center">
               {/* Recherche libre */}
@@ -163,13 +163,13 @@ export default function AdminAuditLogs() {
                   placeholder="Rechercher userId, IP, action…"
                   value={search}
                   onChange={e => { setSearch(e.target.value); setPage(0); }}
-                  className="pl-10 bg-[#0B0E11] border-[#2B3139]"
+                  className="pl-10"
                   data-testid="input-search-audit"
                 />
               </div>
               {/* Filtre action */}
               <Select value={actionFilter} onValueChange={v => { setAction(v); setPage(0); }}>
-                <SelectTrigger className="w-44 bg-[#0B0E11] border-[#2B3139]" data-testid="select-action-filter">
+                <SelectTrigger className="w-44" data-testid="select-action-filter">
                   <SelectValue placeholder="Action" />
                 </SelectTrigger>
                 <SelectContent>
@@ -181,7 +181,7 @@ export default function AdminAuditLogs() {
               </Select>
               {/* Filtre acteur */}
               <Select value={actorFilter} onValueChange={v => { setActor(v); setPage(0); }}>
-                <SelectTrigger className="w-36 bg-[#0B0E11] border-[#2B3139]" data-testid="select-actor-filter">
+                <SelectTrigger className="w-36" data-testid="select-actor-filter">
                   <SelectValue placeholder="Acteur" />
                 </SelectTrigger>
                 <SelectContent>
@@ -193,7 +193,7 @@ export default function AdminAuditLogs() {
               </Select>
               {/* Filtre succès */}
               <Select value={successFilter} onValueChange={v => { setSuccess(v); setPage(0); }}>
-                <SelectTrigger className="w-32 bg-[#0B0E11] border-[#2B3139]" data-testid="select-success-filter">
+                <SelectTrigger className="w-32" data-testid="select-success-filter">
                   <SelectValue placeholder="Statut" />
                 </SelectTrigger>
                 <SelectContent>
@@ -202,7 +202,7 @@ export default function AdminAuditLogs() {
                   <SelectItem value="false">Échec</SelectItem>
                 </SelectContent>
               </Select>
-              <Button variant="outline" size="icon" onClick={() => refetch()} className="border-[#2B3139]" data-testid="button-refresh-audit">
+              <Button variant="outline" size="icon" onClick={() => refetch()} data-testid="button-refresh-audit">
                 <RefreshCw className="w-4 h-4" />
               </Button>
             </div>
@@ -212,7 +212,7 @@ export default function AdminAuditLogs() {
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow className="border-[#2B3139] hover:bg-transparent">
+                  <TableRow className="hover:bg-transparent">
                     <TableHead className="w-8" />
                     <TableHead>Action</TableHead>
                     <TableHead>Acteur</TableHead>
@@ -226,21 +226,21 @@ export default function AdminAuditLogs() {
                 <TableBody>
                   {isLoading ? (
                     Array.from({ length: 8 }).map((_, i) => (
-                      <TableRow key={i} className="border-[#2B3139]">
+                      <TableRow key={i}>
                         {Array.from({ length: 8 }).map((__, j) => (
-                          <TableCell key={j}><div className="h-4 bg-[#2B3139] rounded animate-pulse w-full" /></TableCell>
+                          <TableCell key={j}><div className="h-4 bg-muted rounded animate-pulse w-full" /></TableCell>
                         ))}
                       </TableRow>
                     ))
                   ) : !filtered.length ? (
-                    <TableRow className="border-[#2B3139]">
+                    <TableRow>
                       <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
                         Aucun événement d'audit trouvé
                       </TableCell>
                     </TableRow>
                   ) : (
                     filtered.map(log => (
-                      <TableRow key={log.id} className="border-[#2B3139] hover:bg-[#2B3139]/30" data-testid={`audit-row-${log.id}`}>
+                      <TableRow key={log.id} className="hover:bg-muted/40" data-testid={`audit-row-${log.id}`}>
                         <TableCell className="pl-4">
                           {ACTION_ICONS[log.action] ?? <Shield className="w-4 h-4 text-muted-foreground" />}
                         </TableCell>
@@ -268,8 +268,8 @@ export default function AdminAuditLogs() {
                         </TableCell>
                         <TableCell>
                           {log.success
-                            ? <CheckCircle2 className="w-4 h-4 text-green-400" />
-                            : <AlertCircle className="w-4 h-4 text-red-400" />}
+                            ? <CheckCircle2 className="w-4 h-4 text-green-500" />
+                            : <AlertCircle className="w-4 h-4 text-red-500" />}
                         </TableCell>
                       </TableRow>
                     ))
@@ -280,7 +280,7 @@ export default function AdminAuditLogs() {
 
             {/* Pagination */}
             {total > PAGE_SIZE && (
-              <div className="flex items-center justify-between px-4 py-3 border-t border-[#2B3139]">
+              <div className="flex items-center justify-between px-4 py-3 border-t border-border">
                 <span className="text-sm text-muted-foreground">
                   {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} sur {total.toLocaleString()} événements
                 </span>
@@ -290,7 +290,6 @@ export default function AdminAuditLogs() {
                     size="sm"
                     onClick={() => setPage(p => Math.max(0, p - 1))}
                     disabled={page === 0}
-                    className="border-[#2B3139]"
                     data-testid="button-prev-page"
                   >
                     <ChevronLeft className="w-4 h-4" />
@@ -303,7 +302,6 @@ export default function AdminAuditLogs() {
                     size="sm"
                     onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
                     disabled={page >= totalPages - 1}
-                    className="border-[#2B3139]"
                     data-testid="button-next-page"
                   >
                     <ChevronRight className="w-4 h-4" />
