@@ -295,12 +295,16 @@ export async function createDbAuditTriggers(): Promise<void> {
         changed_cols TEXT[];
         col TEXT;
         row_id TEXT;
+        rec JSONB;
       BEGIN
+        -- Use to_jsonb() for dynamic field access so this trigger works on tables
+        -- whose PK is not named "id" (e.g. the "session" table uses "sid").
         IF TG_OP = 'DELETE' THEN
-          row_id := OLD.id::TEXT;
+          rec := to_jsonb(OLD);
         ELSE
-          row_id := NEW.id::TEXT;
+          rec := to_jsonb(NEW);
         END IF;
+        row_id := COALESCE(rec ->> 'id', rec ->> 'sid', 'unknown');
 
         IF TG_OP = 'UPDATE' THEN
           changed_cols := ARRAY[]::TEXT[];
