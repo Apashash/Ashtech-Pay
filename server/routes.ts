@@ -2496,6 +2496,16 @@ export async function registerRoutes(
         return res.status(500).json({ message: "Erreur génération token" });
       }
 
+      // Sync the current session's tokenIssuedAt to the new token so that
+      // GET /api/user/sessions correctly marks isCurrent=true on the next fetch.
+      try {
+        const newTokenTs = extractTokenTimestamp(newToken);
+        if (newTokenTs && req.session) {
+          req.session.tokenIssuedAt = newTokenTs;
+          req.session.save(() => {});
+        }
+      } catch { /* non-critical */ }
+
       res.json({ ok: true, count, token: newToken });
     } catch (error) {
       console.error("[Sessions] Déconnexion autres appareils erreur:", error);
