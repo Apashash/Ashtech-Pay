@@ -2382,49 +2382,7 @@ export async function registerRoutes(
   });
 
   // Déconnecter un appareil spécifique par son session ID
-  app.delete("/api/user/sessions/:sid", requireAuth, async (req, res) => {
-    try {
-      const userId = req.userId!;
-      const currentSid = req.sessionID;
-      const targetSid = req.params.sid;
-
-      // Empêcher de se déconnecter soi-même via cet endpoint
-      if (targetSid === currentSid) {
-        return res.status(400).json({ message: "Utilisez /logout pour vous déconnecter." });
-      }
-
-      try {
-        // Vérifier que la session appartient bien à cet utilisateur, et lire tokenIssuedAt
-        const check = await sessionPool.query(
-          `SELECT sid, (sess->>'tokenIssuedAt')::bigint AS token_ts FROM session WHERE sid = $1 AND sess->>'userId' = $2`,
-          [targetSid, userId]
-        );
-        if (check.rows.length === 0) {
-          return res.status(404).json({ message: "Session introuvable." });
-        }
-
-        // Révoquer le Bearer token spécifique à cet appareil
-        const tokenTs = check.rows[0]?.token_ts;
-        if (tokenTs) {
-          if (!revokedSpecificTokenTs.has(userId)) revokedSpecificTokenTs.set(userId, new Set());
-          revokedSpecificTokenTs.get(userId)!.add(Number(tokenTs));
-        }
-
-        singleDeviceKicks.add(targetSid);
-        notifySpecificSessionForceLogout(targetSid);
-        await sessionPool.query(`DELETE FROM session WHERE sid = $1`, [targetSid]);
-      } catch (sessErr: any) {
-        console.error("[Sessions] Erreur déconnexion appareil:", sessErr?.message);
-        return res.status(500).json({ message: "Erreur serveur" });
-      }
-
-      res.json({ ok: true });
-    } catch (error) {
-      console.error("[Sessions] Déconnexion appareil erreur:", error);
-      res.status(500).json({ message: "Erreur serveur" });
-    }
-  });
-
+  // IMPORTANT: /others must be defined BEFORE /:sid — otherwise Express matches "others" as :sid
   app.delete("/api/user/sessions/others", requireAuth, async (req, res) => {
     try {
       const userId = req.userId!;
@@ -2483,6 +2441,51 @@ export async function registerRoutes(
       res.json({ ok: true, count, token: newToken });
     } catch (error) {
       console.error("[Sessions] Déconnexion autres appareils erreur:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // Déconnecter un appareil spécifique par son session ID
+  app.delete("/api/user/sessions/:sid", requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId!;
+      const currentSid = req.sessionID;
+      const targetSid = req.params.sid;
+
+      if (targetSid === currentSid) {
+        return res.status(400).json({ message: "Utilisez /logout pour vous déconnecter." });
+      }
+
+      try {
+        // Fallback: sessionPool → main pool
+        let qPool = sessionPool;
+        try { await sessionPool.query("SELECT 1"); } catch { qPool = pool; }
+
+        const check = await qPool.query(
+          `SELECT sid, (sess->>'tokenIssuedAt')::bigint AS token_ts FROM session WHERE sid = $1 AND sess->>'userId' = $2`,
+          [targetSid, userId]
+        );
+        if (check.rows.length === 0) {
+          return res.status(404).json({ message: "Session introuvable." });
+        }
+
+        const tokenTs = check.rows[0]?.token_ts;
+        if (tokenTs) {
+          if (!revokedSpecificTokenTs.has(userId)) revokedSpecificTokenTs.set(userId, new Set());
+          revokedSpecificTokenTs.get(userId)!.add(Number(tokenTs));
+        }
+
+        singleDeviceKicks.add(targetSid);
+        notifySpecificSessionForceLogout(targetSid);
+        await qPool.query(`DELETE FROM session WHERE sid = $1`, [targetSid]);
+      } catch (sessErr: any) {
+        console.error("[Sessions] Erreur déconnexion appareil:", sessErr?.message);
+        return res.status(500).json({ message: "Erreur serveur" });
+      }
+
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("[Sessions] Déconnexion appareil erreur:", error);
       res.status(500).json({ message: "Erreur serveur" });
     }
   });
