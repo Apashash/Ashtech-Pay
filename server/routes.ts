@@ -692,19 +692,6 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
     console.log(`[AdminAccess] OK (Tier4/token) — user=${req.userId} role=${user.role} path=${req.path}`);
   }
 
-  // ── IP Whitelist check (runs on every admin request) ──────────────────────────
-  // If the whitelist is non-empty and the request IP is NOT in it → reject with 403.
-  // NOTE: we do NOT ban the IP here — the admin may simply be connecting from a new
-  // connection (VPN, mobile data, etc.). Banning would lock out legitimate admins.
-  const whitelist = await loadAdminIpWhitelist();
-  if (whitelist.length > 0) {
-    const currentIp = getClientIp(req);
-    if (!isIpAllowed(currentIp, whitelist)) {
-      console.warn(`[AdminAccess] IP WHITELIST REJECT — user=${req.userId} ip=${currentIp} path=${req.path}`);
-      return res.status(403).json({ message: "Accès refusé — IP non autorisée.", ipBlocked: true });
-    }
-  }
-
   console.log(`[AdminAccess] OK — user=${req.userId} role=${user.role} path=${req.path} mem=${memValid} session=${sessionValid} t3=${tier3Used}`);
   next();
 }
@@ -2135,16 +2122,32 @@ export async function registerRoutes(
 
       const ip = getClientIp(req);
 
-      // Check IP whitelist BEFORE creating session — block at login time, not 3s later
-      const whitelist = await loadAdminIpWhitelist();
-      if (whitelist.length > 0 && !isIpAllowed(ip, whitelist)) {
-        console.warn(`[IpWhitelist] LOGIN REJECT — user=${userId} ip=${ip} — not in whitelist`);
-        return res.status(403).json({
-          kicked: true,
-          ipNotWhitelisted: true,
-          message: `Accès refusé. Votre adresse IP (${ip}) n'est pas dans la liste blanche d'administration.`,
-        });
-      }
+      // Detect new/unknown IP — load known IPs for this admin and alert if new
+      (async () => {
+        try {
+          const knownKey = `admin_known_ips_${user.id}`;
+          const setting = await storage.getSetting(knownKey);
+          const knownIps: string[] = setting ? JSON.parse(setting.value) : [];
+          if (!knownIps.includes(ip)) {
+            // Save the new IP immediately
+            knownIps.push(ip);
+            await storage.upsertSetting(knownKey, JSON.stringify(knownIps));
+            // Send Telegram alert
+            const { sendMessage } = await import("./telegram");
+            const timestamp = new Date().toLocaleString("fr-FR", { timeZone: "Africa/Douala" });
+            await sendMessage(
+              `🚨 <b>Nouvel IP détecté — Panneau Admin</b>\n\n` +
+              `👤 <b>${user.fullName || user.username}</b>\n` +
+              `📧 ${user.email || "—"}\n` +
+              `🌐 Nouvel IP: <code>${ip}</code>\n\n` +
+              `⚠️ Si ce n'est pas vous, changez votre mot de passe immédiatement.\n` +
+              `🕐 ${timestamp}`
+            );
+          }
+        } catch (e) {
+          console.warn("[AdminLogin] IP tracking error:", e);
+        }
+      })();
 
       activeIpRegistry.set(user.id, ip);
 
