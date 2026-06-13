@@ -345,6 +345,13 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     },
   });
 
+  // Bypass protection: if _pav flag missing/expired → redirect to /admin-panel-verify
+  useEffect(() => {
+    if (otpStatus?.needsPanelVerify) {
+      setLocation("/admin-panel-verify");
+    }
+  }, [otpStatus?.needsPanelVerify]);
+
   // Auto-request OTP when admin user is confirmed, not yet verified, and TOTP not enabled
   useEffect(() => {
     if (user && ["admin", "support", "finance"].includes((user as any).role) && otpStatus && !otpStatus.verified && !otpSent && !requestOtpMutation.isPending && !otpStatus.totpEnabled) {

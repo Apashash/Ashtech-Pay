@@ -4,7 +4,7 @@ import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Smartphone, Loader2, RefreshCw, ArrowLeft } from "lucide-react";
 
 export default function AdminPanelVerifyPage() {
@@ -28,6 +28,7 @@ export default function AdminPanelVerifyPage() {
       return json;
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/otp-status"] });
       setLocation("/admin");
     },
     onError: (err: any) => {

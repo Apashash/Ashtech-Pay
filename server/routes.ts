@@ -304,6 +304,7 @@ function isIpAllowed(ip: string, list: string[]): boolean {
 // A new login always gets a fresh sessionID → OTP is always re-asked after logout.
 const adminVerifiedSessions = new Map<string, { userId: string; expiresAt: number }>();
 const ADMIN_OTP_SESSION_TTL_MS = 3 * 24 * 60 * 60 * 1000; // 3 days — matches session maxAge
+const ADMIN_PANEL_ACCESS_TTL_MS = 30 * 60 * 1000; // 30 min — _pav flag (panel access verified)
 
 // Periodic cleanup of expired in-memory entries (every 10 min)
 setInterval(() => {
@@ -2165,6 +2166,8 @@ export async function registerRoutes(
         req.session.tokenIssuedAt = extractTokenTimestamp(authToken);
         // Set _avs immediately — admin OTP was verified at login time
         req.session._avs = avsExpiresAt;
+        // _pav — panel access verified (set at login so fresh login bypasses /admin-panel-verify)
+        req.session._pav = Date.now() + ADMIN_PANEL_ACCESS_TTL_MS;
 
         req.session.save((err) => {
           if (err) console.error("Session save error (admin-login-otp):", err);
@@ -2236,6 +2239,12 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Code Google Authenticator incorrect." });
       }
 
+      // Set _pav (panel access verified) — short-lived flag checked by otp-status
+      req.session._pav = Date.now() + ADMIN_PANEL_ACCESS_TTL_MS;
+      await new Promise<void>((resolve) => req.session.save((err) => {
+        if (err) console.error("admin-panel-verify session save error:", err);
+        resolve();
+      }));
       res.json({ ok: true });
     } catch (error) {
       console.error("admin-panel-verify error:", error);
@@ -6662,7 +6671,32 @@ export async function registerRoutes(
     }
   }
 
-  res.json({ verified, totpEnabled: !!user.totpEnabled });
+  // Check _pav (panel access verified) — short-lived flag set by /admin-panel-verify or fresh login
+  // If verified (_avs OK) but _pav missing/expired → needsPanelVerify: true
+  const pavExp = req.session._pav;
+  const panelValid = typeof pavExp === "number" && pavExp > now;
+
+  // Also check DB session for _pav (PM2 multi-worker)
+  let panelValidDb = false;
+  if (!panelValid && req.sessionID) {
+    try {
+      const dbRow = await pool.query(
+        `SELECT sess FROM session WHERE sid = $1 AND expire > NOW()`,
+        [req.sessionID]
+      );
+      if (dbRow.rows.length > 0) {
+        const sessData = typeof dbRow.rows[0].sess === "string"
+          ? JSON.parse(dbRow.rows[0].sess)
+          : dbRow.rows[0].sess;
+        const dbPav = sessData?._pav;
+        if (typeof dbPav === "number" && dbPav > now) panelValidDb = true;
+      }
+    } catch { /* ignore */ }
+  }
+
+  const needsPanelVerify = verified && !panelValid && !panelValidDb;
+
+  res.json({ verified, needsPanelVerify: needsPanelVerify || undefined, totpEnabled: !!user.totpEnabled });
   });
 
   // GET /api/admin/debug-storage — tests Supabase Storage connection (admin only)
