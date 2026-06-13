@@ -2517,8 +2517,10 @@ export async function registerRoutes(
           return res.json({ ok: true, alreadyGone: true });
         }
 
-        // Ownership check in JavaScript (more resilient than SQL comparison)
-        if (sessRow.sess_user_id !== userId) {
+        // Ownership check in JavaScript — use String() on both sides because
+        // session.userId may be stored as a number (Drizzle integer PK), while
+        // req.userId from Bearer token parsing is always a string.
+        if (String(sessRow.sess_user_id) !== String(userId)) {
           return res.status(403).json({ message: "Accès refusé." });
         }
 
