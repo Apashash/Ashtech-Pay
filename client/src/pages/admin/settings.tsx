@@ -55,14 +55,6 @@ export default function AdminSettings() {
       color: "bg-sky-500/10 text-sky-600",
       borderColor: "border-sky-500/30"
     },
-    {
-      id: "admin-ips",
-      title: "IPs Admin autorisées",
-      description: "Restreindre l'accès admin à des IPs spécifiques — ban 72h si violation",
-      icon: ShieldBan,
-      color: "bg-rose-500/10 text-rose-600",
-      borderColor: "border-rose-500/30"
-    },
   ];
 
   return (

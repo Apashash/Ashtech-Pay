@@ -273,19 +273,34 @@ setInterval(() => {
 // Stored in platform_settings (key="admin_ip_whitelist", value=JSON array).
 // If list is empty → no restriction (feature disabled).
 // If non-empty → ONLY listed IPs may access admin routes.
-// ── Admin Panel IP Blocklist (replaces the old whitelist) ────────────────────
+// ── Admin Panel IP Blocklist ──────────────────────────────────────────────────
 // Any IP can access the admin panel by default.
-// Admins can manually add IPs to this blocklist to deny access permanently.
-let _adminPanelBlockedIps: string[] = [];
+// Admins can manually block specific IPs with an optional expiry duration.
+// If expiresAt is undefined → block is permanent until manually removed.
+
+interface AdminPanelBlock {
+  ip: string;
+  blockedAt: number;
+  expiresAt?: number; // undefined = permanent
+  reason?: string;
+}
+
+let _adminPanelBlockedIps: AdminPanelBlock[] = [];
 let _adminPanelBlockedIpsLoadedAt = 0;
 const ADMIN_PANEL_BLOCKED_IPS_TTL = 20_000; // 20s cache
 
-async function loadAdminPanelBlockedIps(): Promise<string[]> {
+async function loadAdminPanelBlockedIps(): Promise<AdminPanelBlock[]> {
   const now = Date.now();
   if (now - _adminPanelBlockedIpsLoadedAt < ADMIN_PANEL_BLOCKED_IPS_TTL) return _adminPanelBlockedIps;
   try {
     const setting = await storage.getSetting("admin_panel_blocked_ips");
-    _adminPanelBlockedIps = setting ? JSON.parse(setting.value) : [];
+    const raw: AdminPanelBlock[] = setting ? JSON.parse(setting.value) : [];
+    // Filter out expired entries on load (auto-cleanup)
+    _adminPanelBlockedIps = raw.filter(b => !b.expiresAt || b.expiresAt > now);
+    // Persist cleaned list if entries were removed
+    if (_adminPanelBlockedIps.length !== raw.length) {
+      await storage.upsertSetting("admin_panel_blocked_ips", JSON.stringify(_adminPanelBlockedIps)).catch(() => {});
+    }
   } catch { /* keep stale */ }
   _adminPanelBlockedIpsLoadedAt = now;
   return _adminPanelBlockedIps;
@@ -295,8 +310,11 @@ function invalidateAdminPanelBlockedIpsCache() {
   _adminPanelBlockedIpsLoadedAt = 0;
 }
 
-function isIpBannedFromAdmin(ip: string, blocklist: string[]): boolean {
-  return blocklist.some(a => a.trim() === ip.trim());
+function isIpBannedFromAdmin(ip: string, blocklist: AdminPanelBlock[]): boolean {
+  const now = Date.now();
+  return blocklist.some(b =>
+    b.ip.trim() === ip.trim() && (!b.expiresAt || b.expiresAt > now)
+  );
 }
 
 // ─── Admin OTP verified sessions — dual storage ───────────────────────────────
@@ -1643,20 +1661,21 @@ export async function registerRoutes(
     res.json({ ip: getClientIp(req) });
   });
 
-  // GET — list panel blocked IPs
+  // GET — list panel blocked IPs (returns full objects with expiry info)
   app.get("/api/admin/panel-blocked-ips", requireAuth, requireAdmin, async (_req, res) => {
     try {
-      const setting = await storage.getSetting("admin_panel_blocked_ips");
-      const ips: string[] = setting ? JSON.parse(setting.value) : [];
-      res.json({ ips });
+      const blocks = await loadAdminPanelBlockedIps();
+      invalidateAdminPanelBlockedIpsCache(); // force fresh load next time
+      res.json({ blocks });
     } catch {
-      res.json({ ips: [] });
+      res.json({ blocks: [] });
     }
   });
 
-  // POST — add IP to panel blocklist
+  // POST — add IP to panel blocklist with optional duration in days
+  // Body: { ip: string, days?: number }  — days=undefined means permanent
   app.post("/api/admin/panel-blocked-ips", requireAuth, requireAdmin, async (req, res) => {
-    const { ip } = req.body;
+    const { ip, days } = req.body;
     if (!ip || typeof ip !== "string") return res.status(400).json({ message: "IP requise." });
     const trimmed = ip.trim();
     if (!trimmed || trimmed.length > 45) return res.status(400).json({ message: "Format IP invalide." });
@@ -1665,29 +1684,41 @@ export async function registerRoutes(
     if (!ipv4Re.test(trimmed) && !ipv6Re.test(trimmed)) {
       return res.status(400).json({ message: "Format IP invalide (ex: 1.2.3.4)." });
     }
+    const daysNum = days !== undefined ? parseInt(String(days), 10) : undefined;
+    if (daysNum !== undefined && (isNaN(daysNum) || daysNum < 1 || daysNum > 3650)) {
+      return res.status(400).json({ message: "Durée invalide (1–3650 jours)." });
+    }
     try {
-      const setting = await storage.getSetting("admin_panel_blocked_ips");
-      const list: string[] = setting ? JSON.parse(setting.value) : [];
-      if (list.includes(trimmed)) return res.status(400).json({ message: "Cette IP est déjà bloquée." });
-      list.push(trimmed);
+      invalidateAdminPanelBlockedIpsCache();
+      const list = await loadAdminPanelBlockedIps();
+      if (list.some(b => b.ip.trim() === trimmed)) {
+        return res.status(400).json({ message: "Cette IP est déjà bloquée." });
+      }
+      const now = Date.now();
+      const block: AdminPanelBlock = {
+        ip: trimmed,
+        blockedAt: now,
+        expiresAt: daysNum !== undefined ? now + daysNum * 86_400_000 : undefined,
+      };
+      list.push(block);
       await storage.upsertSetting("admin_panel_blocked_ips", JSON.stringify(list));
       invalidateAdminPanelBlockedIpsCache();
-      res.json({ ips: list });
+      res.json({ blocks: list });
     } catch {
       res.status(500).json({ message: "Erreur serveur." });
     }
   });
 
-  // DELETE — remove IP from panel blocklist (unblock)
+  // DELETE — remove IP from panel blocklist (unblock immediately)
   app.delete("/api/admin/panel-blocked-ips/:ip", requireAuth, requireAdmin, async (req, res) => {
     const ip = decodeURIComponent(req.params.ip);
     try {
-      const setting = await storage.getSetting("admin_panel_blocked_ips");
-      let list: string[] = setting ? JSON.parse(setting.value) : [];
-      list = list.filter(i => i !== ip);
-      await storage.upsertSetting("admin_panel_blocked_ips", JSON.stringify(list));
       invalidateAdminPanelBlockedIpsCache();
-      res.json({ ips: list });
+      const list = await loadAdminPanelBlockedIps();
+      const filtered = list.filter(b => b.ip !== ip);
+      await storage.upsertSetting("admin_panel_blocked_ips", JSON.stringify(filtered));
+      invalidateAdminPanelBlockedIpsCache();
+      res.json({ blocks: filtered });
     } catch {
       res.status(500).json({ message: "Erreur serveur." });
     }

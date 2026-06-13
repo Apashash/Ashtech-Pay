@@ -60,7 +60,7 @@ import AdminSettingsPublicInfo from "@/pages/admin/settings/public-info";
 import AdminSettingsMaintenance from "@/pages/admin/settings/maintenance";
 import AdminSettingsLimits from "@/pages/admin/settings/limits";
 import AdminSettingsTurnstile from "@/pages/admin/settings/turnstile";
-import AdminSettingsAdminIps from "@/pages/admin/settings/admin-ips";
+
 import AdminWithdrawalNumbers from "@/pages/admin/withdrawal-numbers";
 import AdminDeposits from "@/pages/admin/transactions/deposits";
 import AdminWithdrawals from "@/pages/admin/transactions/withdrawals";
@@ -206,7 +206,6 @@ function Router() {
       <Route path="/admin/settings/maintenance" component={AdminSettingsMaintenance} />
       <Route path="/admin/settings/limits" component={AdminSettingsLimits} />
       <Route path="/admin/settings/turnstile" component={AdminSettingsTurnstile} />
-      <Route path="/admin/settings/admin-ips" component={AdminSettingsAdminIps} />
       <Route path="/admin/withdrawal-numbers" component={AdminWithdrawalNumbers} />
       <Route path="/admin/global-messages" component={AdminGlobalMessages} />
       <Route path="/admin/kyc" component={AdminKYC} />
