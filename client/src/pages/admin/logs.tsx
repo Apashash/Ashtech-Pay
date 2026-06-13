@@ -73,8 +73,8 @@ export default function AdminLogs() {
           : "Aucune session active trouvée.",
       });
     },
-    onError: () => {
-      toast({ title: "Erreur", description: "Impossible de déconnecter les utilisateurs.", variant: "destructive" });
+    onError: (error: Error) => {
+      toast({ title: "Erreur", description: error.message || "Impossible de déconnecter les utilisateurs.", variant: "destructive" });
     },
   });
 

@@ -9199,12 +9199,23 @@ export async function registerRoutes(
       let count = 0;
 
       // Count ALL sessions before deletion (including admin's own)
+      // Tries sessionPool first, falls back to main pool if exhausted (PM2 multi-worker)
       try {
-        const countResult = await sessionPool.query(`SELECT COUNT(*) as cnt FROM session`);
+        const poolsToTry = [sessionPool, pool];
+        let sessQueryPool = sessionPool;
+        for (const p of poolsToTry) {
+          try {
+            await p.query("SELECT 1");
+            sessQueryPool = p;
+            break;
+          } catch { /* try next */ }
+        }
+
+        const countResult = await sessQueryPool.query(`SELECT COUNT(*) as cnt FROM session`);
         count = parseInt(countResult.rows[0]?.cnt || "0", 10);
 
         // Mark ALL sessions as kicked (including admin's)
-        const allSessions = await sessionPool.query(`SELECT sid FROM session`);
+        const allSessions = await sessQueryPool.query(`SELECT sid FROM session`);
         for (const row of allSessions.rows as { sid: string }[]) {
           singleDeviceKicks.add(row.sid);
         }
@@ -9213,7 +9224,7 @@ export async function registerRoutes(
         notifyAllUsersForceLogout("admin_disconnect");
 
         // Delete ALL sessions — including the admin's own
-        await sessionPool.query(`DELETE FROM session`);
+        await sessQueryPool.query(`DELETE FROM session`);
       } catch (sessErr: any) {
         console.error("[Admin] Erreur opérations session:", sessErr?.message);
         notifyAllUsersForceLogout("admin_disconnect");
