@@ -173,6 +173,10 @@ export default function LoginPage() {
       } else if (error.attemptsLeft !== undefined) {
         setAttemptsLeft(error.attemptsLeft);
       }
+      if (error.totpNotConfigured) {
+        toast({ title: "Google Authenticator requis", description: error.message, variant: "destructive", duration: 8000 });
+        return;
+      }
       toast({ title: t.login.toastError, description: error.message || t.login.toastErrorDesc, variant: "destructive" });
     },
   });

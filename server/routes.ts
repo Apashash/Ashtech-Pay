@@ -2000,42 +2000,24 @@ export async function registerRoutes(
       // It is only set inside POST /api/auth/admin-login-otp after OTP verification.
       const isAdminRole = ["admin", "support", "finance"].includes(user.role);
       if (isAdminRole) {
-        const otp = crypto.randomInt(100000, 1000000).toString();
+        // ── Google Authenticator (TOTP) requis — plus d'OTP email/Telegram ──────
+        if (!user.totpEnabled || !user.totpSecret) {
+          return res.status(403).json({
+            message: "Google Authenticator non configuré sur ce compte. Configurez le 2FA depuis le panneau admin avant de pouvoir vous connecter.",
+            totpNotConfigured: true,
+          });
+        }
+
         const pendingToken = crypto.randomBytes(32).toString("base64url");
         await setPendingAdminLogin(pendingToken, {
           userId: user.id,
-          otp,
+          otp: "TOTP", // placeholder — vérification TOTP via totp_secret utilisateur
           expiresAt: Date.now() + ADMIN_LOGIN_OTP_TTL_MS,
           attempts: 0,
         });
 
-        // Send to hardcoded admin notification email
-        sendAdminOtpEmail(ADMIN_NOTIF_EMAIL, user.fullName || user.username, otp).catch(() => {});
-
-        // Send via Telegram
-        const botToken = process.env.TELEGRAM_BOT_TOKEN;
-        const chatId = process.env.TELEGRAM_CHAT_ID;
-        if (botToken && chatId) {
-          fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              chat_id: chatId,
-              text: `🔐 <b>Tentative de connexion Admin</b>\n\n👤 <b>${user.fullName || user.username}</b>\n📧 ${user.email || "—"}\n🌍 IP: <code>${ip}</code>\n\n🔑 Code: <code>${otp}</code>\n⏱ Expire dans 5 minutes`,
-              parse_mode: "HTML",
-            }),
-          }).catch(() => {});
-        }
-
-        // Emergency fallback: log to console if no delivery channel configured
-        const hasEmail = !!process.env.RESEND_API_KEY;
-        const hasTelegram = !!(botToken && chatId);
-        if (!hasEmail && !hasTelegram) {
-          console.warn(`[AdminLoginOTP] ⚠ AUCUN CANAL — Code pour ${user.email}: ${otp} (5 min)`);
-        }
-
         notifyAdminLogin({ adminName: user.fullName || user.username, adminEmail: user.email || "", ip }).catch(() => {});
-        console.log(`[AdminLoginOTP] Code généré pour ${user.role} ${user.email?.replace(/(.{2}).+(@.+)/, "$1***$2")} depuis ${ip}`);
+        console.log(`[AdminLoginOTP] TOTP requis pour ${user.role} ${user.email?.replace(/(.{2}).+(@.+)/, "$1***$2")} depuis ${ip}`);
 
         return res.json({ requireAdminOtp: true, adminLoginToken: pendingToken });
       }
@@ -2109,26 +2091,46 @@ export async function registerRoutes(
       // Persist incremented attempt count so all workers see it
       await setPendingAdminLogin(String(adminLoginToken), pending);
 
-      // Constant-time comparison to prevent timing attacks
+      // ── Vérification Google Authenticator (TOTP) ─────────────────────────────
+      const userForTotp = await storage.getUser(pending.userId);
+      if (!userForTotp) {
+        await deletePendingAdminLogin(String(adminLoginToken));
+        return res.status(404).json({ message: "Utilisateur introuvable.", expired: true });
+      }
+      if (!userForTotp.totpEnabled || !userForTotp.totpSecret) {
+        await deletePendingAdminLogin(String(adminLoginToken));
+        return res.status(400).json({ message: "Google Authenticator non configuré sur ce compte.", expired: true });
+      }
+      const { decryptField } = await import("./fieldEncryption");
+      const { TOTP, Secret } = await import("otpauth");
+      const rawSecret = decryptField(userForTotp.totpSecret);
+      if (!rawSecret) {
+        await deletePendingAdminLogin(String(adminLoginToken));
+        return res.status(400).json({ message: "Erreur de configuration Google Authenticator.", expired: true });
+      }
+      const totp = new TOTP({
+        issuer: "AshTech Pay Admin",
+        label: userForTotp.email || userForTotp.username,
+        algorithm: "SHA1",
+        digits: 6,
+        period: 30,
+        secret: Secret.fromBase32(rawSecret),
+      });
       const submitted = String(code).replace(/\s/g, "");
-      const expected = pending.otp;
-      const lengthMatch = submitted.length === expected.length;
-      const codeMatch = lengthMatch && crypto.timingSafeEqual(Buffer.from(submitted.padEnd(6, "0")), Buffer.from(expected.padEnd(6, "0")));
-
-      if (!lengthMatch || !codeMatch) {
+      const delta = totp.validate({ token: submitted, window: 1 });
+      if (delta === null) {
         const remaining = 5 - pending.attempts;
         return res.status(400).json({
-          message: `Code incorrect. ${remaining} tentative(s) restante(s).`,
+          message: `Code Google Authenticator incorrect. ${remaining} tentative(s) restante(s).`,
           attemptsLeft: remaining,
         });
       }
 
-      // ✅ OTP correct — single-use: immediately remove pending entry
-      const userId = pending.userId;
+      // ✅ TOTP correct — single-use: supprimer l'entrée en attente
+      const userId = userForTotp.id;
       await deletePendingAdminLogin(String(adminLoginToken));
 
-      const user = await storage.getUser(userId);
-      if (!user) return res.status(404).json({ message: "Utilisateur introuvable.", expired: true });
+      const user = userForTotp;
       if (user.isBanned) return res.status(403).json({ message: user.banReason || "Compte banni." });
 
       const ip = getClientIp(req);
@@ -2192,55 +2194,9 @@ export async function registerRoutes(
     }
   });
 
-  // ── Admin Login OTP — resend code ─────────────────────────────────────────────
-  app.post("/api/auth/admin-login-otp/resend", loginLimiter, async (req, res) => {
-    try {
-      const { adminLoginToken } = req.body;
-      if (!adminLoginToken) return res.status(400).json({ message: "Token requis." });
-
-      const pending = await getPendingAdminLogin(String(adminLoginToken));
-      if (!pending || Date.now() > pending.expiresAt) {
-        await deletePendingAdminLogin(String(adminLoginToken));
-        return res.status(400).json({ message: "Session expirée. Veuillez vous reconnecter.", expired: true });
-      }
-
-      const user = await storage.getUser(pending.userId);
-      if (!user) return res.status(404).json({ message: "Utilisateur introuvable.", expired: true });
-
-      // Generate a fresh OTP and reset expiry
-      const newOtp = crypto.randomInt(100000, 1000000).toString();
-      pending.otp = newOtp;
-      pending.expiresAt = Date.now() + ADMIN_LOGIN_OTP_TTL_MS;
-      pending.attempts = 0;
-      await setPendingAdminLogin(String(adminLoginToken), pending);
-
-      sendAdminOtpEmail(ADMIN_NOTIF_EMAIL, user.fullName || user.username, newOtp).catch(() => {});
-
-      const botToken = process.env.TELEGRAM_BOT_TOKEN;
-      const chatId = process.env.TELEGRAM_CHAT_ID;
-      if (botToken && chatId) {
-        fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: `🔐 <b>Nouveau code admin (renvoi)</b>\n\n👤 <b>${user.fullName || user.username}</b>\n📧 ${user.email || "—"}\n\n🔑 Code: <code>${newOtp}</code>\n⏱ Expire dans 5 minutes`,
-            parse_mode: "HTML",
-          }),
-        }).catch(() => {});
-      }
-
-      const hasEmail = !!process.env.RESEND_API_KEY;
-      const hasTelegram = !!(botToken && chatId);
-      if (!hasEmail && !hasTelegram) {
-        console.warn(`[AdminLoginOTP] ⚠ Nouveau code (renvoi) pour ${user.email}: ${newOtp}`);
-      }
-
-      res.json({ sent: true });
-    } catch (error) {
-      console.error("admin-login-otp/resend error:", error);
-      res.status(500).json({ message: "Erreur serveur." });
-    }
+  // ── Admin Login OTP — resend désactivé (TOTP Google Auth ne nécessite pas de renvoi)
+  app.post("/api/auth/admin-login-otp/resend", (_req, res) => {
+    res.status(410).json({ message: "Le renvoi de code n'est plus disponible. Utilisez Google Authenticator." });
   });
 
   app.post("/api/auth/logout", (req, res) => {

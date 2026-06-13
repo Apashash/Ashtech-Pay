@@ -1,50 +1,39 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient, setAuthToken, setAdminOtpToken } from "@/lib/queryClient";
-import { ShieldCheck, Loader2, RotateCcw, AlertTriangle } from "lucide-react";
-
-const RESEND_COOLDOWN = 60; // seconds
+import { Smartphone, Loader2, AlertTriangle, RefreshCw } from "lucide-react";
 
 export default function AdminLoginOtpPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [code, setCode] = useState("");
   const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
-  const [resendCooldown, setResendCooldown] = useState(RESEND_COOLDOWN);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [secondsLeft, setSecondsLeft] = useState(0);
 
-  // Retrieve the pending token stored by the login page
   const adminLoginToken =
     typeof window !== "undefined"
       ? sessionStorage.getItem("adminLoginToken")
       : null;
 
-  // Redirect back to login if there's no pending token
   useEffect(() => {
     if (!adminLoginToken) {
       setLocation("/login");
     }
   }, [adminLoginToken]);
 
-  // Cooldown countdown
+  // Calcule les secondes restantes du code TOTP (période 30s)
   useEffect(() => {
-    if (resendCooldown <= 0) return;
-    intervalRef.current = setInterval(() => {
-      setResendCooldown((s) => {
-        if (s <= 1) {
-          if (intervalRef.current) clearInterval(intervalRef.current);
-          return 0;
-        }
-        return s - 1;
-      });
-    }, 1000);
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+    const update = () => {
+      const s = 30 - (Math.floor(Date.now() / 1000) % 30);
+      setSecondsLeft(s);
     };
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
   }, []);
 
   const verifyMutation = useMutation({
@@ -90,52 +79,7 @@ export default function AdminLoginOtpPage() {
       if (error.attemptsLeft !== undefined) setAttemptsLeft(error.attemptsLeft);
       toast({
         title: "Code incorrect",
-        description: error.message || "Le code saisi est incorrect.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const resendMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/auth/admin-login-otp/resend", {
-        adminLoginToken,
-      });
-      const json = await res.json();
-      if (!res.ok) throw Object.assign(new Error(json.message || "Erreur"), json);
-      return json;
-    },
-    onSuccess: () => {
-      setCode("");
-      setAttemptsLeft(null);
-      setResendCooldown(RESEND_COOLDOWN);
-      // Restart cooldown
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      intervalRef.current = setInterval(() => {
-        setResendCooldown((s) => {
-          if (s <= 1) {
-            if (intervalRef.current) clearInterval(intervalRef.current);
-            return 0;
-          }
-          return s - 1;
-        });
-      }, 1000);
-      toast({
-        title: "Code renvoyé",
-        description: "Un nouveau code a été envoyé par email et Telegram.",
-        duration: 3000,
-        className: "bg-blue-600 text-white border-blue-700",
-      });
-    },
-    onError: (error: any) => {
-      if (error.expired) {
-        sessionStorage.removeItem("adminLoginToken");
-        setLocation("/login");
-        return;
-      }
-      toast({
-        title: "Erreur",
-        description: error.message || "Impossible de renvoyer le code.",
+        description: error.message || "Vérifiez le code dans Google Authenticator.",
         variant: "destructive",
       });
     },
@@ -147,7 +91,6 @@ export default function AdminLoginOtpPage() {
     verifyMutation.mutate();
   };
 
-  // Auto-submit when all 6 digits are entered
   useEffect(() => {
     if (code.length === 6 && !verifyMutation.isPending) {
       verifyMutation.mutate();
@@ -155,6 +98,9 @@ export default function AdminLoginOtpPage() {
   }, [code]);
 
   if (!adminLoginToken) return null;
+
+  const progress = ((30 - secondsLeft) / 30) * 100;
+  const isExpiringSoon = secondsLeft <= 5;
 
   return (
     <div className="min-h-screen bg-muted flex items-center justify-center p-4">
@@ -166,18 +112,43 @@ export default function AdminLoginOtpPage() {
         <div className="bg-card border border-border rounded-2xl p-8 flex flex-col items-center gap-6">
           {/* Icon */}
           <div className="w-16 h-16 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center">
-            <ShieldCheck className="w-8 h-8 text-primary" />
+            <Smartphone className="w-8 h-8 text-primary" />
           </div>
 
           {/* Title */}
           <div className="text-center">
-            <h1 className="text-xl font-bold text-foreground mb-1">Vérification requise</h1>
+            <h1 className="text-xl font-bold text-foreground mb-1">Google Authenticator</h1>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Un code à 6 chiffres a été envoyé à{" "}
-              <span className="font-semibold text-foreground">ashtechsarl@gmail.com</span>{" "}
-              et sur{" "}
-              <span className="font-semibold text-foreground">Telegram</span>.
+              Ouvrez votre application{" "}
+              <span className="font-semibold text-foreground">Google Authenticator</span>{" "}
+              et entrez le code à 6 chiffres affiché pour <span className="font-semibold text-foreground">AshTech Pay Admin</span>.
             </p>
+          </div>
+
+          {/* Countdown ring */}
+          <div className="flex flex-col items-center gap-1">
+            <div className="relative w-12 h-12">
+              <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                <circle cx="18" cy="18" r="15.9" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-muted/30" />
+                <circle
+                  cx="18" cy="18" r="15.9" fill="none" strokeWidth="2.5"
+                  strokeDasharray="100"
+                  strokeDashoffset={progress}
+                  strokeLinecap="round"
+                  className={isExpiringSoon ? "text-red-500" : "text-primary"}
+                  stroke="currentColor"
+                  style={{ transition: "stroke-dashoffset 1s linear, stroke 0.3s" }}
+                />
+              </svg>
+              <span className={`absolute inset-0 flex items-center justify-center text-sm font-bold tabular-nums ${isExpiringSoon ? "text-red-500" : "text-foreground"}`}>
+                {secondsLeft}s
+              </span>
+            </div>
+            {isExpiringSoon && (
+              <p className="text-xs text-red-500 flex items-center gap-1">
+                <RefreshCw className="w-3 h-3" /> Code bientôt expiré
+              </p>
+            )}
           </div>
 
           {/* OTP Input */}
@@ -199,7 +170,6 @@ export default function AdminLoginOtpPage() {
               </InputOTPGroup>
             </InputOTP>
 
-            {/* Attempts warning */}
             {attemptsLeft !== null && attemptsLeft <= 3 && (
               <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2 w-full">
                 <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0" />
@@ -223,28 +193,7 @@ export default function AdminLoginOtpPage() {
             </Button>
           </form>
 
-          {/* Resend */}
-          <div className="flex flex-col items-center gap-1">
-            <p className="text-xs text-muted-foreground">Vous n'avez pas reçu le code ?</p>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="gap-1.5 text-xs"
-              disabled={resendCooldown > 0 || resendMutation.isPending}
-              onClick={() => resendMutation.mutate()}
-              data-testid="button-resend-otp"
-            >
-              {resendMutation.isPending ? (
-                <><Loader2 className="w-3.5 h-3.5 animate-spin" />Envoi…</>
-              ) : resendCooldown > 0 ? (
-                <><RotateCcw className="w-3.5 h-3.5" />Renvoyer dans {resendCooldown}s</>
-              ) : (
-                <><RotateCcw className="w-3.5 h-3.5" />Renvoyer le code</>
-              )}
-            </Button>
-          </div>
-
-          {/* Cancel / back to login */}
+          {/* Cancel */}
           <button
             type="button"
             className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
@@ -258,9 +207,8 @@ export default function AdminLoginOtpPage() {
           </button>
         </div>
 
-        {/* Security note */}
         <p className="text-center text-xs text-muted-foreground mt-4 leading-relaxed px-2">
-          🔒 Cette étape est obligatoire pour les comptes administrateurs et ne peut pas être contournée.
+          🔒 L'authentification à deux facteurs est obligatoire pour les comptes administrateurs.
         </p>
       </div>
     </div>
