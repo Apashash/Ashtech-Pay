@@ -2503,14 +2503,16 @@ export async function registerRoutes(
         notifySpecificSessionForceLogout(targetSid);
         await qPool.query(`DELETE FROM session WHERE sid = $1`, [targetSid]);
       } catch (sessErr: any) {
-        console.error("[Sessions] Erreur déconnexion appareil:", sessErr?.message);
-        return res.status(500).json({ message: "Erreur serveur" });
+        const detail = sessErr?.message || String(sessErr);
+        console.error("[Sessions] Erreur déconnexion appareil:", detail, sessErr?.stack);
+        return res.status(500).json({ message: `Erreur interne: ${detail}` });
       }
 
       res.json({ ok: true });
-    } catch (error) {
-      console.error("[Sessions] Déconnexion appareil erreur:", error);
-      res.status(500).json({ message: "Erreur serveur" });
+    } catch (error: any) {
+      const detail = error?.message || String(error);
+      console.error("[Sessions] Déconnexion appareil erreur:", detail, error?.stack);
+      res.status(500).json({ message: `Erreur interne: ${detail}` });
     }
   });
 
