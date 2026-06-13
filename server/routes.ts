@@ -9195,45 +9195,35 @@ export async function registerRoutes(
   app.delete("/api/admin/sessions/all", requireAuth, requireAdmin, async (req, res) => {
     try {
       const adminId = req.userId!;
-      const adminSid = req.sessionID;
 
       let count = 0;
 
-      // Opérations sur la table session via sessionPool (connexion directe, pas pooler)
+      // Count ALL sessions before deletion (including admin's own)
       try {
-        // Compter les sessions avant suppression (hors admin courant)
-        const countResult = await sessionPool.query(
-          `SELECT COUNT(*) as cnt FROM session WHERE sid != $1`,
-          [adminSid]
-        );
+        const countResult = await sessionPool.query(`SELECT COUNT(*) as cnt FROM session`);
         count = parseInt(countResult.rows[0]?.cnt || "0", 10);
 
-        // Ajouter toutes les autres sessions à singleDeviceKicks
-        const othersResult = await sessionPool.query(
-          `SELECT sid FROM session WHERE sid != $1`,
-          [adminSid]
-        );
-        for (const row of othersResult.rows as { sid: string }[]) {
+        // Mark ALL sessions as kicked (including admin's)
+        const allSessions = await sessionPool.query(`SELECT sid FROM session`);
+        for (const row of allSessions.rows as { sid: string }[]) {
           singleDeviceKicks.add(row.sid);
         }
 
-        // SSE force_logout en temps réel sur tous les clients connectés sauf l'admin courant
+        // SSE force_logout to ALL connected clients (including admin)
         notifyAllUsersForceLogout("admin_disconnect");
 
-        // Supprimer toutes les sessions sauf la session admin courante
-        await sessionPool.query(`DELETE FROM session WHERE sid != $1`, [adminSid]);
+        // Delete ALL sessions — including the admin's own
+        await sessionPool.query(`DELETE FROM session`);
       } catch (sessErr: any) {
         console.error("[Admin] Erreur opérations session:", sessErr?.message);
-        // Continue même si la table session est inaccessible — révoquer les tokens quand même
         notifyAllUsersForceLogout("admin_disconnect");
       }
 
-      // Révoquer tous les tokens bearer (colonne optionnelle — ne pas bloquer si absente)
+      // Revoke ALL bearer tokens — including admin's
       const revokedAt = Date.now();
       try {
-        await db.execute(sql`UPDATE users SET token_revoked_before = ${revokedAt} WHERE id != ${adminId}`);
-        // Mettre aussi à jour le cache in-memory
-        const allUsers = await db.execute(sql`SELECT id FROM users WHERE id != ${adminId}`);
+        await db.execute(sql`UPDATE users SET token_revoked_before = ${revokedAt}`);
+        const allUsers = await db.execute(sql`SELECT id FROM users`);
         for (const row of allUsers.rows as { id: string }[]) {
           revokedTokensBefore.set(row.id, revokedAt);
         }
@@ -9254,7 +9244,15 @@ export async function registerRoutes(
         console.warn("[Admin] createAdminLog skipped:", (logErr as Error).message);
       }
 
+      // Send response BEFORE destroying the admin's own session,
+      // so the HTTP response reaches the client successfully.
       res.json({ ok: true, count });
+
+      // Destroy the admin's own session after the response is sent.
+      // The SSE force_logout event already sent above will redirect the admin to /login.
+      setImmediate(() => {
+        req.session.destroy(() => {});
+      });
     } catch (error) {
       console.error("Admin disconnect all sessions error:", error);
       res.status(500).json({ message: "Erreur serveur" });

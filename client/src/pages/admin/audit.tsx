@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { getAuthHeaders } from "@/lib/queryClient";
 import { AdminLayout } from "./layout";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -100,7 +101,7 @@ export default function AdminAuditLogs() {
   const { data, isLoading, refetch } = useQuery<AuditResponse>({
     queryKey: ["/api/admin/audit-logs", actionFilter, actorFilter, successFilter, page],
     queryFn: async () => {
-      const res = await fetch(`/api/admin/audit-logs?${params.toString()}`, { credentials: "include" });
+      const res = await fetch(`/api/admin/audit-logs?${params.toString()}`, { credentials: "include", headers: getAuthHeaders() });
       if (!res.ok) throw new Error("Erreur de chargement");
       return res.json();
     },

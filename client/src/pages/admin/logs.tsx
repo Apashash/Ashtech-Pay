@@ -147,7 +147,7 @@ export default function AdminLogs() {
               <AlertDialogHeader>
                 <AlertDialogTitle>Déconnexion globale</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Cette action va immédiatement déconnecter <strong>tous les utilisateurs connectés</strong> sur la plateforme (sauf vous). Leurs sessions seront supprimées et leurs tokens révoqués. Ils seront redirigés vers la page de connexion.
+                  Cette action va immédiatement déconnecter <strong>tous les comptes connectés</strong> sur la plateforme, <strong>vous y compris</strong>. Toutes les sessions seront supprimées et tous les tokens révoqués. Vous serez redirigé vers la page de connexion.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
