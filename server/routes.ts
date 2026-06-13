@@ -2475,44 +2475,83 @@ export async function registerRoutes(
       const currentSid = req.sessionID;
       const targetSid = req.params.sid;
 
-      if (targetSid === currentSid) {
+      if (!targetSid || targetSid === currentSid) {
         return res.status(400).json({ message: "Utilisez /logout pour vous déconnecter." });
       }
 
+      // Helper: pick a working pool (sessionPool → fallback pool)
+      async function getWorkingPool() {
+        try { await sessionPool.query("SELECT 1"); return sessionPool; } catch { return pool; }
+      }
+
       try {
-        // Fallback: sessionPool → main pool
-        let qPool = sessionPool;
-        try { await sessionPool.query("SELECT 1"); } catch { qPool = pool; }
+        const qPool = await getWorkingPool();
 
-        const check = await qPool.query(
-          `SELECT sid, sess->>'tokenIssuedAt' AS token_ts FROM session WHERE sid = $1 AND sess->>'userId' = $2`,
-          [targetSid, userId]
-        );
-        if (check.rows.length === 0) {
-          return res.status(404).json({ message: "Session introuvable." });
+        // Look up the session by SID only — avoids sess->>'userId' comparison failures
+        // when sessions are saved asynchronously (race with req.session.save())
+        let sessRow: { sid: string; sess_user_id: string | null; token_ts: string | null } | null = null;
+        try {
+          const check = await qPool.query(
+            `SELECT sid,
+                    sess->>'userId' AS sess_user_id,
+                    sess->>'tokenIssuedAt' AS token_ts
+             FROM session WHERE sid = $1`,
+            [targetSid]
+          );
+          sessRow = check.rows[0] ?? null;
+        } catch (lookupErr: any) {
+          // Pool issue — try fallback
+          console.warn("[Sessions] Lookup error, retrying with main pool:", lookupErr?.message);
+          const check2 = await pool.query(
+            `SELECT sid,
+                    sess->>'userId' AS sess_user_id,
+                    sess->>'tokenIssuedAt' AS token_ts
+             FROM session WHERE sid = $1`,
+            [targetSid]
+          );
+          sessRow = check2.rows[0] ?? null;
         }
 
-        const rawTs = check.rows[0]?.token_ts;
+        if (!sessRow) {
+          // Session already gone — treat as success (idempotent)
+          return res.json({ ok: true, alreadyGone: true });
+        }
+
+        // Ownership check in JavaScript (more resilient than SQL comparison)
+        if (sessRow.sess_user_id !== userId) {
+          return res.status(403).json({ message: "Accès refusé." });
+        }
+
+        // Revoke Bearer token for this specific session
+        const rawTs = sessRow.token_ts;
         const tokenTs = rawTs ? parseInt(rawTs, 10) : null;
-        if (tokenTs) {
+        if (tokenTs && !isNaN(tokenTs)) {
           if (!revokedSpecificTokenTs.has(userId)) revokedSpecificTokenTs.set(userId, new Set());
-          revokedSpecificTokenTs.get(userId)!.add(Number(tokenTs));
+          revokedSpecificTokenTs.get(userId)!.add(tokenTs);
         }
 
+        // Mark session as kicked in-memory + notify via SSE
         singleDeviceKicks.add(targetSid);
         notifySpecificSessionForceLogout(targetSid);
-        await qPool.query(`DELETE FROM session WHERE sid = $1`, [targetSid]);
+
+        // Delete from DB — use both pools for resilience
+        try {
+          await qPool.query(`DELETE FROM session WHERE sid = $1`, [targetSid]);
+        } catch (delErr: any) {
+          console.warn("[Sessions] Delete error on primary pool, retrying:", delErr?.message);
+          await pool.query(`DELETE FROM session WHERE sid = $1`, [targetSid]);
+        }
       } catch (sessErr: any) {
         const detail = sessErr?.message || String(sessErr);
         console.error("[Sessions] Erreur déconnexion appareil:", detail, sessErr?.stack);
-        return res.status(500).json({ message: `Erreur interne: ${detail}` });
+        return res.status(500).json({ message: `Erreur déconnexion: ${detail}` });
       }
 
       res.json({ ok: true });
     } catch (error: any) {
       const detail = error?.message || String(error);
       console.error("[Sessions] Déconnexion appareil erreur:", detail, error?.stack);
-      res.status(500).json({ message: `Erreur interne: ${detail}` });
+      res.status(500).json({ message: `Erreur déconnexion: ${detail}` });
     }
   });
 

@@ -141,9 +141,13 @@ function ConnectedDevicesSection() {
   const disconnectOneMutation = useMutation({
     mutationFn: async (sid: string) => {
       const res = await apiRequest("DELETE", `/api/user/sessions/${sid}`);
+      if (res.status === 404) {
+        // Session already gone — treat as success
+        return { ok: true, alreadyGone: true };
+      }
       return res.json();
     },
-    onSuccess: (_data, sid) => {
+    onSuccess: (_data, _sid) => {
       setDisconnectingId(null);
       refetch();
       toast({
