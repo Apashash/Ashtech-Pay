@@ -446,7 +446,18 @@ function extractUserId(req: Request, _res: Response, next: NextFunction) {
           if (!req.session.clientIp) req.session.clientIp = getClientIp(req);
           if (!req.session.userAgent) req.session.userAgent = req.headers["user-agent"] || "";
           if (!req.session.loginAt) req.session.loginAt = new Date().toISOString();
+          // Store token timestamp to identify THIS session across PM2 workers
+          // (req.sessionID is unreliable on prod with Cloudflare proxy / Bearer-only auth)
+          const tokenTs = extractTokenTimestamp(token);
+          if (tokenTs) req.session.tokenIssuedAt = tokenTs;
           req.session.save(() => {});
+        } else if (req.session?.userId === id && !req.session.tokenIssuedAt) {
+          // Backfill tokenIssuedAt for existing sessions that were created before this fix
+          const tokenTs = extractTokenTimestamp(token);
+          if (tokenTs) {
+            req.session.tokenIssuedAt = tokenTs;
+            req.session.save(() => {});
+          }
         }
       } else {
         // Token invalide — vérifier si c'est à cause d'une révocation single-device
@@ -2360,13 +2371,25 @@ export async function registerRoutes(
         return res.json([]);
       }
 
+      // Detect current session by token timestamp (reliable on Cloudflare proxy / Bearer-only auth)
+      // req.sessionID is unreliable because Bearer token creates ephemeral sessions
+      const currentTokenTs = (() => {
+        const authHeader = req.headers.authorization;
+        if (authHeader?.startsWith("Bearer ")) {
+          return extractTokenTimestamp(authHeader.substring(7));
+        }
+        return null;
+      })();
+
       const sessions = rows.map((row) => {
         const sess = typeof row.sess === "string" ? JSON.parse(row.sess) : (row.sess || {});
         const ua = sess.userAgent || "";
         const { device, browser } = parseDeviceFromUA(ua);
+        const tokenTsMatch = currentTokenTs != null && sess.tokenIssuedAt != null &&
+          Number(sess.tokenIssuedAt) === currentTokenTs;
         return {
           id: row.sid,
-          isCurrent: row.sid === req.sessionID,
+          isCurrent: row.sid === req.sessionID || tokenTsMatch,
           ip: sess.clientIp || "Inconnu",
           device,
           browser,

@@ -151,9 +151,9 @@ function ConnectedDevicesSection() {
         description: "L'appareil a été déconnecté avec succès.",
       });
     },
-    onError: () => {
+    onError: (error: Error) => {
       setDisconnectingId(null);
-      toast({ title: "Erreur", description: "Impossible de déconnecter cet appareil.", variant: "destructive" });
+      toast({ title: "Erreur", description: error.message || "Impossible de déconnecter cet appareil.", variant: "destructive" });
     },
   });
 
