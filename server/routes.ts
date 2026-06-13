@@ -6827,19 +6827,46 @@ export async function registerRoutes(
       const countRes = await pool.query(`SELECT COUNT(*) AS cnt FROM session`);
       totalSessionsInDb = parseInt(countRes.rows[0]?.cnt ?? "0", 10);
 
+      // Toutes les sessions actives (non expirées) avec infos utilisateur
+      let allActiveSessions: any[] = [];
+      try {
+        const allRes = await pool.query(
+          `SELECT s.sid,
+                  s.sess->>'userId'        AS user_id,
+                  u.email,
+                  u.full_name,
+                  s.sess->>'loginAt'       AS login_at,
+                  s.sess->>'clientIp'      AS client_ip,
+                  s.sess->>'userAgent'     AS user_agent,
+                  s.sess->>'tokenIssuedAt' AS token_ts,
+                  s.expire
+           FROM session s
+           LEFT JOIN users u ON u.id::text = s.sess->>'userId'
+           WHERE s.expire > NOW()
+           ORDER BY s.expire ASC
+           LIMIT 200`
+        );
+        allActiveSessions = allRes.rows;
+      } catch (e: any) {
+        allActiveSessions = [{ error: (e as Error).message }];
+      }
+
       if (targetUserId) {
         // Sessions brutes pour un userId donné (pour debug ciblé)
         const rawRes = await pool.query(
-          `SELECT sid,
-                  sess->>'userId'       AS user_id,
-                  sess->>'loginAt'      AS login_at,
-                  sess->>'clientIp'     AS client_ip,
-                  sess->>'userAgent'    AS user_agent,
-                  sess->>'tokenIssuedAt' AS token_ts,
-                  expire
-           FROM session
-           WHERE sess->>'userId' = $1
-           ORDER BY expire DESC
+          `SELECT s.sid,
+                  s.sess->>'userId'        AS user_id,
+                  u.email,
+                  u.full_name,
+                  s.sess->>'loginAt'       AS login_at,
+                  s.sess->>'clientIp'      AS client_ip,
+                  s.sess->>'userAgent'     AS user_agent,
+                  s.sess->>'tokenIssuedAt' AS token_ts,
+                  s.expire
+           FROM session s
+           LEFT JOIN users u ON u.id::text = s.sess->>'userId'
+           WHERE s.sess->>'userId' = $1
+           ORDER BY s.expire DESC
            LIMIT 20`,
           [targetUserId]
         );
@@ -6856,11 +6883,12 @@ export async function registerRoutes(
         main: { errors: poolStats.main.errors, lastError: poolStats.main.lastError, lastErrorAt: poolStats.main.lastErrorAt ? new Date(poolStats.main.lastErrorAt).toISOString() : null },
         session: { errors: poolStats.session.errors, lastError: poolStats.session.lastError, lastErrorAt: poolStats.session.lastErrorAt ? new Date(poolStats.session.lastErrorAt).toISOString() : null, fallbackToMain: poolStats.session.fallbackToMain },
       },
-      sessionOpErrors: sessionOpErrors.slice().reverse(), // plus récent en premier
+      sessionOpErrors: sessionOpErrors.slice().reverse(),
       totalSessionOpErrors: sessionOpErrors.length,
       totalSessionsInDb,
+      allActiveSessions,
       recentSessionsInDb,
-      tip: recentSessionsInDb === null ? "Ajoutez ?userId=<id> pour voir les sessions brutes d'un utilisateur" : undefined,
+      tip: recentSessionsInDb === null ? "Entrez un ID utilisateur pour filtrer ses sessions" : undefined,
       timestamp: new Date().toISOString(),
     });
   });
