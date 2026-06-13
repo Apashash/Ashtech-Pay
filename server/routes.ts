@@ -6822,13 +6822,13 @@ export async function registerRoutes(
     // Compte total des sessions en DB (optionnel, pour vérifier le volume)
     let totalSessionsInDb: number | null = null;
     let recentSessionsInDb: any[] | null = null;
+    let allActiveSessions: any[] = [];
     const targetUserId = req.query.userId as string | undefined;
     try {
       const countRes = await pool.query(`SELECT COUNT(*) AS cnt FROM session`);
       totalSessionsInDb = parseInt(countRes.rows[0]?.cnt ?? "0", 10);
 
       // Toutes les sessions actives (non expirées) avec infos utilisateur
-      let allActiveSessions: any[] = [];
       try {
         const allRes = await pool.query(
           `SELECT s.sid,
