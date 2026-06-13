@@ -106,15 +106,12 @@ async function startListenClient(): Promise<void> {
           if (changedCols.every((c) => migrationCols.has(c))) return;
         }
 
-        // Suppress routine session table UPDATEs from connect-pg-simple.
-        // The session store periodically "touches" sessions by updating expire (and sess).
-        // This is normal app behavior, not a direct DB mutation. Real threats (admin flag
-        // injection, mass DELETE) are caught by the integrity watchdog separately.
-        if (table === "session" && op === "UPDATE") {
-          const sessionRoutineCols = new Set(["expire", "sess"]);
-          // Only suppress if ALL changed cols are routine — if a new field appears, alert.
-          if (changedCols.length > 0 && changedCols.every((c) => sessionRoutineCols.has(c))) return;
-        }
+        // Suppress ALL session table UPDATEs — connect-pg-simple legitimately updates
+        // expire (and sess) on every active session every ~60s. The trigger fires even
+        // when changedCols is empty (no diff detected). Alerting on session UPDATEs
+        // produces only noise. Real threats (admin flag injection into sess JSONB,
+        // mass DELETE) are caught by the 5-min integrity watchdog or via INSERT/DELETE below.
+        if (table === "session" && op === "UPDATE") return;
 
         const colsLine =
           changedCols.length > 0
