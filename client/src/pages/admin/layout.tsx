@@ -132,6 +132,7 @@ const menuItems: MenuItem[] = [
   { icon: ShieldBan, label: "IPs Bloquées", href: "/admin/blocked-ips" },
   { icon: Shield, label: "Logs & Sécurité", href: "/admin/logs" },
   { icon: Shield, label: "Audit Sécurité", href: "/admin/audit" },
+  { icon: Smartphone, label: "Diagnostic Sessions", href: "/admin/session-debug" },
   { icon: Settings, label: "Paramètres", href: "/admin/settings" },
 ];
 
