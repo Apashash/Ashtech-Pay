@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useLayoutEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest, setAdminOtpToken, getAuthHeaders } from "@/lib/queryClient";
@@ -139,6 +139,17 @@ const menuItems: MenuItem[] = [
 export function AdminLayout({ children }: AdminLayoutProps) {
   const [location, setLocation] = useLocation();
   const queryClient = useQueryClient();
+
+  // Force light mode for the entire admin panel
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    const hadDark = root.classList.contains("dark");
+    root.classList.remove("dark");
+    return () => {
+      if (hadDark) root.classList.add("dark");
+    };
+  }, []);
+
   const [sidebarOpen, setSidebarOpenState] = useState(() => {
     const stored = localStorage.getItem("admin_sidebar_open");
     return stored === null ? true : stored === "true";
