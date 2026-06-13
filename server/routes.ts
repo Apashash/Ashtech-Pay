@@ -303,7 +303,7 @@ function isIpAllowed(ip: string, list: string[]): boolean {
 // Keyed by sessionID so each browser session is independently verified.
 // A new login always gets a fresh sessionID → OTP is always re-asked after logout.
 const adminVerifiedSessions = new Map<string, { userId: string; expiresAt: number }>();
-const ADMIN_OTP_SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24h — TOTP re-required every 24h
+const ADMIN_OTP_SESSION_TTL_MS = 3 * 24 * 60 * 60 * 1000; // 3 days — matches session maxAge
 
 // Periodic cleanup of expired in-memory entries (every 10 min)
 setInterval(() => {
