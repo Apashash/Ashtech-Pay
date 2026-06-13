@@ -263,7 +263,26 @@ app.use((req, res, next) => {
     `);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_admin_logs_admin_id ON admin_logs(admin_id)`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_admin_logs_created_at ON admin_logs(created_at)`);
-    console.log("[Migration] Schema columns ready (api_key, notify_url, source, confirmed_at, hosted_page_configs, hosted_payment_sessions, payment_links.notify_url, token_revoked_before, conversion_requests.executed_at/by_id, user_notifications.type, wallets_unique_idx, admin_logs)");
+    // Ensure audit_logs table exists (security audit trail — login, withdrawal, KYC, role changes…)
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS audit_logs (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id VARCHAR,
+        actor_type TEXT NOT NULL DEFAULT 'user',
+        action TEXT NOT NULL,
+        target_type TEXT,
+        target_id VARCHAR,
+        details TEXT,
+        ip_address TEXT,
+        user_agent TEXT,
+        success BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id)`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action)`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DESC)`);
+    console.log("[Migration] Schema columns ready (api_key, notify_url, source, confirmed_at, hosted_page_configs, hosted_payment_sessions, payment_links.notify_url, token_revoked_before, conversion_requests.executed_at/by_id, user_notifications.type, wallets_unique_idx, admin_logs, audit_logs)");
 
     // ── 5.3 Re-encrypt existing plaintext sensitive fields ────────────────────
     // Runs at every startup — idempotent because encryptField() skips already-encrypted values.
