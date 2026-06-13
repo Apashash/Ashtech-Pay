@@ -681,8 +681,8 @@ export class DatabaseStorage implements IStorage {
     // Update global messages admin reference (set to null) 
     await db.execute(sql`UPDATE global_messages SET admin_id = NULL WHERE admin_id = ${id}`);
     
-    // Update admin logs - set admin_id to null instead of delete
-    await db.execute(sql`UPDATE admin_logs SET admin_id = NULL WHERE admin_id = ${id}`);
+    // Delete admin logs where this user was the admin actor (admin_id is NOT NULL — cannot set to null)
+    await db.execute(sql`DELETE FROM admin_logs WHERE admin_id = ${id}`);
     
     // Handle withdrawal number changes (both user_id and admin_id)
     await db.execute(sql`UPDATE withdrawal_number_changes SET admin_id = NULL WHERE admin_id = ${id}`);
@@ -696,6 +696,11 @@ export class DatabaseStorage implements IStorage {
     await db.delete(paymentLinks).where(eq(paymentLinks.userId, id));
     await db.delete(conversionRequests).where(eq(conversionRequests.userId, id));
     await db.delete(wallets).where(eq(wallets.userId, id));
+    // Clean up hosted payment tables (merchant_id / user_id references)
+    await db.execute(sql`DELETE FROM hosted_payment_sessions WHERE merchant_id = ${id}`);
+    await db.execute(sql`DELETE FROM hosted_page_configs WHERE user_id = ${id}`);
+    // Clean up audit logs (nullable user_id, no FK — safe to leave or delete)
+    await db.execute(sql`DELETE FROM audit_logs WHERE user_id = ${id}`);
     await db.delete(users).where(eq(users.id, id));
   }
 
