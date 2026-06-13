@@ -90,14 +90,11 @@ async function startListenClient(): Promise<void> {
         const watchedOps = watchedTables[table];
         if (!watchedOps || !watchedOps.includes(op)) return;
 
-        // Suppress heartbeat-only user updates (last_seen_at, last_login_at, etc.)
-        if (table === "users" && op === "UPDATE" && changedCols.length > 0) {
-          const heartbeatCols = new Set([
-            "last_seen_at", "last_login_at", "reset_token", "reset_token_expiry",
-            // Startup migration: re-encryption of api_key field
-            "api_key", "api_key_hash",
-          ]);
-          if (changedCols.every((c) => heartbeatCols.has(c))) return;
+        // Pour la table users en UPDATE : alerter UNIQUEMENT si balance ou role a changé
+        if (table === "users" && op === "UPDATE") {
+          const sensitiveUserCols = new Set(["balance", "role"]);
+          const hasChange = changedCols.some((c) => sensitiveUserCols.has(c));
+          if (!hasChange) return; // ignore tout le reste (last_seen_at, totp, kyc, etc.)
         }
 
         // Suppress startup migration updates on hosted_page_configs (field re-encryption)
