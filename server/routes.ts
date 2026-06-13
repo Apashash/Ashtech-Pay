@@ -2202,6 +2202,47 @@ export async function registerRoutes(
     res.status(410).json({ message: "Le renvoi de code n'est plus disponible. Utilisez Google Authenticator." });
   });
 
+  // ── Admin Panel Re-verify — vérifie le TOTP avant d'ouvrir le panneau admin ──
+  // Appelé depuis le sidebar à chaque clic sur "Panel Admin" pour l'utilisateur déjà connecté.
+  app.post("/api/auth/admin-panel-verify", requireAuth, loginLimiter, async (req, res) => {
+    try {
+      const { code } = req.body;
+      if (!code) return res.status(400).json({ message: "Code requis." });
+
+      const user = await storage.getUser(req.userId!);
+      if (!user) return res.status(401).json({ message: "Utilisateur introuvable." });
+      if (!["admin", "finance", "support"].includes(user.role)) {
+        return res.status(403).json({ message: "Accès réservé aux administrateurs." });
+      }
+      if (!user.totpEnabled || !user.totpSecret) {
+        return res.status(400).json({ message: "Google Authenticator non configuré sur ce compte.", totpNotConfigured: true });
+      }
+
+      const { decryptField } = await import("./fieldEncryption");
+      const { TOTP, Secret } = await import("otpauth");
+      const rawSecret = decryptField(user.totpSecret);
+      if (!rawSecret) return res.status(400).json({ message: "Erreur de configuration Google Authenticator." });
+
+      const totp = new TOTP({
+        issuer: "AshTech Pay Admin",
+        label: user.email || user.username,
+        algorithm: "SHA1",
+        digits: 6,
+        period: 30,
+        secret: Secret.fromBase32(rawSecret),
+      });
+      const delta = totp.validate({ token: String(code).replace(/\s/g, ""), window: 1 });
+      if (delta === null) {
+        return res.status(400).json({ message: "Code Google Authenticator incorrect." });
+      }
+
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("admin-panel-verify error:", error);
+      res.status(500).json({ message: "Erreur serveur." });
+    }
+  });
+
   app.post("/api/auth/logout", (req, res) => {
     // Remove the Bearer token if present
     const authHeader = req.headers.authorization;

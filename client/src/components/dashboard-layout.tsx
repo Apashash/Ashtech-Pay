@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -60,7 +60,17 @@ import {
   MessageCircle,
   Phone,
   Wrench,
+  Smartphone,
+  Loader2,
 } from "lucide-react";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { SiWhatsapp, SiFacebook } from "react-icons/si";
 import { BottomSheet, BottomSheetContent, BottomSheetHeader, BottomSheetTitle, BottomSheetFooter, BottomSheetDescription } from "@/components/ui/bottom-sheet";
 import { Label } from "@/components/ui/label";
@@ -105,6 +115,49 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [showKycUpdateDialog, setShowKycUpdateDialog] = useState(false);
   const { rates } = useExchangeRates();
   const { t, language } = useLanguage();
+
+  // ── Admin Panel TOTP gate ──────────────────────────────────────────────────
+  const [showAdminVerify, setShowAdminVerify] = useState(false);
+  const [adminOtpCode, setAdminOtpCode] = useState("");
+  const [adminOtpSeconds, setAdminOtpSeconds] = useState(30);
+
+  useEffect(() => {
+    if (!showAdminVerify) return;
+    const tick = () => setAdminOtpSeconds(30 - (Math.floor(Date.now() / 1000) % 30));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [showAdminVerify]);
+
+  const adminVerifyMutation = useMutation({
+    mutationFn: async (code: string) => {
+      const res = await apiRequest("POST", "/api/auth/admin-panel-verify", { code });
+      const json = await res.json();
+      if (!res.ok) throw Object.assign(new Error(json.message || "Erreur"), json);
+      return json;
+    },
+    onSuccess: () => {
+      setShowAdminVerify(false);
+      setAdminOtpCode("");
+      setLocation("/admin");
+    },
+    onError: (err: any) => {
+      setAdminOtpCode("");
+      toast({ title: "Code incorrect", description: err.message || "Vérifiez Google Authenticator.", variant: "destructive" });
+    },
+  });
+
+  const handleAdminPanelClick = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setAdminOtpCode("");
+    setShowAdminVerify(true);
+  }, []);
+
+  useEffect(() => {
+    if (adminOtpCode.length === 6 && !adminVerifyMutation.isPending) {
+      adminVerifyMutation.mutate(adminOtpCode);
+    }
+  }, [adminOtpCode]);
 
   const menuItems = MENU_URLS.map(item => ({ title: t.sidebar[item.key], url: item.url, icon: item.icon }));
   const settingsItems = SETTINGS_URLS.map(item => ({ title: t.sidebar[item.key], url: item.url, icon: item.icon }));
@@ -488,11 +541,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 <SidebarGroupContent>
                   <SidebarMenu>
                     <SidebarMenuItem>
-                      <SidebarMenuButton asChild isActive={location.startsWith("/admin")}>
-                        <Link href="/admin">
-                          <Shield className="w-4 h-4" />
-                          <span>{t.sidebar.adminPanel}</span>
-                        </Link>
+                      <SidebarMenuButton isActive={location.startsWith("/admin")} onClick={handleAdminPanelClick} data-testid="button-admin-panel">
+                        <Shield className="w-4 h-4" />
+                        <span>{t.sidebar.adminPanel}</span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   </SidebarMenu>
@@ -850,6 +901,74 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           <MessageCircle className="w-6 h-6" />
         </button>
       </div>}
+      {/* ── Modal vérification Google Auth pour accéder au Panel Admin ── */}
+      <Dialog open={showAdminVerify} onOpenChange={(open) => { setShowAdminVerify(open); if (!open) setAdminOtpCode(""); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader className="items-center text-center">
+            <div className="w-14 h-14 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center mb-2">
+              <Smartphone className="w-7 h-7 text-primary" />
+            </div>
+            <DialogTitle>Vérification Google Authenticator</DialogTitle>
+            <DialogDescription className="text-center text-sm leading-relaxed">
+              Entrez le code à 6 chiffres affiché dans{" "}
+              <span className="font-semibold text-foreground">Google Authenticator</span>{" "}
+              pour accéder au panneau admin.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col items-center gap-4 py-2">
+            {/* Countdown */}
+            <div className="relative w-10 h-10">
+              <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                <circle cx="18" cy="18" r="15.9" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-muted/30" />
+                <circle
+                  cx="18" cy="18" r="15.9" fill="none" strokeWidth="2.5"
+                  strokeDasharray="100"
+                  strokeDashoffset={((30 - adminOtpSeconds) / 30) * 100}
+                  strokeLinecap="round"
+                  className={adminOtpSeconds <= 5 ? "text-red-500" : "text-primary"}
+                  stroke="currentColor"
+                  style={{ transition: "stroke-dashoffset 1s linear, stroke 0.3s" }}
+                />
+              </svg>
+              <span className={`absolute inset-0 flex items-center justify-center text-xs font-bold tabular-nums ${adminOtpSeconds <= 5 ? "text-red-500" : "text-foreground"}`}>
+                {adminOtpSeconds}s
+              </span>
+            </div>
+
+            <InputOTP
+              maxLength={6}
+              value={adminOtpCode}
+              onChange={setAdminOtpCode}
+              disabled={adminVerifyMutation.isPending}
+              autoFocus
+              data-testid="input-admin-panel-otp"
+            >
+              <InputOTPGroup>
+                <InputOTPSlot index={0} />
+                <InputOTPSlot index={1} />
+                <InputOTPSlot index={2} />
+                <InputOTPSlot index={3} />
+                <InputOTPSlot index={4} />
+                <InputOTPSlot index={5} />
+              </InputOTPGroup>
+            </InputOTP>
+
+            <Button
+              className="w-full font-bold h-11"
+              disabled={adminOtpCode.length < 6 || adminVerifyMutation.isPending}
+              onClick={() => adminVerifyMutation.mutate(adminOtpCode)}
+              data-testid="button-admin-panel-verify"
+            >
+              {adminVerifyMutation.isPending ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Vérification…</>
+              ) : (
+                "Accéder au panneau admin"
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </SidebarProvider>
   );
 }
