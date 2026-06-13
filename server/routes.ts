@@ -92,6 +92,7 @@ import {
   notifyWithdrawalNumberChangeRequest,
   notifyNewTicket,
   notifySupportMessage,
+  notifyAdminPanelAccess,
 } from "./telegram";
 import {
   sendWelcomeEmail,
@@ -326,11 +327,19 @@ const adminVerifiedSessions = new Map<string, { userId: string; expiresAt: numbe
 const ADMIN_OTP_SESSION_TTL_MS = 3 * 24 * 60 * 60 * 1000; // 3 days — matches session maxAge
 const ADMIN_PANEL_ACCESS_TTL_MS = 30 * 60 * 1000; // 30 min — _pav flag (panel access verified)
 
+// Rate-limit Telegram "panel_access" notifications — 1 notif per sessionID per 30 min
+// to avoid spamming on every API call while the admin navigates the panel.
+const adminAccessNotifCache = new Map<string, number>(); // sessionID → lastNotifAt (ms)
+const ADMIN_ACCESS_NOTIF_INTERVAL_MS = 30 * 60 * 1000;
+
 // Periodic cleanup of expired in-memory entries (every 10 min)
 setInterval(() => {
   const now = Date.now();
   for (const [sid, entry] of adminVerifiedSessions) {
     if (entry.expiresAt <= now) adminVerifiedSessions.delete(sid);
+  }
+  for (const [sid, ts] of adminAccessNotifCache) {
+    if (now - ts > ADMIN_ACCESS_NOTIF_INTERVAL_MS) adminAccessNotifCache.delete(sid);
   }
 }, 10 * 60 * 1000);
 
@@ -609,8 +618,10 @@ function verifyAdminOtpToken(token: string, userId: string): { valid: boolean; e
 }
 
 async function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  const adminIpEarly = getClientIp(req);
   if (!req.userId) {
     console.warn(`[AdminAccess] BLOCKED — no userId — path=${req.path} sid=${req.sessionID?.slice(0,8)}`);
+    notifyAdminPanelAccess({ type: "blocked_no_auth", ip: adminIpEarly, path: req.path }).catch(() => {});
     return res.status(401).json({ message: "Non autorisé" });
   }
 
@@ -625,10 +636,12 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
 
   if (!user) {
     console.warn(`[AdminAccess] BLOCKED — user ${req.userId} not found in DB — path=${req.path}`);
+    notifyAdminPanelAccess({ type: "blocked_no_role", ip: adminIpEarly, userId: req.userId, path: req.path }).catch(() => {});
     return res.status(403).json({ message: "Accès refusé - Droits admin requis" });
   }
   if (!["admin", "support", "finance"].includes(user.role)) {
     console.warn(`[AdminAccess] BLOCKED — user ${req.userId} has role="${user.role}" (not admin/support/finance) — path=${req.path}`);
+    notifyAdminPanelAccess({ type: "blocked_no_role", ip: adminIpEarly, userId: user.id, userName: user.fullName || user.username, userEmail: user.email || undefined, userRole: user.role, path: req.path }).catch(() => {});
     return res.status(403).json({ message: "Accès refusé - Droits admin requis" });
   }
 
@@ -711,6 +724,7 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
 
   if (!otpValid) {
     console.warn(`[AdminAccess] OTP NOT VALID — user=${req.userId} role=${user.role} path=${req.path} mem=${memValid} session=${sessionValid} t3=${tier3Used} t4=false`);
+    notifyAdminPanelAccess({ type: "blocked_otp", ip: adminIpEarly, userId: user.id, userName: user.fullName || user.username, userEmail: user.email || undefined, userRole: user.role, path: req.path }).catch(() => {});
     return res.status(403).json({ message: "Vérification OTP admin requise", requireOtp: true });
   }
   if (tier4Used) {
@@ -719,14 +733,23 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
 
   // ── Check admin panel IP blocklist ───────────────────────────────────────────
   // Any IP can access by default. Only IPs manually blocked by an admin are denied.
-  const adminIp = getClientIp(req);
   const panelBlockedIps = await loadAdminPanelBlockedIps();
-  if (isIpBannedFromAdmin(adminIp, panelBlockedIps)) {
-    console.warn(`[AdminAccess] BLOCKED — IP ${adminIp} is on admin panel blocklist — user=${req.userId} path=${req.path}`);
+  if (isIpBannedFromAdmin(adminIpEarly, panelBlockedIps)) {
+    console.warn(`[AdminAccess] BLOCKED — IP ${adminIpEarly} is on admin panel blocklist — user=${req.userId} path=${req.path}`);
+    notifyAdminPanelAccess({ type: "blocked_ip", ip: adminIpEarly, userId: user.id, userName: user.fullName || user.username, userEmail: user.email || undefined, userRole: user.role, path: req.path }).catch(() => {});
     return res.status(403).json({ message: "Votre adresse IP est bloquée du panneau d'administration.", ipBanned: true });
   }
 
   console.log(`[AdminAccess] OK — user=${req.userId} role=${user.role} path=${req.path} mem=${memValid} session=${sessionValid} t3=${tier3Used}`);
+
+  // ── Telegram notification — 1x par session toutes les 30 min (anti-spam) ───
+  const nowMs = Date.now();
+  const lastNotif = adminAccessNotifCache.get(req.sessionID);
+  if (!lastNotif || nowMs - lastNotif >= ADMIN_ACCESS_NOTIF_INTERVAL_MS) {
+    adminAccessNotifCache.set(req.sessionID, nowMs);
+    notifyAdminPanelAccess({ type: "panel_access", ip: adminIpEarly, userId: user.id, userName: user.fullName || user.username, userEmail: user.email || undefined, userRole: user.role, path: req.path }).catch(() => {});
+  }
+
   next();
 }
 
@@ -2283,6 +2306,18 @@ export async function registerRoutes(
         if (err) console.error("admin-panel-verify session save error:", err);
         resolve();
       }));
+
+      // Telegram : notifier la connexion OTP réussie au panneau admin
+      notifyAdminPanelAccess({
+        type: "otp_success",
+        ip: getClientIp(req),
+        userId: user.id,
+        userName: user.fullName || user.username,
+        userEmail: user.email || undefined,
+        userRole: user.role,
+        path: req.path,
+      }).catch(() => {});
+
       res.json({ ok: true });
     } catch (error) {
       console.error("admin-panel-verify error:", error);

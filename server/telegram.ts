@@ -2818,3 +2818,51 @@ export async function notifyAuditEvent(opts: {
 
   await sendMessage(msg);
 }
+
+// ── Notifications accès panneau admin ────────────────────────────────────────
+
+export async function notifyAdminPanelAccess(opts: {
+  type:
+    | "otp_success"      // OTP TOTP validé → session admin ouverte
+    | "panel_access"     // Accès à une route admin (succès, 1x/session)
+    | "blocked_no_role"  // Rôle insuffisant
+    | "blocked_otp"      // OTP admin invalide / expiré
+    | "blocked_ip"       // IP bloquée manuellement
+    | "blocked_no_auth"; // Non authentifié (no userId)
+  ip: string;
+  userId?: string;
+  userName?: string;
+  userEmail?: string;
+  userRole?: string;
+  path?: string;
+}): Promise<void> {
+  const t = new Date();
+  const heure = t.toLocaleString("fr-FR", { timeZone: "Africa/Douala", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const date  = t.toLocaleString("fr-FR", { timeZone: "Africa/Douala", day: "2-digit", month: "2-digit", year: "numeric" });
+
+  type TypeDef = { emoji: string; label: string; success: boolean };
+  const types: Record<typeof opts.type, TypeDef> = {
+    otp_success:      { emoji: "🔓", label: "CONNEXION ADMIN — OTP validé",           success: true  },
+    panel_access:     { emoji: "👁️",  label: "ACCÈS PANNEAU ADMIN",                    success: true  },
+    blocked_no_role:  { emoji: "🚫", label: "TENTATIVE BLOQUÉE — rôle insuffisant",   success: false },
+    blocked_otp:      { emoji: "❌", label: "TENTATIVE BLOQUÉE — OTP invalide",       success: false },
+    blocked_ip:       { emoji: "🛡️", label: "TENTATIVE BLOQUÉE — IP liste noire",     success: false },
+    blocked_no_auth:  { emoji: "⚠️", label: "TENTATIVE BLOQUÉE — non authentifié",    success: false },
+  };
+  const { emoji, label, success } = types[opts.type];
+  const statusLine = success ? "✅ <b>Autorisé</b>" : "🔴 <b>Refusé</b>";
+
+  const msg =
+    `${emoji} <b>ADMIN PANEL — ${label}</b>\n` +
+    `━━━━━━━━━━━━━━━━━━━━━\n` +
+    `${statusLine}\n` +
+    (opts.userName  ? `👤 Nom   : <b>${opts.userName}</b>\n`         : "") +
+    (opts.userEmail ? `📧 Email : ${opts.userEmail}\n`               : "") +
+    (opts.userRole  ? `🎭 Rôle  : <code>${opts.userRole}</code>\n`   : "") +
+    (opts.userId    ? `🆔 ID    : <code>${opts.userId}</code>\n`     : "") +
+    `🌐 IP    : <code>${opts.ip}</code>\n` +
+    (opts.path      ? `🔗 Route : <code>${opts.path}</code>\n`       : "") +
+    `📅 Date  : ${date} à ${heure}`;
+
+  await sendMessage(msg);
+}
