@@ -106,9 +106,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { rates } = useExchangeRates();
   const { t, language } = useLanguage();
 
-  // ── Admin Panel TOTP gate — navigue vers la page de vérification ─────────
+  // ── Admin Panel — navigue directement vers /admin ─────────────────────────
+  // L'AdminLayout gère lui-même la redirection vers /admin-panel-verify si _pav
+  // est expiré (needsPanelVerify=true). On ne demande plus le code 2 fois après login.
   const handleAdminPanelClick = useCallback(() => {
-    setLocation("/admin-panel-verify");
+    setLocation("/admin");
   }, []);
 
   const menuItems = MENU_URLS.map(item => ({ title: t.sidebar[item.key], url: item.url, icon: item.icon }));
