@@ -349,6 +349,42 @@ const otpAttempts = new Map<string, { count: number; lockedUntil: number }>();
 const OTP_MAX_ATTEMPTS = 5;
 const OTP_LOCKOUT_MS = 15 * 60 * 1000;
 
+// ─── Admin-login-otp per-userId rate limiter ───────────────────────────────────
+// Prevents token farming: attacker repeatedly calls /login to generate fresh
+// adminLoginTokens and tries 5 codes per token to brute-force TOTP.
+// Max 10 TOTP attempts per userId per 30 min regardless of how many tokens are issued.
+const adminLoginOtpUserAttempts = new Map<string, { count: number; resetAt: number }>();
+const ADMIN_LOGIN_OTP_USER_MAX = 10;
+const ADMIN_LOGIN_OTP_USER_WINDOW_MS = 30 * 60 * 1000;
+
+function checkAdminLoginOtpRateLimit(userId: string): { allowed: boolean; retryAfter?: number } {
+  const now = Date.now();
+  const rec = adminLoginOtpUserAttempts.get(userId);
+  if (!rec || rec.resetAt <= now) return { allowed: true };
+  if (rec.count >= ADMIN_LOGIN_OTP_USER_MAX) {
+    return { allowed: false, retryAfter: Math.ceil((rec.resetAt - now) / 1000) };
+  }
+  return { allowed: true };
+}
+function recordAdminLoginOtpAttempt(userId: string): void {
+  const now = Date.now();
+  const rec = adminLoginOtpUserAttempts.get(userId);
+  if (!rec || rec.resetAt <= now) {
+    adminLoginOtpUserAttempts.set(userId, { count: 1, resetAt: now + ADMIN_LOGIN_OTP_USER_WINDOW_MS });
+  } else {
+    rec.count += 1;
+  }
+}
+function clearAdminLoginOtpAttempts(userId: string): void {
+  adminLoginOtpUserAttempts.delete(userId);
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, rec] of adminLoginOtpUserAttempts) {
+    if (rec.resetAt <= now) adminLoginOtpUserAttempts.delete(id);
+  }
+}, 10 * 60 * 1000);
+
 function checkOtpRateLimit(userId: string): { allowed: boolean; retryAfter?: number } {
   const now = Date.now();
   const rec = otpAttempts.get(userId);
@@ -591,15 +627,30 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
 // Signed HMAC-SHA256 token stored in localStorage, sent as X-Admin-OTP-Token header.
 // Survives PM2 multi-worker routing, blocked cookies, and Cloudflare proxy.
 // Format: base64url({ payload: "userId:expiresAt", sig: "hmac-hex" })
-const ADMIN_TOKEN_SECRET = () => process.env.SESSION_SECRET || process.env.ADMIN_OTP_TOKEN_SECRET || "ashtech-admin-fallback-secret-change-in-prod";
+//
+// SECURITY: NO hardcoded fallback secret.
+// If neither SESSION_SECRET nor ADMIN_OTP_TOKEN_SECRET is set, Tier 4 is
+// disabled entirely: sign() returns null and verify() always returns invalid.
+// This prevents forging tokens with a known/public fallback string.
+function getAdminTokenSecret(): string | null {
+  return process.env.SESSION_SECRET || process.env.ADMIN_OTP_TOKEN_SECRET || null;
+}
 
-function signAdminOtpToken(userId: string, expiresAt: number): string {
+function signAdminOtpToken(userId: string, expiresAt: number): string | null {
+  const secret = getAdminTokenSecret();
+  if (!secret) {
+    console.warn("[AdminToken] Tier4 token signing DISABLED — set SESSION_SECRET or ADMIN_OTP_TOKEN_SECRET");
+    return null;
+  }
   const payload = `${userId}:${expiresAt}`;
-  const sig = crypto.createHmac("sha256", ADMIN_TOKEN_SECRET()).update(payload).digest("hex");
+  const sig = crypto.createHmac("sha256", secret).update(payload).digest("hex");
   return Buffer.from(JSON.stringify({ payload, sig })).toString("base64url");
 }
 
 function verifyAdminOtpToken(token: string, userId: string): { valid: boolean; expiresAt: number } {
+  const secret = getAdminTokenSecret();
+  // If no secret is configured, Tier 4 is disabled — reject all tokens.
+  if (!secret) return { valid: false, expiresAt: 0 };
   try {
     const decoded = JSON.parse(Buffer.from(token, "base64url").toString("utf8"));
     const { payload, sig } = decoded;
@@ -607,8 +658,11 @@ function verifyAdminOtpToken(token: string, userId: string): { valid: boolean; e
     const [tokenUserId, expiresAtStr] = payload.split(":");
     const expiresAt = parseInt(expiresAtStr, 10);
     if (isNaN(expiresAt)) return { valid: false, expiresAt: 0 };
-    const expectedSig = crypto.createHmac("sha256", ADMIN_TOKEN_SECRET()).update(payload).digest("hex");
-    if (!crypto.timingSafeEqual(Buffer.from(sig, "hex"), Buffer.from(expectedSig, "hex"))) return { valid: false, expiresAt: 0 };
+    const expectedSig = crypto.createHmac("sha256", secret).update(payload).digest("hex");
+    // Pad both sides to same length before timingSafeEqual to prevent length-based timing leaks
+    const sigBuf  = Buffer.from(sig.padEnd(64, "0"),         "hex");
+    const expBuf  = Buffer.from(expectedSig.padEnd(64, "0"), "hex");
+    if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) return { valid: false, expiresAt: 0 };
     if (tokenUserId !== userId) return { valid: false, expiresAt: 0 };
     if (expiresAt <= Date.now()) return { valid: false, expiresAt };
     return { valid: true, expiresAt };
@@ -2140,6 +2194,17 @@ export async function registerRoutes(
       // Persist incremented attempt count so all workers see it
       await setPendingAdminLogin(String(adminLoginToken), pending);
 
+      // ── Rate-limit par userId (anti-token-farming) ────────────────────────────
+      // Prevents generating many tokens via /login and cycling through 5 attempts per token.
+      // Max 10 total TOTP attempts per userId per 30 min, across all tokens.
+      const userRateCheck = checkAdminLoginOtpRateLimit(pending.userId);
+      if (!userRateCheck.allowed) {
+        return res.status(429).json({
+          message: `Trop de tentatives. Réessayez dans ${Math.ceil((userRateCheck.retryAfter ?? 1800) / 60)} minute(s).`,
+          expired: true,
+        });
+      }
+
       // ── Vérification Google Authenticator (TOTP) ─────────────────────────────
       const userForTotp = await storage.getUser(pending.userId);
       if (!userForTotp) {
@@ -2168,6 +2233,7 @@ export async function registerRoutes(
       const submitted = String(code).replace(/\s/g, "");
       const delta = totp.validate({ token: submitted, window: 1 });
       if (delta === null) {
+        recordAdminLoginOtpAttempt(pending.userId); // count against per-userId quota
         const remaining = 5 - pending.attempts;
         return res.status(400).json({
           message: `Code Google Authenticator incorrect. ${remaining} tentative(s) restante(s).`,
@@ -2177,6 +2243,7 @@ export async function registerRoutes(
 
       // ✅ TOTP correct — single-use: supprimer l'entrée en attente
       const userId = userForTotp.id;
+      clearAdminLoginOtpAttempts(userId); // reset per-userId counter on success
       await deletePendingAdminLogin(String(adminLoginToken));
 
       const user = userForTotp;
@@ -2251,7 +2318,7 @@ export async function registerRoutes(
           } as any).catch(() => {});
 
           const { password: _, ...safeUser } = user;
-          const adminOtpToken = signAdminOtpToken(user.id, avsExpiresAt);
+          const adminOtpToken = signAdminOtpToken(user.id, avsExpiresAt) ?? undefined;
           res.json({ user: safeUser, token: authToken, adminOtpToken });
         });
       });
@@ -6687,8 +6754,13 @@ export async function registerRoutes(
     if (!user || !["admin", "support", "finance"].includes(user.role)) {
       return res.status(403).json({ message: "Accès refusé" });
     }
-    // OTP bypass mode: treat session as already verified
-    if (process.env.ADMIN_OTP_BYPASS === "true") {
+    // OTP bypass mode — must match requireAdmin exactly:
+    // requires BOTH ADMIN_OTP_BYPASS=true AND the X-Admin-Bypass-Token header with the matching secret.
+    // A bare ADMIN_OTP_BYPASS=true without the token does NOT skip OTP (prevents accidental env-var bypass).
+    const bypassOk = process.env.ADMIN_OTP_BYPASS === "true"
+      && !!process.env.ADMIN_OTP_BYPASS_TOKEN
+      && req.headers["x-admin-bypass-token"] === process.env.ADMIN_OTP_BYPASS_TOKEN;
+    if (bypassOk) {
       return res.json({ verified: true, bypass: true, totpEnabled: !!user.totpEnabled });
     }
     const now = Date.now();
@@ -7269,7 +7341,7 @@ export async function registerRoutes(
       console.log(`[AdminOTP] Admin ${user.email?.replace(/(.{2}).+(@.+)/, "$1***$2")} vérifié depuis ${ip}`);
       notifyAdminLoginSuccess({ adminName: user.fullName || user.username, adminEmail: user.email || "", ip }).catch(() => {});
 
-      const adminOtpToken = signAdminOtpToken(req.userId!, expiresAt);
+      const adminOtpToken = signAdminOtpToken(req.userId!, expiresAt) ?? undefined;
       res.json({ success: true, adminOtpToken });
     } catch (error: any) {
       console.error("Admin OTP verify error:", error.message);
@@ -7440,7 +7512,7 @@ export async function registerRoutes(
       }).catch(() => {});
       notifyAdminLoginSuccess({ adminName: user.fullName || user.username, adminEmail: user.email || "", ip }).catch(() => {});
       console.log(`[AdminTOTP] Admin ${user.email?.replace(/(.{2}).+(@.+)/, "$1***$2")} vérifié (TOTP) depuis ${ip}`);
-      const adminOtpToken = signAdminOtpToken(req.userId!, expiresAt);
+      const adminOtpToken = signAdminOtpToken(req.userId!, expiresAt) ?? undefined;
       res.json({ success: true, adminOtpToken });
     } catch (err: any) {
       console.error("[AdminTOTP] Verify error:", err?.message);
