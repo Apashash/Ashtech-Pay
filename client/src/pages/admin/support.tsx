@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, getAuthHeaders } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useSSE } from "@/hooks/use-sse";
 import { cn } from "@/lib/utils";
@@ -89,7 +89,7 @@ export default function AdminSupport() {
   const { data: ticketDetail, refetch: refetchDetail } = useQuery<TicketWithMessages>({
     queryKey: ["/api/admin/tickets", selectedTicket],
     queryFn: async () => {
-      const response = await fetch(`/api/admin/tickets/${selectedTicket}`);
+      const response = await fetch(`/api/admin/tickets/${selectedTicket}`, { credentials: "include", headers: getAuthHeaders() });
       return response.json();
     },
     enabled: !!selectedTicket,
