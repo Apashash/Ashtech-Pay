@@ -28,7 +28,11 @@ export default function AdminPanelVerifyPage() {
       return json;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/otp-status"] });
+      queryClient.setQueryData(["/api/admin/otp-status"], (old: any) => ({
+        ...(old || {}),
+        needsPanelVerify: undefined,
+        verified: true,
+      }));
       setLocation("/admin");
     },
     onError: (err: any) => {
