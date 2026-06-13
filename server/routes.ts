@@ -273,28 +273,30 @@ setInterval(() => {
 // Stored in platform_settings (key="admin_ip_whitelist", value=JSON array).
 // If list is empty → no restriction (feature disabled).
 // If non-empty → ONLY listed IPs may access admin routes.
-let _adminIpWhitelist: string[] = [];
-let _adminIpWhitelistLoadedAt = 0;
-const ADMIN_IP_WHITELIST_TTL = 20_000; // 20s cache
+// ── Admin Panel IP Blocklist (replaces the old whitelist) ────────────────────
+// Any IP can access the admin panel by default.
+// Admins can manually add IPs to this blocklist to deny access permanently.
+let _adminPanelBlockedIps: string[] = [];
+let _adminPanelBlockedIpsLoadedAt = 0;
+const ADMIN_PANEL_BLOCKED_IPS_TTL = 20_000; // 20s cache
 
-async function loadAdminIpWhitelist(): Promise<string[]> {
+async function loadAdminPanelBlockedIps(): Promise<string[]> {
   const now = Date.now();
-  if (now - _adminIpWhitelistLoadedAt < ADMIN_IP_WHITELIST_TTL) return _adminIpWhitelist;
+  if (now - _adminPanelBlockedIpsLoadedAt < ADMIN_PANEL_BLOCKED_IPS_TTL) return _adminPanelBlockedIps;
   try {
-    const setting = await storage.getSetting("admin_ip_whitelist");
-    _adminIpWhitelist = setting ? JSON.parse(setting.value) : [];
+    const setting = await storage.getSetting("admin_panel_blocked_ips");
+    _adminPanelBlockedIps = setting ? JSON.parse(setting.value) : [];
   } catch { /* keep stale */ }
-  _adminIpWhitelistLoadedAt = now;
-  return _adminIpWhitelist;
+  _adminPanelBlockedIpsLoadedAt = now;
+  return _adminPanelBlockedIps;
 }
 
-function invalidateAdminIpWhitelistCache() {
-  _adminIpWhitelistLoadedAt = 0;
+function invalidateAdminPanelBlockedIpsCache() {
+  _adminPanelBlockedIpsLoadedAt = 0;
 }
 
-function isIpAllowed(ip: string, list: string[]): boolean {
-  if (!list.length) return true; // empty list = no restriction
-  return list.some(a => a.trim() === ip.trim());
+function isIpBannedFromAdmin(ip: string, blocklist: string[]): boolean {
+  return blocklist.some(a => a.trim() === ip.trim());
 }
 
 // ─── Admin OTP verified sessions — dual storage ───────────────────────────────
@@ -528,16 +530,20 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
   }
 
   // Vérification IP bloquée sur CHAQUE requête authentifiée.
-  // Couvre le cas où clientIp n'est pas encore stocké en session (sessions existantes).
-  // Dès que l'IP est bloquée → 401 sessionRevoked → force-logout côté client.
-  const ip = getClientIp(req);
-  const ipCheck = checkAuthRateLimit(ip);
-  if (ipCheck.blocked && ipCheck.retryAfter) {
-    return res.status(401).json({
-      message: "Votre adresse IP est temporairement bloquée.",
-      sessionRevoked: true,
-      retryAfter: ipCheck.retryAfter,
-    });
+  // EXCEPTION : les routes /api/admin/ ne sont PAS soumises au blocage automatique
+  // par taux d'échec — n'importe quelle IP peut accéder au panneau admin.
+  // Le blocage admin spécifique (manuel) est géré dans requireAdmin.
+  const isAdminPath = req.path.startsWith("/api/admin/");
+  if (!isAdminPath) {
+    const ip = getClientIp(req);
+    const ipCheck = checkAuthRateLimit(ip);
+    if (ipCheck.blocked && ipCheck.retryAfter) {
+      return res.status(401).json({
+        message: "Votre adresse IP est temporairement bloquée.",
+        sessionRevoked: true,
+        retryAfter: ipCheck.retryAfter,
+      });
+    }
   }
 
   if (req.forceLogoutRetryAfter) {
@@ -691,6 +697,15 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
   }
   if (tier4Used) {
     console.log(`[AdminAccess] OK (Tier4/token) — user=${req.userId} role=${user.role} path=${req.path}`);
+  }
+
+  // ── Check admin panel IP blocklist ───────────────────────────────────────────
+  // Any IP can access by default. Only IPs manually blocked by an admin are denied.
+  const adminIp = getClientIp(req);
+  const panelBlockedIps = await loadAdminPanelBlockedIps();
+  if (isIpBannedFromAdmin(adminIp, panelBlockedIps)) {
+    console.warn(`[AdminAccess] BLOCKED — IP ${adminIp} is on admin panel blocklist — user=${req.userId} path=${req.path}`);
+    return res.status(403).json({ message: "Votre adresse IP est bloquée du panneau d'administration.", ipBanned: true });
   }
 
   console.log(`[AdminAccess] OK — user=${req.userId} role=${user.role} path=${req.path} mem=${memValid} session=${sessionValid} t3=${tier3Used}`);
@@ -1620,18 +1635,18 @@ export async function registerRoutes(
     res.json({ ok: true, message: `IP ${ip} débloquée.` });
   });
 
-  // ── Admin IP Whitelist endpoints ─────────────────────────────────────────────
+  // ── Admin Panel IP Blocklist endpoints ───────────────────────────────────────
+  // Any IP is allowed by default. Admin can block specific IPs from the panel.
 
-  // GET — return the current request IP (helper for UI "add my IP" button)
-  // requireAuth only (NOT requireAdmin) so the admin can see their IP even if blocked by whitelist
+  // GET — return the current request IP (helper for UI)
   app.get("/api/admin/my-ip", requireAuth, (req, res) => {
     res.json({ ip: getClientIp(req) });
   });
 
-  // GET — list whitelist
-  app.get("/api/admin/ip-whitelist", requireAuth, requireAdmin, async (_req, res) => {
+  // GET — list panel blocked IPs
+  app.get("/api/admin/panel-blocked-ips", requireAuth, requireAdmin, async (_req, res) => {
     try {
-      const setting = await storage.getSetting("admin_ip_whitelist");
+      const setting = await storage.getSetting("admin_panel_blocked_ips");
       const ips: string[] = setting ? JSON.parse(setting.value) : [];
       res.json({ ips });
     } catch {
@@ -1639,12 +1654,11 @@ export async function registerRoutes(
     }
   });
 
-  // POST — add IP to whitelist
-  app.post("/api/admin/ip-whitelist", requireAuth, requireAdmin, async (req, res) => {
+  // POST — add IP to panel blocklist
+  app.post("/api/admin/panel-blocked-ips", requireAuth, requireAdmin, async (req, res) => {
     const { ip } = req.body;
     if (!ip || typeof ip !== "string") return res.status(400).json({ message: "IP requise." });
     const trimmed = ip.trim();
-    // Accept IPv4 and IPv6 basics — just reject obviously wrong formats
     if (!trimmed || trimmed.length > 45) return res.status(400).json({ message: "Format IP invalide." });
     const ipv4Re = /^(\d{1,3}\.){3}\d{1,3}$/;
     const ipv6Re = /^[0-9a-fA-F:]{3,39}$/;
@@ -1652,55 +1666,50 @@ export async function registerRoutes(
       return res.status(400).json({ message: "Format IP invalide (ex: 1.2.3.4)." });
     }
     try {
-      const setting = await storage.getSetting("admin_ip_whitelist");
+      const setting = await storage.getSetting("admin_panel_blocked_ips");
       const list: string[] = setting ? JSON.parse(setting.value) : [];
-      if (list.includes(trimmed)) return res.status(400).json({ message: "Cette IP est déjà dans la liste." });
+      if (list.includes(trimmed)) return res.status(400).json({ message: "Cette IP est déjà bloquée." });
       list.push(trimmed);
-      await storage.upsertSetting("admin_ip_whitelist", JSON.stringify(list));
-      invalidateAdminIpWhitelistCache();
+      await storage.upsertSetting("admin_panel_blocked_ips", JSON.stringify(list));
+      invalidateAdminPanelBlockedIpsCache();
       res.json({ ips: list });
     } catch {
       res.status(500).json({ message: "Erreur serveur." });
     }
   });
 
-  // DELETE — remove IP from whitelist
-  app.delete("/api/admin/ip-whitelist/:ip", requireAuth, requireAdmin, async (req, res) => {
+  // DELETE — remove IP from panel blocklist (unblock)
+  app.delete("/api/admin/panel-blocked-ips/:ip", requireAuth, requireAdmin, async (req, res) => {
     const ip = decodeURIComponent(req.params.ip);
     try {
-      const setting = await storage.getSetting("admin_ip_whitelist");
+      const setting = await storage.getSetting("admin_panel_blocked_ips");
       let list: string[] = setting ? JSON.parse(setting.value) : [];
       list = list.filter(i => i !== ip);
-      await storage.upsertSetting("admin_ip_whitelist", JSON.stringify(list));
-      invalidateAdminIpWhitelistCache();
+      await storage.upsertSetting("admin_panel_blocked_ips", JSON.stringify(list));
+      invalidateAdminPanelBlockedIpsCache();
       res.json({ ips: list });
     } catch {
       res.status(500).json({ message: "Erreur serveur." });
     }
   });
 
-  // GET — IP check (polled every 3s by admin frontend)
-  // Uses requireAuth only — NOT requireAdmin (to avoid circular IP ban on self-check).
-  // If IP not whitelisted → destroy session + ban 72h → return { kicked: true }.
+  // GET — IP check (polled by admin frontend)
+  // Uses requireAuth only — NOT requireAdmin.
+  // Checks if IP is on the panel blocklist → kick session if yes.
   app.get("/api/admin/ip-check", requireAuth, async (req, res) => {
     try {
       const user = await storage.getUser(req.userId!);
       if (!user || !["admin", "support", "finance"].includes(user.role)) {
-        return res.json({ allowed: true, whitelistActive: false });
+        return res.json({ allowed: true });
       }
-      const whitelist = await loadAdminIpWhitelist();
-      if (!whitelist.length) return res.json({ allowed: true, whitelistActive: false });
-
       const ip = getClientIp(req);
-      if (!isIpAllowed(ip, whitelist)) {
-        // SECURITY: Only destroy the current session — do NOT ban the IP.
-        // Banning would permanently lock out the admin if their IP changes (mobile, VPN, etc.)
-        console.warn(`[IpWhitelist] POLL REJECT — user=${req.userId} ip=${ip} — session destroyed (no ban)`);
+      const blocklist = await loadAdminPanelBlockedIps();
+      if (isIpBannedFromAdmin(ip, blocklist)) {
+        console.warn(`[AdminPanel] POLL REJECT — user=${req.userId} ip=${ip} is on panel blocklist — session destroyed`);
         req.session.destroy(() => {});
-        return res.status(403).json({ kicked: true, message: "IP non autorisée. Session fermée." });
+        return res.status(403).json({ kicked: true, message: "Votre IP a été bloquée du panneau admin. Session fermée." });
       }
-
-      res.json({ allowed: true, whitelistActive: true, ip });
+      res.json({ allowed: true, ip });
     } catch {
       res.status(500).json({ message: "Erreur serveur." });
     }
@@ -1741,11 +1750,10 @@ export async function registerRoutes(
         dbError = e?.message || "Unknown error";
       }
 
-      // IP whitelist
-      const whitelist = await loadAdminIpWhitelist().catch(() => [] as string[]);
+      // Admin panel IP blocklist status
+      const blocklist = await loadAdminPanelBlockedIps().catch(() => [] as string[]);
       const currentIp = getClientIp(req);
-      const whitelistActive = whitelist.length > 0;
-      const ipAllowed = !whitelistActive || isIpAllowed(currentIp, whitelist);
+      const ipBanned = isIpBannedFromAdmin(currentIp, blocklist);
 
       res.json({
         userId: req.userId,
@@ -1758,9 +1766,8 @@ export async function registerRoutes(
         tier3_dbError: dbError,
         otpValid: memValid || sessionValid || dbValid,
         ip: currentIp,
-        whitelistActive,
-        ipAllowed,
-        whitelistCount: whitelist.length,
+        ipBanned,
+        panelBlockedCount: blocklist.length,
         totpEnabled: !!user.totpEnabled,
         timestamp: new Date().toISOString(),
       });

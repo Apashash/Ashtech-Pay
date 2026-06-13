@@ -92,9 +92,8 @@ interface SessionInfo {
   tier3_db: boolean;
   tier3_dbError: string | null;
   ip: string;
-  whitelistActive: boolean;
-  ipAllowed: boolean;
-  whitelistCount: number;
+  ipBanned: boolean;
+  panelBlockedCount: number;
   role: string;
   totpEnabled: boolean;
   timestamp: string;
@@ -313,10 +312,10 @@ export default function AdminDashboard() {
                   <span className={diagInfo.tier3_db ? "text-green-400" : "text-amber-400"}>{diagInfo.tier3_db ? "✓" : diagInfo.tier3_dbError ? `✗ ${diagInfo.tier3_dbError}` : "✗"}</span>
                   <span className="text-red-300/70">IP actuelle :</span>
                   <span className="text-red-200">{diagInfo.ip}</span>
-                  <span className="text-red-300/70">Whitelist IP active :</span>
-                  <span className={diagInfo.whitelistActive ? "text-amber-400" : "text-green-400"}>{diagInfo.whitelistActive ? `Oui (${diagInfo.whitelistCount} IP)` : "Non"}</span>
-                  <span className="text-red-300/70">IP autorisée :</span>
-                  <span className={diagInfo.ipAllowed ? "text-green-400" : "text-red-400 font-bold"}>{diagInfo.ipAllowed ? "✓ Oui" : "✗ Non — ajoutez votre IP dans Paramètres → IP Whitelist"}</span>
+                  <span className="text-red-300/70">IP bloquée admin :</span>
+                  <span className={diagInfo.ipBanned ? "text-red-400 font-bold" : "text-green-400"}>{diagInfo.ipBanned ? "✗ Oui — cette IP est sur la liste noire" : "✓ Non"}</span>
+                  <span className="text-red-300/70">IPs bloquées (total) :</span>
+                  <span className="text-red-200">{diagInfo.panelBlockedCount}</span>
                 </div>
               </div>
             )}
