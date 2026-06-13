@@ -141,14 +141,14 @@ function ConnectedDevicesSection() {
   const disconnectOneMutation = useMutation({
     mutationFn: async (sid: string) => {
       const res = await apiRequest("DELETE", `/api/user/sessions/${sid}`);
-      if (res.status === 404) {
-        // Session already gone — treat as success
-        return { ok: true, alreadyGone: true };
-      }
       return res.json();
     },
-    onSuccess: (_data, _sid) => {
+    onSuccess: (_data, sid) => {
       setDisconnectingId(null);
+      // Retirer l'appareil immédiatement du cache — pas besoin d'attendre le refetch
+      queryClient.setQueryData<DeviceSession[]>(["/api/user/sessions"], (old) =>
+        (old ?? []).filter((s) => s.id !== sid)
+      );
       refetch();
       toast({
         title: "Appareil déconnecté",
