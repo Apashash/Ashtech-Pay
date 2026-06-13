@@ -46,7 +46,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, removeAuthToken, removeAdminOtpToken } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { AdminLog } from "@shared/schema";
 
@@ -69,9 +69,17 @@ export default function AdminLogs() {
       toast({
         title: "Déconnexion globale effectuée",
         description: data.count > 0
-          ? `${data.count} session(s) révoquée(s).`
-          : "Aucune session active trouvée.",
+          ? `${data.count} session(s) révoquée(s). Redirection...`
+          : "Sessions révoquées. Redirection...",
       });
+      // L'EventSource ne peut pas envoyer Authorization: Bearer → le SSE n'atteint pas l'admin.
+      // On force le logout côté client directement après un délai pour que le toast soit visible.
+      setTimeout(() => {
+        queryClient.clear();
+        removeAuthToken();
+        removeAdminOtpToken();
+        window.location.href = "/login";
+      }, 1500);
     },
     onError: (error: Error) => {
       toast({ title: "Erreur", description: error.message || "Impossible de déconnecter les utilisateurs.", variant: "destructive" });

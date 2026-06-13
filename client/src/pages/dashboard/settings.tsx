@@ -172,8 +172,8 @@ function ConnectedDevicesSection() {
           : "Aucun autre appareil connecté.",
       });
     },
-    onError: () => {
-      toast({ title: "Erreur", description: "Impossible de déconnecter les appareils.", variant: "destructive" });
+    onError: (error: Error) => {
+      toast({ title: "Erreur", description: error.message || "Impossible de déconnecter les appareils.", variant: "destructive" });
     },
   });
 

@@ -2432,29 +2432,33 @@ export async function registerRoutes(
 
       let count = 0;
       try {
+        // Fallback: sessionPool → main pool (handles PM2 / pool exhaustion)
+        let qPool = sessionPool;
+        try { await sessionPool.query("SELECT 1"); } catch { qPool = pool; }
+
         // Count other sessions
-        const countResult = await sessionPool.query(
+        const countResult = await qPool.query(
           `SELECT COUNT(*) as cnt FROM session WHERE sess->>'userId' = $1 AND sid != $2`,
-          [userId, currentSid]
+          [userId, currentSid ?? ""]
         );
         count = parseInt(countResult.rows[0]?.cnt || "0", 10);
 
         // Add them to in-memory kicks so pending requests get sessionRevoked
-        const othersResult = await sessionPool.query(
+        const othersResult = await qPool.query(
           `SELECT sid FROM session WHERE sess->>'userId' = $1 AND sid != $2`,
-          [userId, currentSid]
+          [userId, currentSid ?? ""]
         );
         for (const row of othersResult.rows as { sid: string }[]) {
           singleDeviceKicks.add(row.sid);
         }
 
         // Send SSE force_logout to other browsers in real-time (not current)
-        notifyOtherSessionsForceLogout(userId, currentSid);
+        notifyOtherSessionsForceLogout(userId, currentSid ?? "");
 
         // Delete other sessions from DB
-        await sessionPool.query(
+        await qPool.query(
           `DELETE FROM session WHERE sess->>'userId' = $1 AND sid != $2`,
-          [userId, currentSid]
+          [userId, currentSid ?? ""]
         );
       } catch (sessErr: any) {
         console.error("[Sessions] Erreur opérations session:", sessErr?.message);
@@ -2467,7 +2471,14 @@ export async function registerRoutes(
       try {
         await db.execute(sql`UPDATE users SET token_revoked_before = ${revokedAt} WHERE id = ${userId}`);
       } catch {}
-      const newToken = storeAuthToken(userId);
+
+      let newToken: string;
+      try {
+        newToken = storeAuthToken(userId);
+      } catch (tokenErr) {
+        console.error("[Sessions] storeAuthToken error:", (tokenErr as Error).message);
+        return res.status(500).json({ message: "Erreur génération token" });
+      }
 
       res.json({ ok: true, count, token: newToken });
     } catch (error) {
