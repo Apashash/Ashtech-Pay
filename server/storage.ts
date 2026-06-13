@@ -65,7 +65,7 @@ import {
   type HostedPaymentSession,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, sql, and, or, like, ilike, count, inArray } from "drizzle-orm";
+import { eq, desc, sql, and, or, like, ilike, count, inArray, gt } from "drizzle-orm";
 
 export interface IStorage {
   // User operations
@@ -384,7 +384,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserByResetToken(token: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.resetToken, token));
+    const [user] = await db.select().from(users).where(
+      and(eq(users.resetToken, token), gt(users.resetTokenExpiry, new Date()))
+    );
     return user || undefined;
   }
 

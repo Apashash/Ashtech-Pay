@@ -2214,22 +2214,20 @@ export async function registerRoutes(
       const data = forgotPasswordSchema.parse(req.body);
       
       const user = await storage.getUserByEmailOrPhone(data.identifier);
-      if (!user) {
-        return res.status(404).json({ message: "Aucun compte trouvé avec cet email ou téléphone" });
-      }
-      
-      const resetToken = crypto.randomBytes(32).toString("hex");
-      const expiry = new Date(Date.now() + 60 * 60 * 1000);
-      
-      await storage.setResetToken(user.id, resetToken, expiry);
 
-      // Send reset email if user has an email address
-      if (user.email) {
-        sendPasswordResetEmail(user.email, user.fullName || user.username, resetToken).catch(() => {});
+      // Always return the same 200 response regardless of whether the user exists.
+      // Returning 404 leaks which emails/phones are registered (user enumeration CWE-204).
+      if (user) {
+        const resetToken = crypto.randomBytes(32).toString("hex");
+        const expiry = new Date(Date.now() + 60 * 60 * 1000);
+        await storage.setResetToken(user.id, resetToken, expiry);
+        if (user.email) {
+          sendPasswordResetEmail(user.email, user.fullName || user.username, resetToken).catch(() => {});
+        }
       }
       
       res.json({ 
-        message: "Un lien de réinitialisation a été envoyé à votre adresse email."
+        message: "Si un compte correspond à cet identifiant, un lien de réinitialisation a été envoyé."
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -2241,23 +2239,24 @@ export async function registerRoutes(
   });
 
   // Reset password
-  app.post("/api/auth/reset-password", async (req, res) => {
+  app.post("/api/auth/reset-password", passwordResetLimiter, async (req, res) => {
     try {
       const data = resetPasswordSchema.parse(req.body);
-      
+
+      // getUserByResetToken now checks expiry in the DB query (no second code-level check needed)
       const user = await storage.getUserByResetToken(data.token);
       if (!user) {
         return res.status(400).json({ message: "Lien de réinitialisation invalide ou expiré" });
       }
       
-      if (user.resetTokenExpiry && new Date(user.resetTokenExpiry) < new Date()) {
-        await storage.clearResetToken(user.id);
-        return res.status(400).json({ message: "Lien de réinitialisation expiré" });
-      }
-      
       const hashedPassword = await hashPassword(data.password);
       await storage.updatePassword(user.id, hashedPassword);
       await storage.clearResetToken(user.id);
+
+      // Invalidate ALL existing sessions and Bearer tokens for this user.
+      // If an attacker resets the password, the real owner (still logged in) gets kicked.
+      // If the real owner resets it, any stolen session is immediately revoked.
+      destroyUserSessions(user.id, Date.now()).catch(() => {});
       
       res.json({ message: "Mot de passe réinitialisé avec succès" });
     } catch (error) {
@@ -2700,6 +2699,9 @@ export async function registerRoutes(
         userName: pwdUser ? (pwdUser.fullName || pwdUser.username) : undefined,
         userEmail: pwdUser?.email || undefined,
       });
+      // Invalidate all OTHER sessions and tokens for this user (except the current one).
+      // This kicks any attacker who may have had an active session.
+      destroyUserSessions(userId, Date.now()).catch(() => {});
       res.json({ message: "Mot de passe modifié avec succès" });
     } catch (err) {
       console.error("[PasswordChange] confirm error:", err);
