@@ -1270,16 +1270,24 @@ export async function registerRoutes(
 
   // CORS middleware — restrict to known origins in production
   const appUrl = process.env.APP_URL ? process.env.APP_URL.replace(/\/$/, "") : null;
-  const allowedOrigins = new Set<string>(
-    [
-      appUrl,
-      process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : null,
-      process.env.REPL_SLUG ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co` : null,
-      "http://localhost:5000",
-      "https://localhost:5000",
-      "http://localhost:3000",
-    ].filter(Boolean) as string[]
-  );
+
+  // Build all valid origins: custom domain + www variant + Replit domains (dev & prod)
+  const rawOrigins: (string | null)[] = [
+    appUrl,
+    // www variant of APP_URL (e.g. https://www.ashtechpay.top)
+    appUrl ? appUrl.replace(/^(https?:\/\/)/, "$1www.") : null,
+    // Replit dev domain
+    process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : null,
+    // Replit production deployment domains (comma-separated in REPLIT_DOMAINS)
+    ...(process.env.REPLIT_DOMAINS
+      ? process.env.REPLIT_DOMAINS.split(",").map(d => `https://${d.trim()}`)
+      : []),
+    process.env.REPL_SLUG ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co` : null,
+    "http://localhost:5000",
+    "https://localhost:5000",
+    "http://localhost:3000",
+  ];
+  const allowedOrigins = new Set<string>(rawOrigins.filter(Boolean) as string[]);
 
   app.use((req, res, next) => {
     const origin = req.headers.origin;

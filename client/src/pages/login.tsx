@@ -206,11 +206,11 @@ export default function LoginPage() {
               }
               <div>
                 <p className={`text-sm font-semibold ${kickedByIp ? "text-red-400" : "text-blue-400"}`}>
-                  {kickedByIp ? "Adresse IP non autorisée" : "Compte connecté sur un autre appareil"}
+                  {kickedByIp ? "Accès temporairement restreint" : "Compte connecté sur un autre appareil"}
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
                   {kickedByIp
-                    ? "Votre session a été fermée car votre adresse IP n'est pas dans la liste blanche d'administration. Contactez l'administrateur pour ajouter votre IP."
+                    ? "Votre session a été fermée pour des raisons de sécurité. Veuillez réessayer ou contacter le support si le problème persiste."
                     : "Votre session a été fermée car votre compte vient d'être connecté sur un autre navigateur ou appareil."
                   }
                 </p>
