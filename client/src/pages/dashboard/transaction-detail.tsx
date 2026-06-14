@@ -51,6 +51,14 @@ export default function TransactionDetailPage({ params }: { params: { id: string
   const { t } = useLanguage();
   const td = t.transactions;
 
+  const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
+  const { data: depositConfig } = useQuery<any>({ queryKey: ["/api/public/deposit-config"] });
+
+  const { data: tx, isLoading } = useQuery<TransactionDetails>({
+    queryKey: [`/api/transactions/${params.id}`],
+    enabled: !!params.id,
+  });
+
   const depositLabel = tx?.paymentMethod === "crypto" ? td.typeDepositCrypto : td.typeDeposit;
   const typeLabels: Record<string, string> = {
     deposit: depositLabel,
@@ -60,14 +68,6 @@ export default function TransactionDetailPage({ params }: { params: { id: string
     payment_link: td.typePaymentLink,
     conversion: td.typeConversion,
   };
-
-  const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
-  const { data: depositConfig } = useQuery<any>({ queryKey: ["/api/public/deposit-config"] });
-
-  const { data: tx, isLoading } = useQuery<TransactionDetails>({
-    queryKey: [`/api/transactions/${params.id}`],
-    enabled: !!params.id,
-  });
 
   const operatorMap = useMemo<Record<string, { name: string; country: string; countryCode: string }>>(() => {
     const map: Record<string, { name: string; country: string; countryCode: string }> = {};
