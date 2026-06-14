@@ -40,13 +40,13 @@ export default function AdminCountries() {
   const [showCountryModal, setShowCountryModal] = useState(false);
 
   // Crypto USDT settings
-  const [cryptoSettings, setCryptoSettings] = useState({ fx_rate_USDT: "620", nowpayments_fee_percent: "2.5" });
+  const [cryptoSettings, setCryptoSettings] = useState({ fx_rate_USDT: "620", nowpayments_fee_percent: "2.5", nowpayments_min_deposit: "11" });
   const { data: savedSettings } = useQuery<PlatformSetting[]>({ queryKey: ["/api/admin/settings"] });
   useEffect(() => {
     if (savedSettings) {
       const patch: Record<string, string> = {};
       savedSettings.forEach(s => {
-        if (s.key === "fx_rate_USDT" || s.key === "nowpayments_fee_percent") patch[s.key] = s.value;
+        if (["fx_rate_USDT", "nowpayments_fee_percent", "nowpayments_min_deposit"].includes(s.key)) patch[s.key] = s.value;
       });
       if (Object.keys(patch).length) setCryptoSettings(prev => ({ ...prev, ...patch }));
     }
@@ -361,10 +361,31 @@ export default function AdminCountries() {
                   placeholder="2.5"
                   data-testid="input-nowpayments-fee"
                 />
-                <p className="text-xs text-muted-foreground">Pourcentage déduit du montant déposé en USDT (frais Ashtech). Par défaut : 2.5%.</p>
+                <p className="text-xs text-muted-foreground">Pourcentage déduit du montant USDT sur les dépôts et liens de paiement crypto. Appliqué automatiquement.</p>
                 <Button
                   size="sm"
                   onClick={() => saveSettingMutation.mutate({ key: "nowpayments_fee_percent", value: cryptoSettings.nowpayments_fee_percent })}
+                  disabled={saveSettingMutation.isPending}
+                >
+                  <Save className="w-4 h-4 mr-2" />Enregistrer
+                </Button>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Dépôt minimum USDT</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  step="0.5"
+                  value={cryptoSettings.nowpayments_min_deposit}
+                  onChange={(e) => setCryptoSettings(p => ({ ...p, nowpayments_min_deposit: e.target.value }))}
+                  placeholder="11"
+                  data-testid="input-nowpayments-min"
+                />
+                <p className="text-xs text-muted-foreground">Montant minimum accepté pour un dépôt USDT TRC20 (imposé par NowPayments). Appliqué sur la page dépôt.</p>
+                <Button
+                  size="sm"
+                  onClick={() => saveSettingMutation.mutate({ key: "nowpayments_min_deposit", value: cryptoSettings.nowpayments_min_deposit })}
                   disabled={saveSettingMutation.isPending}
                 >
                   <Save className="w-4 h-4 mr-2" />Enregistrer

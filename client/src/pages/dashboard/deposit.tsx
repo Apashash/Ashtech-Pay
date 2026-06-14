@@ -399,7 +399,13 @@ export default function DepositPage() {
   }, []);
 
   const usdtWallet = wallets?.find(w => w.currency === "USDT");
-  const cryptoFeePercent = 2.5;
+
+  const { data: feeSettings } = useQuery<{ cryptoFeePercent: number; cryptoMinDeposit: number }>({
+    queryKey: ["/api/public/fee-settings"],
+  });
+  const cryptoFeePercent = feeSettings?.cryptoFeePercent ?? 2.5;
+  const cryptoMinDeposit = feeSettings?.cryptoMinDeposit ?? 11;
+
   const cryptoAmtNum = parseFloat(cryptoAmountUsd) || 0;
   const cryptoFee = cryptoAmtNum * (cryptoFeePercent / 100);
   const cryptoNet = cryptoAmtNum - cryptoFee;
@@ -663,16 +669,16 @@ export default function DepositPage() {
                     </div>
                   )}
 
-                  {cryptoAmtNum > 0 && cryptoAmtNum < 11 && (
+                  {cryptoAmtNum > 0 && cryptoAmtNum < cryptoMinDeposit && (
                     <p className="text-xs text-amber-500 font-medium text-center -mt-1">
-                      ⚠️ Minimum : 11 USDT
+                      ⚠️ Minimum : {cryptoMinDeposit} USDT
                     </p>
                   )}
 
                   <Button
                     className="w-full h-12 rounded-xl font-bold"
                     size="lg"
-                    disabled={cryptoAmtNum < 11 || cryptoDepositMutation.isPending}
+                    disabled={cryptoAmtNum < cryptoMinDeposit || cryptoDepositMutation.isPending}
                     onClick={() => cryptoDepositMutation.mutate()}
                     data-testid="button-crypto-deposit"
                   >

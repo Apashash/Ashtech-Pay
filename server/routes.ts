@@ -5787,6 +5787,8 @@ export async function registerRoutes(
       const conversionFeePercentPixpay = convProviderFeePixpay + convAshtechFeePixpay;
       const conversionFeePercentAfribapay = convProviderFeeAfribapay + convAshtechFeeAfribapay;
       // Ne pas exposer la décomposition interne (providerFee + ashtechFee) — totaux uniquement
+      const cryptoFeePercent = parseFloat(settings.find(s => s.key === "nowpayments_fee_percent")?.value || "2.5");
+      const cryptoMinDeposit = parseFloat(settings.find(s => s.key === "nowpayments_min_deposit")?.value || "11");
       res.json({
         conversionFeePercent,
         conversionFeePercentSwychr,
@@ -5794,6 +5796,8 @@ export async function registerRoutes(
         conversionFeePercentAfribapay,
         depositFeePercent,
         paymentLinkFeePercent,
+        cryptoFeePercent,
+        cryptoMinDeposit,
       });
     } catch (error) {
       console.error("Get fee settings error:", error);
@@ -11038,6 +11042,12 @@ export async function registerRoutes(
 
       const cryptoFeeSettings = await storage.getSetting("nowpayments_fee_percent");
       const cryptoFeePercent = cryptoFeeSettings ? parseFloat(cryptoFeeSettings.value) : 2.5;
+
+      const cryptoMinSetting = await storage.getSetting("nowpayments_min_deposit");
+      const cryptoMinDeposit = cryptoMinSetting ? parseFloat(cryptoMinSetting.value) : 11;
+      if (numAmountUSD < cryptoMinDeposit) {
+        return res.status(400).json({ message: `Montant minimum : ${cryptoMinDeposit} USDT` });
+      }
 
       const feeAmountUSD = numAmountUSD * (cryptoFeePercent / 100);
       const netAmountUSD = numAmountUSD - feeAmountUSD;
