@@ -16,6 +16,9 @@ export interface NowPaymentsInvoiceParams {
 }
 
 export async function createNowPaymentsInvoice(params: NowPaymentsInvoiceParams): Promise<{ id: string; invoice_url: string; order_id: string }> {
+  if (!NOWPAYMENTS_API_KEY) {
+    throw new Error("NOWPAYMENTS_API_KEY non configurée. Contactez l'administrateur.");
+  }
   const body = {
     price_amount: params.priceAmount,
     price_currency: params.priceCurrency,

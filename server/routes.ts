@@ -6230,7 +6230,7 @@ export async function registerRoutes(
           });
         } catch (invErr: any) {
           console.error("[PaymentLink Crypto] NowPayments error:", invErr.message);
-          return res.status(502).json({ message: "Erreur lors de la création du paiement crypto. Veuillez réessayer." });
+          return res.status(400).json({ message: "Erreur lors de la création du paiement crypto : " + (invErr.message || "Veuillez réessayer.") });
         }
 
         console.log(`[PaymentLink Crypto] Invoice created: ${cryptoInvoice.invoice_url} ref=${reference} amount=${amountInUSD.toFixed(2)} USD`);
@@ -11040,11 +11040,12 @@ export async function registerRoutes(
           cancelUrl: `${appBase}/dashboard/deposit?crypto_status=cancelled`,
         });
       } catch (invErr: any) {
-        await storage.updateTransactionStatus(
-          (await storage.getTransactionByReference(reference))?.id || "",
-          "failed"
-        );
-        return res.status(502).json({ message: "Erreur lors de la création du paiement crypto. Veuillez réessayer." });
+        console.error("[Deposits Crypto] NowPayments invoice error:", invErr.message);
+        try {
+          const tx = await storage.getTransactionByReference(reference);
+          if (tx?.id) await storage.updateTransactionStatus(tx.id, "failed");
+        } catch {}
+        return res.status(400).json({ message: "Erreur lors de la création du paiement crypto : " + (invErr.message || "Veuillez réessayer.") });
       }
 
       console.log(`[Deposits Crypto] Invoice created: ${invoice.invoice_url} ref=${reference} amount=${numAmountUSD} USD`);
