@@ -1321,7 +1321,10 @@ export default function PaymentPage() {
               <div className="flex items-center justify-between">
                 <span className="font-medium text-foreground">Montant total</span>
                 <span className="text-2xl font-bold text-primary" data-testid="text-payment-amount">
-                  {formatAmount(paymentLink.isFixedAmount ? convertedDisplayAmount : displayAmount, selectedDisplayCurrency)}
+                  {paymentMethod === "crypto" && !paymentLink.isFixedAmount
+                    ? `${parseFloat(customAmount || "0").toFixed(2)} USDT`
+                    : formatAmount(paymentLink.isFixedAmount ? convertedDisplayAmount : displayAmount, selectedDisplayCurrency)
+                  }
                 </span>
               </div>
             </div>
