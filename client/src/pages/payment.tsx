@@ -233,7 +233,7 @@ export default function PaymentPage() {
 
   const validatePaymentForm = (): boolean => {
     const newErrors: Record<string, string> = {};
-    if (!fullName.trim()) newErrors.fullName = "Le nom est requis";
+    if (paymentMethod !== "crypto" && !fullName.trim()) newErrors.fullName = "Le nom est requis";
     if (!email.trim()) newErrors.email = "L'email est requis";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = "Email invalide";
     if (!paymentLink?.isFixedAmount && (!customAmount || parseFloat(customAmount) <= 0)) newErrors.amount = "Le montant doit être supérieur à 0";
@@ -264,7 +264,7 @@ export default function PaymentPage() {
   const payMutation = useMutation({
     mutationFn: async () => {
       const newErrors: Record<string, string> = {};
-      if (!fullName.trim()) newErrors.fullName = "Le nom est requis";
+      if (paymentMethod !== "crypto" && !fullName.trim()) newErrors.fullName = "Le nom est requis";
       if (!email.trim()) newErrors.email = "L'email est requis";
       else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = "Email invalide";
       if (!paymentLink?.isFixedAmount && (!customAmount || parseFloat(customAmount) <= 0)) newErrors.amount = "Le montant doit être supérieur à 0";
@@ -280,10 +280,13 @@ export default function PaymentPage() {
 
       const isPixpayOtpOp = selectedOperatorData?.paymentProvider === "pixpay" &&
         selectedOperatorData?.pixpayOperatorType === "otp";
+      // For crypto non-fixed: amount is already in USDT, send with currency USDT
+      const isCryptoFreeAmount = paymentMethod === "crypto" && !paymentLink?.isFixedAmount;
       const body: any = {
-        fullName, email, country, phone,
+        fullName: fullName.trim() || email,
+        email, country, phone,
         amount: paymentLink?.isFixedAmount ? convertedDisplayAmount.toString() : customAmount,
-        currency: selectedDisplayCurrency,
+        currency: isCryptoFreeAmount ? "USDT" : selectedDisplayCurrency,
         paymentMethod,
         operator: paymentMethod === "mobile_money" ? operator : null,
       };
@@ -1214,6 +1217,26 @@ export default function PaymentPage() {
                   <p className="text-sm text-muted-foreground mt-1">= {formatAmount(displayAmount, linkCurrency)}</p>
                 )}
               </div>
+            ) : paymentMethod === "crypto" ? (
+              <div className="space-y-2">
+                <Label htmlFor="amount">Montant à payer (USDT) *</Label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold text-sm">USDT</span>
+                  <Input
+                    id="amount"
+                    type="number"
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    min="1"
+                    step="0.01"
+                    value={customAmount}
+                    onChange={(e) => { setCustomAmount(e.target.value); setErrors(p => ({...p, amount: undefined as any})); }}
+                    className={`pl-16 text-xl h-12 ${errors.amount ? "border-red-500" : ""}`}
+                    data-testid="input-payment-amount"
+                  />
+                </div>
+                {errors.amount && <p className="text-xs text-red-500">{errors.amount}</p>}
+              </div>
             ) : (
               <div className="space-y-2">
                 <Label htmlFor="amount">Montant à payer ({CURRENCY_SYMBOLS[selectedDisplayCurrency]}) *</Label>
@@ -1234,7 +1257,8 @@ export default function PaymentPage() {
               </div>
             )}
 
-            {/* Name */}
+            {/* Name — hidden for crypto */}
+            {paymentMethod !== "crypto" && (
             <div className="space-y-2">
               <Label htmlFor="fullName">Nom complet *</Label>
               <div className="relative">
@@ -1251,6 +1275,7 @@ export default function PaymentPage() {
               </div>
               {errors.fullName && <p className="text-xs text-red-500">{errors.fullName}</p>}
             </div>
+            )}
 
             {/* Email */}
             <div className="space-y-2">

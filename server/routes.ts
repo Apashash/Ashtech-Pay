@@ -6171,10 +6171,16 @@ export async function registerRoutes(
         const cryptoFeeSettings = await storage.getSetting("nowpayments_fee_percent");
         const cryptoFeePercent = cryptoFeeSettings ? parseFloat(cryptoFeeSettings.value) : 2.5;
 
-        // Convert link amount to USD (1 USDT ≈ 1 USD, rate is XAF per 1 USDT)
-        const fxRatesCrypto = await loadFxRates();
-        const amountInXAF = convertToXAF(numAmount, providedCurrency || paymentLink.currency, fxRatesCrypto);
-        const amountInUSD = amountInXAF / usdtRateXaf;
+        // If amount is already in USDT (user entered USDT directly), skip XAF conversion
+        let amountInUSD: number;
+        if ((providedCurrency || "").toUpperCase() === "USDT") {
+          amountInUSD = numAmount; // 1 USDT ≈ 1 USD
+        } else {
+          // Convert link amount to USD via XAF pivot
+          const fxRatesCrypto = await loadFxRates();
+          const amountInXAF = convertToXAF(numAmount, providedCurrency || paymentLink.currency, fxRatesCrypto);
+          amountInUSD = amountInXAF / usdtRateXaf;
+        }
 
         // Apply fee
         const feeAmountUSD = amountInUSD * (cryptoFeePercent / 100);
