@@ -9,6 +9,7 @@ export function formatWalletBalance(amount: string | number, currency: string): 
   const symbol = (CURRENCY_SYMBOLS as Record<string, string>)[currency] || currency;
   if (currency === "USD") return `$${num.toFixed(2)}`;
   if (currency === "EUR") return `${num.toFixed(2)} €`;
+  if (currency === "USDT") return `${new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(num)} USDT`;
   return `${new Intl.NumberFormat("fr-FR").format(Math.round(num))} ${symbol}`;
 }
 
@@ -21,8 +22,23 @@ export function convertCurrency(amountXAF: number, toCurrency: string, customRat
   return inUSD * toRate;
 }
 
+// Currencies whose amounts are stored natively (not as XAF equivalents)
+// and must NOT be converted through the XAF pivot before display.
+const NATIVE_CRYPTO_CURRENCIES = new Set(["USDT"]);
+
 export function formatCurrency(amount: string | number, currency: SupportedCurrency = "XAF", customRates?: Record<string, number>): string {
   const num = typeof amount === "string" ? parseFloat(amount) : amount;
+
+  // Crypto currencies are stored in their own unit — never divide by the XAF rate
+  if (NATIVE_CRYPTO_CURRENCIES.has(currency as string)) {
+    const symbol = (CURRENCY_SYMBOLS as Record<string, string>)[currency] || currency;
+    const formatted = new Intl.NumberFormat("fr-FR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 4,
+    }).format(num);
+    return `${formatted} ${symbol}`;
+  }
+
   const convertedAmount = convertCurrency(num, currency, customRates);
 
   const symbol = (CURRENCY_SYMBOLS as Record<string, string>)[currency] || currency;

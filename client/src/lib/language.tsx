@@ -288,6 +288,7 @@ const translations = {
       pendingCount: "En attente",
       // Type labels
       typeDeposit: "Dépôt Mobile Money",
+      typeDepositCrypto: "Dépôt Crypto",
       typeWithdrawal: "Retrait",
       typeTransferIn: "Virement reçu",
       typeTransferOut: "Virement envoyé",
@@ -1548,6 +1549,7 @@ const translations = {
       displayed: "Results displayed",
       pendingCount: "Pending",
       typeDeposit: "Mobile Money Deposit",
+      typeDepositCrypto: "Crypto Deposit",
       typeWithdrawal: "Withdrawal",
       typeTransferIn: "Transfer received",
       typeTransferOut: "Transfer sent",

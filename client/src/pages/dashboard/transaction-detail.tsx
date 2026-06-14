@@ -51,8 +51,9 @@ export default function TransactionDetailPage({ params }: { params: { id: string
   const { t } = useLanguage();
   const td = t.transactions;
 
+  const depositLabel = tx?.paymentMethod === "crypto" ? td.typeDepositCrypto : td.typeDeposit;
   const typeLabels: Record<string, string> = {
-    deposit: td.typeDeposit,
+    deposit: depositLabel,
     withdrawal: td.typeWithdrawal,
     transfer_in: td.typeTransferIn,
     transfer_out: td.typeTransferOut,
