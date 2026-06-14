@@ -6216,25 +6216,37 @@ export async function registerRoutes(
           recipientCountry: country || "International",
         });
 
-        let cryptoInvoice: any;
+        let cryptoPayment: any;
         try {
-          cryptoInvoice = await createNowPaymentsInvoice({
+          cryptoPayment = await createNowPaymentsPayment({
             priceAmount: Math.round(amountInUSD * 100) / 100,
             priceCurrency: "usd",
             payCurrency: "usdttrc20",
             orderId: reference,
             orderDescription: `${paymentLink.title} — Ashtech Pay`,
             ipnCallbackUrl: `${appBase}/api/nowpayments/ipn`,
-            successUrl: `${appBase}/pay/${slug}?status=success&ref=${reference}`,
-            cancelUrl: `${appBase}/pay/${slug}?status=cancelled&ref=${reference}`,
           });
         } catch (invErr: any) {
           console.error("[PaymentLink Crypto] NowPayments error:", invErr.message);
-          return res.status(400).json({ message: "Erreur lors de la création du paiement crypto : " + (invErr.message || "Veuillez réessayer.") });
+          return res.status(400).json({ message: "Erreur NowPayments : " + (invErr.message || "Veuillez réessayer.") });
         }
 
-        console.log(`[PaymentLink Crypto] Invoice created: ${cryptoInvoice.invoice_url} ref=${reference} amount=${amountInUSD.toFixed(2)} USD`);
-        return res.json({ checkoutUrl: cryptoInvoice.invoice_url, reference, message: "Redirection vers le paiement crypto…" });
+        // Store NowPayments payment_id on the transaction
+        try {
+          const tx = await storage.getTransactionByReference(reference);
+          if (tx?.id) await storage.updateTransaction(tx.id, { paymentIntentId: cryptoPayment.payment_id });
+        } catch {}
+
+        console.log(`[PaymentLink Crypto] Payment created: addr=${cryptoPayment.pay_address} amount=${cryptoPayment.pay_amount} USDT ref=${reference}`);
+        return res.json({
+          payAddress: cryptoPayment.pay_address,
+          payAmount: cryptoPayment.pay_amount,
+          payCurrency: cryptoPayment.pay_currency,
+          paymentId: cryptoPayment.payment_id,
+          expiresAt: cryptoPayment.expiration_estimate_date,
+          reference,
+          message: "Adresse USDT générée",
+        });
       }
 
       // Get country and operator IDs for fee calculation

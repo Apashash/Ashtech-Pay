@@ -81,6 +81,12 @@ export default function PaymentPage() {
   const [pixpayOtpCode, setPixpayOtpCode] = useState("");
   const [pixpayOtpStep, setPixpayOtpStep] = useState(false);
 
+  const [cryptoWaiting, setCryptoWaiting] = useState(false);
+  const [cryptoPayAddress, setCryptoPayAddress] = useState("");
+  const [cryptoPayAmount, setCryptoPayAmount] = useState(0);
+  const [cryptoAddressCopied, setCryptoAddressCopied] = useState(false);
+  const cryptoPollingRef = useRef<NodeJS.Timeout | null>(null);
+
   const { data: paymentLink, isLoading, error } = useQuery<PaymentLink & { hasPdf?: boolean }>({
     queryKey: ["/api/payment-links/public", params?.slug],
     queryFn: async () => {
@@ -294,8 +300,40 @@ export default function PaymentPage() {
       return data;
     },
     onSuccess: async (data) => {
-      if (data.checkoutUrl) { window.location.href = data.checkoutUrl; return; }
       const ref = data.reference || "";
+
+      // ── Crypto direct address flow ───────────────────────────────────────────
+      if (data.payAddress) {
+        setCryptoPayAddress(data.payAddress);
+        setCryptoPayAmount(data.payAmount || 0);
+        setPaymentReference(ref);
+        setCryptoWaiting(true);
+        setPaymentComplete(true);
+        setPaymentStatus("pending");
+        // Poll every 15s for payment completion
+        if (cryptoPollingRef.current) clearInterval(cryptoPollingRef.current);
+        cryptoPollingRef.current = setInterval(async () => {
+          try {
+            const r = await fetch(`/api/transactions/status/${ref}`);
+            if (r.ok) {
+              const statusData = await r.json();
+              if (statusData.status === "completed") {
+                if (cryptoPollingRef.current) clearInterval(cryptoPollingRef.current);
+                setCryptoWaiting(false);
+                setPaymentStatus("success");
+                redirectAfterPayment("success", ref);
+              } else if (statusData.status === "failed") {
+                if (cryptoPollingRef.current) clearInterval(cryptoPollingRef.current);
+                setCryptoWaiting(false);
+                setPaymentStatus("failed");
+                redirectAfterPayment("failed", ref);
+              }
+            }
+          } catch {}
+        }, 15000);
+        return;
+      }
+
       setPaymentComplete(true);
       setPaymentReference(ref);
       setOtpCode("");
@@ -358,6 +396,7 @@ export default function PaymentPage() {
     return () => {
       if (countdownRef.current) clearInterval(countdownRef.current);
       if (pollingRef.current) clearInterval(pollingRef.current);
+      if (cryptoPollingRef.current) clearInterval(cryptoPollingRef.current);
     };
   }, []);
 
@@ -378,6 +417,11 @@ export default function PaymentPage() {
     setOtpRequired(false);
     setOtpCode("");
     setWaveUrl(null);
+    setCryptoWaiting(false);
+    setCryptoPayAddress("");
+    setCryptoPayAmount(0);
+    setCryptoAddressCopied(false);
+    if (cryptoPollingRef.current) clearInterval(cryptoPollingRef.current);
   };
 
   if (isLoading) {
@@ -512,7 +556,82 @@ export default function PaymentPage() {
         <div className="flex-1 flex items-center justify-center p-4">
           <Card className="w-full max-w-md text-center">
             <CardContent className="pt-6 space-y-4">
-              {paymentStatus === "pending" && otpRequired && (
+
+              {/* ── CRYPTO WAITING SCREEN ──────────────────────────────────── */}
+              {cryptoWaiting && paymentStatus === "pending" && (
+                <div className="space-y-5 text-left">
+                  <div className="text-center space-y-1">
+                    <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center mx-auto">
+                      <Clock className="w-6 h-6 text-blue-500" />
+                    </div>
+                    <h2 className="text-base font-bold text-foreground">En attente de paiement</h2>
+                    <p className="text-xs text-muted-foreground">Envoyez exactement le montant ci-dessous à l'adresse USDT TRC20</p>
+                  </div>
+
+                  {/* Amount */}
+                  <div className="bg-primary/10 border border-primary/20 rounded-xl px-4 py-4 text-center">
+                    <p className="text-xs text-muted-foreground mb-1">Montant exact à envoyer</p>
+                    <p className="text-3xl font-bold text-primary tabular-nums">{cryptoPayAmount.toFixed(6)}</p>
+                    <p className="text-sm font-semibold text-muted-foreground mt-0.5">USDT TRC20</p>
+                  </div>
+
+                  {/* QR Code */}
+                  {cryptoPayAddress && (
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="bg-white rounded-2xl p-3 shadow-md">
+                        <img
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(cryptoPayAddress)}&color=000000&bgcolor=FFFFFF`}
+                          alt="QR Code USDT TRC20"
+                          className="w-44 h-44 rounded-xl"
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground">Réseau : <span className="font-semibold text-foreground">TRC20 (Tron)</span></p>
+                    </div>
+                  )}
+
+                  {/* Address copy */}
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide">Adresse USDT TRC20</p>
+                    <div className="flex items-center gap-2 bg-muted/40 rounded-xl px-3 py-3 border border-border">
+                      <p className="font-mono text-xs text-foreground flex-1 break-all leading-relaxed">{cryptoPayAddress}</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(cryptoPayAddress).then(() => {
+                            setCryptoAddressCopied(true);
+                            setTimeout(() => setCryptoAddressCopied(false), 2000);
+                          });
+                        }}
+                        className={`shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${cryptoAddressCopied ? "bg-green-500/20 text-green-500" : "bg-primary/10 text-primary hover:bg-primary/20"}`}
+                        data-testid="button-copy-crypto-address"
+                      >
+                        {cryptoAddressCopied ? <CheckCircle className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                        {cryptoAddressCopied ? "Copié !" : "Copier"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Warning */}
+                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3 flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                    <p className="text-xs text-muted-foreground">
+                      <span className="font-semibold text-amber-500">Important :</span> Envoyez uniquement sur le réseau <strong>TRC20 (Tron)</strong>. Tout envoi sur un autre réseau sera perdu.
+                    </p>
+                  </div>
+
+                  {/* Ref + polling */}
+                  <div className="flex items-center justify-between text-xs text-muted-foreground bg-muted/30 rounded-xl px-3 py-2">
+                    <span className="font-mono truncate flex-1">{paymentReference}</span>
+                    <span className="flex items-center gap-1 shrink-0 ml-2">
+                      <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                      Surveillance active
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* ── EXISTING SCREENS (hidden during crypto waiting) ─────────── */}
+              {!cryptoWaiting && paymentStatus === "pending" && otpRequired && (
                 <>
                   {/* Operator logo with amber halo */}
                   <div className="relative flex items-center justify-center pt-2">
@@ -621,7 +740,7 @@ export default function PaymentPage() {
                   )}
                 </>
               )}
-              {paymentStatus === "pending" && !otpRequired && waveUrl && (
+              {!cryptoWaiting && paymentStatus === "pending" && !otpRequired && waveUrl && (
                 <>
                   {/* Wave logo with blue halo */}
                   <div className="relative flex items-center justify-center pt-2">
@@ -703,7 +822,7 @@ export default function PaymentPage() {
                   )}
                 </>
               )}
-              {paymentStatus === "pending" && !otpRequired && !waveUrl && (
+              {!cryptoWaiting && paymentStatus === "pending" && !otpRequired && !waveUrl && (
                 <>
                   {/* Operator logo with halo */}
                   <div className="relative flex items-center justify-center pt-2">
