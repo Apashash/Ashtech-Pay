@@ -56,7 +56,7 @@ import fs from "fs";
 import { uploadToSupabase, getSignedImageUrl, downloadFromSupabase } from "./supabase";
 import { decryptField } from "./fieldEncryption";
 import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, fetchPaymentLinkDetails, ASHTECH_MARGIN } from "./swychr";
-import { createNowPaymentsInvoice, verifyNowPaymentsIpn, mapNowPaymentsStatus } from "./nowpayments";
+import { createNowPaymentsInvoice, createNowPaymentsPayment, verifyNowPaymentsIpn, mapNowPaymentsStatus } from "./nowpayments";
 import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, getAfribaPayOtpInfo, confirmAfribaPayOtp } from "./afribapay";
 import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, initiatePixPayPayout, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType, getPixPayServiceId, PIXPAY_OTP_USSD_CODES } from "./pixpay";
 import { addPendingPayment, removePendingPayment } from "./paymentPoller";
@@ -11027,29 +11027,40 @@ export async function registerRoutes(
         reference,
       });
 
-      let invoice: any;
+      let payment: any;
       try {
-        invoice = await createNowPaymentsInvoice({
+        payment = await createNowPaymentsPayment({
           priceAmount: Math.round(numAmountUSD * 100) / 100,
           priceCurrency: "usd",
           payCurrency: "usdttrc20",
           orderId: reference,
           orderDescription: "Dépôt Ashtech Pay — USDT TRC20",
           ipnCallbackUrl: `${appBase}/api/nowpayments/ipn`,
-          successUrl: `${appBase}/dashboard/deposit?crypto_status=success&ref=${reference}`,
-          cancelUrl: `${appBase}/dashboard/deposit?crypto_status=cancelled`,
         });
       } catch (invErr: any) {
-        console.error("[Deposits Crypto] NowPayments invoice error:", invErr.message);
+        console.error("[Deposits Crypto] NowPayments payment error:", invErr.message);
         try {
           const tx = await storage.getTransactionByReference(reference);
           if (tx?.id) await storage.updateTransactionStatus(tx.id, "failed");
         } catch {}
-        return res.status(400).json({ message: "Erreur lors de la création du paiement crypto : " + (invErr.message || "Veuillez réessayer.") });
+        return res.status(400).json({ message: "Erreur NowPayments : " + (invErr.message || "Veuillez réessayer.") });
       }
 
-      console.log(`[Deposits Crypto] Invoice created: ${invoice.invoice_url} ref=${reference} amount=${numAmountUSD} USD`);
-      res.json({ checkoutUrl: invoice.invoice_url, reference });
+      // Update transaction with NowPayments payment_id
+      try {
+        const tx = await storage.getTransactionByReference(reference);
+        if (tx?.id) await storage.updateTransaction(tx.id, { paymentIntentId: payment.payment_id });
+      } catch {}
+
+      console.log(`[Deposits Crypto] Payment created: addr=${payment.pay_address} amount=${payment.pay_amount} USDT ref=${reference}`);
+      res.json({
+        payAddress: payment.pay_address,
+        payAmount: payment.pay_amount,
+        payCurrency: payment.pay_currency,
+        paymentId: payment.payment_id,
+        expiresAt: payment.expiration_estimate_date,
+        reference,
+      });
     } catch (error: any) {
       console.error("[Deposits Crypto] Error:", error);
       res.status(500).json({ message: error.message || "Erreur lors du dépôt crypto" });

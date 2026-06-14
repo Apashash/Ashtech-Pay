@@ -15,6 +15,57 @@ export interface NowPaymentsInvoiceParams {
   cancelUrl: string;
 }
 
+export interface NowPaymentsPaymentParams {
+  priceAmount: number;
+  priceCurrency: string;
+  payCurrency: string;
+  orderId: string;
+  orderDescription: string;
+  ipnCallbackUrl: string;
+}
+
+export interface NowPaymentsPaymentResult {
+  payment_id: string;
+  payment_status: string;
+  pay_address: string;
+  pay_amount: number;
+  pay_currency: string;
+  price_amount: number;
+  price_currency: string;
+  order_id: string;
+  expiration_estimate_date: string;
+}
+
+export async function createNowPaymentsPayment(params: NowPaymentsPaymentParams): Promise<NowPaymentsPaymentResult> {
+  if (!NOWPAYMENTS_API_KEY) {
+    throw new Error("NOWPAYMENTS_API_KEY non configurée. Contactez l'administrateur.");
+  }
+  const body = {
+    price_amount: params.priceAmount,
+    price_currency: params.priceCurrency,
+    pay_currency: params.payCurrency,
+    order_id: params.orderId,
+    order_description: params.orderDescription,
+    ipn_callback_url: params.ipnCallbackUrl,
+  };
+
+  const res = await fetch(`${BASE_URL}/payment`, {
+    method: "POST",
+    headers: {
+      "x-api-key": NOWPAYMENTS_API_KEY,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`NowPayments payment error (${res.status}): ${errText}`);
+  }
+
+  return res.json();
+}
+
 export async function createNowPaymentsInvoice(params: NowPaymentsInvoiceParams): Promise<{ id: string; invoice_url: string; order_id: string }> {
   if (!NOWPAYMENTS_API_KEY) {
     throw new Error("NOWPAYMENTS_API_KEY non configurée. Contactez l'administrateur.");
