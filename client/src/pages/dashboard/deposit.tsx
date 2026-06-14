@@ -304,7 +304,7 @@ export default function DepositPage() {
     mutationFn: async () => {
       const amt = parseFloat(cryptoAmountUsd);
       if (!amt || amt <= 0) throw new Error("Entrez un montant valide");
-      if (amt < 1) throw new Error("Montant minimum : 1 USD");
+      if (amt < 11) throw new Error("Le dépôt minimum est de 11 $");
       const res = await apiRequest("POST", "/api/deposits/crypto", { amountUsd: cryptoAmountUsd });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Erreur lors du dépôt crypto");
@@ -671,7 +671,7 @@ export default function DepositPage() {
 
                   {cryptoAmtNum > 0 && cryptoAmtNum < cryptoMinDeposit && (
                     <p className="text-xs text-amber-500 font-medium text-center -mt-1">
-                      ⚠️ Minimum : {cryptoMinDeposit} USDT
+                      ⚠️ Le dépôt minimum est de {cryptoMinDeposit} $
                     </p>
                   )}
 

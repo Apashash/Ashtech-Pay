@@ -6254,7 +6254,7 @@ export async function registerRoutes(
             if (jsonMatch) {
               const parsed = JSON.parse(jsonMatch[0]);
               if (parsed.message && parsed.message.includes("less than minimal")) {
-                friendlyMsg = "Montant trop faible. Le minimum accepté par NowPayments est de 11 USDT.";
+                friendlyMsg = "Le dépôt minimum est de 11 $.";
               } else if (parsed.message) {
                 friendlyMsg = parsed.message;
               }
@@ -11041,8 +11041,8 @@ export async function registerRoutes(
       if (!amountUsd || numAmountUSD <= 0) {
         return res.status(400).json({ message: "Montant invalide" });
       }
-      if (numAmountUSD < 1) {
-        return res.status(400).json({ message: "Montant minimum 1 USD" });
+      if (numAmountUSD < 11) {
+        return res.status(400).json({ message: "Le dépôt minimum est de 11 $" });
       }
 
       const userId = req.userId!;
@@ -11055,7 +11055,7 @@ export async function registerRoutes(
       const cryptoMinSetting = await storage.getSetting("nowpayments_min_deposit");
       const cryptoMinDeposit = cryptoMinSetting ? parseFloat(cryptoMinSetting.value) : 11;
       if (numAmountUSD < cryptoMinDeposit) {
-        return res.status(400).json({ message: `Montant minimum : ${cryptoMinDeposit} USDT` });
+        return res.status(400).json({ message: `Le dépôt minimum est de ${cryptoMinDeposit} $` });
       }
 
       const feeAmountUSD = numAmountUSD * (cryptoFeePercent / 100);
@@ -11100,7 +11100,7 @@ export async function registerRoutes(
           if (jsonMatch) {
             const parsed = JSON.parse(jsonMatch[0]);
             if (parsed.message && parsed.message.includes("less than minimal")) {
-              friendlyMsg = "Montant trop faible. Le minimum accepté par NowPayments est de 11 USDT.";
+              friendlyMsg = "Le dépôt minimum est de 11 $.";
             } else if (parsed.message) {
               friendlyMsg = parsed.message;
             }
