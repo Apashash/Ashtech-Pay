@@ -6219,8 +6219,8 @@ export async function registerRoutes(
         let cryptoPayment: any;
         try {
           cryptoPayment = await createNowPaymentsPayment({
-            priceAmount: Math.round(amountInUSD * 1000000) / 1000000,
-            priceCurrency: "usdttrc20",
+            priceAmount: Math.round(amountInUSD * 100) / 100,
+            priceCurrency: "usd",
             payCurrency: "usdttrc20",
             orderId: reference,
             orderDescription: `${paymentLink.title} — Ashtech Pay`,
@@ -6228,7 +6228,20 @@ export async function registerRoutes(
           });
         } catch (invErr: any) {
           console.error("[PaymentLink Crypto] NowPayments error:", invErr.message);
-          return res.status(400).json({ message: "Erreur NowPayments : " + (invErr.message || "Veuillez réessayer.") });
+          let friendlyMsg = "Une erreur est survenue. Veuillez réessayer.";
+          try {
+            const raw = invErr.message || "";
+            const jsonMatch = raw.match(/\{.*\}/s);
+            if (jsonMatch) {
+              const parsed = JSON.parse(jsonMatch[0]);
+              if (parsed.message && parsed.message.includes("less than minimal")) {
+                friendlyMsg = "Montant trop faible. Le minimum accepté est d'environ 20 USDT.";
+              } else if (parsed.message) {
+                friendlyMsg = parsed.message;
+              }
+            }
+          } catch {}
+          return res.status(400).json({ message: friendlyMsg });
         }
 
         // Store NowPayments payment_id on the transaction
@@ -11042,8 +11055,8 @@ export async function registerRoutes(
       let payment: any;
       try {
         payment = await createNowPaymentsPayment({
-          priceAmount: Math.round(numAmountUSD * 1000000) / 1000000,
-          priceCurrency: "usdttrc20",
+          priceAmount: Math.round(numAmountUSD * 100) / 100,
+          priceCurrency: "usd",
           payCurrency: "usdttrc20",
           orderId: reference,
           orderDescription: "Dépôt Ashtech Pay — USDT TRC20",
@@ -11055,7 +11068,20 @@ export async function registerRoutes(
           const tx = await storage.getTransactionByReference(reference);
           if (tx?.id) await storage.updateTransactionStatus(tx.id, "failed");
         } catch {}
-        return res.status(400).json({ message: "Erreur NowPayments : " + (invErr.message || "Veuillez réessayer.") });
+        let friendlyMsg = "Une erreur est survenue. Veuillez réessayer.";
+        try {
+          const raw = invErr.message || "";
+          const jsonMatch = raw.match(/\{.*\}/s);
+          if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            if (parsed.message && parsed.message.includes("less than minimal")) {
+              friendlyMsg = "Montant trop faible. Le minimum accepté par NowPayments est d'environ 20 USDT.";
+            } else if (parsed.message) {
+              friendlyMsg = parsed.message;
+            }
+          }
+        } catch {}
+        return res.status(400).json({ message: friendlyMsg });
       }
 
       // Update transaction with NowPayments payment_id
