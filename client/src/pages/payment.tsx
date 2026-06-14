@@ -101,7 +101,12 @@ export default function PaymentPage() {
   const { data: depositConfigData } = useQuery<DepositConfigResponse>({
     queryKey: ["/api/public/deposit-config"],
   });
-  
+
+  const { data: feeSettings } = useQuery<{ cryptoMinDeposit: number }>({
+    queryKey: ["/api/fee-settings"],
+  });
+  const cryptoMinDeposit = feeSettings?.cryptoMinDeposit ?? 11;
+
   const allCountries = depositConfigData?.countries || [];
   const adminExchangeRates = depositConfigData?.exchangeRates || { XAF: 1, XOF: 1 };
 
@@ -237,6 +242,7 @@ export default function PaymentPage() {
     if (!email.trim()) newErrors.email = "L'email est requis";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = "Email invalide";
     if (!paymentLink?.isFixedAmount && (!customAmount || parseFloat(customAmount) <= 0)) newErrors.amount = "Le montant doit être supérieur à 0";
+    if (!paymentLink?.isFixedAmount && paymentMethod === "crypto" && customAmount && parseFloat(customAmount) < cryptoMinDeposit) newErrors.amount = `Le dépôt minimum est de ${cryptoMinDeposit} $`;
     if (!paymentMethod) newErrors.paymentMethod = "Veuillez choisir un mode de paiement";
     if (paymentMethod !== "crypto") {
       if (!country) newErrors.country = "Veuillez sélectionner votre pays";
@@ -268,6 +274,7 @@ export default function PaymentPage() {
       if (!email.trim()) newErrors.email = "L'email est requis";
       else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = "Email invalide";
       if (!paymentLink?.isFixedAmount && (!customAmount || parseFloat(customAmount) <= 0)) newErrors.amount = "Le montant doit être supérieur à 0";
+      if (!paymentLink?.isFixedAmount && paymentMethod === "crypto" && customAmount && parseFloat(customAmount) < cryptoMinDeposit) newErrors.amount = `Le dépôt minimum est de ${cryptoMinDeposit} $`;
       if (!paymentMethod) newErrors.paymentMethod = "Veuillez choisir un mode de paiement";
       if (paymentMethod !== "crypto") {
         if (!country) newErrors.country = "Veuillez sélectionner votre pays";

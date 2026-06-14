@@ -6176,6 +6176,13 @@ export async function registerRoutes(
         const numAmount = parseFloat(providedAmount || String(paymentLink.amount) || "0");
         if (numAmount <= 0) return res.status(400).json({ message: "Montant invalide" });
 
+        // Minimum deposit check for crypto
+        const cryptoMinSetting = await storage.getSetting("nowpayments_min_deposit");
+        const cryptoMinDeposit = cryptoMinSetting ? parseFloat(cryptoMinSetting.value) : 11;
+        if (numAmount < cryptoMinDeposit) {
+          return res.status(400).json({ message: `Le dépôt minimum est de ${cryptoMinDeposit} $` });
+        }
+
         // Get USDT rate: XAF per 1 USDT (admin-configurable via fx_rate_USDT setting)
         const usdtRateSetting = await storage.getSetting("fx_rate_USDT");
         const usdtRateXaf = usdtRateSetting ? parseFloat(usdtRateSetting.value) : 620;
