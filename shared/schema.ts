@@ -53,6 +53,7 @@ export const SUPPORTED_CURRENCIES = [
   "UGX",  // Ouganda
   "INR",  // Inde
   "USD",  // USA
+  "USDT", // USDT TRC20 (Tron)
 ] as const;
 export type SupportedCurrency = typeof SUPPORTED_CURRENCIES[number];
 
@@ -167,6 +168,7 @@ export const ALL_FX_CURRENCIES: FxCurrency[] = [
   { code: "CDF", name: "Congolese Franc", defaultRate: 2500.00 },
   { code: "GNF", name: "Franc Guinéen", defaultRate: 9095.00 },
   { code: "INR", name: "Roupie Indienne", defaultRate: 84.00 },
+  { code: "USDT", name: "USDT TRC20 (Tron)", defaultRate: 1.00 },
 ];
 
 export const CURRENCY_SYMBOLS: Record<SupportedCurrency, string> = {
@@ -189,6 +191,7 @@ export const CURRENCY_SYMBOLS: Record<SupportedCurrency, string> = {
   "UGX":  "UGX",
   "INR":  "₹",
   "USD":  "$",
+  "USDT": "USDT",
 };
 
 export const transactions = pgTable("transactions", {
