@@ -164,61 +164,6 @@ export default function AdminSettingsPlatform() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Bitcoin className="w-5 h-5 text-blue-500" />
-              Paiements Crypto (NowPayments)
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Taux USDT/XAF (1 USDT = X XAF)</Label>
-                <Input
-                  type="number"
-                  min="1"
-                  step="0.01"
-                  value={settings.fx_rate_USDT}
-                  onChange={(e) => setSettings({ ...settings, fx_rate_USDT: e.target.value })}
-                  placeholder="620"
-                  data-testid="input-fx-rate-usdt"
-                />
-                <p className="text-xs text-muted-foreground">Taux de conversion utilisé pour afficher les montants XAF en USDT sur les liens de paiement.</p>
-                <Button
-                  size="sm"
-                  onClick={() => handleSave("fx_rate_USDT")}
-                  disabled={saveMutation.isPending}
-                >
-                  <Save className="w-4 h-4 mr-2" />
-                  Enregistrer
-                </Button>
-              </div>
-              <div className="space-y-2">
-                <Label>Frais crypto NowPayments (%)</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="0.1"
-                  value={settings.nowpayments_fee_percent}
-                  onChange={(e) => setSettings({ ...settings, nowpayments_fee_percent: e.target.value })}
-                  placeholder="2.5"
-                  data-testid="input-nowpayments-fee"
-                />
-                <p className="text-xs text-muted-foreground">Pourcentage déduit du montant déposé en USDT (frais Ashtech). Par défaut : 2.5%.</p>
-                <Button
-                  size="sm"
-                  onClick={() => handleSave("nowpayments_fee_percent")}
-                  disabled={saveMutation.isPending}
-                >
-                  <Save className="w-4 h-4 mr-2" />
-                  Enregistrer
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </AdminLayout>
   );

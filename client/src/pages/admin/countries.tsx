@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { AdminLayout } from "./layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,14 +30,32 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Pencil, Trash2, Globe, Smartphone, AlertTriangle } from "lucide-react";
+import { Plus, Pencil, Trash2, Globe, Smartphone, AlertTriangle, Bitcoin, Save } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { Country, Operator } from "@shared/schema";
+import type { Country, Operator, PlatformSetting } from "@shared/schema";
 
 export default function AdminCountries() {
   const { toast } = useToast();
   const [showCountryModal, setShowCountryModal] = useState(false);
+
+  // Crypto USDT settings
+  const [cryptoSettings, setCryptoSettings] = useState({ fx_rate_USDT: "620", nowpayments_fee_percent: "2.5" });
+  const { data: savedSettings } = useQuery<PlatformSetting[]>({ queryKey: ["/api/admin/settings"] });
+  useEffect(() => {
+    if (savedSettings) {
+      const patch: Record<string, string> = {};
+      savedSettings.forEach(s => {
+        if (s.key === "fx_rate_USDT" || s.key === "nowpayments_fee_percent") patch[s.key] = s.value;
+      });
+      if (Object.keys(patch).length) setCryptoSettings(prev => ({ ...prev, ...patch }));
+    }
+  }, [savedSettings]);
+  const saveSettingMutation = useMutation({
+    mutationFn: ({ key, value }: { key: string; value: string }) => apiRequest("POST", "/api/admin/settings", { key, value }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/settings"] }); toast({ title: "Paramètre enregistré" }); },
+    onError: () => toast({ title: "Erreur", variant: "destructive" }),
+  });
   const [showOperatorModal, setShowOperatorModal] = useState(false);
   const [editingCountry, setEditingCountry] = useState<Country | null>(null);
   const [editingOperator, setEditingOperator] = useState<Operator | null>(null);
@@ -298,6 +316,62 @@ export default function AdminCountries() {
             </CardContent>
           </Card>
 
+          {/* USDT Crypto Card */}
+          <Card className="md:col-span-1">
+            <CardHeader>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">Crypto</p>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Bitcoin className="w-4 h-4 text-blue-400" />
+                  USDT TRC20 — Monde entier
+                </CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="space-y-2">
+                <Label>Taux USDT/XAF (1 USDT = X XAF)</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  step="0.01"
+                  value={cryptoSettings.fx_rate_USDT}
+                  onChange={(e) => setCryptoSettings(p => ({ ...p, fx_rate_USDT: e.target.value }))}
+                  placeholder="620"
+                  data-testid="input-fx-rate-usdt"
+                />
+                <p className="text-xs text-muted-foreground">Taux utilisé pour convertir les montants XAF en USDT sur les liens de paiement.</p>
+                <Button
+                  size="sm"
+                  onClick={() => saveSettingMutation.mutate({ key: "fx_rate_USDT", value: cryptoSettings.fx_rate_USDT })}
+                  disabled={saveSettingMutation.isPending}
+                >
+                  <Save className="w-4 h-4 mr-2" />Enregistrer
+                </Button>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Frais crypto NowPayments (%)</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value={cryptoSettings.nowpayments_fee_percent}
+                  onChange={(e) => setCryptoSettings(p => ({ ...p, nowpayments_fee_percent: e.target.value }))}
+                  placeholder="2.5"
+                  data-testid="input-nowpayments-fee"
+                />
+                <p className="text-xs text-muted-foreground">Pourcentage déduit du montant déposé en USDT (frais Ashtech). Par défaut : 2.5%.</p>
+                <Button
+                  size="sm"
+                  onClick={() => saveSettingMutation.mutate({ key: "nowpayments_fee_percent", value: cryptoSettings.nowpayments_fee_percent })}
+                  disabled={saveSettingMutation.isPending}
+                >
+                  <Save className="w-4 h-4 mr-2" />Enregistrer
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         <Dialog open={showCountryModal} onOpenChange={() => resetCountryForm()}>
