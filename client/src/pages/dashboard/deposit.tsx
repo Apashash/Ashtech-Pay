@@ -603,9 +603,9 @@ export default function DepositPage() {
                   )}
 
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Montant (USD)</label>
+                    <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Montant (USDT)</label>
                     <div className="relative">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">$</span>
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold text-sm">USDT</span>
                       <input
                         type="number"
                         inputMode="decimal"
@@ -614,7 +614,7 @@ export default function DepositPage() {
                         placeholder="0.00"
                         value={cryptoAmountUsd}
                         onChange={e => setCryptoAmountUsd(e.target.value)}
-                        className="w-full pl-8 pr-4 h-12 rounded-xl border border-border bg-background text-base font-semibold focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        className="w-full pl-16 pr-4 h-12 rounded-xl border border-border bg-background text-base font-semibold focus:outline-none focus:ring-2 focus:ring-primary/40"
                         data-testid="input-crypto-amount"
                       />
                     </div>
@@ -626,7 +626,7 @@ export default function DepositPage() {
                           onClick={() => setCryptoAmountUsd(String(v))}
                           className="text-xs px-3 py-1.5 rounded-lg border border-border bg-muted/30 hover:bg-muted/60 font-semibold transition-all"
                         >
-                          ${v}
+                          {v} USDT
                         </button>
                       ))}
                     </div>
@@ -636,14 +636,14 @@ export default function DepositPage() {
                     <div className="rounded-xl border border-border bg-muted/30 overflow-hidden">
                       <div className="px-4 py-3 flex items-center justify-between border-b border-border">
                         <span className="text-sm text-muted-foreground">Montant saisi</span>
-                        <span className="text-sm font-semibold tabular-nums">${cryptoAmtNum.toFixed(2)}</span>
+                        <span className="text-sm font-semibold tabular-nums">{cryptoAmtNum.toFixed(2)} USDT</span>
                       </div>
                       <div className="px-4 py-3 flex items-center justify-between border-b border-border">
                         <span className="text-sm text-muted-foreground flex items-center gap-1.5">
                           <TrendingDown className="w-3.5 h-3.5" />
                           Frais ({cryptoFeePercent}%)
                         </span>
-                        <span className="text-sm font-semibold tabular-nums text-red-500">-${cryptoFee.toFixed(4)}</span>
+                        <span className="text-sm font-semibold tabular-nums text-red-500">-{cryptoFee.toFixed(4)} USDT</span>
                       </div>
                       <div className="px-4 py-3 flex items-center justify-between bg-green-500/5">
                         <span className="text-sm font-semibold text-foreground">Crédité (USDT)</span>

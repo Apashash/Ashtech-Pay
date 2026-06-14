@@ -11042,8 +11042,8 @@ export async function registerRoutes(
       let payment: any;
       try {
         payment = await createNowPaymentsPayment({
-          priceAmount: Math.round(numAmountUSD * 100) / 100,
-          priceCurrency: "usd",
+          priceAmount: Math.round(numAmountUSD * 1000000) / 1000000,
+          priceCurrency: "usdttrc20",
           payCurrency: "usdttrc20",
           orderId: reference,
           orderDescription: "Dépôt Ashtech Pay — USDT TRC20",
