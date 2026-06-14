@@ -618,13 +618,6 @@ export default function DepositPage() {
 
               ) : (
                 <>
-                  <div className="flex items-center gap-3 bg-blue-500/10 border border-blue-500/20 rounded-xl px-4 py-3">
-                    <Bitcoin className="w-5 h-5 text-blue-500 shrink-0" />
-                    <div>
-                      <p className="text-sm font-semibold text-blue-500">USDT TRC20 (Tron)</p>
-                      <p className="text-xs text-muted-foreground">Une adresse de paiement unique sera générée. Aucune redirection.</p>
-                    </div>
-                  </div>
 
                   {usdtWallet && (
                     <div className="flex items-center gap-3 bg-muted/30 rounded-xl px-4 py-3">
