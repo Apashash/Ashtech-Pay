@@ -6219,8 +6219,8 @@ export async function registerRoutes(
         let cryptoPayment: any;
         try {
           cryptoPayment = await createNowPaymentsPayment({
-            priceAmount: Math.round(amountInUSD * 100) / 100,
-            priceCurrency: "usd",
+            priceAmount: Math.round(amountInUSD * 1000000) / 1000000,
+            priceCurrency: "usdttrc20",
             payCurrency: "usdttrc20",
             orderId: reference,
             orderDescription: `${paymentLink.title} — Ashtech Pay`,
