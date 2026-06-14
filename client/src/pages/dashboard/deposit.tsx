@@ -417,7 +417,6 @@ export default function DepositPage() {
         {/* Header */}
         <div>
           <h1 className="text-xl font-bold text-foreground">{t.deposit.title}</h1>
-          <p className="text-sm text-muted-foreground">{t.deposit.subtitle}</p>
         </div>
 
         {/* Balance bar — shows USDT wallet in crypto mode, country wallet otherwise */}
