@@ -420,8 +420,25 @@ export default function DepositPage() {
           <p className="text-sm text-muted-foreground">{t.deposit.subtitle}</p>
         </div>
 
-        {/* Balance bar — shows the wallet for the selected country */}
+        {/* Balance bar — shows USDT wallet in crypto mode, country wallet otherwise */}
         {(() => {
+          if (depositMode === "crypto") {
+            const usdtWallet = wallets?.find(w => w.currency === "USDT");
+            const usdtBalance = usdtWallet?.balance || "0";
+            return (
+              <div className="flex items-center gap-3 bg-gradient-to-r from-blue-500/10 to-transparent border border-blue-500/20 rounded-2xl px-4 py-3">
+                <div className="w-9 h-9 rounded-full bg-blue-500/15 flex items-center justify-center shrink-0">
+                  <Bitcoin className="w-4 h-4 text-blue-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-muted-foreground">Solde USDT actuel</p>
+                  <p className="text-base font-bold text-foreground tabular-nums">
+                    {parseFloat(usdtBalance).toFixed(4)} USDT
+                  </p>
+                </div>
+              </div>
+            );
+          }
           const displayCurrency = (selectedCountry?.currency || user?.preferredCurrency || "XAF") as SupportedCurrency;
           const isPrimary = displayCurrency === (user?.preferredCurrency || "XAF");
           const secondaryWallet = wallets?.find(w => w.currency === displayCurrency);
