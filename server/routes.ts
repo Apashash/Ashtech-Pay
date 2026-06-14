@@ -6162,6 +6162,15 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Ce lien de paiement a expiré" });
       }
 
+      // Resolve country ID (UUID) → country name for display
+      let resolvedCountryName = country || "International";
+      if (country && /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(country)) {
+        try {
+          const countryObj = await storage.getCountry(country);
+          if (countryObj) resolvedCountryName = `${countryObj.flag || ""} ${countryObj.name}`.trim();
+        } catch {}
+      }
+
       // ── Crypto (NowPayments USDT TRC20) branch ─────────────────────────────
       if (paymentMethod === "crypto") {
         const numAmount = parseFloat(providedAmount || String(paymentLink.amount) || "0");
@@ -6199,7 +6208,7 @@ export async function registerRoutes(
           payerName: fullName,
           payerEmail: email,
           payerPhone: phone || "",
-          payerCountry: country || "International",
+          payerCountry: resolvedCountryName,
           amount: netAmountUSD.toFixed(6),
           feeAmount: feeAmountUSD.toFixed(6),
           currency: "USDT",
