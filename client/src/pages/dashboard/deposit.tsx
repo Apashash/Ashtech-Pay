@@ -513,12 +513,23 @@ export default function DepositPage() {
                   {/* QR Code */}
                   {cryptoPayAddress && (
                     <div className="flex flex-col items-center gap-3">
-                      <div className="bg-white rounded-2xl p-3 shadow-md">
-                        <img
-                          src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(cryptoPayAddress)}&color=000000&bgcolor=FFFFFF`}
-                          alt="QR Code adresse USDT"
-                          className="w-44 h-44 rounded-xl"
-                        />
+                      <div className="relative flex items-center justify-center">
+                        {/* Pulsing rings */}
+                        <span className="absolute inset-0 rounded-2xl animate-ping bg-primary/20 pointer-events-none" style={{ animationDuration: "1.6s" }} />
+                        <span className="absolute inset-[-6px] rounded-[20px] animate-ping bg-primary/10 pointer-events-none" style={{ animationDuration: "1.6s", animationDelay: "0.3s" }} />
+                        <div className="relative bg-white rounded-2xl p-3 shadow-md ring-2 ring-primary/40" style={{ animation: "qr-pulse 1.6s ease-in-out infinite" }}>
+                          <style>{`
+                            @keyframes qr-pulse {
+                              0%, 100% { box-shadow: 0 0 0 0 rgba(240,185,11,0.5), 0 0 0 0 rgba(240,185,11,0.25); }
+                              50% { box-shadow: 0 0 0 8px rgba(240,185,11,0.15), 0 0 0 16px rgba(240,185,11,0.05); }
+                            }
+                          `}</style>
+                          <img
+                            src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(cryptoPayAddress)}&color=000000&bgcolor=FFFFFF`}
+                            alt="QR Code adresse USDT"
+                            className="w-44 h-44 rounded-xl"
+                          />
+                        </div>
                       </div>
                       <p className="text-xs text-muted-foreground">Réseau : <span className="font-semibold text-foreground">TRC20 (Tron)</span></p>
                     </div>
