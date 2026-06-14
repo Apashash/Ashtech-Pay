@@ -636,7 +636,7 @@ export default function DepositPage() {
                       />
                     </div>
                     <div className="flex gap-2 flex-wrap">
-                      {[5, 10, 25, 50, 100].map(v => (
+                      {[11, 25, 50, 100, 200].map(v => (
                         <button
                           key={v}
                           type="button"
