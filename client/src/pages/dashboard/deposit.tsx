@@ -663,10 +663,16 @@ export default function DepositPage() {
                     </div>
                   )}
 
+                  {cryptoAmtNum > 0 && cryptoAmtNum < 11 && (
+                    <p className="text-xs text-amber-500 font-medium text-center -mt-1">
+                      ⚠️ Minimum : 11 USDT
+                    </p>
+                  )}
+
                   <Button
                     className="w-full h-12 rounded-xl font-bold"
                     size="lg"
-                    disabled={cryptoAmtNum < 1 || cryptoDepositMutation.isPending}
+                    disabled={cryptoAmtNum < 11 || cryptoDepositMutation.isPending}
                     onClick={() => cryptoDepositMutation.mutate()}
                     data-testid="button-crypto-deposit"
                   >

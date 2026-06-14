@@ -6225,8 +6225,8 @@ export async function registerRoutes(
         let cryptoPayment: any;
         try {
           cryptoPayment = await createNowPaymentsPayment({
-            priceAmount: Math.round(amountInUSD * 100) / 100,
-            priceCurrency: "usd",
+            priceAmount: Math.round(amountInUSD * 1000000) / 1000000,
+            priceCurrency: "usdttrc20",
             payCurrency: "usdttrc20",
             orderId: reference,
             orderDescription: `${paymentLink.title} — Ashtech Pay`,
@@ -6241,7 +6241,7 @@ export async function registerRoutes(
             if (jsonMatch) {
               const parsed = JSON.parse(jsonMatch[0]);
               if (parsed.message && parsed.message.includes("less than minimal")) {
-                friendlyMsg = "Montant trop faible. Le minimum accepté est d'environ 20 USDT.";
+                friendlyMsg = "Montant trop faible. Le minimum accepté par NowPayments est de 11 USDT.";
               } else if (parsed.message) {
                 friendlyMsg = parsed.message;
               }
@@ -11061,8 +11061,8 @@ export async function registerRoutes(
       let payment: any;
       try {
         payment = await createNowPaymentsPayment({
-          priceAmount: Math.round(numAmountUSD * 100) / 100,
-          priceCurrency: "usd",
+          priceAmount: Math.round(numAmountUSD * 1000000) / 1000000,
+          priceCurrency: "usdttrc20",
           payCurrency: "usdttrc20",
           orderId: reference,
           orderDescription: "Dépôt Ashtech Pay — USDT TRC20",
@@ -11081,7 +11081,7 @@ export async function registerRoutes(
           if (jsonMatch) {
             const parsed = JSON.parse(jsonMatch[0]);
             if (parsed.message && parsed.message.includes("less than minimal")) {
-              friendlyMsg = "Montant trop faible. Le minimum accepté par NowPayments est d'environ 20 USDT.";
+              friendlyMsg = "Montant trop faible. Le minimum accepté par NowPayments est de 11 USDT.";
             } else if (parsed.message) {
               friendlyMsg = parsed.message;
             }
