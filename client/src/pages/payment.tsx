@@ -1157,15 +1157,6 @@ export default function PaymentPage() {
               </div>
             )}
 
-            {paymentMethod === "crypto" && (
-              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 flex items-start gap-3">
-                <Bitcoin className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-medium text-blue-500 text-sm">Paiement USDT TRC20</p>
-                  <p className="text-sm text-muted-foreground">Vous serez redirigé vers une page de paiement sécurisée. Payez en USDT sur le réseau TRC20 (Tron).</p>
-                </div>
-              </div>
-            )}
 
             {/* Operator */}
             {paymentMethod === "mobile_money" && country && operators.length > 0 && (
