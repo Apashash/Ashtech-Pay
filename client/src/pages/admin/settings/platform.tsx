@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Save, Settings } from "lucide-react";
+import { ArrowLeft, Save, Settings, Bitcoin } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { PlatformSetting } from "@shared/schema";
@@ -19,6 +19,8 @@ export default function AdminSettingsPlatform() {
     default_currency: "XAF",
     support_email: "support@ashtechpay.com",
     support_phone: "+237 6XX XXX XXX",
+    fx_rate_USDT: "620",
+    nowpayments_fee_percent: "2.5",
   });
 
   const { data: savedSettings, isLoading } = useQuery<PlatformSetting[]>({
@@ -28,8 +30,9 @@ export default function AdminSettingsPlatform() {
   useEffect(() => {
     if (savedSettings) {
       const newSettings = { ...settings };
+      const allowedKeys = ["platform_name", "default_currency", "support_email", "support_phone", "fx_rate_USDT", "nowpayments_fee_percent"];
       savedSettings.forEach(s => {
-        if (!s.key.startsWith("fx_rate_") && (s.key === "platform_name" || s.key === "default_currency" || s.key === "support_email" || s.key === "support_phone")) {
+        if (allowedKeys.includes(s.key)) {
           newSettings[s.key] = s.value;
         }
       });
@@ -156,6 +159,62 @@ export default function AdminSettingsPlatform() {
                     Enregistrer
                   </Button>
                 </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Bitcoin className="w-5 h-5 text-blue-500" />
+              Paiements Crypto (NowPayments)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Taux USDT/XAF (1 USDT = X XAF)</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  step="0.01"
+                  value={settings.fx_rate_USDT}
+                  onChange={(e) => setSettings({ ...settings, fx_rate_USDT: e.target.value })}
+                  placeholder="620"
+                  data-testid="input-fx-rate-usdt"
+                />
+                <p className="text-xs text-muted-foreground">Taux de conversion utilisé pour afficher les montants XAF en USDT sur les liens de paiement.</p>
+                <Button
+                  size="sm"
+                  onClick={() => handleSave("fx_rate_USDT")}
+                  disabled={saveMutation.isPending}
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  Enregistrer
+                </Button>
+              </div>
+              <div className="space-y-2">
+                <Label>Frais crypto NowPayments (%)</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value={settings.nowpayments_fee_percent}
+                  onChange={(e) => setSettings({ ...settings, nowpayments_fee_percent: e.target.value })}
+                  placeholder="2.5"
+                  data-testid="input-nowpayments-fee"
+                />
+                <p className="text-xs text-muted-foreground">Pourcentage déduit du montant déposé en USDT (frais Ashtech). Par défaut : 2.5%.</p>
+                <Button
+                  size="sm"
+                  onClick={() => handleSave("nowpayments_fee_percent")}
+                  disabled={saveMutation.isPending}
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  Enregistrer
+                </Button>
               </div>
             </div>
           </CardContent>

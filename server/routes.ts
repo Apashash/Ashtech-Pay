@@ -56,6 +56,7 @@ import fs from "fs";
 import { uploadToSupabase, getSignedImageUrl, downloadFromSupabase } from "./supabase";
 import { decryptField } from "./fieldEncryption";
 import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, fetchPaymentLinkDetails, ASHTECH_MARGIN } from "./swychr";
+import { createNowPaymentsInvoice, verifyNowPaymentsIpn, mapNowPaymentsStatus } from "./nowpayments";
 import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, getAfribaPayOtpInfo, confirmAfribaPayOtp } from "./afribapay";
 import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, initiatePixPayPayout, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType, getPixPayServiceId, PIXPAY_OTP_USSD_CODES } from "./pixpay";
 import { addPendingPayment, removePendingPayment } from "./paymentPoller";
@@ -1306,6 +1307,7 @@ export async function registerRoutes(
   // Endpoints webhook et paiement public exemptés (appelés par des serveurs, pas des navigateurs).
   const CSRF_EXEMPT_PREFIXES = [
     "/api/swychr/webhook", "/api/afribapay/webhook", "/api/pixpay/webhook",
+    "/api/nowpayments/ipn",
     "/api/telegram/webhook", "/api/payment-links/", "/api/public/",
     "/api/v1/hosted-payment", "/api/public/hosted-session",
   ];
@@ -6114,8 +6116,11 @@ export async function registerRoutes(
       }
 
       // Validate required fields
-      if (!fullName || !email || !country || !phone || !paymentMethod) {
+      if (!fullName || !email || !paymentMethod) {
         return res.status(400).json({ message: "Tous les champs requis doivent être remplis" });
+      }
+      if (paymentMethod !== "crypto" && (!country || !phone)) {
+        return res.status(400).json({ message: "Pays et numéro de téléphone requis pour Mobile Money" });
       }
 
       // Validate email format
@@ -6125,12 +6130,12 @@ export async function registerRoutes(
       }
 
       // Validate payment method
-      if (!["mobile_money", "card", "paypal"].includes(paymentMethod)) {
+      if (!["mobile_money", "card", "paypal", "crypto"].includes(paymentMethod)) {
         return res.status(400).json({ message: "Méthode de paiement invalide" });
       }
 
-      // Card and PayPal not yet available
-      if (paymentMethod === "card" || paymentMethod === "paypal") {
+      // PayPal not yet available
+      if (paymentMethod === "paypal" || paymentMethod === "card") {
         return res.status(400).json({ message: "Cette méthode de paiement n'est pas encore disponible" });
       }
 
@@ -6151,6 +6156,85 @@ export async function registerRoutes(
       // Check expiration
       if (paymentLink.expiresAt && new Date(paymentLink.expiresAt) < new Date()) {
         return res.status(400).json({ message: "Ce lien de paiement a expiré" });
+      }
+
+      // ── Crypto (NowPayments USDT TRC20) branch ─────────────────────────────
+      if (paymentMethod === "crypto") {
+        const numAmount = parseFloat(providedAmount || String(paymentLink.amount) || "0");
+        if (numAmount <= 0) return res.status(400).json({ message: "Montant invalide" });
+
+        // Get USDT rate: XAF per 1 USDT (admin-configurable via fx_rate_USDT setting)
+        const usdtRateSetting = await storage.getSetting("fx_rate_USDT");
+        const usdtRateXaf = usdtRateSetting ? parseFloat(usdtRateSetting.value) : 620;
+
+        // Get crypto fee % (admin-configurable via nowpayments_fee_percent)
+        const cryptoFeeSettings = await storage.getSetting("nowpayments_fee_percent");
+        const cryptoFeePercent = cryptoFeeSettings ? parseFloat(cryptoFeeSettings.value) : 2.5;
+
+        // Convert link amount to USD (1 USDT ≈ 1 USD, rate is XAF per 1 USDT)
+        const fxRatesCrypto = await loadFxRates();
+        const amountInXAF = convertToXAF(numAmount, providedCurrency || paymentLink.currency, fxRatesCrypto);
+        const amountInUSD = amountInXAF / usdtRateXaf;
+
+        // Apply fee
+        const feeAmountUSD = amountInUSD * (cryptoFeePercent / 100);
+        const netAmountUSD = amountInUSD - feeAmountUSD;
+
+        const reference = generateTransactionReference("payment_link");
+        const appBase = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
+
+        const cryptoIntent = await storage.createPaymentIntent({
+          paymentLinkId: paymentLink.id,
+          merchantId: paymentLink.userId,
+          payerName: fullName,
+          payerEmail: email,
+          payerPhone: phone || "",
+          payerCountry: country || "International",
+          amount: netAmountUSD.toFixed(6),
+          feeAmount: feeAmountUSD.toFixed(6),
+          currency: "USDT",
+          paymentMethod: "crypto",
+          operator: null,
+          reference,
+        });
+
+        await storage.createTransaction({
+          userId: paymentLink.userId,
+          type: "payment_link",
+          amount: netAmountUSD.toFixed(6),
+          totalAmount: amountInUSD.toFixed(6),
+          feeAmount: feeAmountUSD.toFixed(6),
+          currency: "USDT",
+          status: "pending",
+          description: `Paiement crypto de ${fullName} (${email}) via ${paymentLink.title}`,
+          paymentMethod: "crypto",
+          reference,
+          paymentLinkId: paymentLink.id,
+          paymentIntentId: cryptoIntent.id,
+          payerName: fullName,
+          payerEmail: email,
+          recipientCountry: country || "International",
+        });
+
+        let cryptoInvoice: any;
+        try {
+          cryptoInvoice = await createNowPaymentsInvoice({
+            priceAmount: Math.round(amountInUSD * 100) / 100,
+            priceCurrency: "usd",
+            payCurrency: "usdttrc20",
+            orderId: reference,
+            orderDescription: `${paymentLink.title} — Ashtech Pay`,
+            ipnCallbackUrl: `${appBase}/api/nowpayments/ipn`,
+            successUrl: `${appBase}/pay/${slug}?status=success&ref=${reference}`,
+            cancelUrl: `${appBase}/pay/${slug}?status=cancelled&ref=${reference}`,
+          });
+        } catch (invErr: any) {
+          console.error("[PaymentLink Crypto] NowPayments error:", invErr.message);
+          return res.status(502).json({ message: "Erreur lors de la création du paiement crypto. Veuillez réessayer." });
+        }
+
+        console.log(`[PaymentLink Crypto] Invoice created: ${cryptoInvoice.invoice_url} ref=${reference} amount=${amountInUSD.toFixed(2)} USD`);
+        return res.json({ checkoutUrl: cryptoInvoice.invoice_url, reference, message: "Redirection vers le paiement crypto…" });
       }
 
       // Get country and operator IDs for fee calculation
@@ -10801,6 +10885,174 @@ export async function registerRoutes(
     const host  = req.headers["x-forwarded-host"] as string || req.headers.host || "";
     const baseUrl = process.env.APP_URL || `${proto}://${host}`;
     res.redirect(`${baseUrl}/dashboard?payment=processing`);
+  });
+
+  // ── NowPayments IPN webhook ────────────────────────────────────────────────
+  app.post("/api/nowpayments/ipn", webhookLimiter, async (req, res) => {
+    try {
+      const signature = req.headers["x-nowpayments-sig"] as string | undefined;
+      const body = req.body;
+
+      if (process.env.NOWPAYMENTS_IPN_SECRET) {
+        if (!signature || !verifyNowPaymentsIpn(body, signature)) {
+          console.error("[NowPayments IPN] Invalid or missing signature");
+          return res.status(401).json({ message: "Invalid signature" });
+        }
+      }
+
+      const { order_id, payment_status, actually_paid, pay_currency, price_amount } = body;
+      const ashStatus = mapNowPaymentsStatus(payment_status || "");
+      console.log(`[NowPayments IPN] order_id=${order_id} np_status=${payment_status} → ${ashStatus} paid=${actually_paid} ${pay_currency}`);
+
+      if (!order_id) return res.status(400).json({ message: "Missing order_id" });
+
+      const transaction = await storage.getTransactionByReference(order_id);
+      if (!transaction) {
+        console.warn(`[NowPayments IPN] Transaction not found for order_id=${order_id}`);
+        return res.status(200).json({ message: "ok" });
+      }
+
+      if (transaction.status !== "pending") {
+        return res.status(200).json({ message: "already processed" });
+      }
+
+      if (ashStatus === "completed") {
+        await storage.updateTransactionStatus(transaction.id, "completed");
+        const creditAmount = actually_paid > 0 ? actually_paid : parseFloat(transaction.amount);
+        await creditUserWallet(transaction.userId, creditAmount, "USDT");
+
+        await storage.createUserNotification({
+          userId: transaction.userId,
+          type: transaction.type === "payment_link" ? "payment_link_received" : "deposit_confirmed",
+          title: transaction.type === "payment_link" ? "payment_link_received" : "deposit_confirmed",
+          message: JSON.stringify({ amount: creditAmount.toFixed(6), currency: "USDT" }),
+          transactionId: transaction.id,
+          isRead: false,
+        });
+
+        if (transaction.paymentIntentId) {
+          await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "completed");
+        }
+
+        if (transaction.type === "payment_link" && transaction.payerEmail && transaction.paymentLinkId) {
+          try {
+            const paymentLinkRecord = await storage.getPaymentLinkById(transaction.paymentLinkId);
+            const pdfUrl = (paymentLinkRecord?.hasPdfDelivery && paymentLinkRecord?.pdfPath) ? paymentLinkRecord.pdfPath : null;
+            await sendPayerConfirmationEmail(
+              transaction.payerEmail,
+              transaction.payerName || "Client",
+              paymentLinkRecord?.title || "Lien de paiement",
+              creditAmount.toFixed(4),
+              "USDT",
+              transaction.reference || transaction.id,
+              pdfUrl,
+            );
+          } catch (emailErr: any) {
+            console.error("[NowPayments IPN] Email error:", emailErr.message);
+          }
+        }
+
+        const txUser = await storage.getUser(transaction.userId).catch(() => null);
+        notifyDepositConfirmed({
+          userName: (txUser as any)?.fullName || (txUser as any)?.username || "Utilisateur",
+          userEmail: (txUser as any)?.email || "",
+          amount: creditAmount.toFixed(6),
+          currency: "USDT",
+          reference: order_id,
+          provider: "nowpayments",
+          depositType: transaction.type,
+          paymentMethod: "crypto",
+        }).catch(() => {});
+
+      } else if (ashStatus === "failed") {
+        await storage.updateTransactionStatus(transaction.id, "failed");
+
+        await storage.createUserNotification({
+          userId: transaction.userId,
+          type: "deposit_failed",
+          title: "deposit_failed",
+          message: "{}",
+          transactionId: transaction.id,
+          isRead: false,
+        });
+
+        if (transaction.paymentIntentId) {
+          await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "failed");
+        }
+        console.log(`[NowPayments IPN] ✗ Payment FAILED for ${order_id}`);
+      }
+
+      res.status(200).json({ message: "ok" });
+    } catch (error: any) {
+      console.error("[NowPayments IPN] Error:", error);
+      res.status(500).json({ message: "Internal error" });
+    }
+  });
+
+  // ── Crypto deposit via NowPayments ─────────────────────────────────────────
+  app.post("/api/deposits/crypto", requireAuth, depositLimiter, async (req, res) => {
+    try {
+      const { amountUsd } = req.body;
+      const numAmountUSD = parseFloat(amountUsd || "0");
+      if (!amountUsd || numAmountUSD <= 0) {
+        return res.status(400).json({ message: "Montant invalide" });
+      }
+      if (numAmountUSD < 1) {
+        return res.status(400).json({ message: "Montant minimum 1 USD" });
+      }
+
+      const userId = req.userId!;
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
+
+      const cryptoFeeSettings = await storage.getSetting("nowpayments_fee_percent");
+      const cryptoFeePercent = cryptoFeeSettings ? parseFloat(cryptoFeeSettings.value) : 2.5;
+
+      const feeAmountUSD = numAmountUSD * (cryptoFeePercent / 100);
+      const netAmountUSD = numAmountUSD - feeAmountUSD;
+
+      const reference = generateTransactionReference("deposit");
+      const appBase = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
+
+      await storage.createTransaction({
+        userId,
+        type: "deposit",
+        amount: netAmountUSD.toFixed(6),
+        totalAmount: numAmountUSD.toFixed(6),
+        feeAmount: feeAmountUSD.toFixed(6),
+        currency: "USDT",
+        status: "pending",
+        description: "Dépôt crypto USDT TRC20 via NowPayments",
+        paymentMethod: "crypto",
+        reference,
+      });
+
+      let invoice: any;
+      try {
+        invoice = await createNowPaymentsInvoice({
+          priceAmount: Math.round(numAmountUSD * 100) / 100,
+          priceCurrency: "usd",
+          payCurrency: "usdttrc20",
+          orderId: reference,
+          orderDescription: "Dépôt Ashtech Pay — USDT TRC20",
+          ipnCallbackUrl: `${appBase}/api/nowpayments/ipn`,
+          successUrl: `${appBase}/dashboard/deposit?crypto_status=success&ref=${reference}`,
+          cancelUrl: `${appBase}/dashboard/deposit?crypto_status=cancelled`,
+        });
+      } catch (invErr: any) {
+        await storage.updateTransactionStatus(
+          (await storage.getTransactionByReference(reference))?.id || "",
+          "failed"
+        );
+        return res.status(502).json({ message: "Erreur lors de la création du paiement crypto. Veuillez réessayer." });
+      }
+
+      console.log(`[Deposits Crypto] Invoice created: ${invoice.invoice_url} ref=${reference} amount=${numAmountUSD} USD`);
+      res.json({ checkoutUrl: invoice.invoice_url, reference });
+    } catch (error: any) {
+      console.error("[Deposits Crypto] Error:", error);
+      res.status(500).json({ message: error.message || "Erreur lors du dépôt crypto" });
+    }
   });
 
   app.post("/api/swychr/webhook", webhookLimiter, async (req, res) => {

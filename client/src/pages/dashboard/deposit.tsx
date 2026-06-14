@@ -9,7 +9,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest, queryClient, getAuthHeaders } from "@/lib/queryClient";
 import type { User, SupportedCurrency } from "@shared/schema";
-import { CreditCard, Loader2, AlertCircle, Phone, CheckCircle, XCircle, Smartphone, ExternalLink, Hash, Clock, Copy, TrendingDown } from "lucide-react";
+import { CreditCard, Loader2, AlertCircle, Phone, CheckCircle, XCircle, Smartphone, ExternalLink, Hash, Clock, Copy, TrendingDown, Bitcoin, DollarSign } from "lucide-react";
 import { SearchableSelectContent } from "@/components/ui/searchable-select-content";
 import { useLanguage } from "@/lib/language";
 import { BottomSheet, BottomSheetContent, BottomSheetHeader, BottomSheetTitle, BottomSheetFooter } from "@/components/ui/bottom-sheet";
@@ -78,6 +78,11 @@ export default function DepositPage() {
   const [isCancelling, setIsCancelling] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pendingDepositData, setPendingDepositData] = useState<DepositFormData | null>(null);
+
+  const [depositMode, setDepositMode] = useState<"mobile_money" | "crypto">("mobile_money");
+  const [cryptoAmountUsd, setCryptoAmountUsd] = useState("");
+  const [cryptoStatus, setCryptoStatus] = useState<"idle" | "pending" | "success" | "cancelled">("idle");
+  const [cryptoRef, setCryptoRef] = useState("");
 
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const { data: wallets } = useQuery<{ id: string; currency: string; balance: string }[]>({
@@ -289,6 +294,27 @@ export default function DepositPage() {
     },
   });
 
+  const cryptoDepositMutation = useMutation({
+    mutationFn: async () => {
+      const amt = parseFloat(cryptoAmountUsd);
+      if (!amt || amt <= 0) throw new Error("Entrez un montant valide");
+      if (amt < 1) throw new Error("Montant minimum : 1 USD");
+      const res = await apiRequest("POST", "/api/deposits/crypto", { amountUsd: cryptoAmountUsd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Erreur lors du dépôt crypto");
+      return data;
+    },
+    onSuccess: (data) => {
+      if (data.checkoutUrl) {
+        setCryptoRef(data.reference || "");
+        window.location.href = data.checkoutUrl;
+      }
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+    },
+  });
+
   useEffect(() => {
     return () => {
       if (countdownRef.current) clearInterval(countdownRef.current);
@@ -333,6 +359,20 @@ export default function DepositPage() {
 
   const amountNum = parseFloat(watchedAmount) || 0;
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const cs = params.get("crypto_status");
+    const ref = params.get("ref");
+    if (cs === "success") { setCryptoStatus("success"); if (ref) setCryptoRef(ref); setDepositMode("crypto"); }
+    else if (cs === "cancelled") { setCryptoStatus("cancelled"); setDepositMode("crypto"); }
+  }, []);
+
+  const usdtWallet = wallets?.find(w => w.currency === "USDT");
+  const cryptoFeePercent = 2.5;
+  const cryptoAmtNum = parseFloat(cryptoAmountUsd) || 0;
+  const cryptoFee = cryptoAmtNum * (cryptoFeePercent / 100);
+  const cryptoNet = cryptoAmtNum - cryptoFee;
+
   return (
     <DashboardLayout>
       <div className="max-w-lg mx-auto space-y-4 pb-8">
@@ -369,16 +409,172 @@ export default function DepositPage() {
           );
         })()}
 
-        {isLoadingConfig ? (
+        {/* Deposit mode tabs */}
+        <div className="flex rounded-xl border border-border bg-muted/30 p-1 gap-1">
+          <button
+            type="button"
+            onClick={() => setDepositMode("mobile_money")}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-semibold transition-all ${depositMode === "mobile_money" ? "bg-card shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            data-testid="tab-mobile-money"
+          >
+            <Smartphone className="w-4 h-4" />
+            Mobile Money
+          </button>
+          <button
+            type="button"
+            onClick={() => { setDepositMode("crypto"); setCryptoStatus("idle"); }}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-semibold transition-all ${depositMode === "crypto" ? "bg-card shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            data-testid="tab-crypto"
+          >
+            <Bitcoin className="w-4 h-4" />
+            Crypto (USDT)
+          </button>
+        </div>
+
+        {/* Crypto deposit section */}
+        {depositMode === "crypto" && (
+          <div className="bg-card border border-border rounded-2xl overflow-hidden">
+            <div className="px-6 pb-6 pt-4 space-y-5">
+              {cryptoStatus === "success" ? (
+                <div className="text-center py-4 space-y-4">
+                  <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center mx-auto">
+                    <CheckCircle className="w-8 h-8 text-green-500" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-foreground">Paiement envoyé !</h3>
+                    <p className="text-sm text-muted-foreground mt-1">Votre paiement USDT est en cours de confirmation. Votre solde sera crédité automatiquement.</p>
+                  </div>
+                  {cryptoRef && (
+                    <div className="bg-muted/40 rounded-xl p-3 text-left">
+                      <p className="text-xs text-muted-foreground mb-0.5">Référence</p>
+                      <p className="font-mono text-sm font-bold text-foreground truncate">{cryptoRef}</p>
+                    </div>
+                  )}
+                  {usdtWallet && (
+                    <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl px-4 py-3 text-center">
+                      <p className="text-xs text-muted-foreground">Solde USDT</p>
+                      <p className="text-xl font-bold text-blue-500 tabular-nums">{parseFloat(usdtWallet.balance).toFixed(4)} USDT</p>
+                    </div>
+                  )}
+                  <Button variant="outline" className="w-full" onClick={() => { setCryptoStatus("idle"); setCryptoAmountUsd(""); }} data-testid="button-crypto-new-deposit">
+                    Nouveau dépôt
+                  </Button>
+                </div>
+              ) : cryptoStatus === "cancelled" ? (
+                <div className="text-center py-4 space-y-4">
+                  <div className="w-16 h-16 rounded-full bg-amber-500/10 flex items-center justify-center mx-auto">
+                    <XCircle className="w-8 h-8 text-amber-500" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-foreground">Paiement annulé</h3>
+                    <p className="text-sm text-muted-foreground mt-1">Le paiement crypto a été annulé. Vous pouvez réessayer.</p>
+                  </div>
+                  <Button variant="outline" className="w-full" onClick={() => { setCryptoStatus("idle"); setCryptoAmountUsd(""); }} data-testid="button-crypto-retry">
+                    Réessayer
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center gap-3 bg-blue-500/10 border border-blue-500/20 rounded-xl px-4 py-3">
+                    <Bitcoin className="w-5 h-5 text-blue-500 shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold text-blue-500">USDT TRC20 (Tron)</p>
+                      <p className="text-xs text-muted-foreground">Payez en USDT. Votre portefeuille USDT sera crédité automatiquement.</p>
+                    </div>
+                  </div>
+
+                  {usdtWallet && (
+                    <div className="flex items-center gap-3 bg-muted/30 rounded-xl px-4 py-3">
+                      <DollarSign className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <div>
+                        <p className="text-xs text-muted-foreground">Solde USDT actuel</p>
+                        <p className="text-base font-bold text-foreground tabular-nums">{parseFloat(usdtWallet.balance).toFixed(4)} USDT</p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Montant (USD)</label>
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">$</span>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min="1"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={cryptoAmountUsd}
+                        onChange={e => setCryptoAmountUsd(e.target.value)}
+                        className="w-full pl-8 pr-4 h-12 rounded-xl border border-border bg-background text-base font-semibold focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        data-testid="input-crypto-amount"
+                      />
+                    </div>
+                    <div className="flex gap-2 flex-wrap">
+                      {[5, 10, 25, 50, 100].map(v => (
+                        <button
+                          key={v}
+                          type="button"
+                          onClick={() => setCryptoAmountUsd(String(v))}
+                          className="text-xs px-3 py-1.5 rounded-lg border border-border bg-muted/30 hover:bg-muted/60 font-semibold transition-all"
+                        >
+                          ${v}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {cryptoAmtNum > 0 && (
+                    <div className="rounded-xl border border-border bg-muted/30 overflow-hidden">
+                      <div className="px-4 py-3 flex items-center justify-between border-b border-border">
+                        <span className="text-sm text-muted-foreground">Montant saisi</span>
+                        <span className="text-sm font-semibold tabular-nums">${cryptoAmtNum.toFixed(2)}</span>
+                      </div>
+                      <div className="px-4 py-3 flex items-center justify-between border-b border-border">
+                        <span className="text-sm text-muted-foreground flex items-center gap-1.5">
+                          <TrendingDown className="w-3.5 h-3.5" />
+                          Frais ({cryptoFeePercent}%)
+                        </span>
+                        <span className="text-sm font-semibold tabular-nums text-red-500">-${cryptoFee.toFixed(4)}</span>
+                      </div>
+                      <div className="px-4 py-3 flex items-center justify-between bg-green-500/5">
+                        <span className="text-sm font-semibold text-foreground">Crédité (USDT)</span>
+                        <span className="text-lg font-bold text-green-500 tabular-nums">{cryptoNet.toFixed(4)} USDT</span>
+                      </div>
+                    </div>
+                  )}
+
+                  <Button
+                    className="w-full h-12 rounded-xl font-bold"
+                    size="lg"
+                    disabled={cryptoAmtNum < 1 || cryptoDepositMutation.isPending}
+                    onClick={() => cryptoDepositMutation.mutate()}
+                    data-testid="button-crypto-deposit"
+                  >
+                    {cryptoDepositMutation.isPending
+                      ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Création en cours…</>
+                      : <><Bitcoin className="w-4 h-4 mr-2" />Payer en USDT TRC20</>
+                    }
+                  </Button>
+
+                  <p className="text-xs text-center text-muted-foreground">
+                    Vous serez redirigé vers NowPayments pour compléter le paiement.
+                  </p>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {depositMode === "mobile_money" && isLoadingConfig ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
           </div>
-        ) : !countries?.length ? (
+        ) : depositMode === "mobile_money" && !countries?.length ? (
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>{t.deposit.noCountry}</AlertDescription>
           </Alert>
-        ) : (
+        ) : depositMode === "mobile_money" ? (
           <div className="bg-card border border-border rounded-2xl overflow-hidden">
 
 
@@ -777,7 +973,7 @@ export default function DepositPage() {
               )}
             </div>
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* Confirm bottom sheet */}

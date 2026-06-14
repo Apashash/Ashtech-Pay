@@ -13,7 +13,7 @@ import { getImageSrc } from "@/lib/image";
 import { 
   Loader2, CheckCircle, XCircle, Shield, 
   Smartphone, CreditCard, ExternalLink, FileText, AlertTriangle, Globe,
-  User, Mail, Phone, Hash, Clock, Copy
+  User, Mail, Phone, Hash, Clock, Copy, Bitcoin
 } from "lucide-react";
 import { getOperatorLogo } from "@/lib/operator-logos";
 import { useState, useMemo, useEffect, useRef } from "react";
@@ -63,7 +63,7 @@ export default function PaymentPage() {
   const [country, setCountry] = useState("");
   const [phone, setPhone] = useState("");
   const [customAmount, setCustomAmount] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<"mobile_money" | "card" | "paypal" | "">("");
+  const [paymentMethod, setPaymentMethod] = useState<"mobile_money" | "card" | "paypal" | "crypto" | "">("");
   const [operator, setOperator] = useState("");
   const [displayCurrency, setDisplayCurrency] = useState<SupportedCurrency | "">("");
   
@@ -231,11 +231,13 @@ export default function PaymentPage() {
     if (!email.trim()) newErrors.email = "L'email est requis";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = "Email invalide";
     if (!paymentLink?.isFixedAmount && (!customAmount || parseFloat(customAmount) <= 0)) newErrors.amount = "Le montant doit être supérieur à 0";
-    if (!country) newErrors.country = "Veuillez sélectionner votre pays";
     if (!paymentMethod) newErrors.paymentMethod = "Veuillez choisir un mode de paiement";
-    if (paymentMethod === "mobile_money" && !operator) newErrors.operator = "Veuillez sélectionner un opérateur";
-    if (!phone.trim()) newErrors.phone = "Le numéro est requis";
-    else if (phone.replace(/\s/g, "").length < 8) newErrors.phone = "Numéro trop court";
+    if (paymentMethod !== "crypto") {
+      if (!country) newErrors.country = "Veuillez sélectionner votre pays";
+      if (paymentMethod === "mobile_money" && !operator) newErrors.operator = "Veuillez sélectionner un opérateur";
+      if (!phone.trim()) newErrors.phone = "Le numéro est requis";
+      else if (phone.replace(/\s/g, "").length < 8) newErrors.phone = "Numéro trop court";
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -260,11 +262,13 @@ export default function PaymentPage() {
       if (!email.trim()) newErrors.email = "L'email est requis";
       else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = "Email invalide";
       if (!paymentLink?.isFixedAmount && (!customAmount || parseFloat(customAmount) <= 0)) newErrors.amount = "Le montant doit être supérieur à 0";
-      if (!country) newErrors.country = "Veuillez sélectionner votre pays";
       if (!paymentMethod) newErrors.paymentMethod = "Veuillez choisir un mode de paiement";
-      if (paymentMethod === "mobile_money" && !operator) newErrors.operator = "Veuillez sélectionner un opérateur";
-      if (!phone.trim()) newErrors.phone = "Le numéro est requis";
-      else if (phone.replace(/\s/g, "").length < 8) newErrors.phone = "Numéro trop court";
+      if (paymentMethod !== "crypto") {
+        if (!country) newErrors.country = "Veuillez sélectionner votre pays";
+        if (paymentMethod === "mobile_money" && !operator) newErrors.operator = "Veuillez sélectionner un opérateur";
+        if (!phone.trim()) newErrors.phone = "Le numéro est requis";
+        else if (phone.replace(/\s/g, "").length < 8) newErrors.phone = "Numéro trop court";
+      }
       setErrors(newErrors);
       if (Object.keys(newErrors).length > 0) throw new Error("Veuillez corriger les erreurs ci-dessus");
 
@@ -981,13 +985,13 @@ export default function PaymentPage() {
                 </Button>
                 <Button
                   type="button"
-                  variant={paymentMethod === "card" ? "default" : "outline"}
+                  variant={paymentMethod === "crypto" ? "default" : "outline"}
                   className="flex flex-col items-center gap-1 h-auto py-3"
-                  onClick={() => setPaymentMethod("card")}
-                  data-testid="button-payment-card"
+                  onClick={() => { setPaymentMethod("crypto"); setErrors(p => ({...p, paymentMethod: undefined as any})); }}
+                  data-testid="button-payment-crypto"
                 >
-                  <CreditCard className="w-5 h-5" />
-                  <span className="text-xs">Carte bancaire</span>
+                  <Bitcoin className="w-5 h-5" />
+                  <span className="text-xs">Crypto</span>
                 </Button>
                 <Button
                   type="button"
@@ -1003,16 +1007,22 @@ export default function PaymentPage() {
               {errors.paymentMethod && <p className="text-xs text-red-500">{errors.paymentMethod}</p>}
             </div>
 
-            {(paymentMethod === "card" || paymentMethod === "paypal") && (
+            {paymentMethod === "paypal" && (
               <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 flex items-start gap-3">
                 <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="font-medium text-amber-500 text-sm">Non disponible</p>
-                  <p className="text-sm text-muted-foreground">
-                    {paymentMethod === "card"
-                      ? "Le paiement par carte bancaire n'est pas encore disponible. Veuillez utiliser Mobile Money."
-                      : "Le paiement par PayPal n'est pas encore disponible. Veuillez utiliser Mobile Money."}
-                  </p>
+                  <p className="text-sm text-muted-foreground">Le paiement par PayPal n'est pas encore disponible. Veuillez utiliser Mobile Money ou Crypto.</p>
+                </div>
+              </div>
+            )}
+
+            {paymentMethod === "crypto" && (
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 flex items-start gap-3">
+                <Bitcoin className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-medium text-blue-500 text-sm">Paiement USDT TRC20</p>
+                  <p className="text-sm text-muted-foreground">Vous serez redirigé vers une page de paiement sécurisée. Payez en USDT sur le réseau TRC20 (Tron).</p>
                 </div>
               </div>
             )}
@@ -1130,7 +1140,8 @@ export default function PaymentPage() {
               {errors.email && <p className="text-xs text-red-500">{errors.email}</p>}
             </div>
 
-            {/* Phone */}
+            {/* Phone — hidden for crypto */}
+            {paymentMethod !== "crypto" && (
             <div className="space-y-2">
               <Label htmlFor="phone">Numéro de téléphone Mobile Money *</Label>
               <div className="relative">
@@ -1148,6 +1159,7 @@ export default function PaymentPage() {
               </div>
               {errors.phone && <p className="text-xs text-red-500">{errors.phone}</p>}
             </div>
+            )}
 
             {/* Summary */}
             <div className="rounded-lg border bg-primary/5 border-primary/20 p-4">
