@@ -22,6 +22,18 @@ const app = express();
 const httpServer = createServer(app);
 const isProd = process.env.NODE_ENV === "production";
 
+// ── Gestionnaires d'erreurs globaux — empêche Phusion Passenger de tuer le process ──
+// Sans ces handlers, une Promise rejetée non capturée = crash immédiat sous Passenger.
+process.on("unhandledRejection", (reason: unknown) => {
+  const msg = reason instanceof Error ? reason.message : String(reason);
+  console.error("[CRASH-GUARD] unhandledRejection interceptée — process maintenu:", msg);
+});
+
+process.on("uncaughtException", (err: Error) => {
+  console.error("[CRASH-GUARD] uncaughtException interceptée — process maintenu:", err.message);
+  // En production, on log mais on ne quitte PAS — Passenger gère les redémarrages si nécessaire
+});
+
 // ── FIX-1: SESSION_SECRET est obligatoire en production ET en multi-worker PM2 ─
 // Sans lui, chaque worker PM2 génère sa propre clé aléatoire (_DEV_TOKEN_SECRET).
 // → sessions cookie et Bearer tokens créés sur Worker A sont invalides sur Worker B.

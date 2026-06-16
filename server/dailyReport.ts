@@ -59,27 +59,25 @@ async function sendDailyReport(): Promise<void> {
   try {
     console.log("[DailyReport] Generating daily report for yesterday...");
 
-    const [stats, kycPending, kycApproved, kycRejected, allUsers] = await Promise.all([
+    // Compute yesterday's date range in Douala timezone
+    const dYest = nowDouala();
+    dYest.setDate(dYest.getDate() - 1);
+    const yStart = new Date(dYest); yStart.setHours(0, 0, 0, 0);
+    const yEnd   = new Date(dYest); yEnd.setHours(23, 59, 59, 999);
+
+    const [stats, kycPending, kycApproved, kycRejected, newUsersCount] = await Promise.all([
       storage.getAdminStats("yesterday"),
       storage.countKycByStatus("pending"),
       storage.countKycByStatus("approved"),
       storage.countKycByStatus("rejected"),
-      storage.getAllUsers(),
+      storage.countNewUsersInRange(yStart, yEnd),
     ]);
 
     const totalTx = (stats.depositCount || 0) + (stats.withdrawalCount || 0) +
                     (stats.transferCount || 0) + (stats.paymentLinkCount || 0);
     const totalVol = parseFloat(stats.totalDeposits || "0") + parseFloat(stats.totalWithdrawals || "0");
 
-    const newUsersYesterday = allUsers.filter(u => {
-      if (!u.createdAt) return false;
-      const d = nowDouala();
-      d.setDate(d.getDate() - 1);
-      const yStart = new Date(d); yStart.setHours(0, 0, 0, 0);
-      const yEnd   = new Date(d); yEnd.setHours(23, 59, 59, 999);
-      const created = new Date(u.createdAt);
-      return created >= yStart && created <= yEnd;
-    });
+    const newUsersYesterday = { length: newUsersCount };
 
     const msg =
       `☀️ <b>RAPPORT QUOTIDIEN — ${yesterdayLabel().toUpperCase()}</b>\n` +

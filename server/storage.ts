@@ -65,7 +65,7 @@ import {
   type HostedPaymentSession,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, sql, and, or, like, ilike, count, inArray, gt } from "drizzle-orm";
+import { eq, desc, sql, and, or, like, ilike, count, inArray, gt, gte, lte } from "drizzle-orm";
 
 export interface IStorage {
   // User operations
@@ -126,6 +126,8 @@ export interface IStorage {
   
   // Admin: Transaction management
   getAllTransactions(): Promise<Transaction[]>;
+  getPendingPayoutTransactions(): Promise<Transaction[]>;
+  countNewUsersInRange(start: Date, end: Date): Promise<number>;
   getAdminTransactionsPaginated(params: { limit: number; offset: number; type?: string; status?: string; search?: string }): Promise<{ data: Transaction[]; total: number }>;
   getAdminUsersPaginated(params: { limit: number; offset: number; search?: string; filter?: string }): Promise<{ data: User[]; total: number }>;
   getAdminLayoutStats(): Promise<{ pendingDeposits: number; pendingWithdrawals: number; pendingTransfers: number; pendingManualPayouts: number; kycPending: number; ticketUnread: number; conversionCount: number; withdrawalNumberCount: number; notifications: any[] }>;
@@ -750,6 +752,29 @@ export class DatabaseStorage implements IStorage {
   // Admin: Transaction management
   async getAllTransactions(): Promise<Transaction[]> {
     return await db.select().from(transactions).orderBy(desc(transactions.createdAt));
+  }
+
+  // Targeted query: only pending/processing payouts — avoids loading ALL transactions on startup
+  async getPendingPayoutTransactions(): Promise<Transaction[]> {
+    return await db
+      .select()
+      .from(transactions)
+      .where(
+        and(
+          or(eq(transactions.type, "withdrawal"), eq(transactions.type, "transfer_out")),
+          or(eq(transactions.status, "pending"), eq(transactions.status, "processing"))
+        )
+      )
+      .orderBy(desc(transactions.createdAt));
+  }
+
+  // Count users created within a date range — avoids loading ALL users in memory
+  async countNewUsersInRange(start: Date, end: Date): Promise<number> {
+    const result = await db
+      .select({ cnt: count() })
+      .from(users)
+      .where(and(gte(users.createdAt, start), lte(users.createdAt, end)));
+    return result[0]?.cnt ?? 0;
   }
 
   // Admin: Country operations
