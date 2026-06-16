@@ -307,7 +307,12 @@ app.use((req, res, next) => {
     console.log("[Migration] Schema columns ready (api_key, notify_url, source, confirmed_at, hosted_page_configs, hosted_payment_sessions, payment_links.notify_url, token_revoked_before, conversion_requests.executed_at/by_id, user_notifications.type, wallets_unique_idx, admin_logs, audit_logs)");
 
     // ── 5.3 Re-encrypt existing plaintext sensitive fields ────────────────────
-    // Runs at every startup — idempotent because encryptField() skips already-encrypted values.
+    // Only runs when FIELD_ENCRYPTION_KEY is set. Without the key, encryptField()
+    // returns plaintext (no "enc:" prefix) — running this loop would re-process
+    // ALL rows on EVERY restart, causing 50+ unnecessary DB queries each time.
+    if (!process.env.FIELD_ENCRYPTION_KEY) {
+      console.log("[Migration] FIELD_ENCRYPTION_KEY not set — skipping re-encryption (cleartext mode)");
+    } else
     try {
       // hosted_page_configs: encrypt sk_live, pk_live, hp_live; populate hp_live_hash
       const hpRows = await db.execute(sql`
@@ -460,8 +465,11 @@ app.use((req, res, next) => {
   }
 
   const port = parseInt(process.env.PORT || "5000", 10);
+  // reusePort is useful for PM2 cluster mode but breaks Phusion Passenger
+  // (Passenger manages its own socket binding). Only enable when PM2 is detected.
+  const useReusePort = !!process.env.PM2_HOME || !!process.env.pm_id;
   httpServer.listen(
-    { port, host: "0.0.0.0", reusePort: true },
+    { port, host: "0.0.0.0", ...(useReusePort ? { reusePort: true } : {}) },
     () => {
       log(`serving on port ${port}`);
       startPaymentPoller();
