@@ -97,11 +97,10 @@ async function startListenClient(): Promise<void> {
           if (!hasChange) return; // ignore tout le reste (last_seen_at, totp, kyc, etc.)
         }
 
-        // Suppress startup migration updates on hosted_page_configs (field re-encryption)
-        if (table === "hosted_page_configs" && op === "UPDATE" && changedCols.length > 0) {
-          const migrationCols = new Set(["sk_live", "pk_live", "hp_live", "hp_live_hash"]);
-          if (changedCols.every((c) => migrationCols.has(c))) return;
-        }
+        // Suppress all hosted_page_configs UPDATEs — the web app legitimately updates
+        // this table (merchant config changes, re-encryption on startup, API key rotation).
+        // INSERTs and DELETEs are still monitored for mass creation / unexpected deletions.
+        if (table === "hosted_page_configs" && op === "UPDATE") return;
 
         // Suppress ALL session table UPDATEs — connect-pg-simple legitimately updates
         // expire (and sess) on every active session every ~60s. The trigger fires even

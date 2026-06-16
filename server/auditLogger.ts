@@ -83,17 +83,25 @@ export function audit(req: Request, action: AuditAction, opts: AuditOptions = {}
     });
 
   // ── 2. Alerte Telegram (fire-and-forget) ─────────────────────────────────
-  notifyAuditEvent({
-    action,
-    actorType,
-    userId,
-    userName:  opts.userName  ?? null,
-    userEmail: opts.userEmail ?? null,
-    ipAddress: ip,
-    userAgent,
-    success,
-    details: opts.details ?? null,
-  }).catch((err: unknown) => {
-    console.error("[AuditLog] Échec Telegram:", (err as Error)?.message ?? err);
-  });
+  // Skip high-frequency low-risk events that generate noise without security value.
+  const SILENT_ACTIONS = new Set<AuditAction>([
+    AUDIT.LOGIN_SUCCESS,
+    AUDIT.LOGOUT,
+    AUDIT.REGISTER,
+  ]);
+  if (!SILENT_ACTIONS.has(action)) {
+    notifyAuditEvent({
+      action,
+      actorType,
+      userId,
+      userName:  opts.userName  ?? null,
+      userEmail: opts.userEmail ?? null,
+      ipAddress: ip,
+      userAgent,
+      success,
+      details: opts.details ?? null,
+    }).catch((err: unknown) => {
+      console.error("[AuditLog] Échec Telegram:", (err as Error)?.message ?? err);
+    });
+  }
 }
