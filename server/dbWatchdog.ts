@@ -367,8 +367,14 @@ export function startDbWatchdog(): void {
     console.warn("[SIEM] pg_notify listener failed:", err?.message)
   );
   // First pass after 30s (let startup migrations complete), then every 5 min
-  setTimeout(async () => {
-    await runWatchdog();
-    setInterval(runWatchdog, WATCHDOG_INTERVAL_MS);
+  setTimeout(() => {
+    runWatchdog().catch((err: any) =>
+      console.warn("[SIEM] Watchdog first run error:", err?.message)
+    );
+    setInterval(() => {
+      runWatchdog().catch((err: any) =>
+        console.warn("[SIEM] Watchdog interval error:", err?.message)
+      );
+    }, WATCHDOG_INTERVAL_MS);
   }, 30_000);
 }

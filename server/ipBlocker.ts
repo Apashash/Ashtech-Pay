@@ -68,14 +68,20 @@ export async function hydrateIpBlocker(): Promise<void> {
 }
 
 // ── Periodic cleanup of expired entries ───────────────────────────────────────
-setInterval(async () => {
-  const now = Date.now();
-  for (const [ip, record] of cache.entries()) {
-    if (!record.blockedUntil || now > record.blockedUntil + 60_000) {
-      cache.delete(ip);
-      await remove(ip).catch(() => {});
+setInterval(() => {
+  (async () => {
+    try {
+      const now = Date.now();
+      for (const [ip, record] of cache.entries()) {
+        if (!record.blockedUntil || now > record.blockedUntil + 60_000) {
+          cache.delete(ip);
+          await remove(ip).catch(() => {});
+        }
+      }
+    } catch (err: any) {
+      console.error("[IpBlocker] Cleanup interval error:", err?.message);
     }
-  }
+  })();
 }, 10 * 60 * 1000);
 
 // ── Public API ─────────────────────────────────────────────────────────────────

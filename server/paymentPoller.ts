@@ -245,24 +245,32 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
 }
 
 async function pollPendingPayments() {
-  const now = Date.now();
-  const entries = Array.from(pendingPayments.entries());
-  for (const [reference, payment] of entries) {
-    payment.attempts++;
+  try {
+    const now = Date.now();
+    const entries = Array.from(pendingPayments.entries());
+    for (const [reference, payment] of entries) {
+      try {
+        payment.attempts++;
 
-    const ageMs = now - payment.startedAt;
-    const timedOut = ageMs >= MAX_POLL_DURATION_MS || payment.attempts > MAX_POLL_ATTEMPTS;
+        const ageMs = now - payment.startedAt;
+        const timedOut = ageMs >= MAX_POLL_DURATION_MS || payment.attempts > MAX_POLL_ATTEMPTS;
 
-    if (timedOut) {
-      console.log(`[PaymentPoller] Timeout for ${reference}, marking as failed`);
-      await processPaymentResult(payment, "failed");
-      continue;
+        if (timedOut) {
+          console.log(`[PaymentPoller] Timeout for ${reference}, marking as failed`);
+          await processPaymentResult(payment, "failed");
+          continue;
+        }
+
+        const status = await checkPaymentStatus(payment);
+        if (status === "completed" || status === "failed") {
+          await processPaymentResult(payment, status);
+        }
+      } catch (entryErr: any) {
+        console.error(`[PaymentPoller] Unexpected error for ${reference}:`, entryErr?.message);
+      }
     }
-
-    const status = await checkPaymentStatus(payment);
-    if (status === "completed" || status === "failed") {
-      await processPaymentResult(payment, status);
-    }
+  } catch (err: any) {
+    console.error("[PaymentPoller] Poll loop crashed — recovered:", err?.message);
   }
 }
 

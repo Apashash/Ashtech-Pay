@@ -168,54 +168,66 @@ async function processPayout(payout: PendingPayout, apiStatus: string) {
 }
 
 async function checkProviderStatus(payout: PendingPayout): Promise<{ status: string; shouldRemove?: boolean }> {
-  if (payout.provider === "afribapay") {
-    // Payouts (withdrawals/transfers) use the PAYOUT URL, not the payin URL
-    const result = await checkAfribaPayoutStatus(payout.reference, "order_id");
-    return { status: result.status };
-  }
-
-  if (payout.provider === "pixpay") {
-    const result = await checkPixPayStatus(payout.reference, payout.countryCode);
-    return { status: result.status };
-  }
-
-  const result = await checkSwychrPayoutStatus(payout.reference);
-  if (!result.success) {
-    console.log(`[PayoutPoller] Status check failed for ${payout.reference}: ${result.message}`);
-    if (result.status === "failed") {
-      return { status: "unknown", shouldRemove: true };
+  try {
+    if (payout.provider === "afribapay") {
+      const result = await checkAfribaPayoutStatus(payout.reference, "order_id");
+      return { status: result.status };
     }
+
+    if (payout.provider === "pixpay") {
+      const result = await checkPixPayStatus(payout.reference, payout.countryCode);
+      return { status: result.status };
+    }
+
+    const result = await checkSwychrPayoutStatus(payout.reference);
+    if (!result.success) {
+      console.log(`[PayoutPoller] Status check failed for ${payout.reference}: ${result.message}`);
+      if (result.status === "failed") {
+        return { status: "unknown", shouldRemove: true };
+      }
+      return { status: "pending" };
+    }
+    return { status: result.status || "pending" };
+  } catch (err: any) {
+    console.error(`[PayoutPoller] checkProviderStatus error for ${payout.reference}:`, err?.message);
     return { status: "pending" };
   }
-  return { status: result.status || "pending" };
 }
 
 async function pollPendingPayouts() {
-  const entries = Array.from(pendingPayouts.entries());
-  for (const [reference, payout] of entries) {
-    payout.attempts++;
+  try {
+    const entries = Array.from(pendingPayouts.entries());
+    for (const [reference, payout] of entries) {
+      try {
+        payout.attempts++;
 
-    if (payout.attempts > MAX_ATTEMPTS) {
-      console.log(`[PayoutPoller] Timeout for ${reference} — marking failed`);
-      await processPayout(payout, "failed");
-      continue;
+        if (payout.attempts > MAX_ATTEMPTS) {
+          console.log(`[PayoutPoller] Timeout for ${reference} — marking failed`);
+          await processPayout(payout, "failed");
+          continue;
+        }
+
+        const { status, shouldRemove } = await checkProviderStatus(payout);
+
+        if (shouldRemove) {
+          console.log(`[PayoutPoller] Transaction not found for ${reference} — stopping poll (awaiting admin)`);
+          removePendingPayout(reference);
+          continue;
+        }
+
+        console.log(`[PayoutPoller] ${reference}: status=${status} provider=${payout.provider} (attempt ${payout.attempts}/${MAX_ATTEMPTS})`);
+
+        if (status === "completed" || status === "success") {
+          await processPayout(payout, "success");
+        } else if (status === "failed" || status === "refunded" || status === "cancelled") {
+          await processPayout(payout, status);
+        }
+      } catch (entryErr: any) {
+        console.error(`[PayoutPoller] Unexpected error for ${reference}:`, entryErr?.message);
+      }
     }
-
-    const { status, shouldRemove } = await checkProviderStatus(payout);
-
-    if (shouldRemove) {
-      console.log(`[PayoutPoller] Transaction not found for ${reference} — stopping poll (awaiting admin)`);
-      removePendingPayout(reference);
-      continue;
-    }
-
-    console.log(`[PayoutPoller] ${reference}: status=${status} provider=${payout.provider} (attempt ${payout.attempts}/${MAX_ATTEMPTS})`);
-
-    if (status === "completed" || status === "success") {
-      await processPayout(payout, "success");
-    } else if (status === "failed" || status === "refunded" || status === "cancelled") {
-      await processPayout(payout, status);
-    }
+  } catch (err: any) {
+    console.error("[PayoutPoller] Poll loop crashed — recovered:", err?.message);
   }
 }
 
