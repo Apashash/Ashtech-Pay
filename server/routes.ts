@@ -5695,16 +5695,22 @@ export async function registerRoutes(
   app.get("/api/public/countries", async (_req, res) => {
     try {
       const allCountries = await storage.getAllCountries();
-      const activeCountries = allCountries
-        .filter(c => c.isActive && c.name && c.code)
-        .map(c => ({
-          id: c.id,
-          name: c.name,
-          code: c.code,
-          flag: c.flag,
-          dialCode: c.dialCode,
-          currency: c.currency
-        }));
+      const activeCountries = await Promise.all(
+        allCountries
+          .filter(c => c.isActive && c.name && c.code)
+          .map(async c => {
+            const ops = await storage.getOperatorsByCountry(c.id);
+            return {
+              id: c.id,
+              name: c.name,
+              code: c.code,
+              flag: c.flag,
+              dialCode: c.dialCode,
+              currency: c.currency,
+              operators: ops.filter(o => o.isActive).map(o => ({ id: o.id, name: o.name })),
+            };
+          })
+      );
       res.json(activeCountries);
     } catch (error) {
       console.error("Public get countries error:", error);
