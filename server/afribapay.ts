@@ -16,6 +16,37 @@ const TOKEN_FILE = path.join(process.cwd(), ".local", "afribapay_token.json");
 let cachedToken: string | null = null;
 let tokenExpiry: Date | null = null;
 
+// ─── Circuit breaker ──────────────────────────────────────────────────────────
+// After CIRCUIT_BREAK_AFTER consecutive auth failures, stop retrying for
+// CIRCUIT_RESET_MS milliseconds. Prevents the poller from flooding logs with
+// a stack trace every 3 seconds when the subscription is invalid/inactive.
+const CIRCUIT_BREAK_AFTER = 3;
+const CIRCUIT_RESET_MS = 30 * 60 * 1000; // 30 minutes
+let authFailures = 0;
+let circuitOpenUntil: number | null = null;
+
+export function isAfribaPayCircuitOpen(): boolean {
+  if (circuitOpenUntil === null) return false;
+  if (Date.now() > circuitOpenUntil) {
+    circuitOpenUntil = null;
+    authFailures = 0;
+    console.log("[AfribaPay] Circuit breaker reset — will retry auth");
+    return false;
+  }
+  return true;
+}
+
+function recordAuthFailure(raw: string) {
+  authFailures++;
+  if (authFailures >= CIRCUIT_BREAK_AFTER && circuitOpenUntil === null) {
+    circuitOpenUntil = Date.now() + CIRCUIT_RESET_MS;
+    console.error(`[AfribaPay Auth] Circuit OPEN after ${authFailures} failures (${raw}). Will retry in 30 min.`);
+  } else if (authFailures < CIRCUIT_BREAK_AFTER) {
+    console.error(`[AfribaPay Auth] Failed (${authFailures}/${CIRCUIT_BREAK_AFTER}): ${raw}`);
+  }
+  // When circuit is already open, stay silent to avoid log flooding
+}
+
 function loadCachedToken() {
   try {
     if (fs.existsSync(TOKEN_FILE)) {
@@ -43,6 +74,11 @@ export async function getAfribaPayToken(): Promise<string> {
     return cachedToken;
   }
 
+  // Circuit open — don't make HTTP calls, fail silently
+  if (isAfribaPayCircuitOpen()) {
+    throw new Error("AfribaPay circuit open — subscription invalid, retry paused for 30 min");
+  }
+
   const encoded = Buffer.from(`${AFRIBAPAY_PUBLIC_KEY}:${AFRIBAPAY_SECRET_KEY}`).toString("base64");
   const res = await fetch(`${AFRIBAPAY_PAYIN_URL}/v1/token`, {
     method: "POST",
@@ -54,15 +90,17 @@ export async function getAfribaPayToken(): Promise<string> {
 
   const data = await res.json();
   if (!res.ok || !data.data?.access_token) {
-    const raw = data.error?.message || "";
-    let friendly = raw;
-    if (raw.toLowerCase().includes("subscription invalid") || raw.toLowerCase().includes("subscription inactive")) {
-      friendly = "Ce service de paiement est temporairement indisponible. Veuillez réessayer plus tard ou contacter le support.";
-    }
-    console.error(`[AfribaPay Auth] Failed: ${raw}`);
+    const raw = data.error?.message || data.message || JSON.stringify(data).slice(0, 120);
+    recordAuthFailure(raw);
+    const friendly = (raw.toLowerCase().includes("subscription invalid") || raw.toLowerCase().includes("subscription inactive"))
+      ? "Ce service de paiement est temporairement indisponible. Veuillez réessayer plus tard ou contacter le support."
+      : raw;
     throw new Error(friendly || `AfribaPay auth failed: ${raw}`);
   }
 
+  // Successful auth — reset circuit breaker
+  authFailures = 0;
+  circuitOpenUntil = null;
   cachedToken = data.data.access_token;
   tokenExpiry = new Date(data.data.expires_at);
   saveCachedToken(cachedToken!, tokenExpiry);

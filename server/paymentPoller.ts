@@ -1,6 +1,6 @@
 import { storage } from "./storage";
 import { checkSwychrPaymentStatus } from "./swychr";
-import { checkAfribaPayStatus } from "./afribapay";
+import { checkAfribaPayStatus, isAfribaPayCircuitOpen } from "./afribapay";
 import { checkPixPayStatus } from "./pixpay";
 import { creditUserWallet } from "./walletHelper";
 import { sendPayerConfirmationEmail } from "./email";
@@ -39,6 +39,9 @@ export function removePendingPayment(reference: string) {
 async function checkPaymentStatus(payment: PendingPayment): Promise<"pending" | "completed" | "failed"> {
   try {
     if (payment.provider === "afribapay") {
+      // If AfribaPay circuit is open (subscription invalid), don't make any HTTP calls.
+      // Return "pending" — the normal timeout logic will auto-fail the transaction after 7 min.
+      if (isAfribaPayCircuitOpen()) return "pending";
       // Always query by order_id = our ASHPAY-DEP-... reference (what we sent to AfribaPay as order_id).
       // externalReference = AfribaPay's transaction_id (PIM...) — do NOT use it for status query.
       const result = await checkAfribaPayStatus(payment.reference, "order_id");
@@ -58,8 +61,13 @@ async function checkPaymentStatus(payment: PendingPayment): Promise<"pending" | 
       if (result.success && result.status === "failed") return "failed";
       return "pending";
     }
-  } catch (error) {
-    console.error(`[PaymentPoller] Error checking payment ${payment.reference}:`, error);
+  } catch (error: any) {
+    // Log only the message (not the full stack trace) to avoid log flooding
+    const msg = error?.message || String(error);
+    const isCircuitMsg = msg.includes("circuit open") || msg.includes("Circuit open");
+    if (!isCircuitMsg) {
+      console.error(`[PaymentPoller] Error checking ${payment.reference}: ${msg}`);
+    }
     return "pending";
   }
 }
@@ -266,14 +274,47 @@ export async function recoverPendingDeposits() {
     let autoFailed = 0;
     let recovered = 0;
 
+    // Pre-check AfribaPay availability once — if auth fails, skip ALL AfribaPay
+    // transactions (mark failed immediately) rather than queuing them into the poller
+    // where they'd cause log flooding every 3 seconds.
+    let afribaPayBroken = false;
+    const hasAfribaTxs = pendingTxs.some((tx: any) => {
+      // We'll detect provider below, but do a quick check by peeking operator later
+      return true; // resolve fully in loop
+    });
+    if (hasAfribaTxs) {
+      try {
+        const { getAfribaPayToken } = await import("./afribapay");
+        await getAfribaPayToken();
+      } catch {
+        afribaPayBroken = isAfribaPayCircuitOpen();
+      }
+    }
+
     for (const tx of pendingTxs) {
       const createdAt = tx.createdAt ? new Date(tx.createdAt).getTime() : now;
       const ageMs = now - createdAt;
 
       if (!tx.reference) continue;
 
-      if (ageMs >= MAX_POLL_DURATION_MS) {
-        console.log(`[PaymentPoller] Auto-failing stale transaction: ${tx.reference}`);
+      // Detect provider early so we can auto-fail broken-provider transactions
+      let txProvider = "swychr";
+      if (tx.operatorId) {
+        try {
+          const op = await storage.getOperator(tx.operatorId);
+          const prov = (op as any)?.paymentProvider;
+          if (prov === "afribapay" || prov === "pixpay") txProvider = prov;
+        } catch {}
+      }
+
+      // If AfribaPay is broken (subscription invalid), auto-fail immediately
+      // instead of queuing into the poller and generating log noise for 7 minutes
+      const isAfribaPayBroken = txProvider === "afribapay" && afribaPayBroken;
+
+      if (ageMs >= MAX_POLL_DURATION_MS || isAfribaPayBroken) {
+        const reason = isAfribaPayBroken
+          ? `AfribaPay indisponible (subscription invalid)` : "Délai expiré — annulé automatiquement";
+        console.log(`[PaymentPoller] Auto-failing${isAfribaPayBroken ? " [AfribaPay broken]" : " stale"} transaction: ${tx.reference}`);
         await storage.updateTransactionStatus(tx.id, "failed");
         if (tx.userId) {
           const isPaymentLink = tx.type === "payment_link";
@@ -298,7 +339,7 @@ export async function recoverPendingDeposits() {
               amount: tx.totalAmount || tx.amount,
               currency: tx.currency || "XAF",
               reference: tx.reference || tx.id,
-              reason: "Délai expiré — annulé automatiquement",
+              reason,
               country: (txUser as any)?.country || "",
               depositType: tx.type,
               paymentMethod: tx.paymentMethod || undefined,
@@ -309,19 +350,14 @@ export async function recoverPendingDeposits() {
         }
         autoFailed++;
       } else {
-        // Detect provider and countryCode from the operator record
-        let provider = "swychr";
+        // txProvider already detected above — just get countryCode for pixpay
         let recoveredCountryCode: string | undefined;
-        if (tx.operatorId) {
+        if (txProvider === "pixpay" && tx.operatorId) {
           try {
             const op = await storage.getOperator(tx.operatorId);
-            const prov = (op as any)?.paymentProvider;
-            if (prov === "afribapay" || prov === "pixpay") provider = prov;
-            if (prov === "pixpay" && op?.countryId) {
-              try {
-                const country = await storage.getCountry(op.countryId);
-                if (country?.code) recoveredCountryCode = country.code;
-              } catch {}
+            if (op?.countryId) {
+              const country = await storage.getCountry(op.countryId);
+              if (country?.code) recoveredCountryCode = country.code;
             }
           } catch {}
         }
@@ -335,7 +371,7 @@ export async function recoverPendingDeposits() {
           userId: tx.userId,
           type: tx.type,
           amount: tx.amount,
-          provider,
+          provider: txProvider,
           countryCode: recoveredCountryCode,
           paymentIntentId: tx.paymentIntentId,
           startedAt: createdAt,
