@@ -42,10 +42,7 @@ function throttledAlert(key: string, message: string): void {
   const last = alertCooldown.get(key) || 0;
   if (Date.now() - last < ALERT_COOLDOWN_MS) return;
   alertCooldown.set(key, Date.now());
-  const timestamp = new Date().toLocaleString("fr-FR", { timeZone: "Africa/Douala" });
-  const full = `🚨 <b>[SIEM] Anomalie DB détectée</b>\n\n${message}\n\n🕐 ${timestamp}`;
   console.error("[SIEM]", message.replace(/<[^>]+>/g, "").replace(/\n/g, " "));
-  sendMessage(full).catch(() => {});
 }
 
 async function startListenClient(): Promise<void> {
