@@ -7,8 +7,10 @@ import { sendPayerConfirmationEmail } from "./email";
 import { notifyDepositConfirmed, notifyDepositFailed } from "./telegram";
 
 const POLL_INTERVAL = 3000;
-const MAX_POLL_DURATION_MS = 7 * 60 * 1000; // 7 minutes — auto-reject if no success/failure received
-const MAX_POLL_ATTEMPTS = Math.ceil(MAX_POLL_DURATION_MS / POLL_INTERVAL);
+// After 30 min, slow down polling to every 2 min to avoid hammering the gateway API.
+// Transactions are NEVER auto-cancelled — they stay pending until the gateway responds.
+const SLOW_POLL_THRESHOLD_MS = 30 * 60 * 1000;  // 30 minutes
+const SLOW_POLL_INTERVAL_MS  = 2 * 60 * 1000;   // 2 minutes between checks for old payments
 
 interface PendingPayment {
   transactionId: string;
@@ -23,13 +25,15 @@ interface PendingPayment {
   payerName?: string | null;
   countryCode?: string; // used for PixPay API key selection
   startedAt: number;
+  lastCheckedAt: number; // used for slow-poll throttling
 }
 
 const pendingPayments = new Map<string, PendingPayment>();
 
-export function addPendingPayment(payment: Omit<PendingPayment, "attempts" | "startedAt">) {
+export function addPendingPayment(payment: Omit<PendingPayment, "attempts" | "startedAt" | "lastCheckedAt">) {
   console.log(`[PaymentPoller] Adding pending payment: ${payment.reference} (provider: ${payment.provider || "swychr"})`);
-  pendingPayments.set(payment.reference, { ...payment, attempts: 0, startedAt: Date.now() });
+  const now = Date.now();
+  pendingPayments.set(payment.reference, { ...payment, attempts: 0, startedAt: now, lastCheckedAt: 0 });
 }
 
 export function removePendingPayment(reference: string) {
@@ -250,21 +254,26 @@ async function pollPendingPayments() {
     const entries = Array.from(pendingPayments.entries());
     for (const [reference, payment] of entries) {
       try {
-        payment.attempts++;
-
         const ageMs = now - payment.startedAt;
-        const timedOut = ageMs >= MAX_POLL_DURATION_MS || payment.attempts > MAX_POLL_ATTEMPTS;
+        const isOld = ageMs >= SLOW_POLL_THRESHOLD_MS;
 
-        if (timedOut) {
-          console.log(`[PaymentPoller] Timeout for ${reference}, marking as failed`);
-          await processPaymentResult(payment, "failed");
-          continue;
+        // Slow-poll throttle: once a payment is older than 30 min, only check
+        // every 2 minutes instead of every 3 seconds to avoid spamming the gateway.
+        if (isOld) {
+          const timeSinceLastCheck = now - payment.lastCheckedAt;
+          if (payment.lastCheckedAt > 0 && timeSinceLastCheck < SLOW_POLL_INTERVAL_MS) {
+            continue; // skip this cycle — not yet time to check
+          }
         }
+
+        payment.attempts++;
+        payment.lastCheckedAt = now;
 
         const status = await checkPaymentStatus(payment);
         if (status === "completed" || status === "failed") {
           await processPaymentResult(payment, status);
         }
+        // "pending" → keep in queue, poll again next cycle (no timeout, no auto-cancel)
       } catch (entryErr: any) {
         console.error(`[PaymentPoller] Unexpected error for ${reference}:`, entryErr?.message);
       }
@@ -315,14 +324,14 @@ export async function recoverPendingDeposits() {
         } catch {}
       }
 
-      // If AfribaPay is broken (subscription invalid), auto-fail immediately
-      // instead of queuing into the poller and generating log noise for 7 minutes
+      // Only auto-fail if AfribaPay subscription is broken (service down, not a timeout).
+      // Age-based auto-cancel has been removed — transactions stay pending until
+      // the gateway explicitly returns completed or failed.
       const isAfribaPayBroken = txProvider === "afribapay" && afribaPayBroken;
 
-      if (ageMs >= MAX_POLL_DURATION_MS || isAfribaPayBroken) {
-        const reason = isAfribaPayBroken
-          ? `AfribaPay indisponible (subscription invalid)` : "Délai expiré — annulé automatiquement";
-        console.log(`[PaymentPoller] Auto-failing${isAfribaPayBroken ? " [AfribaPay broken]" : " stale"} transaction: ${tx.reference}`);
+      if (isAfribaPayBroken) {
+        const reason = `AfribaPay indisponible (subscription invalid)`;
+        console.log(`[PaymentPoller] Auto-failing [AfribaPay broken] transaction: ${tx.reference}`);
         await storage.updateTransactionStatus(tx.id, "failed");
         if (tx.userId) {
           const isPaymentLink = tx.type === "payment_link";
@@ -334,7 +343,6 @@ export async function recoverPendingDeposits() {
             transactionId: tx.id,
             isRead: false,
           });
-          // Notify admin via Telegram
           Promise.all([
             storage.getUser(tx.userId).catch(() => null),
             tx.operatorId ? storage.getOperator(tx.operatorId).catch(() => null) : Promise.resolve(null),
@@ -358,7 +366,8 @@ export async function recoverPendingDeposits() {
         }
         autoFailed++;
       } else {
-        // txProvider already detected above — just get countryCode for pixpay
+        // Re-queue all pending transactions regardless of age — no timeout.
+        // Old transactions use slow-poll (every 2 min) automatically.
         let recoveredCountryCode: string | undefined;
         if (txProvider === "pixpay" && tx.operatorId) {
           try {
@@ -370,12 +379,11 @@ export async function recoverPendingDeposits() {
           } catch {}
         }
 
-        const elapsedAttempts = Math.floor(ageMs / POLL_INTERVAL);
         pendingPayments.set(tx.reference, {
           transactionId: tx.id,
           reference: tx.reference,
           externalReference: tx.externalReference || tx.reference,
-          attempts: elapsedAttempts,
+          attempts: 0,
           userId: tx.userId,
           type: tx.type,
           amount: tx.amount,
@@ -383,6 +391,7 @@ export async function recoverPendingDeposits() {
           countryCode: recoveredCountryCode,
           paymentIntentId: tx.paymentIntentId,
           startedAt: createdAt,
+          lastCheckedAt: 0,
         });
         recovered++;
       }
@@ -398,7 +407,7 @@ let pollerInterval: NodeJS.Timeout | null = null;
 
 export function startPaymentPoller() {
   if (pollerInterval) { console.log("[PaymentPoller] Already running"); return; }
-  console.log(`[PaymentPoller] Starting payment poller (every ${POLL_INTERVAL / 1000}s, timeout: 7min)`);
+  console.log(`[PaymentPoller] Starting payment poller (every ${POLL_INTERVAL / 1000}s, no timeout — slow-poll after ${SLOW_POLL_THRESHOLD_MS / 60000}min)`);
   pollerInterval = setInterval(pollPendingPayments, POLL_INTERVAL);
 }
 
