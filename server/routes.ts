@@ -110,7 +110,7 @@ import {
 // ─── AfribaPay: country → ISO currency (authoritative, from AfribaPay API) ───
 // Used to always send the correct ISO currency code regardless of DB value.
 const AFRIBAPAY_ISO_CURRENCY: Record<string, string> = {
-  BF: "XOF", BJ: "XOF", CD: "CDF", CF: "XAF", CG: "XAF",
+  BF: "XOF", BJ: "XOFB", CD: "CDF", CF: "XAF", CG: "XAF",
   CI: "XOF", CM: "XAF", GA: "XAF", GM: "GMD", GN: "GNF",
   GW: "XOF", ML: "XOF", NE: "XOF", NG: "NGN", RW: "RWF",
   SN: "XOF", TD: "XAF", TG: "XOF", KE: "KES", TZ: "TZS",
