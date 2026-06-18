@@ -6408,13 +6408,15 @@ export async function registerRoutes(
 
       // Create pending transaction for the merchant to track in history
       // feeAmount = Ashtech margin only (consistent with deposit/withdrawal/transfer)
+      // currency = merchant's currency (paymentLink.currency), NOT the payer's country currency.
+      // The amounts (netAmount, totalAmount) are already converted to merchant currency above.
       await storage.createTransaction({
         userId: paymentLink.userId,
         type: "payment_link",
         amount: netAmount,
         totalAmount: totalAmount,
         feeAmount: ashtechFeeAmountStr,
-        currency: paymentCurrency,
+        currency: paymentLink.currency,
         status: "pending",
         description: `Paiement en attente de ${fullName} (${email}) via ${paymentLink.title}`,
         paymentMethod,
