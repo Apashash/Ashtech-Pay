@@ -36,7 +36,9 @@ import {
   Phone,
   MapPin,
   CreditCard,
-  FileText
+  FileText,
+  Globe,
+  Coins
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -407,6 +409,24 @@ export default function AdminTransfers() {
                     <Separator />
                     <div className="space-y-3">
                       <p className="text-sm font-semibold text-muted-foreground">Fournisseur</p>
+                      {(txDetails.recipientCountry || txDetails.paymentIntent?.payerCountry) && (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Globe className="w-4 h-4" />
+                            <span className="text-sm">Pays</span>
+                          </div>
+                          <span className="text-sm font-medium">{txDetails.recipientCountry || txDetails.paymentIntent?.payerCountry}</span>
+                        </div>
+                      )}
+                      {txDetails.currency && (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Coins className="w-4 h-4" />
+                            <span className="text-sm">Devise</span>
+                          </div>
+                          <span className="text-sm font-mono font-semibold">{txDetails.currency}</span>
+                        </div>
+                      )}
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 text-muted-foreground">
                           <CreditCard className="w-4 h-4" />

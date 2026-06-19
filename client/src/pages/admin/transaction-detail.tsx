@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import {
   CheckCircle, XCircle, Clock, ArrowLeft, Copy, User as UserIcon,
   Mail, Phone, MapPin, CreditCard, FileText, Calendar, Link2,
-  Zap, ArrowDownCircle, ArrowUpCircle, ArrowLeftRight, RefreshCw, AlertTriangle
+  Zap, ArrowDownCircle, ArrowUpCircle, ArrowLeftRight, RefreshCw, AlertTriangle, Globe, Coins
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -352,6 +352,12 @@ export default function AdminTransactionDetail() {
               <CardTitle className="text-sm text-muted-foreground uppercase tracking-wide">Fournisseur</CardTitle>
             </CardHeader>
             <CardContent className="divide-y divide-border">
+              {(tx.recipientCountry || tx.paymentIntent?.payerCountry) && (
+                <InfoRow icon={<Globe className="w-4 h-4" />} label="Pays" value={tx.recipientCountry || tx.paymentIntent?.payerCountry} />
+              )}
+              {tx.currency && (
+                <InfoRow icon={<Coins className="w-4 h-4" />} label="Devise" value={<span className="font-mono font-semibold">{tx.currency}</span>} />
+              )}
               <InfoRow icon={<CreditCard className="w-4 h-4" />} label="Opérateur" value={tx.operator.name} />
               <InfoRow icon={<Zap className="w-4 h-4" />} label="Fournisseur" value={
                 <span className="capitalize">{(tx.type === "deposit" && tx.operator.depositPaymentProvider) ? tx.operator.depositPaymentProvider : tx.operator.paymentProvider}</span>
