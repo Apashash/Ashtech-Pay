@@ -410,7 +410,23 @@ export default function AdminWithdrawals() {
                           <Phone className="w-4 h-4" />
                           <span className="text-sm font-medium">Numéro de Retrait</span>
                         </div>
-                        <span className="text-lg font-bold text-primary">{extractPhoneNumber(tx.description)}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg font-bold text-primary">{extractPhoneNumber(tx.description)}</span>
+                          {extractPhoneNumber(tx.description) && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigator.clipboard.writeText(extractPhoneNumber(tx.description)!);
+                                toast({ title: "Numéro copié !" });
+                              }}
+                              className="text-primary/60 hover:text-primary transition-colors p-0.5 rounded"
+                              title="Copier le numéro"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}

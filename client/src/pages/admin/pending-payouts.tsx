@@ -14,7 +14,7 @@ import {
 import {
   Clock, RefreshCw, Loader2, User, Phone, Banknote,
   ArrowUpRight, Send, AlertTriangle, CheckCircle2, XCircle,
-  BadgeCheck, ChevronDown, ChevronUp,
+  BadgeCheck, ChevronDown, ChevronUp, Copy,
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -248,7 +248,23 @@ export default function AdminPendingPayoutsPage() {
                           <div className="space-y-0.5">
                             <p className="text-xs text-muted-foreground flex items-center gap-1"><Phone className="w-3 h-3" /> Bénéficiaire</p>
                             <p className="font-medium">{payout.recipientName || "—"}</p>
-                            <p className="text-xs font-mono">{payout.recipientPhone || "—"}</p>
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-xs font-mono">{payout.recipientPhone || "—"}</p>
+                              {payout.recipientPhone && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigator.clipboard.writeText(payout.recipientPhone!);
+                                    toast({ title: "Numéro copié !" });
+                                  }}
+                                  className="text-muted-foreground hover:text-foreground transition-colors p-0.5 rounded"
+                                  title="Copier le numéro"
+                                >
+                                  <Copy className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
 
