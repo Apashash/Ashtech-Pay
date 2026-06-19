@@ -37,10 +37,11 @@ export const SUPPORTED_CURRENCIES = [
   "XAF",  // Cameroun, Centrafrique, Guinée Équatoriale, Tchad
   "XAFC", // Congo Brazzaville
   "XAFG", // Gabon
-  "XOF",  // Mali, Niger, Guinée-Bissau
+  "XOF",  // Niger, Guinée-Bissau
   "XOFB", // Bénin
   "XOFC", // Côte d'Ivoire
   "XOFF", // Burkina Faso
+  "XOFM", // Mali
   "XOFS", // Sénégal
   "XOFT", // Togo
   "CDF",  // RD Congo
@@ -86,7 +87,7 @@ export const COUNTRY_CURRENCIES: Record<string, SupportedCurrency> = {
   "Senegal": "XOFS",
   "Côte d'Ivoire": "XOFC",
   "Ivory Coast": "XOFC",
-  "Mali": "XOF",
+  "Mali": "XOFM",
   "Burkina Faso": "XOFF",
   "Burkina": "XOFF",
   "Niger": "XOFN",
@@ -124,6 +125,7 @@ export const EXCHANGE_RATES: Record<SupportedCurrency, number> = {
   "XOFB": 1,
   "XOFC": 1,
   "XOFF": 1,
+  "XOFM": 1,
   "XOFS": 1,
   "XOFT": 1,
   "CDF":  0.27,
@@ -179,6 +181,7 @@ export const CURRENCY_SYMBOLS: Record<SupportedCurrency, string> = {
   "XOFB": "FCFA",
   "XOFC": "FCFA",
   "XOFF": "FCFA",
+  "XOFM": "FCFA",
   "XOFS": "FCFA",
   "XOFT": "FCFA",
   "CDF":  "FC",
@@ -1009,7 +1012,7 @@ export const CURRENCY_ZONE: Record<string, SupportedCurrency> = {
   // XAF zone — Central Africa (stored in user.balance)
   CM: "XAF", CF: "XAF", CG: "XAF", GA: "XAF", GQ: "XAF", TD: "XAF",
   // XOF zone — West Africa
-  BJ: "XOFB", BF: "XOF", CI: "XOF", GW: "XOF", ML: "XOF", NE: "XOF", SN: "XOF", TG: "XOF",
+  BJ: "XOFB", BF: "XOFF", CI: "XOFC", GW: "XOF", ML: "XOFM", NE: "XOF", SN: "XOFS", TG: "XOFT",
   // Other countries
   GH: "GHS", NG: "NGN", KE: "KES", RW: "RWF", TZ: "TZS", UG: "UGX",
   CD: "CDF", GN: "GNF",
