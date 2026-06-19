@@ -191,7 +191,7 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
         currency: transaction.currency || "XAF",
         reference: payment.reference,
         provider: payment.provider,
-        country: (txUserFailed as any)?.country || "",
+        country: (transaction as any).recipientCountry || undefined,
         depositType: payment.type,
         paymentMethod: transaction.paymentMethod || undefined,
         phone: transaction.recipientPhone || undefined,
