@@ -599,7 +599,7 @@ export function downloadSDKDocs() {
 
   // ── §1  Introduction ──────────────────────────────────────────────────────
   y = sectionTitle(doc, "1. Introduction", y);
-  y = paragraph(doc, "L'Ashtech Pay API unifie plusieurs passerelles de paiement africaines en une seule interface REST. Initiez des paiements Mobile Money dans 16+ pays africains sans redirection. Le routage entre les operateurs est automatique — vous n'avez pas a choisir le fournisseur.", y);
+  y = paragraph(doc, "L'Ashtech Pay API unifie plusieurs passerelles de paiement africaines en une seule interface REST. Initiez des paiements Mobile Money dans 22+ pays africains sans redirection. Le routage entre les operateurs est automatique — vous n'avez pas a choisir le fournisseur.", y);
   y += 3;
   y = table(doc,
     ["Caracteristique", "Detail"],

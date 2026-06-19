@@ -112,7 +112,7 @@ import {
 const AFRIBAPAY_ISO_CURRENCY: Record<string, string> = {
   BF: "XOF", BJ: "XOFB", CD: "CDF", CF: "XAF", CG: "XAF",
   CI: "XOF", CM: "XAF", GA: "XAF", GM: "GMD", GN: "GNF",
-  GW: "XOF", ML: "XOF", NE: "XOF", NG: "NGN", RW: "RWF",
+  GQ: "XAF", GW: "XOF", ML: "XOF", NE: "XOF", NG: "NGN", RW: "RWF",
   SN: "XOF", TD: "XAF", TG: "XOF", KE: "KES", TZ: "TZS",
   UG: "UGX", GH: "GHS",
 };
@@ -12560,8 +12560,8 @@ export async function registerRoutes(
     }
   });
 
-  // GET /api/v1/hosted-payment/:id — check payment link status
-  app.get("/api/v1/hosted-payment/:id", async (req: Request, res: Response) => {
+  // GET /api/v1/hosted-payment/:payment_id — check payment link status
+  app.get("/api/v1/hosted-payment/:payment_id", async (req: Request, res: Response) => {
     try {
       const authHeader = req.headers.authorization || "";
       const hpKey = authHeader.replace("Bearer ", "").trim();
@@ -12571,7 +12571,7 @@ export async function registerRoutes(
       const merchant = await storage.getUserByHpKey(hpKey);
       if (!merchant) return res.status(401).json({ error: "unauthorized" });
 
-      const link = await storage.getPaymentLinkById(req.params.id);
+      const link = await storage.getPaymentLinkById(req.params.payment_id);
       if (!link) return res.status(404).json({ error: "not_found" });
       if (link.userId !== merchant.id) return res.status(403).json({ error: "forbidden" });
 

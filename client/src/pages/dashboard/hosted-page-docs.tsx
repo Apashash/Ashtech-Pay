@@ -181,7 +181,7 @@ export default function HostedPageDocs({ publicMode = false }: { publicMode?: bo
                 <span className="text-xs font-mono text-gray-500 border border-gray-300 px-1.5 py-0.5 rounded">v1.0</span>
               </div>
               <p className="text-sm text-gray-500 mt-1">
-                Intègre le checkout Ashtech Pay dans ton application via API REST. 16+ pays, Mobile Money.
+                Intègre le checkout Ashtech Pay dans ton application via API REST. 22+ pays, Mobile Money.
               </p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
