@@ -65,7 +65,7 @@ import {
   type HostedPaymentSession,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, sql, and, or, like, ilike, count, inArray, gt, gte, lte } from "drizzle-orm";
+import { eq, desc, sql, and, or, like, ilike, count, inArray, gt, gte, lt, lte } from "drizzle-orm";
 
 export interface IStorage {
   // User operations
@@ -1070,12 +1070,16 @@ export class DatabaseStorage implements IStorage {
     const allUsers = await db.select({ id: users.id, country: users.country }).from(users);
     const userCountryMap = new Map(allUsers.map(u => [u.id, u.country || "Inconnu"]));
 
-    const allTx = await db.select().from(transactions);
-    const filtered = allTx.filter(t =>
-      t.status === "completed" &&
-      (t.type === "deposit" || t.type === "payment_link" || t.type === "withdrawal" || t.type === "transfer_out") &&
-      (!resetAt || (t.createdAt && new Date(t.createdAt) > resetAt))
-    );
+    const countryTxConditions: any[] = [
+      eq(transactions.status, "completed"),
+      inArray(transactions.type, ["deposit", "payment_link", "withdrawal", "transfer_out"]),
+    ];
+    if (resetAt) countryTxConditions.push(gt(transactions.createdAt, resetAt));
+
+    const filtered = await db.select({
+      userId: transactions.userId,
+      amount: transactions.amount,
+    }).from(transactions).where(and(...countryTxConditions));
 
     const byCountry: Record<string, { volume: number; count: number }> = {};
     for (const tx of filtered) {
@@ -1157,15 +1161,18 @@ export class DatabaseStorage implements IStorage {
         break;
     }
 
-    const allTx = await db.select().from(transactions);
-    const filtered = allTx.filter(t => {
-      if (!t.createdAt) return false;
-      const d = new Date(t.createdAt);
-      if (periodStart && d < periodStart) return false;
-      if (periodEnd && d >= periodEnd) return false;
-      if (resetAt && d <= resetAt) return false;
-      return t.status === "completed";
-    });
+    const activityConditions: any[] = [eq(transactions.status, "completed")];
+    if (periodStart) activityConditions.push(gte(transactions.createdAt, periodStart));
+    if (periodEnd) activityConditions.push(lt(transactions.createdAt, periodEnd));
+    if (resetAt) activityConditions.push(gt(transactions.createdAt, resetAt));
+
+    const filtered = await db.select({
+      type: transactions.type,
+      source: transactions.source,
+      amount: transactions.amount,
+      currency: transactions.currency,
+      createdAt: transactions.createdAt,
+    }).from(transactions).where(and(...activityConditions));
 
     type Bucket = { date: string; deposit: number; withdrawal: number; payment_link: number; transfer: number; api_deposit: number; depositVol: number; withdrawalVol: number; paymentLinkVol: number; transferVol: number; apiDepositVol: number };
     const empty = (): Bucket => ({ date: "", deposit: 0, withdrawal: 0, payment_link: 0, transfer: 0, api_deposit: 0, depositVol: 0, withdrawalVol: 0, paymentLinkVol: 0, transferVol: 0, apiDepositVol: 0 });
@@ -1285,12 +1292,24 @@ export class DatabaseStorage implements IStorage {
         break;
     }
 
-    // Get all transactions — filter by resetAt in memory
-    const rawAllTx = await db.select().from(transactions);
-    let allTx = resetAt ? rawAllTx.filter(t => t.createdAt && new Date(t.createdAt) > resetAt) : rawAllTx;
-    // Apply period filter
-    if (periodStart) allTx = allTx.filter(t => t.createdAt && new Date(t.createdAt) >= periodStart!);
-    if (periodEnd) allTx = allTx.filter(t => t.createdAt && new Date(t.createdAt) < periodEnd!);
+    // Build WHERE conditions and push all filtering to SQL — never load all rows in memory
+    const txConditions: any[] = [];
+    if (resetAt) txConditions.push(gt(transactions.createdAt, resetAt));
+    if (periodStart) txConditions.push(gte(transactions.createdAt, periodStart));
+    if (periodEnd) txConditions.push(lt(transactions.createdAt, periodEnd));
+
+    const whereClause = txConditions.length > 0 ? and(...txConditions) : undefined;
+
+    const allTx = await db.select({
+      id: transactions.id,
+      type: transactions.type,
+      status: transactions.status,
+      amount: transactions.amount,
+      currency: transactions.currency,
+      feeAmount: transactions.feeAmount,
+      createdAt: transactions.createdAt,
+    }).from(transactions).where(whereClause);
+
     const completedTx = allTx.filter(t => t.status === "completed");
     
     const deposits = completedTx.filter(t => t.type === "deposit");
