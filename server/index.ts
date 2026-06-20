@@ -285,6 +285,42 @@ app.use((req, res, next) => {
     `);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_admin_logs_admin_id ON admin_logs(admin_id)`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_admin_logs_created_at ON admin_logs(created_at)`);
+    // Ensure withdrawal_numbers table and withdrawal_number_changes table exist
+    // (may be missing on Plesk deployments where drizzle-kit push was not re-run)
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS withdrawal_numbers (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id VARCHAR NOT NULL REFERENCES users(id),
+        phone_number TEXT NOT NULL,
+        operator_name TEXT,
+        label TEXT,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS withdrawal_number_changes (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id VARCHAR NOT NULL REFERENCES users(id),
+        withdrawal_number_id VARCHAR REFERENCES withdrawal_numbers(id),
+        action TEXT NOT NULL,
+        old_phone_number TEXT,
+        old_operator_name TEXT,
+        new_phone_number TEXT,
+        new_operator_name TEXT,
+        new_label TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        admin_id VARCHAR REFERENCES users(id),
+        admin_note TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        processed_at TIMESTAMP
+      )
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_withdrawal_numbers_user_id ON withdrawal_numbers(user_id)`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_withdrawal_number_changes_user_id ON withdrawal_number_changes(user_id)`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_withdrawal_number_changes_number_id ON withdrawal_number_changes(withdrawal_number_id)`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_withdrawal_number_changes_status ON withdrawal_number_changes(status)`);
     // Ensure audit_logs table exists (security audit trail — login, withdrawal, KYC, role changes…)
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS audit_logs (
@@ -304,7 +340,7 @@ app.use((req, res, next) => {
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id)`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action)`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DESC)`);
-    console.log("[Migration] Schema columns ready (api_key, notify_url, source, confirmed_at, hosted_page_configs, hosted_payment_sessions, payment_links.notify_url, token_revoked_before, conversion_requests.executed_at/by_id, user_notifications.type, wallets_unique_idx, admin_logs, audit_logs)");
+    console.log("[Migration] Schema columns ready (api_key, notify_url, source, confirmed_at, hosted_page_configs, hosted_payment_sessions, payment_links.notify_url, token_revoked_before, conversion_requests.executed_at/by_id, user_notifications.type, wallets_unique_idx, admin_logs, audit_logs, withdrawal_numbers, withdrawal_number_changes)");
 
     // ── 5.3 Re-encrypt existing plaintext sensitive fields ────────────────────
     // Only runs when FIELD_ENCRYPTION_KEY is set. Without the key, encryptField()
