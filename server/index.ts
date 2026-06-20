@@ -321,6 +321,16 @@ app.use((req, res, next) => {
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_withdrawal_number_changes_user_id ON withdrawal_number_changes(user_id)`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_withdrawal_number_changes_number_id ON withdrawal_number_changes(withdrawal_number_id)`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_withdrawal_number_changes_status ON withdrawal_number_changes(status)`);
+    // Ensure all columns exist on withdrawal_number_changes (table may have been created before these columns were added)
+    await db.execute(sql`ALTER TABLE withdrawal_number_changes ADD COLUMN IF NOT EXISTS old_phone_number TEXT`);
+    await db.execute(sql`ALTER TABLE withdrawal_number_changes ADD COLUMN IF NOT EXISTS old_operator_name TEXT`);
+    await db.execute(sql`ALTER TABLE withdrawal_number_changes ADD COLUMN IF NOT EXISTS new_phone_number TEXT`);
+    await db.execute(sql`ALTER TABLE withdrawal_number_changes ADD COLUMN IF NOT EXISTS new_operator_name TEXT`);
+    await db.execute(sql`ALTER TABLE withdrawal_number_changes ADD COLUMN IF NOT EXISTS new_label TEXT`);
+    await db.execute(sql`ALTER TABLE withdrawal_number_changes ADD COLUMN IF NOT EXISTS admin_note TEXT`);
+    await db.execute(sql`ALTER TABLE withdrawal_number_changes ADD COLUMN IF NOT EXISTS processed_at TIMESTAMP`);
+    // Ensure operator_name column exists on withdrawal_numbers (may be missing on older deployments)
+    await db.execute(sql`ALTER TABLE withdrawal_numbers ADD COLUMN IF NOT EXISTS operator_name TEXT`);
     // Ensure audit_logs table exists (security audit trail — login, withdrawal, KYC, role changes…)
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS audit_logs (
