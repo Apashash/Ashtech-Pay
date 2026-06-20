@@ -397,6 +397,8 @@ export const withdrawalNumberChanges = pgTable("withdrawal_number_changes", {
   userId: varchar("user_id").notNull().references(() => users.id),
   withdrawalNumberId: varchar("withdrawal_number_id").references(() => withdrawalNumbers.id), // null for new numbers
   action: text("action").notNull(), // 'add', 'update', 'delete'
+  oldPhoneNumber: text("old_phone_number"),
+  oldOperatorName: text("old_operator_name"),
   newPhoneNumber: text("new_phone_number"),
   newOperatorName: text("new_operator_name"),
   newLabel: text("new_label"),

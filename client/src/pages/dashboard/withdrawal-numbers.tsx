@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { WithdrawalNumber, WithdrawalNumberChange } from "@shared/schema";
-import { Phone, Plus, Loader2, Edit, Trash2, Clock, CheckCircle2, XCircle, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
+import { Phone, Plus, Loader2, Edit, Trash2, Clock, CheckCircle2, XCircle, AlertCircle, ChevronLeft, ChevronRight, ArrowRight } from "lucide-react";
 import { Link } from "wouter";
 import { useLanguage } from "@/lib/language";
 
@@ -64,6 +64,50 @@ export default function WithdrawalNumbersPage() {
       case "delete": return t.withdrawalNumbers.actionDelete;
       default: return action;
     }
+  };
+
+  const renderPhoneChange = (request: WithdrawalNumberChange) => {
+    const old = (request as any).oldPhoneNumber as string | null;
+    const oldOp = (request as any).oldOperatorName as string | null;
+    const newPhone = request.newPhoneNumber;
+    const newOp = request.newOperatorName;
+
+    if (request.action === "delete") {
+      // Show old number in red (deleted)
+      return old ? (
+        <div className="flex items-center gap-1.5 mt-1">
+          <span className="text-sm font-medium text-red-400 line-through">{old}</span>
+          {oldOp && <span className="text-xs text-red-400/70 line-through">{oldOp}</span>}
+        </div>
+      ) : null;
+    }
+
+    if (request.action === "add") {
+      // Show new number in green
+      return newPhone ? (
+        <div className="flex items-center gap-1.5 mt-1">
+          <span className="text-sm font-medium text-green-400">{newPhone}</span>
+          {newOp && <span className="text-xs text-green-400/70">{newOp}</span>}
+        </div>
+      ) : null;
+    }
+
+    if (request.action === "update") {
+      // Show old → new
+      return (
+        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+          {old && (
+            <span className="text-sm font-medium text-red-400 line-through">{old}{oldOp ? ` · ${oldOp}` : ""}</span>
+          )}
+          {old && newPhone && <ArrowRight className="w-3 h-3 text-muted-foreground shrink-0" />}
+          {newPhone && (
+            <span className="text-sm font-medium text-green-400">{newPhone}{newOp ? ` · ${newOp}` : ""}</span>
+          )}
+        </div>
+      );
+    }
+
+    return null;
   };
 
   return (
@@ -152,8 +196,7 @@ export default function WithdrawalNumbersPage() {
                       <Badge variant="outline" className="text-xs">{getActionText(request.action)}</Badge>
                       {getStatusBadge(request.status)}
                     </div>
-                    {request.newPhoneNumber && <p className="text-sm text-foreground mt-0.5">{request.newPhoneNumber}</p>}
-                    {request.newOperatorName && <p className="text-xs text-muted-foreground">{request.newOperatorName}</p>}
+                    {renderPhoneChange(request)}
                   </div>
                 </div>
               ))}
@@ -177,8 +220,7 @@ export default function WithdrawalNumbersPage() {
                         <Badge variant="outline" className="text-xs">{getActionText(request.action)}</Badge>
                         {getStatusBadge(request.status)}
                       </div>
-                      {request.newPhoneNumber && <p className="text-xs text-muted-foreground mt-0.5">{request.newPhoneNumber}</p>}
-                      {request.adminNote && <p className="text-xs text-muted-foreground">{t.withdrawalNumbers.noteLabel} {request.adminNote}</p>}
+                      {renderPhoneChange(request)}
                     </div>
                   </div>
                 ))}

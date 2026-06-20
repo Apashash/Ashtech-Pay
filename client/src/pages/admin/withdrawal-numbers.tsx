@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Phone, Loader2, Clock, CheckCircle2, XCircle, User, Calendar } from "lucide-react";
+import { Phone, Loader2, Clock, CheckCircle2, XCircle, User, Calendar, ArrowRight } from "lucide-react";
 import { useState } from "react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -19,6 +19,8 @@ interface WithdrawalNumberChangeWithUser {
   userId: string;
   withdrawalNumberId: string | null;
   action: string;
+  oldPhoneNumber: string | null;
+  oldOperatorName: string | null;
   newPhoneNumber: string | null;
   newOperatorName: string | null;
   newLabel: string | null;
@@ -32,6 +34,36 @@ interface WithdrawalNumberChangeWithUser {
     email: string;
     phone: string;
   };
+}
+
+function PhoneChange({ request }: { request: WithdrawalNumberChangeWithUser }) {
+  const { action, oldPhoneNumber, oldOperatorName, newPhoneNumber, newOperatorName } = request;
+  if (action === "delete") {
+    return oldPhoneNumber ? (
+      <div className="flex items-center gap-1.5">
+        <span className="font-medium text-red-400 line-through">{oldPhoneNumber}</span>
+        {oldOperatorName && <span className="text-sm text-red-400/70 line-through">{oldOperatorName}</span>}
+      </div>
+    ) : null;
+  }
+  if (action === "add") {
+    return newPhoneNumber ? (
+      <div className="flex items-center gap-1.5">
+        <span className="font-medium text-green-400">{newPhoneNumber}</span>
+        {newOperatorName && <span className="text-sm text-green-400/70">{newOperatorName}</span>}
+      </div>
+    ) : null;
+  }
+  if (action === "update") {
+    return (
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {oldPhoneNumber && <span className="font-medium text-red-400 line-through">{oldPhoneNumber}{oldOperatorName ? ` · ${oldOperatorName}` : ""}</span>}
+        {oldPhoneNumber && newPhoneNumber && <ArrowRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
+        {newPhoneNumber && <span className="font-medium text-green-400">{newPhoneNumber}{newOperatorName ? ` · ${newOperatorName}` : ""}</span>}
+      </div>
+    );
+  }
+  return null;
 }
 
 export default function AdminWithdrawalNumbersPage() {
@@ -165,15 +197,7 @@ export default function AdminWithdrawalNumbersPage() {
                           <span>{format(new Date(request.createdAt), "dd MMM yyyy à HH:mm", { locale: fr })}</span>
                         </div>
 
-                        {request.newPhoneNumber && (
-                          <div className="flex items-center gap-2">
-                            <Phone className="w-4 h-4 text-primary shrink-0" />
-                            <span className="font-medium">{request.newPhoneNumber}</span>
-                            {request.newOperatorName && (
-                              <span className="text-muted-foreground">({request.newOperatorName})</span>
-                            )}
-                          </div>
-                        )}
+                        <PhoneChange request={request} />
 
                         {request.newLabel && (
                           <p className="text-sm text-muted-foreground">Libellé: {request.newLabel}</p>
@@ -241,13 +265,7 @@ export default function AdminWithdrawalNumbersPage() {
                           <p className="text-sm text-muted-foreground">{request.user.fullName}</p>
                         )}
 
-                        {request.newPhoneNumber && (
-                          <p className="text-sm">{request.newPhoneNumber} ({request.newOperatorName})</p>
-                        )}
-
-                        {request.adminNote && (
-                          <p className="text-sm text-muted-foreground italic">Note: {request.adminNote}</p>
-                        )}
+                        <PhoneChange request={request} />
                       </div>
 
                       <div className="text-right text-sm text-muted-foreground">
@@ -274,24 +292,16 @@ export default function AdminWithdrawalNumbersPage() {
             </DialogHeader>
             {selectedRequest && (
               <div className="space-y-4">
-                <div className="p-3 rounded-lg bg-muted">
-                  <p className="font-medium">{selectedRequest.action === "delete" ? "Suppression" : "Modification"}</p>
-                  {selectedRequest.newPhoneNumber && (
-                    <p className="text-sm">{selectedRequest.newPhoneNumber} ({selectedRequest.newOperatorName})</p>
+                <div className="p-3 rounded-lg bg-muted space-y-1.5">
+                  <p className="font-medium text-sm">{selectedRequest.action === "delete" ? "Suppression de numéro" : "Modification de numéro"}</p>
+                  <PhoneChange request={selectedRequest} />
+                  {selectedRequest.user && (
+                    <p className="text-xs text-muted-foreground">{selectedRequest.user.fullName}</p>
                   )}
-                </div>
-                <div className="space-y-2">
-                  <Label>Note (optionnel)</Label>
-                  <Textarea
-                    placeholder="Ajouter une note..."
-                    value={adminNote}
-                    onChange={(e) => setAdminNote(e.target.value)}
-                    data-testid="input-admin-note"
-                  />
                 </div>
                 <Button
                   className="w-full bg-green-600 hover:bg-green-700"
-                  onClick={() => approveMutation.mutate({ id: selectedRequest.id, note: adminNote })}
+                  onClick={() => approveMutation.mutate({ id: selectedRequest.id })}
                   disabled={approveMutation.isPending}
                   data-testid="button-confirm-approve"
                 >

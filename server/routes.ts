@@ -5420,6 +5420,8 @@ export async function registerRoutes(
         withdrawalNumberId: numberId,
         action: "delete",
         status: "pending",
+        oldPhoneNumber: existingNumber.phoneNumber,
+        oldOperatorName: existingNumber.operatorName || null,
       });
 
       // Notify admin via Telegram
@@ -13540,7 +13542,7 @@ export async function registerRoutes(
           const adminUser = allUsers.find(u => u.role === "admin");
           if (!adminUser) return null;
 
-          const change = await storage.approveWithdrawalNumberChange(changeId, adminUser.id, "Approuvé via Telegram").catch(() => null);
+          const change = await storage.approveWithdrawalNumberChange(changeId, adminUser.id, undefined).catch(() => null);
           if (!change) return null;
 
           const wnUser = await storage.getUser(change.userId).catch(() => null);
