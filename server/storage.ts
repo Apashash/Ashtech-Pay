@@ -1367,11 +1367,16 @@ export class DatabaseStorage implements IStorage {
     return [];
   }
 
-  async getUsersByIds(ids: string[]): Promise<Map<string, { id: string; fullName: string; email: string; username: string }>> {
+  async getUsersByIds(ids: string[]): Promise<Map<string, { id: string; fullName: string; email: string; username: string; phone: string | null; createdAt: Date | null }>> {
     if (ids.length === 0) return new Map();
-    const result = await db.select({ id: users.id, fullName: users.fullName, email: users.email, username: users.username })
-      .from(users)
-      .where(inArray(users.id, ids));
+    const result = await db.select({
+      id: users.id,
+      fullName: users.fullName,
+      email: users.email,
+      username: users.username,
+      phone: users.phone,
+      createdAt: users.createdAt,
+    }).from(users).where(inArray(users.id, ids));
     return new Map(result.map(u => [u.id, u]));
   }
 

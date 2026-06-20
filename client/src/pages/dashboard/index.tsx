@@ -564,6 +564,8 @@ export default function DashboardHome() {
       queryClient.setQueryData(["/api/payment-links"], dashboardData.paymentLinks);
       queryClient.setQueryData(["/api/wallets"], dashboardData.wallets);
       queryClient.setQueryData(["/api/user/stats"], dashboardData.stats);
+      if ((dashboardData as any).globalMessages) queryClient.setQueryData(["/api/global-messages/active"], (dashboardData as any).globalMessages);
+      if ((dashboardData as any).ticketStats) queryClient.setQueryData(["/api/tickets/stats"], (dashboardData as any).ticketStats);
     }
   }, [dashboardData]);
 

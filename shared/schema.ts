@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, decimal, boolean, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, decimal, boolean, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -223,7 +223,12 @@ export const transactions = pgTable("transactions", {
   source: text("source"),          // null | "api" — marks API-originated transactions
   createdAt: timestamp("created_at").defaultNow(),
   confirmedAt: timestamp("confirmed_at"),
-});
+}, (t) => ({
+  txUserIdIdx: index("tx_user_id_idx").on(t.userId),
+  txStatusIdx: index("tx_status_idx").on(t.status),
+  txCreatedAtIdx: index("tx_created_at_idx").on(t.createdAt),
+  txStatusTypeIdx: index("tx_status_type_idx").on(t.status, t.type),
+}));
 
 export const paymentLinks = pgTable("payment_links", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -244,7 +249,9 @@ export const paymentLinks = pgTable("payment_links", {
   allowedCountries: text("allowed_countries").array(),
   notifyUrl: text("notify_url"),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (t) => ({
+  plUserIdIdx: index("pl_user_id_idx").on(t.userId),
+}));
 
 // Payment intents for public payment submissions (pending until verified)
 export const paymentIntents = pgTable("payment_intents", {

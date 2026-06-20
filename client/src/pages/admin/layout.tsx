@@ -528,7 +528,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       } catch { /* network error — ignore, will retry */ }
     };
 
-    const interval = setInterval(check, 3000);
+    const interval = setInterval(check, 30000);
     return () => { cancelled = true; clearInterval(interval); };
   }, [user]);
 

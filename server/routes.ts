@@ -2792,7 +2792,7 @@ export async function registerRoutes(
       const userId = req.userId!;
 
       // Run all queries in parallel for maximum speed
-      const [user, recentTransactions, paymentLinks, extraWallets, notifications, txStats] = await Promise.all([
+      const [user, recentTransactions, paymentLinks, extraWallets, notifications, txStats, globalMsgs, ticketStatsRow] = await Promise.all([
         storage.getUser(userId),
         // Only fetch the 50 most recent transactions for display
         db.select().from(transactionsTable).where(eq(transactionsTable.userId, userId))
@@ -2811,6 +2811,25 @@ export async function registerRoutes(
             COUNT(*) FILTER (WHERE status='completed' AND type='payment_link')::int AS link_payments,
             COALESCE(SUM(amount::numeric) FILTER (WHERE status='completed' AND type='payment_link'), 0) AS total_collected
           FROM transactions WHERE user_id = ${userId}
+        `),
+        // Global messages (banner announcements)
+        storage.getActiveGlobalMessages().then(all => {
+          const now = new Date();
+          return all.filter((m: any) => !m.expiresAt || new Date(m.expiresAt) > now);
+        }),
+        // Ticket stats — single SQL query instead of N message fetches
+        db.execute(drizzleSql`
+          SELECT
+            COUNT(*)::int AS total_count,
+            COUNT(*) FILTER (
+              WHERE st.status IN ('open', 'in_progress')
+              AND EXISTS (
+                SELECT 1 FROM ticket_messages tm
+                WHERE tm.ticket_id = st.id AND tm.is_admin = true
+                AND tm.created_at = (SELECT MAX(tm2.created_at) FROM ticket_messages tm2 WHERE tm2.ticket_id = st.id)
+              )
+            )::int AS unread_count
+          FROM support_tickets st WHERE st.user_id = ${userId}
         `),
       ]);
 
@@ -2838,8 +2857,11 @@ export async function registerRoutes(
         activeLinks: paymentLinks.filter(l => l.isActive).length,
       };
 
+      const ticketRow = (ticketStatsRow.rows?.[0] || {}) as any;
+      const ticketStats = { unreadCount: Number(ticketRow.unread_count || 0), totalCount: Number(ticketRow.total_count || 0) };
+
       const { password: _, ...safeUser } = user;
-      res.json({ user: safeUser, transactions: recentTransactions, paymentLinks, wallets, stats, notifications });
+      res.json({ user: safeUser, transactions: recentTransactions, paymentLinks, wallets, stats, notifications, globalMessages: globalMsgs, ticketStats });
     } catch (error) {
       console.error("Dashboard error:", error);
       res.status(500).json({ message: "Erreur serveur" });
@@ -9500,18 +9522,25 @@ export async function registerRoutes(
   // User: Get ticket stats (unread count based on open tickets with admin responses)
   app.get("/api/tickets/stats", requireAuth, async (req, res) => {
     try {
-      const tickets = await storage.getTicketsByUser(req.userId!);
-      let unreadCount = 0;
-      for (const ticket of tickets) {
-        if (ticket.status === "open" || ticket.status === "in_progress") {
-          const messages = await storage.getTicketMessages(ticket.id);
-          const lastMessage = messages[messages.length - 1];
-          if (lastMessage && lastMessage.isAdmin) {
-            unreadCount++;
-          }
-        }
-      }
-      res.json({ unreadCount, totalCount: tickets.length });
+      const userId = req.userId!;
+      const result = await db.execute(drizzleSql`
+        SELECT
+          COUNT(*)::int AS total_count,
+          COUNT(*) FILTER (
+            WHERE st.status IN ('open', 'in_progress')
+            AND EXISTS (
+              SELECT 1 FROM ticket_messages tm
+              WHERE tm.ticket_id = st.id AND tm.is_admin = true
+              AND tm.created_at = (
+                SELECT MAX(tm2.created_at) FROM ticket_messages tm2 WHERE tm2.ticket_id = st.id
+              )
+            )
+          )::int AS unread_count
+        FROM support_tickets st
+        WHERE st.user_id = ${userId}
+      `);
+      const row = (result.rows?.[0] || {}) as any;
+      res.json({ unreadCount: Number(row.unread_count || 0), totalCount: Number(row.total_count || 0) });
     } catch (error) {
       console.error("Get ticket stats error:", error);
       res.status(500).json({ message: "Erreur serveur" });
@@ -9915,20 +9944,15 @@ export async function registerRoutes(
   app.get("/api/admin/payment-links", requireAuth, requireAdmin, async (req, res) => {
     try {
       const links = await storage.getAllPaymentLinks();
-      const linksWithUsers = await Promise.all(
-        links.map(async (link) => {
-          const user = await storage.getUser(link.userId);
-          return {
-            ...link,
-            user: user ? {
-              id: user.id,
-              fullName: user.fullName,
-              email: user.email,
-              phone: user.phone,
-            } : null,
-          };
-        })
-      );
+      const userIds = [...new Set(links.map(l => l.userId))];
+      const userMap = await storage.getUsersByIds(userIds);
+      const linksWithUsers = links.map((link) => {
+        const user = userMap.get(link.userId);
+        return {
+          ...link,
+          user: user ? { id: user.id, fullName: user.fullName, email: user.email, phone: user.phone } : null,
+        };
+      });
       res.json(linksWithUsers);
     } catch (error) {
       console.error("Admin get payment links error:", error);
@@ -10658,40 +10682,40 @@ export async function registerRoutes(
         allDocMap.get(key)!.push(sub);
       }
 
-      // Enrich with user info + duplicate detection
-      const enrichedSubmissions = await Promise.all(
-        submissions.map(async (sub) => {
-          const user = await storage.getUser(sub.userId);
-          // Find other submissions with same document number (different submission id)
-          const key = sub.documentNumber?.trim().toLowerCase() || "";
-          const duplicates = (allDocMap.get(key) || []).filter(d => d.id !== sub.id);
-          const duplicateAccounts = await Promise.all(
-            duplicates.map(async (dup) => {
-              const dupUser = await storage.getUser(dup.userId);
-              return {
-                submissionId: dup.id,
-                userId: dup.userId,
-                status: dup.status,
-                fullName: dupUser?.fullName || "N/A",
-                email: dupUser?.email || "N/A",
-                username: dupUser?.username || "N/A",
-              };
-            })
-          );
+      // Batch-fetch all users needed (submissions + duplicates) in one query
+      const allNeededIds = new Set<string>();
+      for (const sub of submissions) allNeededIds.add(sub.userId);
+      for (const sub of allSubmissions) allNeededIds.add(sub.userId);
+      const userMap = await storage.getUsersByIds([...allNeededIds]);
+
+      const enrichedSubmissions = submissions.map((sub) => {
+        const user = userMap.get(sub.userId);
+        const key = sub.documentNumber?.trim().toLowerCase() || "";
+        const duplicates = (allDocMap.get(key) || []).filter(d => d.id !== sub.id);
+        const duplicateAccounts = duplicates.map((dup) => {
+          const dupUser = userMap.get(dup.userId);
           return {
-            ...sub,
-            user: user ? {
-              id: user.id,
-              fullName: user.fullName,
-              email: user.email,
-              phone: user.phone,
-              username: user.username,
-              createdAt: (user as any).createdAt,
-            } : null,
-            duplicateAccounts,
+            submissionId: dup.id,
+            userId: dup.userId,
+            status: dup.status,
+            fullName: dupUser?.fullName || "N/A",
+            email: dupUser?.email || "N/A",
+            username: dupUser?.username || "N/A",
           };
-        })
-      );
+        });
+        return {
+          ...sub,
+          user: user ? {
+            id: user.id,
+            fullName: user.fullName,
+            email: user.email,
+            phone: user.phone,
+            username: user.username,
+            createdAt: user.createdAt,
+          } : null,
+          duplicateAccounts,
+        };
+      });
 
       res.json(enrichedSubmissions);
     } catch (error) {
@@ -12844,46 +12868,43 @@ export async function registerRoutes(
 
   // ── Admin API Management ─────────────────────────────────────────────────────
 
-  // GET /api/admin/api-management — list users with API stats
+  // GET /api/admin/api-management — list users with API stats (SQL JOIN — no full table scans)
   app.get("/api/admin/api-management", requireAuth, requireAdmin, async (_req, res) => {
     try {
-      const allUsers = await storage.getAllUsers();
-      const allTransactions = await storage.getAllTransactions();
+      const rows = await db.execute(drizzleSql`
+        SELECT
+          u.id, u.full_name, u.email, u.username, u.is_verified, u.api_enabled, u.api_key, u.created_at,
+          COUNT(t.id) FILTER (WHERE t.status = 'completed')::int                            AS total_tx,
+          COUNT(t.id) FILTER (WHERE t.status = 'completed' AND t.source = 'api')::int       AS sdk_tx,
+          COUNT(t.id) FILTER (WHERE t.status = 'completed' AND t.source = 'hosted_page')::int AS hp_tx,
+          COALESCE(SUM(t.amount::numeric) FILTER (WHERE t.status = 'completed'), 0)            AS total_amount,
+          COALESCE(SUM(t.amount::numeric) FILTER (WHERE t.status = 'completed' AND t.source = 'api'), 0) AS sdk_amount,
+          COALESCE(SUM(t.amount::numeric) FILTER (WHERE t.status = 'completed' AND t.source = 'hosted_page'), 0) AS hp_amount
+        FROM users u
+        LEFT JOIN transactions t ON t.user_id = u.id
+        WHERE u.role NOT IN ('admin', 'support', 'finance')
+        GROUP BY u.id, u.full_name, u.email, u.username, u.is_verified, u.api_enabled, u.api_key, u.created_at
+        ORDER BY u.created_at DESC
+      `);
 
-      const result = allUsers
-        .filter((u: any) => u.role !== "admin" && u.role !== "support")
-        .map((u: any) => {
-          const userTxns = allTransactions.filter((t: any) => t.userId === u.id && t.status === "completed");
-
-          // Hosted Page API: transactions created via /v1/hosted-payment (source = "hosted_page")
-          const hpTxns = userTxns.filter((t: any) => t.source === "hosted_page");
-
-          // SDK: transactions created via /v1/collect (source = "api")
-          const sdkTxns = userTxns.filter((t: any) => t.source === "api");
-
-          const totalSdk = sdkTxns.reduce((s: number, t: any) => s + parseFloat(t.amount || "0"), 0);
-          const totalHp = hpTxns.reduce((s: number, t: any) => s + parseFloat(t.amount || "0"), 0);
-          const totalAll = totalSdk + totalHp;
-
-          return {
-            id: u.id,
-            fullName: u.fullName,
-            email: u.email,
-            username: u.username,
-            isVerified: u.isVerified,
-            apiEnabled: u.apiEnabled || false,
-            hasApiKey: !!u.apiKey,
-            createdAt: u.createdAt,
-            stats: {
-              totalTransactions: sdkTxns.length + hpTxns.length,
-              sdkTransactions: sdkTxns.length,
-              hpTransactions: hpTxns.length,
-              totalCollected: totalAll,
-              sdkCollected: totalSdk,
-              hpCollected: totalHp,
-            },
-          };
-        });
+      const result = (rows.rows as any[]).map(row => ({
+        id: row.id,
+        fullName: row.full_name,
+        email: row.email,
+        username: row.username,
+        isVerified: row.is_verified,
+        apiEnabled: row.api_enabled || false,
+        hasApiKey: !!row.api_key,
+        createdAt: row.created_at,
+        stats: {
+          totalTransactions: Number(row.total_tx || 0),
+          sdkTransactions: Number(row.sdk_tx || 0),
+          hpTransactions: Number(row.hp_tx || 0),
+          totalCollected: parseFloat(row.total_amount || "0"),
+          sdkCollected: parseFloat(row.sdk_amount || "0"),
+          hpCollected: parseFloat(row.hp_amount || "0"),
+        },
+      }));
 
       res.json(result);
     } catch (e: any) {
