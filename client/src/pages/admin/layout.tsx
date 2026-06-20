@@ -186,7 +186,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     queryKey: ["/api/admin/otp-status"],
     enabled: !!user && ["admin", "support", "finance"].includes((user as any).role),
     retry: false,
-    staleTime: 0,
+    staleTime: 15_000,
     refetchOnMount: true,
     gcTime: 10 * 60 * 1000,
   });

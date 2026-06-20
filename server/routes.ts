@@ -6944,30 +6944,30 @@ export async function registerRoutes(
     const sessionValid = typeof avsExp === "number" && avsExp > now;
     let verified = memValid || sessionValid;
 
-    // Tier 3: look up THIS session in DB by sessionID — handles PM2 multi-worker
-    // where req.session may lag on a different worker but the cookie is always correct.
-    // Keyed by sessionID only — prevents cross-browser / cross-session OTP bypass.
+    // Tier 3: ONE single DB query fetching the session row — extract both _avs and _pav
+    // at once to avoid 2 sequential round-trips to the remote DB (was the main perf bottleneck).
     // Tries sessionPool first then falls back to main pool if sessionPool is exhausted.
+    let dbSessData: Record<string, any> | null = null;
     if (!verified && req.sessionID) {
       const poolsToTry = [sessionPool, pool];
-      otpStatusOuter: for (const queryPool of poolsToTry) {
-        for (let attempt = 0; attempt < 2 && !verified; attempt++) {
+      dbFetch: for (const queryPool of poolsToTry) {
+        for (let attempt = 0; attempt < 2; attempt++) {
           try {
             const dbRow = await queryPool.query(
               `SELECT sess FROM session WHERE sid = $1 AND expire > NOW()`,
               [req.sessionID]
             );
             if (dbRow.rows.length > 0) {
-              const sessData = typeof dbRow.rows[0].sess === "string"
+              dbSessData = typeof dbRow.rows[0].sess === "string"
                 ? JSON.parse(dbRow.rows[0].sess)
                 : dbRow.rows[0].sess;
-              const dbAvs = sessData?._avs;
+              const dbAvs = dbSessData?._avs;
               if (typeof dbAvs === "number" && dbAvs > now) {
                 verified = true;
                 adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: dbAvs });
               }
             }
-            break otpStatusOuter;
+            break dbFetch;
           } catch {
             if (attempt === 0) {
               await new Promise(r => setTimeout(r, 200));
@@ -6994,22 +6994,28 @@ export async function registerRoutes(
   const pavExp = req.session._pav;
   const panelValid = typeof pavExp === "number" && pavExp > now;
 
-  // Also check DB session for _pav (PM2 multi-worker)
+  // Re-use the DB row already fetched above — no second round-trip needed.
   let panelValidDb = false;
-  if (!panelValid && req.sessionID) {
-    try {
-      const dbRow = await pool.query(
-        `SELECT sess FROM session WHERE sid = $1 AND expire > NOW()`,
-        [req.sessionID]
-      );
-      if (dbRow.rows.length > 0) {
-        const sessData = typeof dbRow.rows[0].sess === "string"
-          ? JSON.parse(dbRow.rows[0].sess)
-          : dbRow.rows[0].sess;
-        const dbPav = sessData?._pav;
-        if (typeof dbPav === "number" && dbPav > now) panelValidDb = true;
-      }
-    } catch { /* ignore */ }
+  if (!panelValid) {
+    if (dbSessData) {
+      const dbPav = dbSessData._pav;
+      if (typeof dbPav === "number" && dbPav > now) panelValidDb = true;
+    } else if (!verified && req.sessionID) {
+      // dbSessData is null only when Tier 3 was skipped (verified in memory/session already).
+      // In that case we still need _pav from DB if not in req.session.
+      try {
+        const dbRow = await pool.query(
+          `SELECT sess FROM session WHERE sid = $1 AND expire > NOW()`,
+          [req.sessionID]
+        );
+        if (dbRow.rows.length > 0) {
+          const sd = typeof dbRow.rows[0].sess === "string"
+            ? JSON.parse(dbRow.rows[0].sess)
+            : dbRow.rows[0].sess;
+          if (typeof sd?._pav === "number" && sd._pav > now) panelValidDb = true;
+        }
+      } catch { /* ignore */ }
+    }
   }
 
   const needsPanelVerify = verified && !panelValid && !panelValidDb;

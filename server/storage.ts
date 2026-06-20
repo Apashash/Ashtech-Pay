@@ -303,10 +303,35 @@ export interface IStorage {
   updateHostedPaymentSession(id: string, updates: Partial<HostedPaymentSession>): Promise<void>;
 }
 
+// ── Short-lived in-memory user cache ──────────────────────────────────────────
+// Avoids a DB round-trip on every authenticated request (requireAuth + requireAdmin
+// each call getUser). TTL: 20 seconds — short enough that role/ban changes propagate
+// quickly, long enough to collapse the storm of calls per page load.
+const userCache = new Map<string, { user: User; expiresAt: number }>();
+const USER_CACHE_TTL_MS = 20_000;
+
+function getCachedUser(id: string): User | undefined {
+  const entry = userCache.get(id);
+  if (!entry) return undefined;
+  if (entry.expiresAt < Date.now()) { userCache.delete(id); return undefined; }
+  return entry.user;
+}
+
+function setCachedUser(user: User): void {
+  userCache.set(user.id, { user, expiresAt: Date.now() + USER_CACHE_TTL_MS });
+}
+
+export function invalidateUserCache(id: string): void {
+  userCache.delete(id);
+}
+
 export class DatabaseStorage implements IStorage {
   // User operations
   async getUser(id: string): Promise<User | undefined> {
+    const cached = getCachedUser(id);
+    if (cached) return cached;
     const [user] = await db.select().from(users).where(eq(users.id, id));
+    if (user) setCachedUser(user);
     return user || undefined;
   }
 
@@ -344,6 +369,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateUserBalance(id: string, amount: number): Promise<User | undefined> {
+    invalidateUserCache(id);
     const [user] = await db.select().from(users).where(eq(users.id, id));
     if (!user) return undefined;
     
@@ -360,6 +386,7 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, id))
       .returning();
     
+    if (updatedUser) setCachedUser(updatedUser);
     return updatedUser;
   }
 
@@ -376,12 +403,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateUserCurrency(id: string, currency: SupportedCurrency): Promise<User | undefined> {
+    invalidateUserCache(id);
     const [updatedUser] = await db
       .update(users)
       .set({ preferredCurrency: currency })
       .where(eq(users.id, id))
       .returning();
-    
+    if (updatedUser) setCachedUser(updatedUser);
     return updatedUser || undefined;
   }
 
@@ -639,27 +667,34 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateUser(id: string, updates: Partial<User>): Promise<User | undefined> {
+    invalidateUserCache(id);
     const [user] = await db.update(users).set(updates).where(eq(users.id, id)).returning();
+    if (user) setCachedUser(user);
     return user || undefined;
   }
 
   async banUser(id: string, reason: string): Promise<User | undefined> {
+    invalidateUserCache(id);
     const [user] = await db.update(users)
       .set({ isBanned: true, banReason: reason })
       .where(eq(users.id, id))
       .returning();
+    if (user) setCachedUser(user);
     return user || undefined;
   }
 
   async unbanUser(id: string): Promise<User | undefined> {
+    invalidateUserCache(id);
     const [user] = await db.update(users)
       .set({ isBanned: false, banReason: null })
       .where(eq(users.id, id))
       .returning();
+    if (user) setCachedUser(user);
     return user || undefined;
   }
 
   async deleteUser(id: string): Promise<void> {
+    invalidateUserCache(id);
     // Handle all foreign key relationships
     await db.delete(userNotifications).where(eq(userNotifications.userId, id));
     
@@ -983,6 +1018,7 @@ export class DatabaseStorage implements IStorage {
 
   async updateUserLastSeen(userId: string): Promise<void> {
     await db.update(users).set({ lastSeenAt: new Date() }).where(eq(users.id, userId));
+    invalidateUserCache(userId);
   }
 
   // Admin: Logs
