@@ -7761,7 +7761,8 @@ export async function registerRoutes(
   // Admin: Volume par pays
   app.get("/api/admin/stats/by-country", requireAuth, requireAdmin, async (req, res) => {
     try {
-      const result = await storage.getStatsByCountry();
+      const period = typeof req.query.period === "string" ? req.query.period : "this_month";
+      const result = await storage.getStatsByCountry(period);
       res.json(result);
     } catch (error) {
       console.error("Stats by country error:", error);

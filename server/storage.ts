@@ -1099,9 +1099,50 @@ export class DatabaseStorage implements IStorage {
     await this.upsertSetting("stats_reset_at", new Date().toISOString(), "Date de réinitialisation des statistiques financières");
   }
 
-  async getStatsByCountry(): Promise<{ country: string; volume: number; count: number }[]> {
+  async getStatsByCountry(period: string = "this_month"): Promise<{ country: string; volume: number; count: number }[]> {
     const resetSetting = await this.getSetting("stats_reset_at");
     const resetAt: Date | null = resetSetting ? new Date(resetSetting.value) : null;
+
+    // Compute period bounds (same logic as getStatsActivity)
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const dayOfWeek = now.getDay() === 0 ? 7 : now.getDay();
+    let periodStart: Date | null = null;
+    let periodEnd: Date | null = null;
+
+    switch (period) {
+      case "today":
+        periodStart = todayStart;
+        break;
+      case "yesterday":
+        periodStart = new Date(todayStart.getTime() - 86400000);
+        periodEnd = todayStart;
+        break;
+      case "this_week":
+        periodStart = new Date(todayStart.getTime() - (dayOfWeek - 1) * 86400000);
+        break;
+      case "last_week":
+        periodStart = new Date(todayStart.getTime() - dayOfWeek * 86400000 - 6 * 86400000);
+        periodEnd = new Date(todayStart.getTime() - (dayOfWeek - 1) * 86400000);
+        break;
+      case "last_month":
+        periodStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        periodEnd = new Date(now.getFullYear(), now.getMonth(), 1);
+        break;
+      case "this_year":
+        periodStart = new Date(now.getFullYear(), 0, 1);
+        break;
+      case "last_year":
+        periodStart = new Date(now.getFullYear() - 1, 0, 1);
+        periodEnd = new Date(now.getFullYear(), 0, 1);
+        break;
+      case "all":
+        periodStart = null;
+        break;
+      default: // this_month
+        periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        break;
+    }
 
     const allUsers = await db.select({ id: users.id, country: users.country }).from(users);
     const userCountryMap = new Map(allUsers.map(u => [u.id, u.country || "Inconnu"]));
@@ -1110,6 +1151,8 @@ export class DatabaseStorage implements IStorage {
       eq(transactions.status, "completed"),
       inArray(transactions.type, ["deposit", "payment_link", "withdrawal", "transfer_out"]),
     ];
+    if (periodStart) countryTxConditions.push(gte(transactions.createdAt, periodStart));
+    if (periodEnd) countryTxConditions.push(lt(transactions.createdAt, periodEnd));
     if (resetAt) countryTxConditions.push(gt(transactions.createdAt, resetAt));
 
     const filtered = await db.select({

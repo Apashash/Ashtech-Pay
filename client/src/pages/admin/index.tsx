@@ -114,8 +114,8 @@ export default function AdminDashboard() {
     mutationFn: () => apiRequest("POST", "/api/admin/reset-stats"),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/admin/stats?period=${period}`] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/stats/activity"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/stats/by-country"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/admin/stats/activity?period=${period}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/admin/stats/by-country?period=${period}`] });
       setShowResetDialog(false);
       toast({ title: "Réinitialisé", description: "Les statistiques ont été remises à zéro." });
     },
@@ -135,7 +135,7 @@ export default function AdminDashboard() {
   });
 
   const { data: countryData = [] } = useQuery<{ country: string; volume: number; count: number }[]>({
-    queryKey: ["/api/admin/stats/by-country"],
+    queryKey: [`/api/admin/stats/by-country?period=${period}`],
     refetchInterval: 30000,
   });
 
@@ -648,7 +648,7 @@ export default function AdminDashboard() {
               <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Géographie</p>
               <CardTitle className="flex items-center gap-2 text-base">
                 <TrendingUp className="w-4 h-4 text-muted-foreground" />
-                Top 8 pays — Nombre de transactions
+                Top 8 pays — {period === "today" ? "Aujourd'hui" : period === "yesterday" ? "Hier" : period === "this_week" ? "Cette semaine" : period === "last_week" ? "Semaine dernière" : period === "last_month" ? "Mois dernier" : period === "this_year" ? "Cette année" : period === "last_year" ? "L'an dernier" : period === "all" ? "Tout" : "Ce mois"}
               </CardTitle>
             </CardHeader>
             <CardContent>
