@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { and, lt, inArray, sql } from "drizzle-orm";
+import { and, lt, inArray, sql, isNotNull } from "drizzle-orm";
 import {
   transactions,
   paymentIntents,
@@ -7,6 +7,7 @@ import {
   auditLogs,
   conversionRequests,
   hostedPaymentSessions,
+  userNotifications,
 } from "@shared/schema";
 
 const CLEANUP_INTERVAL = 24 * 60 * 60 * 1000; // 24 heures
@@ -25,7 +26,18 @@ export async function cleanupOldTransactions() {
 
     const FINAL_STATUSES = ["completed", "failed", "cancelled", "expired"];
 
-    // 1. Transactions utilisateurs (dépôts, retraits, envois, liens de paiement)
+    // 1a. Supprimer d'abord les notifications liées aux transactions à supprimer
+    //     (contrainte FK user_notifications.transaction_id → transactions.id)
+    await db.execute(sql`
+      DELETE FROM user_notifications
+      WHERE transaction_id IN (
+        SELECT id FROM transactions
+        WHERE created_at < ${cutoff}
+        AND status = ANY(ARRAY[${sql.raw(FINAL_STATUSES.map(s => `'${s}'`).join(","))}])
+      )
+    `);
+
+    // 1b. Transactions utilisateurs (dépôts, retraits, envois, liens de paiement)
     const txResult = await db
       .delete(transactions)
       .where(

@@ -4,8 +4,11 @@ import * as schema from "@shared/schema";
 
 const { Pool } = pg;
 
-// Prefer SUPABASE_DATABASE_URL (production data) over Replit's local empty DB
-const databaseUrl = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
+// Prefer SUPABASE_DB_URL (pooler URL, editable env var) > SUPABASE_DATABASE_URL (secret) > Replit local DB
+const databaseUrl = process.env.SUPABASE_DB_URL || process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
+
+// Log which DB source is used at startup (override the one below)
+const _dbSource = process.env.SUPABASE_DB_URL ? "SUPABASE_DB_URL" : process.env.SUPABASE_DATABASE_URL ? "SUPABASE_DATABASE_URL" : "DATABASE_URL";
 
 if (!databaseUrl) {
   throw new Error(
@@ -14,7 +17,7 @@ if (!databaseUrl) {
 }
 
 // Log which DB source is used at startup
-const dbSource = process.env.SUPABASE_DATABASE_URL ? "SUPABASE_DATABASE_URL" : "DATABASE_URL";
+const dbSource = _dbSource;
 console.log(`[DB] Using ${dbSource} — host: ${databaseUrl.replace(/:[^:@]+@/, ":***@").split("/").slice(0, 3).join("/")}`);
 
 // Replit's managed PostgreSQL does not require SSL
@@ -56,12 +59,18 @@ function addAppName(url: string, name: string): string {
 
 const APP_DB_NAME = "ashtech_secure_app";
 
+// Supabase Transaction mode pooler (port 6543) requires simple query protocol
+// — no prepared statements. We detect pooler by hostname and set allowExitOnIdle.
+const isPooler = (databaseUrl || "").includes("pooler.supabase.com");
+
 export const pool = new Pool({
   connectionString: addAppName(databaseUrl, APP_DB_NAME),
   ssl: sslConfig,
   max: MAIN_POOL_MAX,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
+  // Disable prepared statements for pgBouncer Transaction mode
+  ...(isPooler ? { statement_timeout: 0 } : {}),
 });
 
 // ── Error tracking per pool (for /api/admin/pool-status diagnostic) ─────────
