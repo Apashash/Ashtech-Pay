@@ -1103,7 +1103,6 @@ export class DatabaseStorage implements IStorage {
     const resetSetting = await this.getSetting("stats_reset_at");
     const resetAt: Date | null = resetSetting ? new Date(resetSetting.value) : null;
 
-    // Compute period bounds (same logic as getStatsActivity)
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const dayOfWeek = now.getDay() === 0 ? 7 : now.getDay();
@@ -1111,74 +1110,53 @@ export class DatabaseStorage implements IStorage {
     let periodEnd: Date | null = null;
 
     switch (period) {
-      case "today":
-        periodStart = todayStart;
-        break;
-      case "yesterday":
-        periodStart = new Date(todayStart.getTime() - 86400000);
-        periodEnd = todayStart;
-        break;
-      case "this_week":
-        periodStart = new Date(todayStart.getTime() - (dayOfWeek - 1) * 86400000);
-        break;
-      case "last_week":
-        periodStart = new Date(todayStart.getTime() - dayOfWeek * 86400000 - 6 * 86400000);
-        periodEnd = new Date(todayStart.getTime() - (dayOfWeek - 1) * 86400000);
-        break;
-      case "last_month":
-        periodStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        periodEnd = new Date(now.getFullYear(), now.getMonth(), 1);
-        break;
-      case "this_year":
-        periodStart = new Date(now.getFullYear(), 0, 1);
-        break;
-      case "last_year":
-        periodStart = new Date(now.getFullYear() - 1, 0, 1);
-        periodEnd = new Date(now.getFullYear(), 0, 1);
-        break;
-      case "all":
-        periodStart = null;
-        break;
-      default: // this_month
-        periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
-        break;
+      case "today":      periodStart = todayStart; break;
+      case "yesterday":  periodStart = new Date(todayStart.getTime() - 86400000); periodEnd = todayStart; break;
+      case "this_week":  periodStart = new Date(todayStart.getTime() - (dayOfWeek - 1) * 86400000); break;
+      case "last_week":  periodStart = new Date(todayStart.getTime() - dayOfWeek * 86400000 - 6 * 86400000); periodEnd = new Date(todayStart.getTime() - (dayOfWeek - 1) * 86400000); break;
+      case "last_month": periodStart = new Date(now.getFullYear(), now.getMonth() - 1, 1); periodEnd = new Date(now.getFullYear(), now.getMonth(), 1); break;
+      case "this_year":  periodStart = new Date(now.getFullYear(), 0, 1); break;
+      case "last_year":  periodStart = new Date(now.getFullYear() - 1, 0, 1); periodEnd = new Date(now.getFullYear(), 0, 1); break;
+      case "all":        periodStart = null; break;
+      default:           periodStart = new Date(now.getFullYear(), now.getMonth(), 1); break;
     }
 
-    const allUsers = await db.select({ id: users.id, country: users.country }).from(users);
-    const userCountryMap = new Map(allUsers.map(u => [u.id, u.country || "Inconnu"]));
-
-    const countryTxConditions: any[] = [
+    // JOIN transactions with users in SQL — GROUP BY country — returns ~20 rows max
+    const conditions: any[] = [
       eq(transactions.status, "completed"),
       inArray(transactions.type, ["deposit", "payment_link", "withdrawal", "transfer_out"]),
     ];
-    if (periodStart) countryTxConditions.push(gte(transactions.createdAt, periodStart));
-    if (periodEnd) countryTxConditions.push(lt(transactions.createdAt, periodEnd));
-    if (resetAt) countryTxConditions.push(gt(transactions.createdAt, resetAt));
+    if (periodStart) conditions.push(gte(transactions.createdAt, periodStart));
+    if (periodEnd)   conditions.push(lt(transactions.createdAt, periodEnd));
+    if (resetAt)     conditions.push(gt(transactions.createdAt, resetAt));
 
-    const filtered = await db.select({
-      userId: transactions.userId,
-      amount: transactions.amount,
-    }).from(transactions).where(and(...countryTxConditions));
+    const rows = await db
+      .select({
+        country: sql<string>`COALESCE(NULLIF(${users.country}, ''), 'Inconnu')`,
+        volume:  sql<string>`COALESCE(SUM(${transactions.amount}::numeric), 0)`,
+        cnt:     sql<string>`COUNT(*)`,
+      })
+      .from(transactions)
+      .innerJoin(users, eq(transactions.userId, users.id))
+      .where(and(...conditions))
+      .groupBy(sql`COALESCE(NULLIF(${users.country}, ''), 'Inconnu')`)
+      .orderBy(sql`COUNT(*) DESC`)
+      .limit(8);
 
-    const byCountry: Record<string, { volume: number; count: number }> = {};
-    for (const tx of filtered) {
-      const country = userCountryMap.get(tx.userId) || "Inconnu";
-      if (!byCountry[country]) byCountry[country] = { volume: 0, count: 0 };
-      byCountry[country].volume += parseFloat(tx.amount);
-      byCountry[country].count += 1;
-    }
-
-    return Object.entries(byCountry)
-      .map(([country, data]) => ({ country, volume: data.volume, count: data.count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 8);
+    return rows.map(r => ({
+      country: r.country,
+      volume: parseFloat(r.volume),
+      count: parseInt(r.cnt, 10),
+    }));
   }
 
   async getStatsActivity(period: string = "this_month"): Promise<{ date: string; deposit: number; withdrawal: number; payment_link: number; transfer: number; depositVol: number; withdrawalVol: number; paymentLinkVol: number; transferVol: number }[]> {
-    const resetSetting = await this.getSetting("stats_reset_at");
+    const [resetSetting, allSettings] = await Promise.all([
+      this.getSetting("stats_reset_at"),
+      this.getAllSettings(),
+    ]);
     const resetAt: Date | null = resetSetting ? new Date(resetSetting.value) : null;
 
-    const allSettings = await this.getAllSettings();
     const fxRates: Record<string, number> = {};
     allSettings.forEach((s: { key: string; value: string }) => {
       if (s.key.startsWith("fx_rate_")) {
@@ -1205,66 +1183,44 @@ export class DatabaseStorage implements IStorage {
     let useHourly = false;
 
     switch (period) {
-      case "today":
-        periodStart = todayStart;
-        useHourly = true;
-        break;
-      case "yesterday":
-        periodStart = new Date(todayStart.getTime() - 86400000);
-        periodEnd = todayStart;
-        useHourly = true;
-        break;
-      case "this_week":
-        periodStart = new Date(todayStart.getTime() - (dayOfWeek - 1) * 86400000);
-        break;
-      case "last_week":
-        periodStart = new Date(todayStart.getTime() - dayOfWeek * 86400000 - 6 * 86400000);
-        periodEnd = new Date(todayStart.getTime() - (dayOfWeek - 1) * 86400000);
-        break;
-      case "last_month":
-        periodStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        periodEnd = new Date(now.getFullYear(), now.getMonth(), 1);
-        break;
-      case "this_year":
-        periodStart = new Date(now.getFullYear(), 0, 1);
-        break;
-      case "last_year":
-        periodStart = new Date(now.getFullYear() - 1, 0, 1);
-        periodEnd = new Date(now.getFullYear(), 0, 1);
-        break;
-      case "all":
-        periodStart = new Date(todayStart.getTime() - 89 * 86400000);
-        break;
-      default: // this_month
-        periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
-        break;
+      case "today":      periodStart = todayStart; useHourly = true; break;
+      case "yesterday":  periodStart = new Date(todayStart.getTime() - 86400000); periodEnd = todayStart; useHourly = true; break;
+      case "this_week":  periodStart = new Date(todayStart.getTime() - (dayOfWeek - 1) * 86400000); break;
+      case "last_week":  periodStart = new Date(todayStart.getTime() - dayOfWeek * 86400000 - 6 * 86400000); periodEnd = new Date(todayStart.getTime() - (dayOfWeek - 1) * 86400000); break;
+      case "last_month": periodStart = new Date(now.getFullYear(), now.getMonth() - 1, 1); periodEnd = new Date(now.getFullYear(), now.getMonth(), 1); break;
+      case "this_year":  periodStart = new Date(now.getFullYear(), 0, 1); break;
+      case "last_year":  periodStart = new Date(now.getFullYear() - 1, 0, 1); periodEnd = new Date(now.getFullYear(), 0, 1); break;
+      case "all":        periodStart = new Date(todayStart.getTime() - 89 * 86400000); break;
+      default:           periodStart = new Date(now.getFullYear(), now.getMonth(), 1); break;
     }
 
     const activityConditions: any[] = [eq(transactions.status, "completed")];
     if (periodStart) activityConditions.push(gte(transactions.createdAt, periodStart));
-    if (periodEnd) activityConditions.push(lt(transactions.createdAt, periodEnd));
-    if (resetAt) activityConditions.push(gt(transactions.createdAt, resetAt));
+    if (periodEnd)   activityConditions.push(lt(transactions.createdAt, periodEnd));
+    if (resetAt)     activityConditions.push(gt(transactions.createdAt, resetAt));
 
-    const filtered = await db.select({
-      type: transactions.type,
-      source: transactions.source,
-      amount: transactions.amount,
-      currency: transactions.currency,
-      createdAt: transactions.createdAt,
-    }).from(transactions).where(and(...activityConditions));
+    // Use SQL DATE_TRUNC to aggregate by bucket — returns ~30 rows max instead of thousands
+    const truncExpr = useHourly
+      ? sql<string>`TO_CHAR(DATE_TRUNC('hour', ${transactions.createdAt}), 'YYYY-MM-DD"T"HH24')`
+      : sql<string>`TO_CHAR(DATE_TRUNC('day',  ${transactions.createdAt}), 'YYYY-MM-DD')`;
 
+    const rows = await db
+      .select({
+        bucket:     truncExpr,
+        type:       transactions.type,
+        source:     transactions.source,
+        totalAmt:   sql<string>`COALESCE(SUM(${transactions.amount}::numeric), 0)`,
+        cnt:        sql<string>`COUNT(*)`,
+        currency:   transactions.currency,
+      })
+      .from(transactions)
+      .where(and(...activityConditions))
+      .groupBy(truncExpr, transactions.type, transactions.source, transactions.currency);
+
+    // Build empty bucket scaffold, then fill from aggregated rows
     type Bucket = { date: string; deposit: number; withdrawal: number; payment_link: number; transfer: number; api_deposit: number; depositVol: number; withdrawalVol: number; paymentLinkVol: number; transferVol: number; apiDepositVol: number };
     const empty = (): Bucket => ({ date: "", deposit: 0, withdrawal: 0, payment_link: 0, transfer: 0, api_deposit: 0, depositVol: 0, withdrawalVol: 0, paymentLinkVol: 0, transferVol: 0, apiDepositVol: 0 });
     const buckets: Record<string, Bucket> = {};
-
-    const addTx = (b: Bucket, tx: typeof filtered[0]) => {
-      const vol = toXAF(parseFloat(tx.amount || "0"), tx.currency || "XAF");
-      if (tx.type === "deposit" && tx.source === "api") { b.api_deposit += 1; b.apiDepositVol += vol; }
-      else if (tx.type === "deposit") { b.deposit += 1; b.depositVol += vol; }
-      else if (tx.type === "withdrawal") { b.withdrawal += 1; b.withdrawalVol += vol; }
-      else if (tx.type === "payment_link") { b.payment_link += 1; b.paymentLinkVol += vol; }
-      else if (tx.type === "transfer_out") { b.transfer += 1; b.transferVol += vol; }
-    };
 
     if (useHourly) {
       const start = periodStart!;
@@ -1273,10 +1229,6 @@ export class DatabaseStorage implements IStorage {
         const key = h.toISOString().slice(0, 13);
         buckets[key] = { ...empty(), date: key };
       }
-      for (const tx of filtered) {
-        const key = new Date(tx.createdAt!).toISOString().slice(0, 13);
-        if (buckets[key]) addTx(buckets[key], tx);
-      }
     } else {
       const start = periodStart || new Date(todayStart.getTime() - 29 * 86400000);
       const end = periodEnd || now;
@@ -1284,22 +1236,37 @@ export class DatabaseStorage implements IStorage {
         const key = d.toISOString().slice(0, 10);
         buckets[key] = { ...empty(), date: key };
       }
-      for (const tx of filtered) {
-        const key = new Date(tx.createdAt!).toISOString().slice(0, 10);
-        if (buckets[key]) addTx(buckets[key], tx);
-      }
+    }
+
+    for (const row of rows) {
+      const key = row.bucket;
+      if (!buckets[key]) continue;
+      const b = buckets[key];
+      const vol = toXAF(parseFloat(row.totalAmt), row.currency || "XAF");
+      const n   = parseInt(row.cnt, 10);
+      if (row.type === "deposit" && row.source === "api") { b.api_deposit += n; b.apiDepositVol += vol; }
+      else if (row.type === "deposit")      { b.deposit      += n; b.depositVol      += vol; }
+      else if (row.type === "withdrawal")   { b.withdrawal   += n; b.withdrawalVol   += vol; }
+      else if (row.type === "payment_link") { b.payment_link += n; b.paymentLinkVol  += vol; }
+      else if (row.type === "transfer_out") { b.transfer     += n; b.transferVol     += vol; }
     }
 
     return Object.values(buckets);
   }
 
   async getAdminStats(period: string = "all"): Promise<any> {
-    const resetSetting = await this.getSetting("stats_reset_at");
+    // ── Run settings + user counts in parallel ────────────────────────────────
+    const [resetSetting, allSettings, usersCount, bannedCount, apiEnabledCount] = await Promise.all([
+      this.getSetting("stats_reset_at"),
+      this.getAllSettings(),
+      db.select({ count: count() }).from(users),
+      db.select({ count: count() }).from(users).where(eq(users.isBanned, true)),
+      db.select({ count: count() }).from(users).where(eq(users.apiEnabled, true)),
+    ]);
+
     const resetAt: Date | null = resetSetting ? new Date(resetSetting.value) : null;
 
-    // Load FX rates from platform settings (same source as walletHelper.loadFxRates)
-    // Avoids circular import since walletHelper imports storage
-    const allSettings = await this.getAllSettings();
+    // ── FX rates ──────────────────────────────────────────────────────────────
     const fxRates: Record<string, number> = {};
     allSettings.forEach((s: { key: string; value: string }) => {
       if (s.key.startsWith("fx_rate_")) {
@@ -1308,120 +1275,103 @@ export class DatabaseStorage implements IStorage {
         if (!isNaN(val) && val > 0) fxRates[code] = val;
       }
     });
-    // Apply default rates for currencies not yet configured in admin settings
-    ALL_FX_CURRENCIES.forEach(c => {
-      if (!fxRates[c.code]) fxRates[c.code] = c.defaultRate;
-    });
-    // USDT treated as USD (1:1 peg)
+    ALL_FX_CURRENCIES.forEach(c => { if (!fxRates[c.code]) fxRates[c.code] = c.defaultRate; });
     if (!fxRates["USDT"]) fxRates["USDT"] = fxRates["USD"] || 1.0;
 
-    // All CFA franc variants (XAF/XOF and country-specific codes) are 1:1 with XAF
     const CFA = new Set([
       "XAF", "XAFC", "XAFG",
       "XOF", "XOFC", "XOFF", "XOFN", "XOFB", "XOFT", "XOFS", "XOFM",
     ]);
-
-    // Convert any amount to XAF via USD pivot (mirrors walletHelper.convertToXAF)
     const toXAF = (amount: number, currency: string): number => {
       if (!currency || CFA.has(currency)) return amount;
       const fromRate = fxRates[currency];
-      if (!fromRate) return amount; // unknown currency — treat as XAF
-      const amountUSD = amount / fromRate;
-      return amountUSD * (fxRates["XAF"] || 585);
+      if (!fromRate) return amount;
+      return (amount / fromRate) * (fxRates["XAF"] || 585);
     };
 
-    const [usersCount] = await db.select({ count: count() }).from(users);
-    const [bannedCount] = await db.select({ count: count() }).from(users).where(eq(users.isBanned, true));
-    const [apiEnabledCount] = await db.select({ count: count() }).from(users).where(eq(users.apiEnabled, true));
-    
-    // Compute period date range
+    // ── Period bounds ─────────────────────────────────────────────────────────
     const now = new Date();
     let periodStart: Date | null = null;
     let periodEnd: Date | null = null;
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const dayOfWeek = now.getDay() === 0 ? 7 : now.getDay(); // Mon=1 ... Sun=7
+    const dayOfWeek = now.getDay() === 0 ? 7 : now.getDay();
     switch (period) {
-      case "today":
-        periodStart = todayStart;
-        break;
-      case "yesterday":
-        periodStart = new Date(todayStart.getTime() - 86400000);
-        periodEnd = todayStart;
-        break;
-      case "this_week":
-        periodStart = new Date(todayStart.getTime() - (dayOfWeek - 1) * 86400000);
-        break;
-      case "last_week":
-        periodStart = new Date(todayStart.getTime() - dayOfWeek * 86400000 - 6 * 86400000);
-        periodEnd = new Date(todayStart.getTime() - (dayOfWeek - 1) * 86400000);
-        break;
-      case "this_month":
-        periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
-        break;
-      case "last_month":
-        periodStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        periodEnd = new Date(now.getFullYear(), now.getMonth(), 1);
-        break;
-      case "this_year":
-        periodStart = new Date(now.getFullYear(), 0, 1);
-        break;
-      case "last_year":
-        periodStart = new Date(now.getFullYear() - 1, 0, 1);
-        periodEnd = new Date(now.getFullYear(), 0, 1);
-        break;
+      case "today":      periodStart = todayStart; break;
+      case "yesterday":  periodStart = new Date(todayStart.getTime() - 86400000); periodEnd = todayStart; break;
+      case "this_week":  periodStart = new Date(todayStart.getTime() - (dayOfWeek - 1) * 86400000); break;
+      case "last_week":  periodStart = new Date(todayStart.getTime() - dayOfWeek * 86400000 - 6 * 86400000); periodEnd = new Date(todayStart.getTime() - (dayOfWeek - 1) * 86400000); break;
+      case "this_month": periodStart = new Date(now.getFullYear(), now.getMonth(), 1); break;
+      case "last_month": periodStart = new Date(now.getFullYear(), now.getMonth() - 1, 1); periodEnd = new Date(now.getFullYear(), now.getMonth(), 1); break;
+      case "this_year":  periodStart = new Date(now.getFullYear(), 0, 1); break;
+      case "last_year":  periodStart = new Date(now.getFullYear() - 1, 0, 1); periodEnd = new Date(now.getFullYear(), 0, 1); break;
     }
 
-    // Build WHERE conditions and push all filtering to SQL — never load all rows in memory
     const txConditions: any[] = [];
-    if (resetAt) txConditions.push(gt(transactions.createdAt, resetAt));
+    if (resetAt)     txConditions.push(gt(transactions.createdAt, resetAt));
     if (periodStart) txConditions.push(gte(transactions.createdAt, periodStart));
-    if (periodEnd) txConditions.push(lt(transactions.createdAt, periodEnd));
-
+    if (periodEnd)   txConditions.push(lt(transactions.createdAt, periodEnd));
     const whereClause = txConditions.length > 0 ? and(...txConditions) : undefined;
 
-    const allTx = await db.select({
-      id: transactions.id,
-      type: transactions.type,
-      status: transactions.status,
-      amount: transactions.amount,
-      currency: transactions.currency,
-      feeAmount: transactions.feeAmount,
-      createdAt: transactions.createdAt,
-    }).from(transactions).where(whereClause);
+    // ── Single SQL aggregation query — returns ~20 rows instead of thousands ──
+    // Groups by (type, status, currency) so all math stays in PostgreSQL.
+    const agg = await db
+      .select({
+        type: transactions.type,
+        status: transactions.status,
+        currency: transactions.currency,
+        totalAmount: sql<string>`COALESCE(SUM(${transactions.amount}::numeric), 0)`,
+        totalFee:    sql<string>`COALESCE(SUM(${transactions.feeAmount}::numeric), 0)`,
+        cnt:         sql<string>`COUNT(*)`,
+      })
+      .from(transactions)
+      .where(whereClause)
+      .groupBy(transactions.type, transactions.status, transactions.currency);
 
-    const completedTx = allTx.filter(t => t.status === "completed");
-    
-    const deposits = completedTx.filter(t => t.type === "deposit");
-    const withdrawals = completedTx.filter(t => t.type === "withdrawal");
-    const transfers = completedTx.filter(t => t.type === "transfer_out");
-    const links = completedTx.filter(t => t.type === "payment_link");
-    const conversions = completedTx.filter(t => t.type === "conversion");
-    
-    // All volumes and fees converted to XAF for consistent totals
-    const depositVol = deposits.reduce((sum, t) => sum + toXAF(parseFloat(t.amount), t.currency || "XAF"), 0);
-    const withdrawalVol = withdrawals.reduce((sum, t) => sum + toXAF(parseFloat(t.amount), t.currency || "XAF"), 0);
-    const transferVol = transfers.reduce((sum, t) => sum + toXAF(parseFloat(t.amount), t.currency || "XAF"), 0);
-    const linkVol = links.reduce((sum, t) => sum + toXAF(parseFloat(t.amount), t.currency || "XAF"), 0);
-    
-    // Fees: feeAmount = Ashtech margin only (in transaction's own currency) → convert to XAF
-    const depositFees = deposits.reduce((sum, t) => sum + toXAF(parseFloat(t.feeAmount || "0"), t.currency || "XAF"), 0);
-    const withdrawalFees = withdrawals.reduce((sum, t) => sum + toXAF(parseFloat(t.feeAmount || "0"), t.currency || "XAF"), 0);
-    const transferFees = transfers.reduce((sum, t) => sum + toXAF(parseFloat(t.feeAmount || "0"), t.currency || "XAF"), 0);
-    const paymentLinkFees = links.reduce((sum, t) => sum + toXAF(parseFloat(t.feeAmount || "0"), t.currency || "XAF"), 0);
-    const conversionFees = conversions.reduce((sum, t) => sum + toXAF(parseFloat(t.feeAmount || "0"), t.currency || "XAF"), 0);
+    // ── Reduce aggregated rows in JS (only ~20 rows, not thousands) ───────────
+    let depositVol = 0, withdrawalVol = 0, transferVol = 0, linkVol = 0;
+    let depositFees = 0, withdrawalFees = 0, transferFees = 0, paymentLinkFees = 0, conversionFees = 0;
+    let depositCount = 0, withdrawalCount = 0, transferCount = 0, paymentLinkCount = 0;
+    let totalTransactions = 0, rejectedTransactions = 0, pendingTransactions = 0;
+    let pendingDeposits = 0, pendingWithdrawals = 0, pendingTransfers = 0;
+
+    for (const row of agg) {
+      const cur = row.currency || "XAF";
+      const amt = toXAF(parseFloat(row.totalAmount), cur);
+      const fee = toXAF(parseFloat(row.totalFee), cur);
+      const n   = parseInt(row.cnt, 10);
+      totalTransactions += n;
+
+      if (row.status === "failed")  rejectedTransactions += n;
+      if (row.status === "pending") pendingTransactions  += n;
+
+      if (row.status === "completed") {
+        switch (row.type) {
+          case "deposit":      depositVol    += amt; depositFees    += fee; depositCount    += n; break;
+          case "withdrawal":   withdrawalVol += amt; withdrawalFees += fee; withdrawalCount += n; break;
+          case "transfer_out": transferVol   += amt; transferFees   += fee; transferCount   += n; break;
+          case "payment_link": linkVol       += amt; paymentLinkFees+= fee; paymentLinkCount+= n; break;
+          case "conversion":                         conversionFees += fee; break;
+        }
+      }
+
+      // Pending counts by type
+      if (["pending", "processing"].includes(row.status) && (row.type === "deposit" || row.type === "payment_link")) pendingDeposits += n;
+      if (["pending", "pending_manual", "processing"].includes(row.status) && row.type === "withdrawal") pendingWithdrawals += n;
+      if (["pending", "pending_manual", "processing"].includes(row.status) && (row.type === "transfer_out" || row.type === "transfer_in")) pendingTransfers += n;
+    }
 
     const totalRevenue = depositFees + withdrawalFees + transferFees + paymentLinkFees + conversionFees;
-    
+
     return {
-      totalUsers: usersCount.count,
-      apiEnabledUsers: apiEnabledCount.count,
-      totalTransactions: allTx.length,
+      totalUsers: usersCount[0].count,
+      apiEnabledUsers: apiEnabledCount[0].count,
+      bannedUsers: bannedCount[0].count,
+      statsResetAt: resetAt ? resetAt.toISOString() : null,
+      totalTransactions,
       totalVolume: (depositVol + withdrawalVol + transferVol + linkVol).toFixed(2),
       monthlyTransactions: 0,
-      rejectedTransactions: allTx.filter(t => t.status === "failed").length,
-      pendingTransactions: allTx.filter(t => t.status === "pending").length,
-      bannedUsers: bannedCount.count,
-      statsResetAt: resetAt ? resetAt.toISOString() : null,
+      rejectedTransactions,
+      pendingTransactions,
       totalDeposits: depositVol.toFixed(2),
       totalWithdrawals: withdrawalVol.toFixed(2),
       totalCollected: (depositVol + linkVol).toFixed(2),
@@ -1432,13 +1382,13 @@ export class DatabaseStorage implements IStorage {
       transferFees: transferFees.toFixed(2),
       paymentLinkFees: paymentLinkFees.toFixed(2),
       conversionFees: conversionFees.toFixed(2),
-      depositCount: deposits.length,
-      withdrawalCount: withdrawals.length,
-      transferCount: transfers.length,
-      paymentLinkCount: links.length,
-      pendingDeposits: allTx.filter(t => ["pending", "processing"].includes(t.status) && (t.type === "deposit" || t.type === "payment_link")).length,
-      pendingWithdrawals: allTx.filter(t => ["pending", "pending_manual", "processing"].includes(t.status) && t.type === "withdrawal").length,
-      pendingTransfers: allTx.filter(t => ["pending", "pending_manual", "processing"].includes(t.status) && (t.type === "transfer_out" || t.type === "transfer_in")).length,
+      depositCount,
+      withdrawalCount,
+      transferCount,
+      paymentLinkCount,
+      pendingDeposits,
+      pendingWithdrawals,
+      pendingTransfers,
     };
   }
   
