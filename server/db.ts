@@ -29,17 +29,17 @@ const sslConfig = databaseUrl.includes("localhost") ||
   : { rejectUnauthorized: false };
 
 // Max connections per pool, per worker process.
-// Supabase free tier: 25 total connections.
-// Formula: floor(25 / PM2_workers / 2_pools) with margin.
-// With PM2_instances=2: 2 × (4+2) = 12 — safe.
-// With PM2_instances=4: 4 × (3+2) = 20 — safe.
-// Default: 3 + 2 = 5 per worker; supports up to 4 PM2 workers safely.
+// Supabase free tier: 25 total connections (hard cap).
+// Budget per single worker: 8 main + 4 session + 1 SIEM LISTEN = 13 total.
+// This leaves 12 connections free for migrations, admin queries and burst.
+// With PM2_instances=2: 2 × (5+3) + 2 SIEM = 18 — safe.
+// Formula: floor(8 / PM2_workers) main, floor(4 / PM2_workers) session.
 //
 // NOTE: NODE_APP_INSTANCE is the *index* of the current worker (0, 1, 2...) — NOT the total
 // count. Never use it for pool sizing. Use PM2_INSTANCES (set explicitly in ecosystem config).
 const PM2_INSTANCES = Math.max(1, parseInt(process.env.PM2_INSTANCES || "1", 10) || 1);
-const MAIN_POOL_MAX = Math.max(2, Math.floor(15 / PM2_INSTANCES));
-const SESSION_POOL_MAX = Math.max(1, Math.floor(8 / PM2_INSTANCES));
+const MAIN_POOL_MAX = Math.max(2, Math.floor(8 / PM2_INSTANCES));
+const SESSION_POOL_MAX = Math.max(1, Math.floor(4 / PM2_INSTANCES));
 
 console.log(`[DB] Pool limits — main: ${MAIN_POOL_MAX}, session: ${SESSION_POOL_MAX} (PM2 instances detected: ${PM2_INSTANCES})`);
 

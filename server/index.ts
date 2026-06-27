@@ -22,16 +22,21 @@ const app = express();
 const httpServer = createServer(app);
 const isProd = process.env.NODE_ENV === "production";
 
-// ── Gestionnaires d'erreurs globaux — empêche Phusion Passenger de tuer le process ──
-// Sans ces handlers, une Promise rejetée non capturée = crash immédiat sous Passenger.
+// ── Gestionnaires d'erreurs globaux ──────────────────────────────────────────
+// unhandledRejection: log + continue — safe, these are async promise failures.
 process.on("unhandledRejection", (reason: unknown) => {
   const msg = reason instanceof Error ? reason.message : String(reason);
-  console.error("[CRASH-GUARD] unhandledRejection interceptée — process maintenu:", msg);
+  console.error("[CRASH-GUARD] unhandledRejection interceptée:", msg);
 });
 
+// uncaughtException: log + EXIT — leaving the process alive after an uncaught
+// synchronous exception risks state corruption (broken DB connections, invalid
+// memory, deadlocked intervals). Both Passenger and PM2 will restart the process
+// automatically, making a clean exit safer than running corrupted.
 process.on("uncaughtException", (err: Error) => {
-  console.error("[CRASH-GUARD] uncaughtException interceptée — process maintenu:", err.message);
-  // En production, on log mais on ne quitte PAS — Passenger gère les redémarrages si nécessaire
+  console.error("[CRASH-GUARD] uncaughtException — redémarrage propre:", err.message, err.stack);
+  // Flush logs then exit. Passenger/PM2 will restart the process.
+  setTimeout(() => process.exit(1), 300);
 });
 
 // ── FIX-1: SESSION_SECRET est obligatoire en production ET en multi-worker PM2 ─

@@ -113,13 +113,25 @@ async function editMessageText(messageId: number, text: string): Promise<void> {
 }
 
 // State: waiting for custom rejection reason (chatId → submissionId + messageId)
-const pendingCustomRejections = new Map<string, { submissionId: string; messageId: number }>();
+const pendingCustomRejections = new Map<string, { submissionId: string; messageId: number; ts: number }>();
 // State: waiting for withdrawal rejection reason (chatId → reference + messageId)
-const pendingWithdrawalRejections = new Map<string, { reference: string; messageId: number }>();
+const pendingWithdrawalRejections = new Map<string, { reference: string; messageId: number; ts: number }>();
 // State: waiting for withdrawal number change rejection reason (chatId → changeId + messageId)
-const pendingWncRejections = new Map<string, { changeId: string; messageId: number }>();
-// State: waiting for ticket reply text (chatId → ticketId)
-const pendingTicketReplies = new Map<string, string>();
+const pendingWncRejections = new Map<string, { changeId: string; messageId: number; ts: number }>();
+// State: waiting for ticket reply text (chatId → ticketId + timestamp)
+const pendingTicketReplies = new Map<string, { ticketId: string; ts: number }>();
+
+// ── Cleanup stale pending states every 30 minutes ─────────────────────────────
+// Without this, Maps grow indefinitely if Telegram callbacks never arrive
+// (bot disconnected, admin closed chat, etc.) → memory leak → OOM crash over time.
+const PENDING_TTL_MS = 30 * 60 * 1000; // 30 minutes
+setInterval(() => {
+  const cutoff = Date.now() - PENDING_TTL_MS;
+  for (const [k, v] of pendingCustomRejections) if (v.ts < cutoff) pendingCustomRejections.delete(k);
+  for (const [k, v] of pendingWithdrawalRejections) if (v.ts < cutoff) pendingWithdrawalRejections.delete(k);
+  for (const [k, v] of pendingWncRejections) if (v.ts < cutoff) pendingWncRejections.delete(k);
+  for (const [k, v] of pendingTicketReplies) if (v.ts < cutoff) pendingTicketReplies.delete(k);
+}, PENDING_TTL_MS);
 
 function fmt(amount: string | number, currency: string): string {
   return `${parseFloat(String(amount)).toLocaleString("fr-FR")} ${currency}`;
@@ -1639,7 +1651,7 @@ export async function handleTelegramUpdate(
     // ── Custom KYC rejection — ask for reason ──
     if (data.startsWith("krc:")) {
       const submissionId = data.slice(4);
-      pendingCustomRejections.set(chatId, { submissionId, messageId });
+      pendingCustomRejections.set(chatId, { submissionId, messageId, ts: Date.now() });
       await callBotApi("sendMessage", {
         chat_id: chatId,
         text: `✍️ Envoyez la raison du rejet pour cette demande KYC.\n\n<i>Tapez votre message ci-dessous :</i>`,
@@ -1703,7 +1715,7 @@ export async function handleTelegramUpdate(
     // ── Custom withdrawal rejection — ask for reason ──
     if (data.startsWith("wrc:")) {
       const reference = data.slice(4);
-      pendingWithdrawalRejections.set(chatId, { reference, messageId });
+      pendingWithdrawalRejections.set(chatId, { reference, messageId, ts: Date.now() });
       await callBotApi("sendMessage", {
         chat_id: chatId,
         text: `✍️ Envoyez la raison du rejet pour le retrait <code>${reference}</code> :`,
@@ -1761,7 +1773,7 @@ export async function handleTelegramUpdate(
     // ── Custom withdrawal number change rejection — ask for reason ──
     if (data.startsWith("wncc:")) {
       const changeId = data.slice(5);
-      pendingWncRejections.set(chatId, { changeId, messageId });
+      pendingWncRejections.set(chatId, { changeId, messageId, ts: Date.now() });
       await callBotApi("sendMessage", {
         chat_id: chatId,
         text: `✍️ Envoyez la raison du rejet pour la demande de numéro <code>${changeId}</code> :`,
@@ -1774,7 +1786,7 @@ export async function handleTelegramUpdate(
     // ── Ticket: reply via button ──
     if (data.startsWith("tc:reply:")) {
       const ticketId = data.slice(9);
-      pendingTicketReplies.set(chatId, ticketId);
+      pendingTicketReplies.set(chatId, { ticketId, ts: Date.now() });
       await callBotApi("sendMessage", {
         chat_id: chatId,
         text: `✍️ Envoyez votre réponse pour le ticket <code>${ticketId.slice(0, 8)}…</code> :\n\n<i>Tapez votre message ci-dessous :</i>`,
@@ -1853,7 +1865,8 @@ export async function handleTelegramUpdate(
     const text: string = update.message.text.trim();
 
     // ── Check pending ticket reply ──
-    const pendingTicketId = pendingTicketReplies.get(chatId);
+    const pendingTicketEntry = pendingTicketReplies.get(chatId);
+    const pendingTicketId = pendingTicketEntry?.ticketId;
     if (pendingTicketId && !text.startsWith("/") && !REPLY_KEYBOARD_MAP[text]) {
       pendingTicketReplies.delete(chatId);
       const result = await handlers.replyToTicket(pendingTicketId, text);

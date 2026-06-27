@@ -5,9 +5,18 @@ import path from "path";
 export function serveStatic(app: Express) {
   const distPath = path.resolve(process.cwd(), "dist", "public");
   if (!fs.existsSync(distPath)) {
-    throw new Error(
-      `Could not find the build directory: ${distPath}, make sure to build the client first`,
+    // Log the error clearly but DO NOT throw — throwing here crashes the entire process
+    // under Phusion Passenger, showing a red "could not be started" error page.
+    // Instead, serve a maintenance response on all routes so the process stays alive.
+    console.error(
+      `[Static] CRITICAL: Build directory not found: ${distPath}. Run "npm run build" before starting in production.`
     );
+    app.use("*", (_req, res) => {
+      res.status(503).send(
+        "Service en maintenance. Veuillez réessayer dans quelques instants. (Build manquant)"
+      );
+    });
+    return;
   }
 
   app.use(express.static(distPath));
