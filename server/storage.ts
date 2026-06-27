@@ -1128,7 +1128,7 @@ export class DatabaseStorage implements IStorage {
     ];
     if (periodStart) conditions.push(gte(transactions.createdAt, periodStart));
     if (periodEnd)   conditions.push(lt(transactions.createdAt, periodEnd));
-    if (resetAt)     conditions.push(gt(transactions.createdAt, resetAt));
+    if (resetAt && !periodStart) conditions.push(gt(transactions.createdAt, resetAt));
 
     const rows = await db
       .select({
@@ -1197,7 +1197,7 @@ export class DatabaseStorage implements IStorage {
     const activityConditions: any[] = [eq(transactions.status, "completed")];
     if (periodStart) activityConditions.push(gte(transactions.createdAt, periodStart));
     if (periodEnd)   activityConditions.push(lt(transactions.createdAt, periodEnd));
-    if (resetAt)     activityConditions.push(gt(transactions.createdAt, resetAt));
+    if (resetAt && !periodStart) activityConditions.push(gt(transactions.createdAt, resetAt));
 
     // Use SQL DATE_TRUNC to aggregate by bucket — returns ~30 rows max instead of thousands
     const truncExpr = useHourly
@@ -1307,7 +1307,9 @@ export class DatabaseStorage implements IStorage {
     }
 
     const txConditions: any[] = [];
-    if (resetAt)     txConditions.push(gt(transactions.createdAt, resetAt));
+    // resetAt only applies when no explicit period is selected (global "all-time" view).
+    // When the admin picks a specific period (year/month/week/day), it takes full priority.
+    if (resetAt && !periodStart) txConditions.push(gt(transactions.createdAt, resetAt));
     if (periodStart) txConditions.push(gte(transactions.createdAt, periodStart));
     if (periodEnd)   txConditions.push(lt(transactions.createdAt, periodEnd));
     const whereClause = txConditions.length > 0 ? and(...txConditions) : undefined;
