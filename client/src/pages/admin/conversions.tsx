@@ -94,6 +94,26 @@ const CONVERSION_PAIRS: PairFeeConfig[] = [
     providerLabel: "Frais fournisseur",
     defaultProvider: 3, defaultAshtech: 2,
   },
+  {
+    key: "cfa_usdt",
+    fromLabel: "XAF / XOF", toLabel: "USDT",
+    fromDesc: "XAF, XAFG, XOF, XOFT… (zone CFA)",
+    toDesc: "USDT TRC20 (Tron)",
+    fromFlag: "🌍", toFlag: "💵",
+    color: "text-teal-600 dark:text-teal-400",
+    providerLabel: "Frais fournisseur",
+    defaultProvider: 1, defaultAshtech: 1,
+  },
+  {
+    key: "usdt_cfa",
+    fromLabel: "USDT", toLabel: "XAF / XOF",
+    fromDesc: "USDT TRC20 (Tron)",
+    toDesc: "XAF, XAFG, XOF, XOFT… (zone CFA)",
+    fromFlag: "💵", toFlag: "🌍",
+    color: "text-cyan-600 dark:text-cyan-400",
+    providerLabel: "Frais fournisseur",
+    defaultProvider: 1, defaultAshtech: 1,
+  },
 ];
 
 type FeeState = Record<string, string>;

@@ -4756,6 +4756,7 @@ export async function registerRoutes(
       const PAIR_DEFAULTS: Record<string, [number, number]> = {
         xof_xaf: [1, 1], xaf_xof: [1, 1],
         cdf_cfa: [3, 2], cfa_cdf: [3, 2],
+        cfa_usdt: [1, 1], usdt_cfa: [1, 1],
       };
       const [defProvider, defAshtech] = (pairKey && PAIR_DEFAULTS[pairKey]) ? PAIR_DEFAULTS[pairKey] : [1, 1];
       const [providerFeeSetting, ashtechFeeSetting] = pairKey
@@ -5824,8 +5825,13 @@ export async function registerRoutes(
       const convAshtechFeeXafXof  = parseFloat(settings.find(s => s.key === "conversion_ashtech_fee_xaf_xof")?.value || "1");
       const convProviderFeeCdfCfa = parseFloat(settings.find(s => s.key === "conversion_provider_fee_cdf_cfa")?.value || "3");
       const convAshtechFeeCdfCfa  = parseFloat(settings.find(s => s.key === "conversion_ashtech_fee_cdf_cfa")?.value || "2");
-      const convProviderFeeCfaCdf = parseFloat(settings.find(s => s.key === "conversion_provider_fee_cfa_cdf")?.value || "3");
-      const convAshtechFeeCfaCdf  = parseFloat(settings.find(s => s.key === "conversion_ashtech_fee_cfa_cdf")?.value || "2");
+      const convProviderFeeCfaCdf  = parseFloat(settings.find(s => s.key === "conversion_provider_fee_cfa_cdf")?.value || "3");
+      const convAshtechFeeCfaCdf   = parseFloat(settings.find(s => s.key === "conversion_ashtech_fee_cfa_cdf")?.value || "2");
+      // Paires USDT ↔ CFA
+      const convProviderFeeCfaUsdt = parseFloat(settings.find(s => s.key === "conversion_provider_fee_cfa_usdt")?.value || "1");
+      const convAshtechFeeCfaUsdt  = parseFloat(settings.find(s => s.key === "conversion_ashtech_fee_cfa_usdt")?.value || "1");
+      const convProviderFeeUsdtCfa = parseFloat(settings.find(s => s.key === "conversion_provider_fee_usdt_cfa")?.value || "1");
+      const convAshtechFeeUsdtCfa  = parseFloat(settings.find(s => s.key === "conversion_ashtech_fee_usdt_cfa")?.value || "1");
       const cryptoFeePercent = parseFloat(settings.find(s => s.key === "nowpayments_fee_percent")?.value || "2.5");
       const cryptoMinDeposit = parseFloat(settings.find(s => s.key === "nowpayments_min_deposit")?.value || "11");
       res.json({
@@ -5840,8 +5846,12 @@ export async function registerRoutes(
         convTotalCdfCfa: convProviderFeeCdfCfa + convAshtechFeeCdfCfa,
         convProviderFeeCfaCdf, convAshtechFeeCfaCdf,
         convTotalCfaCdf: convProviderFeeCfaCdf + convAshtechFeeCfaCdf,
+        // Paires USDT ↔ CFA
+        convProviderFeeCfaUsdt, convAshtechFeeCfaUsdt,
+        convTotalCfaUsdt: convProviderFeeCfaUsdt + convAshtechFeeCfaUsdt,
+        convProviderFeeUsdtCfa, convAshtechFeeUsdtCfa,
+        convTotalUsdtCfa: convProviderFeeUsdtCfa + convAshtechFeeUsdtCfa,
         depositFeePercent,
-        paymentLeePercent: paymentLinkFeePercent,
         paymentLinkFeePercent,
         cryptoFeePercent,
         cryptoMinDeposit,

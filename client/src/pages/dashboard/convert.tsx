@@ -68,6 +68,7 @@ export default function ConvertPage() {
     conversionFeePercent: number;
     convTotalXofXaf: number; convTotalXafXof: number;
     convTotalCdfCfa: number; convTotalCfaCdf: number;
+    convTotalCfaUsdt: number; convTotalUsdtCfa: number;
   }>({
     queryKey: ["/api/public/fee-settings"],
     queryFn: async () => { const res = await apiRequest("GET", "/api/public/fee-settings"); return res.json(); },
@@ -103,10 +104,12 @@ export default function ConvertPage() {
   const fromFam = XOF_FAM.has(fromCurrency) ? "XOF" : XAF_FAM.has(fromCurrency) ? "XAF" : fromCurrency === "CDF" ? "CDF" : "OTHER";
   const toFam   = XOF_FAM.has(toCurrency)   ? "XOF" : XAF_FAM.has(toCurrency)   ? "XAF" : toCurrency   === "CDF" ? "CDF" : "OTHER";
   const conversionFeePercent =
-    fromFam === "XOF" && toFam === "XAF" ? (feeSettings?.convTotalXofXaf ?? 2) :
-    fromFam === "XAF" && toFam === "XOF" ? (feeSettings?.convTotalXafXof ?? 2) :
-    fromFam === "CDF" && (toFam === "XAF" || toFam === "XOF") ? (feeSettings?.convTotalCdfCfa ?? 5) :
-    (fromFam === "XAF" || fromFam === "XOF") && toFam === "CDF" ? (feeSettings?.convTotalCfaCdf ?? 5) :
+    fromFam === "XOF" && toFam === "XAF"                                               ? (feeSettings?.convTotalXofXaf  ?? 2) :
+    fromFam === "XAF" && toFam === "XOF"                                               ? (feeSettings?.convTotalXafXof  ?? 2) :
+    fromFam === "CDF" && (toFam === "XAF" || toFam === "XOF")                          ? (feeSettings?.convTotalCdfCfa  ?? 5) :
+    (fromFam === "XAF" || fromFam === "XOF") && toFam === "CDF"                        ? (feeSettings?.convTotalCfaCdf  ?? 5) :
+    (fromFam === "XAF" || fromFam === "XOF") && toCurrency === "USDT"                  ? (feeSettings?.convTotalCfaUsdt ?? 2) :
+    fromCurrency === "USDT" && (toFam === "XAF" || toFam === "XOF")                    ? (feeSettings?.convTotalUsdtCfa ?? 2) :
     (feeSettings?.conversionFeePercent ?? 2);
   const sourceBalance = walletList.find(w => w.currency === fromCurrency);
   const parsedAmount = parseFloat(convertAmount || "0");

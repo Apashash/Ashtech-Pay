@@ -118,6 +118,9 @@ export function getConversionPairKey(fromCurrency: string, toCurrency: string): 
   if (from === "XAF" && to === "XOF") return "xaf_xof";
   if (from === "CDF" && (to === "XAF" || to === "XOF")) return "cdf_cfa";
   if ((from === "XAF" || from === "XOF") && to === "CDF") return "cfa_cdf";
+  // Paires USDT ↔ CFA (XAF/XOF)
+  if ((from === "XAF" || from === "XOF") && toCurrency === "USDT") return "cfa_usdt";
+  if (fromCurrency === "USDT" && (to === "XAF" || to === "XOF")) return "usdt_cfa";
   return null;
 }
 
