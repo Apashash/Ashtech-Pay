@@ -95,6 +95,32 @@ export function sameCfaFamily(a: string, b: string): boolean {
   return false;
 }
 
+// ─── Currency family helpers (for pair-based conversion fees) ─────────────────
+
+// Normalise a currency code to its base family regardless of country suffix.
+// XOFT (Togo), XOFC (Côte d'Ivoire), XOFB (Bénin)… → XOF
+// XAFG (Gabon), XAFC (Congo)… → XAF
+// CDF → CDF
+export function normalizeCurrencyFamily(currency: string): "XAF" | "XOF" | "CDF" | "OTHER" {
+  if (XOF_FAMILY.has(currency)) return "XOF";
+  if (XAF_FAMILY.has(currency)) return "XAF";
+  if (currency === "CDF") return "CDF";
+  return "OTHER";
+}
+
+// Returns the settings key suffix for a conversion pair, e.g. "xof_xaf".
+// Used to look up conversion_provider_fee_<key> and conversion_ashtech_fee_<key>.
+// Returns null for unknown or same-family pairs (no fee rule applies).
+export function getConversionPairKey(fromCurrency: string, toCurrency: string): string | null {
+  const from = normalizeCurrencyFamily(fromCurrency);
+  const to   = normalizeCurrencyFamily(toCurrency);
+  if (from === "XOF" && to === "XAF") return "xof_xaf";
+  if (from === "XAF" && to === "XOF") return "xaf_xof";
+  if (from === "CDF" && (to === "XAF" || to === "XOF")) return "cdf_cfa";
+  if ((from === "XAF" || from === "XOF") && to === "CDF") return "cfa_cdf";
+  return null;
+}
+
 // Smart wallet crediting:
 //
 // Rules (in order):

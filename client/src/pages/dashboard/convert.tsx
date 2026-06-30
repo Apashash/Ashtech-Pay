@@ -66,7 +66,8 @@ export default function ConvertPage() {
   const { data: fxRates = {} } = useQuery<Record<string, number>>({ queryKey: ["/api/public/exchange-rates"] });
   const { data: feeSettings } = useQuery<{
     conversionFeePercent: number;
-    conversionFeePercentSwychr: number;
+    convTotalXofXaf: number; convTotalXafXof: number;
+    convTotalCdfCfa: number; convTotalCfaCdf: number;
   }>({
     queryKey: ["/api/public/fee-settings"],
     queryFn: async () => { const res = await apiRequest("GET", "/api/public/fee-settings"); return res.json(); },
@@ -96,7 +97,17 @@ export default function ConvertPage() {
     }
   }, [walletList.length]);
 
-  const conversionFeePercent = feeSettings?.conversionFeePercentSwychr ?? feeSettings?.conversionFeePercent ?? 6;
+  // Determine fee % by currency pair (XOF↔XAF, CDF↔CFA)
+  const XOF_FAM = new Set(["XOF","XOFC","XOFF","XOFN","XOFB","XOFT","XOFS","XOFM"]);
+  const XAF_FAM = new Set(["XAF","XAFC","XAFG"]);
+  const fromFam = XOF_FAM.has(fromCurrency) ? "XOF" : XAF_FAM.has(fromCurrency) ? "XAF" : fromCurrency === "CDF" ? "CDF" : "OTHER";
+  const toFam   = XOF_FAM.has(toCurrency)   ? "XOF" : XAF_FAM.has(toCurrency)   ? "XAF" : toCurrency   === "CDF" ? "CDF" : "OTHER";
+  const conversionFeePercent =
+    fromFam === "XOF" && toFam === "XAF" ? (feeSettings?.convTotalXofXaf ?? 2) :
+    fromFam === "XAF" && toFam === "XOF" ? (feeSettings?.convTotalXafXof ?? 2) :
+    fromFam === "CDF" && (toFam === "XAF" || toFam === "XOF") ? (feeSettings?.convTotalCdfCfa ?? 5) :
+    (fromFam === "XAF" || fromFam === "XOF") && toFam === "CDF" ? (feeSettings?.convTotalCfaCdf ?? 5) :
+    (feeSettings?.conversionFeePercent ?? 2);
   const sourceBalance = walletList.find(w => w.currency === fromCurrency);
   const parsedAmount = parseFloat(convertAmount || "0");
   const sourceParsedBalance = parseFloat(sourceBalance?.balance || "0");

@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { ArrowLeftRight, CheckCircle, Clock, RefreshCw, Loader2, User, Calendar, Settings, Percent, Save, Equal, Zap, XCircle } from "lucide-react";
+import { ArrowLeftRight, CheckCircle, Clock, RefreshCw, Loader2, User, Calendar, Settings, Percent, Save, Equal, Zap, XCircle, ArrowRight } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 
@@ -38,61 +38,84 @@ const CURRENCY_FLAGS: Record<string, string> = {
   RWF: "🇷🇼", TZS: "🇹🇿", UGX: "🇺🇬", CDF: "🇨🇩", GNF: "🇬🇳",
 };
 
-interface ProviderFeeConfig {
-  key: string;
-  label: string;
+// ── 4 paires de conversion avec leurs settings keys ────────────────────────────
+interface PairFeeConfig {
+  key: string;           // suffix: xof_xaf, xaf_xof, cdf_cfa, cfa_cdf
+  fromLabel: string;
+  toLabel: string;
+  fromDesc: string;      // description détaillée des devises source
+  toDesc: string;        // description détaillée des devises cible
+  fromFlag: string;
+  toFlag: string;
   color: string;
-  providerFeeSettingKey: string;
-  ashtechFeeSettingKey: string;
+  providerLabel: string; // label du champ "frais opérateur"
+  defaultProvider: number;
+  defaultAshtech: number;
 }
 
-const PROVIDERS: ProviderFeeConfig[] = [
+const CONVERSION_PAIRS: PairFeeConfig[] = [
   {
-    key: "swychr",
-    label: "Swychr",
+    key: "xof_xaf",
+    fromLabel: "XOF", toLabel: "XAF",
+    fromDesc: "XOFT, XOFC, XOFB, XOFF… (famille XOF)",
+    toDesc: "XAF, XAFG, XAFC… (famille XAF)",
+    fromFlag: "🌍", toFlag: "🇨🇲",
+    color: "text-emerald-600 dark:text-emerald-400",
+    providerLabel: "Frais opérateurs constant",
+    defaultProvider: 1, defaultAshtech: 1,
+  },
+  {
+    key: "xaf_xof",
+    fromLabel: "XAF", toLabel: "XOF",
+    fromDesc: "XAF, XAFG, XAFC… (famille XAF)",
+    toDesc: "XOFT, XOFC, XOFB, XOFF… (famille XOF)",
+    fromFlag: "🇨🇲", toFlag: "🌍",
     color: "text-blue-600 dark:text-blue-400",
-    providerFeeSettingKey: "conversion_provider_fee_swychr",
-    ashtechFeeSettingKey: "conversion_ashtech_fee_swychr",
+    providerLabel: "Frais opérateurs constant",
+    defaultProvider: 1, defaultAshtech: 1,
   },
   {
-    key: "pixpay",
-    label: "PixPay",
-    color: "text-purple-600 dark:text-purple-400",
-    providerFeeSettingKey: "conversion_provider_fee_pixpay",
-    ashtechFeeSettingKey: "conversion_ashtech_fee_pixpay",
-  },
-  {
-    key: "afribapay",
-    label: "AfribaPay",
+    key: "cdf_cfa",
+    fromLabel: "CDF", toLabel: "XAF / XOF",
+    fromDesc: "CDF (Franc Congolais)",
+    toDesc: "XAF, XAFG, XOF, XOFT… (zone CFA)",
+    fromFlag: "🇨🇩", toFlag: "🌍",
     color: "text-orange-600 dark:text-orange-400",
-    providerFeeSettingKey: "conversion_provider_fee_afribapay",
-    ashtechFeeSettingKey: "conversion_ashtech_fee_afribapay",
+    providerLabel: "Frais fournisseur",
+    defaultProvider: 3, defaultAshtech: 2,
+  },
+  {
+    key: "cfa_cdf",
+    fromLabel: "XAF / XOF", toLabel: "CDF",
+    fromDesc: "XAF, XAFG, XOF, XOFT… (zone CFA)",
+    toDesc: "CDF (Franc Congolais)",
+    fromFlag: "🌍", toFlag: "🇨🇩",
+    color: "text-purple-600 dark:text-purple-400",
+    providerLabel: "Frais fournisseur",
+    defaultProvider: 3, defaultAshtech: 2,
   },
 ];
 
 type FeeState = Record<string, string>;
 
-const DEFAULT_FEES: FeeState = {
-  conversion_provider_fee_swychr: "4",
-  conversion_ashtech_fee_swychr: "2",
-  conversion_provider_fee_pixpay: "4",
-  conversion_ashtech_fee_pixpay: "2",
-  conversion_provider_fee_afribapay: "4",
-  conversion_ashtech_fee_afribapay: "2",
-};
+function buildDefaultFees(): FeeState {
+  const s: FeeState = {};
+  CONVERSION_PAIRS.forEach(p => {
+    s[`conversion_provider_fee_${p.key}`] = String(p.defaultProvider);
+    s[`conversion_ashtech_fee_${p.key}`]  = String(p.defaultAshtech);
+  });
+  return s;
+}
 
 const CONV_PER_PAGE = 15;
 
 export default function AdminConversionsPage() {
   const { toast } = useToast();
-  const [fees, setFees] = useState<FeeState>(DEFAULT_FEES);
+  const [fees, setFees] = useState<FeeState>(buildDefaultFees());
   const [convPage, setConvPage] = useState(0);
 
-  const { data: feeSettings } = useQuery<{
-    convProviderFeeSwychr: number; convAshtechFeeSwychr: number;
-    convProviderFeePixpay: number; convAshtechFeePixpay: number;
-    convProviderFeeAfribapay: number; convAshtechFeeAfribapay: number;
-  }>({
+  // Read current pair-based fees from the API
+  const { data: feeSettings } = useQuery<Record<string, number>>({
     queryKey: ["/api/public/fee-settings"],
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/public/fee-settings");
@@ -102,24 +125,32 @@ export default function AdminConversionsPage() {
 
   useEffect(() => {
     if (!feeSettings) return;
-    setFees({
-      conversion_provider_fee_swychr: String(feeSettings.convProviderFeeSwychr ?? 4),
-      conversion_ashtech_fee_swychr: String(feeSettings.convAshtechFeeSwychr ?? 2),
-      conversion_provider_fee_pixpay: String(feeSettings.convProviderFeePixpay ?? 4),
-      conversion_ashtech_fee_pixpay: String(feeSettings.convAshtechFeePixpay ?? 2),
-      conversion_provider_fee_afribapay: String(feeSettings.convProviderFeeAfribapay ?? 4),
-      conversion_ashtech_fee_afribapay: String(feeSettings.convAshtechFeeAfribapay ?? 2),
+    setFees(prev => {
+      const next = { ...prev };
+      CONVERSION_PAIRS.forEach(p => {
+        const pk = `conversion_provider_fee_${p.key}`;
+        const ak = `conversion_ashtech_fee_${p.key}`;
+        // camelCase key mapping sent by the API
+        // Convert "xof_xaf" → "XofXaf" to match server camelCase keys
+        const suffix = p.key
+          .replace(/_([a-z])/g, (_, c) => c.toUpperCase())  // xof_xaf → xofXaf
+          .replace(/^[a-z]/, c => c.toUpperCase());          // xofXaf  → XofXaf
+        const apiPk = `convProviderFee${suffix}`;            // convProviderFeeXofXaf
+        const apiAk = `convAshtechFee${suffix}`;             // convAshtechFeeXofXaf
+        if (feeSettings[apiPk] !== undefined) next[pk] = String(feeSettings[apiPk]);
+        if (feeSettings[apiAk] !== undefined) next[ak] = String(feeSettings[apiAk]);
+      });
+      return next;
     });
   }, [feeSettings]);
 
   const saveFeeMutation = useMutation({
     mutationFn: async () => {
-      const allKeys = Object.keys(fees);
       await Promise.all(
-        allKeys.map(key =>
+        Object.entries(fees).map(([key, value]) =>
           apiRequest("POST", "/api/admin/settings", {
             key,
-            value: fees[key],
+            value,
             description: `Frais de conversion — ${key}`,
           })
         )
@@ -127,7 +158,7 @@ export default function AdminConversionsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/public/fee-settings"] });
-      toast({ title: "Frais enregistrés", description: "Les frais de conversion par fournisseur ont été mis à jour." });
+      toast({ title: "Frais enregistrés", description: "Les frais de conversion par paire ont été mis à jour." });
     },
     onError: (error: Error) => {
       toast({ title: "Erreur", description: error.message, variant: "destructive" });
@@ -145,10 +176,7 @@ export default function AdminConversionsPage() {
   const executeMutation = useMutation({
     mutationFn: async (id: string) => {
       const res = await apiRequest("POST", `/api/admin/conversion-requests/${id}/execute`);
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.message || "Erreur lors de l'exécution");
-      }
+      if (!res.ok) { const err = await res.json(); throw new Error(err.message || "Erreur"); }
       return res.json();
     },
     onSuccess: (data) => {
@@ -163,10 +191,7 @@ export default function AdminConversionsPage() {
   const cancelMutation = useMutation({
     mutationFn: async (id: string) => {
       const res = await apiRequest("POST", `/api/admin/conversion-requests/${id}/cancel`, { reason: "Annulé manuellement par admin" });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.message || "Erreur lors de l'annulation");
-      }
+      if (!res.ok) { const err = await res.json(); throw new Error(err.message || "Erreur"); }
       return res.json();
     },
     onSuccess: () => {
@@ -178,10 +203,15 @@ export default function AdminConversionsPage() {
     },
   });
 
-  const getTotal = (p: ProviderFeeConfig) => {
-    const provider = parseFloat(fees[p.providerFeeSettingKey] || "0") || 0;
-    const ashtech = parseFloat(fees[p.ashtechFeeSettingKey] || "0") || 0;
+  const getTotal = (p: PairFeeConfig) => {
+    const provider = parseFloat(fees[`conversion_provider_fee_${p.key}`] || "0") || 0;
+    const ashtech  = parseFloat(fees[`conversion_ashtech_fee_${p.key}`]  || "0") || 0;
     return (provider + ashtech).toFixed(2);
+  };
+
+  // Ashtech margin displayed in admin
+  const getAshtechMargin = (p: PairFeeConfig) => {
+    return parseFloat(fees[`conversion_ashtech_fee_${p.key}`] || "0") || 0;
   };
 
   return (
@@ -190,7 +220,7 @@ export default function AdminConversionsPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold">Gestion des Conversions</h1>
-            <p className="text-muted-foreground">Historique des conversions et configuration des frais par fournisseur</p>
+            <p className="text-muted-foreground">Historique des conversions et configuration des frais par paire de devises</p>
           </div>
           <Button variant="outline" onClick={() => refetch()} className="gap-2">
             <RefreshCw className="w-4 h-4" />
@@ -198,72 +228,89 @@ export default function AdminConversionsPage() {
           </Button>
         </div>
 
+        {/* ── Configuration par paire ── */}
         <Card>
           <CardHeader>
             <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Configuration</p>
             <CardTitle className="flex items-center gap-2 text-base">
               <Settings className="w-4 h-4 text-muted-foreground" />
-              Frais de conversion par fournisseur
+              Frais de conversion par paire de devises
             </CardTitle>
             <p className="text-xs text-muted-foreground">
-              Pour chaque fournisseur : configurez le frais du fournisseur et la marge Ashtech Pay séparément.
-              Le frais total prélevé à l'utilisateur est la somme des deux.
+              Le frais total prélevé à l'utilisateur = frais opérateurs + marge Ashtech Pay.
+              Le suffixe (T, B, C, G…) indique uniquement le pays — XOFT=Togo, XOFC=Côte d'Ivoire, XAFG=Gabon, etc.
             </p>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="grid gap-5 sm:grid-cols-3">
-              {PROVIDERS.map(p => {
-                const total = getTotal(p);
+            <div className="grid gap-5 sm:grid-cols-2">
+              {CONVERSION_PAIRS.map(p => {
+                const provKey = `conversion_provider_fee_${p.key}`;
+                const ashKey  = `conversion_ashtech_fee_${p.key}`;
+                const total   = getTotal(p);
+                const margin  = getAshtechMargin(p);
                 return (
                   <div key={p.key} className="space-y-3 p-4 rounded-xl border bg-muted/20">
-                    <p className={`text-sm font-bold ${p.color}`}>{p.label}</p>
-
-                    <div className="space-y-1.5">
-                      <Label htmlFor={p.providerFeeSettingKey} className="text-xs text-muted-foreground font-medium">
-                        Frais fournisseur
-                      </Label>
-                      <div className="relative">
-                        <Percent className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                        <Input
-                          id={p.providerFeeSettingKey}
-                          type="number"
-                          inputMode="decimal"
-                          step="0.1"
-                          min="0"
-                          max="100"
-                          value={fees[p.providerFeeSettingKey]}
-                          onChange={e => setFees(prev => ({ ...prev, [p.providerFeeSettingKey]: e.target.value }))}
-                          className="pl-8 h-8 text-sm"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <Label htmlFor={p.ashtechFeeSettingKey} className="text-xs text-muted-foreground font-medium">
-                        Frais Ashtech Pay
-                      </Label>
-                      <div className="relative">
-                        <Percent className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                        <Input
-                          id={p.ashtechFeeSettingKey}
-                          type="number"
-                          inputMode="decimal"
-                          step="0.1"
-                          min="0"
-                          max="100"
-                          value={fees[p.ashtechFeeSettingKey]}
-                          onChange={e => setFees(prev => ({ ...prev, [p.ashtechFeeSettingKey]: e.target.value }))}
-                          className="pl-8 h-8 text-sm"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-1 border-t border-border/50">
-                      <span className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Equal className="w-3 h-3" />
-                        Total prélevé
+                    {/* Header */}
+                    <div className="flex items-center gap-2">
+                      <span className={`text-sm font-bold ${p.color}`}>
+                        {p.fromFlag} {p.fromLabel}
                       </span>
-                      <span className={`text-sm font-bold ${p.color}`}>{total}%</span>
+                      <ArrowRight className="w-4 h-4 text-muted-foreground" />
+                      <span className={`text-sm font-bold ${p.color}`}>
+                        {p.toFlag} {p.toLabel}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      {p.fromDesc} → {p.toDesc}
+                    </p>
+
+                    {/* Frais opérateurs */}
+                    <div className="space-y-1.5">
+                      <Label htmlFor={provKey} className="text-xs text-muted-foreground font-medium">
+                        {p.providerLabel}
+                      </Label>
+                      <div className="relative">
+                        <Percent className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                        <Input
+                          id={provKey}
+                          type="number" inputMode="decimal" step="0.1" min="0" max="100"
+                          value={fees[provKey]}
+                          onChange={e => setFees(prev => ({ ...prev, [provKey]: e.target.value }))}
+                          className="pl-8 h-8 text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Marge Ashtech */}
+                    <div className="space-y-1.5">
+                      <Label htmlFor={ashKey} className="text-xs text-muted-foreground font-medium">
+                        Marge Ashtech Pay
+                      </Label>
+                      <div className="relative">
+                        <Percent className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                        <Input
+                          id={ashKey}
+                          type="number" inputMode="decimal" step="0.1" min="0" max="100"
+                          value={fees[ashKey]}
+                          onChange={e => setFees(prev => ({ ...prev, [ashKey]: e.target.value }))}
+                          className="pl-8 h-8 text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Totaux */}
+                    <div className="space-y-1 pt-1 border-t border-border/50">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Equal className="w-3 h-3" />
+                          Total prélevé (utilisateur)
+                        </span>
+                        <span className={`text-sm font-bold ${p.color}`}>{total}%</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">↳ dont marge Ashtech</span>
+                        <span className="text-xs font-semibold text-primary">{margin.toFixed(2)}%</span>
+                      </div>
                     </div>
                   </div>
                 );
@@ -283,12 +330,13 @@ export default function AdminConversionsPage() {
                 Enregistrer les frais
               </Button>
               <p className="text-xs text-muted-foreground">
-                Les frais sont appliqués selon le fournisseur de la dernière transaction entrante de l'utilisateur.
+                Les frais sont déterminés par la paire de devises (famille XOF, XAF, CDF), indépendamment du fournisseur.
               </p>
             </div>
           </CardContent>
         </Card>
 
+        {/* ── Historique ── */}
         <div className="space-y-4">
           <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Historique des conversions</p>
 
@@ -329,37 +377,36 @@ export default function AdminConversionsPage() {
                             <Clock className="w-3 h-3" />
                             {req.createdAt ? format(new Date(req.createdAt), "dd/MM/yyyy HH:mm", { locale: fr }) : "-"}
                           </span>
+                          {req.notes && (() => {
+                            try {
+                              const n = JSON.parse(req.notes);
+                              if (n.feePercent) return (
+                                <span className="text-xs text-primary font-medium">Frais : {n.feePercent}</span>
+                              );
+                            } catch {}
+                            return null;
+                          })()}
                         </div>
                       </div>
                       {req.status === "pending" && (
                         <div className="flex items-center gap-2 shrink-0">
                           <Button
-                            size="sm"
-                            className="gap-1.5 h-8 text-xs"
+                            size="sm" className="gap-1.5 h-8 text-xs"
                             onClick={() => executeMutation.mutate(req.id)}
                             disabled={executeMutation.isPending || cancelMutation.isPending}
                             data-testid={`button-execute-conversion-${req.id}`}
                           >
-                            {executeMutation.isPending ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            ) : (
-                              <Zap className="w-3.5 h-3.5" />
-                            )}
+                            {executeMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
                             Forcer
                           </Button>
                           <Button
-                            size="sm"
-                            variant="outline"
+                            size="sm" variant="outline"
                             className="gap-1.5 h-8 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
                             onClick={() => cancelMutation.mutate(req.id)}
                             disabled={executeMutation.isPending || cancelMutation.isPending}
                             data-testid={`button-cancel-conversion-${req.id}`}
                           >
-                            {cancelMutation.isPending ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            ) : (
-                              <XCircle className="w-3.5 h-3.5" />
-                            )}
+                            {cancelMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
                             Annuler
                           </Button>
                         </div>

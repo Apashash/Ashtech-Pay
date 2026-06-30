@@ -60,7 +60,7 @@ import { createNowPaymentsInvoice, createNowPaymentsPayment, verifyNowPaymentsIp
 import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, getAfribaPayOtpInfo, confirmAfribaPayOtp } from "./afribapay";
 import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, initiatePixPayPayout, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType, getPixPayServiceId, PIXPAY_OTP_USSD_CODES } from "./pixpay";
 import { addPendingPayment, removePendingPayment } from "./paymentPoller";
-import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, sameCfaFamily } from "./walletHelper";
+import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, sameCfaFamily, getConversionPairKey } from "./walletHelper";
 import { createSwychrPayout, formatInternationalPhone, detectMethodFromPhone, fiatToPusd, pusdToFiatRate, convertFiatToPusd, getPayoutToken, COUNTRY_CURRENCY } from "./swychrPayout";
 import { addPendingPayout, removePendingPayout } from "./payoutPoller";
 import { addSSEClient, removeSSEClient, setActiveTicket, isUserOnline, getOnlineUserIds, getAdminViewingTicket, getUserViewingTicket, notifyUser, notifyAdmins, broadcastOnlineStatus, notifyUserForceLogout, notifyOtherSessionsForceLogout, notifyAllUsersForceLogout, notifySpecificSessionForceLogout } from "./sse";
@@ -4751,23 +4751,21 @@ export async function registerRoutes(
         return res.status(400).json({ message: `Solde insuffisant en ${fromCurrency} (disponible: ${sourceBalance.toFixed(2)})` });
       }
 
-      // Determine provider fee
-      let conversionProvider = "swychr";
-      const lastIncomingTx = await storage.getLastIncomingTransactionByCurrency(userId, fromCurrency);
-      if (lastIncomingTx?.operatorId) {
-        const txOperator = await storage.getOperator(lastIncomingTx.operatorId).catch(() => null);
-        if (txOperator) conversionProvider = (txOperator as any).paymentProvider || "swychr";
-      }
-
-      // Frais fournisseur + marge Ashtech — admin configure les deux séparément
-      const providerFeeKey = `conversion_provider_fee_${conversionProvider}`;
-      const ashtechFeeKey = `conversion_ashtech_fee_${conversionProvider}`;
-      const [providerFeeSetting, ashtechFeeSetting] = await Promise.all([
-        storage.getSetting(providerFeeKey),
-        storage.getSetting(ashtechFeeKey),
-      ]);
-      const providerFeePercent = providerFeeSetting ? parseFloat(providerFeeSetting.value) : 4;
-      const ashtechFeePercent = ashtechFeeSetting ? parseFloat(ashtechFeeSetting.value) : 2;
+      // Frais par paire de devises (XOF↔XAF, CDF↔CFA) — indépendant du fournisseur
+      const pairKey = getConversionPairKey(fromCurrency, toCurrency);
+      const PAIR_DEFAULTS: Record<string, [number, number]> = {
+        xof_xaf: [1, 1], xaf_xof: [1, 1],
+        cdf_cfa: [3, 2], cfa_cdf: [3, 2],
+      };
+      const [defProvider, defAshtech] = (pairKey && PAIR_DEFAULTS[pairKey]) ? PAIR_DEFAULTS[pairKey] : [1, 1];
+      const [providerFeeSetting, ashtechFeeSetting] = pairKey
+        ? await Promise.all([
+            storage.getSetting(`conversion_provider_fee_${pairKey}`),
+            storage.getSetting(`conversion_ashtech_fee_${pairKey}`),
+          ])
+        : [null, null];
+      const providerFeePercent = providerFeeSetting ? parseFloat(providerFeeSetting.value) : defProvider;
+      const ashtechFeePercent  = ashtechFeeSetting  ? parseFloat(ashtechFeeSetting.value)  : defAshtech;
       const conversionFeePercent = providerFeePercent + ashtechFeePercent;
 
       const providerFeeAmount = (parsedAmount * providerFeePercent) / 100;
@@ -4797,7 +4795,7 @@ export async function registerRoutes(
         amount: parsedAmount.toFixed(2),
         currency: fromCurrency,
         status: "pending",
-        description: `Conversion ${parsedAmount.toFixed(2)} ${fromCurrency} → ${receivedAmount.toFixed(2)} ${toCurrency} (Frais: ${providerFeePercent}% fournisseur + ${ashtechFeePercent}% Ashtech = ${conversionFeePercent}%)`,
+        description: `Conversion ${parsedAmount.toFixed(2)} ${fromCurrency} → ${receivedAmount.toFixed(2)} ${toCurrency} (Frais: ${providerFeePercent}% opérateurs + ${ashtechFeePercent}% Ashtech = ${conversionFeePercent}%)`,
         reference: generateTransactionReference("CONV"),
         feeAmount: totalFeeAmount.toFixed(2),
         totalAmount: receivedAmount.toFixed(2),
@@ -4816,7 +4814,7 @@ export async function registerRoutes(
           executeAt,
           txId: transaction.id,
           feeAmount: totalFeeAmount.toFixed(2),
-          feePercent: `${providerFeePercent}% fournisseur + ${ashtechFeePercent}% Ashtech = ${conversionFeePercent}`,
+          feePercent: `${providerFeePercent}% opérateurs + ${ashtechFeePercent}% Ashtech = ${conversionFeePercent}`,
           fromAmount: parsedAmount.toFixed(2),
           toAmount: receivedAmount.toFixed(2),
         }),
@@ -4858,7 +4856,7 @@ export async function registerRoutes(
         toAmount: receivedAmount.toFixed(2),
         toCurrency,
         feeAmount: totalFeeAmount.toFixed(2),
-        feePercent: `${providerFeePercent}% fournisseur + ${ashtechFeePercent}% Ashtech = ${conversionFeePercent}`,
+        feePercent: `${providerFeePercent}% opérateurs + ${ashtechFeePercent}% Ashtech = ${conversionFeePercent}`,
         reference: transaction.reference || "",
         userCountry: user.country || "",
         estimatedSeconds: delaySeconds,
@@ -4927,15 +4925,21 @@ export async function registerRoutes(
         return res.status(400).json({ message: `Solde insuffisant en ${fromCurrency} (disponible: ${sourceBalance.toFixed(2)})` });
       }
 
-      // Frais fournisseur + marge Ashtech — admin peut choisir le provider
-      const ALLOWED_PROVIDERS = ["swychr", "pixpay", "afribapay"];
-      const adminProvider = ALLOWED_PROVIDERS.includes(req.body.provider) ? req.body.provider : "swychr";
-      const [adminProviderFeeSetting, adminAshtechFeeSetting] = await Promise.all([
-        storage.getSetting(`conversion_provider_fee_${adminProvider}`),
-        storage.getSetting(`conversion_ashtech_fee_${adminProvider}`),
-      ]);
-      const adminProviderFeePercent = adminProviderFeeSetting ? parseFloat(adminProviderFeeSetting.value) : 4;
-      const adminAshtechFeePercent = adminAshtechFeeSetting ? parseFloat(adminAshtechFeeSetting.value) : 2;
+      // Frais par paire de devises — même logique que la route user
+      const adminPairKey = getConversionPairKey(fromCurrency, toCurrency);
+      const ADMIN_PAIR_DEFAULTS: Record<string, [number, number]> = {
+        xof_xaf: [1, 1], xaf_xof: [1, 1],
+        cdf_cfa: [3, 2], cfa_cdf: [3, 2],
+      };
+      const [adminDefProvider, adminDefAshtech] = (adminPairKey && ADMIN_PAIR_DEFAULTS[adminPairKey]) ? ADMIN_PAIR_DEFAULTS[adminPairKey] : [1, 1];
+      const [adminProviderFeeSetting, adminAshtechFeeSetting] = adminPairKey
+        ? await Promise.all([
+            storage.getSetting(`conversion_provider_fee_${adminPairKey}`),
+            storage.getSetting(`conversion_ashtech_fee_${adminPairKey}`),
+          ])
+        : [null, null];
+      const adminProviderFeePercent = adminProviderFeeSetting ? parseFloat(adminProviderFeeSetting.value) : adminDefProvider;
+      const adminAshtechFeePercent  = adminAshtechFeeSetting  ? parseFloat(adminAshtechFeeSetting.value)  : adminDefAshtech;
       const conversionFeePercent = adminProviderFeePercent + adminAshtechFeePercent;
       const adminProviderFeeAmount = (parsedAmount * adminProviderFeePercent) / 100;
       const adminAshtechFeeAmount = (parsedAmount * adminAshtechFeePercent) / 100;
@@ -4953,7 +4957,7 @@ export async function registerRoutes(
         amount: parsedAmount.toFixed(2),
         currency: fromCurrency,
         status: "completed",
-        description: `Conversion admin: ${parsedAmount.toFixed(2)} ${fromCurrency} → ${receivedAmount.toFixed(2)} ${toCurrency} (Frais: ${adminProviderFeePercent}% fournisseur + ${adminAshtechFeePercent}% Ashtech = ${conversionFeePercent}%)`,
+        description: `Conversion admin: ${parsedAmount.toFixed(2)} ${fromCurrency} → ${receivedAmount.toFixed(2)} ${toCurrency} (Frais: ${adminProviderFeePercent}% opérateurs + ${adminAshtechFeePercent}% Ashtech = ${conversionFeePercent}%)`,
         reference: generateTransactionReference("CONV"),
         feeAmount: feeAmount.toFixed(2),
         totalAmount: receivedAmount.toFixed(2),
@@ -5002,7 +5006,7 @@ export async function registerRoutes(
         toAmount: receivedAmount.toFixed(2),
         toCurrency,
         feeAmount: feeAmount.toFixed(2),
-        feePercent: `${adminProviderFeePercent}% fournisseur + ${adminAshtechFeePercent}% Ashtech = ${conversionFeePercent}`,
+        feePercent: `${adminProviderFeePercent}% opérateurs + ${adminAshtechFeePercent}% Ashtech = ${conversionFeePercent}`,
         reference: transaction.reference || "",
         byAdmin: true,
         adminName: adminUser?.fullName || adminUser?.username || "Admin",
@@ -5813,26 +5817,31 @@ export async function registerRoutes(
       const conversionFeePercent = parseFloat(settings.find(s => s.key === "conversion_fee_percent")?.value || "6");
       const depositFeePercent = parseFloat(settings.find(s => s.key === "deposit_fee_percent")?.value || "0");
       const paymentLinkFeePercent = parseFloat(settings.find(s => s.key === "payment_link_fee_percent")?.value || "2");
-      // Nouveau système à deux frais par fournisseur
-      const convProviderFeeSwychr = parseFloat(settings.find(s => s.key === "conversion_provider_fee_swychr")?.value || "4");
-      const convAshtechFeeSwychr = parseFloat(settings.find(s => s.key === "conversion_ashtech_fee_swychr")?.value || "2");
-      const convProviderFeePixpay = parseFloat(settings.find(s => s.key === "conversion_provider_fee_pixpay")?.value || "4");
-      const convAshtechFeePixpay = parseFloat(settings.find(s => s.key === "conversion_ashtech_fee_pixpay")?.value || "2");
-      const convProviderFeeAfribapay = parseFloat(settings.find(s => s.key === "conversion_provider_fee_afribapay")?.value || "4");
-      const convAshtechFeeAfribapay = parseFloat(settings.find(s => s.key === "conversion_ashtech_fee_afribapay")?.value || "2");
-      // Totaux calculés (rétro-compatibilité)
-      const conversionFeePercentSwychr = convProviderFeeSwychr + convAshtechFeeSwychr;
-      const conversionFeePercentPixpay = convProviderFeePixpay + convAshtechFeePixpay;
-      const conversionFeePercentAfribapay = convProviderFeeAfribapay + convAshtechFeeAfribapay;
-      // Ne pas exposer la décomposition interne (providerFee + ashtechFee) — totaux uniquement
+      // Frais par paire de devises
+      const convProviderFeeXofXaf = parseFloat(settings.find(s => s.key === "conversion_provider_fee_xof_xaf")?.value || "1");
+      const convAshtechFeeXofXaf  = parseFloat(settings.find(s => s.key === "conversion_ashtech_fee_xof_xaf")?.value || "1");
+      const convProviderFeeXafXof = parseFloat(settings.find(s => s.key === "conversion_provider_fee_xaf_xof")?.value || "1");
+      const convAshtechFeeXafXof  = parseFloat(settings.find(s => s.key === "conversion_ashtech_fee_xaf_xof")?.value || "1");
+      const convProviderFeeCdfCfa = parseFloat(settings.find(s => s.key === "conversion_provider_fee_cdf_cfa")?.value || "3");
+      const convAshtechFeeCdfCfa  = parseFloat(settings.find(s => s.key === "conversion_ashtech_fee_cdf_cfa")?.value || "2");
+      const convProviderFeeCfaCdf = parseFloat(settings.find(s => s.key === "conversion_provider_fee_cfa_cdf")?.value || "3");
+      const convAshtechFeeCfaCdf  = parseFloat(settings.find(s => s.key === "conversion_ashtech_fee_cfa_cdf")?.value || "2");
       const cryptoFeePercent = parseFloat(settings.find(s => s.key === "nowpayments_fee_percent")?.value || "2.5");
       const cryptoMinDeposit = parseFloat(settings.find(s => s.key === "nowpayments_min_deposit")?.value || "11");
       res.json({
         conversionFeePercent,
-        conversionFeePercentSwychr,
-        conversionFeePercentPixpay,
-        conversionFeePercentAfribapay,
+        // Paires XOF ↔ XAF
+        convProviderFeeXofXaf, convAshtechFeeXofXaf,
+        convTotalXofXaf: convProviderFeeXofXaf + convAshtechFeeXofXaf,
+        convProviderFeeXafXof, convAshtechFeeXafXof,
+        convTotalXafXof: convProviderFeeXafXof + convAshtechFeeXafXof,
+        // Paires CDF ↔ CFA
+        convProviderFeeCdfCfa, convAshtechFeeCdfCfa,
+        convTotalCdfCfa: convProviderFeeCdfCfa + convAshtechFeeCdfCfa,
+        convProviderFeeCfaCdf, convAshtechFeeCfaCdf,
+        convTotalCfaCdf: convProviderFeeCfaCdf + convAshtechFeeCfaCdf,
         depositFeePercent,
+        paymentLeePercent: paymentLinkFeePercent,
         paymentLinkFeePercent,
         cryptoFeePercent,
         cryptoMinDeposit,
