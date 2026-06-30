@@ -55,6 +55,26 @@ interface PairFeeConfig {
 
 const CONVERSION_PAIRS: PairFeeConfig[] = [
   {
+    key: "xaf_xaf",
+    fromLabel: "XAF", toLabel: "XAF",
+    fromDesc: "XAF, XAFG, XAFC… (intra-famille XAF)",
+    toDesc: "XAF, XAFG, XAFC… (pays différent)",
+    fromFlag: "🇨🇲", toFlag: "🇨🇲",
+    color: "text-slate-600 dark:text-slate-400",
+    providerLabel: "Frais opérateurs",
+    defaultProvider: 0, defaultAshtech: 0,
+  },
+  {
+    key: "xof_xof",
+    fromLabel: "XOF", toLabel: "XOF",
+    fromDesc: "XOF, XOFT, XOFC… (intra-famille XOF)",
+    toDesc: "XOF, XOFT, XOFC… (pays différent)",
+    fromFlag: "🌍", toFlag: "🌍",
+    color: "text-slate-500 dark:text-slate-400",
+    providerLabel: "Frais opérateurs",
+    defaultProvider: 0, defaultAshtech: 0,
+  },
+  {
     key: "xof_xaf",
     fromLabel: "XOF", toLabel: "XAF",
     fromDesc: "XOFT, XOFC, XOFB, XOFF… (famille XOF)",

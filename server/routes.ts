@@ -4754,6 +4754,7 @@ export async function registerRoutes(
       // Frais par paire de devises (XOF↔XAF, CDF↔CFA) — indépendant du fournisseur
       const pairKey = getConversionPairKey(fromCurrency, toCurrency);
       const PAIR_DEFAULTS: Record<string, [number, number]> = {
+        xaf_xaf: [0, 0], xof_xof: [0, 0],
         xof_xaf: [1, 1], xaf_xof: [1, 1],
         cdf_cfa: [3, 2], cfa_cdf: [3, 2],
         cfa_usdt: [1, 1], usdt_cfa: [1, 1],
@@ -5819,6 +5820,11 @@ export async function registerRoutes(
       const depositFeePercent = parseFloat(settings.find(s => s.key === "deposit_fee_percent")?.value || "0");
       const paymentLinkFeePercent = parseFloat(settings.find(s => s.key === "payment_link_fee_percent")?.value || "2");
       // Frais par paire de devises
+      // Intra-famille
+      const convProviderFeeXafXaf = parseFloat(settings.find(s => s.key === "conversion_provider_fee_xaf_xaf")?.value || "0");
+      const convAshtechFeeXafXaf  = parseFloat(settings.find(s => s.key === "conversion_ashtech_fee_xaf_xaf")?.value || "0");
+      const convProviderFeeXofXof = parseFloat(settings.find(s => s.key === "conversion_provider_fee_xof_xof")?.value || "0");
+      const convAshtechFeeXofXof  = parseFloat(settings.find(s => s.key === "conversion_ashtech_fee_xof_xof")?.value || "0");
       const convProviderFeeXofXaf = parseFloat(settings.find(s => s.key === "conversion_provider_fee_xof_xaf")?.value || "1");
       const convAshtechFeeXofXaf  = parseFloat(settings.find(s => s.key === "conversion_ashtech_fee_xof_xaf")?.value || "1");
       const convProviderFeeXafXof = parseFloat(settings.find(s => s.key === "conversion_provider_fee_xaf_xof")?.value || "1");
@@ -5836,6 +5842,11 @@ export async function registerRoutes(
       const cryptoMinDeposit = parseFloat(settings.find(s => s.key === "nowpayments_min_deposit")?.value || "11");
       res.json({
         conversionFeePercent,
+        // Intra-famille
+        convProviderFeeXafXaf, convAshtechFeeXafXaf,
+        convTotalXafXaf: convProviderFeeXafXaf + convAshtechFeeXafXaf,
+        convProviderFeeXofXof, convAshtechFeeXofXof,
+        convTotalXofXof: convProviderFeeXofXof + convAshtechFeeXofXof,
         // Paires XOF ↔ XAF
         convProviderFeeXofXaf, convAshtechFeeXofXaf,
         convTotalXofXaf: convProviderFeeXofXaf + convAshtechFeeXofXaf,

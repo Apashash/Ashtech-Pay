@@ -114,11 +114,16 @@ export function normalizeCurrencyFamily(currency: string): "XAF" | "XOF" | "CDF"
 export function getConversionPairKey(fromCurrency: string, toCurrency: string): string | null {
   const from = normalizeCurrencyFamily(fromCurrency);
   const to   = normalizeCurrencyFamily(toCurrency);
+  // Intra-famille (même devise → même famille, pays différent)
+  if (from === "XAF" && to === "XAF") return "xaf_xaf";
+  if (from === "XOF" && to === "XOF") return "xof_xof";
+  // Inter-famille CFA
   if (from === "XOF" && to === "XAF") return "xof_xaf";
   if (from === "XAF" && to === "XOF") return "xaf_xof";
+  // CDF ↔ CFA
   if (from === "CDF" && (to === "XAF" || to === "XOF")) return "cdf_cfa";
   if ((from === "XAF" || from === "XOF") && to === "CDF") return "cfa_cdf";
-  // Paires USDT ↔ CFA (XAF/XOF)
+  // USDT ↔ CFA (XAF/XOF)
   if ((from === "XAF" || from === "XOF") && toCurrency === "USDT") return "cfa_usdt";
   if (fromCurrency === "USDT" && (to === "XAF" || to === "XOF")) return "usdt_cfa";
   return null;
