@@ -686,7 +686,7 @@ export default function SettingsPage() {
               Confirmer le changement
             </BottomSheetTitle>
             <BottomSheetDescription>
-              Un code à 4 chiffres a été envoyé à votre adresse email. Entrez-le ci-dessous pour confirmer le changement de mot de passe.
+              Un code à 6 chiffres a été envoyé à votre adresse email. Entrez-le ci-dessous pour confirmer le changement de mot de passe.
             </BottomSheetDescription>
           </BottomSheetHeader>
           <div className="py-5 space-y-4">
@@ -695,10 +695,10 @@ export default function SettingsPage() {
               <Input
                 type="text"
                 inputMode="numeric"
-                maxLength={4}
-                placeholder="• • • •"
+                maxLength={6}
+                placeholder="• • • • • •"
                 value={otpValue}
-                onChange={(e) => setOtpValue(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                onChange={(e) => setOtpValue(e.target.value.replace(/\D/g, "").slice(0, 6))}
                 className="text-center text-2xl font-bold tracking-[0.5em] h-14"
                 autoFocus
                 data-testid="input-password-otp"
@@ -712,7 +712,7 @@ export default function SettingsPage() {
             </Button>
             <Button
               onClick={() => confirmPasswordChangeMutation.mutate()}
-              disabled={otpValue.length !== 4 || confirmPasswordChangeMutation.isPending}
+              disabled={otpValue.length !== 6 || confirmPasswordChangeMutation.isPending}
               data-testid="button-confirm-otp"
             >
               {confirmPasswordChangeMutation.isPending
