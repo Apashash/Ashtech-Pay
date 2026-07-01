@@ -79,6 +79,8 @@ import AdminMerchants from "@/pages/admin/merchants";
 import AdminBlockedIps from "@/pages/admin/blocked-ips";
 import AdminAuditLogs from "@/pages/admin/audit";
 import AdminSessionDebug from "@/pages/admin/session-debug";
+import AdminPanelVerifyPage from "@/pages/admin-panel-verify";
+import AdminLoginOtpPage from "@/pages/admin-login-otp";
 import TermsPage from "@/pages/terms";
 import PrivacyPage from "@/pages/privacy";
 import LegalPage from "@/pages/legal";
@@ -180,6 +182,8 @@ function Router() {
       <Route path="/dashboard/settings" component={SettingsPage} />
       <Route path="/pay/:slug" component={PaymentPage} />
       <Route path="/checkout/:transactionId" component={CheckoutPage} />
+      <Route path="/admin-panel-verify" component={AdminPanelVerifyPage} />
+      <Route path="/admin-login-otp" component={AdminLoginOtpPage} />
       <Route path="/ashtechpayadmin62929383737367" component={AdminDashboard} />
       <Route path="/ashtechpayadmin62929383737367/users" component={AdminUsers} />
       <Route path="/ashtechpayadmin62929383737367/users/:id" component={AdminUserDetail} />

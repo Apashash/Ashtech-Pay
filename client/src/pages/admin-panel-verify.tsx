@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { useToast } from "@/hooks/use-toast";
@@ -13,8 +13,38 @@ export default function AdminPanelVerifyPage() {
   const [code, setCode] = useState("");
   const [secondsLeft, setSecondsLeft] = useState(30);
 
-  // ── TOTP DÉSACTIVÉ TEMPORAIREMENT — redirection immédiate vers admin ──
-  useEffect(() => { setLocation("/admin"); }, []);
+  const ADMIN_URL = "/ashtechpayadmin62929383737367";
+
+  const { data: otpStatus, isLoading: statusLoading } = useQuery<{
+    verified: boolean;
+    needsPanelVerify?: boolean;
+    totpEnabled?: boolean;
+  }>({
+    queryKey: ["/api/admin/otp-status"],
+    retry: false,
+    staleTime: 0,
+  });
+
+  useEffect(() => {
+    if (statusLoading) return;
+    if (!otpStatus) {
+      setLocation("/login");
+      return;
+    }
+    if (!otpStatus.totpEnabled) {
+      toast({
+        title: "Google Authenticator non configuré",
+        description: "Vous devez configurer Google Authenticator pour accéder au panneau admin.",
+        variant: "destructive",
+        duration: 8000,
+      });
+      setLocation("/dashboard");
+      return;
+    }
+    if (otpStatus.verified && !otpStatus.needsPanelVerify) {
+      setLocation(ADMIN_URL);
+    }
+  }, [otpStatus, statusLoading]);
 
   useEffect(() => {
     const tick = () => setSecondsLeft(30 - (Math.floor(Date.now() / 1000) % 30));
@@ -36,7 +66,7 @@ export default function AdminPanelVerifyPage() {
         needsPanelVerify: undefined,
         verified: true,
       }));
-      setLocation("/admin");
+      setLocation(ADMIN_URL);
     },
     onError: (err: any) => {
       setCode("");
@@ -57,10 +87,17 @@ export default function AdminPanelVerifyPage() {
   const isExpiringSoon = secondsLeft <= 5;
   const progress = ((30 - secondsLeft) / 30) * 100;
 
+  if (statusLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
-        {/* Back button */}
         <button
           onClick={() => setLocation("/dashboard")}
           className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors"
@@ -71,12 +108,10 @@ export default function AdminPanelVerifyPage() {
         </button>
 
         <div className="bg-card border border-border rounded-2xl p-8 flex flex-col items-center gap-6">
-          {/* Icon */}
           <div className="w-16 h-16 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center">
             <Smartphone className="w-8 h-8 text-primary" />
           </div>
 
-          {/* Title */}
           <div className="text-center">
             <h1 className="text-xl font-bold text-foreground mb-1">Vérification Google Authenticator</h1>
             <p className="text-sm text-muted-foreground leading-relaxed">
@@ -86,7 +121,6 @@ export default function AdminPanelVerifyPage() {
             </p>
           </div>
 
-          {/* Countdown ring */}
           <div className="flex flex-col items-center gap-1">
             <div className="relative w-14 h-14">
               <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
@@ -112,7 +146,6 @@ export default function AdminPanelVerifyPage() {
             )}
           </div>
 
-          {/* OTP Input */}
           <div className="flex flex-col items-center gap-4 w-full">
             <InputOTP
               maxLength={6}

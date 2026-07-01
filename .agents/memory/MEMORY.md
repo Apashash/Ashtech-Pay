@@ -1,1 +1,1 @@
-- [Admin OTP removed](admin-otp-removed.md) — entire 2-step OTP/TOTP login gate removed from admin panel; admins now access directly after role-based login. requireAdmin = role check + IP blocklist only.
+- [Admin TOTP mandatory](admin-totp-mandatory.md) — TOTP now enforced server-side in requireAdmin AND at login; no bypass possible; both OTP pages had disabled redirects that were removed.

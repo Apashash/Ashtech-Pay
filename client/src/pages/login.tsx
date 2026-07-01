@@ -151,12 +151,11 @@ export default function LoginPage() {
       return json;
     },
     onSuccess: (data) => {
-      // ── TOTP ADMIN DÉSACTIVÉ TEMPORAIREMENT (urgence sécurité) ──
-      // if (data.requireAdminOtp && data.adminLoginToken) {
-      //   sessionStorage.setItem("adminLoginToken", data.adminLoginToken);
-      //   setLocation("/admin-login-otp");
-      //   return;
-      // }
+      if (data.requiresAdminOtp && data.adminLoginToken) {
+        sessionStorage.setItem("adminLoginToken", data.adminLoginToken);
+        setLocation("/admin-login-otp");
+        return;
+      }
       if (data.token) setAuthToken(data.token);
       if (data.user) queryClient.setQueryData(["/api/user"], data.user);
       toast({ title: t.login.toastSuccess, description: `${t.login.toastSuccessDescPre}${data.user?.fullName ?? ""}!`, duration: 2000, className: "bg-blue-600 text-white border-blue-700" });

@@ -14,15 +14,14 @@ export default function AdminLoginOtpPage() {
   const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
 
-  // ── TOTP DÉSACTIVÉ TEMPORAIREMENT — redirection immédiate vers login ──
+  const adminLoginToken = sessionStorage.getItem("adminLoginToken");
+
   useEffect(() => {
-    sessionStorage.removeItem("adminLoginToken");
-    setLocation("/login");
-  }, []);
+    if (!adminLoginToken) {
+      setLocation("/login");
+    }
+  }, [adminLoginToken]);
 
-  const adminLoginToken = null; // désactivé
-
-  // Calcule les secondes restantes du code TOTP (période 30s)
   useEffect(() => {
     const update = () => {
       const s = 30 - (Math.floor(Date.now() / 1000) % 30);
@@ -54,7 +53,7 @@ export default function AdminLoginOtpPage() {
         duration: 2500,
         className: "bg-green-600 text-white border-green-700",
       });
-      setLocation("/admin");
+      setLocation("/ashtechpayadmin62929383737367");
     },
     onError: (error: any) => {
       setCode("");
@@ -107,12 +106,10 @@ export default function AdminLoginOtpPage() {
         </div>
 
         <div className="bg-card border border-border rounded-2xl p-8 flex flex-col items-center gap-6">
-          {/* Icon */}
           <div className="w-16 h-16 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center">
             <Smartphone className="w-8 h-8 text-primary" />
           </div>
 
-          {/* Title */}
           <div className="text-center">
             <h1 className="text-xl font-bold text-foreground mb-1">Google Authenticator</h1>
             <p className="text-sm text-muted-foreground leading-relaxed">
@@ -122,7 +119,6 @@ export default function AdminLoginOtpPage() {
             </p>
           </div>
 
-          {/* Countdown ring */}
           <div className="flex flex-col items-center gap-1">
             <div className="relative w-12 h-12">
               <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
@@ -148,13 +144,13 @@ export default function AdminLoginOtpPage() {
             )}
           </div>
 
-          {/* OTP Input */}
           <form onSubmit={handleSubmit} className="flex flex-col items-center gap-4 w-full">
             <InputOTP
               maxLength={6}
               value={code}
               onChange={setCode}
               disabled={verifyMutation.isPending}
+              autoFocus
               data-testid="input-admin-otp"
             >
               <InputOTPGroup>
@@ -190,7 +186,6 @@ export default function AdminLoginOtpPage() {
             </Button>
           </form>
 
-          {/* Cancel */}
           <button
             type="button"
             className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"

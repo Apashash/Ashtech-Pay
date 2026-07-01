@@ -769,6 +769,64 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
     return res.status(403).json({ message: "Votre adresse IP est bloquée du panneau d'administration.", ipBanned: true });
   }
 
+  // ── MANDATORY Google Authenticator (TOTP) — enforced server-side ─────────────
+  // Every admin API call requires TOTP to be (1) configured and (2) verified in
+  // this session. No env-var bypass. No exception for the logo-click trick.
+  if (!user.totpEnabled || !user.totpSecret) {
+    console.warn(`[AdminAccess] BLOCKED — TOTP not configured — user=${req.userId} role=${user.role} path=${req.path}`);
+    notifyAdminPanelAccess({ type: "blocked_no_auth", ip: adminIpEarly, userId: user.id, userName: user.fullName || user.username, userEmail: user.email || undefined, userRole: user.role, path: req.path }).catch(() => {});
+    return res.status(403).json({
+      message: "Google Authenticator obligatoire. Configurez-le pour accéder au panneau admin.",
+      totpNotConfigured: true,
+    });
+  }
+
+  // Tier 1: in-memory map (instant — no async)
+  const nowTotp = Date.now();
+  const avsMemEntry = adminVerifiedSessions.get(req.sessionID);
+  let avsOk = !!(avsMemEntry && avsMemEntry.expiresAt > nowTotp);
+
+  // Tier 2: session cookie (no extra round-trip)
+  if (!avsOk) {
+    const avsExp = req.session._avs;
+    if (typeof avsExp === "number" && avsExp > nowTotp) {
+      avsOk = true;
+      adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: avsExp });
+    }
+  }
+
+  // Tier 3: DB (multi-process / cold-start fallback — same logic as otp-status)
+  if (!avsOk && req.sessionID) {
+    for (const queryPool of [sessionPool, pool]) {
+      try {
+        const dbRow = await queryPool.query(
+          `SELECT sess FROM session WHERE sid = $1 AND expire > NOW()`,
+          [req.sessionID]
+        );
+        if (dbRow.rows.length > 0) {
+          const sessData = typeof dbRow.rows[0].sess === "string"
+            ? JSON.parse(dbRow.rows[0].sess)
+            : dbRow.rows[0].sess;
+          const dbAvs = sessData?._avs;
+          if (typeof dbAvs === "number" && dbAvs > nowTotp) {
+            avsOk = true;
+            adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: dbAvs });
+          }
+        }
+        break;
+      } catch { /* try next pool */ }
+    }
+  }
+
+  if (!avsOk) {
+    console.warn(`[AdminAccess] BLOCKED — TOTP not verified — user=${req.userId} role=${user.role} path=${req.path}`);
+    notifyAdminPanelAccess({ type: "blocked_no_auth", ip: adminIpEarly, userId: user.id, userName: user.fullName || user.username, userEmail: user.email || undefined, userRole: user.role, path: req.path }).catch(() => {});
+    return res.status(403).json({
+      message: "Vérification Google Authenticator requise pour accéder au panneau admin.",
+      totpRequired: true,
+    });
+  }
+
   console.log(`[AdminAccess] OK — user=${req.userId} role=${user.role} path=${req.path}`);
 
   // ── Telegram notification — 1x par session toutes les 30 min (anti-spam) ───
@@ -2096,11 +2154,23 @@ export async function registerRoutes(
 
       await clearAuthAttempts(ip);
 
-      // Session created immediately for all roles (including admin/support/finance).
-      // Admin panel access is protected by: requireAdmin (role re-fetched from DB every request)
-      // + IP blocklist + Telegram alert on each panel access.
-      // Optional TOTP (Google Authenticator) can be enabled per admin account via
-      // POST /api/admin/totp/setup → adds _avs OTP layer on top of password auth.
+      // ── Admin/support/finance — TOTP obligatoire AVANT toute session ──────────
+      // Prevents getting a working session without passing Google Authenticator.
+      // If TOTP is not configured on the account, access is blocked entirely.
+      if (["admin", "support", "finance"].includes(user.role)) {
+        if (!user.totpEnabled || !user.totpSecret) {
+          return res.status(403).json({
+            message: "Google Authenticator obligatoire pour les comptes admin. Contactez votre super-administrateur pour configurer le 2FA sur votre compte.",
+            totpNotConfigured: true,
+          });
+        }
+        // Create a short-lived pending login token — full session is only granted after TOTP
+        const pendingToken = crypto.randomBytes(32).toString("hex");
+        const expiresAt = Date.now() + 10 * 60 * 1000; // 10 min
+        await setPendingAdminLogin(pendingToken, { userId: user.id, otp: "", expiresAt, attempts: 0 });
+        return res.json({ requiresAdminOtp: true, adminLoginToken: pendingToken });
+      }
+
       activeIpRegistry.set(user.id, ip);
 
       // Generate auth token for token-based auth (works in iframes where cookies fail)
@@ -2343,12 +2413,17 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Code Google Authenticator incorrect." });
       }
 
-      // Set _pav (panel access verified) — short-lived flag checked by otp-status
+      // Set _avs (admin verified session, 3-day TTL) — makes requireAdmin pass
+      // Set _pav (panel access verified, 30-min TTL) — checked by otp-status
+      const avsPanelExp = Date.now() + ADMIN_OTP_SESSION_TTL_MS;
+      req.session._avs = avsPanelExp;
       req.session._pav = Date.now() + ADMIN_PANEL_ACCESS_TTL_MS;
       await new Promise<void>((resolve) => req.session.save((err) => {
         if (err) console.error("admin-panel-verify session save error:", err);
         resolve();
       }));
+      // Populate in-memory cache so requireAdmin is instant on subsequent requests
+      adminVerifiedSessions.set(req.sessionID, { userId: user.id, expiresAt: avsPanelExp });
 
       // Telegram : notifier la connexion OTP réussie au panneau admin
       notifyAdminPanelAccess({
@@ -6956,10 +7031,7 @@ export async function registerRoutes(
     if (!user || !["admin", "support", "finance"].includes(user.role)) {
       return res.status(403).json({ message: "Accès refusé" });
     }
-    // OTP bypass mode — mirrors requireAdmin: ADMIN_OTP_BYPASS=true alone is enough.
-    if (process.env.ADMIN_OTP_BYPASS === "true") {
-      return res.json({ verified: true, bypass: true, totpEnabled: !!user.totpEnabled });
-    }
+    // ADMIN_OTP_BYPASS env var has been permanently removed — no bypass allowed.
     const now = Date.now();
     // Keyed by sessionID — each browser login is independently verified
     const memEntry = adminVerifiedSessions.get(req.sessionID);

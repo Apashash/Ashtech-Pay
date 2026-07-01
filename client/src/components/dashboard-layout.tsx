@@ -106,8 +106,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { rates } = useExchangeRates();
   const { t, language } = useLanguage();
 
-  const ADMIN_URL = "/ashtechpayadmin62929383737367";
-
   // ── Logo click counter — 5 clicks to access admin panel secretly ──────────
   const [logoClickCount, setLogoClickCount] = useState(0);
   const logoClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -118,7 +116,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       const next = prev + 1;
       if (next >= 5) {
         if (logoClickTimer.current) clearTimeout(logoClickTimer.current);
-        setLocation(ADMIN_URL);
+        setLocation("/admin-panel-verify");
         return 0;
       }
       if (logoClickTimer.current) clearTimeout(logoClickTimer.current);
