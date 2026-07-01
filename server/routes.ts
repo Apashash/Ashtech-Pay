@@ -224,6 +224,8 @@ const SessionStore = connectPgSimple(session);
 declare module "express-session" {
   interface SessionData {
     userId: string;
+    role?: string;          // stored at login — used for inactivity timeout (5h admin / 24h user)
+    lastActivity?: number;  // ms timestamp — updated on every authenticated request
     _avs?: number;
     _avsIp?: string;      // IP at TOTP verification time — used for admin session IP pinning
     _otpCode?: string;    // deprecated: plaintext OTP kept for backward compat only
@@ -350,7 +352,7 @@ function isIpBannedFromAdmin(ip: string, blocklist: AdminPanelBlock[]): boolean 
 // Keyed by sessionID so each browser session is independently verified.
 // A new login always gets a fresh sessionID → OTP is always re-asked after logout.
 const adminVerifiedSessions = new Map<string, { userId: string; expiresAt: number }>();
-const ADMIN_OTP_SESSION_TTL_MS = 3 * 24 * 60 * 60 * 1000; // 3 days — matches session maxAge
+const ADMIN_OTP_SESSION_TTL_MS = 1 * 60 * 60 * 1000; // 1h inactivity — slides on each requireAdmin pass
 const ADMIN_PANEL_ACCESS_TTL_MS = 30 * 60 * 1000; // 30 min — _pav flag (panel access verified)
 
 // Rate-limit Telegram "panel_access" notifications — 1 notif per sessionID per 30 min
@@ -695,6 +697,31 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
     return res.status(401).json({ message: "Non autorisé" });
   }
 
+  // ── Inactivity-based session expiry ──────────────────────────────────────────
+  // Admin/support/finance: 5h — Regular users: 24h
+  {
+    const now = Date.now();
+    const lastActivity = req.session.lastActivity;
+    if (lastActivity) {
+      const role = req.session.role ?? "";
+      const isPrivileged = ["admin", "support", "finance"].includes(role);
+      const maxInactivity = isPrivileged
+        ? 5 * 60 * 60 * 1000   // 5h for admin
+        : 24 * 60 * 60 * 1000; // 24h for regular users
+      if (now - lastActivity > maxInactivity) {
+        req.session.destroy(() => {});
+        const label = isPrivileged ? "5h (compte admin)" : "24h";
+        return res.status(401).json({
+          message: `Session expirée après ${label} d'inactivité. Reconnectez-vous.`,
+          sessionRevoked: true,
+          inactivityExpired: true,
+        });
+      }
+    }
+    // Slide lastActivity forward on every authenticated request
+    req.session.lastActivity = now;
+  }
+
   // ── Session IP consistency check — detect potential cookie hijacking ──────────
   // Compare current IP with IP stored at login. For regular users: log only (mobile
   // switches IPs frequently). Flag it in logs for SIEM review.
@@ -879,6 +906,15 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
   }
 
   console.log(`[AdminAccess] OK — user=${req.userId} role=${user.role} path=${req.path}`);
+
+  // ── Slide _avs by 1h on every successful admin access (inactivity-based TOTP) ─
+  {
+    const newAvsExp = Date.now() + ADMIN_OTP_SESSION_TTL_MS;
+    req.session._avs = newAvsExp;
+    req.session._avsIp = adminIpEarly;
+    adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: newAvsExp });
+    req.session.save(() => {});
+  }
 
   // ── Telegram notification — 1x par session toutes les 30 min (anti-spam) ───
   const nowMs = Date.now();
@@ -2248,6 +2284,8 @@ export async function registerRoutes(
         req.session.userAgent = req.headers["user-agent"] || "";
         req.session.loginAt = new Date().toISOString();
         req.session.tokenIssuedAt = extractTokenTimestamp(authToken);
+        req.session.role = user.role;
+        req.session.lastActivity = Date.now();
         // Belt-and-suspenders: explicitly clear any stale OTP verification state
         delete req.session._avs;
         delete (req.session as any)._otpCode;
