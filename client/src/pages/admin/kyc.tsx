@@ -145,7 +145,16 @@ export default function AdminKYC() {
       setViewSubmission(null);
       setApproveNote("");
     },
-    onError: () => toast({ title: "Erreur", variant: "destructive" }),
+    onError: (err: any) => {
+      const msg = err?.message;
+      if (msg === "PIN_CANCELLED") return;
+      if (msg === "PIN_LOCKED") return;
+      toast({
+        title: "Erreur lors de l'approbation",
+        description: msg || "Une erreur est survenue.",
+        variant: "destructive",
+      });
+    },
   });
 
   const rejectMutation = useMutation({
@@ -160,7 +169,16 @@ export default function AdminKYC() {
       setRejectNote("");
       setViewSubmission(null);
     },
-    onError: () => toast({ title: "Erreur", variant: "destructive" }),
+    onError: (err: any) => {
+      const msg = err?.message;
+      if (msg === "PIN_CANCELLED") return;
+      if (msg === "PIN_LOCKED") return;
+      toast({
+        title: "Erreur lors du rejet",
+        description: msg || "Une erreur est survenue.",
+        variant: "destructive",
+      });
+    },
   });
 
   const getDocumentTypeName = (typeId: string) =>

@@ -102,6 +102,10 @@ function isPinChallenge(status: number, body: Record<string, unknown>): boolean 
   );
 }
 
+function isPinNotConfigured(status: number, body: Record<string, unknown>): boolean {
+  return status === 503 && !!body.pinNotConfigured;
+}
+
 // ── apiRequest ────────────────────────────────────────────────────────────────
 // For /api/admin/* mutations, transparently handles PIN challenges:
 //   428 pinRequired → open dialog → retry with PIN header
@@ -128,6 +132,13 @@ export async function apiRequest(
   const bodyText = await res.clone().text();
   let body: Record<string, unknown> = {};
   try { body = JSON.parse(bodyText); } catch { /* ignore */ }
+
+  // 503 pinNotConfigured — admin PIN not set on the server
+  if (isPinNotConfigured(res.status, body)) {
+    throw new Error(
+      String(body.message || "Le code PIN admin n'est pas configuré sur le serveur. Ajoutez ADMIN_PIN_CODE dans les variables d'environnement.")
+    );
+  }
 
   if (!isPinChallenge(res.status, body)) {
     await throwIfResNotOk(res);

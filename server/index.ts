@@ -382,7 +382,15 @@ app.use((req, res, next) => {
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id)`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action)`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DESC)`);
-    console.log("[Migration] Schema columns ready (api_key, notify_url, source, confirmed_at, hosted_page_configs, hosted_payment_sessions, payment_links.notify_url, token_revoked_before, conversion_requests.executed_at/by_id, user_notifications.type, wallets_unique_idx, admin_logs, audit_logs, withdrawal_numbers, withdrawal_number_changes)");
+    // Ensure kyc_submissions review columns exist (may be missing on older deployments)
+    await db.execute(sql`ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS reviewer_id VARCHAR REFERENCES users(id)`);
+    await db.execute(sql`ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS review_note TEXT`);
+    await db.execute(sql`ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP`);
+    await db.execute(sql`ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()`);
+    await db.execute(sql`ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS country TEXT`);
+    await db.execute(sql`ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS city TEXT`);
+    await db.execute(sql`ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS postal_code TEXT`);
+    console.log("[Migration] Schema columns ready (api_key, notify_url, source, confirmed_at, hosted_page_configs, hosted_payment_sessions, payment_links.notify_url, token_revoked_before, conversion_requests.executed_at/by_id, user_notifications.type, wallets_unique_idx, admin_logs, audit_logs, withdrawal_numbers, withdrawal_number_changes, kyc_submissions.reviewer_id/review_note/reviewed_at/updated_at/country/city/postal_code)");
 
     // ── 5.3 Re-encrypt existing plaintext sensitive fields ────────────────────
     // Only runs when FIELD_ENCRYPTION_KEY is set. Without the key, encryptField()
