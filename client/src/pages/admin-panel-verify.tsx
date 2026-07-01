@@ -13,6 +13,9 @@ export default function AdminPanelVerifyPage() {
   const [code, setCode] = useState("");
   const [secondsLeft, setSecondsLeft] = useState(30);
 
+  // ── TOTP DÉSACTIVÉ TEMPORAIREMENT — redirection immédiate vers admin ──
+  useEffect(() => { setLocation("/admin"); }, []);
+
   useEffect(() => {
     const tick = () => setSecondsLeft(30 - (Math.floor(Date.now() / 1000) % 30));
     tick();
