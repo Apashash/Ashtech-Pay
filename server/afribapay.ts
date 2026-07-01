@@ -12,6 +12,35 @@ const AFRIBAPAY_PAYOUT_URL  = "https://api-payout.afribapay.com";
 
 const TOKEN_FILE = path.join(process.cwd(), ".local", "afribapay_token.json");
 
+// ─── PII masking helpers for logs ──────────────────────────────────────────────
+// Avoid printing full phone numbers / emails in server logs (GDPR / PII hygiene).
+function maskPhone(phone: string | undefined | null): string {
+  if (!phone) return String(phone);
+  const s = String(phone);
+  return s.length <= 4 ? "***" : `${s.slice(0, 3)}***${s.slice(-2)}`;
+}
+function maskEmail(email: string | undefined | null): string {
+  if (!email) return String(email);
+  const [user, domain] = String(email).split("@");
+  if (!domain) return "***";
+  return `${user.slice(0, 2)}***@${domain}`;
+}
+function maskPiiInObject(obj: any): any {
+  if (!obj || typeof obj !== "object") return obj;
+  const clone: any = Array.isArray(obj) ? [...obj] : { ...obj };
+  for (const key of Object.keys(clone)) {
+    const lower = key.toLowerCase();
+    if (typeof clone[key] === "string" && (lower.includes("phone") || lower.includes("msisdn"))) {
+      clone[key] = maskPhone(clone[key]);
+    } else if (typeof clone[key] === "string" && lower.includes("email")) {
+      clone[key] = maskEmail(clone[key]);
+    } else if (clone[key] && typeof clone[key] === "object") {
+      clone[key] = maskPiiInObject(clone[key]);
+    }
+  }
+  return clone;
+}
+
 // ─── Token cache ──────────────────────────────────────────────────────────────
 let cachedToken: string | null = null;
 let tokenExpiry: Date | null = null;
@@ -190,7 +219,7 @@ export async function initiateAfribaPayin(params: AfribaPayinParams): Promise<Af
       cancel_url: params.cancel_url || "",
     };
 
-    console.log(`[AfribaPay Payin] Initiating ${params.amount} ${params.currency} for ${params.phone_number} (${params.operator}/${params.country})`);
+    console.log(`[AfribaPay Payin] Initiating ${params.amount} ${params.currency} for ${maskPhone(params.phone_number)} (${params.operator}/${params.country})`);
 
     const res = await fetch(`${AFRIBAPAY_PAYIN_URL}/v1/pay/payin`, {
       method: "POST",
@@ -199,7 +228,7 @@ export async function initiateAfribaPayin(params: AfribaPayinParams): Promise<Af
     });
 
     const data = await res.json();
-    console.log(`[AfribaPay Payin] Response:`, JSON.stringify(data));
+    console.log(`[AfribaPay Payin] Response:`, JSON.stringify(maskPiiInObject(data)));
 
     if (!res.ok || data.error) {
       return { success: false, message: data.error?.message || data.data?.message || "Erreur AfribaPay", raw: data };
@@ -269,7 +298,7 @@ export async function initiateAfribaPayout(params: AfribaPayoutParams): Promise<
       cancel_url: "",
     };
 
-    console.log(`[AfribaPay Payout] Initiating ${params.amount} ${params.currency} to ${params.phone_number} (${params.operator}/${params.country})`);
+    console.log(`[AfribaPay Payout] Initiating ${params.amount} ${params.currency} to ${maskPhone(params.phone_number)} (${params.operator}/${params.country})`);
 
     const res = await fetch(`${AFRIBAPAY_PAYOUT_URL}/v1/pay/payout`, {
       method: "POST",
@@ -278,7 +307,7 @@ export async function initiateAfribaPayout(params: AfribaPayoutParams): Promise<
     });
 
     const data = await res.json();
-    console.log(`[AfribaPay Payout] Response:`, JSON.stringify(data));
+    console.log(`[AfribaPay Payout] Response:`, JSON.stringify(maskPiiInObject(data)));
 
     if (!res.ok || data.error) {
       return { success: false, message: data.error?.message || data.data?.message || "Erreur payout AfribaPay", raw: data };
@@ -316,7 +345,7 @@ export async function checkAfribaPayStatus(
 
     const d = data.data;
     const rawStatus = (d?.status || d?.transaction_status || "").toUpperCase();
-    console.log(`[AfribaPay PayinStatus] ${param} → HTTP ${res.status} | raw_status="${rawStatus}" | data=${JSON.stringify(d)}`);
+    console.log(`[AfribaPay PayinStatus] ${param} → HTTP ${res.status} | raw_status="${rawStatus}" | data=${JSON.stringify(maskPiiInObject(d))}`);
 
     if (rawStatus === "SUCCESS" || rawStatus === "COMPLETED" || rawStatus === "SUCCESSFUL"
         || rawStatus === "PAID" || rawStatus === "APPROVED") {
@@ -346,7 +375,7 @@ export async function checkAfribaPayoutStatus(
 
     const d = data.data;
     const rawStatus = (d?.status || d?.transaction_status || d?.payout_status || "").toUpperCase();
-    console.log(`[AfribaPay PayoutStatus] ${param} → HTTP ${res.status} | raw_status="${rawStatus}" | data=${JSON.stringify(d)}`);
+    console.log(`[AfribaPay PayoutStatus] ${param} → HTTP ${res.status} | raw_status="${rawStatus}" | data=${JSON.stringify(maskPiiInObject(d))}`);
 
     if (rawStatus === "SUCCESS" || rawStatus === "COMPLETED" || rawStatus === "SUCCESSFUL"
         || rawStatus === "PAID" || rawStatus === "APPROVED" || rawStatus === "PROCESSED") {
@@ -466,7 +495,7 @@ export async function initiateAfribaPayOtp(params: Omit<AfribaPayinParams, "retu
       notify_url: params.notify_url || "",
     };
 
-    console.log(`[AfribaPay OTP Init] Sending OTP SMS: ${params.amount} ${params.currency} for ${params.phone_number} (${params.operator}/${params.country})`);
+    console.log(`[AfribaPay OTP Init] Sending OTP SMS: ${params.amount} ${params.currency} for ${maskPhone(params.phone_number)} (${params.operator}/${params.country})`);
 
     const res = await fetch(`${AFRIBAPAY_PAYIN_URL}/v1/pay/otp`, {
       method: "POST",
@@ -477,7 +506,7 @@ export async function initiateAfribaPayOtp(params: Omit<AfribaPayinParams, "retu
     let data: any = null;
     const text = await res.text();
     try { data = JSON.parse(text); } catch { data = text; }
-    console.log(`[AfribaPay OTP Init] Response status=${res.status} body=${JSON.stringify(data)}`);
+    console.log(`[AfribaPay OTP Init] Response status=${res.status} body=${JSON.stringify(maskPiiInObject(data))}`);
 
     // AfribaPay returns "" (empty string) or 2xx on success — treat non-5xx as success
     if (res.status >= 500) {
@@ -530,7 +559,7 @@ export async function confirmAfribaPayOtp(params: AfribaPayOtpParams): Promise<A
     });
 
     const data = await res.json();
-    console.log(`[AfribaPay OTP] Response:`, JSON.stringify(data));
+    console.log(`[AfribaPay OTP] Response:`, JSON.stringify(maskPiiInObject(data)));
 
     if (!res.ok || data.error) {
       return { success: false, message: data.error?.message || "Code OTP invalide ou expiré", raw: data };

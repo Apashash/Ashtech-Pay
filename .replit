@@ -43,7 +43,6 @@ build = ["npm", "run", "build"]
 [userenv]
 
 [userenv.shared]
-ADMIN_OTP_BYPASS = "true"
 SUPABASE_URL = "https://vngfjjfgaxkcwtrzawdq.supabase.co/"
 PIXPAY_WAVE_BUSINESS_ID = "am-23kv2kt281gqe"
 APP_URL_DEV = "https://f96a6379-f341-4944-8f17-8e8a1d157003-00-rvqhzlc1jkpk.worf.replit.dev"
@@ -54,7 +53,6 @@ TRUST_PROXY = "true"
 COOKIE_SECURE = "false"
 COOKIE_SAMESITE = "lax"
 APP_URL = "https://ashtechpay.top"
-WEBHOOK_SECRET = "dd8f31ca851c030d293949b33eac0955114de528cd864177c374dcbae92d7fe5"
 
 [userenv.development]
 

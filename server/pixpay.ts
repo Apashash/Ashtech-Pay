@@ -6,6 +6,27 @@
 const PIXPAY_AIRTIME_URL = "https://proxy-coreapi.pixelinnov.net/api_v1/transaction/airtime";
 const PIXPAY_STATUS_URL  = "https://proxy-coreapi.pixelinnov.net/api_v1/transaction/status";
 
+// ─── PII masking helpers for logs ──────────────────────────────────────────────
+// Avoid printing full phone numbers / emails in server logs (GDPR / PII hygiene).
+function maskPhone(phone: string | undefined | null): string {
+  if (!phone) return String(phone);
+  const s = String(phone);
+  return s.length <= 4 ? "***" : `${s.slice(0, 3)}***${s.slice(-2)}`;
+}
+function maskPiiInObject(obj: any): any {
+  if (!obj || typeof obj !== "object") return obj;
+  const clone: any = Array.isArray(obj) ? [...obj] : { ...obj };
+  for (const key of Object.keys(clone)) {
+    const lower = key.toLowerCase();
+    if (typeof clone[key] === "string" && (lower.includes("phone") || lower.includes("msisdn") || lower.includes("destination"))) {
+      clone[key] = maskPhone(clone[key]);
+    } else if (clone[key] && typeof clone[key] === "object") {
+      clone[key] = maskPiiInObject(clone[key]);
+    }
+  }
+  return clone;
+}
+
 // ─── API keys by currency zone ────────────────────────────────────────────────
 const PIXPAY_API_KEYS: Record<string, string> = {
   XAF: process.env.PIXPAY_API_KEY_XAF!,
@@ -214,7 +235,7 @@ export interface PixPayinResult {
 // ─── Build common request body ────────────────────────────────────────────────
 function buildBaseBody(params: PixPayBaseParams, countryCode: string): Record<string, any> {
   const normalizedPhone = normalizePixPayPhone(params.phone, countryCode);
-  console.log(`[PixPay] Phone normalisation: "${params.phone}" → "${normalizedPhone}" (${countryCode})`);
+  console.log(`[PixPay] Phone normalisation: "${maskPhone(params.phone)}" → "${maskPhone(normalizedPhone)}" (${countryCode})`);
   return {
     amount: params.amount,
     api_key: getPixPayApiKey(countryCode),
@@ -250,14 +271,14 @@ function humanizePixPayError(raw: string | undefined | null): string {
 
 // ─── Generic call helper ──────────────────────────────────────────────────────
 async function callPixPay(body: Record<string, any>, logLabel: string): Promise<PixPayinResult> {
-  console.log(`[PixPay ${logLabel}] Body:`, JSON.stringify({ ...body, api_key: "***" }));
+  console.log(`[PixPay ${logLabel}] Body:`, JSON.stringify(maskPiiInObject({ ...body, api_key: "***" })));
   const res = await fetch(PIXPAY_AIRTIME_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
   const data = await res.json();
-  console.log(`[PixPay ${logLabel}] Response:`, JSON.stringify(data));
+  console.log(`[PixPay ${logLabel}] Response:`, JSON.stringify(maskPiiInObject(data)));
 
   const d = data.data;
 
@@ -356,7 +377,7 @@ export async function checkPixPayStatus(
       body: JSON.stringify({ api_key: apiKey, transaction_ids: transactionId }),
     });
     const data = await res.json();
-    console.log(`[PixPay Status] raw response for ${transactionId}:`, JSON.stringify(data));
+    console.log(`[PixPay Status] raw response for ${transactionId}:`, JSON.stringify(maskPiiInObject(data)));
 
     if (data.statut_code !== 200 || !data.data) return { status: "pending", raw: data };
 
@@ -426,14 +447,14 @@ export async function initiatePixPayPayout(params: PixPayoutParams): Promise<Pix
       { ...params, serviceId: params.serviceId },
       params.countryCode
     );
-    console.log(`[PixPay Payout] Body:`, JSON.stringify({ ...body, api_key: "***" }));
+    console.log(`[PixPay Payout] Body:`, JSON.stringify(maskPiiInObject({ ...body, api_key: "***" })));
     const res = await fetch(PIXPAY_AIRTIME_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
     const data = await res.json();
-    console.log(`[PixPay Payout] Response:`, JSON.stringify(data));
+    console.log(`[PixPay Payout] Response:`, JSON.stringify(maskPiiInObject(data)));
 
     if (data.statut_code !== 200 || !data.data) {
       return { success: false, message: data.message || "Échec payout PixPay", raw: data };

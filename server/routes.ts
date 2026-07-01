@@ -1230,9 +1230,22 @@ export async function registerRoutes(
   // Restaurer les révocations de tokens depuis la DB (persistance après redémarrage)
   await loadTokenRevocationsFromDb();
 
-  // Serve uploaded files statically
+  // Serve uploaded files statically.
+  // H-6 hardening: force download disposition + nosniff so a stray script-like
+  // upload can never be interpreted/executed by the browser as HTML/JS, even if
+  // the reverse proxy were ever misconfigured to execute files from this folder.
   const express = await import("express");
-  app.use("/uploads", express.default.static(uploadsDir));
+  app.use("/uploads", express.default.static(uploadsDir, {
+    setHeaders: (res, filePath) => {
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox;");
+      const ext = filePath.toLowerCase();
+      const isImage = ext.endsWith(".jpg") || ext.endsWith(".jpeg") || ext.endsWith(".png") || ext.endsWith(".gif") || ext.endsWith(".webp");
+      if (!isImage) {
+        res.setHeader("Content-Disposition", "attachment");
+      }
+    },
+  }));
 
   // ── IP block redirect: GET /login, /register → /blocked?until=X ─────────────
   // Works server-side BEFORE React loads — any browser on a blocked IP gets
@@ -5644,8 +5657,20 @@ export async function registerRoutes(
         return res.status(403).json({ message: "Non autorisé" });
       }
 
-      const updates = { ...req.body };
-      
+      // Whitelist: only allow fields the owner is permitted to change.
+      // Prevents mass-assignment of protected fields like userId, clickCount, id.
+      const ALLOWED_PAYMENT_LINK_FIELDS = [
+        "title", "description", "amount", "currency", "isFixedAmount",
+        "imagePath", "pdfPath", "hasPdfDelivery", "redirectUrl", "expiresAt",
+        "notifyUrl", "allowedCountries", "isActive", "customSlug",
+      ] as const;
+      const updates: Record<string, any> = {};
+      for (const field of ALLOWED_PAYMENT_LINK_FIELDS) {
+        if (Object.prototype.hasOwnProperty.call(req.body, field)) {
+          updates[field] = req.body[field];
+        }
+      }
+
       // Handle slug update - check uniqueness if slug is being changed
       if (updates.customSlug !== undefined) {
         let newSlug = updates.customSlug?.trim() || "";
@@ -10090,7 +10115,18 @@ export async function registerRoutes(
   // Admin: Update payment link
   app.patch("/api/admin/payment-links/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
-      const link = await storage.updatePaymentLink(req.params.id, req.body);
+      const ADMIN_ALLOWED_PAYMENT_LINK_FIELDS = [
+        "title", "description", "amount", "currency", "isFixedAmount",
+        "imagePath", "pdfPath", "hasPdfDelivery", "redirectUrl", "expiresAt",
+        "notifyUrl", "allowedCountries", "isActive", "slug",
+      ] as const;
+      const adminUpdates: Record<string, any> = {};
+      for (const field of ADMIN_ALLOWED_PAYMENT_LINK_FIELDS) {
+        if (Object.prototype.hasOwnProperty.call(req.body, field)) {
+          adminUpdates[field] = req.body[field];
+        }
+      }
+      const link = await storage.updatePaymentLink(req.params.id, adminUpdates);
       if (!link) {
         return res.status(404).json({ message: "Lien non trouvé" });
       }
