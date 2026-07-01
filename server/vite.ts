@@ -51,6 +51,9 @@ export async function setupVite(server: Server, app: Express) {
     }
   });
 
+  const adminPath = process.env.VITE_ADMIN_PATH || "/admin";
+  const adminInjection = `<script>window.__ADMIN_PATH__="${adminPath}"</script>`;
+
   app.use("*", async (req, res, next) => {
     const url = req.originalUrl;
 
@@ -68,6 +71,7 @@ export async function setupVite(server: Server, app: Express) {
         `src="/src/main.tsx"`,
         `src="/src/main.tsx?v=${nanoid()}"`,
       );
+      template = template.replace("</head>", `${adminInjection}</head>`);
       const page = await vite.transformIndexHtml(url, template);
       res.status(200).set({ "Content-Type": "text/html" }).end(page);
     } catch (e) {

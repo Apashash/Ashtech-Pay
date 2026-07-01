@@ -1,3 +1,4 @@
+import { getAdminPath } from "@/lib/adminPath";
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -13,7 +14,7 @@ export default function AdminPanelVerifyPage() {
   const [code, setCode] = useState("");
   const [secondsLeft, setSecondsLeft] = useState(30);
 
-  const ADMIN_URL = (import.meta.env.VITE_ADMIN_PATH as string) || "/admin";
+  const ADMIN_URL = getAdminPath();
 
   const { data: otpStatus, isLoading: statusLoading } = useQuery<{
     verified: boolean;

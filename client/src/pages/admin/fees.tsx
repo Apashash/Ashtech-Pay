@@ -1,10 +1,11 @@
+import { getAdminPath } from "@/lib/adminPath";
 import { Link } from "wouter";
 import { AdminLayout } from "./layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { ArrowDownCircle, ArrowUpCircle, Send, ChevronRight } from "lucide-react";
 
 function getFeesSections() {
-  const A = (import.meta.env.VITE_ADMIN_PATH as string) || "/admin";
+  const A = getAdminPath();
   return [
     {
       href: `${A}/fees/deposits`,

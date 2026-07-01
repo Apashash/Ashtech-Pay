@@ -21,11 +21,18 @@ export function serveStatic(app: Express) {
 
   app.use(express.static(distPath));
 
+  const adminPath = process.env.VITE_ADMIN_PATH || "/admin";
+  const adminInjection = `<script>window.__ADMIN_PATH__="${adminPath}"</script>`;
+
+  function injectAdminPath(html: string): string {
+    return html.replace("</head>", `${adminInjection}</head>`);
+  }
+
   // Serve payment pages without og:image so sharing shows no preview image
   app.get(["/pay/:slug", "/hpay/:id"], (_req, res) => {
     const indexPath = path.resolve(distPath, "index.html");
     let html = fs.readFileSync(indexPath, "utf-8");
-    html = html
+    html = injectAdminPath(html)
       .replace(/<meta property="og:image"[^>]*>/g, "")
       .replace(/<meta property="og:image:[^"]*"[^>]*>/g, "")
       .replace(/<meta name="twitter:image"[^>]*>/g, "")
@@ -33,8 +40,10 @@ export function serveStatic(app: Express) {
     res.set("Content-Type", "text/html").send(html);
   });
 
-  // fall through to index.html if the file doesn't exist
+  // fall through to index.html — inject admin path at runtime
   app.use("*", (_req, res) => {
-    res.sendFile(path.resolve(distPath, "index.html"));
+    const indexPath = path.resolve(distPath, "index.html");
+    const html = injectAdminPath(fs.readFileSync(indexPath, "utf-8"));
+    res.set("Content-Type", "text/html").send(html);
   });
 }

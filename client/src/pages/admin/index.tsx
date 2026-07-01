@@ -1,7 +1,8 @@
+import { getAdminPath } from "@/lib/adminPath";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
-const A = (import.meta.env.VITE_ADMIN_PATH as string) || "/admin";
+const A = getAdminPath();
 import { AdminLayout } from "./layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";

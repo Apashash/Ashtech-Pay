@@ -1,3 +1,4 @@
+import { getAdminPath } from "@/lib/adminPath";
 import { AdminLayout } from "./layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,7 +14,7 @@ import {
 
 export default function AdminSettings() {
   const [, setLocation] = useLocation();
-  const ADMIN = (import.meta.env.VITE_ADMIN_PATH as string) || "/admin";
+  const ADMIN = getAdminPath();
 
   const settingsSections = [
     {

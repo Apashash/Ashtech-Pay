@@ -1,3 +1,4 @@
+import { getAdminPath } from "@/lib/adminPath";
 export const RATE_LIMIT_KEY = "ashtech_rate_limit_until";
 
 export function getBlockedUntil(): number | null {
@@ -11,7 +12,7 @@ export function getBlockedUntil(): number | null {
   return null;
 }
 
-export const GEO_BYPASS_PATHS = ["/pay/", "/hpay/", "/checkout/", (import.meta.env.VITE_ADMIN_PATH as string) || "/admin"];
+export const GEO_BYPASS_PATHS = ["/pay/", "/hpay/", "/checkout/", getAdminPath()];
 export const GEO_CACHE_KEY = "ashtech_geo_cache";
 export const GEO_CACHE_TTL = 10 * 60 * 1000;
 

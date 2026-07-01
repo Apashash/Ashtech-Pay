@@ -1,3 +1,4 @@
+import { getAdminPath } from "@/lib/adminPath";
 import React, { useEffect, useLayoutEffect } from "react";
 import { Switch, Route, useLocation } from "wouter";
 import { queryClient, removeAuthToken, getQueryFn, getAuthHeaders } from "./lib/queryClient";
@@ -140,7 +141,7 @@ function GeoGuard({ children }: { children: React.ReactNode }) {
 }
 
 function Router() {
-  const A = (import.meta.env.VITE_ADMIN_PATH as string) || "/admin";
+  const A = getAdminPath();
   return (
     <Switch>
       <Route path="/" component={LandingPage} />
@@ -418,7 +419,7 @@ function ImpersonationBanner() {
     } catch {}
 
     // 4. Redirection vers l'admin
-    window.location.href = `${(import.meta.env.VITE_ADMIN_PATH as string) || "/admin"}/users`;
+    window.location.href = `${getAdminPath()}/users`;
   };
 
   if (!isImpersonating) return null;

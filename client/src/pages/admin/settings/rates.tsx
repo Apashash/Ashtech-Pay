@@ -1,5 +1,6 @@
+import { getAdminPath } from "@/lib/adminPath";
 import { Redirect } from "wouter";
-const A = (import.meta.env.VITE_ADMIN_PATH as string) || "/admin";
+const A = getAdminPath();
 export default function AdminSettingsRates() {
   return <Redirect to={`${A}/countries`} />;
 }

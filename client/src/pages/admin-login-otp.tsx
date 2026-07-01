@@ -1,3 +1,4 @@
+import { getAdminPath } from "@/lib/adminPath";
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useMutation } from "@tanstack/react-query";
@@ -53,7 +54,7 @@ export default function AdminLoginOtpPage() {
         duration: 2500,
         className: "bg-green-600 text-white border-green-700",
       });
-      setLocation((import.meta.env.VITE_ADMIN_PATH as string) || "/admin");
+      setLocation(getAdminPath());
     },
     onError: (error: any) => {
       setCode("");
