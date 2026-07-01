@@ -704,7 +704,7 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
     const lastActivity = req.session.lastActivity;
     if (lastActivity) {
       const role = req.session.role ?? "";
-      const isPrivileged = ["admin", "support", "finance"].includes(role);
+      const isPrivileged = ["admin"].includes(role);
       const maxInactivity = isPrivileged
         ? 5 * 60 * 60 * 1000   // 5h for admin
         : 24 * 60 * 60 * 1000; // 24h for regular users
@@ -808,8 +808,8 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
     notifyAdminPanelAccess({ type: "blocked_no_role", ip: adminIpEarly, userId: req.userId, path: req.path }).catch(() => {});
     return res.status(403).json({ message: "Accès refusé - Droits admin requis" });
   }
-  if (!["admin", "support", "finance"].includes(user.role)) {
-    console.warn(`[AdminAccess] BLOCKED — user ${req.userId} has role="${user.role}" (not admin/support/finance) — path=${req.path}`);
+  if (!["admin"].includes(user.role)) {
+    console.warn(`[AdminAccess] BLOCKED — user ${req.userId} has role="${user.role}" (not admin) — path=${req.path}`);
     notifyAdminPanelAccess({ type: "blocked_no_role", ip: adminIpEarly, userId: user.id, userName: user.fullName || user.username, userEmail: user.email || undefined, userRole: user.role, path: req.path }).catch(() => {});
     return res.status(403).json({ message: "Accès refusé - Droits admin requis" });
   }
@@ -1586,7 +1586,7 @@ export async function registerRoutes(
       }
 
       // VPN check for authenticated users — skip for admins (trusted + OTP-verified)
-      const isAdminRole = user && ["admin", "support", "finance"].includes(user.role);
+      const isAdminRole = user && ["admin"].includes(user.role);
       if (!isAdminRole && req.path.startsWith("/api/") && !req.path.startsWith("/api/public/")) {
         const ip = getClientIp(req);
         const isVpn = await checkVpnOrProxy(ip);
@@ -1684,7 +1684,7 @@ export async function registerRoutes(
       // ── 5.2 IDOR fix: KYC documents require ownership or admin role ──────────
       if (isRelativePath && storagePath.startsWith("kyc/")) {
         const requestingUser = await storage.getUser(req.userId!);
-        const isAdminRole = requestingUser && ["admin", "support", "finance"].includes(requestingUser.role);
+        const isAdminRole = requestingUser && ["admin"].includes(requestingUser.role);
         if (!isAdminRole) {
           // Verify the path belongs to a KYC submission owned by this user
           // FIX: exact path comparison only — no suffix/filename matching (IDOR)
@@ -1974,7 +1974,7 @@ export async function registerRoutes(
   app.get("/api/admin/ip-check", requireAuth, async (req, res) => {
     try {
       const user = await storage.getUser(req.userId!);
-      if (!user || !["admin", "support", "finance"].includes(user.role)) {
+      if (!user || !["admin"].includes(user.role)) {
         return res.json({ allowed: true });
       }
       const ip = getClientIp(req);
@@ -1996,7 +1996,7 @@ export async function registerRoutes(
   app.get("/api/admin/session-info", requireAuth, async (req, res) => {
     try {
       const user = await storage.getUser(req.userId!).catch(() => null);
-      if (!user || !["admin", "support", "finance"].includes(user.role)) {
+      if (!user || !["admin"].includes(user.role)) {
         return res.status(403).json({ message: "Accès refusé" });
       }
       const now = Date.now();
@@ -2488,7 +2488,7 @@ export async function registerRoutes(
 
       const user = await storage.getUser(req.userId!);
       if (!user) return res.status(401).json({ message: "Utilisateur introuvable." });
-      if (!["admin", "finance", "support"].includes(user.role)) {
+      if (!["admin"].includes(user.role)) {
         return res.status(403).json({ message: "Accès réservé aux administrateurs." });
       }
       if (!user.totpEnabled || !user.totpSecret) {
@@ -7129,7 +7129,7 @@ export async function registerRoutes(
   // GET /api/admin/otp-status — check if current session has verified the admin OTP
   app.get("/api/admin/otp-status", requireAuth, async (req, res) => {
     const user = await storage.getUser(req.userId!).catch(() => null);
-    if (!user || !["admin", "support", "finance"].includes(user.role)) {
+    if (!user || !["admin"].includes(user.role)) {
       return res.status(403).json({ message: "Accès refusé" });
     }
     const now = Date.now();
@@ -7511,7 +7511,7 @@ export async function registerRoutes(
         userId: req.userId,
         userFound: !!user,
         userRole: user?.role || null,
-        isAdminRole: user ? ["admin", "support", "finance"].includes(user.role) : false,
+        isAdminRole: user ? ["admin"].includes(user.role) : false,
         otp: {
           memValid,
           sessionValid,
@@ -7544,7 +7544,7 @@ export async function registerRoutes(
   app.post("/api/admin/request-otp", requireAuth, adminOtpRequestLimiter, async (req, res) => {
     try {
       const user = await storage.getUser(req.userId!);
-      if (!user || !["admin", "support", "finance"].includes(user.role)) {
+      if (!user || !["admin"].includes(user.role)) {
         return res.status(403).json({ message: "Accès refusé" });
       }
       // VULN-A2: userId-keyed throttle (after role check) — IP-keyed middleware
@@ -7620,7 +7620,7 @@ export async function registerRoutes(
   app.post("/api/admin/verify-otp", requireAuth, adminActionLimiter, async (req, res) => {
     try {
       const user = await storage.getUser(req.userId!);
-      if (!user || !["admin", "support", "finance"].includes(user.role)) {
+      if (!user || !["admin"].includes(user.role)) {
         return res.status(403).json({ message: "Accès refusé" });
       }
 
@@ -7754,7 +7754,7 @@ export async function registerRoutes(
   app.get("/api/admin/totp/status", requireAuth, async (req, res) => {
     try {
       const user = await storage.getUser(req.userId!);
-      if (!user || !["admin", "support", "finance"].includes(user.role)) {
+      if (!user || !["admin"].includes(user.role)) {
         return res.status(403).json({ message: "Accès refusé" });
       }
       res.json({ enabled: !!user.totpEnabled });
@@ -7770,7 +7770,7 @@ export async function registerRoutes(
   app.post("/api/admin/totp/setup", requireAuth, adminActionLimiter, async (req, res) => {
     try {
       const user = await storage.getUser(req.userId!);
-      if (!user || !["admin", "support", "finance"].includes(user.role)) {
+      if (!user || !["admin"].includes(user.role)) {
         return res.status(403).json({ message: "Accès refusé" });
       }
 
@@ -7819,7 +7819,7 @@ export async function registerRoutes(
   app.post("/api/admin/totp/confirm", requireAuth, adminActionLimiter, async (req, res) => {
     try {
       const user = await storage.getUser(req.userId!);
-      if (!user || !["admin", "support", "finance"].includes(user.role)) {
+      if (!user || !["admin"].includes(user.role)) {
         return res.status(403).json({ message: "Accès refusé" });
       }
       const { code } = req.body as { code: string };
@@ -7871,7 +7871,7 @@ export async function registerRoutes(
   app.post("/api/admin/totp/verify", requireAuth, adminActionLimiter, async (req, res) => {
     try {
       const user = await storage.getUser(req.userId!);
-      if (!user || !["admin", "support", "finance"].includes(user.role)) {
+      if (!user || !["admin"].includes(user.role)) {
         return res.status(403).json({ message: "Accès refusé" });
       }
       if (!user.totpEnabled || !user.totpSecret) {
@@ -7947,7 +7947,7 @@ export async function registerRoutes(
   app.post("/api/admin/totp/disable", requireAuth, adminActionLimiter, async (req, res) => {
     try {
       const user = await storage.getUser(req.userId!);
-      if (!user || !["admin", "support", "finance"].includes(user.role)) {
+      if (!user || !["admin"].includes(user.role)) {
         return res.status(403).json({ message: "Accès refusé" });
       }
       if (!user.totpEnabled || !user.totpSecret) {
@@ -8479,7 +8479,7 @@ export async function registerRoutes(
     try {
       const { id } = req.params;
       const { role } = req.body;
-      const allowedRoles = ["user", "admin", "support", "finance"];
+      const allowedRoles = ["user", "admin"];
       if (!role || !allowedRoles.includes(role)) {
         return res.status(400).json({ message: `Rôle invalide. Valeurs acceptées : ${allowedRoles.join(", ")}` });
       }
@@ -8700,7 +8700,7 @@ export async function registerRoutes(
         req.session.destroy(() => {});
         return res.status(404).json({ message: "Compte admin introuvable — session fermée." });
       }
-      if (!["admin", "support", "finance"].includes(admin.role)) {
+      if (!["admin"].includes(admin.role)) {
         req.session.destroy(() => {});
         return res.status(403).json({ message: "Accès refusé — droits admin révoqués. Session fermée." });
       }
@@ -9922,7 +9922,7 @@ export async function registerRoutes(
     res.flushHeaders();
 
     const user = await storage.getUser(req.userId!);
-    const isAdmin = user?.role === "admin" || user?.role === "support";
+    const isAdmin = user?.role === "admin";
     const connId = addSSEClient(req.userId!, !!isAdmin, res, req.sessionID);
 
     // Update last seen
