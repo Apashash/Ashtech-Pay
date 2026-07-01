@@ -11263,23 +11263,27 @@ export async function registerRoutes(
         }).catch(() => {});
       }
 
-      // Create notification for user
-      await storage.createUserNotification({
+      // Répondre immédiatement — l'approbation DB est déjà effectuée
+      res.json(submission);
+
+      // Effets secondaires en fire-and-forget (ne bloquent pas la réponse)
+      storage.createUserNotification({
         userId: submission.userId,
         type: "kyc_approved",
         title: "Compte vérifié",
         message: "Félicitations ! Votre vérification KYC a été approuvée. Vous avez maintenant accès à toutes les fonctionnalités.",
         transactionId: null,
-      });
-      
-      await storage.createAdminLog({
+      }).catch((e) => console.error("[KYC approve] createUserNotification failed:", e));
+
+      storage.createAdminLog({
         adminId: req.userId!,
         action: "approve_kyc",
         targetType: "kyc_submission",
         targetId: req.params.id,
         details: JSON.stringify({ note }),
         ipAddress: req.ip || null,
-      });
+      }).catch((e) => console.error("[KYC approve] createAdminLog failed:", e));
+
       audit(req, AUDIT.KYC_APPROVED, {
         userId: req.userId!,
         actorType: "admin",
@@ -11287,7 +11291,6 @@ export async function registerRoutes(
         targetId: req.params.id,
         details: { affectedUserId: submission.userId, note: note || null },
       });
-      res.json(submission);
     } catch (error) {
       console.error("Approve KYC error:", error);
       res.status(500).json({ message: "Erreur serveur" });
@@ -11326,23 +11329,27 @@ export async function registerRoutes(
         }).catch(() => {});
       }
 
-      // Create notification for user
-      await storage.createUserNotification({
+      // Répondre immédiatement — le rejet DB est déjà effectué
+      res.json(submission);
+
+      // Effets secondaires en fire-and-forget
+      storage.createUserNotification({
         userId: submission.userId,
         type: "kyc_rejected",
         title: "Vérification rejetée",
         message: `Votre vérification KYC a été rejetée. Raison: ${note}. Veuillez soumettre de nouveaux documents.`,
         transactionId: null,
-      });
-      
-      await storage.createAdminLog({
+      }).catch((e) => console.error("[KYC reject] createUserNotification failed:", e));
+
+      storage.createAdminLog({
         adminId: req.userId!,
         action: "reject_kyc",
         targetType: "kyc_submission",
         targetId: req.params.id,
         details: JSON.stringify({ note }),
         ipAddress: req.ip || null,
-      });
+      }).catch((e) => console.error("[KYC reject] createAdminLog failed:", e));
+
       audit(req, AUDIT.KYC_REJECTED, {
         userId: req.userId!,
         actorType: "admin",
@@ -11350,8 +11357,6 @@ export async function registerRoutes(
         targetId: req.params.id,
         details: { affectedUserId: submission.userId, reason: note },
       });
-      
-      res.json(submission);
     } catch (error) {
       console.error("Reject KYC error:", error);
       res.status(500).json({ message: "Erreur serveur" });
