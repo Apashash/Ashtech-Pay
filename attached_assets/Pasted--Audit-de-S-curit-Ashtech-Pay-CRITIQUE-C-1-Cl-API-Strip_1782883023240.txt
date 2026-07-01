@@ -1,0 +1,155 @@
+🔐 Audit de Sécurité — Ashtech Pay
+
+🔴 CRITIQUE
+
+C-1 — Clé API Stripe hardcodée dans le code source
+
+Fichier : client/src/pages/docs/test-payment.tsx
+Risque : La clé Stripe est commitée en clair dans le dépôt Git. Quiconque a accès au repo peut l'utiliser pour créer des charges ou accéder aux données de paiement Stripe.
+Action : Révoquer immédiatement la clé sur dashboard.stripe.com, la remplacer par une variable d'environnement.
+
+C-2 — Auth tokens loggés dans la console serveur
+
+Fichiers : server/routes.ts, server/pixpay.ts
+Risque : Des tokens d'authentification (PixPay, sessions) s'affichent dans console.log. Quiconque lit les logs Replit (ou un accès SSH futur) voit les tokens en clair.
+Scénario d'attaque : Log exfiltration → replay d'un token PixPay → initiation de paiements frauduleux.
+Action : Masquer tous les tokens dans les logs (token.slice(0,8)+"***").
+
+C-3 — ADMIN_OTP_BYPASS=true actuellement actif en production
+
+Fichier : .replit → ADMIN_OTP_BYPASS = "true"
+Risque : N'importe quel compte avec rôle admin/support/finance accède au panneau admin sans OTP. Si un compte admin est compromis (phishing, bruteforce), l'attaquant a accès total sans 2FA.
+Action : Désactiver dès que vous avez configuré RESEND_API_KEY ou TELEGRAM_BOT_TOKEN+TELEGRAM_CHAT_ID.
+
+C-4 — Credentials en clair dans .replit
+
+Fichier : .replit ligne WEBHOOK_SECRET
+Risque : Le fichier .replit est versionné dans Git. Le WEBHOOK_SECRET y est visible en clair.
+Action : Déplacer vers Replit Secrets (onglet 🔒 Secrets), pas dans [userenv].
+
+🟠 ÉLEVÉ
+
+H-1 — Endpoints /api/admin/* accessibles sans requireAdmin
+
+Fichier : server/routes.ts
+
+Endpoint	Problème
+GET /api/admin/session-info	Seulement requireAuth — expose état des pools DB, sessionID, OTP status
+GET /api/admin/ip-check	Seulement requireAuth — tout utilisateur connecté peut sonder
+GET /api/admin/my-ip	Corrigé récemment ✅
+Scénario : Un utilisateur normal (non-admin) appelle /api/admin/session-info et récupère des infos sur l'architecture interne.
+
+H-2 — IDOR sur suppression de session utilisateur
+
+Fichier : server/routes.ts ~ DELETE /api/user/sessions/:sid
+Risque : Si la requête de suppression n'inclut pas WHERE sid=$1 AND userId=$2, un utilisateur A peut révoquer la session de l'utilisateur B en devinant son sid.
+Scénario : Bruteforce de SIDs → déconnexion forcée de tous les utilisateurs.
+
+H-3 — Validation webhook conditionnelle (Swychr, AfribaPay, PixPay)
+
+Fichier : server/routes.ts lignes ~11307, ~11435, ~11645
+Risque : Si WEBHOOK_SECRET n'est pas défini, le comportement dépend du code — soit il continue à traiter, soit il rejette. Si le traitement continue → un attaquant peut envoyer de faux callbacks de paiement pour créditer des comptes.
+Scénario : POST /api/swychr/webhook avec status: "completed" sans secret → dépôt fictif crédité.
+Action : if (!WEBHOOK_SECRET) return res.status(500) au démarrage du serveur (bloquer le boot).
+
+H-4 — Masse assignment sur mise à jour de liens de paiement
+
+Fichier : server/routes.ts ~ PATCH /api/payment-links/:id
+Risque : Si req.body est passé directement à storage.updatePaymentLink, un attaquant peut injecter des champs comme userId, isActive: false, clickCount.
+Action : Whitelister explicitement les champs acceptés.
+
+H-5 — Requêtes SQL brutes dans plusieurs fichiers
+
+Fichiers : server/dbWatchdog.ts, server/index.ts, server/routes.ts
+Risque : pool.query() avec des chaînes construites dynamiquement = risque d'injection SQL si un input non sanitisé est interpolé.
+Action : Utiliser exclusivement les template literals Drizzle sql\...`` avec paramètres.
+
+H-6 — Fichiers uploadés stockés localement sans contrôle d'accès
+
+Fichier : server/routes.ts ~ /api/uploads/local → ./uploads/
+Risque : Si nginx/Plesk sert le dossier uploads/ statiquement et qu'un fichier .php ou .js est uploadé malgré la validation magic-bytes, il pourrait être exécuté.
+Action : Vérifier que nginx n'exécute jamais les fichiers du dossier uploads/. Servir via une route Express avec Content-Disposition: attachment.
+
+🟡 MOYEN
+
+M-1 — Endpoints publics exposant des données sensibles
+
+Endpoint	Donnée exposée	Risque
+GET /api/checkout/:transactionId	Détails transaction	IDOR si IDs prévisibles
+GET /api/transactions/status/:reference	Statut paiement	Énumération de références
+GET /api/public/hosted-session/:id/status	Statut session paiement	Fuites business
+M-2 — Énumération d'utilisateurs (User Enumeration)
+
+Endpoints : POST /api/auth/register, POST /api/auth/forgot-password
+Risque : Des messages d'erreur différents selon qu'un email existe ou non permettent de construire une liste de comptes.
+Action : Réponse identique quel que soit le résultat ("Si cet email existe, vous recevrez un lien").
+
+M-3 — Données personnelles dans les logs serveur
+
+Fichiers : server/routes.ts, server/botGuard.ts, server/afribapay.ts, server/pixpay.ts
+Adresses, numéros de téléphone, IPs et emails s'affichent dans console.log/console.error.
+Risque : Non-conformité RGPD/données africaines. Fuite si accès aux logs.
+Action : Masquer ou hacher les données PII dans les logs.
+
+M-4 — Pas de rate limit sur endpoints GET sensibles
+
+Manquants sur : sessions utilisateur, historique transactions, statut KYC, profil utilisateur.
+Seul le global (50 req/min/IP) protège.
+Risque : Scraping massif des données utilisateurs.
+
+M-5 — SESSION_SECRET absent = sessions invalides en multi-worker
+
+Fichier : server/routes.ts:241
+En dev sans SESSION_SECRET, chaque process génère un secret aléatoire → sessions incompatibles entre workers PM2.
+Action : Bloquer le démarrage si SESSION_SECRET absent en production (déjà fait dans index.ts — vérifier que c'est bien le cas).
+
+M-6 — Frontaux admin accessibles sans routage sécurisé
+
+Fichier : client/src/App.tsx
+Les routes /admin/* côté client sont protégées uniquement par une vérification de rôle en JS. Si quelqu'un désactive JS ou manipule le state React, les composants se chargent — même si les API retournent 403.
+Risque : Faible (les vraies données viennent de l'API) mais les formulaires admin restent visibles.
+
+🟢 BAS
+
+L-1 — Hash bcrypt visible dans le code source
+
+Fichier : server/routes.ts (hash de test probablement)
+Pas exploitable directement mais indique une mauvaise hygiène.
+
+L-2 — Requête HTTP non chiffrée
+
+Fichier : server/replit_integrations/object_storage/objectStorage.ts
+Une requête utilise http:// au lieu de https://.
+
+L-3 — ADMIN_OTP_BYPASS sans expiration automatique
+
+La variable reste active indéfiniment. Prévoir un token avec TTL ou une désactivation automatique après X heures.
+
+📊 Résumé Scanners Automatisés
+
+Scanner	Critique	Élevé	Moyen	Bas
+Dépendances (npm audit)	0	0	0	0
+SAST (Semgrep)	0	12	294	—
+HoundDog (données)	4	0	19	19
+Bonne nouvelle : Aucune CVE dans les dépendances npm.
+
+✅ Déjà bien protégé
+
+Brute-force login : loginLimiter (10/15min/IP) ✅
+OTP admin : brute-force verrouillé après 5 tentatives ✅
+OTP stocké hashé (HMAC) en session DB ✅
+Telegram webhook signé (secret_token) ✅
+Helmet (headers sécurité HTTP) ✅
+Trust proxy configuré correctement ✅
+Mots de passe : bcrypt ✅
+Drizzle ORM (paramétrage automatique) ✅
+🎯 Plan d'action prioritaire
+
+Priorité	Action
+Immédiat	Révoquer et supprimer la clé Stripe hardcodée (C-1)
+Immédiat	Désactiver ADMIN_OTP_BYPASS dès que le canal OTP fonctionne (C-3)
+Cette semaine	Ajouter requireAdmin sur session-info et ip-check (H-1)
+Cette semaine	Vérifier la validation webhook — bloquer si secret absent (H-3)
+Cette semaine	Masquer tokens et PII dans les logs (C-2, M-3)
+Ce mois	Whitelister les champs dans les routes PATCH/PUT (H-4)
+Ce mois	Réponses identiques sur register/forgot-password (M-2)
