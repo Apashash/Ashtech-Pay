@@ -59,6 +59,7 @@ export default function WithdrawPage() {
   const [otpRef, setOtpRef] = useState<string | null>(null);
   const [otpCode, setOtpCode] = useState("");
   const [otpError, setOtpError] = useState("");
+  const [otpTimer, setOtpTimer] = useState(600);
   const { toast } = useToast();
 
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
@@ -129,6 +130,13 @@ export default function WithdrawPage() {
     form.setValue("operatorId", selectedOperator);
   }, [selectedOperator, form]);
 
+  useEffect(() => {
+    if (!showOtpDialog) return;
+    setOtpTimer(600);
+    const id = setInterval(() => setOtpTimer(prev => (prev <= 1 ? (clearInterval(id), 0) : prev - 1)), 1000);
+    return () => clearInterval(id);
+  }, [showOtpDialog]);
+
   const requestOtpMutation = useMutation({
     mutationFn: async () => {
       const values = form.getValues();
@@ -151,7 +159,8 @@ export default function WithdrawPage() {
       setShowConfirmDialog(false);
       setOtpCode("");
       setOtpError("");
-      setShowOtpDialog(true);
+      setShowOtpDialog(false);
+      setTimeout(() => setShowOtpDialog(true), 50);
     },
     onError: (error: Error) => {
       toast({ title: "Erreur", description: error.message, variant: "destructive" });
@@ -643,6 +652,16 @@ export default function WithdrawPage() {
               <p className="text-sm text-muted-foreground px-4">
                 Un code à 6 chiffres a été envoyé à <strong>{user?.email}</strong>
               </p>
+              <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full ${
+                otpTimer > 60 ? "bg-green-500/15 text-green-500" :
+                otpTimer > 20 ? "bg-orange-500/15 text-orange-500" :
+                otpTimer > 0  ? "bg-red-500/15 text-red-500" :
+                "bg-muted text-muted-foreground"
+              }`} data-testid="text-otp-timer">
+                {otpTimer > 0
+                  ? `⏱ ${Math.floor(otpTimer / 60)}:${String(otpTimer % 60).padStart(2, "0")}`
+                  : "Code expiré"}
+              </span>
             </div>
             <div className="space-y-2">
               <input
@@ -659,6 +678,17 @@ export default function WithdrawPage() {
               {otpError && (
                 <p className="text-xs text-destructive text-center">{otpError}</p>
               )}
+              <div className="text-center">
+                <button
+                  type="button"
+                  disabled={otpTimer > 0 || requestOtpMutation.isPending}
+                  onClick={() => requestOtpMutation.mutate()}
+                  className="text-xs text-primary underline underline-offset-2 disabled:no-underline disabled:text-muted-foreground disabled:cursor-not-allowed transition-colors"
+                  data-testid="button-resend-otp"
+                >
+                  {requestOtpMutation.isPending ? "Envoi en cours…" : otpTimer > 0 ? `Renvoyer le code dans ${Math.floor(otpTimer / 60)}:${String(otpTimer % 60).padStart(2, "0")}` : "Renvoyer le code"}
+                </button>
+              </div>
             </div>
           </div>
           <BottomSheetFooter>
@@ -668,7 +698,7 @@ export default function WithdrawPage() {
             <Button
               className="flex-1"
               onClick={() => withdrawMutation.mutate(form.getValues())}
-              disabled={withdrawMutation.isPending || otpCode.length < 6}
+              disabled={withdrawMutation.isPending || otpCode.length < 6 || otpTimer === 0}
               data-testid="button-validate-otp"
             >
               {withdrawMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle className="w-4 h-4 mr-2" />}
