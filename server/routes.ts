@@ -220,7 +220,8 @@ declare module "express-session" {
   interface SessionData {
     userId: string;
     _avs?: number;
-    _otpCode?: string;
+    _otpCode?: string;    // deprecated: plaintext OTP kept for backward compat only
+    _otpCodeH?: string;   // VULN-A1 fix: HMAC-SHA256 hash of OTP stored in DB session
     _otpExpiry?: number;
     _totpPendingSecret?: string;
     clientIp?: string;
