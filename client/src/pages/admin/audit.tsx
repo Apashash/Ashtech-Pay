@@ -1,11 +1,16 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getAuthHeaders } from "@/lib/queryClient";
 import { AdminLayout } from "./layout";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -15,7 +20,7 @@ import {
 import {
   LogIn, LogOut, UserPlus, Key, ArrowDownCircle, ArrowRightCircle,
   ShieldCheck, ShieldX, UserX, UserCheck, Shield, Search, ChevronLeft,
-  ChevronRight, RefreshCw, AlertCircle, CheckCircle2,
+  ChevronRight, RefreshCw, AlertCircle, CheckCircle2, Trash2,
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -90,6 +95,23 @@ export default function AdminAuditLogs() {
   const [actorFilter, setActor]     = useState("all");
   const [successFilter, setSuccess] = useState("all");
   const [page, setPage]             = useState(0);
+  const queryClient = useQueryClient();
+
+  const clearMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/admin/audit-logs", {
+        method: "DELETE",
+        credentials: "include",
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) throw new Error("Erreur lors de la suppression");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/audit-logs"] });
+      setPage(0);
+    },
+  });
 
   const params = new URLSearchParams();
   params.set("limit",  String(PAGE_SIZE));
@@ -205,6 +227,32 @@ export default function AdminAuditLogs() {
               <Button variant="outline" size="icon" onClick={() => refetch()} data-testid="button-refresh-audit">
                 <RefreshCw className="w-4 h-4" />
               </Button>
+
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" size="sm" className="gap-2" disabled={clearMutation.isPending}>
+                    <Trash2 className="w-4 h-4" />
+                    Tout effacer
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Supprimer tous les audits ?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Cette action est irréversible. Les <strong>{total.toLocaleString()} entrées</strong> d'audit seront définitivement supprimées.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Annuler</AlertDialogCancel>
+                    <AlertDialogAction
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      onClick={() => clearMutation.mutate()}
+                    >
+                      Supprimer tout
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           </CardHeader>
 

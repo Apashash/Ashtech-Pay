@@ -9903,6 +9903,21 @@ export async function registerRoutes(
     }
   });
 
+  // Admin: Supprimer tous les logs d'audit
+  app.delete("/api/admin/audit-logs", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const result = await db.execute(sql`DELETE FROM audit_logs`);
+      const deleted = (result as any).rowCount ?? 0;
+      const ip = getClientIp(req);
+      storage.createAdminLog({ adminId: req.userId!, action: "audit_logs_cleared", details: `${deleted} entrées supprimées depuis IP ${ip}` }).catch(() => {});
+      console.log(`[AuditClear] ${deleted} entrée(s) supprimée(s) par admin ${req.userId}`);
+      res.json({ ok: true, deleted });
+    } catch (error: any) {
+      console.error("Clear audit logs error:", error.message);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   // Admin: Déconnecter TOUS les utilisateurs
   app.delete("/api/admin/sessions/all", requireAuth, requireAdmin, async (req, res) => {
     try {
