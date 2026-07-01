@@ -9,7 +9,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User, SupportedCurrency, Wallet } from "@shared/schema";
-import { Send, Globe, Loader2, AlertCircle, Shield, CheckCircle2, Smartphone, TrendingDown, Wallet as WalletIcon, UserCheck, Users, X, CheckCircle } from "lucide-react";
+import { Send, Globe, Loader2, AlertCircle, Shield, CheckCircle2, Smartphone, TrendingDown, Wallet as WalletIcon, UserCheck, Users, X, CheckCircle, RefreshCw } from "lucide-react";
 import { SearchableSelectContent } from "@/components/ui/searchable-select-content";
 import { useLanguage } from "@/lib/language";
 import { BottomSheet, BottomSheetContent, BottomSheetHeader, BottomSheetTitle, BottomSheetFooter } from "@/components/ui/bottom-sheet";
@@ -918,25 +918,38 @@ export default function SendMoneyPage() {
             <BottomSheetTitle className="text-center text-lg">Code de vérification</BottomSheetTitle>
           </BottomSheetHeader>
           <div className="space-y-5 py-2">
-            <div className="text-center space-y-2">
-              <div className="w-14 h-14 rounded-full bg-blue-500/15 flex items-center justify-center mx-auto">
-                <Shield className="w-7 h-7 text-blue-500" />
+            <div className="text-center space-y-3">
+              {/* Circular countdown timer */}
+              <div className="relative w-24 h-24 mx-auto" data-testid="text-otp-timer">
+                <svg className="w-24 h-24 -rotate-90" viewBox="0 0 96 96">
+                  <circle cx="48" cy="48" r="40" fill="none" strokeWidth="5" className="stroke-muted" />
+                  <circle
+                    cx="48" cy="48" r="40" fill="none" strokeWidth="5" strokeLinecap="round"
+                    className={
+                      otpTimer > 60 ? "stroke-green-500" :
+                      otpTimer > 20 ? "stroke-orange-500" :
+                      otpTimer > 0  ? "stroke-red-500" :
+                      "stroke-muted-foreground"
+                    }
+                    strokeDasharray={`${2 * Math.PI * 40}`}
+                    strokeDashoffset={`${2 * Math.PI * 40 * (1 - otpTimer / 600)}`}
+                    style={{ transition: "stroke-dashoffset 1s linear" }}
+                  />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <Shield className={`w-4 h-4 mb-0.5 ${otpTimer > 60 ? "text-green-500" : otpTimer > 20 ? "text-orange-500" : otpTimer > 0 ? "text-red-500" : "text-muted-foreground"}`} />
+                  <span className={`text-base font-bold leading-none ${otpTimer > 60 ? "text-green-500" : otpTimer > 20 ? "text-orange-500" : otpTimer > 0 ? "text-red-500" : "text-muted-foreground"}`}>
+                    {otpTimer > 0
+                      ? `${Math.floor(otpTimer / 60)}:${String(otpTimer % 60).padStart(2, "0")}`
+                      : "Expiré"}
+                  </span>
+                </div>
               </div>
               <p className="text-sm text-muted-foreground px-4">
                 Un code à 6 chiffres a été envoyé à <strong>{user?.email}</strong>
               </p>
-              <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full ${
-                otpTimer > 60 ? "bg-green-500/15 text-green-500" :
-                otpTimer > 20 ? "bg-orange-500/15 text-orange-500" :
-                otpTimer > 0  ? "bg-red-500/15 text-red-500" :
-                "bg-muted text-muted-foreground"
-              }`} data-testid="text-otp-timer">
-                {otpTimer > 0
-                  ? `⏱ ${Math.floor(otpTimer / 60)}:${String(otpTimer % 60).padStart(2, "0")}`
-                  : "Code expiré"}
-              </span>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-3">
               <input
                 type="text"
                 inputMode="numeric"
@@ -951,17 +964,22 @@ export default function SendMoneyPage() {
               {otpError && (
                 <p className="text-xs text-destructive text-center">{otpError}</p>
               )}
-              <div className="text-center">
-                <button
-                  type="button"
-                  disabled={otpTimer > 0 || requestOtpMutation.isPending}
-                  onClick={() => lastTransferPayload && requestOtpMutation.mutate(lastTransferPayload)}
-                  className="text-xs text-primary underline underline-offset-2 disabled:no-underline disabled:text-muted-foreground disabled:cursor-not-allowed transition-colors"
-                  data-testid="button-resend-otp"
-                >
-                  {requestOtpMutation.isPending ? "Envoi en cours…" : otpTimer > 0 ? `Renvoyer le code dans ${Math.floor(otpTimer / 60)}:${String(otpTimer % 60).padStart(2, "0")}` : "Renvoyer le code"}
-                </button>
-              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={otpTimer > 0 || requestOtpMutation.isPending}
+                onClick={() => lastTransferPayload && requestOtpMutation.mutate(lastTransferPayload)}
+                className="w-full gap-2"
+                data-testid="button-resend-otp"
+              >
+                {requestOtpMutation.isPending
+                  ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Envoi en cours…</>
+                  : otpTimer > 0
+                  ? `Renvoyer dans ${Math.floor(otpTimer / 60)}:${String(otpTimer % 60).padStart(2, "0")}`
+                  : <><RefreshCw className="w-3.5 h-3.5" />Renvoyer le code</>
+                }
+              </Button>
             </div>
           </div>
           <BottomSheetFooter>
