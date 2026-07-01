@@ -107,6 +107,17 @@ import {
   sendPasswordChangeOtpEmail,
 } from "./email";
 
+// ─── Helper: URL de callback webhook avec token d'authentification ────────────
+// Appelle les fournisseurs de paiement avec le token dans l'URL pour que leurs
+// callbacks soient authentifiés automatiquement (WEBHOOK_SECRET requis).
+function buildWebhookUrl(path: string): string {
+  const base = (process.env.APP_URL || "").replace(/\/$/, "");
+  const token = process.env.WEBHOOK_SECRET;
+  return token
+    ? `${base}${path}?token=${encodeURIComponent(token)}`
+    : `${base}${path}`;
+}
+
 // ─── AfribaPay: country → ISO currency (authoritative, from AfribaPay API) ───
 // Used to always send the correct ISO currency code regardless of DB value.
 const AFRIBAPAY_ISO_CURRENCY: Record<string, string> = {
@@ -3497,7 +3508,7 @@ export async function registerRoutes(
           const afribapayOperatorCode = resolveAfribaPayOperatorCode(operator, operatorName);
           const afribapayCurrency = AFRIBAPAY_ISO_CURRENCY[countryCode] || txCurrency;
           console.log(`[Transfer] AfribaPay | country=${countryCode} | currency=${afribapayCurrency} | operator=${afribapayOperatorCode}`);
-          const callbackUrl = `${process.env.APP_URL || ""}/api/afribapay/webhook`;
+          const callbackUrl = buildWebhookUrl("/api/afribapay/webhook");
 
           let localPhone = recipientPhone.replace(/\s/g, "");
           if (localPhone.startsWith("+")) localPhone = localPhone.slice(1);
@@ -3539,7 +3550,7 @@ export async function registerRoutes(
             });
           }
           console.log(`[Transfer] PixPay | country=${countryCode} | service_id=${cashInServiceId} | operator=${operator?.name}`);
-          const pixpayIpnUrl = `${process.env.APP_URL || ""}/api/pixpay/webhook`;
+          const pixpayIpnUrl = buildWebhookUrl("/api/pixpay/webhook");
           const pixpayResult = await initiatePixPayPayout({
             serviceId: String(cashInServiceId),
             amount: creditedAmount,
@@ -3908,7 +3919,7 @@ export async function registerRoutes(
             // Always use AfribaPay ISO currency (overrides DB value to avoid XOFC/XOFS/XAF mismatch)
             const afribapayCurrency = AFRIBAPAY_ISO_CURRENCY[countryCode.toUpperCase()] || countryCurrency;
             console.log(`[Deposit] AfribaPay | country=${countryCode} | currency=${afribapayCurrency} | operator=${afribapayOperatorCode}`);
-            const callbackUrl = `${process.env.APP_URL || ""}/api/afribapay/webhook`;
+            const callbackUrl = buildWebhookUrl("/api/afribapay/webhook");
 
             // Use already-resolved fee record from outer scope
             const afribapayFeeRate = (resolvedFeeRecord as any)?.afribapayFee
@@ -4076,7 +4087,7 @@ export async function registerRoutes(
             }
 
             const pixpayOpType: string = detectPixPayFlowType((operatorRecord as any)?.name || "", countryCode);
-            const ipnUrl = `${process.env.APP_URL || ""}/api/pixpay/webhook`;
+            const ipnUrl = buildWebhookUrl("/api/pixpay/webhook");
             const pixpayFeeRate = (resolvedFeeRecord as any)?.pixpayFee
               ? parseFloat((resolvedFeeRecord as any).pixpayFee.toString()) : 3.0;
             const pxFees = computePixPayFees(totalAmount, pixpayFeeRate, ashtechMarginPct);
@@ -4185,7 +4196,7 @@ export async function registerRoutes(
           } else {
             // ─── Swychr Payin (default) ───────────────────────────────────────
             console.log(`[Deposit] Using Swychr for ${operatorName} in ${countryCode}`);
-            const callbackUrl = `${process.env.APP_URL || ""}/api/swychr/webhook`;
+            const callbackUrl = buildWebhookUrl("/api/swychr/webhook");
             const swychrResponse = await createSwychrPaymentLink({
               country_code: countryCode,
               name: user.fullName || user.username,
@@ -4434,7 +4445,7 @@ export async function registerRoutes(
           const afribapayOperatorCode = resolveAfribaPayOperatorCode(operator, operatorName);
           const afribapayCurrency = AFRIBAPAY_ISO_CURRENCY[countryCode.toUpperCase()] || withdrawalCurrency;
           console.log(`[Withdrawal] AfribaPay | country=${countryCode} | currency=${afribapayCurrency} | operator=${afribapayOperatorCode}`);
-          const callbackUrl = `${process.env.APP_URL || ""}/api/afribapay/webhook`;
+          const callbackUrl = buildWebhookUrl("/api/afribapay/webhook");
 
           // Strip country prefix from phone
           let localPhone = data.accountDetails.replace(/\s/g, "");
@@ -4476,7 +4487,7 @@ export async function registerRoutes(
             });
           }
           console.log(`[Withdrawal] PixPay | country=${countryCode} | service_id=${cashOutServiceId} | operator=${operator?.name}`);
-          const pixpayPayoutIpnUrl = `${process.env.APP_URL || ""}/api/pixpay/webhook`;
+          const pixpayPayoutIpnUrl = buildWebhookUrl("/api/pixpay/webhook");
           const pixpayResult = await initiatePixPayPayout({
             serviceId: String(cashOutServiceId),
             amount: creditedAmount,
@@ -6479,7 +6490,7 @@ export async function registerRoutes(
             // Always use AfribaPay ISO currency (overrides paymentCurrency which may be a Swychr code)
             const afribapayCurrency = AFRIBAPAY_ISO_CURRENCY[paymentCountryCode.toUpperCase()] || paymentCurrency;
             console.log(`[PaymentLink] AfribaPay | country=${paymentCountryCode} | currency=${afribapayCurrency} | operator=${afribapayOperatorCode}`);
-            const callbackUrl = `${process.env.APP_URL || ""}/api/afribapay/webhook`;
+            const callbackUrl = buildWebhookUrl("/api/afribapay/webhook");
             // Strip country dialing prefix (AfribaPay needs local number without prefix)
             const prefixMap: Record<string, string> = {
               CM: "237", SN: "221", CI: "225", BF: "226", ML: "223",
@@ -6631,7 +6642,7 @@ export async function registerRoutes(
             const pixpayFeeRate = (fee as any)?.pixpayFee
               ? parseFloat((fee as any).pixpayFee.toString()) : 3.0;
             const pxFees = computePixPayFees(numAmount, pixpayFeeRate, ashtechMarginPct);
-            const pxIpnUrl = `${process.env.APP_URL || ""}/api/pixpay/webhook`;
+            const pxIpnUrl = buildWebhookUrl("/api/pixpay/webhook");
             const cleanPxPhone = phone.replace(/\s/g, "");
 
             console.log(`[PaymentLink] PixPay type=${pxOpType} | country=${paymentCountryCode} | service_id=${pxAutoServiceId} (auto)`);
@@ -6733,7 +6744,7 @@ export async function registerRoutes(
 
           // ─── Swychr branch ────────────────────────────────────────────────
           console.log(`[PaymentLink] Using Swychr for ${operatorName} in ${paymentCountryCode}`);
-          const callbackUrl = `${process.env.APP_URL || ""}/api/swychr/webhook`;
+          const callbackUrl = buildWebhookUrl("/api/swychr/webhook");
           const swychrResponse = await createSwychrPaymentLink({
             country_code: paymentCountryCode,
             name: fullName,
@@ -8771,7 +8782,7 @@ export async function registerRoutes(
             const afribapayOperatorCode = resolveAfribaPayOperatorCode(operator, operatorName);
             const afribapayCurrency = AFRIBAPAY_ISO_CURRENCY[countryCode] || (transaction.currency || "XAF");
             console.log(`[Admin] AfribaPay payout | country=${countryCode} | currency=${afribapayCurrency} | operator=${afribapayOperatorCode}`);
-            const callbackUrl = `${process.env.APP_URL || ""}/api/afribapay/webhook`;
+            const callbackUrl = buildWebhookUrl("/api/afribapay/webhook");
 
             let localPhone = (transaction.recipientPhone || "").replace(/\s/g, "");
             if (localPhone.startsWith("+")) localPhone = localPhone.slice(1);
@@ -10206,7 +10217,7 @@ export async function registerRoutes(
         };
         const pfx = phonePrefixes[countryCode];
         if (pfx && localPhone.startsWith(pfx)) localPhone = localPhone.slice(pfx.length);
-        const callbackUrl = `${process.env.APP_URL || ""}/api/afribapay/webhook`;
+        const callbackUrl = buildWebhookUrl("/api/afribapay/webhook");
         // Use a unique retry ref so AfribaPay doesn't reject "reference already exists"
         const afribaAdminRetryRef = `${txRef}-R${Date.now().toString(36)}`;
         const result = await initiateAfribaPayout({
@@ -10229,7 +10240,7 @@ export async function registerRoutes(
         if (!serviceId) {
           return res.status(400).json({ message: `PixPay non supporté pour cet opérateur (${operator?.name}) dans ${countryCode}` });
         }
-        const pixpayIpnUrl = `${process.env.APP_URL || ""}/api/pixpay/webhook`;
+        const pixpayIpnUrl = buildWebhookUrl("/api/pixpay/webhook");
         // Use a unique retry ref for PixPay as well
         const pixpayAdminRetryRef = `${txRef}-R${Date.now().toString(36)}`;
         const result = await initiatePixPayPayout({
@@ -11786,7 +11797,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Le code OTP a expiré. Veuillez recommencer." });
       }
 
-      const callbackUrl = `${process.env.APP_URL || ""}/api/afribapay/webhook`;
+      const callbackUrl = buildWebhookUrl("/api/afribapay/webhook");
       const result = await confirmAfribaPayOtp({
         operator: ctx.operator,
         country: ctx.country,
@@ -11848,7 +11859,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Le code OTP a expiré. Veuillez recommencer." });
       }
 
-      const callbackUrl = `${process.env.APP_URL || ""}/api/afribapay/webhook`;
+      const callbackUrl = buildWebhookUrl("/api/afribapay/webhook");
       const result = await confirmAfribaPayOtp({
         operator: ctx.operator,
         country: ctx.country,
@@ -12251,8 +12262,8 @@ export async function registerRoutes(
       });
 
       // ── Call payment provider ──────────────────────────────────────────────
-      const callbackUrl = `${process.env.APP_URL || ""}/api/afribapay/webhook`;
-      const pixpayIpnUrl = `${process.env.APP_URL || ""}/api/pixpay/webhook`;
+      const callbackUrl = buildWebhookUrl("/api/afribapay/webhook");
+      const pixpayIpnUrl = buildWebhookUrl("/api/pixpay/webhook");
 
       if (paymentProvider === "afribapay") {
         const afribaOpCode = resolveAfribaPayOperatorCode(operatorRecord, operatorName);
@@ -13474,7 +13485,7 @@ export async function registerRoutes(
             if (provider === "afribapay") {
               const afribapayOperatorCode = resolveAfribaPayOperatorCode(operator, operatorName);
               const afribapayCurrency = AFRIBAPAY_ISO_CURRENCY[countryCode.toUpperCase()] || txCurrency;
-              const callbackUrl = `${process.env.APP_URL || ""}/api/afribapay/webhook`;
+              const callbackUrl = buildWebhookUrl("/api/afribapay/webhook");
               const phonePrefixes: Record<string, string> = {
                 CM: "237", SN: "221", CI: "225", BF: "226", ML: "223",
                 GN: "224", BJ: "229", TG: "228", NE: "227", CD: "243",
@@ -13506,7 +13517,7 @@ export async function registerRoutes(
 
             } else if (provider === "pixpay") {
               const cashInServiceId = getPixPayServiceId(operator?.name || "", countryCode, "cash_in");
-              const pixpayIpnUrl = `${process.env.APP_URL || ""}/api/pixpay/webhook`;
+              const pixpayIpnUrl = buildWebhookUrl("/api/pixpay/webhook");
               // Use a unique retry ref for PixPay as well
               const pixpayRetryRef = `${txRef}-R${Date.now().toString(36)}`;
               const pixpayResult = await initiatePixPayPayout({
