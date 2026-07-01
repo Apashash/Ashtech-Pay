@@ -159,7 +159,7 @@ export default function LoginPage() {
       // }
       if (data.token) setAuthToken(data.token);
       if (data.user) queryClient.setQueryData(["/api/user"], data.user);
-      toast({ title: t.login.toastSuccess, description: `${t.login.toastSuccessDescPre}${data.user.fullName}!`, duration: 2000, className: "bg-blue-600 text-white border-blue-700" });
+      toast({ title: t.login.toastSuccess, description: `${t.login.toastSuccessDescPre}${data.user?.fullName ?? ""}!`, duration: 2000, className: "bg-blue-600 text-white border-blue-700" });
       setLocation("/dashboard");
     },
     onError: (error: any) => {
