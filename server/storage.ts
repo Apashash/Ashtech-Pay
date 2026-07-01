@@ -1469,6 +1469,17 @@ export class DatabaseStorage implements IStorage {
       ));
     } else if (filter === "pending_kyc") {
       conditions.push(eq(users.kycStatus, "pending"));
+    // Filtres par rôle
+    } else if (filter === "role_admin") {
+      conditions.push(eq(users.role, "admin"));
+    } else if (filter === "role_support") {
+      conditions.push(eq(users.role, "support"));
+    } else if (filter === "role_finance") {
+      conditions.push(eq(users.role, "finance"));
+    } else if (filter === "role_user") {
+      conditions.push(eq(users.role, "user"));
+    } else if (filter === "role_privileged") {
+      conditions.push(inArray(users.role, ["admin", "support", "finance"]));
     }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;

@@ -504,6 +504,21 @@ export default function AdminUsers() {
                   <SelectItem value="has_balance">
                     <span className="flex items-center gap-2 text-blue-500"><DollarSign className="w-3.5 h-3.5" />Avec solde</span>
                   </SelectItem>
+                  <SelectItem value="role_privileged">
+                    <span className="flex items-center gap-2 text-amber-500"><Shield className="w-3.5 h-3.5" />Comptes privilégiés</span>
+                  </SelectItem>
+                  <SelectItem value="role_admin">
+                    <span className="flex items-center gap-2 text-red-500"><Shield className="w-3.5 h-3.5" />Admins uniquement</span>
+                  </SelectItem>
+                  <SelectItem value="role_support">
+                    <span className="flex items-center gap-2 text-blue-500"><Shield className="w-3.5 h-3.5" />Support uniquement</span>
+                  </SelectItem>
+                  <SelectItem value="role_finance">
+                    <span className="flex items-center gap-2 text-green-500"><Shield className="w-3.5 h-3.5" />Finance uniquement</span>
+                  </SelectItem>
+                  <SelectItem value="role_user">
+                    <span className="flex items-center gap-2 text-muted-foreground"><Users className="w-3.5 h-3.5" />Utilisateurs standard</span>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
