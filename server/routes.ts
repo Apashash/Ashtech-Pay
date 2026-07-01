@@ -24,6 +24,7 @@ import {
   transactionStatusLimiter,
   hostedPaymentLimiter,
   bannerLimiter,
+  adminOtpRequestLimiter,
 } from "./rateLimiter";
 import { 
   loginSchema, 
@@ -2093,16 +2094,11 @@ export async function registerRoutes(
 
       await clearAuthAttempts(ip);
 
-      // ── Admin/Support/Finance accounts: block session creation until OTP verified ──
-      // The session (req.session.userId) is NEVER set here for privileged accounts.
-      // It is only set inside POST /api/auth/admin-login-otp after OTP verification.
-      const isAdminRole = ["admin", "support", "finance"].includes(user.role);
-      // ── TOTP ADMIN TEMPORAIREMENT DÉSACTIVÉ (urgence sécurité — réactiver après) ──
-      // if (isAdminRole) { ... TOTP block désactivé ... }
-      if (false && isAdminRole) {
-        return res.status(403).json({ message: "TOTP désactivé temporairement." });
-      }
-
+      // Session created immediately for all roles (including admin/support/finance).
+      // Admin panel access is protected by: requireAdmin (role re-fetched from DB every request)
+      // + IP blocklist + Telegram alert on each panel access.
+      // Optional TOTP (Google Authenticator) can be enabled per admin account via
+      // POST /api/admin/totp/setup → adds _avs OTP layer on top of password auth.
       activeIpRegistry.set(user.id, ip);
 
       // Generate auth token for token-based auth (works in iframes where cookies fail)
@@ -7366,7 +7362,7 @@ export async function registerRoutes(
   });
 
   // POST /api/admin/request-otp — generate & send 4-digit code to admin email
-  app.post("/api/admin/request-otp", requireAuth, async (req, res) => {
+  app.post("/api/admin/request-otp", requireAuth, adminOtpRequestLimiter, async (req, res) => {
     try {
       const user = await storage.getUser(req.userId!);
       if (!user || !["admin", "support", "finance"].includes(user.role)) {
@@ -7442,7 +7438,7 @@ export async function registerRoutes(
   });
 
   // POST /api/admin/verify-otp — verify 6-digit code and register session in-memory
-  app.post("/api/admin/verify-otp", requireAuth, async (req, res) => {
+  app.post("/api/admin/verify-otp", requireAuth, adminActionLimiter, async (req, res) => {
     try {
       const user = await storage.getUser(req.userId!);
       if (!user || !["admin", "support", "finance"].includes(user.role)) {
@@ -7598,7 +7594,7 @@ export async function registerRoutes(
   // Does NOT enable TOTP yet — admin must confirm with a valid code first.
   // SECURITY: if TOTP is already enabled, the current TOTP code MUST be provided
   // to prevent an attacker from overwriting an existing secret without possession proof.
-  app.post("/api/admin/totp/setup", requireAuth, async (req, res) => {
+  app.post("/api/admin/totp/setup", requireAuth, adminActionLimiter, async (req, res) => {
     try {
       const user = await storage.getUser(req.userId!);
       if (!user || !["admin", "support", "finance"].includes(user.role)) {
@@ -7647,7 +7643,7 @@ export async function registerRoutes(
   });
 
   // POST /api/admin/totp/confirm — verify first code and permanently enable TOTP
-  app.post("/api/admin/totp/confirm", requireAuth, async (req, res) => {
+  app.post("/api/admin/totp/confirm", requireAuth, adminActionLimiter, async (req, res) => {
     try {
       const user = await storage.getUser(req.userId!);
       if (!user || !["admin", "support", "finance"].includes(user.role)) {
@@ -7699,7 +7695,7 @@ export async function registerRoutes(
   });
 
   // POST /api/admin/totp/verify — verify TOTP code during login (sets admin session)
-  app.post("/api/admin/totp/verify", requireAuth, async (req, res) => {
+  app.post("/api/admin/totp/verify", requireAuth, adminActionLimiter, async (req, res) => {
     try {
       const user = await storage.getUser(req.userId!);
       if (!user || !["admin", "support", "finance"].includes(user.role)) {
@@ -7773,7 +7769,7 @@ export async function registerRoutes(
   // POST /api/admin/totp/disable — disable TOTP (requires current valid TOTP code)
   // Note: requireAdmin is intentionally NOT used here — the TOTP code itself is the proof of ownership.
   // requireAdmin would block on PM2 multi-worker when session isn't found on the current worker.
-  app.post("/api/admin/totp/disable", requireAuth, async (req, res) => {
+  app.post("/api/admin/totp/disable", requireAuth, adminActionLimiter, async (req, res) => {
     try {
       const user = await storage.getUser(req.userId!);
       if (!user || !["admin", "support", "finance"].includes(user.role)) {
@@ -8516,16 +8512,26 @@ export async function registerRoutes(
   app.post("/api/admin/impersonate/exit", requireAuth, async (req, res) => {
     try {
       const originalAdminId = req.session.impersonatedBy;
+      // SECURITY: impersonatedBy must be set in session (only set by /api/admin/users/:id/impersonate
+      // which itself requires requireAdmin). A regular user can never have this set.
       if (!originalAdminId) {
         return res.status(400).json({ message: "Vous n'êtes pas en mode impersonation." });
       }
 
-      // SECURITY: verify the original admin still exists and has admin role
+      // SECURITY: verify the original admin still exists and STILL has admin role
+      // (role could have been downgraded while impersonation was active)
       const admin = await storage.getUser(originalAdminId);
-      if (!admin) return res.status(404).json({ message: "Compte admin introuvable" });
+      if (!admin) {
+        req.session.destroy(() => {});
+        return res.status(404).json({ message: "Compte admin introuvable — session fermée." });
+      }
       if (!["admin", "support", "finance"].includes(admin.role)) {
         req.session.destroy(() => {});
-        return res.status(403).json({ message: "Accès refusé — droits admin requis." });
+        return res.status(403).json({ message: "Accès refusé — droits admin révoqués. Session fermée." });
+      }
+      if (admin.isBanned) {
+        req.session.destroy(() => {});
+        return res.status(403).json({ message: "Compte admin banni. Session fermée." });
       }
 
       req.session.userId = originalAdminId;
