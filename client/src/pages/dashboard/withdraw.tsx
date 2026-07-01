@@ -10,7 +10,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { withdrawSchema, type SupportedCurrency, type WithdrawalNumber } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User } from "@shared/schema";
-import { Smartphone, Building2, Loader2, CheckCircle, AlertCircle, Plus, Settings, Shield, Info, CreditCard, X, RefreshCw } from "lucide-react";
+import { Smartphone, Building2, Loader2, CheckCircle, AlertCircle, Plus, Settings, Shield, Info, CreditCard, X, RefreshCw, Clock } from "lucide-react";
 import { useLanguage } from "@/lib/language";
 import { BottomSheet, BottomSheetContent, BottomSheetHeader, BottomSheetTitle, BottomSheetFooter } from "@/components/ui/bottom-sheet";
 import { getOperatorLogo } from "@/lib/operator-logos";
@@ -48,6 +48,25 @@ const withdrawMethods = [
   { id: "bank_transfer", name: "Virement bancaire", icon: Building2, description: "Vers votre compte bancaire" },
 ];
 
+const OTP_LOCK_KEY = "atp_otp_lock";
+const OTP_LOCK_DURATION_MS = 15 * 60 * 1000;
+
+function getOtpLockRemaining(): number {
+  try {
+    const raw = localStorage.getItem(OTP_LOCK_KEY);
+    if (!raw) return 0;
+    const { sentAt } = JSON.parse(raw);
+    const remaining = Math.ceil((OTP_LOCK_DURATION_MS - (Date.now() - sentAt)) / 1000);
+    return remaining > 0 ? remaining : 0;
+  } catch { return 0; }
+}
+function setOtpLock() {
+  localStorage.setItem(OTP_LOCK_KEY, JSON.stringify({ sentAt: Date.now() }));
+}
+function clearOtpLock() {
+  localStorage.removeItem(OTP_LOCK_KEY);
+}
+
 export default function WithdrawPage() {
   const [selectedMethod, setSelectedMethod] = useState<string>("mobile_money");
   const [selectedNumber, setSelectedNumber] = useState<string>("");
@@ -56,6 +75,8 @@ export default function WithdrawPage() {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [showOtpDialog, setShowOtpDialog] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [showLockedDialog, setShowLockedDialog] = useState(false);
+  const [lockRemaining, setLockRemaining] = useState(0);
   const [otpRef, setOtpRef] = useState<string | null>(null);
   const [otpCode, setOtpCode] = useState("");
   const [otpError, setOtpError] = useState("");
@@ -137,6 +158,17 @@ export default function WithdrawPage() {
     return () => clearInterval(id);
   }, [showOtpDialog]);
 
+  useEffect(() => {
+    if (!showLockedDialog || lockRemaining <= 0) return;
+    const id = setInterval(() => {
+      setLockRemaining(prev => {
+        if (prev <= 1) { clearInterval(id); setShowLockedDialog(false); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, [showLockedDialog]);
+
   const requestOtpMutation = useMutation({
     mutationFn: async () => {
       const values = form.getValues();
@@ -155,6 +187,7 @@ export default function WithdrawPage() {
       return data;
     },
     onSuccess: (data: { ref: string }) => {
+      setOtpLock();
       setOtpRef(data.ref);
       setShowConfirmDialog(false);
       setOtpCode("");
@@ -180,6 +213,7 @@ export default function WithdrawPage() {
       return json;
     },
     onSuccess: () => {
+      clearOtpLock();
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
       form.reset();
@@ -627,7 +661,16 @@ export default function WithdrawPage() {
             </Button>
             <Button
               className="flex-1"
-              onClick={() => requestOtpMutation.mutate()}
+              onClick={() => {
+                const remaining = getOtpLockRemaining();
+                if (remaining > 0) {
+                  setLockRemaining(remaining);
+                  setShowConfirmDialog(false);
+                  setShowLockedDialog(true);
+                  return;
+                }
+                requestOtpMutation.mutate();
+              }}
               disabled={requestOtpMutation.isPending}
               data-testid="button-final-confirm-withdraw"
             >
@@ -721,6 +764,32 @@ export default function WithdrawPage() {
             >
               {withdrawMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle className="w-4 h-4 mr-2" />}
               Valider
+            </Button>
+          </BottomSheetFooter>
+        </BottomSheetContent>
+      </BottomSheet>
+
+      {/* ── Locked dialog (OTP déjà envoyé, 15min) ── */}
+      <BottomSheet open={showLockedDialog} onOpenChange={setShowLockedDialog}>
+        <BottomSheetContent>
+          <BottomSheetHeader>
+            <BottomSheetTitle className="text-center text-lg">Opération en cours</BottomSheetTitle>
+          </BottomSheetHeader>
+          <div className="space-y-4 py-2 text-center">
+            <div className="w-16 h-16 rounded-full bg-orange-500/15 flex items-center justify-center mx-auto">
+              <Clock className="w-8 h-8 text-orange-500" />
+            </div>
+            <p className="text-sm text-muted-foreground px-4">
+              Un code de vérification a déjà été envoyé sur votre email. Vous pourrez lancer une nouvelle opération dans :
+            </p>
+            <div className="text-4xl font-bold tabular-nums text-orange-500" data-testid="text-lock-remaining">
+              {Math.floor(lockRemaining / 60)}:{String(lockRemaining % 60).padStart(2, "0")}
+            </div>
+            <p className="text-xs text-muted-foreground">Réessayez après l'expiration du délai.</p>
+          </div>
+          <BottomSheetFooter>
+            <Button className="w-full" variant="outline" onClick={() => setShowLockedDialog(false)}>
+              Fermer
             </Button>
           </BottomSheetFooter>
         </BottomSheetContent>

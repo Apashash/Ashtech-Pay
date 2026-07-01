@@ -9,7 +9,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User, SupportedCurrency, Wallet } from "@shared/schema";
-import { Send, Globe, Loader2, AlertCircle, Shield, CheckCircle2, Smartphone, TrendingDown, Wallet as WalletIcon, UserCheck, Users, X, CheckCircle, RefreshCw } from "lucide-react";
+import { Send, Globe, Loader2, AlertCircle, Shield, CheckCircle2, Smartphone, TrendingDown, Wallet as WalletIcon, UserCheck, Users, X, CheckCircle, RefreshCw, Clock } from "lucide-react";
 import { SearchableSelectContent } from "@/components/ui/searchable-select-content";
 import { useLanguage } from "@/lib/language";
 import { BottomSheet, BottomSheetContent, BottomSheetHeader, BottomSheetTitle, BottomSheetFooter } from "@/components/ui/bottom-sheet";
@@ -22,6 +22,25 @@ import { useLocation } from "wouter";
 import { useExchangeRates } from "@/hooks/use-exchange-rates";
 
 const INTERNAL_KEY = "__ashtech_interne__";
+
+const OTP_LOCK_KEY = "atp_otp_lock";
+const OTP_LOCK_DURATION_MS = 15 * 60 * 1000;
+
+function getOtpLockRemaining(): number {
+  try {
+    const raw = localStorage.getItem(OTP_LOCK_KEY);
+    if (!raw) return 0;
+    const { sentAt } = JSON.parse(raw);
+    const remaining = Math.ceil((OTP_LOCK_DURATION_MS - (Date.now() - sentAt)) / 1000);
+    return remaining > 0 ? remaining : 0;
+  } catch { return 0; }
+}
+function setOtpLock() {
+  localStorage.setItem(OTP_LOCK_KEY, JSON.stringify({ sentAt: Date.now() }));
+}
+function clearOtpLock() {
+  localStorage.removeItem(OTP_LOCK_KEY);
+}
 
 interface OperatorConfig {
   id: string;
@@ -126,6 +145,8 @@ export default function SendMoneyPage() {
   const [showInternalConfirmDialog, setShowInternalConfirmDialog] = useState(false);
   const [prevCountryId, setPrevCountryId] = useState("");
   const [showOtpDialog, setShowOtpDialog] = useState(false);
+  const [showLockedDialog, setShowLockedDialog] = useState(false);
+  const [lockRemaining, setLockRemaining] = useState(0);
   const [otpRef, setOtpRef] = useState<string | null>(null);
   const [otpCode, setOtpCode] = useState("");
   const [otpError, setOtpError] = useState("");
@@ -190,6 +211,17 @@ export default function SendMoneyPage() {
     return () => clearInterval(id);
   }, [showOtpDialog]);
 
+  useEffect(() => {
+    if (!showLockedDialog || lockRemaining <= 0) return;
+    const id = setInterval(() => {
+      setLockRemaining(prev => {
+        if (prev <= 1) { clearInterval(id); setShowLockedDialog(false); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, [showLockedDialog]);
+
   const requestOtpMutation = useMutation({
     mutationFn: async (payload: {
       type: "external" | "internal";
@@ -208,6 +240,7 @@ export default function SendMoneyPage() {
       return data as { ref: string };
     },
     onSuccess: (data, variables) => {
+      setOtpLock();
       setOtpRef(data.ref);
       setOtpCode("");
       setOtpError("");
@@ -240,6 +273,7 @@ export default function SendMoneyPage() {
       return data;
     },
     onSuccess: (data) => {
+      clearOtpLock();
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/wallets"] });
@@ -276,6 +310,7 @@ export default function SendMoneyPage() {
       return json;
     },
     onSuccess: () => {
+      clearOtpLock();
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/wallets"] });
@@ -821,14 +856,23 @@ export default function SendMoneyPage() {
             <Button variant="outline" className="flex-1" onClick={() => setShowInternalConfirmDialog(false)}>{t.send.back}</Button>
             <Button
               className="flex-1 bg-primary hover:bg-primary/90 text-black font-bold"
-              onClick={() => requestOtpMutation.mutate({
-                type: "internal",
-                recipient: internalIdentifier,
-                amount: internalAmountValue.toLocaleString("fr-FR"),
-                fee: "0",
-                net: internalAmountValue.toLocaleString("fr-FR"),
-                currency: selectedWallet,
-              })}
+              onClick={() => {
+                const remaining = getOtpLockRemaining();
+                if (remaining > 0) {
+                  setLockRemaining(remaining);
+                  setShowInternalConfirmDialog(false);
+                  setShowLockedDialog(true);
+                  return;
+                }
+                requestOtpMutation.mutate({
+                  type: "internal",
+                  recipient: internalIdentifier,
+                  amount: internalAmountValue.toLocaleString("fr-FR"),
+                  fee: "0",
+                  net: internalAmountValue.toLocaleString("fr-FR"),
+                  currency: selectedWallet,
+                });
+              }}
               disabled={requestOtpMutation.isPending}
               data-testid="button-final-confirm-internal"
             >
@@ -888,6 +932,13 @@ export default function SendMoneyPage() {
             <Button
               className="flex-1 bg-primary hover:bg-primary/90 text-black font-bold"
               onClick={() => {
+                const remaining = getOtpLockRemaining();
+                if (remaining > 0) {
+                  setLockRemaining(remaining);
+                  setShowConfirmDialog(false);
+                  setShowLockedDialog(true);
+                  return;
+                }
                 if (!pendingExternalData) return;
                 requestOtpMutation.mutate({
                   type: "external",
@@ -999,6 +1050,32 @@ export default function SendMoneyPage() {
                 ? <Loader2 className="w-4 h-4 animate-spin mr-2" />
                 : <CheckCircle className="w-4 h-4 mr-2" />}
               Valider
+            </Button>
+          </BottomSheetFooter>
+        </BottomSheetContent>
+      </BottomSheet>
+
+      {/* ── Locked dialog (OTP déjà envoyé, 15min) ── */}
+      <BottomSheet open={showLockedDialog} onOpenChange={setShowLockedDialog}>
+        <BottomSheetContent>
+          <BottomSheetHeader>
+            <BottomSheetTitle className="text-center text-lg">Opération en cours</BottomSheetTitle>
+          </BottomSheetHeader>
+          <div className="space-y-4 py-2 text-center">
+            <div className="w-16 h-16 rounded-full bg-orange-500/15 flex items-center justify-center mx-auto">
+              <Clock className="w-8 h-8 text-orange-500" />
+            </div>
+            <p className="text-sm text-muted-foreground px-4">
+              Un code de vérification a déjà été envoyé sur votre email. Vous pourrez lancer une nouvelle opération dans :
+            </p>
+            <div className="text-4xl font-bold tabular-nums text-orange-500" data-testid="text-lock-remaining">
+              {Math.floor(lockRemaining / 60)}:{String(lockRemaining % 60).padStart(2, "0")}
+            </div>
+            <p className="text-xs text-muted-foreground">Réessayez après l'expiration du délai.</p>
+          </div>
+          <BottomSheetFooter>
+            <Button className="w-full" variant="outline" onClick={() => setShowLockedDialog(false)}>
+              Fermer
             </Button>
           </BottomSheetFooter>
         </BottomSheetContent>
