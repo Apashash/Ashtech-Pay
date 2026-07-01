@@ -8451,12 +8451,9 @@ export async function registerRoutes(
       req.session.impersonatedBy = adminId;
       req.session.userId = id;
 
-      // Generate a new token for the impersonated user so Bearer auth also works
-      const impersonateToken = storeAuthToken(id);
-
       req.session.save((err) => {
         if (err) console.error("[Impersonate] Session save error:", err);
-        res.json({ ok: true, userId: id, adminId, username: targetUser.username, token: impersonateToken });
+        res.json({ ok: true, userId: id, adminId, username: targetUser.username });
       });
     } catch (error) {
       console.error("Admin impersonate error:", error);
@@ -11220,14 +11217,16 @@ export async function registerRoutes(
 
   app.post("/api/swychr/webhook", webhookLimiter, async (req, res) => {
     try {
-      // ── Vérification du secret webhook ──────────────────────────────────────
+      // ── Vérification du secret webhook (obligatoire) ─────────────────────────
       const webhookSecret = process.env.WEBHOOK_SECRET;
-      if (webhookSecret) {
-        const token = req.query.token || req.headers["x-webhook-token"];
-        if (token !== webhookSecret) {
-          console.warn("[Swychr Webhook] Token invalide — requête rejetée");
-          return res.status(401).json({ message: "Unauthorized" });
-        }
+      if (!webhookSecret) {
+        console.error("[Swychr Webhook] WEBHOOK_SECRET non configuré — requête rejetée");
+        return res.status(503).json({ message: "Webhook endpoint not configured" });
+      }
+      const webhookToken = (req.query.token as string) || (req.headers["x-webhook-token"] as string);
+      if (webhookToken !== webhookSecret) {
+        console.warn("[Swychr Webhook] Token invalide — requête rejetée");
+        return res.status(401).json({ message: "Unauthorized" });
       }
       const payload = req.body;
       console.log("[Swychr Webhook] Received:", JSON.stringify(payload));
@@ -11346,14 +11345,16 @@ export async function registerRoutes(
   // ─── AfribaPay Webhook ────────────────────────────────────────────────────
   app.post("/api/afribapay/webhook", webhookLimiter, async (req, res) => {
     try {
-      // ── Vérification du secret webhook ──────────────────────────────────────
+      // ── Vérification du secret webhook (obligatoire) ─────────────────────────
       const webhookSecret = process.env.WEBHOOK_SECRET;
-      if (webhookSecret) {
-        const token = req.query.token || req.headers["x-webhook-token"];
-        if (token !== webhookSecret) {
-          console.warn("[AfribaPay Webhook] Token invalide — requête rejetée");
-          return res.status(401).json({ message: "Unauthorized" });
-        }
+      if (!webhookSecret) {
+        console.error("[AfribaPay Webhook] WEBHOOK_SECRET non configuré — requête rejetée");
+        return res.status(503).json({ message: "Webhook endpoint not configured" });
+      }
+      const webhookToken = (req.query.token as string) || (req.headers["x-webhook-token"] as string);
+      if (webhookToken !== webhookSecret) {
+        console.warn("[AfribaPay Webhook] Token invalide — requête rejetée");
+        return res.status(401).json({ message: "Unauthorized" });
       }
       const payload = req.body;
       console.log("[AfribaPay Webhook] Received:", JSON.stringify(payload));
@@ -11554,14 +11555,16 @@ export async function registerRoutes(
   // ─── PixPay IPN Webhook ───────────────────────────────────────────────────────
   app.post("/api/pixpay/webhook", webhookLimiter, async (req, res) => {
     try {
-      // ── Vérification du secret webhook ──────────────────────────────────────
+      // ── Vérification du secret webhook (obligatoire) ─────────────────────────
       const webhookSecret = process.env.WEBHOOK_SECRET;
-      if (webhookSecret) {
-        const token = req.query.token || req.headers["x-webhook-token"];
-        if (token !== webhookSecret) {
-          console.warn("[PixPay Webhook] Token invalide — requête rejetée");
-          return res.status(401).json({ message: "Unauthorized" });
-        }
+      if (!webhookSecret) {
+        console.error("[PixPay Webhook] WEBHOOK_SECRET non configuré — requête rejetée");
+        return res.status(503).json({ message: "Webhook endpoint not configured" });
+      }
+      const webhookToken = (req.query.token as string) || (req.headers["x-webhook-token"] as string);
+      if (webhookToken !== webhookSecret) {
+        console.warn("[PixPay Webhook] Token invalide — requête rejetée");
+        return res.status(401).json({ message: "Unauthorized" });
       }
       const payload = req.body;
       console.log("[PixPay Webhook] Received:", JSON.stringify(payload));

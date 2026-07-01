@@ -55,7 +55,7 @@ async function startListenClient(): Promise<void> {
     databaseUrl.includes("sslmode=disable") ||
     databaseUrl.includes("heliumdb")
       ? undefined
-      : { rejectUnauthorized: false };
+      : { rejectUnauthorized: true };
 
   const reconnect = async () => {
     const client = new Client({ connectionString: databaseUrl, ssl: sslConfig as any });
@@ -286,10 +286,14 @@ async function runWatchdog(): Promise<void> {
  * Called once during server startup. Idempotent (CREATE OR REPLACE + DROP IF EXISTS).
  * Sends pg_notify on every INSERT/UPDATE/DELETE — column names only, no values (no PII leak).
  */
+// Allowlist of tables allowed for audit triggers — prevents any dynamic injection
+const AUDIT_TRIGGER_TABLES = ["users", "session", "hosted_page_configs", "admin_logs", "kyc_submissions"] as const;
+
 export async function createDbAuditTriggers(): Promise<void> {
   try {
-    await db.execute(sql.raw(`
-      CREATE OR REPLACE FUNCTION ashtech_audit_notify() RETURNS TRIGGER AS $$
+    // Use sql`` template literal (parameterized-safe) for the static function DDL
+    await db.execute(sql`
+      CREATE OR REPLACE FUNCTION ashtech_audit_notify() RETURNS TRIGGER AS $func$
       DECLARE
         payload TEXT;
         changed_cols TEXT[];
@@ -297,8 +301,6 @@ export async function createDbAuditTriggers(): Promise<void> {
         row_id TEXT;
         rec JSONB;
       BEGIN
-        -- Use to_jsonb() for dynamic field access so this trigger works on tables
-        -- whose PK is not named "id" (e.g. the "session" table uses "sid").
         IF TG_OP = 'DELETE' THEN
           rec := to_jsonb(OLD);
         ELSE
@@ -337,12 +339,11 @@ export async function createDbAuditTriggers(): Promise<void> {
         PERFORM pg_notify('ashtech_db_audit', payload);
         RETURN COALESCE(NEW, OLD);
       END;
-      $$ LANGUAGE plpgsql SECURITY DEFINER;
-    `));
+      $func$ LANGUAGE plpgsql SECURITY DEFINER
+    `);
 
-    const tables = ["users", "session", "hosted_page_configs", "admin_logs", "kyc_submissions"];
-
-    for (const table of tables) {
+    // Identifiers come from a hardcoded allowlist — safe to embed directly
+    for (const table of AUDIT_TRIGGER_TABLES) {
       const trig = `ashtech_audit_${table}`;
       await db.execute(sql.raw(`DROP TRIGGER IF EXISTS "${trig}" ON "${table}"`));
       await db.execute(sql.raw(`
@@ -352,7 +353,7 @@ export async function createDbAuditTriggers(): Promise<void> {
       `));
     }
 
-    console.log("[SIEM] PostgreSQL audit triggers installed on:", tables.join(", "));
+    console.log("[SIEM] PostgreSQL audit triggers installed on:", [...AUDIT_TRIGGER_TABLES].join(", "));
   } catch (err: any) {
     console.warn("[SIEM] Failed to install audit triggers:", err?.message);
   }

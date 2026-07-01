@@ -26,7 +26,7 @@ const sslConfig = databaseUrl.includes("localhost") ||
   databaseUrl.includes("sslmode=disable") ||
   databaseUrl.includes("heliumdb")
   ? undefined
-  : { rejectUnauthorized: false };
+  : { rejectUnauthorized: true };
 
 // Max connections per pool, per worker process.
 // Supabase free tier: 25 total connections (hard cap).

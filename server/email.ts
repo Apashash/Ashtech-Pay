@@ -15,6 +15,17 @@ const FACEBOOK_URL  = "https://www.facebook.com/share/1Eczpeowdp/?mibextid=wwXIf
 const WHATSAPP_URL  = "https://whatsapp.com/channel/0029VbC5tPPCxoAveJ44Vs2w";
 const SUPPORT_PHONE = "+237 6 83 67 78 72";
 
+// ─── HTML ESCAPE — protège contre les injections XSS dans les templates ───────
+function escapeHtml(str: string | null | undefined): string {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;");
+}
+
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
 const NAVY   = "#1E3A8A";
 const TEXT   = "#111827";
@@ -155,7 +166,7 @@ async function sendEmail(to: string, subject: string, html: string, label: strin
 // ─── PASSWORD RESET ───────────────────────────────────────────────────────────
 
 export async function sendPasswordResetEmail(to: string, fullName: string, resetToken: string): Promise<void> {
-  const firstName = fullName?.trim().split(" ")[0] || "cher(e) client(e)";
+  const firstName = escapeHtml(fullName?.trim().split(" ")[0] || "cher(e) client(e)");
   const resetLink = `${APP_URL}/reset-password?token=${resetToken}`;
 
   const body = `
@@ -199,7 +210,7 @@ export async function sendPasswordResetEmail(to: string, fullName: string, reset
 // ─── WELCOME ──────────────────────────────────────────────────────────────────
 
 export async function sendWelcomeEmail(to: string, fullName: string): Promise<void> {
-  const firstName = fullName?.trim().split(" ")[0] || "cher(e) client(e)";
+  const firstName = escapeHtml(fullName?.trim().split(" ")[0] || "cher(e) client(e)");
 
   const body = `
   <tr>
@@ -239,7 +250,7 @@ export async function sendWelcomeEmail(to: string, fullName: string): Promise<vo
 // ─── KYC APPROVED ─────────────────────────────────────────────────────────────
 
 export async function sendKycApprovedEmail(to: string, fullName: string): Promise<void> {
-  const firstName = fullName?.trim().split(" ")[0] || "cher(e) client(e)";
+  const firstName = escapeHtml(fullName?.trim().split(" ")[0] || "cher(e) client(e)");
 
   const body = `
   <tr>
@@ -279,10 +290,10 @@ export async function sendWithdrawalApprovedEmail(
   reference?: string,
   operator?: string
 ): Promise<void> {
-  const firstName = fullName?.trim().split(" ")[0] || "cher(e) client(e)";
+  const firstName = escapeHtml(fullName?.trim().split(" ")[0] || "cher(e) client(e)");
 
-  const refRow = reference ? [{ label: "Référence", value: reference }] : [];
-  const operatorRow = operator ? [{ label: "Opérateur Mobile Money", value: operator }] : [];
+  const refRow = reference ? [{ label: "Référence", value: escapeHtml(reference) }] : [];
+  const operatorRow = operator ? [{ label: "Opérateur Mobile Money", value: escapeHtml(operator) }] : [];
 
   const body = `
   <tr>
@@ -293,7 +304,7 @@ export async function sendWithdrawalApprovedEmail(
       <p style="margin:0 0 6px;font-size:15px;color:${TEXT};line-height:1.7;">Bonjour ${firstName},</p>
       <p style="margin:0 0 8px;font-size:15px;color:${TEXT};line-height:1.7;">
         Votre retrait a été traité avec succès. Le virement a été envoyé
-        directement sur votre compte${operator ? ` <strong style="color:${TEXT};">${operator}</strong>` : " Mobile Money"}.
+        directement sur votre compte${operator ? ` <strong style="color:${TEXT};">${escapeHtml(operator)}</strong>` : " Mobile Money"}.
       </p>
 
       ${infoBox([
@@ -322,9 +333,9 @@ export async function sendWithdrawalNumberApprovedEmail(
   phoneNumber: string,
   operator?: string
 ): Promise<void> {
-  const firstName = fullName?.trim().split(" ")[0] || "cher(e) client(e)";
+  const firstName = escapeHtml(fullName?.trim().split(" ")[0] || "cher(e) client(e)");
 
-  const operatorRow = operator ? [{ label: "Opérateur", value: operator }] : [];
+  const operatorRow = operator ? [{ label: "Opérateur", value: escapeHtml(operator) }] : [];
 
   const body = `
   <tr>
@@ -339,7 +350,7 @@ export async function sendWithdrawalNumberApprovedEmail(
       </p>
 
       ${infoBox([
-        { label: "Numéro approuvé", value: phoneNumber },
+        { label: "Numéro approuvé", value: escapeHtml(phoneNumber) },
         ...operatorRow,
         { label: "Statut", value: "Approuvé" },
         { label: "Date", value: new Date().toLocaleString("fr-FR", { timeZone: "Africa/Douala" }) },
@@ -368,7 +379,7 @@ export async function sendWithdrawalNumberApprovedEmail(
 // ─── ACCOUNT DELETED ──────────────────────────────────────────────────────────
 
 export async function sendAccountDeletedEmail(to: string, fullName: string): Promise<void> {
-  const firstName = fullName?.trim().split(" ")[0] || "cher(e) client(e)";
+  const firstName = escapeHtml(fullName?.trim().split(" ")[0] || "cher(e) client(e)");
 
   const body = `
   <tr>
@@ -422,7 +433,7 @@ export async function sendPayerConfirmationEmail(
   reference: string,
   pdfUrl?: string | null,
 ): Promise<void> {
-  const firstName = payerName?.trim().split(" ")[0] || "cher(e) client(e)";
+  const firstName = escapeHtml(payerName?.trim().split(" ")[0] || "cher(e) client(e)");
 
   const pdfBlock = pdfUrl ? `
   <table width="100%" cellpadding="0" cellspacing="0" border="0"
@@ -448,14 +459,14 @@ export async function sendPayerConfirmationEmail(
       </h1>
       <p style="margin:0 0 6px;font-size:15px;color:${TEXT};line-height:1.7;">Bonjour ${firstName},</p>
       <p style="margin:0 0 8px;font-size:15px;color:${TEXT};line-height:1.7;">
-        Votre paiement pour <strong style="color:${TEXT};">${linkTitle}</strong> a été reçu et confirmé avec succès.
+        Votre paiement pour <strong style="color:${TEXT};">${escapeHtml(linkTitle)}</strong> a été reçu et confirmé avec succès.
         Voici votre reçu de paiement :
       </p>
 
       ${infoBox([
-        { label: "Service", value: linkTitle },
-        { label: "Montant payé", value: `${amount} ${currency}` },
-        { label: "Référence", value: reference },
+        { label: "Service", value: escapeHtml(linkTitle) },
+        { label: "Montant payé", value: `${escapeHtml(amount)} ${escapeHtml(currency)}` },
+        { label: "Référence", value: escapeHtml(reference) },
         { label: "Date", value: new Date().toLocaleString("fr-FR", { timeZone: "Africa/Douala" }) },
         { label: "Statut", value: "Confirmé" },
       ])}
@@ -491,8 +502,9 @@ export async function sendCampaignEmail(opts: CampaignEmailOptions): Promise<voi
     buttonColor = NAVY,
   } = opts;
 
+  const safeFirstName = escapeHtml(firstName);
   const bodyHtml = body
-    .replace(/\{prenom\}/gi, firstName)
+    .replace(/\{prenom\}/gi, safeFirstName)
     .split("\n\n")
     .map(p => `<p style="margin:0 0 16px;font-size:15px;color:${TEXT};line-height:1.75;">${p.replace(/\n/g, "<br/>")}</p>`)
     .join("");
@@ -504,7 +516,7 @@ export async function sendCampaignEmail(opts: CampaignEmailOptions): Promise<voi
   const bodyRows = `
   <tr>
     <td style="padding:36px 40px 8px;">
-      <p style="margin:0 0 6px;font-size:15px;color:${TEXT};line-height:1.7;">Bonjour ${firstName},</p>
+      <p style="margin:0 0 6px;font-size:15px;color:${TEXT};line-height:1.7;">Bonjour ${safeFirstName},</p>
       ${bodyHtml}
       ${buttonHtml}
       ${supportNote()}
@@ -517,7 +529,7 @@ export async function sendCampaignEmail(opts: CampaignEmailOptions): Promise<voi
 
 // ─── PASSWORD CHANGE OTP ──────────────────────────────────────────────────────
 export async function sendPasswordChangeOtpEmail(to: string, fullName: string, code: string): Promise<void> {
-  const firstName = fullName?.trim().split(" ")[0] || "cher(e) client(e)";
+  const firstName = escapeHtml(fullName?.trim().split(" ")[0] || "cher(e) client(e)");
 
   const bodyRows = `
   <tr>
@@ -557,11 +569,12 @@ export async function sendPasswordChangeOtpEmail(to: string, fullName: string, c
 
 // ─── Admin OTP ────────────────────────────────────────────────────────────────
 export async function sendAdminOtpEmail(to: string, adminName: string, code: string): Promise<void> {
+  const safeAdminName = escapeHtml(adminName);
   const bodyRows = `
   <tr>
     <td style="padding:36px 40px 8px;">
       <p style="margin:0 0 16px;font-size:15px;color:${TEXT};line-height:1.7;">
-        Bonjour <strong>${adminName}</strong>,
+        Bonjour <strong>${safeAdminName}</strong>,
       </p>
       <p style="margin:0 0 24px;font-size:15px;color:${TEXT};line-height:1.7;">
         Une tentative de connexion au <strong>panel administrateur</strong> a été détectée.
