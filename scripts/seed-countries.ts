@@ -30,7 +30,9 @@ async function seedCountriesAndOperators() {
       (gen_random_uuid(), 'RD Congo', 'CD', '🇨🇩', '+243', 'CDF', 0.27, true, 100, 5000000, 500, 2000000),
       (gen_random_uuid(), 'Nigeria', 'NG', '🇳🇬', '+234', 'NGN', 0.0016, true, 100, 5000000, 500, 2000000),
       (gen_random_uuid(), 'Ghana', 'GH', '🇬🇭', '+233', 'GHS', 0.0016, true, 100, 5000000, 500, 2000000),
-      (gen_random_uuid(), 'Kenya', 'KE', '🇰🇪', '+254', 'KES', 0.0016, true, 100, 5000000, 500, 2000000)
+      (gen_random_uuid(), 'Kenya', 'KE', '🇰🇪', '+254', 'KES', 0.0016, true, 100, 5000000, 500, 2000000),
+      (gen_random_uuid(), 'Gambie', 'GM', '🇬🇲', '+220', 'GMD', 0.0016, true, 100, 5000000, 500, 2000000),
+      (gen_random_uuid(), 'Guinée Conakry', 'GN', '🇬🇳', '+224', 'GNF', 0.0076, true, 100, 5000000, 500, 2000000)
       ON CONFLICT (code) DO NOTHING
       RETURNING id, code;
     `);
