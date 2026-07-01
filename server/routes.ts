@@ -1572,6 +1572,29 @@ export async function registerRoutes(
     next();
   });
 
+  // ── Security: 404 on admin frontend paths for unauthenticated requests ───────
+  // Placed HERE (after session + extractUserId) so req.userId is always populated.
+  // Prevents route enumeration: unauthenticated visitors get 404 (not 200/HTML)
+  // on any URL that starts with the secret admin path prefix.
+  {
+    const ADMIN_FRONTEND_PATH = process.env.VITE_ADMIN_PATH || "";
+    const ADMIN_REVEAL_PATHS = ["/admin-panel-verify", "/admin-login-otp"];
+    app.use((req: Request, res: Response, next: NextFunction) => {
+      const p = req.path;
+      if (p.startsWith("/api/")) return next();
+      const isAdminFrontend = ADMIN_FRONTEND_PATH && p.startsWith(ADMIN_FRONTEND_PATH);
+      const isAdminReveal = ADMIN_REVEAL_PATHS.some(r => p === r || p.startsWith(r + "/"));
+      if (!isAdminFrontend && !isAdminReveal) return next();
+      // req.userId is set by extractUserId above — valid session or bearer token
+      // Also accept _apl (admin pending login) set during mid-login OTP step
+      const sessionAdminPending = (req.session as any)?._apl;
+      if (!req.userId && !sessionAdminPending) {
+        return res.status(404).end();
+      }
+      next();
+    });
+  }
+
   // File upload endpoint using local storage
   app.post("/api/uploads/local", requireAuth, upload.single("file"), (req, res) => {
     try {

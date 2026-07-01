@@ -519,30 +519,6 @@ app.use((req, res, next) => {
     }
   }
 
-  // ── Security: 404 on admin frontend paths for unauthenticated requests ───────
-  // Prevents route enumeration — anyone not logged in gets 404 (not 200/HTML)
-  // on every URL that starts with the secret admin path prefix.
-  const ADMIN_FRONTEND_PATH = process.env.VITE_ADMIN_PATH || "";
-  // Paths that reveal the admin panel exist — always 404 unless session present
-  const ADMIN_REVEAL_PATHS = ["/admin-panel-verify", "/admin-login-otp"];
-  app.use((req: Request, res: Response, next: NextFunction) => {
-    const p = req.path;
-    // Allow API calls through (handled by requireAdmin middleware in routes)
-    if (p.startsWith("/api/")) return next();
-    // Check if this request touches any admin-revealing path
-    const isAdminFrontend = ADMIN_FRONTEND_PATH && p.startsWith(ADMIN_FRONTEND_PATH);
-    const isAdminReveal = ADMIN_REVEAL_PATHS.some(r => p === r || p.startsWith(r + "/"));
-    if (!isAdminFrontend && !isAdminReveal) return next();
-    // Check session authentication (partial session also accepted — admin mid-login)
-    const sessionUserId = (req.session as any)?.userId || (req.session as any)?.passport?.user;
-    const sessionAdminPending = (req.session as any)?._apl; // admin pending login token
-    const bearerToken = (req.headers.authorization || "").replace(/^Bearer\s+/i, "").trim();
-    if (!sessionUserId && !sessionAdminPending && !bearerToken) {
-      return res.status(404).end();
-    }
-    next();
-  });
-
   await registerRoutes(httpServer, app);
 
   // ── Security: Sanitized error handler (no stack traces in production) ─────
