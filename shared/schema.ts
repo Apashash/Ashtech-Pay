@@ -451,12 +451,12 @@ export const insertUserSchema = createInsertSchema(users).pick({
 
 export const loginSchema = z.object({
   identifier: z.string().min(1, "Email ou numéro de téléphone requis"),
-  password: z.string().min(6, "Le mot de passe doit contenir au moins 6 caractères"),
+  password: z.string().min(8, "Le mot de passe doit contenir au moins 8 caractères"),
 });
 
 export const registerSchema = insertUserSchema.extend({
   email: z.string().email("Email invalide"),
-  password: z.string().min(6, "Le mot de passe doit contenir au moins 6 caractères"),
+  password: z.string().min(8, "Le mot de passe doit contenir au moins 8 caractères"),
   fullName: z.string().min(2, "Le nom complet est requis"),
   username: z.string().min(3, "Le nom d'utilisateur doit contenir au moins 3 caractères"),
 });

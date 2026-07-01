@@ -537,7 +537,19 @@ function getTokenUserIdIgnoreRevocation(token: string): string | null {
   }
 }
 
-function removeAuthToken(_token: string): void {
+function removeAuthToken(token: string): void {
+  try {
+    const decoded = Buffer.from(token, "base64url").toString();
+    const parts = decoded.split(".");
+    if (parts.length !== 3) return;
+    const [userId, timestamp] = parts;
+    const ts = parseInt(timestamp, 10);
+    if (!userId || isNaN(ts)) return;
+    if (!revokedSpecificTokenTs.has(userId)) revokedSpecificTokenTs.set(userId, new Set());
+    revokedSpecificTokenTs.get(userId)!.add(ts);
+  } catch {
+    // ignore malformed tokens
+  }
 }
 
 // Extended request to include userId from token
@@ -3067,8 +3079,8 @@ export async function registerRoutes(
       if (!currentPassword || !newPassword) {
         return res.status(400).json({ message: "Mot de passe actuel et nouveau mot de passe requis" });
       }
-      if (newPassword.length < 6) {
-        return res.status(400).json({ message: "Le nouveau mot de passe doit contenir au moins 6 caractères" });
+      if (typeof newPassword !== "string" || newPassword.length < 8) {
+        return res.status(400).json({ message: "Le nouveau mot de passe doit contenir au moins 8 caractères" });
       }
 
       const user = await storage.getUser(userId);

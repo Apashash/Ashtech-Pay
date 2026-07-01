@@ -130,7 +130,7 @@ export default function RegisterPage() {
   }, [countdown, blockedUntil]);
 
   const extendedRegisterSchema = registerSchema.extend({
-    confirmPassword: z.string().min(6, t.register.passwordMinError),
+    confirmPassword: z.string().min(8, t.register.passwordMinError),
   }).refine((data) => data.password === data.confirmPassword, {
     message: t.register.passwordMismatch,
     path: ["confirmPassword"],
