@@ -580,21 +580,26 @@ export default function DashboardHome() {
   const logoClickCount = useRef(0);
   const logoClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [logoFlash, setLogoFlash] = useState(false);
+  const [logoClickDisplay, setLogoClickDisplay] = useState(0);
   const isAdminRole = ["admin", "support", "finance"].includes(user?.role ?? "");
 
   const handleLogoClick = useCallback(() => {
     if (!isAdminRole) return;
     logoClickCount.current += 1;
+    const count = logoClickCount.current;
     setLogoFlash(true);
+    setLogoClickDisplay(count);
     setTimeout(() => setLogoFlash(false), 150);
     if (logoClickTimer.current) clearTimeout(logoClickTimer.current);
-    if (logoClickCount.current >= 5) {
+    if (count >= 5) {
       logoClickCount.current = 0;
+      setLogoClickDisplay(0);
       setLocation("/admin-panel-verify");
       return;
     }
     logoClickTimer.current = setTimeout(() => {
       logoClickCount.current = 0;
+      setLogoClickDisplay(0);
     }, 2000);
   }, [isAdminRole, setLocation]);
 
@@ -707,13 +712,23 @@ export default function DashboardHome() {
                     <Wallet className="w-4 h-4" />
                     Conversion
                   </button>
-                  <div className="hidden sm:block">
+                  <div className="hidden sm:block relative">
                     <img
                       src="/logo.png"
                       alt="Tableau de bord Ashtech Pay"
                       onClick={handleLogoClick}
                       className={`h-28 w-auto object-contain transition-opacity duration-150 ${isAdminRole ? "cursor-pointer select-none" : ""} ${logoFlash ? "opacity-50" : "opacity-100"}`}
                     />
+                    {isAdminRole && logoClickDisplay > 0 && (
+                      <div className="absolute -bottom-5 left-0 right-0 flex justify-center gap-1">
+                        {[1, 2, 3, 4, 5].map((dot) => (
+                          <span
+                            key={dot}
+                            className={`w-1.5 h-1.5 rounded-full transition-all duration-150 ${dot <= logoClickDisplay ? "bg-primary scale-125" : "bg-muted-foreground/30"}`}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
