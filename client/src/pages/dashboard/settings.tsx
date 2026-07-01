@@ -463,24 +463,24 @@ export default function SettingsPage() {
             )}
           </div>
 
-          {/* Account ID row with copy button */}
-          {user?.accountId && (
+          {/* ID utilisateur (format ASHTECH) avec bouton copier */}
+          {user?.id && (
             <div className="w-full flex items-center gap-3 px-4 py-3.5 text-left">
               <Fingerprint className="w-4 h-4 shrink-0 text-yellow-500" />
-              <span className="flex-1 text-sm font-medium text-foreground">Account ID</span>
-              <span className="text-sm text-muted-foreground font-mono mr-1">{user.accountId}</span>
+              <span className="flex-1 text-sm font-medium text-foreground">ID</span>
+              <span className="text-sm text-muted-foreground font-mono mr-1">{user.id}</span>
               <button
                 type="button"
                 onClick={async () => {
                   try {
-                    await navigator.clipboard.writeText(user.accountId!);
-                    toast({ title: "Copié !", description: "Account ID copié dans le presse-papier." });
+                    await navigator.clipboard.writeText(user.id!);
+                    toast({ title: "Copié !", description: "ID copié dans le presse-papier." });
                   } catch {
-                    toast({ title: "Erreur", description: "Impossible de copier l'Account ID.", variant: "destructive" });
+                    toast({ title: "Erreur", description: "Impossible de copier l'ID.", variant: "destructive" });
                   }
                 }}
                 className="text-muted-foreground hover:text-primary transition-colors shrink-0"
-                title="Copier l'Account ID"
+                title="Copier l'ID"
               >
                 <Copy className="w-4 h-4" />
               </button>

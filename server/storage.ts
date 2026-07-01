@@ -380,26 +380,25 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    // Generate unique account ID: ASHTECH + 8 random digits
-    const generateAccountId = () =>
+    // Generate unique user ID: ASHTECH + 8 random digits (e.g. ASHTECH38023380)
+    const generateId = () =>
       "ASHTECH" + Math.floor(10000000 + Math.random() * 90000000).toString();
 
-    // Retry loop: handles both pre-check collisions and DB unique-constraint violations
+    // Retry loop: handles DB unique-constraint collisions on the primary key
     for (let attempt = 0; attempt < 10; attempt++) {
-      const accountId = generateAccountId();
+      const id = generateId();
       try {
-        const [user] = await db.insert(users).values({ ...insertUser, accountId }).returning();
+        const [user] = await db.insert(users).values({ ...insertUser, id }).returning();
         return user;
       } catch (err: any) {
-        // 23505 = unique_violation in PostgreSQL
-        if (err?.code === "23505" && err?.constraint?.includes("account_id")) {
-          continue; // collision — regenerate and retry
+        // 23505 = unique_violation — retry with a new ID
+        if (err?.code === "23505" && err?.detail?.includes("(id)")) {
+          continue;
         }
-        throw err; // other error — rethrow immediately
+        throw err;
       }
     }
-    // Extremely unlikely fallback (10 collisions in a row with 90M space)
-    throw new Error("Impossible de générer un Account ID unique après 10 tentatives.");
+    throw new Error("Impossible de générer un ID unique après 10 tentatives.");
   }
 
   async updateUserBalance(id: string, amount: number): Promise<User | undefined> {

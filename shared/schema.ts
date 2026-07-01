@@ -4,7 +4,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  id: varchar("id").primaryKey(),
   username: text("username").notNull().unique(),
   email: text("email").notNull().unique(),
   password: text("password").notNull(),
@@ -30,15 +30,11 @@ export const users = pgTable("users", {
   registrationIp: text("registration_ip"),
   totpSecret: text("totp_secret"),
   totpEnabled: boolean("totp_enabled").default(false),
-  accountId: text("account_id").unique(),
   createdAt: timestamp("created_at").defaultNow(),
 }, (t) => ({
   // Case-insensitive email uniqueness — prevents TEST@mail.com vs test@mail.com duplicates
-  // Case-insensitive email uniqueness — prevents TEST@mail.com vs test@mail.com duplicates
   emailLowerUniq: uniqueIndex("users_email_lower_unique").on(sql`lower(${t.email})`),
-  // Case-insensitive username uniqueness — prevents Test vs test duplicates
   usernameUniq: uniqueIndex("users_username_lower_unique").on(sql`lower(${t.username})`),
-  // Phone uniqueness — stored without leading +; NULL values allowed multiple times
   phoneUniq: uniqueIndex("users_phone_unique").on(t.phone),
 }));
 
