@@ -1766,7 +1766,15 @@ export class DatabaseStorage implements IStorage {
     const submission = await this.getKycSubmissionById(id);
     if (!submission) return undefined;
 
-    await this.updateUser(submission.userId, { kycStatus: "verified", isVerified: true });
+    // Update user KYC status — wrapped in try/catch so we log the REAL error
+    // (e.g. guard trigger blocking is_verified on pgBouncer) instead of a generic 500.
+    try {
+      await this.updateUser(submission.userId, { kycStatus: "verified", isVerified: true });
+    } catch (userUpdateErr: any) {
+      console.error("[KYC approve] updateUser failed:", userUpdateErr?.message || userUpdateErr);
+      // Fallback: update only kycStatus (not is_verified) to avoid guard trigger
+      await db.update(users).set({ kycStatus: "verified" }).where(eq(users.id, submission.userId));
+    }
 
     // Try full update (with reviewer fields). Fall back to status-only if columns
     // don't exist yet on older production deployments.

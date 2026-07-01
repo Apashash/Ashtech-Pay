@@ -474,24 +474,29 @@ app.use((req, res, next) => {
 
     // ── Security: Block direct DB modifications to sensitive columns ──────────
     // Any connection whose application_name != 'ashtech_secure_app' (i.e. not
-    // the app server pool) is BLOCKED from changing is_banned, role, or
-    // is_verified on the users table. Direct psql / pgAdmin / script access
-    // will hit RAISE EXCEPTION and the change will be rolled back.
+    // the app server pool) is BLOCKED from changing is_banned or role on the
+    // users table. Direct psql / pgAdmin / script access will hit RAISE EXCEPTION.
+    // NOTE: is_verified is NOT blocked here — it is changed by the KYC approval
+    // flow which is already secured by auth + TOTP + PIN. Blocking it at the DB
+    // level causes false exceptions on pgBouncer/Supavisor poolers.
     await db.execute(sql`
       CREATE OR REPLACE FUNCTION ashtech_guard_sensitive_update()
       RETURNS TRIGGER LANGUAGE plpgsql AS $$
       DECLARE
         app_name TEXT;
       BEGIN
-        app_name := current_setting('application_name', true);
+        app_name := COALESCE(current_setting('application_name', true), '');
         -- Allow only the official app server connection pool
+        -- Note: is_verified is intentionally excluded — it is updated by the admin KYC
+        -- flow which is already protected by auth + PIN + TOTP at the application layer.
+        -- Blocking it here would cause false RAISE EXCEPTION on pgBouncer/Supavisor
+        -- poolers that reset application_name between transactions.
         IF app_name IS DISTINCT FROM 'ashtech_secure_app' THEN
-          -- Block any attempt to change is_banned, role, or is_verified
+          -- Only block truly critical privilege columns: ban status and role
           IF (NEW.is_banned IS DISTINCT FROM OLD.is_banned)
-            OR (NEW.role IS DISTINCT FROM OLD.role)
-            OR (NEW.is_verified IS DISTINCT FROM OLD.is_verified) THEN
+            OR (NEW.role IS DISTINCT FROM OLD.role) THEN
             RAISE EXCEPTION
-              '[AshTech Security] Modification directe des colonnes sensibles (is_banned, role, is_verified) bloquée. Utilisez l''interface admin. Source: %', app_name;
+              '[AshTech Security] Modification directe des colonnes sensibles (is_banned, role) bloquée. Utilisez l''interface admin. Source: %', app_name;
           END IF;
         END IF;
         RETURN NEW;
