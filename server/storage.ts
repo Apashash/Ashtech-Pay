@@ -1,4 +1,16 @@
 import { encryptField, decryptField, hmacField } from "./fieldEncryption";
+
+/**
+ * Normalize a phone number before DB storage or lookup:
+ * - Strips all leading + signs ("++" → "", "+237..." → "237...")
+ * - Strips surrounding whitespace
+ * - Returns undefined for empty/whitespace-only/plus-only inputs
+ */
+export function normalizePhone(phone: string | null | undefined): string | undefined {
+  if (!phone) return undefined;
+  const normalized = phone.trim().replace(/^\++/, "");
+  return normalized.length > 0 ? normalized : undefined;
+}
 import { 
   users,
   transactions,
@@ -336,7 +348,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.username, username));
+    const [user] = await db.select().from(users).where(
+      sql`lower(${users.username}) = lower(${username.trim()})`
+    );
     return user || undefined;
   }
 
@@ -346,7 +360,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserByPhone(phone: string): Promise<User | undefined> {
-    const normalized = phone.trim();
+    const normalized = normalizePhone(phone);
+    if (!normalized) return undefined;
     const [user] = await db.select().from(users).where(eq(users.phone, normalized));
     return user || undefined;
   }

@@ -1,6 +1,6 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
+import { storage, normalizePhone } from "./storage";
 import { audit, AUDIT } from "./auditLogger";
 import {
   checkAuthRateLimit,
@@ -2138,11 +2138,12 @@ export async function registerRoutes(
       }
 
       const rawData = registerSchema.parse(req.body);
-      // Normalize email to lowercase and trim phone before any check
+      // Normalize: email → lowercase, username → lowercase, phone → strip + and spaces
       const data = {
         ...rawData,
         email: rawData.email.trim().toLowerCase(),
-        phone: rawData.phone ? rawData.phone.trim() : rawData.phone,
+        username: rawData.username.trim().toLowerCase(),
+        phone: normalizePhone(rawData.phone) ?? rawData.phone,
       };
 
       const existingEmail = await storage.getUserByEmail(data.email);
@@ -3098,7 +3099,7 @@ export async function registerRoutes(
       const stripHtml = (v: unknown) => typeof v === "string" ? v.replace(/<[^>]*>/g, "").trim() : undefined;
       const fullName  = stripHtml(req.body.fullName);
       const email     = typeof req.body.email === "string" ? req.body.email.trim().toLowerCase() : undefined;
-      const phone     = stripHtml(req.body.phone);
+      const phone     = typeof req.body.phone === "string" ? normalizePhone(req.body.phone) : undefined;
       const country   = stripHtml(req.body.country);
 
       if (fullName !== undefined && fullName.length < 2) {

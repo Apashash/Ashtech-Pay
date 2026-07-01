@@ -34,8 +34,11 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at").defaultNow(),
 }, (t) => ({
   // Case-insensitive email uniqueness — prevents TEST@mail.com vs test@mail.com duplicates
+  // Case-insensitive email uniqueness — prevents TEST@mail.com vs test@mail.com duplicates
   emailLowerUniq: uniqueIndex("users_email_lower_unique").on(sql`lower(${t.email})`),
-  // Phone uniqueness — NULL values are allowed multiple times (users without phone)
+  // Case-insensitive username uniqueness — prevents Test vs test duplicates
+  usernameUniq: uniqueIndex("users_username_lower_unique").on(sql`lower(${t.username})`),
+  // Phone uniqueness — stored without leading +; NULL values allowed multiple times
   phoneUniq: uniqueIndex("users_phone_unique").on(t.phone),
 }));
 
