@@ -29,17 +29,14 @@ interface TurnstileWidgetProps {
   onSuccess: (token: string) => void;
   onExpire?: () => void;
   onError?: () => void;
-  onFallback?: () => void;
   theme?: "light" | "dark" | "auto";
 }
-
-const FALLBACK_TIMEOUT_MS = 10000;
 
 let scriptLoaded = false;
 let scriptLoading = false;
 const callbacks: Array<() => void> = [];
 
-function loadTurnstileScript(onLoad: () => void) {
+function loadTurnstileScript(onLoad: () => void, onLoadError: () => void) {
   if (scriptLoaded) {
     onLoad();
     return;
@@ -58,44 +55,31 @@ function loadTurnstileScript(onLoad: () => void) {
   script.defer = true;
   script.onerror = () => {
     scriptLoading = false;
-    callbacks.forEach(cb => cb());
     callbacks.length = 0;
+    onLoadError();
   };
   document.head.appendChild(script);
 }
 
-export function TurnstileWidget({ siteKey, onSuccess, onExpire, onError, onFallback, theme = "auto" }: TurnstileWidgetProps) {
+export function TurnstileWidget({ siteKey, onSuccess, onExpire, onError, theme = "auto" }: TurnstileWidgetProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
-  const resolvedRef = useRef(false);
-  const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const clearFallback = useCallback(() => {
-    if (fallbackTimerRef.current) {
-      clearTimeout(fallbackTimerRef.current);
-      fallbackTimerRef.current = null;
-    }
-  }, []);
 
   const handleSuccess = useCallback((token: string) => {
-    resolvedRef.current = true;
-    clearFallback();
     onSuccess(token);
-  }, [onSuccess, clearFallback]);
+  }, [onSuccess]);
 
   const handleError = useCallback(() => {
-    clearFallback();
     onError?.();
-  }, [onError, clearFallback]);
+  }, [onError]);
 
   const handleExpire = useCallback(() => {
-    resolvedRef.current = false;
     onExpire?.();
   }, [onExpire]);
 
   const renderWidget = useCallback(() => {
     if (!containerRef.current || !window.turnstile) {
-      if (!resolvedRef.current) onFallback?.();
+      onError?.();
       return;
     }
 
@@ -115,25 +99,17 @@ export function TurnstileWidget({ siteKey, onSuccess, onExpire, onError, onFallb
       execution: "render",
       size: "normal",
     });
-
-    fallbackTimerRef.current = setTimeout(() => {
-      if (!resolvedRef.current) {
-        onFallback?.();
-      }
-    }, FALLBACK_TIMEOUT_MS);
-  }, [siteKey, handleSuccess, handleExpire, handleError, onFallback, theme]);
+  }, [siteKey, handleSuccess, handleExpire, handleError, theme]);
 
   useEffect(() => {
-    resolvedRef.current = false;
-    loadTurnstileScript(renderWidget);
+    loadTurnstileScript(renderWidget, () => onError?.());
     return () => {
-      clearFallback();
       if (widgetIdRef.current) {
         try { window.turnstile.remove(widgetIdRef.current); } catch {}
         widgetIdRef.current = null;
       }
     };
-  }, [renderWidget, clearFallback]);
+  }, [renderWidget, onError]);
 
   return <div ref={containerRef} className="flex justify-center" />;
 }
