@@ -3,6 +3,8 @@
  * Envoie des alertes en temps réel pour toutes les transactions et événements de sécurité.
  */
 
+import crypto from "crypto";
+
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 const BOT_API = BOT_TOKEN ? `https://api.telegram.org/bot${BOT_TOKEN}` : null;
@@ -2616,13 +2618,34 @@ export async function handleTelegramUpdate(
 
 // ─── ENREGISTREMENT DU WEBHOOK ──────────────────
 
+/**
+ * VULN-A3: Derives a stable webhook secret from SESSION_SECRET so Telegram
+ * can include X-Telegram-Bot-Api-Secret-Token on every update it posts.
+ * We verify that header before processing any webhook payload.
+ *
+ * Fallback: process-local random (never a predictable constant) so dev
+ * environments without SESSION_SECRET still get meaningful protection.
+ * In production, SESSION_SECRET is required (index.ts exits if absent).
+ */
+const _DEV_WEBHOOK_SECRET = crypto.randomBytes(32).toString("hex");
+export function getTelegramWebhookSecret(): string {
+  const base = process.env.SESSION_SECRET;
+  if (!base) return _DEV_WEBHOOK_SECRET; // random per process — not guessable
+  // 64 hex chars — valid for Telegram's secret_token field (alphanumeric + _ -)
+  return crypto.createHmac("sha256", base).update("tg-webhook-secret-v1").digest("hex").slice(0, 64);
+}
+
 export async function registerTelegramWebhook(webhookUrl: string): Promise<void> {
   if (!BOT_API) return;
   try {
     const res = await fetch(`${BOT_API}/setWebhook`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: webhookUrl, drop_pending_updates: false }),
+      body: JSON.stringify({
+        url: webhookUrl,
+        drop_pending_updates: false,
+        secret_token: getTelegramWebhookSecret(), // VULN-A3: enforce signature
+      }),
     });
     const data = await res.json() as any;
     if (data.ok) {

@@ -210,3 +210,29 @@ export const hostedPaymentLimiter = rateLimit({
   handler: (_req, res) =>
     reject(res, "Trop de demandes de paiement hébergé. Réessayez dans une minute.", 60),
 });
+
+// ─── 14. Admin OTP request : 3 / 15 minutes / IP ────────────────────────────
+// VULN-A2: prevents email/Telegram flooding and code invalidation loop.
+export const adminOtpRequestLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: getIp,
+  validate: sharedValidate,
+  handler: (_req, res) =>
+    reject(res, "Trop de demandes de code OTP. Réessayez dans 15 minutes.", 900),
+});
+
+// ─── 15. Bot banner images : 10 / minute / IP ───────────────────────────────
+// VULN-A4: prevents CPU DoS via repeated sharp image generation.
+export const bannerLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: getIp,
+  validate: sharedValidate,
+  handler: (_req, res) =>
+    reject(res, "Trop de requêtes. Réessayez dans une minute.", 60),
+});

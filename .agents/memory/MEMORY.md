@@ -1,4 +1,5 @@
 - [Admin OTP multi-process fix](admin-otp-fix.md) — OTP verification must use session (DB-backed), not in-memory Map; in-memory breaks PM2 cluster & server restarts.
+- [Security OTP hardening](security-otp-fixes.md) — OTP stored as HMAC hash in session; store keyed by sessionID; throttle per-userId after role check; Telegram webhook verified; banner DoS guarded.
 - [Pending admin login token DB-backed](pending-admin-login-db.md) — pendingAdminLogins Map moved to admin_pending_logins table; in-memory Map caused "Session expirée" on PM2 multi-worker (token on Worker A, OTP verify hits Worker B).
 - [Admin requireAdmin Tier 4](admin-requireadmin-tier4.md) — requireAdmin middleware must have 4 tiers matching otp-status; missing Tier 4 (search by userId) causes 403 on PM2 → admin dashboard shows all zeros.
 - [TOTP disable no requireAdmin](totp-disable-no-requireadmin.md) — POST /api/admin/totp/disable must NOT use requireAdmin; the TOTP code itself is the proof of ownership; requireAdmin blocks on PM2 multi-worker when session isn't on the current worker.

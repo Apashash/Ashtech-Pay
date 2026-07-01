@@ -23,6 +23,7 @@ import {
   webhookLimiter,
   transactionStatusLimiter,
   hostedPaymentLimiter,
+  bannerLimiter,
 } from "./rateLimiter";
 import { 
   loginSchema, 
@@ -90,6 +91,7 @@ import {
   notifyDepositConfirmed,
   handleTelegramUpdate,
   registerTelegramWebhook,
+  getTelegramWebhookSecret,
   notifyWithdrawalNumberChangeRequest,
   notifyNewTicket,
   notifySupportMessage,
@@ -238,8 +240,15 @@ declare module "express-session" {
 // la même clé — cohérence entre les deux mécanismes d'authentification.
 const _DEV_TOKEN_SECRET = crypto.randomBytes(32).toString("hex");
 
-// ─── Admin OTP store (in-memory, per-userId) ──────────────────────────────────
-// Stores pending OTP codes. Never persisted to DB — cannot be injected via SQL.
+// ─── VULN-A1: HMAC helper — OTP is stored as hash in DB session, never plaintext ─
+function hashOtp(code: string): string {
+  const secret = process.env.SESSION_SECRET || _DEV_TOKEN_SECRET;
+  return crypto.createHmac("sha256", secret).update(code).digest("hex");
+}
+
+// ─── Admin OTP store (in-memory, per-sessionID) ───────────────────────────────
+// VULN-A5: keyed by sessionID (not userId) so concurrent admin sessions are isolated.
+// Never persisted to DB — cannot be injected via SQL.
 const adminOtpStore = new Map<string, { code: string; expiresAt: number }>();
 
 // ─── Pending admin logins — DB-backed (survives PM2 worker restarts) ──────────
@@ -353,6 +362,42 @@ setInterval(() => {
   }
   for (const [sid, ts] of adminAccessNotifCache) {
     if (now - ts > ADMIN_ACCESS_NOTIF_INTERVAL_MS) adminAccessNotifCache.delete(sid);
+  }
+  // VULN-A5 fix: evict expired OTP entries so abandoned sessions don't accumulate
+  for (const [sid, entry] of adminOtpStore) {
+    if (entry.expiresAt <= now) adminOtpStore.delete(sid);
+  }
+}, 10 * 60 * 1000);
+
+// ─── Admin OTP request throttle (in-memory, per-userId) ───────────────────────
+// VULN-A2: keyed by userId (not IP) so shared-NAT users can't block admins.
+// Max 3 requests per 15 min window. Applied after role check in the handler.
+const adminOtpRequestAttempts = new Map<string, { count: number; resetAt: number }>();
+const ADMIN_OTP_REQUEST_MAX = 3;
+const ADMIN_OTP_REQUEST_WINDOW_MS = 15 * 60 * 1000;
+
+function checkAdminOtpRequestLimit(userId: string): { allowed: boolean; retryAfter?: number } {
+  const now = Date.now();
+  const rec = adminOtpRequestAttempts.get(userId);
+  if (!rec || rec.resetAt <= now) return { allowed: true };
+  if (rec.count >= ADMIN_OTP_REQUEST_MAX) {
+    return { allowed: false, retryAfter: Math.ceil((rec.resetAt - now) / 1000) };
+  }
+  return { allowed: true };
+}
+function recordAdminOtpRequest(userId: string): void {
+  const now = Date.now();
+  const rec = adminOtpRequestAttempts.get(userId);
+  if (!rec || rec.resetAt <= now) {
+    adminOtpRequestAttempts.set(userId, { count: 1, resetAt: now + ADMIN_OTP_REQUEST_WINDOW_MS });
+  } else {
+    rec.count += 1;
+  }
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, rec] of adminOtpRequestAttempts) {
+    if (rec.resetAt <= now) adminOtpRequestAttempts.delete(id);
   }
 }, 10 * 60 * 1000);
 
@@ -1756,7 +1801,8 @@ export async function registerRoutes(
   // Any IP is allowed by default. Admin can block specific IPs from the panel.
 
   // GET — return the current request IP (helper for UI)
-  app.get("/api/admin/my-ip", requireAuth, (req, res) => {
+  // VULN-A6: restricted to admins only — no reason for regular users to probe this
+  app.get("/api/admin/my-ip", requireAuth, requireAdmin, (req, res) => {
     res.json({ ip: getClientIp(req) });
   });
 
@@ -7346,7 +7392,7 @@ export async function registerRoutes(
         },
         session: {
           sid: req.sessionID ? req.sessionID.slice(0, 8) + "..." : "none",
-          hasOtpCode: !!(req.session._otpCode),
+          hasOtpCode: !!(req.session._otpCodeH),
           dbRowFound: dbSessionData !== null && !dbSessionData?.error,
           dbError: dbSessionData?.error || null,
         },
@@ -7371,22 +7417,36 @@ export async function registerRoutes(
       if (!user || !["admin", "support", "finance"].includes(user.role)) {
         return res.status(403).json({ message: "Accès refusé" });
       }
+      // VULN-A2: userId-keyed throttle (after role check) — IP-keyed middleware
+      // would let any NAT-sharing user block the admin's OTP channel.
+      const requestLimit = checkAdminOtpRequestLimit(req.userId!);
+      if (!requestLimit.allowed) {
+        return res.status(429).json({
+          message: `Trop de demandes. Réessayez dans ${Math.ceil((requestLimit.retryAfter ?? 900) / 60)} minute(s).`,
+          retryAfter: requestLimit.retryAfter,
+        });
+      }
+      recordAdminOtpRequest(req.userId!);
       if (!user.email) {
         return res.status(400).json({ message: "Aucun email configuré pour ce compte admin" });
       }
       // Invalidate any previous pending code before issuing a new one
-      adminOtpStore.delete(req.userId!);
+      // VULN-A5: keyed by sessionID — each login session is independent
+      adminOtpStore.delete(req.sessionID);
       // Clear both verification stores for THIS session (require fresh OTP on new request)
       adminVerifiedSessions.delete(req.sessionID);
       delete req.session._avs;
-      delete req.session._otpCode;
+      delete req.session._otpCode;   // clear any legacy plaintext
+      delete req.session._otpCodeH;  // clear previous hash
       delete req.session._otpExpiry;
 
       const code = generateAdminOtp(); // 6 digits (1 000 000 combinations)
       const otpExpiry = Date.now() + 15 * 60 * 1000; // 15 min — enough time to check server logs
-      // Store in-memory (fast, same-process) AND session (PostgreSQL — survives PM2 multi-worker)
-      adminOtpStore.set(req.userId!, { code, expiresAt: otpExpiry });
-      req.session._otpCode = code;
+      // Store in-memory (fast, same-process, plaintext safe — never written to DB)
+      // VULN-A5: key = sessionID; VULN-A1: DB session stores hash only
+      adminOtpStore.set(req.sessionID, { code, expiresAt: otpExpiry });
+      delete req.session._otpCode;                  // VULN-A1: never store plaintext in DB session
+      req.session._otpCodeH = hashOtp(code);        // VULN-A1: store HMAC-SHA256 hash
       req.session._otpExpiry = otpExpiry;
       await new Promise<void>((resolve) => { req.session.save((err) => { if (err) console.error("[AdminOTP] session save warning:", err?.message); resolve(); }); });
       // Send via email (silently skipped if RESEND_API_KEY not set)
@@ -7455,18 +7515,23 @@ export async function registerRoutes(
       }
 
       // Resolve stored OTP: in-memory first (same-process, fast), then session (DB-backed, PM2 multi-worker)
+      // VULN-A1: session/DB tiers store HMAC hash — compare hash(submitted) vs stored hash
+      // VULN-A5: in-memory store keyed by sessionID
       let storedCode: string | undefined;
       let storedExpiry: number | undefined;
+      let storedIsHashed = false; // true when storedCode is a HMAC hash (session tiers)
 
-      const memStored = adminOtpStore.get(req.userId!);
+      const memStored = adminOtpStore.get(req.sessionID);
       if (memStored) {
         storedCode = memStored.code;
         storedExpiry = memStored.expiresAt;
-      } else if (req.session._otpCode && req.session._otpExpiry) {
-        // Fallback: read from session (handles PM2 worker routing mismatch)
-        storedCode = req.session._otpCode;
+        storedIsHashed = false; // in-memory: plaintext, never written to DB
+      } else if (req.session._otpCodeH && req.session._otpExpiry) {
+        // Fallback: hash from session (handles PM2 worker routing mismatch)
+        storedCode = req.session._otpCodeH;
         storedExpiry = req.session._otpExpiry;
-        console.log(`[AdminOTP] Code trouvé en session DB (fallback PM2) pour userId=${req.userId}`);
+        storedIsHashed = true;
+        console.log(`[AdminOTP] Code (hash) trouvé en session DB (fallback PM2) pour userId=${req.userId}`);
       } else {
         // Try reading directly from DB session table (extreme fallback: session middleware not yet hydrated)
         try {
@@ -7478,10 +7543,11 @@ export async function registerRoutes(
             const sessData = typeof dbRow.rows[0].sess === "string"
               ? JSON.parse(dbRow.rows[0].sess)
               : dbRow.rows[0].sess;
-            if (sessData?._otpCode && sessData?._otpExpiry) {
-              storedCode = sessData._otpCode;
+            if (sessData?._otpCodeH && sessData?._otpExpiry) {
+              storedCode = sessData._otpCodeH;
               storedExpiry = sessData._otpExpiry;
-              console.log(`[AdminOTP] Code trouvé en session DB directe (fallback tier-3) pour userId=${req.userId}`);
+              storedIsHashed = true;
+              console.log(`[AdminOTP] Code (hash) trouvé en session DB directe (fallback tier-3) pour userId=${req.userId}`);
             }
           }
         } catch { /* continue */ }
@@ -7491,16 +7557,20 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Aucun code demandé. Veuillez demander un nouveau code." });
       }
       if (Date.now() > storedExpiry) {
-        adminOtpStore.delete(req.userId!);
+        adminOtpStore.delete(req.sessionID);
         delete req.session._otpCode;
+        delete req.session._otpCodeH;
         delete req.session._otpExpiry;
         return res.status(400).json({ message: "Code expiré. Veuillez demander un nouveau code." });
       }
 
       // Constant-time comparison to prevent timing attacks
+      // VULN-A1: if stored as hash, compare hash(submitted) vs stored hash
       const submittedCode = code.trim();
-      const codesMatch = submittedCode.length === storedCode.length &&
-        crypto.timingSafeEqual(Buffer.from(submittedCode), Buffer.from(storedCode));
+      const compareA = storedIsHashed ? hashOtp(submittedCode) : submittedCode;
+      const compareB = storedCode;
+      const codesMatch = compareA.length === compareB.length &&
+        crypto.timingSafeEqual(Buffer.from(compareA), Buffer.from(compareB));
 
       if (!codesMatch) {
         recordOtpFailure(req.userId!);
@@ -7513,8 +7583,9 @@ export async function registerRoutes(
       }
 
       // ── OTP valid — cleanup both stores
-      adminOtpStore.delete(req.userId!);
+      adminOtpStore.delete(req.sessionID);
       delete req.session._otpCode;
+      delete req.session._otpCodeH;
       delete req.session._otpExpiry;
       clearOtpFailures(req.userId!);
 
@@ -13088,10 +13159,20 @@ export async function registerRoutes(
   });
 
   // ─── Bot Banner Images ──────────────────────────────────────────────────────
-  app.get("/api/bot/banner/:type", async (req, res) => {
+  // VULN-A4: rate-limited + type-allowlist to prevent CPU DoS via sharp
+  const VALID_BANNER_TYPES = new Set([
+    "stats","pending","kyc","users","revenue","wallet",
+    "rapport","liens","top","verif","broadcast","taux",
+    "pays","search","user","help","ban","tx",
+  ]);
+  app.get("/api/bot/banner/:type", bannerLimiter, async (req, res) => {
+    const type = req.params.type;
+    if (!VALID_BANNER_TYPES.has(type)) {
+      return res.status(400).json({ error: "Invalid banner type" });
+    }
     try {
       const { generateBanner } = await import("./bannerGenerator");
-      const png = await generateBanner(req.params.type as any);
+      const png = await generateBanner(type as any);
       res.set("Content-Type", "image/png");
       res.set("Cache-Control", "public, max-age=86400");
       res.send(png);
@@ -13101,7 +13182,14 @@ export async function registerRoutes(
   });
 
   // ─── Telegram Webhook ────────────────────────────────────────────────────────
-  app.post("/api/telegram/webhook", async (req, res) => {
+  // VULN-A3: verify X-Telegram-Bot-Api-Secret-Token before processing any update
+  app.post("/api/telegram/webhook", webhookLimiter, async (req, res) => {
+    const expectedSecret = getTelegramWebhookSecret();
+    const receivedSecret = req.headers["x-telegram-bot-api-secret-token"];
+    if (!receivedSecret || receivedSecret !== expectedSecret) {
+      // Acknowledge to Telegram to avoid retries, but do not process
+      return res.json({ ok: true });
+    }
     res.json({ ok: true }); // answer Telegram immediately
     try {
       await handleTelegramUpdate(req.body, {

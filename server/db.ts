@@ -20,13 +20,16 @@ if (!databaseUrl) {
 const dbSource = _dbSource;
 console.log(`[DB] Using ${dbSource} — host: ${databaseUrl.replace(/:[^:@]+@/, ":***@").split("/").slice(0, 3).join("/")}`);
 
-// Replit's managed PostgreSQL does not require SSL
-const sslConfig = databaseUrl.includes("localhost") ||
+// Replit's managed PostgreSQL does not require SSL.
+// Supabase Transaction pooler uses a self-signed certificate chain — we must
+// set rejectUnauthorized:false for pooler.supabase.com connections.
+const isLocalDb = databaseUrl.includes("localhost") ||
   databaseUrl.includes("127.0.0.1") ||
   databaseUrl.includes("sslmode=disable") ||
-  databaseUrl.includes("heliumdb")
+  databaseUrl.includes("heliumdb");
+const sslConfig = isLocalDb
   ? undefined
-  : { rejectUnauthorized: true };
+  : { rejectUnauthorized: !databaseUrl.includes("pooler.supabase.com") };
 
 // Max connections per pool, per worker process.
 // Supabase free tier: 25 total connections (hard cap).
