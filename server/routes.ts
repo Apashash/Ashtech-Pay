@@ -2229,22 +2229,9 @@ export async function registerRoutes(
 
       await clearAuthAttempts(ip);
 
-      // ── Admin/support/finance — TOTP obligatoire AVANT toute session ──────────
-      // Prevents getting a working session without passing Google Authenticator.
-      // If TOTP is not configured on the account, access is blocked entirely.
-      if (["admin", "support", "finance"].includes(user.role)) {
-        if (!user.totpEnabled || !user.totpSecret) {
-          return res.status(403).json({
-            message: "Google Authenticator obligatoire pour les comptes admin. Contactez votre super-administrateur pour configurer le 2FA sur votre compte.",
-            totpNotConfigured: true,
-          });
-        }
-        // Create a short-lived pending login token — full session is only granted after TOTP
-        const pendingToken = crypto.randomBytes(32).toString("hex");
-        const expiresAt = Date.now() + 10 * 60 * 1000; // 10 min
-        await setPendingAdminLogin(pendingToken, { userId: user.id, otp: "", expiresAt, attempts: 0 });
-        return res.json({ requiresAdminOtp: true, adminLoginToken: pendingToken });
-      }
+      // Admin/support/finance log in like normal users.
+      // TOTP is only required when accessing the admin panel (requireAdmin middleware).
+      // No TOTP gate at login — the 5-click logo gesture on the dashboard triggers it.
 
       activeIpRegistry.set(user.id, ip);
 

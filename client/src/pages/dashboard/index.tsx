@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -575,6 +575,27 @@ export default function DashboardHome() {
   const userStats = dashboardData?.stats;
   const wallets = dashboardData?.wallets ?? [];
 
+  const logoClickCount = useRef(0);
+  const logoClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [logoFlash, setLogoFlash] = useState(false);
+  const isAdminRole = ["admin", "support", "finance"].includes(user?.role ?? "");
+
+  const handleLogoClick = useCallback(() => {
+    if (!isAdminRole) return;
+    logoClickCount.current += 1;
+    setLogoFlash(true);
+    setTimeout(() => setLogoFlash(false), 150);
+    if (logoClickTimer.current) clearTimeout(logoClickTimer.current);
+    if (logoClickCount.current >= 5) {
+      logoClickCount.current = 0;
+      setLocation("/admin-panel-verify");
+      return;
+    }
+    logoClickTimer.current = setTimeout(() => {
+      logoClickCount.current = 0;
+    }, 2000);
+  }, [isAdminRole, setLocation]);
+
   const localCurrency = user?.preferredCurrency || "XAF";
 
   const totalBalanceInLocalCurrency = useMemo(() => {
@@ -690,7 +711,8 @@ export default function DashboardHome() {
                     <img
                       src="/logo.png"
                       alt="Tableau de bord Ashtech Pay"
-                      className="h-28 w-auto object-contain"
+                      onClick={handleLogoClick}
+                      className={`h-28 w-auto object-contain transition-opacity duration-150 ${isAdminRole ? "cursor-pointer select-none" : ""} ${logoFlash ? "opacity-50" : "opacity-100"}`}
                     />
                   </div>
                 </div>
