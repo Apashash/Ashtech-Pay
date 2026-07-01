@@ -766,7 +766,7 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
     return res.status(403).json({ message: "Votre adresse IP est bloquée du panneau d'administration.", ipBanned: true });
   }
 
-  console.log(`[AdminAccess] OK — user=${req.userId} role=${user.role} path=${req.path} mem=${memValid} session=${sessionValid} t3=${tier3Used}`);
+  console.log(`[AdminAccess] OK — user=${req.userId} role=${user.role} path=${req.path}`);
 
   // ── Telegram notification — 1x par session toutes les 30 min (anti-spam) ───
   const nowMs = Date.now();
