@@ -1765,27 +1765,48 @@ export class DatabaseStorage implements IStorage {
   async approveKycSubmission(id: string, reviewerId: string, note?: string): Promise<KycSubmission | undefined> {
     const submission = await this.getKycSubmissionById(id);
     if (!submission) return undefined;
-    
+
     await this.updateUser(submission.userId, { kycStatus: "verified", isVerified: true });
-    
-    const [updated] = await db.update(kycSubmissions)
-      .set({ status: "approved", reviewerId, reviewNote: note, reviewedAt: new Date(), updatedAt: new Date() })
-      .where(eq(kycSubmissions.id, id))
-      .returning();
-    return updated;
+
+    // Try full update (with reviewer fields). Fall back to status-only if columns
+    // don't exist yet on older production deployments.
+    try {
+      const [updated] = await db.update(kycSubmissions)
+        .set({ status: "approved", reviewerId, reviewNote: note, reviewedAt: new Date(), updatedAt: new Date() })
+        .where(eq(kycSubmissions.id, id))
+        .returning();
+      return updated;
+    } catch (e) {
+      console.error("[KYC approve] Full update failed — falling back to status-only update:", e);
+      const [updated] = await db.update(kycSubmissions)
+        .set({ status: "approved" })
+        .where(eq(kycSubmissions.id, id))
+        .returning();
+      return updated;
+    }
   }
 
   async rejectKycSubmission(id: string, reviewerId: string, note?: string): Promise<KycSubmission | undefined> {
     const submission = await this.getKycSubmissionById(id);
     if (!submission) return undefined;
-    
+
     await this.updateUser(submission.userId, { kycStatus: "rejected" });
-    
-    const [updated] = await db.update(kycSubmissions)
-      .set({ status: "rejected", reviewerId, reviewNote: note, reviewedAt: new Date(), updatedAt: new Date() })
-      .where(eq(kycSubmissions.id, id))
-      .returning();
-    return updated;
+
+    // Try full update. Fall back to status-only if columns don't exist yet.
+    try {
+      const [updated] = await db.update(kycSubmissions)
+        .set({ status: "rejected", reviewerId, reviewNote: note, reviewedAt: new Date(), updatedAt: new Date() })
+        .where(eq(kycSubmissions.id, id))
+        .returning();
+      return updated;
+    } catch (e) {
+      console.error("[KYC reject] Full update failed — falling back to status-only update:", e);
+      const [updated] = await db.update(kycSubmissions)
+        .set({ status: "rejected" })
+        .where(eq(kycSubmissions.id, id))
+        .returning();
+      return updated;
+    }
   }
 
   // ── Multi-currency wallets ──────────────────────────────────────────────────
