@@ -46,7 +46,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { apiRequest, queryClient, removeAuthToken, removeAdminOtpToken } from "@/lib/queryClient";
+import { apiRequest, queryClient, removeAuthToken } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { AdminLog } from "@shared/schema";
 
@@ -77,7 +77,6 @@ export default function AdminLogs() {
       setTimeout(() => {
         queryClient.clear();
         removeAuthToken();
-        removeAdminOtpToken();
         window.location.href = "/login";
       }, 1500);
     },
