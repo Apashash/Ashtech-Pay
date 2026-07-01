@@ -350,11 +350,7 @@ export default function LoginPage() {
                       </p>
                     )}
                   </div>
-                ) : (
-                  <div className="py-2 px-3 rounded-md border border-dashed border-muted-foreground/40 bg-muted/50 text-center" data-testid="status-turnstile-no-key">
-                    <p className="text-xs text-muted-foreground">🔒 Vérification anti-bot non disponible — clé Turnstile manquante</p>
-                  </div>
-                )}
+                ) : null}
 
                 {canSubmit && (
                 <Button
