@@ -7460,12 +7460,12 @@ export async function registerRoutes(
       if (!user.email) {
         return res.status(400).json({ message: "Aucun email configuré pour ce compte admin" });
       }
-      // Invalidate any previous pending code before issuing a new one
+      // Invalidate any previous pending email OTP code before issuing a new one
       // VULN-A5: keyed by sessionID — each login session is independent
       adminOtpStore.delete(req.sessionID);
-      // Clear both verification stores for THIS session (require fresh OTP on new request)
-      adminVerifiedSessions.delete(req.sessionID);
-      delete req.session._avs;
+      // Clear only the email OTP stores — do NOT touch _avs (TOTP panel verification).
+      // Previously this cleared _avs too, which would force TOTP re-verification just
+      // for requesting an email OTP code — that was unnecessary and disruptive.
       delete req.session._otpCode;   // clear any legacy plaintext
       delete req.session._otpCodeH;  // clear previous hash
       delete req.session._otpExpiry;
@@ -7621,12 +7621,11 @@ export async function registerRoutes(
 
       const expiresAt = Date.now() + ADMIN_OTP_SESSION_TTL_MS;
 
-      // 1. In-memory Map — keyed by sessionID so each login session is independently verified
-      adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt });
-
-      // 2. Session (PostgreSQL) — survives restarts and works across multiple processes
-      req.session._avs = expiresAt;
-      // Await session save so the client's immediate refetch sees the verified state
+      // NOTE: Email OTP verification NO LONGER sets _avs — TOTP (Google Authenticator)
+      // is now the ONLY mechanism that grants admin panel access. Setting _avs here would
+      // create a bypass: email OTP → _avs → requireAdmin passes without Google Authenticator.
+      // _avs is set ONLY by: /api/auth/admin-login-otp, /api/auth/admin-panel-verify,
+      // and /api/admin/totp/verify (all require actual TOTP code verification).
       await new Promise<void>((resolve) => {
         req.session.save((err) => {
           if (err) console.error("[AdminOTP] Session save warning (non-fatal):", err?.message);
