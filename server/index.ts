@@ -159,6 +159,32 @@ app.use("/api", (_req, res, next) => {
   next();
 });
 
+// ── Security: CSRF protection — block state-changing requests from foreign origins ──
+// All legitimate requests from the React SPA send X-Requested-With: XMLHttpRequest.
+// Cross-origin requests (CSRF attacks via HTML forms, img tags, or XHR from other domains)
+// cannot set this custom header without a CORS preflight that the server does not permit.
+// Exemptions: GET/HEAD/OPTIONS (read-only), webhooks (use HMAC), Bearer-only paths.
+// Paths exempt from CSRF check: external callbacks that don't use browser cookies.
+// Use originalUrl (full path) because req.path inside app.use("/api", ...) is relative.
+const CSRF_EXEMPT_PREFIXES = [
+  "/api/swychr/webhook",
+  "/api/nowpayments/webhook",
+  "/api/v1/hosted-payment/",
+  "/api/payment-links/",         // public pay page uses our own JS, but keep flexible
+];
+app.use("/api", (req: Request, res: Response, next: NextFunction) => {
+  if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") {
+    return next();
+  }
+  const fullPath = req.originalUrl.split("?")[0];
+  if (CSRF_EXEMPT_PREFIXES.some(p => fullPath.startsWith(p))) return next();
+  const xrw = req.headers["x-requested-with"];
+  if (!xrw || String(xrw).toLowerCase() !== "xmlhttprequest") {
+    return res.status(403).json({ message: "Requête non autorisée (CSRF)." });
+  }
+  next();
+});
+
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
     hour: "numeric",

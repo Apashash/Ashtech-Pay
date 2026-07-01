@@ -57,6 +57,7 @@ export async function apiRequest(
 ): Promise<Response> {
   const headers: HeadersInit = {
     ...getAuthHeaders(),
+    "X-Requested-With": "XMLHttpRequest",
     ...(data ? { "Content-Type": "application/json" } : {}),
   };
   

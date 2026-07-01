@@ -2860,9 +2860,19 @@ export async function registerRoutes(
   // Update user profile
   app.patch("/api/user/profile", requireAuth, async (req, res) => {
     try {
-      const { fullName, email, phone, country } = req.body;
       const userId = req.userId!;
-      
+
+      // Strict whitelist + sanitize HTML from text inputs (XSS prevention)
+      const stripHtml = (v: unknown) => typeof v === "string" ? v.replace(/<[^>]*>/g, "").trim() : undefined;
+      const fullName  = stripHtml(req.body.fullName);
+      const email     = typeof req.body.email === "string" ? req.body.email.trim().toLowerCase() : undefined;
+      const phone     = stripHtml(req.body.phone);
+      const country   = stripHtml(req.body.country);
+
+      if (fullName !== undefined && fullName.length < 2) {
+        return res.status(400).json({ message: "Le nom complet doit comporter au moins 2 caractères." });
+      }
+
       // Validate email uniqueness if changed
       if (email) {
         const existingUser = await storage.getUserByEmail(email);
@@ -2870,8 +2880,14 @@ export async function registerRoutes(
           return res.status(400).json({ message: "Cet email est déjà utilisé" });
         }
       }
-      
-      const user = await storage.updateUser(userId, { fullName, email, phone, country });
+
+      const updates: Record<string, unknown> = {};
+      if (fullName !== undefined) updates.fullName = fullName;
+      if (email !== undefined)    updates.email    = email;
+      if (phone !== undefined)    updates.phone    = phone;
+      if (country !== undefined)  updates.country  = country;
+
+      const user = await storage.updateUser(userId, updates);
       if (!user) {
         return res.status(404).json({ message: "Utilisateur non trouvé" });
       }
@@ -6060,7 +6076,7 @@ export async function registerRoutes(
   });
 
   // Public payment link route
-  app.get("/api/payment-links/public/:slug", async (req, res) => {
+  app.get("/api/payment-links/public/:slug", publicPayLimiter, async (req, res) => {
     try {
       const link = await storage.getPaymentLinkBySlug(req.params.slug);
       if (!link || !link.isActive) {
@@ -7029,8 +7045,9 @@ export async function registerRoutes(
   });
 
   // GET /api/admin/debug-storage — tests Supabase Storage connection (admin only)
-  // FIX-3: requireAdmin ajouté dans la chaîne middleware (plus seulement vérifié en interne).
+  // SECURITY: disabled in production to prevent infrastructure enumeration.
   app.get("/api/admin/debug-storage", requireAuth, requireAdmin, async (req, res) => {
+    if (process.env.NODE_ENV === "production") return res.status(404).end();
     const { supabase: sbClient, STORAGE_BUCKET: bucket, listSupabaseBuckets, testDownload } = await import("./supabase");
     const result: Record<string, any> = {
       env: {
@@ -7077,8 +7094,9 @@ export async function registerRoutes(
   });
 
   // GET /api/admin/debug-db — diagnostic endpoint (admin only)
-  // FIX-3: requireAdmin ajouté dans la chaîne middleware.
+  // SECURITY: disabled in production to prevent infrastructure enumeration.
   app.get("/api/admin/debug-db", requireAuth, requireAdmin, async (req, res) => {
+    if (process.env.NODE_ENV === "production") return res.status(404).end();
     const results: Record<string, any> = {
       env: {
         hasSupabaseUrl: !!process.env.SUPABASE_DATABASE_URL,
@@ -7112,8 +7130,9 @@ export async function registerRoutes(
   });
 
   // GET /api/admin/pool-status — live DB pool diagnostics (admin only)
-  // Shows real-time connection counts, config, errors and fallback usage for both pools.
+  // SECURITY: disabled in production to prevent DB infrastructure enumeration.
   app.get("/api/admin/pool-status", requireAuth, requireAdmin, async (req, res) => {
+    if (process.env.NODE_ENV === "production") return res.status(404).end();
     const workerIndex = process.env.NODE_APP_INSTANCE ?? process.env.PM2_INSTANCE_ID ?? "0";
     const pm2Instances = parseInt(process.env.PM2_INSTANCES || "1", 10) || 1;
     const hasSessionSecret = !!process.env.SESSION_SECRET;
@@ -7190,8 +7209,9 @@ export async function registerRoutes(
   });
 
   // GET /api/admin/session-errors — diagnostic en temps réel des erreurs de sessions
-  // Affiche le buffer circulaire des 100 dernières erreurs + probe live des pools + sessions brutes en DB
+  // SECURITY: disabled in production — exposes all active user sessions with emails/IPs.
   app.get("/api/admin/session-errors", requireAuth, requireAdmin, async (req, res) => {
+    if (process.env.NODE_ENV === "production") return res.status(404).end();
     const workerIndex = process.env.NODE_APP_INSTANCE ?? "0";
 
     // Probe live des deux pools
@@ -7280,8 +7300,9 @@ export async function registerRoutes(
   });
 
   // GET /api/admin/check-access — diagnostic without OTP; shows role, session, OTP state
-  // FIX-3: requireAdmin ajouté dans la chaîne middleware.
+  // SECURITY: disabled in production to prevent session state enumeration.
   app.get("/api/admin/check-access", requireAuth, requireAdmin, async (req, res) => {
+    if (process.env.NODE_ENV === "production") return res.status(404).end();
     try {
       const user = await storage.getUser(req.userId!).catch(() => null);
       const now = Date.now();
@@ -8230,22 +8251,35 @@ export async function registerRoutes(
   app.patch("/api/admin/users/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
-      const rawUpdates = req.body;
 
-      // ── Strip financial and security-critical fields (CWE-20 fix)
-      // balance     → use PATCH /api/admin/users/:id/balance (audited)
-      // role        → use dedicated role-change endpoint
-      // password    → never overwritten via generic patch
-      // totpSecret/totpEnabled → only via /api/admin/totp/* routes (requires TOTP proof)
-      const BLOCKED_FIELDS = ["balance", "password", "role", "totpSecret", "totpEnabled", "_totpPendingSecret"] as const;
-      const blocked = BLOCKED_FIELDS.filter(f => rawUpdates[f] !== undefined);
-      if (blocked.length > 0) {
-        return res.status(400).json({
-          message: `Le(s) champ(s) "${blocked.join(", ")}" ne peuvent pas être modifiés via cet endpoint. Utilisez les endpoints dédiés.`,
-        });
+      // ── STRICT WHITELIST (CWE-20): only these fields can be updated via this endpoint.
+      // Any field not listed here is silently ignored, regardless of what is sent.
+      // Sensitive fields have their own dedicated, audited endpoints:
+      //   balance           → PATCH /api/admin/users/:id/balance
+      //   role              → PATCH /api/admin/users/:id/role
+      //   isBanned          → POST  /api/admin/users/:id/ban|unban
+      //   withdrawalBlocked → POST  /api/admin/users/:id/block-withdrawal|unblock-withdrawal
+      //   password/totp*    → never via generic patch
+      //   apiKey/apiKeyHash  → never via generic patch
+      const ALLOWED_USER_FIELDS = [
+        "fullName", "email", "phone", "country", "preferredCurrency",
+        "isVerified", "kycStatus", "banReason", "withdrawalBlockReason",
+        "apiEnabled",
+      ] as const;
+
+      const updates: Record<string, unknown> = {};
+      for (const field of ALLOWED_USER_FIELDS) {
+        if (req.body[field] !== undefined) updates[field] = req.body[field];
       }
-
-      const updates = { ...rawUpdates };
+      // Sanitize text fields to strip HTML tags (XSS prevention)
+      for (const textField of ["fullName", "banReason", "withdrawalBlockReason"] as const) {
+        if (typeof updates[textField] === "string") {
+          updates[textField] = (updates[textField] as string).replace(/<[^>]*>/g, "").trim();
+        }
+      }
+      if (Object.keys(updates).length === 0) {
+        return res.status(400).json({ message: "Aucun champ modifiable fourni." });
+      }
 
       const user = await storage.updateUser(id, updates);
       if (!user) {
