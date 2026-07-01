@@ -7558,14 +7558,34 @@ export async function registerRoutes(
 
   // POST /api/admin/totp/setup — generate a TOTP secret & return OTP URI for QR
   // Does NOT enable TOTP yet — admin must confirm with a valid code first.
-  // Stores the pending secret in DB (totp_secret, totpEnabled=false) instead of session
-  // to survive PM2 multi-process routing between setup and confirm requests.
+  // SECURITY: if TOTP is already enabled, the current TOTP code MUST be provided
+  // to prevent an attacker from overwriting an existing secret without possession proof.
   app.post("/api/admin/totp/setup", requireAuth, async (req, res) => {
     try {
       const user = await storage.getUser(req.userId!);
       if (!user || !["admin", "support", "finance"].includes(user.role)) {
         return res.status(403).json({ message: "Accès refusé" });
       }
+
+      // ── SECURITY: if TOTP already enabled, require the current code to replace it ──
+      if (user.totpEnabled && user.totpSecret) {
+        const { currentCode } = req.body as { currentCode?: string };
+        if (!currentCode) {
+          return res.status(403).json({
+            message: "Un code Google Authenticator actuel est requis pour modifier le secret TOTP.",
+            requireCurrentCode: true,
+          });
+        }
+        const { decryptField } = await import("./fieldEncryption");
+        const { TOTP: TOTPv, Secret: Secretv } = await import("otpauth");
+        const rawSecret = decryptField(user.totpSecret);
+        if (!rawSecret) return res.status(400).json({ message: "Erreur de configuration TOTP actuelle." });
+        const totpCheck = new TOTPv({ issuer: "AshTech Pay Admin", label: user.email || user.username, algorithm: "SHA1", digits: 6, period: 30, secret: Secretv.fromBase32(rawSecret) });
+        if (totpCheck.validate({ token: String(currentCode).replace(/\s/g, ""), window: 1 }) === null) {
+          return res.status(403).json({ message: "Code Google Authenticator actuel incorrect. Impossible de modifier le secret." });
+        }
+      }
+
       const { TOTP, Secret } = await import("otpauth");
       const secret = new Secret({ size: 20 });
       const totp = new TOTP({
@@ -8196,10 +8216,11 @@ export async function registerRoutes(
       const rawUpdates = req.body;
 
       // ── Strip financial and security-critical fields (CWE-20 fix)
-      // balance → use PATCH /api/admin/users/:id/balance (audited, with before/after + transaction record)
-      // role    → use dedicated role-change endpoint (to be secured separately)
-      // password → never overwritten via generic patch
-      const BLOCKED_FIELDS = ["balance", "password", "role"] as const;
+      // balance     → use PATCH /api/admin/users/:id/balance (audited)
+      // role        → use dedicated role-change endpoint
+      // password    → never overwritten via generic patch
+      // totpSecret/totpEnabled → only via /api/admin/totp/* routes (requires TOTP proof)
+      const BLOCKED_FIELDS = ["balance", "password", "role", "totpSecret", "totpEnabled", "_totpPendingSecret"] as const;
       const blocked = BLOCKED_FIELDS.filter(f => rawUpdates[f] !== undefined);
       if (blocked.length > 0) {
         return res.status(400).json({
