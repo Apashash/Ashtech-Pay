@@ -53,7 +53,7 @@ export default function AdminLoginOtpPage() {
         duration: 2500,
         className: "bg-green-600 text-white border-green-700",
       });
-      setLocation(import.meta.env.VITE_ADMIN_PATH);
+      setLocation((import.meta.env.VITE_ADMIN_PATH as string) || "/admin");
     },
     onError: (error: any) => {
       setCode("");

@@ -140,7 +140,7 @@ function GeoGuard({ children }: { children: React.ReactNode }) {
 }
 
 function Router() {
-  const A = import.meta.env.VITE_ADMIN_PATH as string;
+  const A = (import.meta.env.VITE_ADMIN_PATH as string) || "/admin";
   return (
     <Switch>
       <Route path="/" component={LandingPage} />
