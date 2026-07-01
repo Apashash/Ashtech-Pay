@@ -53,6 +53,7 @@ TRUST_PROXY = "true"
 COOKIE_SECURE = "false"
 COOKIE_SAMESITE = "lax"
 APP_URL = "https://ashtechpay.top"
+SUPABASE_STORAGE_BUCKET = "uploads"
 
 [userenv.development]
 
