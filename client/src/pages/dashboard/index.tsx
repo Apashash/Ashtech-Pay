@@ -712,35 +712,16 @@ export default function DashboardHome() {
                     <Wallet className="w-4 h-4" />
                     Conversion
                   </button>
-                  {/* Desktop logo */}
-                  <div className="hidden sm:block relative">
+                  {/* Logo — responsive, tap/click gesture pour admin uniquement */}
+                  <div className="relative">
                     <img
                       src="/logo.png"
                       alt="Tableau de bord Ashtech Pay"
-                      onClick={handleLogoClick}
-                      className={`h-28 w-auto object-contain transition-opacity duration-150 ${isAdminRole ? "cursor-pointer select-none" : ""} ${logoFlash ? "opacity-50" : "opacity-100"}`}
+                      onClick={isAdminRole ? handleLogoClick : undefined}
+                      className={`h-16 sm:h-28 w-auto object-contain transition-opacity duration-150 ${isAdminRole ? "cursor-pointer select-none" : "pointer-events-none"} ${logoFlash ? "opacity-50" : "opacity-100"}`}
                     />
                     {isAdminRole && logoClickDisplay > 0 && (
-                      <div className="absolute -bottom-5 left-0 right-0 flex justify-center gap-1">
-                        {[1, 2, 3, 4, 5].map((dot) => (
-                          <span
-                            key={dot}
-                            className={`w-1.5 h-1.5 rounded-full transition-all duration-150 ${dot <= logoClickDisplay ? "bg-primary scale-125" : "bg-muted-foreground/30"}`}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  {/* Mobile logo — tap gesture */}
-                  <div className="block sm:hidden relative">
-                    <img
-                      src="/logo.png"
-                      alt="Ashtech Pay"
-                      onClick={handleLogoClick}
-                      className={`h-16 w-auto object-contain transition-opacity duration-150 ${isAdminRole ? "cursor-pointer select-none" : ""} ${logoFlash ? "opacity-50" : "opacity-100"}`}
-                    />
-                    {isAdminRole && logoClickDisplay > 0 && (
-                      <div className="absolute -bottom-4 left-0 right-0 flex justify-center gap-1">
+                      <div className="absolute -bottom-4 sm:-bottom-5 left-0 right-0 flex justify-center gap-1">
                         {[1, 2, 3, 4, 5].map((dot) => (
                           <span
                             key={dot}
