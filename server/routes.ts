@@ -59,6 +59,7 @@ import path from "path";
 import fs from "fs";
 import { uploadToSupabase, getSignedImageUrl, downloadFromSupabase } from "./supabase";
 import { decryptField } from "./fieldEncryption";
+import { requireAdminPin } from "./adminPin";
 import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, fetchPaymentLinkDetails, ASHTECH_MARGIN } from "./swychr";
 import { createNowPaymentsInvoice, createNowPaymentsPayment, verifyNowPaymentsIpn, mapNowPaymentsStatus } from "./nowpayments";
 import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, getAfribaPayOtpInfo, confirmAfribaPayOtp } from "./afribapay";
@@ -1924,6 +1925,13 @@ export async function registerRoutes(
     const ipCheck = checkAuthRateLimit(ip);
     res.json({ ok: true, blocked: ipCheck.blocked, retryAfter: ipCheck.retryAfter });
   });
+
+  // ── Admin PIN: require 4-digit PIN for all state-changing admin requests ─────
+  // Applied globally here so it covers every /api/admin/* POST/PATCH/PUT/DELETE
+  // defined below, without modifying each individual handler.
+  // requireAdminPin runs AFTER requireAuth (user is known) so it can track
+  // attempts per user ID. Exempt paths are listed inside requireAdminPin.
+  app.use("/api/admin", requireAdminPin);
 
   // Admin — liste des IPs bloquées (temps réel)
   app.get("/api/admin/blocked-ips", requireAuth, requireAdmin, (_req, res) => {

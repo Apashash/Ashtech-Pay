@@ -1,4 +1,5 @@
 import { getAdminPath } from "@/lib/adminPath";
+import { AdminPinProvider } from "@/hooks/use-admin-pin";
 import { useState, useEffect, useRef, useLayoutEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";

@@ -1,4 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { hasPinHandler, invokeRequestPin, invokePinError, invokePinSuccess } from "./pinGate";
 
 // Token storage for authentication (workaround for blocked cookies in iframes)
 const AUTH_TOKEN_KEY = 'ashtech_auth_token';
@@ -71,26 +72,119 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
-export async function apiRequest(
+// ── Raw fetch helper (no PIN logic) ──────────────────────────────────────────
+async function rawFetch(
   method: string,
   url: string,
-  data?: unknown | undefined,
+  data: unknown | undefined,
+  pin: string | null,
 ): Promise<Response> {
-  const headers: HeadersInit = {
-    ...getAuthHeaders(),
+  const headers: Record<string, string> = {
+    ...getAuthHeaders() as Record<string, string>,
     "X-Requested-With": "XMLHttpRequest",
     ...(data ? { "Content-Type": "application/json" } : {}),
+    ...(pin ? { "X-Admin-Pin": pin } : {}),
   };
-  
-  const res = await fetch(url, {
+  return fetch(url, {
     method,
     headers,
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });
+}
 
-  await throwIfResNotOk(res);
-  return res;
+// ── Admin PIN challenge detection ────────────────────────────────────────────
+function isPinChallenge(status: number, body: Record<string, unknown>): boolean {
+  return (
+    (status === 428 && !!body.pinRequired) ||
+    (status === 403 && !!body.pinInvalid) ||
+    (status === 423 && !!body.pinLocked)
+  );
+}
+
+// ── apiRequest ────────────────────────────────────────────────────────────────
+// For /api/admin/* mutations, transparently handles PIN challenges:
+//   428 pinRequired → open dialog → retry with PIN header
+//   403 pinInvalid  → show error in dialog → loop
+//   423 pinLocked   → show lockout screen
+export async function apiRequest(
+  method: string,
+  url: string,
+  data?: unknown | undefined,
+): Promise<Response> {
+  const isAdminRoute = url.startsWith("/api/admin/") || url.startsWith("/api/admin");
+  const isStateChanging = method !== "GET" && method !== "HEAD" && method !== "OPTIONS";
+
+  // First request — no PIN
+  let res = await rawFetch(method, url, data, null);
+
+  // Only intercept PIN challenges for admin routes with a registered handler
+  if (!isAdminRoute || !isStateChanging || !hasPinHandler()) {
+    await throwIfResNotOk(res);
+    return res;
+  }
+
+  // Check if this is a PIN challenge
+  const bodyText = await res.clone().text();
+  let body: Record<string, unknown> = {};
+  try { body = JSON.parse(bodyText); } catch { /* ignore */ }
+
+  if (!isPinChallenge(res.status, body)) {
+    await throwIfResNotOk(res);
+    return res;
+  }
+
+  // Handle locked state
+  if (res.status === 423 && body.pinLocked) {
+    let pin: string;
+    try { pin = await invokeRequestPin(); } catch { throw new Error("PIN_CANCELLED"); }
+    invokePinError(String(body.message || "Trop de tentatives."), {
+      locked: true,
+      retryAfterMs: body.retryAfterMs as number | undefined,
+    });
+    throw new Error("PIN_LOCKED");
+  }
+
+  // PIN required or invalid — enter retry loop
+  while (true) {
+    let pin: string;
+    try {
+      pin = await invokeRequestPin();
+    } catch {
+      throw new Error("PIN_CANCELLED");
+    }
+
+    res = await rawFetch(method, url, data, pin);
+
+    if (res.ok) {
+      invokePinSuccess();
+      return res;
+    }
+
+    const errText = await res.clone().text();
+    let errBody: Record<string, unknown> = {};
+    try { errBody = JSON.parse(errText); } catch { /* ignore */ }
+
+    if (res.status === 403 && errBody.pinInvalid) {
+      invokePinError(String(errBody.message || "Code PIN incorrect."), {
+        attemptsLeft: errBody.attemptsLeft as number | undefined,
+      });
+      continue; // loop — dialog stays open with error shown
+    }
+
+    if (res.status === 423 && errBody.pinLocked) {
+      invokePinError(String(errBody.message || "Compte bloqué 20 minutes."), {
+        locked: true,
+        retryAfterMs: errBody.retryAfterMs as number | undefined,
+      });
+      throw new Error("PIN_LOCKED");
+    }
+
+    // Other error — close dialog, surface normally
+    invokePinSuccess();
+    await throwIfResNotOk(res);
+    return res;
+  }
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";
