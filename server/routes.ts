@@ -913,8 +913,9 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
   }
 
   if (!avsOk) {
-    console.warn(`[AdminAccess] BLOCKED — TOTP not verified — user=${req.userId} role=${user.role} path=${req.path}`);
-    notifyAdminPanelAccess({ type: "blocked_no_auth", ip: adminIpEarly, userId: user.id, userName: user.fullName || user.username, userEmail: user.email || undefined, userRole: user.role, path: req.path }).catch(() => {});
+    // Session expiry for a legitimate admin — NOT an attack. Do not send Telegram alert.
+    // Only log locally so the admin knows to re-verify TOTP.
+    console.info(`[AdminAccess] TOTP session expired — user=${req.userId} role=${user.role} path=${req.path} — redirecting to panel-verify`);
     return res.status(403).json({
       message: "Vérification Google Authenticator requise pour accéder au panneau admin.",
       totpRequired: true,

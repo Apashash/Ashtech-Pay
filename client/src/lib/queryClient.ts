@@ -56,6 +56,11 @@ async function throwIfResNotOk(res: Response) {
         window.dispatchEvent(new CustomEvent("admin-ip-blocked", { detail: { message: json.message } }));
         window.location.href = "/login?kicked=ip";
       }
+      if (json.totpRequired && res.status === 403) {
+        // Admin TOTP session expired — silently redirect to verify page, no error thrown
+        window.location.href = "/admin-panel-verify";
+        return;
+      }
       throw Object.assign(new Error(json.message || text), json);
     } catch (e) {
       if (e instanceof SyntaxError) {
