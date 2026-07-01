@@ -70,7 +70,6 @@ import { addPendingPayout, removePendingPayout } from "./payoutPoller";
 import { addSSEClient, removeSSEClient, setActiveTicket, isUserOnline, getOnlineUserIds, getAdminViewingTicket, getUserViewingTicket, notifyUser, notifyAdmins, broadcastOnlineStatus, notifyUserForceLogout, notifyOtherSessionsForceLogout, notifyAllUsersForceLogout, notifySpecificSessionForceLogout } from "./sse";
 import {
   notifyNewDeposit,
-  notifyWithdrawalRequest,
   notifyWithdrawalPendingManual,
   notifyWithdrawalManuallyValidated,
   notifyWithdrawalAutoValidated,
@@ -4762,21 +4761,6 @@ export async function registerRoutes(
 
       console.log(`[Withdrawal] Created withdrawal ${withdrawalRef} for ${creditedAmount} — calling payout gateway`);
 
-      notifyWithdrawalRequest({
-        userName: user.fullName || user.username,
-        userEmail: user.email || "",
-        userPhone: user.phone || undefined,
-        amount: creditedAmount,
-        grossAmount: totalAmount,
-        currency: withdrawalCurrency,
-        phone: data.accountDetails,
-        operator: (withdrawalOperator as any)?.name || undefined,
-        reference: withdrawalRef,
-        provider: withdrawalProvider,
-        senderCountry: user.country || "",
-        recipientCountry: withdrawalCountryCode || "",
-        recipientName: user.fullName || user.username,
-      }).catch(() => {});
 
       // Call payout API immediately — choose provider based on operator config
       try {
