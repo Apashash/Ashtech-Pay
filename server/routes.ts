@@ -6994,13 +6994,8 @@ export async function registerRoutes(
     if (!user || !["admin", "support", "finance"].includes(user.role)) {
       return res.status(403).json({ message: "Accès refusé" });
     }
-    // OTP bypass mode — must match requireAdmin exactly:
-    // requires BOTH ADMIN_OTP_BYPASS=true AND the X-Admin-Bypass-Token header with the matching secret.
-    // A bare ADMIN_OTP_BYPASS=true without the token does NOT skip OTP (prevents accidental env-var bypass).
-    const bypassOk = process.env.ADMIN_OTP_BYPASS === "true"
-      && !!process.env.ADMIN_OTP_BYPASS_TOKEN
-      && req.headers["x-admin-bypass-token"] === process.env.ADMIN_OTP_BYPASS_TOKEN;
-    if (bypassOk) {
+    // OTP bypass mode — mirrors requireAdmin: ADMIN_OTP_BYPASS=true alone is enough.
+    if (process.env.ADMIN_OTP_BYPASS === "true") {
       return res.json({ verified: true, bypass: true, totpEnabled: !!user.totpEnabled });
     }
     const now = Date.now();
