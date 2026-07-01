@@ -248,12 +248,11 @@ export default function WithdrawPage() {
       setTimeout(() => setShowSuccess(false), 4000);
     },
     onError: (error: Error) => {
-      if (error.message.includes("OTP") || error.message.includes("Code")) {
-        setOtpError(error.message);
-      } else {
-        toast({ title: "Erreur", description: error.message, variant: "destructive" });
-        setShowOtpDialog(false);
-      }
+      clearOtpLock();
+      setOtpRef(null);
+      setOtpCode("");
+      setShowOtpDialog(false);
+      toast({ title: "Code invalide", description: error.message, variant: "destructive" });
     },
   });
 

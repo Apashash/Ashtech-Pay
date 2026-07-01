@@ -310,12 +310,11 @@ export default function SendMoneyPage() {
       setTimeout(() => setShowSuccess(false), 4000);
     },
     onError: (error: Error) => {
-      if (error.message.includes("OTP") || error.message.includes("Code")) {
-        setOtpError(error.message);
-      } else {
-        toast({ title: "Erreur", description: error.message, variant: "destructive" });
-        setShowOtpDialog(false);
-      }
+      clearOtpLock();
+      setOtpRef(null);
+      setOtpCode("");
+      setShowOtpDialog(false);
+      toast({ title: "Code invalide", description: error.message, variant: "destructive" });
     },
   });
 
@@ -347,12 +346,11 @@ export default function SendMoneyPage() {
       setTimeout(() => setShowSuccess(false), 4000);
     },
     onError: (error: Error) => {
-      if (error.message.includes("OTP") || error.message.includes("Code")) {
-        setOtpError(error.message);
-      } else {
-        setShowOtpDialog(false);
-        toast({ title: "Erreur", description: error.message, variant: "destructive" });
-      }
+      clearOtpLock();
+      setOtpRef(null);
+      setOtpCode("");
+      setShowOtpDialog(false);
+      toast({ title: "Code invalide", description: error.message, variant: "destructive" });
     },
   });
 

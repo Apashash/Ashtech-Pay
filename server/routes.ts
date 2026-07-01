@@ -3592,7 +3592,7 @@ export async function registerRoutes(
   });
 
   // Send money externally (with operator and fees)
-  app.post("/api/transfers/send", requireAuth, transferLimiter, async (req, res) => {
+  app.post("/api/transfers/send", requireAuth, transferLimiter, otpConfirmLimiter, async (req, res) => {
     try {
       const { recipientName, recipientPhone, countryId, operatorId, amount, description, sourceCurrency, feeBearer } = req.body;
 
@@ -3626,7 +3626,9 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Code OTP expiré, veuillez en demander un nouveau", code: "OTP_EXPIRED" });
       }
       if (hashOtp(String(sendOtpCode)) !== sendOtpEntry.otpHash) {
-        return res.status(400).json({ message: "Code OTP incorrect", code: "OTP_WRONG" });
+        txOtpStore.delete(sendOtpRef);
+        clearOtpOpLock(senderId);
+        return res.status(400).json({ message: "Code OTP incorrect. Demandez un nouveau code.", code: "OTP_WRONG" });
       }
       txOtpStore.delete(sendOtpRef);
       clearOtpOpLock(senderId);
@@ -3937,7 +3939,7 @@ export async function registerRoutes(
   });
 
   // Transfer between Ashtech Pay accounts (by email or username)
-  app.post("/api/transfers/internal", requireAuth, transferLimiter, async (req, res) => {
+  app.post("/api/transfers/internal", requireAuth, transferLimiter, otpConfirmLimiter, async (req, res) => {
     try {
       const { recipientIdentifier, amount, description, sourceCurrency } = req.body;
       const senderId = req.userId!;
@@ -3967,7 +3969,9 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Code OTP expiré, veuillez en demander un nouveau", code: "OTP_EXPIRED" });
       }
       if (hashOtp(String(intOtpCode)) !== intOtpEntry.otpHash) {
-        return res.status(400).json({ message: "Code OTP incorrect", code: "OTP_WRONG" });
+        txOtpStore.delete(intOtpRef);
+        clearOtpOpLock(senderId);
+        return res.status(400).json({ message: "Code OTP incorrect. Demandez un nouveau code.", code: "OTP_WRONG" });
       }
       txOtpStore.delete(intOtpRef);
       clearOtpOpLock(senderId);
@@ -4590,7 +4594,7 @@ export async function registerRoutes(
   });
 
   // Withdraw money
-  app.post("/api/withdrawals", requireAuth, withdrawalLimiter, async (req, res) => {
+  app.post("/api/withdrawals", requireAuth, withdrawalLimiter, otpConfirmLimiter, async (req, res) => {
     try {
       const data = withdrawSchema.parse(req.body);
       const userId = req.userId!;
@@ -4615,7 +4619,9 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Code OTP expiré, veuillez en demander un nouveau", code: "OTP_EXPIRED" });
       }
       if (hashOtp(String(submittedOtpCode)) !== otpEntry.otpHash) {
-        return res.status(400).json({ message: "Code OTP incorrect", code: "OTP_WRONG" });
+        txOtpStore.delete(otpRef);
+        clearOtpOpLock(userId);
+        return res.status(400).json({ message: "Code OTP incorrect. Demandez un nouveau code.", code: "OTP_WRONG" });
       }
       txOtpStore.delete(otpRef);
       clearOtpOpLock(userId);
