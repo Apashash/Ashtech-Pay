@@ -31,7 +31,9 @@ export function removeAdminOtpToken(): void {
 
 export function getAuthHeaders(): HeadersInit {
   const token = getAuthToken();
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = {
+    'X-Requested-With': 'XMLHttpRequest',
+  };
   if (token) headers['Authorization'] = `Bearer ${token}`;
   return headers;
 }
