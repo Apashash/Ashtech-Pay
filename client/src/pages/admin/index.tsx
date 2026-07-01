@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
+const A = import.meta.env.VITE_ADMIN_PATH as string;
 import { AdminLayout } from "./layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -166,7 +167,7 @@ export default function AdminDashboard() {
       icon: Zap,
       color: "text-amber-500",
       bgColor: "bg-amber-500/10",
-      href: "/admin/api-management",
+      href: `${A}/api-management`,
     },
     {
       title: "Total Transactions",
@@ -210,7 +211,7 @@ export default function AdminDashboard() {
       color: "text-green-500",
       bgColor: "bg-green-500/10",
       pending: stats?.pendingDeposits || 0,
-      href: stats?.pendingDeposits ? "/admin/transactions/deposits?status=pending" : "/admin/transactions/deposits",
+      href: stats?.pendingDeposits ? `${A}/transactions/deposits?status=pending` : `${A}/transactions/deposits`,
     },
     {
       title: "Retraits",
@@ -219,7 +220,7 @@ export default function AdminDashboard() {
       color: "text-orange-500",
       bgColor: "bg-orange-500/10",
       pending: stats?.pendingWithdrawals || 0,
-      href: stats?.pendingWithdrawals ? "/admin/transactions/withdrawals?status=pending" : "/admin/transactions/withdrawals",
+      href: stats?.pendingWithdrawals ? `${A}/transactions/withdrawals?status=pending` : `${A}/transactions/withdrawals`,
     },
     {
       title: "Envois",
@@ -228,7 +229,7 @@ export default function AdminDashboard() {
       color: "text-blue-500",
       bgColor: "bg-blue-500/10",
       pending: stats?.pendingTransfers || 0,
-      href: stats?.pendingTransfers ? "/admin/transactions/transfers?status=pending" : "/admin/transactions/transfers",
+      href: stats?.pendingTransfers ? `${A}/transactions/transfers?status=pending` : `${A}/transactions/transfers`,
     },
     {
       title: "Liens de paiement",
@@ -236,7 +237,7 @@ export default function AdminDashboard() {
       icon: Link2,
       color: "text-purple-500",
       bgColor: "bg-purple-500/10",
-      href: "/admin/transactions/deposits",
+      href: `${A}/transactions/deposits`,
     },
     {
       title: "Transactions Rejetées",
@@ -244,7 +245,7 @@ export default function AdminDashboard() {
       icon: XCircle,
       color: "text-red-500",
       bgColor: "bg-red-500/10",
-      href: "/admin/transactions?status=failed",
+      href: `${A}/transactions?status=failed`,
     },
     {
       title: "En Attente",
@@ -252,7 +253,7 @@ export default function AdminDashboard() {
       icon: Clock,
       color: "text-amber-500",
       bgColor: "bg-amber-500/10",
-      href: "/admin/transactions?status=pending",
+      href: `${A}/transactions?status=pending`,
     },
     {
       title: "Utilisateurs Bannis",

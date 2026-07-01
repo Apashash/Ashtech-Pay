@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useSearch, useLocation } from "wouter";
 import { AdminLayout } from "./layout";
+const A = import.meta.env.VITE_ADMIN_PATH as string;
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -557,7 +558,7 @@ export default function AdminUsers() {
                       key={user.id}
                       data-testid={`user-row-${user.id}`}
                       className="cursor-pointer hover:bg-muted/50 transition-colors"
-                      onClick={() => navigate(`/admin/users/${user.id}`)}
+                      onClick={() => navigate(`${A}/users/${user.id}`)}
                     >
                       <TableCell className="max-w-[160px]">
                         <div className="space-y-0.5">
@@ -621,7 +622,7 @@ export default function AdminUsers() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => navigate(`/admin/users/${user.id}`)}>
+                            <DropdownMenuItem onClick={() => navigate(`${A}/users/${user.id}`)}>
                               <Eye className="w-4 h-4 mr-2" /> Voir détails
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => openEditModal(user)}>

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import { AdminLayout } from "./layout";
+const A = import.meta.env.VITE_ADMIN_PATH as string;
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -334,7 +335,7 @@ export default function AdminUserDetail() {
 
   const deleteMutation = useMutation({
     mutationFn: async () => apiRequest("DELETE", `/api/admin/users/${id}`),
-    onSuccess: () => { toast({ title: "Utilisateur supprimé" }); navigate("/admin/users"); },
+    onSuccess: () => { toast({ title: "Utilisateur supprimé" }); navigate(`${A}/users`); },
     onError: () => toast({ title: "Erreur", variant: "destructive" }),
   });
 
@@ -402,7 +403,7 @@ export default function AdminUserDetail() {
     return (
       <AdminLayout>
         <div className="p-6 space-y-4">
-          <Button variant="ghost" onClick={() => navigate("/admin/users")} className="gap-2">
+          <Button variant="ghost" onClick={() => navigate(`${A}/users`)} className="gap-2">
             <ArrowLeft className="w-4 h-4" /> Retour aux utilisateurs
           </Button>
           <p className="text-muted-foreground">Utilisateur introuvable.</p>
@@ -416,7 +417,7 @@ export default function AdminUserDetail() {
       <div className="p-4 sm:p-6 space-y-4 max-w-2xl mx-auto">
         {/* Header */}
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/admin/users")}>
+          <Button variant="ghost" size="icon" onClick={() => navigate(`${A}/users`)}>
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div className="flex items-center gap-2 min-w-0">
@@ -547,7 +548,7 @@ export default function AdminUserDetail() {
                   </Button>
                   <Button
                     variant="outline" size="sm" className="gap-2 justify-start col-span-2"
-                    onClick={() => navigate(`/admin/kyc?search=${encodeURIComponent(user.email)}`)}
+                    onClick={() => navigate(`${A}/kyc?search=${encodeURIComponent(user.email)}`)}
                   >
                     <FileSearch className="w-4 h-4" /> Voir le KYC
                   </Button>

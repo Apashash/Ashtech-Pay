@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import { AdminLayout } from "./layout";
+const A = import.meta.env.VITE_ADMIN_PATH as string;
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -300,7 +301,7 @@ export default function AdminTransactionDetail() {
             </CardHeader>
             <CardContent className="divide-y divide-border">
               <InfoRow icon={<UserIcon className="w-4 h-4" />} label="Nom" value={
-                <button className="text-primary hover:underline font-medium text-right" onClick={() => navigate(`/admin/users/${tx.user?.id || ""}`)}>
+                <button className="text-primary hover:underline font-medium text-right" onClick={() => navigate(`${A}/users/${tx.user?.id || ""}`)}>
                   {tx.user.fullName}
                 </button>
               } />

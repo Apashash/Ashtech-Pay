@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { AdminLayout } from "./layout";
+const A = import.meta.env.VITE_ADMIN_PATH as string;
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -141,7 +142,7 @@ export default function AdminLinks() {
                     <TableRow key={link.id} data-testid={`link-row-${link.id}`}>
                       <TableCell>
                         {link.user ? (
-                          <Link href={`/admin/users?search=${encodeURIComponent(link.user.email)}`}>
+                          <Link href={`${A}/users?search=${encodeURIComponent(link.user.email)}`}>
                             <div className="flex items-center gap-2 cursor-pointer hover:text-primary transition-colors">
                               <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
                                 <User className="w-4 h-4 text-primary" />

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { AdminLayout } from "./layout";
+const A = import.meta.env.VITE_ADMIN_PATH as string;
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -452,7 +453,7 @@ export default function AdminKYC() {
                             className="shrink-0 border-red-500/30 text-red-400 hover:bg-red-500/10 text-xs gap-1"
                             onClick={() => {
                               setViewSubmission(null);
-                              navigate(`/admin/users?search=${encodeURIComponent(acc.email)}`);
+                              navigate(`${A}/users?search=${encodeURIComponent(acc.email)}`);
                             }}
                           >
                             <ExternalLink className="w-3 h-3" />

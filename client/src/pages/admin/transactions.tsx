@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { AdminLayout } from "./layout";
+const A = import.meta.env.VITE_ADMIN_PATH as string;
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -319,7 +320,7 @@ export default function AdminTransactions() {
                           <Button 
                             size="icon" 
                             variant="outline"
-                            onClick={() => navigate(`/admin/transactions/${tx.id}`)}
+                            onClick={() => navigate(`${A}/transactions/${tx.id}`)}
                             data-testid={`button-view-${tx.id}`}
                           >
                             <Eye className="w-4 h-4" />

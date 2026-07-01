@@ -604,10 +604,10 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                         <Link 
                           key={notif.id} 
                           href={notif.type === "deposit" || notif.type === "payment_link" 
-                            ? `/admin/transactions/deposits?highlight=${notif.id}` 
+                            ? `${ADMIN}/transactions/deposits?highlight=${notif.id}` 
                             : notif.type === "withdrawal" 
-                              ? `/admin/transactions/withdrawals?highlight=${notif.id}` 
-                              : `/admin/transactions/transfers?highlight=${notif.id}`}
+                              ? `${ADMIN}/transactions/withdrawals?highlight=${notif.id}` 
+                              : `${ADMIN}/transactions/transfers?highlight=${notif.id}`}
                           onClick={() => setNotificationsOpen(false)}
                         >
                           <div className="p-3 hover-elevate cursor-pointer">
