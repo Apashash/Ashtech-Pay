@@ -2137,12 +2137,26 @@ export async function registerRoutes(
         });
       }
 
-      const data = registerSchema.parse(req.body);
+      const rawData = registerSchema.parse(req.body);
+      // Normalize email to lowercase and trim phone before any check
+      const data = {
+        ...rawData,
+        email: rawData.email.trim().toLowerCase(),
+        phone: rawData.phone ? rawData.phone.trim() : rawData.phone,
+      };
 
       const existingEmail = await storage.getUserByEmail(data.email);
       if (existingEmail) {
         await recordAuthFailure(ip);
         return res.status(400).json({ message: "Cet email est déjà utilisé" });
+      }
+
+      if (data.phone) {
+        const existingPhone = await storage.getUserByPhone(data.phone);
+        if (existingPhone) {
+          await recordAuthFailure(ip);
+          return res.status(400).json({ message: "Ce numéro de téléphone est déjà utilisé" });
+        }
       }
 
       const existingUsername = await storage.getUserByUsername(data.username);
@@ -3091,11 +3105,19 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Le nom complet doit comporter au moins 2 caractères." });
       }
 
-      // Validate email uniqueness if changed
+      // Validate email uniqueness if changed (case-insensitive)
       if (email) {
         const existingUser = await storage.getUserByEmail(email);
         if (existingUser && existingUser.id !== userId) {
           return res.status(400).json({ message: "Cet email est déjà utilisé" });
+        }
+      }
+
+      // Validate phone uniqueness if changed
+      if (phone) {
+        const existingPhone = await storage.getUserByPhone(phone);
+        if (existingPhone && existingPhone.id !== userId) {
+          return res.status(400).json({ message: "Ce numéro de téléphone est déjà utilisé" });
         }
       }
 

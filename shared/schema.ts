@@ -32,7 +32,12 @@ export const users = pgTable("users", {
   totpEnabled: boolean("totp_enabled").default(false),
   accountId: text("account_id").unique(),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (t) => ({
+  // Case-insensitive email uniqueness — prevents TEST@mail.com vs test@mail.com duplicates
+  emailLowerUniq: uniqueIndex("users_email_lower_unique").on(sql`lower(${t.email})`),
+  // Phone uniqueness — NULL values are allowed multiple times (users without phone)
+  phoneUniq: uniqueIndex("users_phone_unique").on(t.phone),
+}));
 
 export const SUPPORTED_CURRENCIES = [
   "XAF",  // Cameroun, Centrafrique, Guinée Équatoriale, Tchad

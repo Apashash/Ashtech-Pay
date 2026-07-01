@@ -346,7 +346,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserByPhone(phone: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.phone, phone));
+    const normalized = phone.trim();
+    const [user] = await db.select().from(users).where(eq(users.phone, normalized));
     return user || undefined;
   }
 
