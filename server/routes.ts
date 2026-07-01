@@ -757,12 +757,8 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
     return res.status(403).json({ message: "Accès refusé - Droits admin requis" });
   }
 
-  // ── OTP Bypass mode: requires BOTH ADMIN_OTP_BYPASS=true AND a matching ADMIN_OTP_BYPASS_TOKEN secret.
-  // A simple "=true" alone is not enough — prevents accidental activation in production.
-  const bypassEnabled = process.env.ADMIN_OTP_BYPASS === "true";
-  const bypassToken = process.env.ADMIN_OTP_BYPASS_TOKEN;
-  const requestToken = req.headers["x-admin-bypass-token"];
-  if (bypassEnabled && bypassToken && requestToken && requestToken === bypassToken) {
+  // ── OTP Bypass mode: set ADMIN_OTP_BYPASS=true to skip OTP entirely (dev/recovery use).
+  if (process.env.ADMIN_OTP_BYPASS === "true") {
     console.warn(`[AdminAccess] OTP BYPASS ACTIVE — user=${req.userId} role=${user.role} path=${req.path}`);
     return next();
   }
