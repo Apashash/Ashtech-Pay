@@ -1969,21 +1969,11 @@ export async function registerRoutes(
   });
 
   // GET — IP check (polled by admin frontend)
-  // Uses requireAuth only — NOT requireAdmin.
-  // Checks if IP is on the panel blocklist → kick session if yes.
-  app.get("/api/admin/ip-check", requireAuth, async (req, res) => {
+  // Uses requireAdmin — non-admin users receive 403 before reaching the handler.
+  // The IP blocklist check is handled inside requireAdmin middleware.
+  app.get("/api/admin/ip-check", requireAdmin, async (req, res) => {
     try {
-      const user = await storage.getUser(req.userId!);
-      if (!user || !["admin"].includes(user.role)) {
-        return res.status(403).json({ message: "Accès refusé" });
-      }
       const ip = getClientIp(req);
-      const blocklist = await loadAdminPanelBlockedIps();
-      if (isIpBannedFromAdmin(ip, blocklist)) {
-        console.warn(`[AdminPanel] POLL REJECT — user=${req.userId} ip=${ip} is on panel blocklist — session destroyed`);
-        req.session.destroy(() => {});
-        return res.status(403).json({ kicked: true, message: "Votre IP a été bloquée du panneau admin. Session fermée." });
-      }
       res.json({ allowed: true, ip });
     } catch {
       res.status(500).json({ message: "Erreur serveur." });
@@ -8688,7 +8678,7 @@ export async function registerRoutes(
       // SECURITY: impersonatedBy must be set in session (only set by /api/admin/users/:id/impersonate
       // which itself requires requireAdmin). A regular user can never have this set.
       if (!originalAdminId) {
-        return res.status(400).json({ message: "Vous n'êtes pas en mode impersonation." });
+        return res.status(403).json({ message: "Vous n'êtes pas en mode impersonation." });
       }
 
       // SECURITY: verify the original admin still exists and STILL has admin role
