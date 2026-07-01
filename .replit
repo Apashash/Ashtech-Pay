@@ -43,15 +43,6 @@ build = ["npm", "run", "build"]
 [userenv]
 
 [userenv.shared]
-APP_URL_PROD = "https://ashtechpay.top"
-NODE_ENV = "development"
-PORT = "5000"
-TRUST_PROXY = "true"
-COOKIE_SECURE = "false"
-COOKIE_SAMESITE = "lax"
-APP_URL = "https://ashtechpay.top"
-SUPABASE_STORAGE_BUCKET = "uploads"
-VITE_ADMIN_PATH = "/ashtechpayadmin62929383737367"
 
 [userenv.development]
 
