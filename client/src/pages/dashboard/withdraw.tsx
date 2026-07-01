@@ -169,6 +169,18 @@ export default function WithdrawPage() {
     return () => clearInterval(id);
   }, [showLockedDialog]);
 
+  useEffect(() => {
+    fetch("/api/user/otp-lock", { credentials: "include" })
+      .then(r => r.json())
+      .then((d: { remainingSeconds: number }) => {
+        if (d.remainingSeconds > 0) {
+          setLockRemaining(d.remainingSeconds);
+          setShowLockedDialog(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const requestOtpMutation = useMutation({
     mutationFn: async () => {
       const values = form.getValues();
@@ -183,6 +195,12 @@ export default function WithdrawPage() {
         currency: userCurrency,
       });
       const data = await res.json();
+      if (data.code === "OTP_LOCKED") {
+        const err = new Error(data.message || "Opération en cours");
+        (err as any).code = "OTP_LOCKED";
+        (err as any).remainingSeconds = data.remainingSeconds ?? 0;
+        throw err;
+      }
       if (!res.ok) throw new Error(data.message || "Erreur lors de l'envoi du code");
       return data;
     },
@@ -195,7 +213,12 @@ export default function WithdrawPage() {
       setShowOtpDialog(false);
       setTimeout(() => setShowOtpDialog(true), 50);
     },
-    onError: (error: Error) => {
+    onError: (error: Error & { code?: string; remainingSeconds?: number }) => {
+      if (error.code === "OTP_LOCKED") {
+        setLockRemaining(error.remainingSeconds ?? 900);
+        setShowLockedDialog(true);
+        return;
+      }
       toast({ title: "Erreur", description: error.message, variant: "destructive" });
     },
   });

@@ -272,6 +272,32 @@ setInterval(() => {
   }
 }, 10 * 60 * 1000);
 
+// ─── DB-backed OTP operation lock (15 min per user, survives restarts) ───────
+const OTP_OP_LOCK_MS = 15 * 60 * 1000;
+
+async function getOtpOpLockRemaining(userId: string): Promise<number> {
+  try {
+    const result = await db.execute(sql`SELECT otp_locked_until FROM users WHERE id = ${userId}`);
+    const row = (result as any).rows?.[0];
+    if (!row) return 0;
+    const lockedUntil = Number(row.otp_locked_until ?? 0);
+    const remaining = lockedUntil - Date.now();
+    return remaining > 0 ? Math.ceil(remaining / 1000) : 0;
+  } catch { return 0; }
+}
+
+async function setOtpOpLock(userId: string): Promise<void> {
+  try {
+    await db.execute(sql`UPDATE users SET otp_locked_until = ${Date.now() + OTP_OP_LOCK_MS} WHERE id = ${userId}`);
+  } catch (e) { console.error("[OtpLock] setOtpOpLock error:", e); }
+}
+
+async function clearOtpOpLock(userId: string): Promise<void> {
+  try {
+    await db.execute(sql`UPDATE users SET otp_locked_until = 0 WHERE id = ${userId}`);
+  } catch (e) { console.error("[OtpLock] clearOtpOpLock error:", e); }
+}
+
 // ─── Pending admin logins — DB-backed (survives PM2 worker restarts) ──────────
 // Stores OTP for admin accounts BEFORE any session is created.
 // Session is only created AFTER OTP is verified — impossible to bypass.
@@ -2631,6 +2657,11 @@ export async function registerRoutes(
   });
 
   // User routes
+  app.get("/api/user/otp-lock", requireAuth, async (req, res) => {
+    const remainingSeconds = await getOtpOpLockRemaining(req.userId!);
+    res.json({ remainingSeconds });
+  });
+
   app.get("/api/user", requireAuth, async (req, res) => {
     try {
       const user = await storage.getUser(req.userId!);
@@ -3528,12 +3559,23 @@ export async function registerRoutes(
       const user = await storage.getUser(userId);
       if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
 
+      const lockRemaining = await getOtpOpLockRemaining(userId);
+      if (lockRemaining > 0) {
+        return res.status(429).json({
+          message: `Une opération est déjà en cours. Réessayez dans ${Math.floor(lockRemaining / 60)}:${String(lockRemaining % 60).padStart(2, "0")}.`,
+          code: "OTP_LOCKED",
+          remainingSeconds: lockRemaining,
+        });
+      }
+
       const { type, recipient, phone, countryOperator, feeBearer, amount, fee, net, currency } = req.body;
       const otpType = type === "internal" ? "transfer_internal" : "transfer_external";
 
       const code = String(Math.floor(100000 + Math.random() * 900000));
       const ref = crypto.randomUUID();
       txOtpStore.set(ref, { userId, otpHash: hashOtp(code), type: otpType, expiresAt: Date.now() + TX_OTP_TTL_MS });
+
+      await setOtpOpLock(userId);
 
       const { sendTransferOtpEmail } = await import("./email");
       sendTransferOtpEmail(user.email, user.fullName || user.username, code, {
@@ -3587,6 +3629,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Code OTP incorrect", code: "OTP_WRONG" });
       }
       txOtpStore.delete(sendOtpRef);
+      clearOtpOpLock(senderId);
       // ── End OTP ──
 
       if (sender.withdrawalBlocked) {
@@ -3927,6 +3970,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Code OTP incorrect", code: "OTP_WRONG" });
       }
       txOtpStore.delete(intOtpRef);
+      clearOtpOpLock(senderId);
       // ── End OTP ──
 
       // Lookup recipient by email, phone or username
@@ -4515,11 +4559,22 @@ export async function registerRoutes(
       const user = await storage.getUser(userId);
       if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
 
+      const lockRemaining = await getOtpOpLockRemaining(userId);
+      if (lockRemaining > 0) {
+        return res.status(429).json({
+          message: `Une opération est déjà en cours. Réessayez dans ${Math.floor(lockRemaining / 60)}:${String(lockRemaining % 60).padStart(2, "0")}.`,
+          code: "OTP_LOCKED",
+          remainingSeconds: lockRemaining,
+        });
+      }
+
       const { method, country, operator, phone, amount, fee, net, currency } = req.body;
 
       const code = String(Math.floor(100000 + Math.random() * 900000));
       const ref = crypto.randomUUID();
       txOtpStore.set(ref, { userId, otpHash: hashOtp(code), type: "withdrawal", expiresAt: Date.now() + TX_OTP_TTL_MS });
+
+      await setOtpOpLock(userId);
 
       const { sendWithdrawalOtpEmail } = await import("./email");
       sendWithdrawalOtpEmail(user.email, user.fullName || user.username, code, {
@@ -4563,6 +4618,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Code OTP incorrect", code: "OTP_WRONG" });
       }
       txOtpStore.delete(otpRef);
+      clearOtpOpLock(userId);
       // ── End OTP ──
 
       if (user.withdrawalBlocked) {

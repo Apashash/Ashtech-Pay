@@ -147,6 +147,18 @@ export default function SendMoneyPage() {
   const [showOtpDialog, setShowOtpDialog] = useState(false);
   const [showLockedDialog, setShowLockedDialog] = useState(false);
   const [lockRemaining, setLockRemaining] = useState(0);
+
+  useEffect(() => {
+    fetch("/api/user/otp-lock", { credentials: "include" })
+      .then(r => r.json())
+      .then((d: { remainingSeconds: number }) => {
+        if (d.remainingSeconds > 0) {
+          setLockRemaining(d.remainingSeconds);
+          setShowLockedDialog(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
   const [otpRef, setOtpRef] = useState<string | null>(null);
   const [otpCode, setOtpCode] = useState("");
   const [otpError, setOtpError] = useState("");
@@ -236,6 +248,12 @@ export default function SendMoneyPage() {
     }) => {
       const res = await apiRequest("POST", "/api/transfers/request-otp", payload);
       const data = await res.json();
+      if (data.code === "OTP_LOCKED") {
+        const err = new Error(data.message || "Opération en cours");
+        (err as any).code = "OTP_LOCKED";
+        (err as any).remainingSeconds = data.remainingSeconds ?? 0;
+        throw err;
+      }
       if (!res.ok) throw new Error(data.message || "Erreur lors de l'envoi du code");
       return data as { ref: string };
     },
@@ -251,7 +269,12 @@ export default function SendMoneyPage() {
       setShowOtpDialog(false);
       setTimeout(() => setShowOtpDialog(true), 50);
     },
-    onError: (error: Error) => {
+    onError: (error: Error & { code?: string; remainingSeconds?: number }) => {
+      if (error.code === "OTP_LOCKED") {
+        setLockRemaining(error.remainingSeconds ?? 900);
+        setShowLockedDialog(true);
+        return;
+      }
       toast({ title: "Erreur", description: error.message, variant: "destructive" });
     },
   });
