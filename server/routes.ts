@@ -1479,7 +1479,7 @@ export async function registerRoutes(
   }
   const isSecureProxy = process.env.TRUST_PROXY === "true" || !!process.env.REPL_ID;
   const cookieSecure = process.env.COOKIE_SECURE !== "false";
-  const cookieSameSite = (process.env.COOKIE_SAMESITE as "none" | "lax" | "strict") || (isSecureProxy ? "none" : "lax");
+  const cookieSameSite = (process.env.COOKIE_SAMESITE as "none" | "lax" | "strict") || "lax";
   // Resilient session pool: tries sessionPool first, falls back to main pool if exhausted.
   // This prevents session save failures when PM2_INSTANCES is misconfigured on production
   // and sessionPool runs out of connections (which causes 401 right after login).
