@@ -54,7 +54,6 @@ COOKIE_SECURE = "false"
 COOKIE_SAMESITE = "lax"
 APP_URL = "https://ashtechpay.top"
 ADMIN_OTP_BYPASS = "false"
-SUPABASE_DB_URL = "postgresql://postgres.vngfjjfgaxkcwtrzawdq:q8aNLLz2GZF7WnZe@aws-1-eu-west-3.pooler.supabase.com:5432/postgres"
 
 [userenv.development]
 

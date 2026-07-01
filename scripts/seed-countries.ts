@@ -94,8 +94,10 @@ async function seedCountriesAndOperators() {
         await client.query(`
           INSERT INTO operators (id, name, type, country_id, is_active, is_in_maintenance, daily_limit)
           VALUES (gen_random_uuid(), $1, 'mobile_money', $2, true, false, 1000000)
-          ON CONFLICT DO NOTHING;
-          UPDATE operators SET is_active = true WHERE name = $1 AND country_id = $2;
+          ON CONFLICT DO NOTHING
+        `, [op.name, countryId]);
+        await client.query(`
+          UPDATE operators SET is_active = true WHERE name = $1 AND country_id = $2
         `, [op.name, countryId]);
         operatorsInserted++;
       }
