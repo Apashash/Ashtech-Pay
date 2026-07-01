@@ -108,8 +108,8 @@ export default function AdminAuditLogs() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/audit-logs"] });
       setPage(0);
+      refetch();
     },
   });
 
