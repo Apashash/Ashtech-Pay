@@ -140,6 +140,7 @@ function GeoGuard({ children }: { children: React.ReactNode }) {
 }
 
 function Router() {
+  const A = import.meta.env.VITE_ADMIN_PATH as string;
   return (
     <Switch>
       <Route path="/" component={LandingPage} />
@@ -184,41 +185,41 @@ function Router() {
       <Route path="/checkout/:transactionId" component={CheckoutPage} />
       <Route path="/admin-panel-verify" component={AdminPanelVerifyPage} />
       <Route path="/admin-login-otp" component={AdminLoginOtpPage} />
-      <Route path="/ashtechpayadmin62929383737367" component={AdminDashboard} />
-      <Route path="/ashtechpayadmin62929383737367/users" component={AdminUsers} />
-      <Route path="/ashtechpayadmin62929383737367/users/:id" component={AdminUserDetail} />
-      <Route path="/ashtechpayadmin62929383737367/transactions" component={AdminTransactions} />
-      <Route path="/ashtechpayadmin62929383737367/transactions/deposits" component={AdminDeposits} />
-      <Route path="/ashtechpayadmin62929383737367/transactions/withdrawals" component={AdminWithdrawals} />
-      <Route path="/ashtechpayadmin62929383737367/transactions/transfers" component={AdminTransfers} />
-      <Route path="/ashtechpayadmin62929383737367/transactions/:id" component={AdminTransactionDetail} />
-      <Route path="/ashtechpayadmin62929383737367/fees" component={AdminFees} />
-      <Route path="/ashtechpayadmin62929383737367/fees/deposits" component={AdminFeesDeposits} />
-      <Route path="/ashtechpayadmin62929383737367/fees/withdrawals" component={AdminFeesWithdrawals} />
-      <Route path="/ashtechpayadmin62929383737367/fees/transfers" component={AdminFeesTransfers} />
-      <Route path="/ashtechpayadmin62929383737367/countries" component={AdminCountries} />
-      <Route path="/ashtechpayadmin62929383737367/links" component={AdminLinks} />
-      <Route path="/ashtechpayadmin62929383737367/support" component={AdminSupport} />
-      <Route path="/ashtechpayadmin62929383737367/logs" component={AdminLogs} />
-      <Route path="/ashtechpayadmin62929383737367/settings" component={AdminSettings} />
-      <Route path="/ashtechpayadmin62929383737367/settings/platform" component={AdminSettingsPlatform} />
-      <Route path="/ashtechpayadmin62929383737367/settings/public-info" component={AdminSettingsPublicInfo} />
-      <Route path="/ashtechpayadmin62929383737367/settings/maintenance" component={AdminSettingsMaintenance} />
-      <Route path="/ashtechpayadmin62929383737367/settings/limits" component={AdminSettingsLimits} />
-      <Route path="/ashtechpayadmin62929383737367/settings/turnstile" component={AdminSettingsTurnstile} />
-      <Route path="/ashtechpayadmin62929383737367/withdrawal-numbers" component={AdminWithdrawalNumbers} />
-      <Route path="/ashtechpayadmin62929383737367/global-messages" component={AdminGlobalMessages} />
-      <Route path="/ashtechpayadmin62929383737367/kyc" component={AdminKYC} />
-      <Route path="/ashtechpayadmin62929383737367/conversions" component={AdminConversions} />
-      <Route path="/ashtechpayadmin62929383737367/pending-payouts" component={AdminPendingPayouts} />
-      <Route path="/ashtechpayadmin62929383737367/afribapay" component={AdminAfribaPay} />
-      <Route path="/ashtechpayadmin62929383737367/pixpay" component={AdminPixPay} />
-      <Route path="/ashtechpayadmin62929383737367/email-campaigns" component={AdminEmailCampaigns} />
-      <Route path="/ashtechpayadmin62929383737367/api-management" component={AdminApiManagement} />
-      <Route path="/ashtechpayadmin62929383737367/merchants" component={AdminMerchants} />
-      <Route path="/ashtechpayadmin62929383737367/blocked-ips" component={AdminBlockedIps} />
-      <Route path="/ashtechpayadmin62929383737367/audit" component={AdminAuditLogs} />
-      <Route path="/ashtechpayadmin62929383737367/session-debug" component={AdminSessionDebug} />
+      <Route path={A} component={AdminDashboard} />
+      <Route path={`${A}/users`} component={AdminUsers} />
+      <Route path={`${A}/users/:id`} component={AdminUserDetail} />
+      <Route path={`${A}/transactions`} component={AdminTransactions} />
+      <Route path={`${A}/transactions/deposits`} component={AdminDeposits} />
+      <Route path={`${A}/transactions/withdrawals`} component={AdminWithdrawals} />
+      <Route path={`${A}/transactions/transfers`} component={AdminTransfers} />
+      <Route path={`${A}/transactions/:id`} component={AdminTransactionDetail} />
+      <Route path={`${A}/fees`} component={AdminFees} />
+      <Route path={`${A}/fees/deposits`} component={AdminFeesDeposits} />
+      <Route path={`${A}/fees/withdrawals`} component={AdminFeesWithdrawals} />
+      <Route path={`${A}/fees/transfers`} component={AdminFeesTransfers} />
+      <Route path={`${A}/countries`} component={AdminCountries} />
+      <Route path={`${A}/links`} component={AdminLinks} />
+      <Route path={`${A}/support`} component={AdminSupport} />
+      <Route path={`${A}/logs`} component={AdminLogs} />
+      <Route path={`${A}/settings`} component={AdminSettings} />
+      <Route path={`${A}/settings/platform`} component={AdminSettingsPlatform} />
+      <Route path={`${A}/settings/public-info`} component={AdminSettingsPublicInfo} />
+      <Route path={`${A}/settings/maintenance`} component={AdminSettingsMaintenance} />
+      <Route path={`${A}/settings/limits`} component={AdminSettingsLimits} />
+      <Route path={`${A}/settings/turnstile`} component={AdminSettingsTurnstile} />
+      <Route path={`${A}/withdrawal-numbers`} component={AdminWithdrawalNumbers} />
+      <Route path={`${A}/global-messages`} component={AdminGlobalMessages} />
+      <Route path={`${A}/kyc`} component={AdminKYC} />
+      <Route path={`${A}/conversions`} component={AdminConversions} />
+      <Route path={`${A}/pending-payouts`} component={AdminPendingPayouts} />
+      <Route path={`${A}/afribapay`} component={AdminAfribaPay} />
+      <Route path={`${A}/pixpay`} component={AdminPixPay} />
+      <Route path={`${A}/email-campaigns`} component={AdminEmailCampaigns} />
+      <Route path={`${A}/api-management`} component={AdminApiManagement} />
+      <Route path={`${A}/merchants`} component={AdminMerchants} />
+      <Route path={`${A}/blocked-ips`} component={AdminBlockedIps} />
+      <Route path={`${A}/audit`} component={AdminAuditLogs} />
+      <Route path={`${A}/session-debug`} component={AdminSessionDebug} />
       <Route path="/terms" component={TermsPage} />
       <Route path="/privacy" component={PrivacyPage} />
       <Route path="/legal" component={LegalPage} />
@@ -412,7 +413,7 @@ function ImpersonationBanner() {
     } catch {}
 
     // 4. Redirection vers l'admin
-    window.location.href = "/ashtechpayadmin62929383737367/users";
+    window.location.href = `${import.meta.env.VITE_ADMIN_PATH}/users`;
   };
 
   if (!isImpersonating) return null;

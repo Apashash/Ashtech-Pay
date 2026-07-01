@@ -43,9 +43,6 @@ build = ["npm", "run", "build"]
 [userenv]
 
 [userenv.shared]
-SUPABASE_URL = "https://vngfjjfgaxkcwtrzawdq.supabase.co/"
-PIXPAY_WAVE_BUSINESS_ID = "am-23kv2kt281gqe"
-APP_URL_DEV = "https://f96a6379-f341-4944-8f17-8e8a1d157003-00-rvqhzlc1jkpk.worf.replit.dev"
 APP_URL_PROD = "https://ashtechpay.top"
 NODE_ENV = "development"
 PORT = "5000"

@@ -53,7 +53,7 @@ export default function AdminLoginOtpPage() {
         duration: 2500,
         className: "bg-green-600 text-white border-green-700",
       });
-      setLocation("/ashtechpayadmin62929383737367");
+      setLocation(import.meta.env.VITE_ADMIN_PATH);
     },
     onError: (error: any) => {
       setCode("");
