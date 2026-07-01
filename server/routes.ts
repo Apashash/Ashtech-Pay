@@ -7005,6 +7005,9 @@ export async function registerRoutes(
   // Get payment intents for a specific link
   app.get("/api/payment-links/:id/intents", requireAuth, async (req, res) => {
     try {
+      const link = await storage.getPaymentLinkById(req.params.id);
+      if (!link) return res.status(404).json({ message: "Lien introuvable" });
+      if (link.userId !== req.userId!) return res.status(403).json({ message: "Accès refusé" });
       const intents = await storage.getPaymentIntentsByLinkId(req.params.id);
       res.json(intents);
     } catch (error) {
