@@ -575,6 +575,8 @@ export default function DashboardHome() {
   const userStats = dashboardData?.stats;
   const wallets = dashboardData?.wallets ?? [];
 
+  const [, setLocation] = useLocation();
+
   const logoClickCount = useRef(0);
   const logoClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [logoFlash, setLogoFlash] = useState(false);
@@ -611,8 +613,6 @@ export default function DashboardHome() {
 
   const recentTransactions = transactions.slice(0, 5);
   const isVerified = user?.isVerified ?? false;
-
-  const [, setLocation] = useLocation();
 
   const handleAction = (action: string) => {
     if (action === "deposit") {
