@@ -14,16 +14,13 @@ export default function AdminLoginOtpPage() {
   const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
 
-  const adminLoginToken =
-    typeof window !== "undefined"
-      ? sessionStorage.getItem("adminLoginToken")
-      : null;
-
+  // ── TOTP DÉSACTIVÉ TEMPORAIREMENT — redirection immédiate vers login ──
   useEffect(() => {
-    if (!adminLoginToken) {
-      setLocation("/login");
-    }
-  }, [adminLoginToken]);
+    sessionStorage.removeItem("adminLoginToken");
+    setLocation("/login");
+  }, []);
+
+  const adminLoginToken = null; // désactivé
 
   // Calcule les secondes restantes du code TOTP (période 30s)
   useEffect(() => {
