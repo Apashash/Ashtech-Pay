@@ -25,6 +25,8 @@ import {
   hostedPaymentLimiter,
   bannerLimiter,
   adminOtpRequestLimiter,
+  publicInfoLimiter,
+  externalProxyLimiter,
 } from "./rateLimiter";
 import { 
   loginSchema, 
@@ -1639,7 +1641,7 @@ export async function registerRoutes(
   // GET /api/img — public image redirect to Supabase CDN (no auth required).
   // Since the Supabase "uploads" bucket is PUBLIC, we redirect directly to the CDN URL.
   // Path validation (allowlist) is still enforced to prevent SSRF.
-  app.get("/api/img", async (req, res) => {
+  app.get("/api/img", externalProxyLimiter, async (req, res) => {
     const storagePath = req.query.path as string;
     if (!storagePath) return res.status(400).send("Path required");
 
@@ -1667,7 +1669,7 @@ export async function registerRoutes(
     return res.redirect(302, publicUrl);
   });
 
-  app.get("/api/public/geo", async (req, res) => {
+  app.get("/api/public/geo", externalProxyLimiter, async (req, res) => {
     try {
       const ip = getClientIp(req);
       if (isPrivateIp(ip)) {
@@ -1696,7 +1698,7 @@ export async function registerRoutes(
   });
 
   // Auth routes — check IP block status (public, no auth)
-  app.get("/api/auth/ip-status", (req, res) => {
+  app.get("/api/auth/ip-status", publicInfoLimiter, (req, res) => {
     const ip = getClientIp(req);
     const check = checkAuthRateLimit(ip);
     if (check.blocked) {
@@ -2303,7 +2305,7 @@ export async function registerRoutes(
   });
 
   // ── Admin Login OTP — resend désactivé (TOTP Google Auth ne nécessite pas de renvoi)
-  app.post("/api/auth/admin-login-otp/resend", (_req, res) => {
+  app.post("/api/auth/admin-login-otp/resend", loginLimiter, (_req, res) => {
     res.status(410).json({ message: "Le renvoi de code n'est plus disponible. Utilisez Google Authenticator." });
   });
 
@@ -3131,7 +3133,12 @@ export async function registerRoutes(
   // Public endpoint to check transaction status (for payment page polling)
   app.get("/api/transactions/status/:reference", transactionStatusLimiter, async (req, res) => {
     try {
-      const transaction = await storage.getTransactionByReference(req.params.reference);
+      // Validate reference format — prevents enumeration via arbitrary strings
+      const { reference } = req.params;
+      if (!reference || !/^[A-Za-z0-9_-]{6,64}$/.test(reference)) {
+        return res.status(400).json({ message: "Référence invalide", status: "not_found" });
+      }
+      const transaction = await storage.getTransactionByReference(reference);
       if (!transaction) {
         return res.status(404).json({ message: "Transaction non trouvée", status: "not_found" });
       }
@@ -5020,7 +5027,7 @@ export async function registerRoutes(
     "min_deposit", "max_deposit", "min_withdrawal", "max_withdrawal",
     "registration_enabled", "kyc_required",
   ]);
-  app.get("/api/settings/:key", async (req, res) => {
+  app.get("/api/settings/:key", publicInfoLimiter, async (req, res) => {
     try {
       const key = req.params.key;
       if (!PUBLIC_SETTINGS_ALLOWLIST.has(key)) {
@@ -5658,7 +5665,7 @@ export async function registerRoutes(
   });
 
   // Public contact info route
-  app.get("/api/contact-info", async (_req, res) => {
+  app.get("/api/contact-info", publicInfoLimiter, async (_req, res) => {
     try {
       const settings = await storage.getAllSettings();
       const contactEmail = settings.find(s => s.key === "contact_email")?.value || "";
@@ -5684,7 +5691,7 @@ export async function registerRoutes(
     next();
   });
 
-  app.get("/api/public/fees", async (_req, res) => {
+  app.get("/api/public/fees", publicInfoLimiter, async (_req, res) => {
     try {
       const fees = await storage.getAllFees();
       res.json(fees.filter(f => f.isActive));
@@ -5694,7 +5701,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/public/limits", async (_req, res) => {
+  app.get("/api/public/limits", publicInfoLimiter, async (_req, res) => {
     try {
       const allSettings = await storage.getAllSettings();
       const get = (key: string, def: number) => {
@@ -5714,7 +5721,7 @@ export async function registerRoutes(
   });
 
   // Public countries route for registration/login
-  app.get("/api/public/countries", async (_req, res) => {
+  app.get("/api/public/countries", publicInfoLimiter, async (_req, res) => {
     try {
       const allCountries = await storage.getAllCountries();
       const activeCountries = await Promise.all(
@@ -5741,7 +5748,7 @@ export async function registerRoutes(
   });
 
   // Public operators route — for fee-details page
-  app.get("/api/public/operators", async (_req, res) => {
+  app.get("/api/public/operators", publicInfoLimiter, async (_req, res) => {
     try {
       const all = await storage.getAllOperators();
       const active = all
@@ -5762,7 +5769,7 @@ export async function registerRoutes(
 
   // Public exchange rates — XAF-direct format (how many XAF = 1 unit of currency)
   // Source: countries.exchange_rate field (set in /admin/countries)
-  app.get("/api/public/exchange-rates", async (_req, res) => {
+  app.get("/api/public/exchange-rates", publicInfoLimiter, async (_req, res) => {
     try {
       const fxRates = await loadFxRates();
       res.json(fxRates);
@@ -5773,11 +5780,11 @@ export async function registerRoutes(
   });
 
   // Public maintenance status — no auth required so frontend can check before rendering dashboard
-  app.get("/api/public/turnstile-key", (_req, res) => {
+  app.get("/api/public/turnstile-key", publicInfoLimiter, (_req, res) => {
     res.json({ siteKey: process.env.TURNSTILE_SITE_KEY || "" });
   });
 
-  app.get("/api/public/maintenance", async (_req, res) => {
+  app.get("/api/public/maintenance", publicInfoLimiter, async (_req, res) => {
     try {
       const setting = await storage.getSetting("maintenance_mode");
       const active = setting?.value === "true";
@@ -5789,7 +5796,7 @@ export async function registerRoutes(
   });
 
   // Public support contact info route
-  app.get("/api/public/support-contact", async (_req, res) => {
+  app.get("/api/public/support-contact", publicInfoLimiter, async (_req, res) => {
     try {
       const settings = await storage.getAllSettings();
       const supportEmail = settings.find(s => s.key === "support_email")?.value || "support@ashtechpay.com";
@@ -5805,7 +5812,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/public/fee-settings", async (_req, res) => {
+  app.get("/api/public/fee-settings", publicInfoLimiter, async (_req, res) => {
     try {
       const settings = await storage.getAllSettings();
       const conversionFeePercent = parseFloat(settings.find(s => s.key === "conversion_fee_percent")?.value || "6");
@@ -5866,7 +5873,7 @@ export async function registerRoutes(
   });
 
   // Public deposit config for payment links (uses deposit fees)
-  app.get("/api/public/deposit-config", async (_req, res) => {
+  app.get("/api/public/deposit-config", publicInfoLimiter, async (_req, res) => {
     try {
       const countries = await storage.getActiveCountries();
       const allOperators = await storage.getAllOperators();
@@ -5992,7 +5999,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/public/withdrawal-operators-for-country/:country", async (req, res) => {
+  app.get("/api/public/withdrawal-operators-for-country/:country", publicInfoLimiter, async (req, res) => {
     try {
       const countryParam = (req.params.country || "").toLowerCase().trim();
       if (!countryParam) return res.json([]);
@@ -6026,7 +6033,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/public/withdrawal-operators", async (_req, res) => {
+  app.get("/api/public/withdrawal-operators", publicInfoLimiter, async (_req, res) => {
     try {
       const countries = await storage.getActiveCountries();
       const allOperators = await storage.getAllOperators();
@@ -6130,7 +6137,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/payment-links/:slug/download-pdf/:reference", async (req, res) => {
+  app.get("/api/payment-links/:slug/download-pdf/:reference", publicPayLimiter, async (req, res) => {
     try {
       const { slug, reference } = req.params;
       
@@ -12764,7 +12771,7 @@ export async function registerRoutes(
   });
 
   // GET /api/public/countries — list active countries with operators (no auth)
-  app.get("/api/public/countries", async (_req: Request, res: Response) => {
+  app.get("/api/public/countries", publicInfoLimiter, async (_req: Request, res: Response) => {
     try {
       const countries = await storage.getActiveCountries();
       const result = await Promise.all(

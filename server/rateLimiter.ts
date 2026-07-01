@@ -236,3 +236,32 @@ export const bannerLimiter = rateLimit({
   handler: (_req, res) =>
     reject(res, "Trop de requêtes. Réessayez dans une minute.", 60),
 });
+
+// ─── 16. Endpoints publics d'information : 20 / minute / IP ─────────────────
+// Couvre les routes publiques sans auth (/api/public/*, /api/contact-info, etc.)
+// qui ne sont pas couvertes par un limiter dédié plus strict.
+// Le global limiter (50/min) reste actif en plus — cette couche est plus serrée.
+export const publicInfoLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: getIp,
+  validate: sharedValidate,
+  handler: (_req, res) =>
+    reject(res, "Trop de requêtes. Réessayez dans une minute.", 60),
+});
+
+// ─── 17. Proxy image / geo-lookup : 15 / minute / IP ────────────────────────
+// Protège les endpoints qui font des appels HTTP vers des services externes
+// (ip-api.com, Supabase storage) — évite le flooding de ressources externes.
+export const externalProxyLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: getIp,
+  validate: sharedValidate,
+  handler: (_req, res) =>
+    reject(res, "Trop de requêtes. Réessayez dans une minute.", 60),
+});
