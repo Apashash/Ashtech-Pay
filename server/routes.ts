@@ -225,6 +225,7 @@ declare module "express-session" {
   interface SessionData {
     userId: string;
     _avs?: number;
+    _avsIp?: string;      // IP at TOTP verification time — used for admin session IP pinning
     _otpCode?: string;    // deprecated: plaintext OTP kept for backward compat only
     _otpCodeH?: string;   // VULN-A1 fix: HMAC-SHA256 hash of OTP stored in DB session
     _otpExpiry?: number;
@@ -681,6 +682,20 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
     console.log("Auth failed - No userId. Cookies:", req.headers.cookie ? "present" : "none", "Auth header:", req.headers.authorization ? "present" : "none");
     return res.status(401).json({ message: "Non autorisé" });
   }
+
+  // ── Session IP consistency check — detect potential cookie hijacking ──────────
+  // Compare current IP with IP stored at login. For regular users: log only (mobile
+  // switches IPs frequently). Flag it in logs for SIEM review.
+  if (req.session?.clientIp) {
+    const currentIp = getClientIp(req);
+    const sessionIp = req.session.clientIp;
+    const normalize = (ip: string) =>
+      ip === "::1" || ip === "::ffff:127.0.0.1" ? "127.0.0.1" : ip;
+    if (normalize(currentIp) !== normalize(sessionIp)) {
+      console.warn(`[SessionGuard] IP CHANGE — userId=${req.userId} sessionIp=${sessionIp} currentIp=${currentIp} sid=${req.sessionID?.slice(0,8)} — possible cookie theft or mobile switch`);
+    }
+  }
+
   next();
 }
 
@@ -825,6 +840,30 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
       message: "Vérification Google Authenticator requise pour accéder au panneau admin.",
       totpRequired: true,
     });
+  }
+
+  // ── Admin session IP pinning — prevent stolen cookie reuse from a different IP ──
+  // _avsIp is stored when TOTP is verified. If the current IP differs, the _avs is
+  // invalidated immediately and the admin must re-verify with Google Authenticator.
+  // Grace: IPv6 ↔ IPv4 loopback equivalences are tolerated (::1 === 127.0.0.1).
+  const avsIp = req.session._avsIp;
+  if (avsIp) {
+    const normalizeLoopback = (ip: string) =>
+      ip === "::1" || ip === "::ffff:127.0.0.1" ? "127.0.0.1" : ip;
+    if (normalizeLoopback(adminIpEarly) !== normalizeLoopback(avsIp)) {
+      // Revoke _avs immediately — delete from all tiers
+      delete req.session._avs;
+      delete req.session._avsIp;
+      req.session.save(() => {});
+      adminVerifiedSessions.delete(req.sessionID);
+      console.warn(`[AdminAccess] IP MISMATCH — cookie stolen? user=${req.userId} avsIp=${avsIp} currentIp=${adminIpEarly} — _avs revoked, TOTP required`);
+      notifyAdminPanelAccess({ type: "blocked_no_auth", ip: adminIpEarly, userId: user.id, userName: user.fullName || user.username, userEmail: user.email || undefined, userRole: user.role, path: req.path }).catch(() => {});
+      return res.status(403).json({
+        message: "Votre adresse IP a changé. Vérification Google Authenticator requise.",
+        totpRequired: true,
+        ipChanged: true,
+      });
+    }
   }
 
   console.log(`[AdminAccess] OK — user=${req.userId} role=${user.role} path=${req.path}`);
@@ -1429,6 +1468,7 @@ export async function registerRoutes(
         errorLog: (err: Error) => console.error("[SessionStore]", err.message),
       }),
       proxy: isSecureProxy,
+      name: "__ash_sid",
       cookie: {
         secure: cookieSecure,
         httpOnly: true,
@@ -2340,6 +2380,7 @@ export async function registerRoutes(
         req.session.tokenIssuedAt = extractTokenTimestamp(authToken);
         // Set _avs immediately — admin OTP was verified at login time
         req.session._avs = avsExpiresAt;
+        req.session._avsIp = ip;
         // _pav — panel access verified (set at login so fresh login bypasses /admin-panel-verify)
         req.session._pav = Date.now() + ADMIN_PANEL_ACCESS_TTL_MS;
 
@@ -2417,6 +2458,7 @@ export async function registerRoutes(
       // Set _pav (panel access verified, 30-min TTL) — checked by otp-status
       const avsPanelExp = Date.now() + ADMIN_OTP_SESSION_TTL_MS;
       req.session._avs = avsPanelExp;
+      req.session._avsIp = getClientIp(req);
       req.session._pav = Date.now() + ADMIN_PANEL_ACCESS_TTL_MS;
       await new Promise<void>((resolve) => req.session.save((err) => {
         if (err) console.error("admin-panel-verify session save error:", err);
@@ -7819,13 +7861,15 @@ export async function registerRoutes(
       }
       clearOtpFailures(req.userId!);
       const expiresAt = Date.now() + ADMIN_OTP_SESSION_TTL_MS;
+      const totpVerifyIp = getClientIp(req);
       adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt });
       req.session._avs = expiresAt;
+      req.session._avsIp = totpVerifyIp;
       await new Promise<void>((resolve) => req.session.save((err) => {
         if (err) console.error("[AdminTOTP] Session save warning:", err?.message);
         resolve();
       }));
-      const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
+      const ip = totpVerifyIp;
       storage.createAdminLog({
         adminId: req.userId!,
         action: "totp_verified",
