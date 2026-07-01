@@ -567,6 +567,145 @@ export async function sendPasswordChangeOtpEmail(to: string, fullName: string, c
   await sendEmail(to, "Code de confirmation — Changement de mot de passe Ashtech Pay", html, "password-change-otp");
 }
 
+// ─── Withdrawal OTP ───────────────────────────────────────────────────────────
+export async function sendWithdrawalOtpEmail(
+  to: string,
+  userName: string,
+  code: string,
+  details: {
+    method?: string;
+    country?: string;
+    operator?: string;
+    phone?: string;
+    amount: string;
+    fee: string;
+    net: string;
+    currency: string;
+  }
+): Promise<void> {
+  const safeName = escapeHtml(userName);
+  const fields: [string, string][] = [
+    ...(details.method ? [["Méthode", escapeHtml(details.method)] as [string, string]] : []),
+    ...(details.country ? [["Pays", escapeHtml(details.country)] as [string, string]] : []),
+    ...(details.operator ? [["Opérateur", escapeHtml(details.operator)] as [string, string]] : []),
+    ...(details.phone ? [["Numéro", escapeHtml(details.phone)] as [string, string]] : []),
+    ["Montant demandé", `${escapeHtml(details.amount)} ${escapeHtml(details.currency)}`],
+    ["Frais", `<span style="color:#DC2626;">${escapeHtml(details.fee)} ${escapeHtml(details.currency)}</span>`],
+    ["Net à recevoir", `<strong style="color:#16A34A;">${escapeHtml(details.net)} ${escapeHtml(details.currency)}</strong>`],
+  ];
+  const rows = fields.map(([label, value]) => `
+    <tr>
+      <td style="padding:10px 20px;font-size:13px;color:${MUTED};border-bottom:1px solid ${BORDER};">${label}</td>
+      <td style="padding:10px 20px;font-size:13px;color:${TEXT};font-weight:600;text-align:right;border-bottom:1px solid ${BORDER};">${value}</td>
+    </tr>`).join("");
+
+  const bodyRows = `
+  <tr>
+    <td style="padding:36px 40px 8px;">
+      <p style="margin:0 0 16px;font-size:15px;color:${TEXT};line-height:1.7;">
+        Bonjour <strong>${safeName}</strong>,
+      </p>
+      <p style="margin:0 0 16px;font-size:15px;color:${TEXT};line-height:1.7;">
+        Vous avez initié une <strong>demande de retrait</strong>. Voici les détails :
+      </p>
+      <table width="100%" cellpadding="0" cellspacing="0" border="0"
+             style="background:${BOX_BG};border-radius:6px;border:1px solid ${BORDER};margin:0 0 24px;overflow:hidden;">
+        ${rows}
+      </table>
+      <p style="margin:0 0 12px;font-size:15px;color:${TEXT};line-height:1.7;">
+        Entrez ce code pour confirmer votre retrait :
+      </p>
+      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px;">
+        <tr>
+          <td align="center">
+            <div style="display:inline-block;background:#1E3A8A;color:#FFFFFF;font-size:40px;font-weight:900;letter-spacing:16px;padding:20px 36px;border-radius:10px;font-family:monospace;">
+              ${escapeHtml(code)}
+            </div>
+          </td>
+        </tr>
+      </table>
+      <p style="margin:0 0 8px;font-size:13px;color:${MUTED};line-height:1.6;">⏱ Ce code expire dans <strong>10 minutes</strong>.</p>
+      <p style="margin:0 0 24px;font-size:13px;color:${MUTED};line-height:1.6;">
+        Si vous n'êtes pas à l'origine de cette demande, contactez notre support immédiatement.
+      </p>
+      ${supportNote()}
+    </td>
+  </tr>`;
+  const html = emailBase("Code de confirmation de retrait", bodyRows);
+  await sendEmail(to, "🔐 Confirmez votre retrait — Ashtech Pay", html, "withdrawal-otp");
+}
+
+// ─── Transfer OTP ─────────────────────────────────────────────────────────────
+export async function sendTransferOtpEmail(
+  to: string,
+  userName: string,
+  code: string,
+  details: {
+    type: "external" | "internal";
+    recipient?: string;
+    phone?: string;
+    countryOperator?: string;
+    feeBearer?: string;
+    amount: string;
+    fee: string;
+    net: string;
+    currency: string;
+  }
+): Promise<void> {
+  const safeName = escapeHtml(userName);
+  const isInternal = details.type === "internal";
+  const label = isInternal ? "transfert interne" : "envoi d'argent";
+  const fields: [string, string][] = [
+    ...(details.recipient ? [["Destinataire", escapeHtml(details.recipient)] as [string, string]] : []),
+    ...(details.phone ? [["Numéro", escapeHtml(details.phone)] as [string, string]] : []),
+    ...(details.countryOperator ? [["Pays / Opérateur", escapeHtml(details.countryOperator)] as [string, string]] : []),
+    ...(details.feeBearer ? [["Frais payés par", escapeHtml(details.feeBearer)] as [string, string]] : []),
+    ["Montant envoyé", `${escapeHtml(details.amount)} ${escapeHtml(details.currency)}`],
+    ["Frais", `<span style="color:#DC2626;">${escapeHtml(details.fee)} ${escapeHtml(details.currency)}</span>`],
+    ["Net reçu", `<strong style="color:#16A34A;">${escapeHtml(details.net)} ${escapeHtml(details.currency)}</strong>`],
+  ];
+  const rows = fields.map(([lbl, val]) => `
+    <tr>
+      <td style="padding:10px 20px;font-size:13px;color:${MUTED};border-bottom:1px solid ${BORDER};">${lbl}</td>
+      <td style="padding:10px 20px;font-size:13px;color:${TEXT};font-weight:600;text-align:right;border-bottom:1px solid ${BORDER};">${val}</td>
+    </tr>`).join("");
+
+  const bodyRows = `
+  <tr>
+    <td style="padding:36px 40px 8px;">
+      <p style="margin:0 0 16px;font-size:15px;color:${TEXT};line-height:1.7;">
+        Bonjour <strong>${safeName}</strong>,
+      </p>
+      <p style="margin:0 0 16px;font-size:15px;color:${TEXT};line-height:1.7;">
+        Vous avez initié un <strong>${label}</strong>. Voici les détails :
+      </p>
+      <table width="100%" cellpadding="0" cellspacing="0" border="0"
+             style="background:${BOX_BG};border-radius:6px;border:1px solid ${BORDER};margin:0 0 24px;overflow:hidden;">
+        ${rows}
+      </table>
+      <p style="margin:0 0 12px;font-size:15px;color:${TEXT};line-height:1.7;">
+        Entrez ce code pour confirmer votre ${label} :
+      </p>
+      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px;">
+        <tr>
+          <td align="center">
+            <div style="display:inline-block;background:#1E3A8A;color:#FFFFFF;font-size:40px;font-weight:900;letter-spacing:16px;padding:20px 36px;border-radius:10px;font-family:monospace;">
+              ${escapeHtml(code)}
+            </div>
+          </td>
+        </tr>
+      </table>
+      <p style="margin:0 0 8px;font-size:13px;color:${MUTED};line-height:1.6;">⏱ Ce code expire dans <strong>10 minutes</strong>.</p>
+      <p style="margin:0 0 24px;font-size:13px;color:${MUTED};line-height:1.6;">
+        Si vous n'êtes pas à l'origine de cette demande, contactez notre support immédiatement.
+      </p>
+      ${supportNote()}
+    </td>
+  </tr>`;
+  const html = emailBase(`Code de confirmation de ${isInternal ? "transfert" : "envoi"}`, bodyRows);
+  await sendEmail(to, `🔐 Confirmez votre ${isInternal ? "transfert" : "envoi"} — Ashtech Pay`, html, "transfer-otp");
+}
+
 // ─── Admin OTP ────────────────────────────────────────────────────────────────
 export async function sendAdminOtpEmail(to: string, adminName: string, code: string): Promise<void> {
   const safeAdminName = escapeHtml(adminName);

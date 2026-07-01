@@ -9,7 +9,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User, SupportedCurrency, Wallet } from "@shared/schema";
-import { Send, Globe, Loader2, AlertCircle, Shield, CheckCircle2, Smartphone, TrendingDown, Wallet as WalletIcon, UserCheck, Users } from "lucide-react";
+import { Send, Globe, Loader2, AlertCircle, Shield, CheckCircle2, Smartphone, TrendingDown, Wallet as WalletIcon, UserCheck, Users, X, CheckCircle } from "lucide-react";
 import { SearchableSelectContent } from "@/components/ui/searchable-select-content";
 import { useLanguage } from "@/lib/language";
 import { BottomSheet, BottomSheetContent, BottomSheetHeader, BottomSheetTitle, BottomSheetFooter } from "@/components/ui/bottom-sheet";
@@ -125,6 +125,13 @@ export default function SendMoneyPage() {
   const [pendingExternalData, setPendingExternalData] = useState<ExternalFormData | null>(null);
   const [showInternalConfirmDialog, setShowInternalConfirmDialog] = useState(false);
   const [prevCountryId, setPrevCountryId] = useState("");
+  const [showOtpDialog, setShowOtpDialog] = useState(false);
+  const [otpRef, setOtpRef] = useState<string | null>(null);
+  const [otpCode, setOtpCode] = useState("");
+  const [otpError, setOtpError] = useState("");
+  const [otpType, setOtpType] = useState<"external" | "internal">("external");
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [successLabel, setSuccessLabel] = useState("");
 
   useEffect(() => {
     if (watchedCountryId !== prevCountryId) {
@@ -170,6 +177,37 @@ export default function SendMoneyPage() {
     return () => clearTimeout(timer);
   }, [fetchFeePreview]);
 
+  const requestOtpMutation = useMutation({
+    mutationFn: async (payload: {
+      type: "external" | "internal";
+      recipient?: string;
+      phone?: string;
+      countryOperator?: string;
+      feeBearer?: string;
+      amount: string;
+      fee: string;
+      net: string;
+      currency: string;
+    }) => {
+      const res = await apiRequest("POST", "/api/transfers/request-otp", payload);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Erreur lors de l'envoi du code");
+      return data as { ref: string };
+    },
+    onSuccess: (data, variables) => {
+      setOtpRef(data.ref);
+      setOtpCode("");
+      setOtpError("");
+      setOtpType(variables.type);
+      setShowConfirmDialog(false);
+      setShowInternalConfirmDialog(false);
+      setShowOtpDialog(true);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+    },
+  });
+
   const internalMutation = useMutation({
     mutationFn: async () => {
       if (!internalIdentifier.trim()) throw new Error("Veuillez entrer l'identifiant du destinataire");
@@ -179,6 +217,8 @@ export default function SendMoneyPage() {
         recipientIdentifier: internalIdentifier.trim(),
         amount: internalAmount,
         sourceCurrency: selectedWallet,
+        otpRef,
+        otpCode,
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Erreur lors du transfert");
@@ -188,20 +228,34 @@ export default function SendMoneyPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/wallets"] });
-      toast({ title: "Transfert effectué ✓", description: `Compte de ${data.recipientName} crédité instantanément — Frais: 0` });
       setInternalIdentifier("");
       setInternalAmount("");
-      setShowInternalConfirmDialog(false);
+      setOtpRef(null);
+      setOtpCode("");
+      setShowOtpDialog(false);
+      setSuccessLabel(`Compte de ${data.recipientName} crédité avec succès`);
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 4000);
     },
     onError: (error: Error) => {
-      toast({ title: "Erreur", description: error.message, variant: "destructive" });
-      setShowInternalConfirmDialog(false);
+      if (error.message.includes("OTP") || error.message.includes("Code")) {
+        setOtpError(error.message);
+      } else {
+        toast({ title: "Erreur", description: error.message, variant: "destructive" });
+        setShowOtpDialog(false);
+      }
     },
   });
 
   const externalMutation = useMutation({
     mutationFn: async (data: ExternalFormData) => {
-      const res = await apiRequest("POST", "/api/transfers/send", { ...data, sourceCurrency: selectedWallet, feeBearer });
+      const res = await apiRequest("POST", "/api/transfers/send", {
+        ...data,
+        sourceCurrency: selectedWallet,
+        feeBearer,
+        otpRef,
+        otpCode,
+      });
       const json = await res.json();
       if (!res.ok) throw new Error(json.message || "Erreur lors du transfert");
       return json;
@@ -210,14 +264,22 @@ export default function SendMoneyPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/wallets"] });
-      setShowConfirmDialog(false);
       setPendingExternalData(null);
       form.reset();
-      toast({ title: "Paiement envoyé avec succès ✓", description: "Votre transaction est en cours de traitement" });
+      setOtpRef(null);
+      setOtpCode("");
+      setShowOtpDialog(false);
+      setSuccessLabel("Envoi effectué avec succès");
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 4000);
     },
     onError: (error: Error) => {
-      setShowConfirmDialog(false);
-      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+      if (error.message.includes("OTP") || error.message.includes("Code")) {
+        setOtpError(error.message);
+      } else {
+        setShowOtpDialog(false);
+        toast({ title: "Erreur", description: error.message, variant: "destructive" });
+      }
     },
   });
 
@@ -744,11 +806,18 @@ export default function SendMoneyPage() {
             <Button variant="outline" className="flex-1" onClick={() => setShowInternalConfirmDialog(false)}>{t.send.back}</Button>
             <Button
               className="flex-1 bg-primary hover:bg-primary/90 text-black font-bold"
-              onClick={() => internalMutation.mutate()}
-              disabled={internalMutation.isPending}
+              onClick={() => requestOtpMutation.mutate({
+                type: "internal",
+                recipient: internalIdentifier,
+                amount: internalAmountValue.toLocaleString("fr-FR"),
+                fee: "0",
+                net: internalAmountValue.toLocaleString("fr-FR"),
+                currency: selectedWallet,
+              })}
+              disabled={requestOtpMutation.isPending}
               data-testid="button-final-confirm-internal"
             >
-              {internalMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
+              {requestOtpMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
               {t.send.confirm}
             </Button>
           </BottomSheetFooter>
@@ -803,16 +872,114 @@ export default function SendMoneyPage() {
             <Button variant="outline" className="flex-1" onClick={() => setShowConfirmDialog(false)}>{t.send.back}</Button>
             <Button
               className="flex-1 bg-primary hover:bg-primary/90 text-black font-bold"
-              onClick={() => { if (pendingExternalData) externalMutation.mutate(pendingExternalData); }}
-              disabled={externalMutation.isPending}
+              onClick={() => {
+                if (!pendingExternalData) return;
+                requestOtpMutation.mutate({
+                  type: "external",
+                  recipient: pendingExternalData.recipientName,
+                  phone: pendingExternalData.recipientPhone,
+                  countryOperator: `${selectedCountry?.name || ""} · ${selectedOperator?.name || ""}`,
+                  feeBearer: feeBearer === "sender" ? "Moi (l'envoyeur)" : "Le receveur",
+                  amount: amountValue.toLocaleString("fr-FR"),
+                  fee: feePreview.feeAmount > 0 ? `-${feePreview.feeAmount.toLocaleString("fr-FR")}` : "0",
+                  net: netReceivedByRecipient.toLocaleString("fr-FR"),
+                  currency: selectedWallet,
+                });
+              }}
+              disabled={requestOtpMutation.isPending}
               data-testid="button-final-confirm-external"
             >
-              {externalMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
+              {requestOtpMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
               {t.send.confirm}
             </Button>
           </BottomSheetFooter>
         </BottomSheetContent>
       </BottomSheet>
+
+      {/* ── OTP Verification dialog ── */}
+      <BottomSheet open={showOtpDialog} onOpenChange={setShowOtpDialog}>
+        <BottomSheetContent>
+          <BottomSheetHeader>
+            <BottomSheetTitle className="text-center text-lg">Code de vérification</BottomSheetTitle>
+          </BottomSheetHeader>
+          <div className="space-y-5 py-2">
+            <div className="text-center space-y-2">
+              <div className="w-14 h-14 rounded-full bg-blue-500/15 flex items-center justify-center mx-auto">
+                <Shield className="w-7 h-7 text-blue-500" />
+              </div>
+              <p className="text-sm text-muted-foreground px-4">
+                Un code à 6 chiffres a été envoyé à <strong>{user?.email}</strong>
+              </p>
+            </div>
+            <div className="space-y-2">
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                placeholder="• • • • • •"
+                value={otpCode}
+                onChange={(e) => { setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setOtpError(""); }}
+                className="w-full h-14 text-center text-2xl font-bold tracking-[0.5em] bg-muted border border-border rounded-xl outline-none focus:border-primary transition-colors text-foreground placeholder:text-muted-foreground/40"
+                data-testid="input-transfer-otp"
+                autoFocus
+              />
+              {otpError && (
+                <p className="text-xs text-destructive text-center">{otpError}</p>
+              )}
+            </div>
+          </div>
+          <BottomSheetFooter>
+            <Button variant="outline" className="flex-1" onClick={() => setShowOtpDialog(false)} data-testid="button-cancel-otp">
+              Annuler
+            </Button>
+            <Button
+              className="flex-1 bg-primary hover:bg-primary/90 text-black font-bold"
+              onClick={() => {
+                if (otpType === "internal") internalMutation.mutate();
+                else if (pendingExternalData) externalMutation.mutate(pendingExternalData);
+              }}
+              disabled={(otpType === "internal" ? internalMutation.isPending : externalMutation.isPending) || otpCode.length < 6}
+              data-testid="button-validate-otp"
+            >
+              {(otpType === "internal" ? internalMutation.isPending : externalMutation.isPending)
+                ? <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                : <CheckCircle className="w-4 h-4 mr-2" />}
+              Valider
+            </Button>
+          </BottomSheetFooter>
+        </BottomSheetContent>
+      </BottomSheet>
+
+      {/* ── Success popup ── */}
+      {showSuccess && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="relative bg-card border border-border rounded-3xl p-8 mx-4 max-w-sm w-full shadow-2xl text-center space-y-5 animate-in zoom-in-95 duration-200">
+            <button
+              onClick={() => setShowSuccess(false)}
+              className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              data-testid="button-close-success"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <div className="w-16 h-16 rounded-full bg-green-500/15 flex items-center justify-center mx-auto">
+              <CheckCircle className="w-8 h-8 text-green-500" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-foreground">{successLabel || "Envoi effectué avec succès"}</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                {otpType === "internal" ? "Transfert instantané — aucun frais." : "Votre transaction est en cours de traitement."}
+              </p>
+            </div>
+            <Button
+              className="w-full font-semibold"
+              onClick={() => { setShowSuccess(false); form.reset(); setInternalIdentifier(""); setInternalAmount(""); }}
+              data-testid="button-another-transaction"
+            >
+              Effectuer un autre envoi
+            </Button>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

@@ -10,7 +10,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { withdrawSchema, type SupportedCurrency, type WithdrawalNumber } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User } from "@shared/schema";
-import { Smartphone, Building2, Loader2, CheckCircle, AlertCircle, Plus, Settings, Shield, Info, CreditCard } from "lucide-react";
+import { Smartphone, Building2, Loader2, CheckCircle, AlertCircle, Plus, Settings, Shield, Info, CreditCard, X } from "lucide-react";
 import { useLanguage } from "@/lib/language";
 import { BottomSheet, BottomSheetContent, BottomSheetHeader, BottomSheetTitle, BottomSheetFooter } from "@/components/ui/bottom-sheet";
 import { getOperatorLogo } from "@/lib/operator-logos";
@@ -54,6 +54,11 @@ export default function WithdrawPage() {
   const [selectedCountry, setSelectedCountry] = useState<string>("");
   const [selectedOperator, setSelectedOperator] = useState<string>("");
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [showOtpDialog, setShowOtpDialog] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [otpRef, setOtpRef] = useState<string | null>(null);
+  const [otpCode, setOtpCode] = useState("");
+  const [otpError, setOtpError] = useState("");
   const { toast } = useToast();
 
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
@@ -124,25 +129,65 @@ export default function WithdrawPage() {
     form.setValue("operatorId", selectedOperator);
   }, [selectedOperator, form]);
 
+  const requestOtpMutation = useMutation({
+    mutationFn: async () => {
+      const values = form.getValues();
+      const res = await apiRequest("POST", "/api/withdrawals/request-otp", {
+        method: selectedMethod === "mobile_money" ? "Mobile Money" : "Virement bancaire",
+        country: selectedCountryData?.name,
+        operator: selectedOperatorData?.name,
+        phone: values.accountDetails,
+        amount: amountValue.toLocaleString("fr-FR"),
+        fee: feeAmount > 0 ? `-${feeAmount.toLocaleString("fr-FR")}` : "0",
+        net: (amountValue - feeAmount).toLocaleString("fr-FR"),
+        currency: userCurrency,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Erreur lors de l'envoi du code");
+      return data;
+    },
+    onSuccess: (data: { ref: string }) => {
+      setOtpRef(data.ref);
+      setShowConfirmDialog(false);
+      setOtpCode("");
+      setOtpError("");
+      setShowOtpDialog(true);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+    },
+  });
+
   const withdrawMutation = useMutation({
     mutationFn: async (data: z.infer<typeof withdrawSchema>) => {
       const res = await apiRequest("POST", "/api/withdrawals", {
         ...data,
         paymentMethod: selectedMethod,
+        otpRef,
+        otpCode,
       });
-      return res.json();
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || "Erreur");
+      return json;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
-      toast({ title: "Retrait demandé", description: "Votre demande de retrait a été enregistrée" });
       form.reset();
       setSelectedNumber("");
-      setShowConfirmDialog(false);
+      setOtpRef(null);
+      setOtpCode("");
+      setShowOtpDialog(false);
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 4000);
     },
     onError: (error: Error) => {
-      toast({ title: "Erreur", description: error.message, variant: "destructive" });
-      setShowConfirmDialog(false);
+      if (error.message.includes("OTP") || error.message.includes("Code")) {
+        setOtpError(error.message);
+      } else {
+        toast({ title: "Erreur", description: error.message, variant: "destructive" });
+        setShowOtpDialog(false);
+      }
     },
   });
 
@@ -573,16 +618,94 @@ export default function WithdrawPage() {
             </Button>
             <Button
               className="flex-1"
-              onClick={() => withdrawMutation.mutate(form.getValues())}
-              disabled={withdrawMutation.isPending}
+              onClick={() => requestOtpMutation.mutate()}
+              disabled={requestOtpMutation.isPending}
               data-testid="button-final-confirm-withdraw"
             >
-              {withdrawMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CreditCard className="w-4 h-4 mr-2" />}
+              {requestOtpMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CreditCard className="w-4 h-4 mr-2" />}
               {t.withdraw.confirm}
             </Button>
           </BottomSheetFooter>
         </BottomSheetContent>
       </BottomSheet>
+
+      {/* ── OTP Verification dialog ── */}
+      <BottomSheet open={showOtpDialog} onOpenChange={setShowOtpDialog}>
+        <BottomSheetContent>
+          <BottomSheetHeader>
+            <BottomSheetTitle className="text-center text-lg">Code de vérification</BottomSheetTitle>
+          </BottomSheetHeader>
+          <div className="space-y-5 py-2">
+            <div className="text-center space-y-2">
+              <div className="w-14 h-14 rounded-full bg-blue-500/15 flex items-center justify-center mx-auto">
+                <Shield className="w-7 h-7 text-blue-500" />
+              </div>
+              <p className="text-sm text-muted-foreground px-4">
+                Un code à 6 chiffres a été envoyé à <strong>{user?.email}</strong>
+              </p>
+            </div>
+            <div className="space-y-2">
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                placeholder="• • • • • •"
+                value={otpCode}
+                onChange={(e) => { setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setOtpError(""); }}
+                className="w-full h-14 text-center text-2xl font-bold tracking-[0.5em] bg-muted border border-border rounded-xl outline-none focus:border-primary transition-colors text-foreground placeholder:text-muted-foreground/40"
+                data-testid="input-withdrawal-otp"
+                autoFocus
+              />
+              {otpError && (
+                <p className="text-xs text-destructive text-center">{otpError}</p>
+              )}
+            </div>
+          </div>
+          <BottomSheetFooter>
+            <Button variant="outline" className="flex-1" onClick={() => setShowOtpDialog(false)} data-testid="button-cancel-otp">
+              Annuler
+            </Button>
+            <Button
+              className="flex-1"
+              onClick={() => withdrawMutation.mutate(form.getValues())}
+              disabled={withdrawMutation.isPending || otpCode.length < 6}
+              data-testid="button-validate-otp"
+            >
+              {withdrawMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle className="w-4 h-4 mr-2" />}
+              Valider
+            </Button>
+          </BottomSheetFooter>
+        </BottomSheetContent>
+      </BottomSheet>
+
+      {/* ── Success popup ── */}
+      {showSuccess && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="relative bg-card border border-border rounded-3xl p-8 mx-4 max-w-sm w-full shadow-2xl text-center space-y-5 animate-in zoom-in-95 duration-200">
+            <button
+              onClick={() => setShowSuccess(false)}
+              className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              data-testid="button-close-success"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <div className="w-16 h-16 rounded-full bg-green-500/15 flex items-center justify-center mx-auto">
+              <CheckCircle className="w-8 h-8 text-green-500" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-foreground">Retrait effectué avec succès</h3>
+              <p className="text-sm text-muted-foreground mt-1">Votre demande est en cours de traitement.</p>
+            </div>
+            <Button
+              className="w-full font-semibold"
+              onClick={() => setShowSuccess(false)}
+              data-testid="button-another-transaction"
+            >
+              Effectuer un autre retrait
+            </Button>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

@@ -257,6 +257,21 @@ function hashOtp(code: string): string {
 // Never persisted to DB — cannot be injected via SQL.
 const adminOtpStore = new Map<string, { code: string; expiresAt: number }>();
 
+// ─── Transaction OTP store (withdrawal / transfer) ────────────────────────────
+const TX_OTP_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const txOtpStore = new Map<string, {
+  userId: number;
+  otpHash: string;
+  type: "withdrawal" | "transfer_external" | "transfer_internal";
+  expiresAt: number;
+}>();
+setInterval(() => {
+  const now = Date.now();
+  for (const [ref, entry] of txOtpStore) {
+    if (entry.expiresAt <= now) txOtpStore.delete(ref);
+  }
+}, 10 * 60 * 1000);
+
 // ─── Pending admin logins — DB-backed (survives PM2 worker restarts) ──────────
 // Stores OTP for admin accounts BEFORE any session is created.
 // Session is only created AFTER OTP is verified — impossible to bypass.
@@ -3506,6 +3521,34 @@ export async function registerRoutes(
     }
   });
 
+  // Request OTP for transfer (external or internal)
+  app.post("/api/transfers/request-otp", requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId!;
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
+
+      const { type, recipient, phone, countryOperator, feeBearer, amount, fee, net, currency } = req.body;
+      const otpType = type === "internal" ? "transfer_internal" : "transfer_external";
+
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      const ref = crypto.randomUUID();
+      txOtpStore.set(ref, { userId, otpHash: hashOtp(code), type: otpType, expiresAt: Date.now() + TX_OTP_TTL_MS });
+
+      const { sendTransferOtpEmail } = await import("./email");
+      sendTransferOtpEmail(user.email, user.fullName || user.username, code, {
+        type: type === "internal" ? "internal" : "external",
+        recipient, phone, countryOperator, feeBearer,
+        amount: String(amount), fee: String(fee), net: String(net), currency: String(currency || "XAF"),
+      }).catch((err: Error) => console.error("[TransferOTP] Email error:", err.message));
+
+      res.json({ ref, expiresIn: 600 });
+    } catch (error) {
+      console.error("Transfer OTP request error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   // Send money externally (with operator and fees)
   app.post("/api/transfers/send", requireAuth, transferLimiter, async (req, res) => {
     try {
@@ -3526,6 +3569,25 @@ export async function registerRoutes(
       if (!sender) {
         return res.status(404).json({ message: "Utilisateur non trouvé" });
       }
+
+      // ── OTP verification ──
+      const { otpRef: sendOtpRef, otpCode: sendOtpCode } = req.body as any;
+      if (!sendOtpRef || !sendOtpCode) {
+        return res.status(400).json({ message: "Code OTP requis", code: "OTP_REQUIRED" });
+      }
+      const sendOtpEntry = txOtpStore.get(sendOtpRef);
+      if (!sendOtpEntry || sendOtpEntry.userId !== senderId || sendOtpEntry.type !== "transfer_external") {
+        return res.status(400).json({ message: "Code OTP invalide ou expiré", code: "OTP_INVALID" });
+      }
+      if (sendOtpEntry.expiresAt < Date.now()) {
+        txOtpStore.delete(sendOtpRef);
+        return res.status(400).json({ message: "Code OTP expiré, veuillez en demander un nouveau", code: "OTP_EXPIRED" });
+      }
+      if (hashOtp(String(sendOtpCode)) !== sendOtpEntry.otpHash) {
+        return res.status(400).json({ message: "Code OTP incorrect", code: "OTP_WRONG" });
+      }
+      txOtpStore.delete(sendOtpRef);
+      // ── End OTP ──
 
       if (sender.withdrawalBlocked) {
         const reason = sender.withdrawalBlockReason || "Votre compte a été restreint. Contactez le support.";
@@ -3847,6 +3909,25 @@ export async function registerRoutes(
 
       const sender = await storage.getUser(senderId);
       if (!sender) return res.status(404).json({ message: "Utilisateur non trouvé" });
+
+      // ── OTP verification ──
+      const { otpRef: intOtpRef, otpCode: intOtpCode } = req.body as any;
+      if (!intOtpRef || !intOtpCode) {
+        return res.status(400).json({ message: "Code OTP requis", code: "OTP_REQUIRED" });
+      }
+      const intOtpEntry = txOtpStore.get(intOtpRef);
+      if (!intOtpEntry || intOtpEntry.userId !== senderId || intOtpEntry.type !== "transfer_internal") {
+        return res.status(400).json({ message: "Code OTP invalide ou expiré", code: "OTP_INVALID" });
+      }
+      if (intOtpEntry.expiresAt < Date.now()) {
+        txOtpStore.delete(intOtpRef);
+        return res.status(400).json({ message: "Code OTP expiré, veuillez en demander un nouveau", code: "OTP_EXPIRED" });
+      }
+      if (hashOtp(String(intOtpCode)) !== intOtpEntry.otpHash) {
+        return res.status(400).json({ message: "Code OTP incorrect", code: "OTP_WRONG" });
+      }
+      txOtpStore.delete(intOtpRef);
+      // ── End OTP ──
 
       // Lookup recipient by email, phone or username
       const identifier = recipientIdentifier.trim();
@@ -4427,6 +4508,32 @@ export async function registerRoutes(
     }
   });
 
+  // Request OTP for withdrawal
+  app.post("/api/withdrawals/request-otp", requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId!;
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
+
+      const { method, country, operator, phone, amount, fee, net, currency } = req.body;
+
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      const ref = crypto.randomUUID();
+      txOtpStore.set(ref, { userId, otpHash: hashOtp(code), type: "withdrawal", expiresAt: Date.now() + TX_OTP_TTL_MS });
+
+      const { sendWithdrawalOtpEmail } = await import("./email");
+      sendWithdrawalOtpEmail(user.email, user.fullName || user.username, code, {
+        method, country, operator, phone,
+        amount: String(amount), fee: String(fee), net: String(net), currency: String(currency || "XAF"),
+      }).catch((err: Error) => console.error("[WithdrawalOTP] Email error:", err.message));
+
+      res.json({ ref, expiresIn: 600 });
+    } catch (error) {
+      console.error("Withdrawal OTP request error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   // Withdraw money
   app.post("/api/withdrawals", requireAuth, withdrawalLimiter, async (req, res) => {
     try {
@@ -4438,6 +4545,25 @@ export async function registerRoutes(
       if (!user) {
         return res.status(404).json({ message: "Utilisateur non trouvé" });
       }
+
+      // ── OTP verification ──
+      const { otpRef, otpCode: submittedOtpCode } = req.body as any;
+      if (!otpRef || !submittedOtpCode) {
+        return res.status(400).json({ message: "Code OTP requis", code: "OTP_REQUIRED" });
+      }
+      const otpEntry = txOtpStore.get(otpRef);
+      if (!otpEntry || otpEntry.userId !== userId || otpEntry.type !== "withdrawal") {
+        return res.status(400).json({ message: "Code OTP invalide ou expiré", code: "OTP_INVALID" });
+      }
+      if (otpEntry.expiresAt < Date.now()) {
+        txOtpStore.delete(otpRef);
+        return res.status(400).json({ message: "Code OTP expiré, veuillez en demander un nouveau", code: "OTP_EXPIRED" });
+      }
+      if (hashOtp(String(submittedOtpCode)) !== otpEntry.otpHash) {
+        return res.status(400).json({ message: "Code OTP incorrect", code: "OTP_WRONG" });
+      }
+      txOtpStore.delete(otpRef);
+      // ── End OTP ──
 
       if (user.withdrawalBlocked) {
         const reason = user.withdrawalBlockReason || "Votre compte a été restreint. Contactez le support.";
