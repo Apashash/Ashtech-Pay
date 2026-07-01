@@ -350,8 +350,13 @@ function ImpersonationBanner() {
 
   const [expanded, setExpanded] = React.useState(false);
   const [pos, setPos] = React.useState(() => {
-    const saved = sessionStorage.getItem("impersonationBannerPos");
-    return saved ? JSON.parse(saved) : { x: window.innerWidth - 80, y: 80 };
+    try {
+      const saved = sessionStorage.getItem("impersonationBannerPos");
+      if (saved) return JSON.parse(saved);
+    } catch {
+      sessionStorage.removeItem("impersonationBannerPos");
+    }
+    return { x: window.innerWidth - 80, y: 80 };
   });
   const dragging = React.useRef(false);
   const dragOffset = React.useRef({ x: 0, y: 0 });
