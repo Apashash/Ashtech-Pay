@@ -7173,14 +7173,13 @@ export async function registerRoutes(
       }
     }
 
-  // Tier 4: X-Admin-OTP-Token header (same as requireAdmin)
+  // Tier 4: X-Admin-OTP-Token header — read-only status check only, does NOT populate adminVerifiedSessions
   if (!verified) {
     const headerToken = req.headers["x-admin-otp-token"] as string | undefined;
     if (headerToken) {
       const result = verifyAdminOtpToken(headerToken, req.userId!);
       if (result.valid) {
         verified = true;
-        adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: result.expiresAt });
       }
     }
   }
@@ -7740,8 +7739,7 @@ export async function registerRoutes(
       console.log(`[AdminOTP] Admin ${user.email?.replace(/(.{2}).+(@.+)/, "$1***$2")} vérifié depuis ${ip}`);
       notifyAdminLoginSuccess({ adminName: user.fullName || user.username, adminEmail: user.email || "", ip }).catch(() => {});
 
-      const adminOtpToken = signAdminOtpToken(req.userId!, expiresAt) ?? undefined;
-      res.json({ success: true, adminOtpToken });
+      res.json({ success: true });
     } catch (error: any) {
       console.error("Admin OTP verify error:", error.message);
       res.status(500).json({ message: "Erreur serveur" });
