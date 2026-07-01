@@ -30,6 +30,7 @@ export const users = pgTable("users", {
   registrationIp: text("registration_ip"),
   totpSecret: text("totp_secret"),
   totpEnabled: boolean("totp_enabled").default(false),
+  accountId: text("account_id").unique(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

@@ -364,8 +364,26 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const [user] = await db.insert(users).values(insertUser).returning();
-    return user;
+    // Generate unique account ID: ASHTECH + 8 random digits
+    const generateAccountId = () =>
+      "ASHTECH" + Math.floor(10000000 + Math.random() * 90000000).toString();
+
+    // Retry loop: handles both pre-check collisions and DB unique-constraint violations
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const accountId = generateAccountId();
+      try {
+        const [user] = await db.insert(users).values({ ...insertUser, accountId }).returning();
+        return user;
+      } catch (err: any) {
+        // 23505 = unique_violation in PostgreSQL
+        if (err?.code === "23505" && err?.constraint?.includes("account_id")) {
+          continue; // collision — regenerate and retry
+        }
+        throw err; // other error — rethrow immediately
+      }
+    }
+    // Extremely unlikely fallback (10 collisions in a row with 90M space)
+    throw new Error("Impossible de générer un Account ID unique après 10 tentatives.");
   }
 
   async updateUserBalance(id: string, amount: number): Promise<User | undefined> {
