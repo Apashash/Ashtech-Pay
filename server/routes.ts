@@ -825,7 +825,7 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
 
   // ── MANDATORY Google Authenticator (TOTP) — enforced server-side ─────────────
   // Every admin API call requires TOTP to be (1) configured and (2) verified in
-  // this session. No env-var bypass. No exception for the logo-click trick.
+  // this session.
   if (!user.totpEnabled || !user.totpSecret) {
     console.warn(`[AdminAccess] BLOCKED — TOTP not configured — user=${req.userId} role=${user.role} path=${req.path}`);
     notifyAdminPanelAccess({ type: "blocked_no_auth", ip: adminIpEarly, userId: user.id, userName: user.fullName || user.username, userEmail: user.email || undefined, userRole: user.role, path: req.path }).catch(() => {});
@@ -2441,7 +2441,6 @@ export async function registerRoutes(
         // Set _avs immediately — admin OTP was verified at login time
         req.session._avs = avsExpiresAt;
         req.session._avsIp = ip;
-        // _pav — panel access verified (set at login so fresh login bypasses /admin-panel-verify)
         req.session._pav = Date.now() + ADMIN_PANEL_ACCESS_TTL_MS;
 
         req.session.save((err) => {
@@ -7133,7 +7132,6 @@ export async function registerRoutes(
     if (!user || !["admin", "support", "finance"].includes(user.role)) {
       return res.status(403).json({ message: "Accès refusé" });
     }
-    // ADMIN_OTP_BYPASS env var has been permanently removed — no bypass allowed.
     const now = Date.now();
     // Keyed by sessionID — each browser login is independently verified
     const memEntry = adminVerifiedSessions.get(req.sessionID);
@@ -7723,11 +7721,6 @@ export async function registerRoutes(
 
       const expiresAt = Date.now() + ADMIN_OTP_SESSION_TTL_MS;
 
-      // NOTE: Email OTP verification NO LONGER sets _avs — TOTP (Google Authenticator)
-      // is now the ONLY mechanism that grants admin panel access. Setting _avs here would
-      // create a bypass: email OTP → _avs → requireAdmin passes without Google Authenticator.
-      // _avs is set ONLY by: /api/auth/admin-login-otp, /api/auth/admin-panel-verify,
-      // and /api/admin/totp/verify (all require actual TOTP code verification).
       await new Promise<void>((resolve) => {
         req.session.save((err) => {
           if (err) console.error("[AdminOTP] Session save warning (non-fatal):", err?.message);
