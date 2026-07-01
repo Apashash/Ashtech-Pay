@@ -68,7 +68,7 @@ export default function AdminMerchants() {
     <AdminLayout>
       <div className="space-y-6">
         <div className="flex items-center gap-4">
-          <Link href={`${import.meta.env.VITE_ADMIN_PATH}/api-management`}>
+          <Link href={`${(import.meta.env.VITE_ADMIN_PATH as string) || "/admin"}/api-management`}>
             <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0">
               <ArrowLeft className="h-4 w-4" />
             </Button>

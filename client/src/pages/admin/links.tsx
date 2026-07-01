@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { AdminLayout } from "./layout";
-const A = import.meta.env.VITE_ADMIN_PATH as string;
+const A = (import.meta.env.VITE_ADMIN_PATH as string) || "/admin";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

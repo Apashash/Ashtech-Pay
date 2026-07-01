@@ -418,7 +418,7 @@ function ImpersonationBanner() {
     } catch {}
 
     // 4. Redirection vers l'admin
-    window.location.href = `${import.meta.env.VITE_ADMIN_PATH}/users`;
+    window.location.href = `${(import.meta.env.VITE_ADMIN_PATH as string) || "/admin"}/users`;
   };
 
   if (!isImpersonating) return null;

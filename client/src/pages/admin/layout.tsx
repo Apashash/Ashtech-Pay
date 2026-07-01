@@ -92,7 +92,7 @@ const typeColors: Record<string, string> = {
   payment_link: "text-purple-500",
 };
 
-const ADMIN = import.meta.env.VITE_ADMIN_PATH as string;
+const ADMIN = (import.meta.env.VITE_ADMIN_PATH as string) || "/admin";
 
 const menuItems: MenuItem[] = [
   { icon: LayoutDashboard, label: "Dashboard", href: ADMIN },

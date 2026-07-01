@@ -13,7 +13,7 @@ import {
 
 export default function AdminSettings() {
   const [, setLocation] = useLocation();
-  const ADMIN = import.meta.env.VITE_ADMIN_PATH as string;
+  const ADMIN = (import.meta.env.VITE_ADMIN_PATH as string) || "/admin";
 
   const settingsSections = [
     {

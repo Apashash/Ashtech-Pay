@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ArrowDownCircle, ArrowUpCircle, Send, ChevronRight } from "lucide-react";
 
 function getFeesSections() {
-  const A = import.meta.env.VITE_ADMIN_PATH as string;
+  const A = (import.meta.env.VITE_ADMIN_PATH as string) || "/admin";
   return [
     {
       href: `${A}/fees/deposits`,

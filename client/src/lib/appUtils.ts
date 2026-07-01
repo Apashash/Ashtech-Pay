@@ -11,7 +11,7 @@ export function getBlockedUntil(): number | null {
   return null;
 }
 
-export const GEO_BYPASS_PATHS = ["/pay/", "/hpay/", "/checkout/", import.meta.env.VITE_ADMIN_PATH as string];
+export const GEO_BYPASS_PATHS = ["/pay/", "/hpay/", "/checkout/", (import.meta.env.VITE_ADMIN_PATH as string) || "/admin"];
 export const GEO_CACHE_KEY = "ashtech_geo_cache";
 export const GEO_CACHE_TTL = 10 * 60 * 1000;
 
