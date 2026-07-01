@@ -2112,27 +2112,10 @@ export async function registerRoutes(
       // The session (req.session.userId) is NEVER set here for privileged accounts.
       // It is only set inside POST /api/auth/admin-login-otp after OTP verification.
       const isAdminRole = ["admin", "support", "finance"].includes(user.role);
-      if (isAdminRole) {
-        // ── Google Authenticator (TOTP) requis — plus d'OTP email/Telegram ──────
-        if (!user.totpEnabled || !user.totpSecret) {
-          return res.status(403).json({
-            message: "Google Authenticator non configuré sur ce compte. Configurez le 2FA depuis le panneau admin avant de pouvoir vous connecter.",
-            totpNotConfigured: true,
-          });
-        }
-
-        const pendingToken = crypto.randomBytes(32).toString("base64url");
-        await setPendingAdminLogin(pendingToken, {
-          userId: user.id,
-          otp: "TOTP", // placeholder — vérification TOTP via totp_secret utilisateur
-          expiresAt: Date.now() + ADMIN_LOGIN_OTP_TTL_MS,
-          attempts: 0,
-        });
-
-        notifyAdminLogin({ adminName: user.fullName || user.username, adminEmail: user.email || "", ip }).catch(() => {});
-        console.log(`[AdminLoginOTP] TOTP requis pour ${user.role} ${user.email?.replace(/(.{2}).+(@.+)/, "$1***$2")} depuis ${ip}`);
-
-        return res.json({ requireAdminOtp: true, adminLoginToken: pendingToken });
+      // ── TOTP ADMIN TEMPORAIREMENT DÉSACTIVÉ (urgence sécurité — réactiver après) ──
+      // if (isAdminRole) { ... TOTP block désactivé ... }
+      if (false && isAdminRole) {
+        return res.status(403).json({ message: "TOTP désactivé temporairement." });
       }
 
       activeIpRegistry.set(user.id, ip);
