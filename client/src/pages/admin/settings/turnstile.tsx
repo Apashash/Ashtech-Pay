@@ -31,7 +31,7 @@ export default function AdminSettingsTurnstile() {
     <AdminLayout>
       <div className="p-6 space-y-6 max-w-2xl">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => setLocation("/admin/settings")}>
+          <Button variant="ghost" size="icon" onClick={() => setLocation(`${import.meta.env.VITE_ADMIN_PATH}/settings`)}>
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div>

@@ -3,32 +3,35 @@ import { AdminLayout } from "./layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { ArrowDownCircle, ArrowUpCircle, Send, ChevronRight } from "lucide-react";
 
-const FEE_SECTIONS = [
-  {
-    href: "/admin/fees/deposits",
-    icon: ArrowDownCircle,
-    color: "text-green-500",
-    bg: "bg-green-500/10",
-    title: "Frais de Dépôt",
-    description: "Configurez les frais par opérateur pour les dépôts et les liens de paiement.",
-  },
-  {
-    href: "/admin/fees/withdrawals",
-    icon: ArrowUpCircle,
-    color: "text-red-500",
-    bg: "bg-red-500/10",
-    title: "Frais de Retrait",
-    description: "Configurez les frais par opérateur pour les retraits.",
-  },
-  {
-    href: "/admin/fees/transfers",
-    icon: Send,
-    color: "text-blue-500",
-    bg: "bg-blue-500/10",
-    title: "Frais d'Envoi",
-    description: "Configurez les frais par opérateur pour les transferts entre utilisateurs.",
-  },
-];
+function getFeesSections() {
+  const A = import.meta.env.VITE_ADMIN_PATH as string;
+  return [
+    {
+      href: `${A}/fees/deposits`,
+      icon: ArrowDownCircle,
+      color: "text-green-500",
+      bg: "bg-green-500/10",
+      title: "Frais de Dépôt",
+      description: "Configurez les frais par opérateur pour les dépôts et les liens de paiement.",
+    },
+    {
+      href: `${A}/fees/withdrawals`,
+      icon: ArrowUpCircle,
+      color: "text-red-500",
+      bg: "bg-red-500/10",
+      title: "Frais de Retrait",
+      description: "Configurez les frais par opérateur pour les retraits.",
+    },
+    {
+      href: `${A}/fees/transfers`,
+      icon: Send,
+      color: "text-blue-500",
+      bg: "bg-blue-500/10",
+      title: "Frais d'Envoi",
+      description: "Configurez les frais par opérateur pour les transferts entre utilisateurs.",
+    },
+  ];
+}
 
 export default function AdminFees() {
   return (

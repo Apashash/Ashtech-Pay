@@ -13,6 +13,7 @@ import {
 
 export default function AdminSettings() {
   const [, setLocation] = useLocation();
+  const ADMIN = import.meta.env.VITE_ADMIN_PATH as string;
 
   const settingsSections = [
     {
@@ -73,7 +74,7 @@ export default function AdminSettings() {
               <Card 
                 key={section.id}
                 className={`cursor-pointer hover:shadow-lg transition-all border-2 ${section.borderColor}`}
-                onClick={() => setLocation(`/admin/settings/${section.id}`)}
+                onClick={() => setLocation(`${ADMIN}/settings/${section.id}`)}
               >
                 <CardHeader>
                   <div className="flex items-start justify-between">
@@ -90,7 +91,7 @@ export default function AdminSettings() {
                     className="w-full"
                     onClick={(e) => {
                       e.stopPropagation();
-                      setLocation(`/admin/settings/${section.id}`);
+                      setLocation(`${ADMIN}/settings/${section.id}`);
                     }}
                   >
                     Configurer →

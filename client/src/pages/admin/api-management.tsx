@@ -90,7 +90,7 @@ export default function AdminApiManagement() {
               Vue d'ensemble de l'accès API marchand. Activez ou désactivez les accès depuis la page Marchands.
             </p>
           </div>
-          <Link href="/admin/merchants">
+          <Link href={`${import.meta.env.VITE_ADMIN_PATH}/merchants`}>
             <Button className="gap-2 shrink-0" data-testid="button-go-merchants">
               <Users className="h-4 w-4" />
               Marchands
@@ -205,7 +205,7 @@ export default function AdminApiManagement() {
               <Lock className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
               <p className="text-sm text-muted-foreground">
                 <strong className="text-foreground">Règle d'accès</strong> — Un marchand doit d'abord être KYC-vérifié avant que vous puissiez lui activer l'API. Rendez-vous sur la page{" "}
-                <Link href="/admin/merchants" className="text-primary hover:underline font-medium">Marchands</Link>{" "}
+                <Link href={`${import.meta.env.VITE_ADMIN_PATH}/merchants`} className="text-primary hover:underline font-medium">Marchands</Link>{" "}
                 pour gérer les accès individuels.
               </p>
             </div>

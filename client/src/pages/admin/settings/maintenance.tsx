@@ -55,7 +55,7 @@ export default function AdminSettingsMaintenance() {
         <div className="flex items-center gap-4">
           <Button 
             variant="ghost" 
-            onClick={() => setLocation("/admin/settings")}
+            onClick={() => setLocation(`${import.meta.env.VITE_ADMIN_PATH}/settings`)}
             className="gap-2"
           >
             <ArrowLeft className="w-4 h-4" />
