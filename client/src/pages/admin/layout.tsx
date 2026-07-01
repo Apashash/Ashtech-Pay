@@ -360,6 +360,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   }
 
   return (
+    <AdminPinProvider>
     <div className="flex h-dvh bg-background">
       {/* Mobile backdrop — closes sidebar when tapping outside */}
       {sidebarOpen && (
@@ -851,5 +852,6 @@ export function AdminLayout({ children }: AdminLayoutProps) {
         </DialogContent>
       </Dialog>
     </div>
+    </AdminPinProvider>
   );
 }
