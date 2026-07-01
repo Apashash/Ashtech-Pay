@@ -1975,7 +1975,7 @@ export async function registerRoutes(
     try {
       const user = await storage.getUser(req.userId!);
       if (!user || !["admin"].includes(user.role)) {
-        return res.json({ allowed: true });
+        return res.status(403).json({ message: "Accès refusé" });
       }
       const ip = getClientIp(req);
       const blocklist = await loadAdminPanelBlockedIps();
