@@ -92,44 +92,46 @@ const typeColors: Record<string, string> = {
   payment_link: "text-purple-500",
 };
 
+const ADMIN = "/ashtechpayadmin62929383737367";
+
 const menuItems: MenuItem[] = [
-  { icon: LayoutDashboard, label: "Dashboard", href: "/admin" },
-  { icon: Users, label: "Utilisateurs", href: "/admin/users" },
-  { icon: UserCheck, label: "Vérifications KYC", href: "/admin/kyc" },
+  { icon: LayoutDashboard, label: "Dashboard", href: ADMIN },
+  { icon: Users, label: "Utilisateurs", href: `${ADMIN}/users` },
+  { icon: UserCheck, label: "Vérifications KYC", href: `${ADMIN}/kyc` },
   { 
     icon: CreditCard, 
     label: "Transactions",
     subItems: [
-      { icon: ArrowDownCircle, label: "Dépôts", href: "/admin/transactions/deposits" },
-      { icon: ArrowUpCircle, label: "Retraits", href: "/admin/transactions/withdrawals" },
-      { icon: Send, label: "Envois", href: "/admin/transactions/transfers" },
+      { icon: ArrowDownCircle, label: "Dépôts", href: `${ADMIN}/transactions/deposits` },
+      { icon: ArrowUpCircle, label: "Retraits", href: `${ADMIN}/transactions/withdrawals` },
+      { icon: Send, label: "Envois", href: `${ADMIN}/transactions/transfers` },
     ]
   },
-  { icon: Clock, label: "Paiements en attente", href: "/admin/pending-payouts" },
-  { icon: Phone, label: "Numéros de retrait", href: "/admin/withdrawal-numbers" },
+  { icon: Clock, label: "Paiements en attente", href: `${ADMIN}/pending-payouts` },
+  { icon: Phone, label: "Numéros de retrait", href: `${ADMIN}/withdrawal-numbers` },
   { 
     icon: DollarSign, 
     label: "Frais",
     subItems: [
-      { icon: ArrowDownCircle, label: "Frais Dépôt", href: "/admin/fees/deposits" },
-      { icon: ArrowUpCircle, label: "Frais Retrait", href: "/admin/fees/withdrawals" },
-      { icon: Send, label: "Frais Envoi", href: "/admin/fees/transfers" },
+      { icon: ArrowDownCircle, label: "Frais Dépôt", href: `${ADMIN}/fees/deposits` },
+      { icon: ArrowUpCircle, label: "Frais Retrait", href: `${ADMIN}/fees/withdrawals` },
+      { icon: Send, label: "Frais Envoi", href: `${ADMIN}/fees/transfers` },
     ]
   },
-  { icon: ArrowLeftRight, label: "Conversions", href: "/admin/conversions" },
-  { icon: Globe, label: "Pays & Opérateurs", href: "/admin/countries" },
-  { icon: Zap, label: "AfribaPay", href: "/admin/afribapay" },
-  { icon: Zap, label: "PixPay", href: "/admin/pixpay" },
-  { icon: Mail, label: "Campagnes Email", href: "/admin/email-campaigns" },
-  { icon: Code2, label: "Gestion des API", href: "/admin/api-management" },
-  { icon: Link2, label: "Liens de paiement", href: "/admin/links" },
-  { icon: MessageSquare, label: "Message Global", href: "/admin/global-messages" },
-  { icon: MessageSquare, label: "Support", href: "/admin/support" },
-  { icon: ShieldBan, label: "IPs Bloquées", href: "/admin/blocked-ips" },
-  { icon: Shield, label: "Logs & Sécurité", href: "/admin/logs" },
-  { icon: Shield, label: "Audit Sécurité", href: "/admin/audit" },
-  { icon: Smartphone, label: "Diagnostic Sessions", href: "/admin/session-debug" },
-  { icon: Settings, label: "Paramètres", href: "/admin/settings" },
+  { icon: ArrowLeftRight, label: "Conversions", href: `${ADMIN}/conversions` },
+  { icon: Globe, label: "Pays & Opérateurs", href: `${ADMIN}/countries` },
+  { icon: Zap, label: "AfribaPay", href: `${ADMIN}/afribapay` },
+  { icon: Zap, label: "PixPay", href: `${ADMIN}/pixpay` },
+  { icon: Mail, label: "Campagnes Email", href: `${ADMIN}/email-campaigns` },
+  { icon: Code2, label: "Gestion des API", href: `${ADMIN}/api-management` },
+  { icon: Link2, label: "Liens de paiement", href: `${ADMIN}/links` },
+  { icon: MessageSquare, label: "Message Global", href: `${ADMIN}/global-messages` },
+  { icon: MessageSquare, label: "Support", href: `${ADMIN}/support` },
+  { icon: ShieldBan, label: "IPs Bloquées", href: `${ADMIN}/blocked-ips` },
+  { icon: Shield, label: "Logs & Sécurité", href: `${ADMIN}/logs` },
+  { icon: Shield, label: "Audit Sécurité", href: `${ADMIN}/audit` },
+  { icon: Smartphone, label: "Diagnostic Sessions", href: `${ADMIN}/session-debug` },
+  { icon: Settings, label: "Paramètres", href: `${ADMIN}/settings` },
 ];
 
 export function AdminLayout({ children }: AdminLayoutProps) {
@@ -275,18 +277,18 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   );
 
   const pendingCounts: Record<string, number> = {
-    "/admin/transactions/deposits": layoutStats?.pendingDeposits || 0,
-    "/admin/transactions/withdrawals": layoutStats?.pendingWithdrawals || 0,
-    "/admin/transactions/transfers": layoutStats?.pendingTransfers || 0,
-    "/admin/pending-payouts": layoutStats?.pendingManualPayouts || 0,
-    "/admin/kyc": layoutStats?.kycPending || 0,
-    "/admin/support": layoutStats?.ticketUnread || 0,
-    "/admin/conversions": hasNewConversion ? (layoutStats?.conversionCount || 0) : 0,
-    "/admin/withdrawal-numbers": layoutStats?.withdrawalNumberCount || 0,
+    [`${ADMIN}/transactions/deposits`]: layoutStats?.pendingDeposits || 0,
+    [`${ADMIN}/transactions/withdrawals`]: layoutStats?.pendingWithdrawals || 0,
+    [`${ADMIN}/transactions/transfers`]: layoutStats?.pendingTransfers || 0,
+    [`${ADMIN}/pending-payouts`]: layoutStats?.pendingManualPayouts || 0,
+    [`${ADMIN}/kyc`]: layoutStats?.kycPending || 0,
+    [`${ADMIN}/support`]: layoutStats?.ticketUnread || 0,
+    [`${ADMIN}/conversions`]: hasNewConversion ? (layoutStats?.conversionCount || 0) : 0,
+    [`${ADMIN}/withdrawal-numbers`]: layoutStats?.withdrawalNumberCount || 0,
   };
 
   useEffect(() => {
-    if (location === "/admin/conversions") {
+    if (location === `${ADMIN}/conversions`) {
       const now = new Date().toISOString();
       localStorage.setItem("ashtech_conv_seen_at", now);
       setConversionSeenAt(now);
@@ -463,7 +465,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
               }
               
               const isActive = location === item.href || 
-                (item.href !== "/admin" && item.href && location.startsWith(item.href));
+                (item.href !== ADMIN && item.href && location.startsWith(item.href));
               const itemPendingCount = pendingCounts[item.href || ""] || 0;
               return (
                 <Link key={item.href || item.label} href={item.href || "#"}>
@@ -570,7 +572,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                         Messages Support non lus
                       </h4>
                     </div>
-                    <Link href="/admin/support" onClick={() => { setNotificationsOpen(false); setSidebarOpen(false); }}>
+                    <Link href={`${ADMIN}/support`} onClick={() => { setNotificationsOpen(false); setSidebarOpen(false); }}>
                       <div className="p-3 hover-elevate cursor-pointer flex items-center justify-between gap-2 border-b border-border">
                         <div>
                           <span className="text-sm font-medium text-blue-500">

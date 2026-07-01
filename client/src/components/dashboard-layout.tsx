@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -106,12 +106,26 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { rates } = useExchangeRates();
   const { t, language } = useLanguage();
 
-  // ── Admin Panel — navigue directement vers /admin ─────────────────────────
-  // L'AdminLayout gère lui-même la redirection vers /admin-panel-verify si _pav
-  // est expiré (needsPanelVerify=true). On ne demande plus le code 2 fois après login.
-  const handleAdminPanelClick = useCallback(() => {
-    setLocation("/admin");
-  }, []);
+  const ADMIN_URL = "/ashtechpayadmin62929383737367";
+
+  // ── Logo click counter — 5 clicks to access admin panel secretly ──────────
+  const [logoClickCount, setLogoClickCount] = useState(0);
+  const logoClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleLogoClick = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setLogoClickCount(prev => {
+      const next = prev + 1;
+      if (next >= 5) {
+        if (logoClickTimer.current) clearTimeout(logoClickTimer.current);
+        setLocation(ADMIN_URL);
+        return 0;
+      }
+      if (logoClickTimer.current) clearTimeout(logoClickTimer.current);
+      logoClickTimer.current = setTimeout(() => setLogoClickCount(0), 2000);
+      return next;
+    });
+  }, [setLocation]);
 
   const menuItems = MENU_URLS.map(item => ({ title: t.sidebar[item.key], url: item.url, icon: item.icon }));
   const settingsItems = SETTINGS_URLS.map(item => ({ title: t.sidebar[item.key], url: item.url, icon: item.icon }));
@@ -391,11 +405,13 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       <div className="flex min-h-dvh w-full">
         <Sidebar>
           <SidebarHeader className="p-4 border-b border-sidebar-border">
-            <Link href="/dashboard">
-              <div className="flex items-center gap-2 cursor-pointer">
-                <img src="/logo.png" alt="AshTech Pay" className="h-12 w-auto" />
-              </div>
-            </Link>
+            <div
+              className="flex items-center gap-2 cursor-pointer select-none"
+              onClick={handleLogoClick}
+              data-testid="logo-ashtech"
+            >
+              <img src="/logo.png" alt="AshTech Pay" className="h-12 w-auto" />
+            </div>
           </SidebarHeader>
           
           <SidebarContent>
@@ -489,21 +505,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               </SidebarGroupContent>
             </SidebarGroup>
 
-            {(user.role === "admin" || user.role === "support" || user.role === "finance") && (
-              <SidebarGroup>
-                <SidebarGroupLabel>{t.sidebar.administration}</SidebarGroupLabel>
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    <SidebarMenuItem>
-                      <SidebarMenuButton isActive={location.startsWith("/admin")} onClick={handleAdminPanelClick} data-testid="button-admin-panel">
-                        <Shield className="w-4 h-4" />
-                        <span>{t.sidebar.adminPanel}</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </SidebarGroup>
-            )}
           </SidebarContent>
 
           <SidebarFooter className="p-4 border-t border-sidebar-border">
