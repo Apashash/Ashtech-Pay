@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ShieldBan, Clock, Unlock, RefreshCw, WifiOff, Ban, Plus, Infinity } from "lucide-react";
+import { ShieldBan, Clock, Unlock, RefreshCw, WifiOff, Ban, Plus, Infinity, LogOut, Search, UserX, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -97,6 +97,128 @@ function ExpiryBadge({ expiresAt }: { expiresAt?: number }) {
   );
 }
 
+interface FoundUser {
+  id: string;
+  username: string;
+  fullName: string | null;
+  email: string | null;
+  role: string;
+  isBanned: boolean;
+}
+
+function ForceLogoutSection() {
+  const { toast } = useToast();
+  const [searchEmail, setSearchEmail] = useState("");
+  const [foundUser, setFoundUser] = useState<FoundUser | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState("");
+
+  const forceLogoutMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const res = await apiRequest("POST", `/api/admin/users/${userId}/force-logout`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || "Erreur");
+      return json;
+    },
+    onSuccess: (data) => {
+      toast({ title: "✅ Déconnecté", description: data.message, className: "bg-green-600 text-white border-green-700" });
+      setFoundUser(null);
+      setSearchEmail("");
+    },
+    onError: (e: Error) => toast({ title: "Erreur", description: e.message, variant: "destructive" }),
+  });
+
+  const handleSearch = async () => {
+    const email = searchEmail.trim();
+    if (!email) return;
+    setSearching(true);
+    setSearchError("");
+    setFoundUser(null);
+    try {
+      const res = await apiRequest("GET", `/api/admin/users/by-email?email=${encodeURIComponent(email)}`);
+      const json = await res.json();
+      if (!res.ok) { setSearchError(json.message || "Utilisateur non trouvé"); return; }
+      setFoundUser(json);
+    } catch {
+      setSearchError("Erreur réseau");
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  return (
+    <Card className="border-red-500/30 bg-red-500/5">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2 text-red-400">
+          <AlertTriangle className="w-4 h-4" />
+          Actions de sécurité d'urgence
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-xs text-muted-foreground">
+          Si un compte a été compromis, forcez immédiatement la déconnexion de tous ses appareils.
+          L'utilisateur sera expulsé en temps réel et devra se reconnecter.
+        </p>
+
+        <div className="flex flex-wrap gap-3 items-end">
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs text-muted-foreground">Email ou téléphone du compte compromis</Label>
+            <Input
+              placeholder="ex: ashtechsarl@gmail.com"
+              value={searchEmail}
+              onChange={e => { setSearchEmail(e.target.value); setFoundUser(null); setSearchError(""); }}
+              onKeyDown={e => { if (e.key === "Enter") handleSearch(); }}
+              className="w-72 text-sm"
+              data-testid="input-search-email"
+            />
+          </div>
+          <Button
+            variant="outline"
+            className="gap-1.5"
+            onClick={handleSearch}
+            disabled={!searchEmail.trim() || searching}
+            data-testid="button-search-user"
+          >
+            <Search className="w-3.5 h-3.5" />
+            {searching ? "Recherche..." : "Trouver"}
+          </Button>
+        </div>
+
+        {searchError && (
+          <p className="text-sm text-destructive flex items-center gap-1.5">
+            <UserX className="w-4 h-4" /> {searchError}
+          </p>
+        )}
+
+        {foundUser && (
+          <div className="flex items-center justify-between bg-card border border-border rounded-xl px-4 py-3 gap-4">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-sm font-semibold text-foreground">
+                {foundUser.fullName || foundUser.username}
+              </span>
+              <span className="text-xs text-muted-foreground">{foundUser.email}</span>
+              <div className="flex gap-2 mt-1">
+                <Badge variant="outline" className="text-xs">{foundUser.role}</Badge>
+                {foundUser.isBanned && <Badge className="text-xs bg-red-500/10 text-red-400 border-red-500/20">Banni</Badge>}
+              </div>
+            </div>
+            <Button
+              variant="destructive"
+              className="gap-1.5 shrink-0"
+              onClick={() => forceLogoutMutation.mutate(foundUser.id)}
+              disabled={forceLogoutMutation.isPending}
+              data-testid="button-force-logout"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              {forceLogoutMutation.isPending ? "Déconnexion..." : "Forcer la déconnexion"}
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function BlockedIpsPage() {
   const { toast } = useToast();
   const [newIp, setNewIp] = useState("");
@@ -180,6 +302,9 @@ export default function BlockedIpsPage() {
             Actualiser
           </Button>
         </div>
+
+        {/* ── Section 0 : Actions d'urgence ───────────────────────────────── */}
+        <ForceLogoutSection />
 
         {/* ── Section 1 : Blocage manuel du panneau admin ─────────────────── */}
         <Card className="border-border">

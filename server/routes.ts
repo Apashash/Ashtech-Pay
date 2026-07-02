@@ -8947,6 +8947,52 @@ export async function registerRoutes(
     }
   });
 
+  // Admin: Force-logout a specific user (terminate all their sessions immediately)
+  app.post("/api/admin/users/:id/force-logout", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const adminId = req.userId!;
+
+      const targetUser = await storage.getUser(id);
+      if (!targetUser) return res.status(404).json({ message: "Utilisateur non trouvé" });
+
+      if (id === adminId) {
+        return res.status(400).json({ message: "Vous ne pouvez pas vous déconnecter vous-même depuis ici." });
+      }
+
+      await destroyUserSessions(id, Date.now() + 30 * 60 * 1000);
+
+      await storage.createAdminLog({
+        adminId,
+        action: "force_logout_user",
+        targetType: "user",
+        targetId: id,
+        details: JSON.stringify({ targetEmail: targetUser.email, targetUsername: targetUser.username, reason: "admin_security_action" }),
+        ipAddress: req.ip || null,
+      });
+
+      console.log(`[Security] Admin ${adminId} a forcé la déconnexion de l'utilisateur ${id} (${targetUser.email || targetUser.username})`);
+
+      res.json({ ok: true, message: `${targetUser.fullName || targetUser.username} a été déconnecté de tous ses appareils.` });
+    } catch (error) {
+      console.error("Admin force-logout error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // Admin: Find user by email (for security actions)
+  app.get("/api/admin/users/by-email", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const email = String(req.query.email || "").trim().toLowerCase();
+      if (!email) return res.status(400).json({ message: "Email requis" });
+      const user = await storage.getUserByEmailOrPhone(email);
+      if (!user) return res.status(404).json({ message: "Aucun utilisateur trouvé avec cet email" });
+      res.json({ id: user.id, username: user.username, fullName: user.fullName, email: user.email, role: user.role, isBanned: user.isBanned });
+    } catch (error) {
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   // Admin: Delete user
   app.delete("/api/admin/users/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
