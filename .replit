@@ -43,6 +43,9 @@ build = ["npm", "run", "build"]
 [userenv]
 
 [userenv.shared]
+PORT = "5000"
+NODE_ENV = "development"
+TRUST_PROXY = "true"
 
 [userenv.development]
 
