@@ -95,6 +95,7 @@ import {
   handleTelegramUpdate,
   registerTelegramWebhook,
   getTelegramWebhookSecret,
+  getWebhookInfo,
   notifyWithdrawalNumberChangeRequest,
   notifyNewTicket,
   notifySupportMessage,
@@ -7796,6 +7797,21 @@ export async function registerRoutes(
           hasResendKey: !!process.env.RESEND_API_KEY,
           hasTelegramToken: !!process.env.TELEGRAM_BOT_TOKEN,
         },
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // GET /api/admin/telegram/webhook-info — diagnose why bot commands may not respond
+  app.get("/api/admin/telegram/webhook-info", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const info = await getWebhookInfo();
+      res.json({
+        hasTelegramToken: !!process.env.TELEGRAM_BOT_TOKEN,
+        hasTelegramChatId: !!process.env.TELEGRAM_CHAT_ID,
+        expectedSecretPrefix: getTelegramWebhookSecret().slice(0, 8) + "...",
+        telegram: info,
       });
     } catch (e: any) {
       res.status(500).json({ error: e.message });

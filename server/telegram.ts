@@ -2635,6 +2635,12 @@ export function getTelegramWebhookSecret(): string {
   return crypto.createHmac("sha256", base).update("tg-webhook-secret-v1").digest("hex").slice(0, 64);
 }
 
+export async function getWebhookInfo(): Promise<any> {
+  if (!BOT_API) return { error: "TELEGRAM_BOT_TOKEN not configured on this instance" };
+  const result = await callBotApi("getWebhookInfo", {});
+  return result;
+}
+
 export async function registerTelegramWebhook(webhookUrl: string): Promise<void> {
   if (!BOT_API) return;
   try {
