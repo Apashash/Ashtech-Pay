@@ -3693,9 +3693,10 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Pays non trouvé" });
       }
 
-      // Source wallet = automatically the destination country's currency
-      // (XAF for Cameroon, XAFG for Gabon, XOFT for Togo, etc. — no user choice)
-      const txCurrency = country.currency || sender.preferredCurrency || "XAF";
+      // Source wallet = destination country's exact currency code.
+      // Use COUNTRY_CURRENCY (authoritative Swychr map) — country.currency in DB may be generic.
+      // TG→XOFT, BJ→XOFB, SN→XOFS, CM→XAF, GA→XAFG, etc.
+      const txCurrency = COUNTRY_CURRENCY[country.code] || country.currency || sender.preferredCurrency || "XAF";
 
       const fxRates = await loadFxRates();
       const minTransferSetting = await storage.getSetting("min_transfer");
@@ -3754,20 +3755,37 @@ export async function registerRoutes(
       const creditedAmount = senderPaysFees ? parsedAmount : parsedAmount - feeAmount;
       const totalAmount = senderPaysFees ? parsedAmount + feeAmount : parsedAmount;
 
-      // Always debit the sender's primary wallet (users.balance).
-      // The destination currency (txCurrency) only routes the Swychr payout —
-      // it never changes which wallet we debit.
-      // Togo sender (XOFT) sending to Cameroon → XOFT debited. Always.
+      // Debit the wallet that matches the destination country currency.
+      // Togo sender (XOFT) sending to Togo (XOFT) → primary wallet.
+      // Togo sender (XOFT) sending to Bénin (XOFB) → secondary XOFB wallet.
+      // Togo sender (XOFT) sending to Cameroun (XAF) → secondary XAF wallet.
+      // If insufficient in destination wallet → error (must convert first).
       const senderPrimaryCurrency = sender.preferredCurrency || "XAF";
-      if (parseFloat(sender.balance) < totalAmount) {
-        return res.status(400).json({
-          message: `Solde insuffisant dans votre compte ${senderPrimaryCurrency}. Vous avez ${parseFloat(sender.balance).toFixed(0)} ${senderPrimaryCurrency} — besoin de ${totalAmount.toFixed(0)} ${senderPrimaryCurrency}`,
-        });
+      const isPrimaryTransfer = (txCurrency === senderPrimaryCurrency);
+
+      if (isPrimaryTransfer) {
+        if (parseFloat(sender.balance) < totalAmount) {
+          return res.status(400).json({
+            message: `Solde insuffisant dans votre compte ${senderPrimaryCurrency}. Vous avez ${parseFloat(sender.balance).toFixed(0)} ${senderPrimaryCurrency} — besoin de ${totalAmount.toFixed(0)} ${senderPrimaryCurrency}`,
+          });
+        }
+      } else {
+        const senderWallet = await storage.getWallet(senderId, txCurrency);
+        const walletBalance = senderWallet ? parseFloat(senderWallet.balance) : 0;
+        if (walletBalance < totalAmount) {
+          return res.status(400).json({
+            message: `Solde insuffisant dans votre compte ${txCurrency}. Vous avez ${walletBalance.toFixed(0)} ${txCurrency} — besoin de ${totalAmount.toFixed(0)} ${txCurrency}. Convertissez d'abord depuis votre compte ${senderPrimaryCurrency}.`,
+          });
+        }
       }
 
-      // Debit primary wallet immediately
+      // Debit the correct wallet immediately
       console.log(`[Transfer] Sender=${senderId}, Amount=${parsedAmount}, Fee=${feeAmount}, Net=${creditedAmount} (${txCurrency})`);
-      await storage.updateUserBalance(senderId, -totalAmount);
+      if (isPrimaryTransfer) {
+        await storage.updateUserBalance(senderId, -totalAmount);
+      } else {
+        await storage.upsertWallet(senderId, txCurrency, -totalAmount);
+      }
 
       // Create pending transaction
       const reference = generateTransactionReference("transfer_out");
@@ -4682,8 +4700,10 @@ export async function registerRoutes(
 
       // Resolve country info for currency and country code
       const withdrawalCountry = await storage.getCountry(data.countryId);
-      const withdrawalCurrency = withdrawalCountry?.currency || userCurrency;
       const withdrawalCountryCode = withdrawalCountry?.code || "CM";
+      // Use COUNTRY_CURRENCY for the exact wallet code (XOFT for TG, XOFB for BJ, etc.)
+      // This is the authoritative Swychr map — country.currency in DB may be generic (XOF).
+      const withdrawalCurrency = COUNTRY_CURRENCY[withdrawalCountryCode] || withdrawalCountry?.currency || userCurrency;
 
       // Fetch operator early to determine provider before fee calculation
       const withdrawalOperator = await storage.getOperator(data.operatorId);
@@ -4737,22 +4757,34 @@ export async function registerRoutes(
       const creditedAmount = amount - feeAmount;
       const totalAmount = amount;
 
-      // Always debit the user's primary wallet (users.balance).
-      // The destination country currency (withdrawalCurrency) is only used to route
-      // the payout via Swychr — it never changes which wallet we debit.
-      // Togo user (XOFT) withdrawing to Cameroon → XOFT debited. Always.
-      const isDecimalCurrency = userCurrency === "USD" || userCurrency === "EUR";
-      const availableBalance = isDecimalCurrency
-        ? Math.floor(parseFloat(user.balance) * 100) / 100
-        : Math.round(parseFloat(user.balance));
-      if (availableBalance < amount) {
-        return res.status(400).json({
-          message: `Solde insuffisant dans votre compte ${userCurrency}. Vous avez ${availableBalance.toLocaleString()} ${userCurrency} — besoin de ${amount.toLocaleString()} ${userCurrency}`,
-        });
-      }
+      // Debit the wallet that matches the destination country currency.
+      // Togo user (XOFT) withdrawing to Togo (XOFT) → primary wallet.
+      // Togo user (XOFT) withdrawing to Bénin (XOFB) → secondary XOFB wallet.
+      // Togo user (XOFT) withdrawing to Cameroun (XAF) → secondary XAF wallet.
+      // If the user doesn't have enough in the destination wallet → error (must convert first).
+      const isPrimaryWithdrawal = (withdrawalCurrency === userCurrency);
 
-      // Debit primary wallet
-      await storage.updateUserBalance(userId, -amount);
+      if (isPrimaryWithdrawal) {
+        const isDecimalCurrency = userCurrency === "USD" || userCurrency === "EUR";
+        const availableBalance = isDecimalCurrency
+          ? Math.floor(parseFloat(user.balance) * 100) / 100
+          : Math.round(parseFloat(user.balance));
+        if (availableBalance < amount) {
+          return res.status(400).json({
+            message: `Solde insuffisant dans votre compte ${userCurrency}. Vous avez ${availableBalance.toLocaleString()} ${userCurrency} — besoin de ${amount.toLocaleString()} ${userCurrency}`,
+          });
+        }
+        await storage.updateUserBalance(userId, -amount);
+      } else {
+        const secondaryWallet = await storage.getWallet(userId, withdrawalCurrency);
+        const walletBalance = secondaryWallet ? parseFloat(secondaryWallet.balance) : 0;
+        if (walletBalance < amount) {
+          return res.status(400).json({
+            message: `Solde insuffisant dans votre compte ${withdrawalCurrency}. Vous avez ${walletBalance.toLocaleString()} ${withdrawalCurrency} — besoin de ${amount.toLocaleString()} ${withdrawalCurrency}. Convertissez d'abord depuis votre compte ${userCurrency}.`,
+          });
+        }
+        await storage.upsertWallet(userId, withdrawalCurrency, -amount);
+      }
 
       console.log(`[Withdrawal] User=${userId}, RequestedAmount=${amount}, Fee=${feeAmount}, NetToUser=${creditedAmount} (${withdrawalCurrency})`);
 
