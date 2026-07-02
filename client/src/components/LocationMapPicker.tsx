@@ -218,7 +218,7 @@ export const LocationMapPicker = forwardRef<LocationMapPickerHandle, LocationMap
             ) : (
               <MapPin className="w-3.5 h-3.5 mr-1.5" />
             )}
-            {confirmed ? "Emplacement confirmé" : "Confirmer cet emplacement"}
+            {confirmed ? "Confirmé" : "Confirmer"}
           </Button>
         )}
       </div>

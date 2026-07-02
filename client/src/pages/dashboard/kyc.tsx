@@ -28,6 +28,7 @@ import {
   Image as ImageIcon
 } from "lucide-react";
 import { useState, useRef, useCallback, useMemo, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/lib/language";
 import { LocationMapPicker, type LocationMapPickerHandle } from "@/components/LocationMapPicker";
@@ -760,46 +761,6 @@ export default function KYCPage() {
                           </div>
                         </div>
                       </div>
-                    ) : cameraActive ? (
-                      <div className="space-y-3">
-                        <div className="relative rounded-lg overflow-hidden bg-black aspect-video">
-                          <video
-                            ref={videoRef}
-                            autoPlay
-                            playsInline
-                            muted
-                            className="w-full h-full object-cover scale-x-[-1]"
-                          />
-                          {!cameraReady && (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/60 text-white">
-                              <Loader2 className="w-6 h-6 animate-spin" />
-                              <p className="text-xs">Démarrage de la caméra…</p>
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            type="button"
-                            onClick={capturePhoto}
-                            disabled={!cameraReady || capturingPhoto || uploading.selfie}
-                            className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-black"
-                          >
-                            {(capturingPhoto || uploading.selfie)
-                              ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                              : <Camera className="w-4 h-4 mr-2" />}
-                            {uploading.selfie ? "Envoi…" : capturingPhoto ? "Capture…" : !cameraReady ? "Chargement…" : "Prendre la photo"}
-                          </Button>
-                          <Button type="button" variant="ghost" onClick={stopCamera}>
-                            <X className="w-4 h-4" />
-                          </Button>
-                        </div>
-                        {cameraError && (
-                          <p className="text-xs text-destructive text-center">{cameraError}</p>
-                        )}
-                        <p className="text-xs text-muted-foreground text-center">
-                          Tenez votre pièce d'identité visible et regardez la caméra
-                        </p>
-                      </div>
                     ) : (
                       <div className="space-y-2">
                         {cameraError && (
@@ -968,6 +929,60 @@ export default function KYCPage() {
           </form>
         )}
       </div>
+
+      {/* Full-screen camera overlay — rendered via portal so it covers everything */}
+      {cameraActive && createPortal(
+        <div className="fixed inset-0 z-50 bg-black flex flex-col">
+          {/* Video — fills remaining space */}
+          <div className="relative flex-1 overflow-hidden">
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="absolute inset-0 w-full h-full object-cover scale-x-[-1]"
+            />
+            {/* Loading overlay */}
+            {!cameraReady && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/70 text-white">
+                <Loader2 className="w-8 h-8 animate-spin" />
+                <p className="text-sm">Démarrage de la caméra…</p>
+              </div>
+            )}
+            {/* Close button — top right */}
+            <button
+              type="button"
+              onClick={stopCamera}
+              className="absolute top-4 right-4 p-2 rounded-full bg-black/50 text-white hover:bg-black/70"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            {/* Instruction — top center */}
+            <p className="absolute top-4 left-1/2 -translate-x-1/2 text-xs text-white/80 bg-black/40 px-3 py-1 rounded-full whitespace-nowrap">
+              Tenez votre pièce visible et regardez la caméra
+            </p>
+          </div>
+
+          {/* Bottom bar */}
+          <div className="safe-area-bottom px-6 py-6 flex flex-col gap-3 bg-black">
+            {cameraError && (
+              <p className="text-xs text-red-400 text-center">{cameraError}</p>
+            )}
+            <Button
+              type="button"
+              onClick={capturePhoto}
+              disabled={!cameraReady || capturingPhoto || uploading.selfie}
+              className="w-full h-14 text-base bg-yellow-500 hover:bg-yellow-600 text-black font-semibold rounded-2xl"
+            >
+              {(capturingPhoto || uploading.selfie)
+                ? <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                : <Camera className="w-5 h-5 mr-2" />}
+              {uploading.selfie ? "Envoi…" : capturingPhoto ? "Capture…" : !cameraReady ? "Chargement…" : "Prendre la photo"}
+            </Button>
+          </div>
+        </div>,
+        document.body
+      )}
     </DashboardLayout>
   );
 }
