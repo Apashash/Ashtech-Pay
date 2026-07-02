@@ -95,21 +95,28 @@ export function AdminPinProvider({ children }: { children: ReactNode }) {
   const handleSubmit = (pin: string) => {
     // Cache PIN briefly so concurrent requests in the same mutation don't reopen the dialog
     pinCacheRef.current = { pin, expiresAt: Date.now() + PIN_CACHE_TTL_MS };
-    resolveRef.current?.(pin);
-    // Resolve all queued waiters with the same PIN
-    for (const resolve of waitersRef.current) resolve(pin);
+    // Capture and clear refs before resolving (clean state for any retry cycle)
+    const resolve = resolveRef.current;
+    const waiters = waitersRef.current;
+    resolveRef.current = null;
+    rejectRef.current = null;
     waitersRef.current = [];
     waiterRejectsRef.current = [];
+    resolve?.(pin);
+    for (const w of waiters) w(pin);
   };
 
   const handleCancel = () => {
     setState({ open: false, error: null, locked: false });
-    rejectRef.current?.(new Error("PIN_CANCELLED"));
-    for (const reject of waiterRejectsRef.current) reject(new Error("PIN_CANCELLED"));
-    waitersRef.current = [];
-    waiterRejectsRef.current = [];
+    pinCacheRef.current = null; // clear cache on explicit cancel
+    const reject = rejectRef.current;
+    const waiterRejects = waiterRejectsRef.current;
     resolveRef.current = null;
     rejectRef.current = null;
+    waitersRef.current = [];
+    waiterRejectsRef.current = [];
+    reject?.(new Error("PIN_CANCELLED"));
+    for (const r of waiterRejects) r(new Error("PIN_CANCELLED"));
   };
 
   return (
