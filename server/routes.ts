@@ -5430,6 +5430,33 @@ export async function registerRoutes(
     }
   });
 
+  // Bulk-save multiple settings in one request (used by conversion fees page)
+  app.post("/api/admin/settings/bulk", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { settings } = req.body as { settings: Array<{ key: string; value: string; description?: string }> };
+      if (!Array.isArray(settings) || settings.length === 0) {
+        return res.status(400).json({ message: "settings[] requis" });
+      }
+      const results = await Promise.all(
+        settings.map(({ key, value, description }) =>
+          storage.upsertSetting(key, String(value), description)
+        )
+      );
+      await storage.createAdminLog({
+        adminId: req.userId!,
+        action: "update_settings_bulk",
+        targetType: "setting",
+        targetId: settings.map(s => s.key).join(","),
+        details: JSON.stringify(settings),
+        ipAddress: req.ip || null,
+      });
+      res.json(results);
+    } catch (error) {
+      console.error("Admin bulk settings error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   // GET /api/admin/conversion-requests — list all conversion requests
   app.get("/api/admin/conversion-requests", requireAuth, requireAdmin, async (req, res) => {
     try {

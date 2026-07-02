@@ -186,15 +186,13 @@ export default function AdminConversionsPage() {
 
   const saveFeeMutation = useMutation({
     mutationFn: async () => {
-      await Promise.all(
-        Object.entries(fees).map(([key, value]) =>
-          apiRequest("POST", "/api/admin/settings", {
-            key,
-            value,
-            description: `Frais de conversion — ${key}`,
-          })
-        )
-      );
+      await apiRequest("POST", "/api/admin/settings/bulk", {
+        settings: Object.entries(fees).map(([key, value]) => ({
+          key,
+          value,
+          description: `Frais de conversion — ${key}`,
+        })),
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/public/fee-settings"] });
