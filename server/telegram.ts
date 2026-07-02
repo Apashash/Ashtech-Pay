@@ -2531,6 +2531,8 @@ export async function handleTelegramUpdate(
       "/revenue": { type: "revenue", period: "this_month" },
       "/aide":    { type: "help" },
       "/help":    { type: "help" },
+      "/ping":    { type: "ping" },
+      "/pong":    { type: "pong" },
     };
 
     const matched = Object.keys(cmdMap).find(k => text === k || text.startsWith(k + " ") || text.startsWith(k + "@"));
@@ -2538,6 +2540,16 @@ export async function handleTelegramUpdate(
       const { type, period = "this_month" } = cmdMap[matched];
 
       if (type === "menu") { await sendMenu(chatId); return; }
+
+      if (type === "ping") {
+        await callBotApi("sendMessage", { chat_id: chatId, text: "pong" });
+        return;
+      }
+
+      if (type === "pong") {
+        await callBotApi("sendMessage", { chat_id: chatId, text: "ping" });
+        return;
+      }
 
       if (type === "help") {
         await callBotApi("sendMessage", {
@@ -2581,6 +2593,8 @@ export async function handleTelegramUpdate(
             `<b>❓ Aide</b>\n` +
             `/aide — Afficher cette liste\n` +
             `/help — Afficher cette liste (alias)\n` +
+            `/ping — Test de connectivité (répond "pong")\n` +
+            `/pong — Test de connectivité (répond "ping")\n` +
             `──────────────────\n` +
             `🕐 ${now()}`,
           parse_mode: "HTML",
