@@ -395,7 +395,10 @@ app.use((req, res, next) => {
     await db.execute(sql`ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS business_type TEXT`);
     await db.execute(sql`ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS business_category TEXT`);
     await db.execute(sql`ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS business_description TEXT`);
-    console.log("[Migration] Schema columns ready (api_key, notify_url, source, confirmed_at, hosted_page_configs, hosted_payment_sessions, payment_links.notify_url, token_revoked_before, conversion_requests.executed_at/by_id, user_notifications.type, wallets_unique_idx, admin_logs, audit_logs, withdrawal_numbers, withdrawal_number_changes, kyc_submissions.reviewer_id/review_note/reviewed_at/updated_at/country/city/postal_code/latitude/longitude/business_type/business_category/business_description)");
+    // Ensure ashtech_fee_amount exists on transactions — Drizzle includes it in
+    // every SELECT/RETURNING; without this column ALL transaction queries fail.
+    await db.execute(sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS ashtech_fee_amount DECIMAL(15,2)`);
+    console.log("[Migration] Schema columns ready (api_key, notify_url, source, confirmed_at, hosted_page_configs, hosted_payment_sessions, payment_links.notify_url, token_revoked_before, conversion_requests.executed_at/by_id, user_notifications.type, wallets_unique_idx, admin_logs, audit_logs, withdrawal_numbers, withdrawal_number_changes, kyc_submissions.reviewer_id/review_note/reviewed_at/updated_at/country/city/postal_code/latitude/longitude/business_type/business_category/business_description, transactions.ashtech_fee_amount)");
 
     // ── 5.3 Re-encrypt existing plaintext sensitive fields ────────────────────
     // Only runs when FIELD_ENCRYPTION_KEY is set. Without the key, encryptField()
