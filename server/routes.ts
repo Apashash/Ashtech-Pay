@@ -14422,16 +14422,20 @@ export async function registerRoutes(
     }
   });
 
-  // Register Telegram webhook after all routes are set up
+  // Register Telegram webhook after all routes are set up.
+  // Priority: APP_URL (production) > REPLIT_DEV_DOMAIN (dev only, no APP_URL set).
+  // This prevents the Replit dev server from overwriting the production webhook.
   setImmediate(async () => {
     const replitDomain = process.env.REPLIT_DEV_DOMAIN;
     const appUrl = (process.env.APP_URL || "").replace(/\/$/, "");
 
     let webhookBase: string | null = null;
-    if (replitDomain) {
-      webhookBase = `https://${replitDomain}`;
-    } else if (appUrl) {
+    if (appUrl) {
+      // Production APP_URL always takes priority — never overwrite with Replit domain
       webhookBase = appUrl;
+    } else if (replitDomain) {
+      // Only use Replit domain in pure dev (no APP_URL configured)
+      webhookBase = `https://${replitDomain}`;
     }
 
     if (webhookBase) {
