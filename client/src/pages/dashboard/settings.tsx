@@ -10,7 +10,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { apiRequest, queryClient, setAuthToken } from "@/lib/queryClient";
 import type { User } from "@shared/schema";
 import {
@@ -44,8 +44,8 @@ import {
   KeyRound,
   Copy,
   Fingerprint,
+  Megaphone,
 } from "lucide-react";
-import { Link } from "wouter";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useTheme } from "@/components/theme-provider";
@@ -394,9 +394,19 @@ export default function SettingsPage() {
   return (
     <DashboardLayout>
       <div className="max-w-lg mx-auto pb-10">
-        <div className="px-4 pt-2 pb-4">
-          <h1 className="text-2xl font-semibold text-foreground">{t.settings.title}</h1>
-          <p className="text-sm text-muted-foreground">{t.settings.subtitle}</p>
+        <div className="px-4 pt-2 pb-4 flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold text-foreground">{t.settings.title}</h1>
+            <p className="text-sm text-muted-foreground">{t.settings.subtitle}</p>
+          </div>
+          <Link
+            href="/dashboard/updates"
+            className="flex items-center gap-1.5 mt-1 bg-primary/10 hover:bg-primary/20 border border-primary/20 text-primary rounded-full px-3 py-1.5 text-xs font-semibold transition-colors shrink-0"
+            title="Voir les mises à jour"
+          >
+            <Megaphone className="w-3.5 h-3.5" />
+            Mises à jour
+          </Link>
         </div>
 
         {/* PROFIL */}

@@ -41,6 +41,7 @@ import HostedPageDocs from "@/pages/dashboard/hosted-page-docs";
 import TestPaymentPage from "@/pages/docs/test-payment";
 import HPayPage from "@/pages/hpay";
 import SettingsPage from "@/pages/dashboard/settings";
+import UpdatesPage from "@/pages/dashboard/updates";
 import PaymentPage from "@/pages/payment";
 import CheckoutPage from "@/pages/checkout";
 import NotFound from "@/pages/not-found";
@@ -182,6 +183,7 @@ function Router() {
       <Route path="/dashboard/hosted-page" component={HostedPageDashboard} />
       <Route path="/hpay/:id" component={HPayPage} />
       <Route path="/dashboard/settings" component={SettingsPage} />
+      <Route path="/dashboard/updates" component={UpdatesPage} />
       <Route path="/pay/:slug" component={PaymentPage} />
       <Route path="/checkout/:transactionId" component={CheckoutPage} />
       <Route path="/admin-panel-verify" component={AdminPanelVerifyPage} />
