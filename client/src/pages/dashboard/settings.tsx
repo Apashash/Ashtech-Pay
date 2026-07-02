@@ -44,9 +44,7 @@ import {
   KeyRound,
   Copy,
   Fingerprint,
-  ScanLine,
 } from "lucide-react";
-import { QRCodeSVG } from "qrcode.react";
 import { Link } from "wouter";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -283,12 +281,6 @@ export default function SettingsPage() {
   const [notifOpen, setNotifOpen] = useState(false);
   const [securityOpen, setSecurityOpen] = useState(false);
 
-  // TOTP setup state
-  const [totpStep, setTotpStep] = useState<"idle" | "setup" | "confirm">("idle");
-  const [totpUri, setTotpUri] = useState("");
-  const [totpManualSecret, setTotpManualSecret] = useState("");
-  const [totpCode, setTotpCode] = useState("");
-
   const [notifications, setNotifications] = useState({
     email: true,
     push: true,
@@ -374,44 +366,6 @@ export default function SettingsPage() {
       setConfirmPassword("");
       setOtpValue("");
       setSecurityOpen(false);
-    },
-    onError: (error: Error) => {
-      toast({ title: "Code incorrect", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const totpSetupMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/admin/totp/setup", {});
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Erreur");
-      return data as { uri: string; secret: string };
-    },
-    onSuccess: (data) => {
-      setTotpUri(data.uri);
-      setTotpManualSecret(data.secret);
-      setTotpCode("");
-      setTotpStep("setup");
-    },
-    onError: (error: Error) => {
-      toast({ title: "Erreur", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const totpConfirmMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/admin/totp/confirm", { code: totpCode.replace(/\s/g, "") });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Code incorrect");
-      return data;
-    },
-    onSuccess: () => {
-      setTotpStep("idle");
-      setTotpUri("");
-      setTotpManualSecret("");
-      setTotpCode("");
-      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
-      toast({ title: "Google Authenticator activé ✓", description: "Votre compte admin est maintenant protégé par TOTP." });
     },
     onError: (error: Error) => {
       toast({ title: "Code incorrect", description: error.message, variant: "destructive" });
@@ -683,96 +637,6 @@ export default function SettingsPage() {
             onClick={() => setLocation("/dashboard/api-keys")}
             data-testid="row-api-keys"
           />
-
-          {/* Google Authenticator — admins uniquement */}
-          {user?.role === "admin" && (
-            <>
-              <Divider />
-              {totpStep === "idle" && (
-                <button
-                  type="button"
-                  className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-muted/50 transition-colors text-left"
-                  onClick={() => totpSetupMutation.mutate()}
-                  disabled={totpSetupMutation.isPending}
-                >
-                  {totpSetupMutation.isPending
-                    ? <Loader2 className="w-4 h-4 shrink-0 animate-spin text-yellow-500" />
-                    : <ScanLine className="w-4 h-4 shrink-0 text-yellow-500" />}
-                  <span className="flex-1 text-sm font-medium text-foreground">Google Authenticator</span>
-                  <span className="text-xs text-muted-foreground mr-1">
-                    {user?.totpEnabled ? "✓ Activé" : "Non configuré"}
-                  </span>
-                  <ChevronRight className="w-4 h-4 text-muted-foreground/50 shrink-0" />
-                </button>
-              )}
-
-              {totpStep === "setup" && (
-                <div className="px-4 py-4 bg-muted/20 space-y-4">
-                  <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                    <ScanLine className="w-4 h-4 text-yellow-500" />
-                    Configurer Google Authenticator
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Scannez ce QR code avec l'app <strong>Google Authenticator</strong> ou <strong>Authy</strong>.
-                  </p>
-                  <div className="flex justify-center p-3 bg-white rounded-xl">
-                    <QRCodeSVG value={totpUri} size={180} />
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Clé manuelle</p>
-                    <p className="font-mono text-xs bg-muted rounded-lg px-3 py-2 break-all select-all">{totpManualSecret}</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="outline" onClick={() => setTotpStep("confirm")} className="flex-1">
-                      <Check className="w-3.5 h-3.5 mr-1.5" /> J'ai scanné le code
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setTotpStep("idle")}>
-                      <X className="w-3.5 h-3.5" />
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {totpStep === "confirm" && (
-                <div className="px-4 py-4 bg-muted/20 space-y-3">
-                  <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                    <ScanLine className="w-4 h-4 text-yellow-500" />
-                    Confirmer le code
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Entrez le code à 6 chiffres affiché dans Google Authenticator pour finaliser.
-                  </p>
-                  <Input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="\d*"
-                    maxLength={6}
-                    placeholder="000 000"
-                    value={totpCode}
-                    onChange={e => setTotpCode(e.target.value.replace(/\D/g, ""))}
-                    className="text-center text-2xl tracking-[0.4em] font-mono"
-                    autoFocus
-                  />
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      onClick={() => totpConfirmMutation.mutate()}
-                      disabled={totpCode.length !== 6 || totpConfirmMutation.isPending}
-                      className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-black"
-                    >
-                      {totpConfirmMutation.isPending
-                        ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                        : <Check className="w-3.5 h-3.5 mr-1.5" />}
-                      Activer
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setTotpStep("setup")}>
-                      <X className="w-3.5 h-3.5" />
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
         </SettingsCard>
 
         {/* APPAREILS CONNECTÉS */}
