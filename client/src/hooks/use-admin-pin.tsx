@@ -2,6 +2,11 @@ import { createContext, useContext, useRef, useState, useCallback, useEffect, Re
 import { AdminPinDialog } from "@/components/AdminPinDialog";
 import { registerPinHandler } from "@/lib/pinGate";
 
+// Short-lived PIN cache — allows concurrent requests within the same mutation
+// (e.g. PATCH profile + PATCH role fired in parallel) to share one dialog.
+interface PinCache { pin: string; expiresAt: number; }
+const PIN_CACHE_TTL_MS = 8_000; // 8 seconds
+
 // ── Admin PIN Context ──────────────────────────────────────────────────────
 // Provides a promise-based requestPin() function. apiRequest() in queryClient.ts
 // calls invokeRequestPin() from pinGate, which delegates to this provider.
@@ -34,8 +39,24 @@ export function AdminPinProvider({ children }: { children: ReactNode }) {
 
   const resolveRef = useRef<((pin: string) => void) | null>(null);
   const rejectRef = useRef<((reason?: unknown) => void) | null>(null);
+  // Extra waiters queued when dialog is already open (parallel requests in one mutation)
+  const waitersRef = useRef<Array<(pin: string) => void>>([]);
+  const waiterRejectsRef = useRef<Array<(reason?: unknown) => void>>([]);
+  // Short-lived PIN cache so back-to-back requests reuse the PIN without reopening dialog
+  const pinCacheRef = useRef<PinCache | null>(null);
 
   const requestPin = useCallback((): Promise<string> => {
+    // Return cached PIN if still fresh (handles concurrent requests in the same mutation)
+    if (pinCacheRef.current && Date.now() < pinCacheRef.current.expiresAt) {
+      return Promise.resolve(pinCacheRef.current.pin);
+    }
+    // Dialog already open — queue onto the existing promise instead of overwriting resolveRef
+    if (resolveRef.current !== null) {
+      return new Promise((resolve, reject) => {
+        waitersRef.current.push(resolve);
+        waiterRejectsRef.current.push(reject);
+      });
+    }
     return new Promise((resolve, reject) => {
       resolveRef.current = resolve;
       rejectRef.current = reject;
@@ -47,6 +68,8 @@ export function AdminPinProvider({ children }: { children: ReactNode }) {
     msg: string,
     opts?: { locked?: boolean; retryAfterMs?: number; attemptsLeft?: number }
   ) => {
+    // Invalidate cache on wrong PIN so the user must re-enter
+    pinCacheRef.current = null;
     setState(s => ({
       ...s,
       open: true,
@@ -70,12 +93,21 @@ export function AdminPinProvider({ children }: { children: ReactNode }) {
   }, [requestPin, reportPinError, reportPinSuccess]);
 
   const handleSubmit = (pin: string) => {
+    // Cache PIN briefly so concurrent requests in the same mutation don't reopen the dialog
+    pinCacheRef.current = { pin, expiresAt: Date.now() + PIN_CACHE_TTL_MS };
     resolveRef.current?.(pin);
+    // Resolve all queued waiters with the same PIN
+    for (const resolve of waitersRef.current) resolve(pin);
+    waitersRef.current = [];
+    waiterRejectsRef.current = [];
   };
 
   const handleCancel = () => {
     setState({ open: false, error: null, locked: false });
     rejectRef.current?.(new Error("PIN_CANCELLED"));
+    for (const reject of waiterRejectsRef.current) reject(new Error("PIN_CANCELLED"));
+    waitersRef.current = [];
+    waiterRejectsRef.current = [];
     resolveRef.current = null;
     rejectRef.current = null;
   };

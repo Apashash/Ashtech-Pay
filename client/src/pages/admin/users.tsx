@@ -283,16 +283,17 @@ export default function AdminUsers() {
   });
 
   const updateUserMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: { fullName?: string; email?: string; phone?: string; role?: string } }) => {
+    mutationFn: async ({ id, data, originalRole }: { id: string; data: { fullName?: string; email?: string; phone?: string; role?: string }; originalRole?: string }) => {
       const { role, ...rest } = data;
-      const promises: Promise<any>[] = [];
+      // Sequential — not parallel — to avoid PIN dialog race condition
+      // (the PIN singleton can only handle one pending request at a time)
       if (Object.keys(rest).length > 0) {
-        promises.push(apiRequest("PATCH", `/api/admin/users/${id}`, rest));
+        await apiRequest("PATCH", `/api/admin/users/${id}`, rest);
       }
-      if (role !== undefined) {
-        promises.push(apiRequest("PATCH", `/api/admin/users/${id}/role`, { role }));
+      // Only send role update if it actually changed (avoids a second PIN prompt for no-op)
+      if (role !== undefined && role !== originalRole) {
+        await apiRequest("PATCH", `/api/admin/users/${id}/role`, { role });
       }
-      await Promise.all(promises);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
@@ -374,6 +375,7 @@ export default function AdminUsers() {
       updateUserMutation.mutate({
         id: editUser.id,
         data: editForm,
+        originalRole: editUser.role,
       });
     }
   };
