@@ -76,7 +76,7 @@ export default function KYCPage() {
   const [documentType, setDocumentType] = useState("");
   const [documentNumber, setDocumentNumber] = useState("");
   const [city, setCity] = useState("");
-  const [postalCode, setPostalCode] = useState("");
+  const [lieuDit, setLieuDit] = useState("");
   const [detectedCountry, setDetectedCountry] = useState("");
   const [latitude, setLatitude] = useState<number | null>(null);
   const [longitude, setLongitude] = useState<number | null>(null);
@@ -366,7 +366,7 @@ export default function KYCPage() {
     if (!documentType)       missing.push("Type de document");
     if (!documentNumber)     missing.push("Numéro de document");
     if (!city)               missing.push("Ville");
-    if (!postalCode)         missing.push("Code postal");
+    if (!lieuDit)            missing.push("Lieu dit");
     if (!locationConfirmed)  missing.push("Confirmation de l'emplacement sur la carte");
     if (!businessType)       missing.push("Type d'activité");
     if (!businessCategory)   missing.push("Catégorie d'activité");
@@ -379,6 +379,15 @@ export default function KYCPage() {
       toast({
         title: "Champs manquants",
         description: "Veuillez remplir : " + missing.join(", ") + ".",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (descriptionWordCount < 20) {
+      toast({
+        title: t.kyc.toastDescTooShort,
+        description: t.kyc.toastDescTooShortPre + descriptionWordCount + t.kyc.toastDescTooShortSuf,
         variant: "destructive",
       });
       return;
@@ -401,7 +410,7 @@ export default function KYCPage() {
       selfiePath: uploadedPaths.selfie,
       country: detectedCountry || user?.country || undefined,
       city,
-      postalCode,
+      postalCode: lieuDit,
       latitude: latitude != null ? String(latitude) : undefined,
       longitude: longitude != null ? String(longitude) : undefined,
       businessType,
@@ -657,11 +666,10 @@ export default function KYCPage() {
                   <div className="space-y-2">
                     <Label>{t.kyc.postalCodeLabel}</Label>
                     <Input
-                      value={postalCode}
-                      onChange={(e) => setPostalCode(e.target.value)}
+                      value={lieuDit}
+                      onChange={(e) => setLieuDit(e.target.value)}
                       placeholder={t.kyc.postalCodePlaceholder}
-                      inputMode="numeric"
-                      data-testid="input-postal-code"
+                      data-testid="input-lieu-dit"
                     />
                   </div>
                 </div>
@@ -680,6 +688,7 @@ export default function KYCPage() {
                       setLocationConfirmed(false);
                       if (info.city) setCity(info.city);
                       if (info.country) setDetectedCountry(info.country);
+                      if (info.locality) setLieuDit(info.locality);
                     }}
                   />
                 </div>
@@ -868,7 +877,7 @@ export default function KYCPage() {
                       rows={4}
                       data-testid="textarea-business-description"
                     />
-                    <p className={cn("text-xs", descriptionWordCount > 250 ? "text-destructive font-medium" : "text-muted-foreground")}>
+                    <p className={cn("text-xs", descriptionWordCount > 250 || (descriptionWordCount > 0 && descriptionWordCount < 20) ? "text-destructive font-medium" : "text-muted-foreground")}>
                       {descriptionWordCount} {t.kyc.wordsOf}
                     </p>
                   </div>

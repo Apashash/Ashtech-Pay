@@ -21,6 +21,7 @@ interface GeocodeResult {
   country?: string;
   countryCode?: string;
   city?: string;
+  locality?: string; // lieu dit : rue, quartier, hameau
 }
 
 interface LocationMapPickerProps {
@@ -65,7 +66,17 @@ export const LocationMapPicker = forwardRef<LocationMapPickerHandle, LocationMap
       const city = addr.city || addr.town || addr.village || addr.municipality || addr.county || "";
       const country = addr.country || "";
       const countryCode = (addr.country_code || "").toUpperCase();
-      onLocationChange(lat, lng, { country, countryCode, city });
+      // Lieu dit : on prend la donnée la plus précise disponible (quartier, hameau, rue…)
+      const locality =
+        addr.quarter ||
+        addr.neighbourhood ||
+        addr.suburb ||
+        addr.hamlet ||
+        addr.road ||
+        addr.residential ||
+        addr.locality ||
+        "";
+      onLocationChange(lat, lng, { country, countryCode, city, locality });
     } catch {
       onLocationChange(lat, lng, {});
     } finally {
