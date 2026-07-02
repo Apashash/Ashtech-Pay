@@ -14,7 +14,9 @@ export default function AdminPanelVerifyPage() {
   const [code, setCode] = useState("");
   const [secondsLeft, setSecondsLeft] = useState(30);
 
-  const ADMIN_URL = getAdminPath();
+  // Restore the page the admin was on before TOTP expiry; fall back to admin root
+  const returnPath = sessionStorage.getItem("admin_verify_return") || getAdminPath();
+  const ADMIN_URL = returnPath.startsWith("/admin-panel-verify") ? getAdminPath() : returnPath;
 
   const { data: otpStatus, isLoading: statusLoading } = useQuery<{
     verified: boolean;
@@ -67,6 +69,7 @@ export default function AdminPanelVerifyPage() {
         needsPanelVerify: undefined,
         verified: true,
       }));
+      sessionStorage.removeItem("admin_verify_return");
       setLocation(ADMIN_URL);
     },
     onError: (err: any) => {

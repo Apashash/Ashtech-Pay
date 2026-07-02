@@ -64,7 +64,8 @@ async function throwIfResNotOk(res: Response) {
         window.location.href = "/login?kicked=ip";
       }
       if (json.totpRequired && res.status === 403) {
-        // Admin TOTP session expired — silently redirect to verify page, no error thrown
+        // Admin TOTP session expired — save current path so we can return after verification
+        sessionStorage.setItem("admin_verify_return", window.location.pathname + window.location.search);
         window.location.href = "/admin-panel-verify";
         return;
       }
