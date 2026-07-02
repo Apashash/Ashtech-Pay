@@ -2541,13 +2541,12 @@ export async function handleTelegramUpdate(
 
       if (type === "menu") { await sendMenu(chatId); return; }
 
-      if (type === "ping") {
-        await callBotApi("sendMessage", { chat_id: chatId, text: "pong" });
-        return;
-      }
-
-      if (type === "pong") {
-        await callBotApi("sendMessage", { chat_id: chatId, text: "ping" });
+      if (type === "ping" || type === "pong") {
+        const sentAtMs = typeof update.message?.date === "number" ? update.message.date * 1000 : null;
+        const latencyMs = sentAtMs ? Date.now() - sentAtMs : null;
+        const reply = type === "ping" ? "pong" : "ping";
+        const speedTxt = latencyMs !== null ? ` (${latencyMs} ms)` : "";
+        await callBotApi("sendMessage", { chat_id: chatId, text: `${reply}${speedTxt}` });
         return;
       }
 
@@ -2593,8 +2592,8 @@ export async function handleTelegramUpdate(
             `<b>❓ Aide</b>\n` +
             `/aide — Afficher cette liste\n` +
             `/help — Afficher cette liste (alias)\n` +
-            `/ping — Test de connectivité (répond "pong")\n` +
-            `/pong — Test de connectivité (répond "ping")\n` +
+            `/ping — Test de connectivité (répond "pong" + latence)\n` +
+            `/pong — Test de connectivité (répond "ping" + latence)\n` +
             `──────────────────\n` +
             `🕐 ${now()}`,
           parse_mode: "HTML",
