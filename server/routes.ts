@@ -1657,15 +1657,25 @@ export async function registerRoutes(
   // Placed HERE (after session + extractUserId) so req.userId is always populated.
   // Prevents route enumeration: unauthenticated visitors get 404 (not 200/HTML)
   // on any URL that starts with the secret admin path prefix.
+  //
+  // IMPORTANT: /admin-panel-verify and /admin-login-otp are intentionally exempt
+  // from the 404 guard. When a session expires mid-navigation, queryClient.ts does
+  // a full-page redirect to /admin-panel-verify. If the server returns 404 (because
+  // req.userId is now undefined), the admin sees a blank page and cannot re-verify.
+  // The pages themselves are harmless — the TOTP verification API still requires a
+  // valid session, so serving the HTML shell is safe.
   {
     const ADMIN_FRONTEND_PATH = process.env.VITE_ADMIN_PATH || "";
     const ADMIN_REVEAL_PATHS = ["/admin-panel-verify", "/admin-login-otp"];
     app.use((req: Request, res: Response, next: NextFunction) => {
       const p = req.path;
       if (p.startsWith("/api/")) return next();
-      const isAdminFrontend = ADMIN_FRONTEND_PATH && p.startsWith(ADMIN_FRONTEND_PATH);
+      // Reveal paths (verify/OTP pages) are always served — no 404 guard
       const isAdminReveal = ADMIN_REVEAL_PATHS.some(r => p === r || p.startsWith(r + "/"));
-      if (!isAdminFrontend && !isAdminReveal) return next();
+      if (isAdminReveal) return next();
+      // Only gate the secret admin frontend path
+      const isAdminFrontend = ADMIN_FRONTEND_PATH && p.startsWith(ADMIN_FRONTEND_PATH);
+      if (!isAdminFrontend) return next();
       // req.userId is set by extractUserId above — valid session or bearer token
       // Also accept _apl (admin pending login) set during mid-login OTP step
       const sessionAdminPending = (req.session as any)?._apl;

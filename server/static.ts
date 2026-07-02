@@ -12,8 +12,11 @@ export function serveStatic(app: Express) {
       `[Static] CRITICAL: Build directory not found: ${distPath}. Run "npm run build" before starting in production.`
     );
     app.use("*", (_req, res) => {
-      res.status(503).send(
-        "Service en maintenance. Veuillez réessayer dans quelques instants. (Build manquant)"
+      // Explicit Content-Type prevents Safari from downloading the response as a
+      // file (document.txt) when no MIME type can be inferred from the URL.
+      res.status(503).set("Content-Type", "text/html; charset=utf-8").send(
+        "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Maintenance</title></head>" +
+        "<body>Service en maintenance. Veuillez réessayer dans quelques instants.</body></html>"
       );
     });
     return;

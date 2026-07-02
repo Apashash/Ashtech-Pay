@@ -95,6 +95,7 @@ import FAQPage from "@/pages/faq";
 import CountryBlockedPage from "@/pages/country-blocked";
 import BlockedPage from "@/pages/blocked";
 import { getBlockedUntil, getGeoCache, setGeoCache, GEO_BYPASS_PATHS, GEO_CACHE_KEY } from "@/lib/appUtils";
+import { clearAdminPathCache } from "@/lib/adminPath";
 
 // Redirige immédiatement vers /blocked si l'IP est bloquée (vérif. localStorage)
 // useLayoutEffect + return null = aucun flash de la page login/register
@@ -308,6 +309,7 @@ function VpnDisconnectGuard() {
     const handler = (e: Event) => {
       queryClient.clear();
       removeAuthToken();
+      clearAdminPathCache();
       window.location.href = "/";
     };
     window.addEventListener("vpn-disconnect", handler);
@@ -323,6 +325,7 @@ function ForceLogoutGuard() {
       const detail = (e as CustomEvent).detail;
       queryClient.clear();
       removeAuthToken();
+      clearAdminPathCache();
       const retryAfter = detail?.retryAfter;
       const reason = detail?.reason;
       if (retryAfter) {
