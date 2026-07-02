@@ -142,3 +142,41 @@ Countries supported: CM, GA, CG, CD, SN, CI, BF, ML, BJ, TG, TZ, UG, NG, NE, RW,
 - **Vite**: Frontend build tool and dev server
 - **esbuild**: Server bundling for production
 - **tsx**: TypeScript execution for development
+
+## Running on Replit
+
+### First-time setup
+```bash
+npm install          # install all dependencies
+npm run db:push      # push Drizzle schema to the local PostgreSQL database
+```
+
+### Development
+The "Start application" workflow runs `npm run dev`, which starts the Express + Vite dev server on port 5000. The app is served at the Replit preview URL.
+
+### Required environment secrets
+Set these in Replit Secrets before connecting to live services:
+
+| Secret | Description |
+|--------|-------------|
+| `SESSION_SECRET` | Random 64-char string for session signing (already set) |
+| `SUPABASE_DATABASE_URL` | Supabase PostgreSQL connection string (Transaction pooler, port 6543) |
+| `SUPABASE_URL` | Supabase project URL (for file uploads) |
+| `SUPABASE_ANON_KEY` | Supabase anon/public key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key |
+| `SWYCHR_EMAIL` | Swychr account email (payment gateway) |
+| `SWYCHR_PASSWORD` | Swychr account password |
+| `RESEND_API_KEY` | Resend API key for transactional email |
+| `ADMIN_PIN_CODE` | 6-digit PIN for admin panel access |
+| `AFRIBAPAY_PUBLIC_KEY` | AfribaPay public key |
+| `AFRIBAPAY_SECRET_KEY` | AfribaPay secret key |
+| `PIXPAY_API_KEY_XAF` | PixPay XAF key |
+
+Without Supabase secrets, the app falls back to Replit's local PostgreSQL and local file storage — fine for development.
+
+### Production build
+```bash
+npm run build        # bundles server to dist/index.cjs + client assets
+npm run db:push      # ensure schema is up to date
+node dist/index.cjs  # run production server
+```
