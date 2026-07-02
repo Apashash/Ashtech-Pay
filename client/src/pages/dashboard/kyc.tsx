@@ -27,7 +27,7 @@ import {
   X,
   Image as ImageIcon
 } from "lucide-react";
-import { useState, useRef, useCallback, useMemo } from "react";
+import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/lib/language";
 
@@ -100,7 +100,60 @@ export default function KYCPage() {
 
   const frontInputRef = useRef<HTMLInputElement>(null);
   const backInputRef = useRef<HTMLInputElement>(null);
-  const selfieInputRef = useRef<HTMLInputElement>(null);
+
+  // Camera (selfie — front camera only, no file import)
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [capturingPhoto, setCapturingPhoto] = useState(false);
+
+  useEffect(() => {
+    return () => { streamRef.current?.getTracks().forEach(t => t.stop()); };
+  }, []);
+
+  const startCamera = useCallback(async () => {
+    setCameraError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+      setCameraActive(true);
+    } catch {
+      setCameraError("Impossible d'accéder à la caméra. Vérifiez les autorisations.");
+    }
+  }, []);
+
+  const stopCamera = useCallback(() => {
+    streamRef.current?.getTracks().forEach(t => t.stop());
+    streamRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
+    setCameraActive(false);
+  }, []);
+
+  const capturePhoto = useCallback(async () => {
+    if (!videoRef.current || !canvasRef.current) return;
+    setCapturingPhoto(true);
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext("2d")!.drawImage(video, 0, 0);
+    canvas.toBlob(async (blob) => {
+      if (!blob) { setCapturingPhoto(false); return; }
+      const file = new File([blob], "selfie.jpg", { type: "image/jpeg" });
+      stopCamera();
+      await handleFileUpload(file, "selfie");
+      setCapturingPhoto(false);
+    }, "image/jpeg", 0.92);
+  }, [stopCamera]);
 
   const filteredCategories = useMemo(() => businessType
     ? BUSINESS_CATEGORIES.filter(cat => cat.type === businessType)
@@ -220,20 +273,32 @@ export default function KYCPage() {
   const removeUpload = (field: UploadField) => {
     setUploadedPaths(prev => ({ ...prev, [field]: null }));
     setUploadPreviews(prev => ({ ...prev, [field]: null }));
-
-    const inputRef = field === "front" ? frontInputRef : field === "back" ? backInputRef : selfieInputRef;
-    if (inputRef.current) {
-      inputRef.current.value = "";
+    if (field !== "selfie") {
+      const inputRef = field === "front" ? frontInputRef : backInputRef;
+      if (inputRef.current) inputRef.current.value = "";
     }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!documentType || !documentNumber || !city || !postalCode || !businessType || !businessCategory || !businessDescription) {
+    // Collect all missing fields with their labels
+    const missing: string[] = [];
+    if (!documentType)       missing.push("Type de document");
+    if (!documentNumber)     missing.push("Numéro de document");
+    if (!city)               missing.push("Ville");
+    if (!postalCode)         missing.push("Code postal");
+    if (!businessType)       missing.push("Type d'activité");
+    if (!businessCategory)   missing.push("Catégorie d'activité");
+    if (!businessDescription) missing.push("Description de l'activité");
+    if (!uploadedPaths.front)  missing.push("Photo recto du document");
+    if (!uploadedPaths.back)   missing.push("Photo verso du document");
+    if (!uploadedPaths.selfie) missing.push("Selfie avec le document");
+
+    if (missing.length > 0) {
       toast({
-        title: t.kyc.toastRequiredFields,
-        description: t.kyc.toastRequiredFieldsDesc,
+        title: "Champs manquants",
+        description: "Veuillez remplir : " + missing.join(", ") + ".",
         variant: "destructive",
       });
       return;
@@ -243,15 +308,6 @@ export default function KYCPage() {
       toast({
         title: t.kyc.toastDescTooLong,
         description: t.kyc.toastDescTooLongPre + descriptionWordCount + t.kyc.toastDescTooLongSuf,
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!uploadedPaths.front || !uploadedPaths.back || !uploadedPaths.selfie) {
-      toast({
-        title: t.kyc.toastDocsRequired,
-        description: t.kyc.toastDocsRequiredDesc,
         variant: "destructive",
       });
       return;
@@ -578,13 +634,78 @@ export default function KYCPage() {
                     backInputRef as React.RefObject<HTMLInputElement>
                   )}
 
-                  {renderUploadBox(
-                    "selfie",
-                    t.kyc.selfieLabel,
-                    t.kyc.selfieDesc,
-                    <Camera className="w-8 h-8" />,
-                    selfieInputRef as React.RefObject<HTMLInputElement>
-                  )}
+                  {/* Selfie — caméra frontale uniquement, import désactivé */}
+                  <div className="space-y-2">
+                    <Label>{t.kyc.selfieLabel}</Label>
+                    <canvas ref={canvasRef} className="hidden" />
+
+                    {uploadedPaths.selfie && uploadPreviews.selfie ? (
+                      <div className="relative border-2 border-green-500/50 bg-green-500/5 rounded-lg p-4">
+                        <button
+                          type="button"
+                          onClick={() => removeUpload("selfie")}
+                          className="absolute top-2 right-2 p-1 bg-destructive text-destructive-foreground rounded-full hover:bg-destructive/80"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                        <div className="flex items-center gap-4">
+                          <img src={uploadPreviews.selfie} alt="Selfie" className="w-20 h-20 object-cover rounded-lg" />
+                          <div className="flex items-center gap-2 text-green-500">
+                            <CheckCircle className="w-5 h-5" />
+                            <span className="text-sm font-medium">{t.kyc.uploaded}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ) : cameraActive ? (
+                      <div className="space-y-3">
+                        <div className="relative rounded-lg overflow-hidden bg-black aspect-video">
+                          <video
+                            ref={videoRef}
+                            autoPlay
+                            playsInline
+                            muted
+                            className="w-full h-full object-cover scale-x-[-1]"
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            onClick={capturePhoto}
+                            disabled={capturingPhoto || uploading.selfie}
+                            className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-black"
+                          >
+                            {(capturingPhoto || uploading.selfie)
+                              ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              : <Camera className="w-4 h-4 mr-2" />}
+                            {uploading.selfie ? "Envoi…" : capturingPhoto ? "Capture…" : "Prendre la photo"}
+                          </Button>
+                          <Button type="button" variant="ghost" onClick={stopCamera}>
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground text-center">
+                          Tenez votre pièce d'identité visible et regardez la caméra
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {cameraError && (
+                          <p className="text-xs text-destructive">{cameraError}</p>
+                        )}
+                        <button
+                          type="button"
+                          onClick={startCamera}
+                          className="w-full border-2 border-dashed border-border rounded-lg p-6 text-center hover:border-primary/50 transition-colors cursor-pointer"
+                        >
+                          <div className="w-12 h-12 mx-auto text-muted-foreground mb-2 flex items-center justify-center">
+                            <Camera className="w-8 h-8" />
+                          </div>
+                          <p className="text-sm text-muted-foreground">{t.kyc.selfieDesc}</p>
+                          <p className="text-xs text-muted-foreground mt-1">Caméra frontale uniquement • Aucun import de fichier autorisé</p>
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
 

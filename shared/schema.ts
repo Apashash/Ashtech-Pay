@@ -679,11 +679,9 @@ export const kycSubmissions = pgTable("kyc_submissions", {
 
 // KYC Document types
 export const KYC_DOCUMENT_TYPES = [
-  { id: "cni", name: "Carte Nationale d'Identité (CNI)" },
-  { id: "cni_receipt", name: "Récépissé de CNI" },
+  { id: "cni", name: "Pièce d'identité Nationale (CIN)" },
   { id: "driver_license", name: "Permis de conduire" },
   { id: "residence_card", name: "Carte de séjour" },
-  { id: "voter_card", name: "Carte électorale" },
 ] as const;
 
 // Business types catalog (400+ types)
