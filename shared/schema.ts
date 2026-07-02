@@ -666,6 +666,8 @@ export const kycSubmissions = pgTable("kyc_submissions", {
   country: text("country"),
   city: text("city"),
   postalCode: text("postal_code"),
+  latitude: text("latitude"),
+  longitude: text("longitude"),
   businessType: text("business_type").notNull(), // 'physical' or 'online'
   businessCategory: text("business_category").notNull(),
   businessDescription: text("business_description").notNull(),

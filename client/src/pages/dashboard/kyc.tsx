@@ -30,6 +30,7 @@ import {
 import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/lib/language";
+import { LocationMapPicker, type LocationMapPickerHandle } from "@/components/LocationMapPicker";
 
 const africanCountries = [
   { code: "CM", name: "Cameroun", flag: "🇨🇲" },
@@ -75,6 +76,11 @@ export default function KYCPage() {
   const [documentNumber, setDocumentNumber] = useState("");
   const [city, setCity] = useState("");
   const [postalCode, setPostalCode] = useState("");
+  const [detectedCountry, setDetectedCountry] = useState("");
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
+  const [locationConfirmed, setLocationConfirmed] = useState(false);
+  const mapRef = useRef<LocationMapPickerHandle>(null);
   const [businessType, setBusinessType] = useState<"physical" | "online" | "">("");
   const [businessCategory, setBusinessCategory] = useState("");
   const [businessDescription, setBusinessDescription] = useState("");
@@ -108,32 +114,88 @@ export default function KYCPage() {
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [capturingPhoto, setCapturingPhoto] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [cameraStarting, setCameraStarting] = useState(false);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => { streamRef.current?.getTracks().forEach(t => t.stop()); };
   }, []);
 
-  // Attach stream to video element once it appears in the DOM
+  // Attach stream to video element once it appears in the DOM, and wait for
+  // an actual frame (loadedmetadata / playing) before allowing capture —
+  // this is what prevents the "black screen, can't capture" state.
   useEffect(() => {
-    if (cameraActive && videoRef.current && streamRef.current) {
-      videoRef.current.srcObject = streamRef.current;
-      videoRef.current.play().catch(() => {});
-    }
+    if (!cameraActive || !videoRef.current || !streamRef.current) return;
+
+    const video = videoRef.current;
+    setCameraReady(false);
+    video.srcObject = streamRef.current;
+
+    let cancelled = false;
+    const tryPlay = () => { video.play().catch(() => {}); };
+
+    const markReady = () => {
+      if (!cancelled && video.videoWidth > 0) setCameraReady(true);
+    };
+
+    video.onloadedmetadata = () => { tryPlay(); markReady(); };
+    video.oncanplay = () => { tryPlay(); markReady(); };
+    video.onplaying = markReady;
+
+    // Some mobile browsers need a couple of retries before the first frame arrives.
+    tryPlay();
+    const retryTimer = setInterval(() => {
+      if (cancelled) return;
+      if (video.videoWidth > 0) {
+        markReady();
+        clearInterval(retryTimer);
+      } else {
+        tryPlay();
+      }
+    }, 400);
+    const giveUpTimer = setTimeout(() => clearInterval(retryTimer), 6000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(retryTimer);
+      clearTimeout(giveUpTimer);
+      video.onloadedmetadata = null;
+      video.oncanplay = null;
+      video.onplaying = null;
+    };
   }, [cameraActive]);
 
   const startCamera = useCallback(async () => {
     setCameraError(null);
+    setCameraStarting(true);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: false,
-      });
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false,
+        });
+      } catch {
+        // Fallback: some devices/browsers reject facingMode constraints entirely.
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      }
       streamRef.current = stream;
       // cameraActive=true first → triggers useEffect above which attaches stream to <video>
       setCameraActive(true);
-    } catch {
-      setCameraError("Impossible d'accéder à la caméra. Vérifiez les autorisations du navigateur.");
+    } catch (err: any) {
+      const name = err?.name;
+      if (name === "NotAllowedError" || name === "SecurityError") {
+        setCameraError("Accès à la caméra refusé. Autorisez la caméra dans les paramètres de votre navigateur puis réessayez.");
+      } else if (name === "NotFoundError") {
+        setCameraError("Aucune caméra détectée sur cet appareil.");
+      } else if (name === "NotReadableError") {
+        setCameraError("La caméra est déjà utilisée par une autre application. Fermez-la puis réessayez.");
+      } else {
+        setCameraError("Impossible d'accéder à la caméra. Vérifiez les autorisations du navigateur.");
+      }
+    } finally {
+      setCameraStarting(false);
     }
   }, []);
 
@@ -142,16 +204,24 @@ export default function KYCPage() {
     streamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
     setCameraActive(false);
+    setCameraReady(false);
   }, []);
 
   const capturePhoto = useCallback(async () => {
     if (!videoRef.current || !canvasRef.current) return;
-    setCapturingPhoto(true);
     const video = videoRef.current;
+    if (!video.videoWidth || !video.videoHeight) {
+      setCameraError("La caméra n'a pas encore de flux vidéo. Attendez quelques secondes puis réessayez.");
+      return;
+    }
+    setCapturingPhoto(true);
     const canvas = canvasRef.current;
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
-    canvas.getContext("2d")!.drawImage(video, 0, 0);
+    const ctx = canvas.getContext("2d")!;
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, 0, 0);
     canvas.toBlob(async (blob) => {
       if (!blob) { setCapturingPhoto(false); return; }
       const file = new File([blob], "selfie.jpg", { type: "image/jpeg" });
@@ -180,6 +250,8 @@ export default function KYCPage() {
       country?: string;
       city?: string;
       postalCode?: string;
+      latitude?: string;
+      longitude?: string;
       businessType: string;
       businessCategory: string;
       businessDescription: string;
@@ -294,6 +366,7 @@ export default function KYCPage() {
     if (!documentNumber)     missing.push("Numéro de document");
     if (!city)               missing.push("Ville");
     if (!postalCode)         missing.push("Code postal");
+    if (!locationConfirmed)  missing.push("Confirmation de l'emplacement sur la carte");
     if (!businessType)       missing.push("Type d'activité");
     if (!businessCategory)   missing.push("Catégorie d'activité");
     if (!businessDescription) missing.push("Description de l'activité");
@@ -325,9 +398,11 @@ export default function KYCPage() {
       documentFrontPath: uploadedPaths.front,
       documentBackPath: uploadedPaths.back,
       selfiePath: uploadedPaths.selfie,
-      country: user?.country || undefined,
+      country: detectedCountry || user?.country || undefined,
       city,
       postalCode,
+      latitude: latitude != null ? String(latitude) : undefined,
+      longitude: longitude != null ? String(longitude) : undefined,
       businessType,
       businessCategory,
       businessDescription,
@@ -568,7 +643,12 @@ export default function KYCPage() {
                     <Label>{t.kyc.cityLabel}</Label>
                     <Input
                       value={city}
-                      onChange={(e) => setCity(e.target.value)}
+                      onChange={(e) => { setCity(e.target.value); setLocationConfirmed(false); }}
+                      onBlur={() => {
+                        if (city.trim()) {
+                          mapRef.current?.search(`${city}${detectedCountry || user?.country ? ", " + (detectedCountry || user?.country) : ""}`);
+                        }
+                      }}
                       placeholder={t.kyc.cityPlaceholder}
                       data-testid="input-city"
                     />
@@ -583,6 +663,24 @@ export default function KYCPage() {
                       data-testid="input-postal-code"
                     />
                   </div>
+                </div>
+
+                <div className="space-y-2 pt-2">
+                  <Label>Emplacement sur la carte</Label>
+                  <LocationMapPicker
+                    ref={mapRef}
+                    latitude={latitude}
+                    longitude={longitude}
+                    confirmed={locationConfirmed}
+                    onConfirm={() => setLocationConfirmed(true)}
+                    onLocationChange={(lat, lng, info) => {
+                      setLatitude(lat);
+                      setLongitude(lng);
+                      setLocationConfirmed(false);
+                      if (info.city) setCity(info.city);
+                      if (info.country) setDetectedCountry(info.country);
+                    }}
+                  />
                 </div>
               </CardContent>
             </Card>
@@ -672,23 +770,32 @@ export default function KYCPage() {
                             muted
                             className="w-full h-full object-cover scale-x-[-1]"
                           />
+                          {!cameraReady && (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/60 text-white">
+                              <Loader2 className="w-6 h-6 animate-spin" />
+                              <p className="text-xs">Démarrage de la caméra…</p>
+                            </div>
+                          )}
                         </div>
                         <div className="flex gap-2">
                           <Button
                             type="button"
                             onClick={capturePhoto}
-                            disabled={capturingPhoto || uploading.selfie}
+                            disabled={!cameraReady || capturingPhoto || uploading.selfie}
                             className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-black"
                           >
                             {(capturingPhoto || uploading.selfie)
                               ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                               : <Camera className="w-4 h-4 mr-2" />}
-                            {uploading.selfie ? "Envoi…" : capturingPhoto ? "Capture…" : "Prendre la photo"}
+                            {uploading.selfie ? "Envoi…" : capturingPhoto ? "Capture…" : !cameraReady ? "Chargement…" : "Prendre la photo"}
                           </Button>
                           <Button type="button" variant="ghost" onClick={stopCamera}>
                             <X className="w-4 h-4" />
                           </Button>
                         </div>
+                        {cameraError && (
+                          <p className="text-xs text-destructive text-center">{cameraError}</p>
+                        )}
                         <p className="text-xs text-muted-foreground text-center">
                           Tenez votre pièce d'identité visible et regardez la caméra
                         </p>
@@ -701,12 +808,13 @@ export default function KYCPage() {
                         <button
                           type="button"
                           onClick={startCamera}
-                          className="w-full border-2 border-dashed border-border rounded-lg p-6 text-center hover:border-primary/50 transition-colors cursor-pointer"
+                          disabled={cameraStarting}
+                          className="w-full border-2 border-dashed border-border rounded-lg p-6 text-center hover:border-primary/50 transition-colors cursor-pointer disabled:opacity-50"
                         >
                           <div className="w-12 h-12 mx-auto text-muted-foreground mb-2 flex items-center justify-center">
-                            <Camera className="w-8 h-8" />
+                            {cameraStarting ? <Loader2 className="w-8 h-8 animate-spin" /> : <Camera className="w-8 h-8" />}
                           </div>
-                          <p className="text-sm text-muted-foreground">{t.kyc.selfieDesc}</p>
+                          <p className="text-sm text-muted-foreground">{cameraStarting ? "Ouverture de la caméra…" : t.kyc.selfieDesc}</p>
                           <p className="text-xs text-muted-foreground mt-1">Caméra frontale uniquement • Aucun import de fichier autorisé</p>
                         </button>
                       </div>

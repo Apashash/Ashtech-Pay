@@ -11119,6 +11119,8 @@ export async function registerRoutes(
         country,
         city,
         postalCode,
+        latitude,
+        longitude,
         businessType,
         businessCategory,
         businessDescription 
@@ -11139,6 +11141,8 @@ export async function registerRoutes(
         country: country || null,
         city: city || null,
         postalCode: postalCode || null,
+        latitude: latitude || null,
+        longitude: longitude || null,
         businessType,
         businessCategory,
         businessDescription,
