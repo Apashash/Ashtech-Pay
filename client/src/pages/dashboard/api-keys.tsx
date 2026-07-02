@@ -125,9 +125,9 @@ export default function ApiKeysPage() {
 
   const regenerateMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/user/api-key/regenerate"),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/user/api-key"] });
-      setShowKey(false);
+    onSuccess: (data: { apiKey: string }) => {
+      queryClient.setQueryData(["/api/user/api-key"], data);
+      setShowKey(true);
       toast({ title: t.apiKeys.toastRegenerated, description: t.apiKeys.toastRegeneratedDesc });
     },
     onError: () => {
