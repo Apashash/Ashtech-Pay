@@ -162,10 +162,12 @@ export default function ApiKeysPage() {
   }
 
   const hpMutation = useMutation({
-    mutationFn: (data: { successUrl: string; cancelUrl: string; notifyUrl: string; regenerate?: boolean }) =>
-      apiRequest("POST", "/api/hosted-page/config", data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/hosted-page/config"] });
+    mutationFn: async (data: { successUrl: string; cancelUrl: string; notifyUrl: string; regenerate?: boolean }) => {
+      const res = await apiRequest("POST", "/api/hosted-page/config", data);
+      return res.json() as Promise<HostedPageConfig>;
+    },
+    onSuccess: (data: HostedPageConfig) => {
+      queryClient.setQueryData(["/api/hosted-page/config"], data);
       toast({ title: t.apiKeys.toastConfigSaved, description: t.apiKeys.toastConfigSavedDesc });
     },
     onError: () => {
