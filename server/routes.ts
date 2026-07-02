@@ -3754,14 +3754,17 @@ export async function registerRoutes(
       const creditedAmount = senderPaysFees ? parsedAmount : parsedAmount - feeAmount;
       const totalAmount = senderPaysFees ? parsedAmount + feeAmount : parsedAmount;
 
-      // Determine if debiting primary wallet or secondary wallet
-      const isPrimaryTransfer = (txCurrency === (sender.preferredCurrency || "XAF"));
+      // Determine if debiting primary wallet or secondary wallet.
+      // All CFA variants (XOFT, XOFB, XAFC…) are 1:1 and share the primary wallet.
+      const senderPrimaryCurrency = sender.preferredCurrency || "XAF";
+      const isPrimaryTransfer = txCurrency === senderPrimaryCurrency
+        || sameCfaFamily(txCurrency, senderPrimaryCurrency);
 
       // Check balance in the correct wallet (determined by destination country)
       if (isPrimaryTransfer) {
         if (parseFloat(sender.balance) < totalAmount) {
           return res.status(400).json({
-            message: `Solde insuffisant dans votre compte ${txCurrency}. Vous avez ${parseFloat(sender.balance).toFixed(0)} ${txCurrency} — besoin de ${totalAmount.toFixed(0)} ${txCurrency}`,
+            message: `Solde insuffisant dans votre compte ${senderPrimaryCurrency}. Vous avez ${parseFloat(sender.balance).toFixed(0)} ${senderPrimaryCurrency} — besoin de ${totalAmount.toFixed(0)} ${senderPrimaryCurrency}`,
           });
         }
       } else {
@@ -4750,9 +4753,11 @@ export async function registerRoutes(
       const creditedAmount = amount - feeAmount;
       const totalAmount = amount;
 
-      // Determine the wallet to debit: always the destination country's currency
-      // XAF for Cameroon, XAFG for Gabon, XOFT for Togo, etc.
-      const isPrimaryWithdrawal = (withdrawalCurrency === userCurrency);
+      // Determine the wallet to debit: always the destination country's currency.
+      // All CFA variants (XOFT/Togo, XOFB/Bénin, XAFC/Congo…) are 1:1 and share
+      // the primary wallet (users.balance). Only non-CFA (GNF, CDF…) use a secondary wallet.
+      const isPrimaryWithdrawal = withdrawalCurrency === userCurrency
+        || sameCfaFamily(withdrawalCurrency, userCurrency);
 
       // Check balance in the correct wallet BEFORE any deduction
       if (isPrimaryWithdrawal) {
@@ -4762,7 +4767,7 @@ export async function registerRoutes(
           : Math.round(parseFloat(user.balance));
         if (availableBalance < amount) {
           return res.status(400).json({
-            message: `Solde insuffisant dans votre compte ${withdrawalCurrency}. Vous avez ${availableBalance.toLocaleString()} ${withdrawalCurrency} — besoin de ${amount.toLocaleString()} ${withdrawalCurrency}`,
+            message: `Solde insuffisant dans votre compte ${userCurrency}. Vous avez ${availableBalance.toLocaleString()} ${userCurrency} — besoin de ${amount.toLocaleString()} ${userCurrency}`,
           });
         }
       } else {
