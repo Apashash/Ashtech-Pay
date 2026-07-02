@@ -5160,6 +5160,7 @@ export async function registerRoutes(
         description: `Conversion ${parsedAmount.toFixed(2)} ${fromCurrency} → ${receivedAmount.toFixed(2)} ${toCurrency} (Frais: ${providerFeePercent}% opérateurs + ${ashtechFeePercent}% Ashtech = ${conversionFeePercent}%)`,
         reference: generateTransactionReference("CONV"),
         feeAmount: totalFeeAmount.toFixed(2),
+        ashtechFeeAmount: ashtechFeeAmount.toFixed(2),
         totalAmount: receivedAmount.toFixed(2),
         recipientCountry: toCurrency,
       });
@@ -5322,6 +5323,7 @@ export async function registerRoutes(
         description: `Conversion admin: ${parsedAmount.toFixed(2)} ${fromCurrency} → ${receivedAmount.toFixed(2)} ${toCurrency} (Frais: ${adminProviderFeePercent}% opérateurs + ${adminAshtechFeePercent}% Ashtech = ${conversionFeePercent}%)`,
         reference: generateTransactionReference("CONV"),
         feeAmount: feeAmount.toFixed(2),
+        ashtechFeeAmount: adminAshtechFeeAmount.toFixed(2),
         totalAmount: receivedAmount.toFixed(2),
         recipientCountry: toCurrency,
       });

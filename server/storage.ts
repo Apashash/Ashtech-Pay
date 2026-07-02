@@ -1354,9 +1354,10 @@ export class DatabaseStorage implements IStorage {
         type: transactions.type,
         status: transactions.status,
         currency: transactions.currency,
-        totalAmount: sql<string>`COALESCE(SUM(${transactions.amount}::numeric), 0)`,
-        totalFee:    sql<string>`COALESCE(SUM(${transactions.feeAmount}::numeric), 0)`,
-        cnt:         sql<string>`COUNT(*)`,
+        totalAmount:      sql<string>`COALESCE(SUM(${transactions.amount}::numeric), 0)`,
+        totalFee:         sql<string>`COALESCE(SUM(${transactions.feeAmount}::numeric), 0)`,
+        totalAshtechFee:  sql<string>`COALESCE(SUM(${transactions.ashtechFeeAmount}::numeric), 0)`,
+        cnt:              sql<string>`COUNT(*)`,
       })
       .from(transactions)
       .where(whereClause)
@@ -1373,6 +1374,7 @@ export class DatabaseStorage implements IStorage {
       const cur = row.currency || "XAF";
       const amt = toXAF(parseFloat(row.totalAmount), cur);
       const fee = toXAF(parseFloat(row.totalFee), cur);
+      const ashtechFee = toXAF(parseFloat(row.totalAshtechFee), cur);
       const n   = parseInt(row.cnt, 10);
       totalTransactions += n;
 
@@ -1385,7 +1387,12 @@ export class DatabaseStorage implements IStorage {
           case "withdrawal":   withdrawalVol += amt; withdrawalFees += fee; withdrawalCount += n; break;
           case "transfer_out": transferVol   += amt; transferFees   += fee; transferCount   += n; break;
           case "payment_link": linkVol       += amt; paymentLinkFees+= fee; paymentLinkCount+= n; break;
-          case "conversion":                         conversionFees += fee; break;
+          // Pour les conversions, seule la marge Ashtech est du revenu réel.
+          // ashtechFeeAmount est stocké séparément ; on retombe sur feeAmount pour les
+          // anciennes transactions qui n'ont pas encore ce champ.
+          case "conversion":
+            conversionFees += ashtechFee > 0 ? ashtechFee : fee;
+            break;
         }
       }
 

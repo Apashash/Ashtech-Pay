@@ -216,6 +216,7 @@ export const transactions = pgTable("transactions", {
   recipientCountry: text("recipient_country"),
   operatorId: varchar("operator_id"),
   feeAmount: decimal("fee_amount", { precision: 15, scale: 2 }),
+  ashtechFeeAmount: decimal("ashtech_fee_amount", { precision: 15, scale: 2 }),
   totalAmount: decimal("total_amount", { precision: 15, scale: 2 }),
   paymentMethod: text("payment_method"), // 'mobile_money', 'crypto', 'bank_transfer'
   reference: text("reference"),
@@ -486,6 +487,7 @@ export const insertTransactionSchema = createInsertSchema(transactions).pick({
   payerName: true,
   payerEmail: true,
   feeAmount: true,
+  ashtechFeeAmount: true,
   totalAmount: true,
   notifyUrl: true,
   source: true,
