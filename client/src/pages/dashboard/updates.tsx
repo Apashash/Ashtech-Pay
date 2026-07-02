@@ -1,7 +1,5 @@
 import React, { useState } from "react";
 import { DashboardLayout } from "@/components/dashboard-layout";
-import { useQuery } from "@tanstack/react-query";
-import { getQueryFn } from "@/lib/queryClient";
 import {
   ShieldCheck,
   TrendingDown,
@@ -9,7 +7,6 @@ import {
   BadgeCheck,
   Sparkles,
   ArrowLeft,
-  Loader2,
   ChevronRight,
 } from "lucide-react";
 import { Link } from "wouter";
@@ -17,59 +14,6 @@ import { Link } from "wouter";
 const APP_VERSION = "v1.7h ASH";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
-interface Fee {
-  id: string;
-  transactionType: string;
-  feeType: string;    // "percentage" | "fixed"
-  feeValue: number;   // Ashtech margin / base fee
-  ashtechMargin?: number;
-  minFee?: number;
-  maxFee?: number;
-  swychrFee?: number;
-  afribapayFee?: number;
-  pixpayFee?: number;
-  countryId?: string | null;
-  operatorId?: string | null;
-  isActive: boolean;
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-/** PostgreSQL decimal fields come back as strings — always parse. */
-function n(v: unknown): number {
-  const num = parseFloat(String(v ?? 0));
-  return isFinite(num) ? num : 0;
-}
-
-function feeTotal(fee: Fee): number {
-  const base = n(fee.feeValue);
-  const providers = [n(fee.swychrFee), n(fee.afribapayFee), n(fee.pixpayFee)].filter(v => v > 0);
-  const providerMax = providers.length > 0 ? Math.max(...providers) : 0;
-  return base + providerMax;
-}
-
-function fmtFee(fee: Fee): string {
-  const total = feeTotal(fee);
-  if (fee.feeType === "percentage") {
-    return `${total.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} %`;
-  }
-  return `${total.toLocaleString("fr-FR")} XAF`;
-}
-
-function feesByType(fees: Fee[], type: string): Fee[] {
-  return fees.filter(f => f.transactionType === type && f.isActive);
-}
-
-function lowestFeeStr(fees: Fee[], type: string): string | null {
-  const group = feesByType(fees, type);
-  if (group.length === 0) return null;
-  const totals = group.map(feeTotal);
-  const min = Math.min(...totals);
-  const idx = totals.findIndex(t => t === min);
-  if (idx === -1 || !group[idx]) return null;
-  return fmtFee(group[idx]);
-}
-
-// ─── Update cards data ────────────────────────────────────────────────────────
 type UpdateEntry = {
   num: number;
   icon: React.ElementType;
@@ -79,93 +23,56 @@ type UpdateEntry = {
   date: string;
   summary: string;
   bullets: string[];
-  feeSection?: React.ReactNode;
 };
-
-// ─── Fee Display sub-component ───────────────────────────────────────────────
-function FeeSummaryBlock({ fees }: { fees: Fee[] }) {
-  const types = [
-    { key: "deposit",    label: "Dépôts" },
-    { key: "withdrawal", label: "Retraits" },
-    { key: "transfer",   label: "Transferts" },
-    { key: "conversion", label: "Conversions" },
-  ];
-
-  return (
-    <div className="mt-3 rounded-lg border border-border overflow-hidden">
-      <div className="bg-muted/40 px-3 py-2 border-b border-border">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Frais actuels configurés
-        </p>
-      </div>
-      <div className="divide-y divide-border">
-        {types.map(({ key, label }) => {
-          const str = lowestFeeStr(fees, key);
-          return (
-            <div key={key} className="flex items-center justify-between px-3 py-2.5">
-              <span className="text-sm text-foreground">{label}</span>
-              <span className="text-sm font-semibold text-primary">
-                {str ? `dès ${str}` : "—"}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 // ─── Single update card ───────────────────────────────────────────────────────
 function UpdateCard({
   entry,
   expanded,
   onToggle,
-  fees,
 }: {
   entry: UpdateEntry;
   expanded: boolean;
   onToggle: () => void;
-  fees: Fee[];
 }) {
   const Icon = entry.icon;
   return (
     <div className="rounded-xl border border-border bg-card overflow-hidden">
-      {/* Header — always visible */}
       <button
         type="button"
         onClick={onToggle}
         className="w-full flex items-center gap-3 px-4 py-4 hover:bg-muted/40 transition-colors text-left"
       >
         <div className={`w-9 h-9 rounded-full ${entry.iconBg} flex items-center justify-center shrink-0`}>
-          <Icon className={`w-4.5 h-4.5 ${entry.iconColor}`} />
+          <Icon className={`w-5 h-5 ${entry.iconColor}`} />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold text-muted-foreground/60 font-mono">#{entry.num.toString().padStart(2, "0")}</span>
+            <span className="text-[10px] font-bold text-muted-foreground/60 font-mono">
+              #{entry.num.toString().padStart(2, "0")}
+            </span>
             <p className="text-sm font-semibold text-foreground leading-tight truncate">{entry.title}</p>
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">{entry.date}</p>
         </div>
-        <ChevronRight className={`w-4 h-4 text-muted-foreground/40 shrink-0 transition-transform duration-200 ${expanded ? "rotate-90" : ""}`} />
+        <ChevronRight
+          className={`w-4 h-4 text-muted-foreground/40 shrink-0 transition-transform duration-200 ${
+            expanded ? "rotate-90" : ""
+          }`}
+        />
       </button>
 
-      {/* Expanded body */}
       {expanded && (
         <div className="border-t border-border px-4 py-4 bg-muted/10 space-y-3">
           <p className="text-sm text-muted-foreground leading-relaxed">{entry.summary}</p>
           <ul className="space-y-2">
             {entry.bullets.map((b, i) => (
               <li key={i} className="flex items-start gap-2 text-sm text-foreground">
-                <span className="mt-0.5 w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
+                <span className="mt-1 w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
                 {b}
               </li>
             ))}
           </ul>
-
-          {/* Fees block for update #2 and #3 */}
-          {(entry.num === 2 || entry.num === 3) && fees.length > 0 && (
-            <FeeSummaryBlock fees={fees} />
-          )}
         </div>
       )}
     </div>
@@ -175,13 +82,6 @@ function UpdateCard({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function UpdatesPage() {
   const [expanded, setExpanded] = useState<number | null>(1);
-
-  const { data: feesRaw, isLoading } = useQuery<Fee[] | null>({
-    queryKey: ["/api/public/fees"],
-    queryFn: getQueryFn({ on401: "returnNull" }),
-    staleTime: 5 * 60 * 1000,
-  });
-  const fees: Fee[] = Array.isArray(feesRaw) ? feesRaw : [];
 
   const updates: UpdateEntry[] = [
     {
@@ -209,7 +109,7 @@ export default function UpdatesPage() {
       title: "Frais de transactions réduits",
       date: "Juillet 2026",
       summary:
-        "Les frais de transactions (dépôts, retraits, transferts) ont été revus à la baisse pour plusieurs pays afin de vous offrir un meilleur tarif.",
+        "Les frais de transactions ont été revus à la baisse pour plusieurs pays afin de vous offrir un meilleur tarif.",
       bullets: [
         "Réduction des frais pour les opérations Mobile Money",
         "Nouveaux tarifs compétitifs pour les transferts inter-pays",
@@ -227,10 +127,9 @@ export default function UpdatesPage() {
       summary:
         "Les taux appliqués lors des conversions de devises ont été améliorés. Vous bénéficiez désormais de spreads plus compétitifs.",
       bullets: [
-        "Marge de conversion réduite sur toutes les paires de devises",
+        "Taux de conversion améliorés sur toutes les paires de devises",
         "Affichage du taux en temps réel avant confirmation",
         "Conversions instantanées sans frais cachés",
-        "Les frais totaux (marge Ashtech + opérateur) sont affichés ci-dessous",
       ],
     },
     {
@@ -245,7 +144,7 @@ export default function UpdatesPage() {
       bullets: [
         "Suppression du récépissé comme document accepté",
         "Suppression de la carte électorale comme document accepté",
-        "Ajout de la carte graphique (carte d'identité graphique) — plus moderne et sécurisée",
+        "Ajout de la carte graphique — plus moderne et sécurisée",
         "Interface KYC redessinée : plus intuitive et professionnelle",
         "Validation plus rapide grâce à une meilleure reconnaissance documentaire",
         "Documents acceptés : CNI, Passeport, Carte graphique",
@@ -256,7 +155,7 @@ export default function UpdatesPage() {
   return (
     <DashboardLayout>
       <div className="max-w-lg mx-auto pb-10">
-        {/* ── Header ── */}
+        {/* Header */}
         <div className="px-4 pt-2 pb-5">
           <Link
             href="/dashboard/settings"
@@ -271,7 +170,6 @@ export default function UpdatesPage() {
               <h1 className="text-2xl font-semibold text-foreground">Mises à jour</h1>
               <p className="text-sm text-muted-foreground mt-0.5">Nouveautés et améliorations</p>
             </div>
-            {/* Version badge */}
             <div className="flex items-center gap-1.5 bg-primary/10 border border-primary/20 rounded-full px-3 py-1.5 shrink-0">
               <Sparkles className="w-3.5 h-3.5 text-primary" />
               <span className="text-xs font-bold text-primary font-mono">{APP_VERSION}</span>
@@ -279,20 +177,12 @@ export default function UpdatesPage() {
           </div>
         </div>
 
-        {/* ── Loading ── */}
-        {isLoading && (
-          <div className="flex justify-center py-4">
-            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-          </div>
-        )}
-
-        {/* ── Update list ── */}
+        {/* Update list */}
         <div className="px-4 space-y-3">
           {updates.map((entry) => (
             <UpdateCard
               key={entry.num}
               entry={entry}
-              fees={fees}
               expanded={expanded === entry.num}
               onToggle={() => setExpanded(expanded === entry.num ? null : entry.num)}
             />
@@ -304,4 +194,3 @@ export default function UpdatesPage() {
     </DashboardLayout>
   );
 }
-
