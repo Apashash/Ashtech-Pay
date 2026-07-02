@@ -850,9 +850,12 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
     return res.status(403).json({ message: "Accès refusé - Droits admin requis" });
   }
   if (!["admin"].includes(user.role)) {
-    console.warn(`[AdminAccess] BLOCKED — user ${req.userId} has role="${user.role}" (not admin) — path=${req.path}`);
+    console.warn(`[AdminAccess] BLOCKED+LOGOUT — user ${req.userId} has role="${user.role}" (not admin) — path=${req.path}`);
     notifyAdminPanelAccess({ type: "blocked_no_role", ip: adminIpEarly, userId: user.id, userName: user.fullName || user.username, userEmail: user.email || undefined, userRole: user.role, path: req.path }).catch(() => {});
-    return res.status(403).json({ message: "Accès refusé - Droits admin requis" });
+    // Force logout — destroy session immediately so the intruder is kicked out
+    req.session.destroy(() => {});
+    res.clearCookie("connect.sid");
+    return res.status(403).json({ message: "Accès refusé - Droits admin requis", forceLogout: true });
   }
 
   // ── Check admin panel IP blocklist ───────────────────────────────────────────
@@ -8704,6 +8707,23 @@ export async function registerRoutes(
       const allowedRoles = ["user", "admin"];
       if (!role || !allowedRoles.includes(role)) {
         return res.status(400).json({ message: `Rôle invalide. Valeurs acceptées : ${allowedRoles.join(", ")}` });
+      }
+      // Only ashtechpay@gmail.com can promote someone to admin
+      if (role === "admin") {
+        const requestingAdmin = await storage.getUser(req.userId!).catch(() => null);
+        const SUPER_ADMIN_EMAIL = "ashtechpay@gmail.com";
+        if (!requestingAdmin || requestingAdmin.email?.toLowerCase() !== SUPER_ADMIN_EMAIL) {
+          console.warn(`[AdminAccess] ROLE PROMOTION BLOCKED — ${requestingAdmin?.email} tried to promote user ${id} to admin`);
+          await storage.createAdminLog({
+            adminId: req.userId!,
+            action: "role_promotion_blocked",
+            targetType: "user",
+            targetId: id,
+            details: JSON.stringify({ attemptedRole: "admin", blockedEmail: requestingAdmin?.email }),
+            ipAddress: req.ip || null,
+          }).catch(() => {});
+          return res.status(403).json({ message: "Seul le super-administrateur peut promouvoir un utilisateur au rang d'admin." });
+        }
       }
       const user = await storage.updateUser(id, { role });
       if (!user) {

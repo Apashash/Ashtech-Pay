@@ -52,6 +52,12 @@ async function throwIfResNotOk(res: Response) {
         removeAuthToken();
         window.dispatchEvent(new CustomEvent("force-logout", { detail: { retryAfter: json.retryAfter } }));
       }
+      if (json.forceLogout && res.status === 403) {
+        // Server destroyed the session — clear local token and redirect to login
+        removeAuthToken();
+        window.location.href = "/login?kicked=unauthorized";
+        return;
+      }
       if (json.ipBlocked && res.status === 403) {
         removeAuthToken();
         window.dispatchEvent(new CustomEvent("admin-ip-blocked", { detail: { message: json.message } }));
