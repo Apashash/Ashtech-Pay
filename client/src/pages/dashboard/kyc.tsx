@@ -109,9 +109,18 @@ export default function KYCPage() {
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [capturingPhoto, setCapturingPhoto] = useState(false);
 
+  // Cleanup on unmount
   useEffect(() => {
     return () => { streamRef.current?.getTracks().forEach(t => t.stop()); };
   }, []);
+
+  // Attach stream to video element once it appears in the DOM
+  useEffect(() => {
+    if (cameraActive && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [cameraActive]);
 
   const startCamera = useCallback(async () => {
     setCameraError(null);
@@ -121,13 +130,10 @@ export default function KYCPage() {
         audio: false,
       });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
+      // cameraActive=true first → triggers useEffect above which attaches stream to <video>
       setCameraActive(true);
     } catch {
-      setCameraError("Impossible d'accéder à la caméra. Vérifiez les autorisations.");
+      setCameraError("Impossible d'accéder à la caméra. Vérifiez les autorisations du navigateur.");
     }
   }, []);
 
