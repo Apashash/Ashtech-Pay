@@ -494,14 +494,6 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                 </Link>
               );
             })}
-            <Button
-              variant="ghost"
-              className="w-full justify-start gap-3 px-3"
-              onClick={() => setShowPusdConvert(true)}
-            >
-              <RefreshCw className="w-4 h-4" />
-              FTPUSD
-            </Button>
           </nav>
         </ScrollArea>
 
