@@ -124,7 +124,10 @@ export default function ApiKeysPage() {
   });
 
   const regenerateMutation = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/user/api-key/regenerate"),
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/user/api-key/regenerate");
+      return res.json() as Promise<{ apiKey: string }>;
+    },
     onSuccess: (data: { apiKey: string }) => {
       queryClient.setQueryData(["/api/user/api-key"], data);
       setShowKey(true);
