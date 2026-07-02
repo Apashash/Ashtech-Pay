@@ -63,10 +63,12 @@ export const LocationMapPicker = forwardRef<LocationMapPickerHandle, LocationMap
       );
       const data = await res.json();
       const addr = data?.address || {};
-      const city = addr.city || addr.town || addr.village || addr.municipality || addr.county || "";
+      const city =
+        addr.city || addr.town || addr.village ||
+        addr.municipality || addr.county || "";
       const country = addr.country || "";
       const countryCode = (addr.country_code || "").toUpperCase();
-      // Lieu dit : on prend la donnée la plus précise disponible (quartier, hameau, rue…)
+      // Lieu dit : du plus précis au moins précis — toujours une valeur (ou "")
       const locality =
         addr.quarter ||
         addr.neighbourhood ||
@@ -75,7 +77,12 @@ export const LocationMapPicker = forwardRef<LocationMapPickerHandle, LocationMap
         addr.road ||
         addr.residential ||
         addr.locality ||
+        addr.village ||          // fallback zone rurale
+        addr.town ||             // fallback petite ville
+        addr.municipality ||
         "";
+      // On passe TOUJOURS toutes les valeurs (même vides) pour que le KYC
+      // puisse effacer les anciens champs si on change d'emplacement.
       onLocationChange(lat, lng, { country, countryCode, city, locality });
     } catch {
       onLocationChange(lat, lng, {});

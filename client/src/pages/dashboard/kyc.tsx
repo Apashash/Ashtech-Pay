@@ -78,6 +78,7 @@ export default function KYCPage() {
   const [city, setCity] = useState("");
   const [lieuDit, setLieuDit] = useState("");
   const [detectedCountry, setDetectedCountry] = useState("");
+  const [countryMismatch, setCountryMismatch] = useState(false);
   const [latitude, setLatitude] = useState<number | null>(null);
   const [longitude, setLongitude] = useState<number | null>(null);
   const [locationConfirmed, setLocationConfirmed] = useState(false);
@@ -686,11 +687,31 @@ export default function KYCPage() {
                       setLatitude(lat);
                       setLongitude(lng);
                       setLocationConfirmed(false);
-                      if (info.city) setCity(info.city);
+                      // Toujours mettre à jour (même vide) pour effacer les valeurs précédentes
+                      setCity(info.city ?? "");
+                      setLieuDit(info.locality ?? "");
                       if (info.country) setDetectedCountry(info.country);
-                      if (info.locality) setLieuDit(info.locality);
+                      // Vérification pays : comparer le code pays détecté avec le pays d'inscription
+                      if (info.countryCode && user?.country) {
+                        const userCode = africanCountries.find(
+                          c => c.name.toLowerCase() === (user.country ?? "").toLowerCase()
+                        )?.code ?? "";
+                        setCountryMismatch(
+                          userCode !== "" && info.countryCode !== userCode
+                        );
+                      } else {
+                        setCountryMismatch(false);
+                      }
                     }}
                   />
+                  {countryMismatch && (
+                    <div className="flex items-start gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30 mt-2">
+                      <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+                      <p className="text-sm text-red-500">
+                        Le pays sélectionné sur la carte ne correspond pas à votre pays d'inscription (<strong>{user?.country}</strong>). Veuillez déplacer le repère vers votre pays.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
