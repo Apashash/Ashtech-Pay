@@ -245,6 +245,57 @@ async function checkPrivilegeEscalation(
   }
 }
 
+/**
+ * Checks that all expected security triggers still exist in the DB.
+ * If any are missing (manually dropped), alerts immediately and auto-reinstalls them.
+ */
+async function checkTriggerIntegrity(): Promise<void> {
+  try {
+    const res = await db.execute(sql`
+      SELECT trigger_name, event_object_table
+      FROM information_schema.triggers
+      WHERE trigger_schema = 'public'
+        AND trigger_name LIKE 'ashtech_%'
+    `);
+    const existing = new Set(
+      (res.rows as any[]).map((r) => `${r.trigger_name}::${r.event_object_table}`)
+    );
+
+    const missing = EXPECTED_TRIGGERS.filter(
+      ({ trigger, table }) => !existing.has(`${trigger}::${table}`)
+    );
+
+    if (missing.length === 0) return;
+
+    const missingList = missing.map((m) => `<code>${m.trigger}</code> sur <code>${m.table}</code>`).join("\n");
+
+    throttledAlert(
+      "trigger:missing",
+      `🚨 <b>ALERTE SÉCURITÉ — Trigger(s) supprimé(s) détecté(s)</b>\n\n` +
+        `Les triggers de sécurité suivants sont ABSENTS de la base de données :\n` +
+        missingList +
+        `\n\n⚠️ Quelqu'un a peut-être supprimé ces triggers directement en DB.\n` +
+        `♻️ Réinstallation automatique en cours...`
+    );
+
+    console.error("[SIEM] ⚠️ Triggers manquants — réinstallation automatique:", missing.map((m) => m.trigger).join(", "));
+
+    // Auto-reinstall: guard trigger first, then audit triggers
+    const needsGuard = missing.some((m) => m.trigger === "ashtech_guard_sensitive");
+    const needsAudit = missing.some((m) => m.trigger.startsWith("ashtech_audit_"));
+
+    if (needsGuard) await installGuardTrigger();
+    if (needsAudit) await createDbAuditTriggers();
+
+    throttledAlert(
+      "trigger:reinstalled",
+      `✅ <b>Triggers réinstallés avec succès</b>\n` + missingList
+    );
+  } catch (err: any) {
+    console.warn("[SIEM] Trigger integrity check error:", err?.message);
+  }
+}
+
 async function runWatchdog(): Promise<void> {
   const curr = await takeSnapshot();
   if (!curr) return;
@@ -278,7 +329,47 @@ async function runWatchdog(): Promise<void> {
   // 4. Session JSONB anomaly (every run)
   await checkSessionAnomalies();
 
+  // 5. Trigger integrity — detect & auto-fix dropped security triggers
+  await checkTriggerIntegrity();
+
   previousSnapshot = curr;
+}
+
+/**
+ * Installs the sensitive-column guard trigger on the users table.
+ * Blocks direct modifications to is_banned / role outside the official app connection.
+ * Called on startup AND auto-reinstalled by the watchdog if removed.
+ */
+export async function installGuardTrigger(): Promise<void> {
+  try {
+    await db.execute(sql`
+      CREATE OR REPLACE FUNCTION ashtech_guard_sensitive_update()
+      RETURNS TRIGGER LANGUAGE plpgsql AS $$
+      DECLARE
+        app_name TEXT;
+      BEGIN
+        app_name := COALESCE(current_setting('application_name', true), '');
+        IF app_name IS DISTINCT FROM 'ashtech_secure_app' THEN
+          IF (NEW.is_banned IS DISTINCT FROM OLD.is_banned)
+            OR (NEW.role IS DISTINCT FROM OLD.role) THEN
+            RAISE EXCEPTION
+              '[AshTech Security] Modification directe des colonnes sensibles (is_banned, role) bloquée. Utilisez l''interface admin. Source: %', app_name;
+          END IF;
+        END IF;
+        RETURN NEW;
+      END;
+      $$
+    `);
+    await db.execute(sql`DROP TRIGGER IF EXISTS ashtech_guard_sensitive ON users`);
+    await db.execute(sql`
+      CREATE TRIGGER ashtech_guard_sensitive
+      BEFORE UPDATE ON users
+      FOR EACH ROW EXECUTE FUNCTION ashtech_guard_sensitive_update()
+    `);
+    console.log("[Security] Guard trigger (ashtech_guard_sensitive) installé sur users");
+  } catch (err: any) {
+    console.warn("[Security] Échec installation guard trigger:", err?.message);
+  }
 }
 
 /**
@@ -288,6 +379,12 @@ async function runWatchdog(): Promise<void> {
  */
 // Allowlist of tables allowed for audit triggers — prevents any dynamic injection
 const AUDIT_TRIGGER_TABLES = ["users", "session", "hosted_page_configs", "admin_logs", "kyc_submissions"] as const;
+
+// All security triggers we expect to find in the DB at all times
+const EXPECTED_TRIGGERS: Array<{ trigger: string; table: string }> = [
+  { trigger: "ashtech_guard_sensitive", table: "users" },
+  ...AUDIT_TRIGGER_TABLES.map((t) => ({ trigger: `ashtech_audit_${t}`, table: t })),
+];
 
 export async function createDbAuditTriggers(): Promise<void> {
   try {
