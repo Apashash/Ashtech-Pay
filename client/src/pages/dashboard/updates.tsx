@@ -34,10 +34,15 @@ interface Fee {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+/** PostgreSQL decimal fields come back as strings — always parse. */
+function n(v: unknown): number {
+  const num = parseFloat(String(v ?? 0));
+  return isFinite(num) ? num : 0;
+}
+
 function feeTotal(fee: Fee): number {
-  // Total = feeValue (ashtech) + highest provider fee available
-  const base = fee.feeValue ?? 0;
-  const providers = [fee.swychrFee ?? 0, fee.afribapayFee ?? 0, fee.pixpayFee ?? 0].filter(v => v > 0);
+  const base = n(fee.feeValue);
+  const providers = [n(fee.swychrFee), n(fee.afribapayFee), n(fee.pixpayFee)].filter(v => v > 0);
   const providerMax = providers.length > 0 ? Math.max(...providers) : 0;
   return base + providerMax;
 }
@@ -59,8 +64,9 @@ function lowestFeeStr(fees: Fee[], type: string): string | null {
   if (group.length === 0) return null;
   const totals = group.map(feeTotal);
   const min = Math.min(...totals);
-  const fee = group[totals.indexOf(min)];
-  return fmtFee(fee);
+  const idx = totals.findIndex(t => t === min);
+  if (idx === -1 || !group[idx]) return null;
+  return fmtFee(group[idx]);
 }
 
 // ─── Update cards data ────────────────────────────────────────────────────────
