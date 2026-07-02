@@ -4,6 +4,8 @@ import { like, eq } from "drizzle-orm";
 
 const MAX_AUTH_ATTEMPTS = 4;
 const AUTH_BLOCK_DURATION_MS = 30 * 60 * 1000;
+// Pending count entries (not yet blocked) expire after 30 min of inactivity
+const PENDING_ENTRY_TTL_MS = 30 * 60 * 1000;
 const KEY_PREFIX = "ipblock:";
 
 interface IpRecord {
@@ -11,6 +13,7 @@ interface IpRecord {
   blockedUntil?: number;
   identifier?: string;
   blockedAt?: number;
+  lastAttemptAt?: number;
 }
 
 // In-memory cache (fast path) — hydrated from DB on startup
@@ -42,26 +45,56 @@ async function remove(ip: string): Promise<void> {
   }
 }
 
+// ── Load a single IP record from DB (used for cache-miss fallback) ─────────────
+async function loadFromDb(ip: string): Promise<IpRecord | null> {
+  try {
+    const key = dbKey(ip);
+    const rows = await db.select().from(platformSettings).where(eq(platformSettings.key, key)).limit(1);
+    if (rows.length === 0) return null;
+    return JSON.parse(rows[0].value) as IpRecord;
+  } catch {
+    return null;
+  }
+}
+
 // ── Hydrate cache from DB on server start ─────────────────────────────────────
+// FIX: now loads BOTH blocked IPs AND pending count entries (no blockedUntil).
+// Previously only blocked IPs were reloaded — pending counts were deleted on
+// restart, letting users start fresh after every server restart/worker switch.
 export async function hydrateIpBlocker(): Promise<void> {
   try {
     const rows = await db.select().from(platformSettings).where(like(platformSettings.key, `${KEY_PREFIX}%`));
     const now = Date.now();
-    let loaded = 0;
+    let loadedBlocked = 0;
+    let loadedPending = 0;
     for (const row of rows) {
       try {
         const record: IpRecord = JSON.parse(row.value);
         const ip = row.key.slice(KEY_PREFIX.length);
-        if (record.blockedUntil && now < record.blockedUntil) {
-          cache.set(ip, record);
-          loaded++;
+
+        if (record.blockedUntil) {
+          // Active block — load if not expired
+          if (now < record.blockedUntil) {
+            cache.set(ip, record);
+            loadedBlocked++;
+          } else {
+            // Expired block — clean up
+            await db.delete(platformSettings).where(eq(platformSettings.key, row.key));
+          }
         } else {
-          // expired — clean up
-          await db.delete(platformSettings).where(eq(platformSettings.key, row.key));
+          // Pending count (not yet blocked) — keep if recent enough
+          const lastAttempt = record.lastAttemptAt ?? 0;
+          if (now - lastAttempt < PENDING_ENTRY_TTL_MS) {
+            cache.set(ip, record);
+            loadedPending++;
+          } else {
+            // Stale pending entry — clean up
+            await db.delete(platformSettings).where(eq(platformSettings.key, row.key));
+          }
         }
       } catch {}
     }
-    console.log(`[IpBlocker] Hydrated ${loaded} active block(s) from DB.`);
+    console.log(`[IpBlocker] Hydrated ${loadedBlocked} active block(s) + ${loadedPending} pending counter(s) from DB.`);
   } catch (err: any) {
     console.error("[IpBlocker] hydrate error:", err.message);
   }
@@ -73,7 +106,10 @@ setInterval(() => {
     try {
       const now = Date.now();
       for (const [ip, record] of cache.entries()) {
-        if (!record.blockedUntil || now > record.blockedUntil + 60_000) {
+        const expired = record.blockedUntil
+          ? now > record.blockedUntil + 60_000
+          : now - (record.lastAttemptAt ?? 0) > PENDING_ENTRY_TTL_MS;
+        if (expired) {
           cache.delete(ip);
           await remove(ip).catch(() => {});
         }
@@ -102,10 +138,22 @@ export async function recordAuthFailure(
   identifier?: string
 ): Promise<{ blocked: boolean; retryAfter?: number; attemptsLeft: number }> {
   const now = Date.now();
-  const existing = cache.get(ip);
 
+  // FIX: if not in local cache (e.g. multi-worker PM2 or post-restart), load
+  // the count from DB before incrementing — prevents the counter from resetting
+  // to 1 just because this worker hasn't seen previous attempts.
+  let existing = cache.get(ip);
+  if (!existing) {
+    const dbRecord = await loadFromDb(ip);
+    if (dbRecord) {
+      existing = dbRecord;
+      cache.set(ip, dbRecord);
+    }
+  }
+
+  // If a previous block has now expired, start a fresh counter
   if (existing?.blockedUntil && now >= existing.blockedUntil) {
-    const fresh: IpRecord = { count: 1, identifier };
+    const fresh: IpRecord = { count: 1, identifier, lastAttemptAt: now };
     cache.set(ip, fresh);
     await persist(ip, fresh);
     return { blocked: false, attemptsLeft: MAX_AUTH_ATTEMPTS - 1 };
@@ -119,15 +167,19 @@ export async function recordAuthFailure(
       blockedUntil,
       identifier: identifier || existing?.identifier,
       blockedAt: now,
+      lastAttemptAt: now,
     };
     cache.set(ip, record);
     await persist(ip, record);
     return { blocked: true, retryAfter: blockedUntil, attemptsLeft: 0 };
   }
 
-  const record: IpRecord = { count: newCount, identifier: identifier || existing?.identifier };
+  const record: IpRecord = {
+    count: newCount,
+    identifier: identifier || existing?.identifier,
+    lastAttemptAt: now,
+  };
   cache.set(ip, record);
-  // Persist chaque tentative en DB → le compteur survit aux redémarrages serveur
   await persist(ip, record);
   return { blocked: false, attemptsLeft: MAX_AUTH_ATTEMPTS - newCount };
 }
@@ -164,6 +216,7 @@ export async function blockIpManually(ip: string, durationMs: number, reason: st
     blockedUntil,
     identifier: reason,
     blockedAt: now,
+    lastAttemptAt: now,
   };
   cache.set(ip, record);
   await persist(ip, record);
