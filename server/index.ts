@@ -168,8 +168,13 @@ app.use("/api", (_req, res, next) => {
 // Use originalUrl (full path) because req.path inside app.use("/api", ...) is relative.
 const CSRF_EXEMPT_PREFIXES = [
   "/api/swychr/webhook",
-  "/api/nowpayments/webhook",
+  "/api/afribapay/webhook",
+  "/api/pixpay/webhook",
+  "/api/nowpayments/ipn",
+  "/api/telegram/webhook",       // Telegram's servers don't send X-Requested-With
   "/api/v1/hosted-payment/",
+  "/api/public/",
+  "/api/public/hosted-session",
   "/api/payment-links/",         // public pay page uses our own JS, but keep flexible
 ];
 app.use("/api", (req: Request, res: Response, next: NextFunction) => {
