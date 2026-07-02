@@ -1349,19 +1349,40 @@ export class DatabaseStorage implements IStorage {
 
     // ── Single SQL aggregation query — returns ~20 rows instead of thousands ──
     // Groups by (type, status, currency) so all math stays in PostgreSQL.
-    const agg = await db
-      .select({
-        type: transactions.type,
-        status: transactions.status,
-        currency: transactions.currency,
-        totalAmount:      sql<string>`COALESCE(SUM(${transactions.amount}::numeric), 0)`,
-        totalFee:         sql<string>`COALESCE(SUM(${transactions.feeAmount}::numeric), 0)`,
-        totalAshtechFee:  sql<string>`COALESCE(SUM(${transactions.ashtechFeeAmount}::numeric), 0)`,
-        cnt:              sql<string>`COUNT(*)`,
-      })
-      .from(transactions)
-      .where(whereClause)
-      .groupBy(transactions.type, transactions.status, transactions.currency);
+    //
+    // Guard against production DBs that haven't run the migration adding
+    // ashtech_fee_amount yet: we check the information_schema first and fall
+    // back to a query without that column so the dashboard never goes blank.
+    let hasAshtechFeeCol = true;
+    try {
+      const colCheck = await db.execute(sql`
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'transactions' AND column_name = 'ashtech_fee_amount'
+        LIMIT 1
+      `);
+      hasAshtechFeeCol = (colCheck.rows ?? colCheck).length > 0;
+    } catch { hasAshtechFeeCol = false; }
+
+    const agg = await (hasAshtechFeeCol
+      ? db.select({
+          type: transactions.type,
+          status: transactions.status,
+          currency: transactions.currency,
+          totalAmount:      sql<string>`COALESCE(SUM(${transactions.amount}::numeric), 0)`,
+          totalFee:         sql<string>`COALESCE(SUM(${transactions.feeAmount}::numeric), 0)`,
+          totalAshtechFee:  sql<string>`COALESCE(SUM(${transactions.ashtechFeeAmount}::numeric), 0)`,
+          cnt:              sql<string>`COUNT(*)`,
+        }).from(transactions).where(whereClause).groupBy(transactions.type, transactions.status, transactions.currency)
+      : db.select({
+          type: transactions.type,
+          status: transactions.status,
+          currency: transactions.currency,
+          totalAmount:      sql<string>`COALESCE(SUM(${transactions.amount}::numeric), 0)`,
+          totalFee:         sql<string>`COALESCE(SUM(${transactions.feeAmount}::numeric), 0)`,
+          totalAshtechFee:  sql<string>`'0'`,
+          cnt:              sql<string>`COUNT(*)`,
+        }).from(transactions).where(whereClause).groupBy(transactions.type, transactions.status, transactions.currency)
+    );
 
     // ── Reduce aggregated rows in JS (only ~20 rows, not thousands) ───────────
     let depositVol = 0, withdrawalVol = 0, transferVol = 0, linkVol = 0;
@@ -1388,10 +1409,11 @@ export class DatabaseStorage implements IStorage {
           case "transfer_out": transferVol   += amt; transferFees   += fee; transferCount   += n; break;
           case "payment_link": linkVol       += amt; paymentLinkFees+= fee; paymentLinkCount+= n; break;
           // Pour les conversions, seule la marge Ashtech est du revenu réel.
-          // ashtechFeeAmount est stocké séparément ; on retombe sur feeAmount pour les
-          // anciennes transactions qui n'ont pas encore ce champ.
+          // On n'utilise JAMAIS feeAmount comme fallback — ce champ contient
+          // la commission totale (Ashtech + fournisseur) et gonflerait les stats.
+          // Les anciennes transactions sans ashtechFeeAmount contribuent 0.
           case "conversion":
-            conversionFees += ashtechFee > 0 ? ashtechFee : fee;
+            conversionFees += ashtechFee;
             break;
         }
       }
