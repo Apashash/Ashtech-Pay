@@ -58,6 +58,7 @@ import AdminSettings from "@/pages/admin/settings";
 import AdminSettingsPlatform from "@/pages/admin/settings/platform";
 import AdminSettingsPublicInfo from "@/pages/admin/settings/public-info";
 import AdminSettingsMaintenance from "@/pages/admin/settings/maintenance";
+import AdminSettingsOtp from "@/pages/admin/settings/otp";
 import AdminSettingsLimits from "@/pages/admin/settings/limits";
 import AdminSettingsTurnstile from "@/pages/admin/settings/turnstile";
 
@@ -209,6 +210,7 @@ function Router() {
       <Route path={`${A}/settings/platform`} component={AdminSettingsPlatform} />
       <Route path={`${A}/settings/public-info`} component={AdminSettingsPublicInfo} />
       <Route path={`${A}/settings/maintenance`} component={AdminSettingsMaintenance} />
+      <Route path={`${A}/settings/otp`} component={AdminSettingsOtp} />
       <Route path={`${A}/settings/limits`} component={AdminSettingsLimits} />
       <Route path={`${A}/settings/turnstile`} component={AdminSettingsTurnstile} />
       <Route path={`${A}/withdrawal-numbers`} component={AdminWithdrawalNumbers} />

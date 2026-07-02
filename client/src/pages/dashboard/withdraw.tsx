@@ -204,10 +204,17 @@ export default function WithdrawPage() {
       if (!res.ok) throw new Error(data.message || "Erreur lors de l'envoi du code");
       return data;
     },
-    onSuccess: (data: { ref: string }) => {
+    onSuccess: (data: { ref: string; disabled?: boolean }) => {
+      setShowConfirmDialog(false);
+      if (data.disabled) {
+        clearOtpLock();
+        setOtpRef(null);
+        setOtpCode("");
+        withdrawMutation.mutate(form.getValues());
+        return;
+      }
       setOtpLock();
       setOtpRef(data.ref);
-      setShowConfirmDialog(false);
       setOtpCode("");
       setOtpError("");
       setShowOtpDialog(false);

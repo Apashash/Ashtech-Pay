@@ -9,7 +9,8 @@ import {
   AlertTriangle,
   Lock,
   ShieldCheck,
-  ShieldBan
+  ShieldBan,
+  Mail
 } from "lucide-react";
 
 export default function AdminSettings() {
@@ -48,6 +49,14 @@ export default function AdminSettings() {
       icon: Lock,
       color: "bg-red-500/10 text-red-600",
       borderColor: "border-red-500/30"
+    },
+    {
+      id: "otp",
+      title: "OTP par email",
+      description: "Activer/désactiver le code email pour retraits et envois",
+      icon: Mail,
+      color: "bg-purple-500/10 text-purple-600",
+      borderColor: "border-purple-500/30"
     },
     {
       id: "turnstile",

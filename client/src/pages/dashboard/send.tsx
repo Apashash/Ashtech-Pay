@@ -257,15 +257,27 @@ export default function SendMoneyPage() {
       if (!res.ok) throw new Error(data.message || "Erreur lors de l'envoi du code");
       return data as { ref: string };
     },
-    onSuccess: (data, variables) => {
+    onSuccess: (data: { ref: string; disabled?: boolean }, variables) => {
+      setShowConfirmDialog(false);
+      setShowInternalConfirmDialog(false);
+      if (data.disabled) {
+        clearOtpLock();
+        setOtpRef(null);
+        setOtpCode("");
+        setOtpType(variables.type);
+        if (variables.type === "internal") {
+          internalMutation.mutate();
+        } else {
+          externalMutation.mutate(pendingExternalData as ExternalFormData);
+        }
+        return;
+      }
       setOtpLock();
       setOtpRef(data.ref);
       setOtpCode("");
       setOtpError("");
       setOtpType(variables.type);
       setLastTransferPayload(variables);
-      setShowConfirmDialog(false);
-      setShowInternalConfirmDialog(false);
       setShowOtpDialog(false);
       setTimeout(() => setShowOtpDialog(true), 50);
     },
