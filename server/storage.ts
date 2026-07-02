@@ -1357,7 +1357,9 @@ export class DatabaseStorage implements IStorage {
     try {
       const colCheck = await db.execute(sql`
         SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'transactions' AND column_name = 'ashtech_fee_amount'
+        WHERE table_schema = current_schema()
+          AND table_name = 'transactions'
+          AND column_name = 'ashtech_fee_amount'
         LIMIT 1
       `);
       hasAshtechFeeCol = (colCheck.rows ?? colCheck).length > 0;
