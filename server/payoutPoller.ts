@@ -51,7 +51,9 @@ export async function recoverPendingPayouts() {
 
       let pollerRef: string;
       if (provider === "afribapay") {
-        pollerRef = internalRef;
+        // For retries, externalReference holds the submitted order_id (retry ref).
+        // For original submissions without an externalReference, fall back to internalRef.
+        pollerRef = (t as any).externalReference || internalRef;
       } else if (provider === "pixpay") {
         pollerRef = (t as any).externalReference || internalRef;
       } else {

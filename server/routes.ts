@@ -3860,8 +3860,10 @@ export async function registerRoutes(
             reference_id: reference,
             notify_url: callbackUrl,
           });
-          if (afribaResult.success && afribaResult.transaction_id) {
-            await storage.updateTransactionExternalReference(transaction.id, afribaResult.transaction_id);
+          if (afribaResult.success) {
+            // Persist submitted order_id (= reference) as externalReference so restart
+            // recovery uses the same value the poller checks with (order_id, not transaction_id).
+            await storage.updateTransactionExternalReference(transaction.id, reference);
           }
           payoutResult = afribaResult;
 
@@ -3914,9 +3916,14 @@ export async function registerRoutes(
 
         if (payoutResult.success) {
           console.log(`[Transfer] Payout submitted OK: ${reference} (ext: ${payoutResult.transaction_id})`);
+          // AfribaPay: poll by submitted order_id (= reference), NOT by transaction_id.
+          // PixPay/Swychr: poll by provider transaction_id when available.
+          const transferPollerRef = transferProvider === "afribapay"
+            ? reference
+            : (payoutResult.transaction_id || reference);
           addPendingPayout({
             transactionId: transaction.id,
-            reference:     payoutResult.transaction_id || reference,
+            reference:     transferPollerRef,
             userId:        senderId,
             amount:        creditedAmount.toFixed(2),
             totalDebited:  totalAmount.toFixed(2),
@@ -4871,8 +4878,10 @@ export async function registerRoutes(
             reference_id: withdrawalRef,
             notify_url: callbackUrl,
           });
-          if (afribaResult.success && afribaResult.transaction_id) {
-            await storage.updateTransactionExternalReference(transaction.id, afribaResult.transaction_id);
+          if (afribaResult.success) {
+            // Persist submitted order_id (= withdrawalRef) so restart recovery polls
+            // the right AfribaPay reference (not transaction_id, which status API ignores).
+            await storage.updateTransactionExternalReference(transaction.id, withdrawalRef);
           }
           payoutResult = afribaResult;
 
@@ -9377,8 +9386,10 @@ export async function registerRoutes(
               reference_id: payoutRef,
               notify_url:   callbackUrl,
             });
-            if (afribaResult.success && afribaResult.transaction_id) {
-              await storage.updateTransactionExternalReference(transaction.id, afribaResult.transaction_id);
+            if (afribaResult.success) {
+              // Persist submitted order_id (= payoutRef) so restart recovery polls
+              // the right AfribaPay reference (not transaction_id, which status API ignores).
+              await storage.updateTransactionExternalReference(transaction.id, payoutRef);
             }
             payoutResult  = afribaResult;
             pollerProvider = "afribapay";
@@ -10801,6 +10812,10 @@ export async function registerRoutes(
       const txRef = tx.reference || "";
 
       let payoutResult: { success: boolean; transaction_id?: string; transactionId?: string; message?: string };
+      // pollerRef = the reference the payout poller must use to check status with the provider.
+      // Must be the *actual* reference submitted — NOT the internal txRef — so the provider
+      // can match the right transaction when we retry with a new reference.
+      let pollerRef = txRef;
 
       if (provider === "afribapay") {
         const operatorName = (operator?.name || "").toUpperCase();
@@ -10827,8 +10842,12 @@ export async function registerRoutes(
           reference_id: afribaAdminRetryRef,
           notify_url: callbackUrl,
         });
-        if (result.success && result.transaction_id) {
-          await storage.updateTransactionExternalReference(tx.id, result.transaction_id);
+        if (result.success) {
+          // Always poll AfribaPay by the submitted order_id — the status API
+          // uses order_id for lookup, NOT transaction_id.
+          // Save it as externalReference so restart recovery uses the right ref.
+          pollerRef = afribaAdminRetryRef;
+          await storage.updateTransactionExternalReference(tx.id, afribaAdminRetryRef);
         }
         payoutResult = result;
 
@@ -10849,8 +10868,11 @@ export async function registerRoutes(
           ipnUrl: pixpayIpnUrl,
           customData: txRef,
         });
-        if (result.success && result.transactionId) {
-          await storage.updateTransactionExternalReference(tx.id, result.transactionId);
+        if (result.success) {
+          // PixPay status is polled by its own transactionId.
+          // Save it as externalReference so restart recovery also finds it.
+          pollerRef = result.transactionId || pixpayAdminRetryRef;
+          await storage.updateTransactionExternalReference(tx.id, pollerRef);
         }
         payoutResult = result;
 
@@ -10866,14 +10888,14 @@ export async function registerRoutes(
           payment_method: finalPaymentMethod as any,
           remarks: `Ashtech Pay - ${txRef}`,
         });
+        if (result.success) {
+          pollerRef = result.transaction_id || txRef;
+        }
         payoutResult = result;
       }
 
       if (payoutResult.success) {
         await storage.updateTransactionStatus(tx.id, "pending");
-        const pollerRef = provider === "afribapay"
-          ? txRef
-          : (payoutResult.transaction_id || payoutResult.transactionId || txRef);
         addPendingPayout({
           transactionId: tx.id,
           reference:     pollerRef,
@@ -14135,6 +14157,9 @@ export async function registerRoutes(
 
           try {
             let payoutResult: { success: boolean; transaction_id?: string; message?: string };
+            // pollerRef must match the actual reference submitted to the provider
+            // so the poller status check finds the right transaction.
+            let telegramPollerRef = txRef;
 
             if (provider === "afribapay") {
               const afribapayOperatorCode = resolveAfribaPayOperatorCode(operator, operatorName);
@@ -14164,8 +14189,11 @@ export async function registerRoutes(
                 reference_id: afribaRetryRef,
                 notify_url: callbackUrl,
               });
-              if (afribaResult.success && afribaResult.transaction_id) {
-                await storage.updateTransactionExternalReference(tx.id, afribaResult.transaction_id);
+              if (afribaResult.success) {
+                // Poll by submitted order_id — AfribaPay status API uses order_id.
+                // Persist it as externalReference so restart recovery finds the right ref.
+                telegramPollerRef = afribaRetryRef;
+                await storage.updateTransactionExternalReference(tx.id, afribaRetryRef);
               }
               payoutResult = afribaResult;
 
@@ -14183,8 +14211,10 @@ export async function registerRoutes(
                 ipnUrl: pixpayIpnUrl,
                 customData: txRef,
               });
-              if (pixpayResult.success && pixpayResult.transactionId) {
-                await storage.updateTransactionExternalReference(tx.id, pixpayResult.transactionId);
+              if (pixpayResult.success) {
+                // Poll by PixPay's own transactionId; persist as externalReference.
+                telegramPollerRef = pixpayResult.transactionId || pixpayRetryRef;
+                await storage.updateTransactionExternalReference(tx.id, telegramPollerRef);
               }
               payoutResult = { success: pixpayResult.success, transaction_id: pixpayResult.transactionId, message: pixpayResult.message };
 
@@ -14200,15 +14230,17 @@ export async function registerRoutes(
                 payment_method: finalPaymentMethod as any,
                 remarks: `Ashtech Pay Telegram - ${txRef}`,
               });
+              if (swychrResult.success) {
+                telegramPollerRef = swychrResult.transaction_id || txRef;
+              }
               payoutResult = swychrResult;
             }
 
             if (payoutResult.success) {
-              const extTxId = payoutResult.transaction_id || txRef;
               await storage.updateTransactionStatus(tx.id, "processing");
               addPendingPayout({
                 transactionId: tx.id,
-                reference: extTxId,
+                reference: telegramPollerRef,
                 userId: tx.userId,
                 amount: tx.amount,
                 totalDebited: tx.totalAmount || tx.amount,
