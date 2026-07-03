@@ -64,16 +64,27 @@ export default function AdminPendingPayoutsPage() {
   const executeMutation = useMutation({
     mutationFn: async ({ txId, provider }: { txId: string; provider: string }) => {
       const res = await apiRequest("POST", `/api/admin/pending-payouts/${txId}/execute`, { provider });
-      if (!res.ok) { const err = await res.json(); throw new Error(err.message || "Erreur"); }
-      return res.json();
+      const data = await res.json();
+      if (!res.ok) {
+        const err = new Error(data.message || "Erreur") as Error & { pendingManual?: boolean };
+        err.pendingManual = !!data.pendingManual;
+        throw err;
+      }
+      return data;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/pending-payouts"] });
       toast({ title: "Payout soumis", description: data.message });
       setLoadingId(null);
     },
-    onError: (error: Error) => {
-      toast({ title: "Échec", description: error.message, variant: "destructive" });
+    onError: (error: Error & { pendingManual?: boolean }) => {
+      if (error.pendingManual) {
+        // Not a real failure — the transaction stays pending_manual for retry,
+        // exactly like the standard withdrawal/transfer flow does.
+        toast({ title: "Toujours en attente", description: error.message });
+      } else {
+        toast({ title: "Échec", description: error.message, variant: "destructive" });
+      }
       setLoadingId(null);
     },
   });

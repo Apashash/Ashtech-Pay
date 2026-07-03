@@ -10886,8 +10886,39 @@ export async function registerRoutes(
         console.log(`[Admin] Executed pending_manual payout ${txRef} via ${provider} → poller ref: ${pollerRef}`);
         res.json({ message: `Payout soumis via ${provider} avec succès`, reference: pollerRef });
       } else {
-        console.error(`[Admin] Execute pending_manual failed (${provider}): ${payoutResult.message}`);
-        res.status(400).json({ message: `Échec via ${provider}: ${payoutResult.message}` });
+        // Same classification as the initial withdrawal/transfer creation flow:
+        // insufficient balance / whitelist errors are NOT a definitive failure —
+        // the transaction stays pending_manual so the admin can retry (with the
+        // same or another provider) once the wallet is topped up. We explicitly
+        // re-assert pending_manual (defensive) instead of leaving it ambiguous.
+        const errMsg = (payoutResult.message || "").toLowerCase();
+        const requiresManualReview =
+          errMsg.includes("forbidden") ||
+          errMsg.includes("whitelist") ||
+          errMsg.includes("insuffi") ||
+          errMsg.includes("solde") ||
+          errMsg.includes("balance");
+
+        await storage.updateTransactionStatus(tx.id, "pending_manual");
+        await storage.createAdminLog({
+          adminId: req.userId!,
+          action: "execute_pending_payout_retry_failed",
+          targetType: "transaction",
+          targetId: tx.id,
+          details: JSON.stringify({ provider, message: payoutResult.message }),
+          ipAddress: req.ip || null,
+        });
+
+        if (requiresManualReview) {
+          console.log(`[Admin] Execute pending_manual — still insufficient via ${provider} for ${txRef}: ${payoutResult.message}`);
+          res.status(409).json({
+            pendingManual: true,
+            message: `Solde ${provider === "afribapay" ? "AfribaPay" : provider === "pixpay" ? "PixPay" : "Swychr"} toujours insuffisant. La transaction reste en attente — rechargez le wallet fournisseur puis réessayez (ou essayez un autre fournisseur).`,
+          });
+        } else {
+          console.error(`[Admin] Execute pending_manual failed (${provider}): ${payoutResult.message}`);
+          res.status(400).json({ message: `Échec via ${provider}: ${payoutResult.message}` });
+        }
       }
     } catch (error: any) {
       console.error("Admin execute pending-payout error:", error.message);
