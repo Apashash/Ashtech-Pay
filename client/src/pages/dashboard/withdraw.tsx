@@ -84,6 +84,11 @@ export default function WithdrawPage() {
   const { toast } = useToast();
 
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
+  const { data: otpStatus } = useQuery<{ enabled: boolean }>({
+    queryKey: ["/api/public/otp-email-status"],
+    staleTime: 30_000,
+  });
+  const isOtpRequired = otpStatus?.enabled !== false; // default to true (safe)
 
   const { data: limits } = useQuery<{ minWithdrawal: number; maxWithdrawal: number; minTransfer: number; maxTransfer: number }>({
     queryKey: ["/api/public/limits"],
@@ -259,7 +264,7 @@ export default function WithdrawPage() {
       setOtpRef(null);
       setOtpCode("");
       setShowOtpDialog(false);
-      toast({ title: "Code invalide", description: error.message, variant: "destructive" });
+      toast({ title: "Erreur", description: error.message, variant: "destructive" });
     },
   });
 
@@ -691,6 +696,15 @@ export default function WithdrawPage() {
             <Button
               className="flex-1"
               onClick={() => {
+                // Skip OTP step entirely when admin has disabled email OTP
+                if (!isOtpRequired) {
+                  setShowConfirmDialog(false);
+                  clearOtpLock();
+                  setOtpRef(null);
+                  setOtpCode("");
+                  withdrawMutation.mutate(form.getValues());
+                  return;
+                }
                 const remaining = getOtpLockRemaining();
                 if (remaining > 0) {
                   setLockRemaining(remaining);
@@ -700,10 +714,10 @@ export default function WithdrawPage() {
                 }
                 requestOtpMutation.mutate();
               }}
-              disabled={requestOtpMutation.isPending}
+              disabled={requestOtpMutation.isPending || withdrawMutation.isPending}
               data-testid="button-final-confirm-withdraw"
             >
-              {requestOtpMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CreditCard className="w-4 h-4 mr-2" />}
+              {(requestOtpMutation.isPending || withdrawMutation.isPending) ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CreditCard className="w-4 h-4 mr-2" />}
               {t.withdraw.confirm}
             </Button>
           </BottomSheetFooter>

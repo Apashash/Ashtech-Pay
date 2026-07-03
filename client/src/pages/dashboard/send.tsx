@@ -107,6 +107,11 @@ export default function SendMoneyPage() {
   const { data: limits } = useQuery<{ minTransfer: number; maxTransfer: number }>({
     queryKey: ["/api/public/limits"],
   });
+  const { data: otpStatus } = useQuery<{ enabled: boolean }>({
+    queryKey: ["/api/public/otp-email-status"],
+    staleTime: 30_000,
+  });
+  const isOtpRequired = otpStatus?.enabled !== false; // default to true (safe)
   const { rates: fxRates } = useExchangeRates();
   const senderCurrency = (selectedWallet || primaryCurrency || "XAF") as string;
   // fxRates are XAF-direct: fxRates[currency] = how many XAF = 1 unit of that currency
@@ -326,7 +331,7 @@ export default function SendMoneyPage() {
       setOtpRef(null);
       setOtpCode("");
       setShowOtpDialog(false);
-      toast({ title: "Code invalide", description: error.message, variant: "destructive" });
+      toast({ title: "Erreur", description: error.message, variant: "destructive" });
     },
   });
 
@@ -362,7 +367,7 @@ export default function SendMoneyPage() {
       setOtpRef(null);
       setOtpCode("");
       setShowOtpDialog(false);
-      toast({ title: "Code invalide", description: error.message, variant: "destructive" });
+      toast({ title: "Erreur", description: error.message, variant: "destructive" });
     },
   });
 
@@ -890,6 +895,15 @@ export default function SendMoneyPage() {
             <Button
               className="flex-1 bg-primary hover:bg-primary/90 text-black font-bold"
               onClick={() => {
+                // Skip OTP step entirely when admin has disabled email OTP
+                if (!isOtpRequired) {
+                  setShowInternalConfirmDialog(false);
+                  clearOtpLock();
+                  setOtpRef(null);
+                  setOtpCode("");
+                  internalMutation.mutate();
+                  return;
+                }
                 const remaining = getOtpLockRemaining();
                 if (remaining > 0) {
                   setLockRemaining(remaining);
@@ -906,7 +920,7 @@ export default function SendMoneyPage() {
                   currency: selectedWallet,
                 });
               }}
-              disabled={requestOtpMutation.isPending}
+              disabled={requestOtpMutation.isPending || internalMutation.isPending}
               data-testid="button-final-confirm-internal"
             >
               {requestOtpMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
@@ -965,6 +979,16 @@ export default function SendMoneyPage() {
             <Button
               className="flex-1 bg-primary hover:bg-primary/90 text-black font-bold"
               onClick={() => {
+                if (!pendingExternalData) return;
+                // Skip OTP step entirely when admin has disabled email OTP
+                if (!isOtpRequired) {
+                  setShowConfirmDialog(false);
+                  clearOtpLock();
+                  setOtpRef(null);
+                  setOtpCode("");
+                  externalMutation.mutate(pendingExternalData);
+                  return;
+                }
                 const remaining = getOtpLockRemaining();
                 if (remaining > 0) {
                   setLockRemaining(remaining);
@@ -972,7 +996,6 @@ export default function SendMoneyPage() {
                   setShowLockedDialog(true);
                   return;
                 }
-                if (!pendingExternalData) return;
                 requestOtpMutation.mutate({
                   type: "external",
                   recipient: pendingExternalData.recipientName,
@@ -985,7 +1008,7 @@ export default function SendMoneyPage() {
                   currency: selectedWallet,
                 });
               }}
-              disabled={requestOtpMutation.isPending}
+              disabled={requestOtpMutation.isPending || externalMutation.isPending}
               data-testid="button-final-confirm-external"
             >
               {requestOtpMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}

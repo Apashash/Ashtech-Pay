@@ -6249,6 +6249,16 @@ export async function registerRoutes(
     }
   });
 
+  // GET /api/public/otp-email-status — whether email OTP is required for withdrawals & transfers
+  app.get("/api/public/otp-email-status", publicInfoLimiter, async (_req, res) => {
+    try {
+      const enabled = await isOtpEmailEnabled();
+      res.json({ enabled });
+    } catch {
+      res.json({ enabled: true }); // fail-safe: default to enabled
+    }
+  });
+
   app.get("/api/public/fee-settings", publicInfoLimiter, async (_req, res) => {
     try {
       const settings = await storage.getAllSettings();
