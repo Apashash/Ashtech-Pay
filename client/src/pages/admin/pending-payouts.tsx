@@ -74,6 +74,9 @@ export default function AdminPendingPayoutsPage() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/pending-payouts"] });
+      // Also refresh the withdrawals list so the pending row appears immediately
+      // if the admin navigates there to watch the status update.
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/transactions", "withdrawals"] });
       toast({ title: "Payout soumis", description: data.message });
       setLoadingId(null);
     },

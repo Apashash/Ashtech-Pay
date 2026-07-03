@@ -80,6 +80,12 @@ export default function AdminWithdrawals() {
       if (!res.ok) throw new Error("Erreur");
       return res.json();
     },
+    // Poll every 4s whenever there are "pending" transactions so status changes
+    // (completed / failed) from the payout poller are reflected automatically.
+    refetchInterval: (query) => {
+      const hasPending = query.state.data?.data?.some(tx => tx.status === "pending");
+      return hasPending ? 4_000 : false;
+    },
   });
 
   const { data: txDetails, isLoading: txDetailsLoading } = useQuery<TransactionDetails>({
