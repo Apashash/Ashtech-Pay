@@ -52,7 +52,7 @@ import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import { pool, db, sessionPool, poolStats } from "./db";
 import { transactions as transactionsTable, users as usersTable, wallets as walletsTable } from "@shared/schema";
-import { desc, eq, sql as drizzleSql } from "drizzle-orm";
+import { and, desc, eq, sql as drizzleSql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import multer from "multer";
 import path from "path";
@@ -10756,6 +10756,11 @@ export async function registerRoutes(
 
   // ============= ADMIN: PENDING MANUAL PAYOUTS =============
 
+  // ─── In-flight guard — one Set per process ───────────────────────────────
+  // Blocks concurrent admin clicks on the same transaction before the DB lock
+  // (Solution 1) even has a chance to fire.
+  const executingPayouts = new Set<string>();
+
   // GET /api/admin/pending-payouts — list all pending_manual withdrawals & transfers
   app.get("/api/admin/pending-payouts", requireAuth, requireAdmin, async (_req, res) => {
     try {
@@ -10780,26 +10785,62 @@ export async function registerRoutes(
 
   // POST /api/admin/pending-payouts/:id/execute — execute with chosen provider
   app.post("/api/admin/pending-payouts/:id/execute", requireAuth, requireAdmin, async (req, res) => {
+    const txId = req.params.id;
+
+    // ── Solution 1: in-memory guard (fast-path, same process) ─────────────
+    if (executingPayouts.has(txId)) {
+      return res.status(409).json({ message: "Exécution déjà en cours pour cette transaction" });
+    }
+    executingPayouts.add(txId);
+
+    // Both flags declared outside try so catch can read them.
+    // lockAcquired: the atomic UPDATE succeeded — transaction is now "processing".
+    //               Only revert on error when this is true.
+    // providerSubmitted: provider accepted the call — money is in-flight.
+    //                    Never revert to pending_manual when this is true.
+    let lockAcquired = false;
+    let providerSubmitted = false;
+
     try {
       const { provider } = req.body as { provider: "swychr" | "afribapay" | "pixpay" };
       if (!provider || !["swychr","afribapay","pixpay"].includes(provider)) {
         return res.status(400).json({ message: "provider invalide (swychr|afribapay|pixpay)" });
       }
 
-      const tx = await storage.getTransactionById(req.params.id);
-      if (!tx || tx.status !== "pending_manual") {
-        return res.status(404).json({ message: "Transaction non trouvée ou statut incorrect" });
-      }
+      const tx = await storage.getTransactionById(txId);
+      if (!tx) return res.status(404).json({ message: "Transaction non trouvée" });
       if (!["withdrawal","transfer_out"].includes(tx.type)) {
         return res.status(400).json({ message: "Type de transaction non supporté" });
       }
 
+      // ── Solution 2: atomic DB lock — pending_manual → processing ──────────
+      // A single SQL UPDATE with a WHERE on status ensures only one request
+      // can proceed, even across multiple server instances (PM2, etc.).
+      // Any concurrent request gets 0 rows back and is rejected immediately.
+      const locked = await db
+        .update(transactionsTable)
+        .set({ status: "processing" })
+        .where(and(eq(transactionsTable.id, txId), eq(transactionsTable.status, "pending_manual")))
+        .returning({ id: transactionsTable.id });
+
+      if (locked.length === 0) {
+        return res.status(409).json({ message: "Transaction déjà en cours d'exécution ou statut incorrect" });
+      }
+      lockAcquired = true; // status is now "processing" — catch must revert on pre-submit errors
+
+      // From here the transaction is in "processing" — no other request can enter.
+      // Pre-submit error paths revert to "pending_manual" so the admin can retry.
+      // Post-submit errors must NOT revert (see providerSubmitted in catch).
+
       const txUser = await storage.getUser(tx.userId);
-      if (!txUser) return res.status(404).json({ message: "Utilisateur non trouvé" });
+      if (!txUser) {
+        await storage.updateTransactionStatus(txId, "pending_manual");
+        return res.status(404).json({ message: "Utilisateur non trouvé" });
+      }
 
       const operator = tx.operatorId ? await storage.getOperator(tx.operatorId).catch(() => null) : null;
-      // recipientCountry may be a code ("CM") for withdrawals or a name ("Cameroun") for transfers
-      // If longer than 2 chars, try to resolve the code from the operator's country
+      // recipientCountry may be a code ("CM") for withdrawals or a name ("Cameroun") for transfers.
+      // If longer than 2 chars, resolve the code from the operator's country.
       let countryCode = (tx.recipientCountry || "CM").toUpperCase();
       if (countryCode.length > 2 && operator?.countryId) {
         const opCountry = await storage.getCountry(operator.countryId).catch(() => null);
@@ -10812,9 +10853,7 @@ export async function registerRoutes(
       const txRef = tx.reference || "";
 
       let payoutResult: { success: boolean; transaction_id?: string; transactionId?: string; message?: string };
-      // pollerRef = the reference the payout poller must use to check status with the provider.
-      // Must be the *actual* reference submitted — NOT the internal txRef — so the provider
-      // can match the right transaction when we retry with a new reference.
+      // pollerRef = the reference the poller uses to check status with the provider.
       let pollerRef = txRef;
 
       if (provider === "afribapay") {
@@ -10830,8 +10869,14 @@ export async function registerRoutes(
         const pfx = phonePrefixes[countryCode];
         if (pfx && localPhone.startsWith(pfx)) localPhone = localPhone.slice(pfx.length);
         const callbackUrl = buildWebhookUrl("/api/afribapay/webhook");
-        // Use a unique retry ref so AfribaPay doesn't reject "reference already exists"
         const afribaAdminRetryRef = `${txRef}-R${Date.now().toString(36)}`;
+
+        // ── Solution 3: persist ref BEFORE calling provider ─────────────────
+        // If the server crashes after a successful provider call but before
+        // updateTransactionStatus, recoverPendingPayouts() finds "processing"
+        // + externalReference and polls the provider instead of re-executing.
+        await storage.updateTransactionExternalReference(txId, afribaAdminRetryRef);
+
         const result = await initiateAfribaPayout({
           operator: afribapayOperatorCode,
           country: countryCode,
@@ -10843,22 +10888,23 @@ export async function registerRoutes(
           notify_url: callbackUrl,
         });
         if (result.success) {
-          // Always poll AfribaPay by the submitted order_id — the status API
-          // uses order_id for lookup, NOT transaction_id.
-          // Save it as externalReference so restart recovery uses the right ref.
+          // AfribaPay status API uses order_id for lookup.
           pollerRef = afribaAdminRetryRef;
-          await storage.updateTransactionExternalReference(tx.id, afribaAdminRetryRef);
         }
         payoutResult = result;
 
       } else if (provider === "pixpay") {
         const serviceId = getPixPayServiceId(operator?.name || "", countryCode, "cash_in");
         if (!serviceId) {
+          await storage.updateTransactionStatus(txId, "pending_manual");
           return res.status(400).json({ message: `PixPay non supporté pour cet opérateur (${operator?.name}) dans ${countryCode}` });
         }
         const pixpayIpnUrl = buildWebhookUrl("/api/pixpay/webhook");
-        // Use a unique retry ref for PixPay as well
         const pixpayAdminRetryRef = `${txRef}-R${Date.now().toString(36)}`;
+
+        // ── Solution 3: persist ref BEFORE calling provider ─────────────────
+        await storage.updateTransactionExternalReference(txId, pixpayAdminRetryRef);
+
         const result = await initiatePixPayPayout({
           serviceId: String(serviceId),
           amount: creditedAmount,
@@ -10869,14 +10915,14 @@ export async function registerRoutes(
           customData: txRef,
         });
         if (result.success) {
-          // PixPay status is polled by its own transactionId.
-          // Save it as externalReference so restart recovery also finds it.
+          // PixPay returns its own transactionId — use it for status polling.
           pollerRef = result.transactionId || pixpayAdminRetryRef;
-          await storage.updateTransactionExternalReference(tx.id, pollerRef);
+          await storage.updateTransactionExternalReference(txId, pollerRef);
         }
         payoutResult = result;
 
       } else {
+        // Swychr — no retry ref needed (uses the original txRef)
         const operatorName = (operator?.name || "").toUpperCase();
         const finalPaymentMethod = resolvePaymentMethod(operatorName, countryCode);
         const result = await createSwychrPayout({
@@ -10895,9 +10941,12 @@ export async function registerRoutes(
       }
 
       if (payoutResult.success) {
-        await storage.updateTransactionStatus(tx.id, "pending");
+        // Provider accepted — mark this BEFORE any DB write so the catch block
+        // knows not to revert to pending_manual if a subsequent step throws.
+        providerSubmitted = true;
+        await storage.updateTransactionStatus(txId, "pending");
         addPendingPayout({
-          transactionId: tx.id,
+          transactionId: txId,
           reference:     pollerRef,
           userId:        tx.userId,
           amount:        tx.amount,
@@ -10907,22 +10956,21 @@ export async function registerRoutes(
           txType:        tx.type,
           txCurrency:    tx.currency || "XAF",
         });
-        await storage.createAdminLog({
+        // Bookkeeping is non-fatal: a failure here must not roll back the
+        // transaction to pending_manual (the payment is already dispatched).
+        storage.createAdminLog({
           adminId: req.userId!,
           action: "execute_pending_payout",
           targetType: "transaction",
-          targetId: tx.id,
+          targetId: txId,
           details: JSON.stringify({ provider, reference: pollerRef }),
           ipAddress: req.ip || null,
-        });
+        }).catch((e: any) => console.error("[Admin] AdminLog error (non-fatal):", e.message));
         console.log(`[Admin] Executed pending_manual payout ${txRef} via ${provider} → poller ref: ${pollerRef}`);
         res.json({ message: `Payout soumis via ${provider} avec succès`, reference: pollerRef });
       } else {
-        // Same classification as the initial withdrawal/transfer creation flow:
-        // insufficient balance / whitelist errors are NOT a definitive failure —
-        // the transaction stays pending_manual so the admin can retry (with the
-        // same or another provider) once the wallet is topped up. We explicitly
-        // re-assert pending_manual (defensive) instead of leaving it ambiguous.
+        // Insufficient balance / whitelist errors are NOT definitive failures:
+        // revert to pending_manual so the admin can retry after topping up.
         const errMsg = (payoutResult.message || "").toLowerCase();
         const requiresManualReview =
           errMsg.includes("forbidden") ||
@@ -10931,12 +10979,12 @@ export async function registerRoutes(
           errMsg.includes("solde") ||
           errMsg.includes("balance");
 
-        await storage.updateTransactionStatus(tx.id, "pending_manual");
+        await storage.updateTransactionStatus(txId, "pending_manual");
         await storage.createAdminLog({
           adminId: req.userId!,
           action: "execute_pending_payout_retry_failed",
           targetType: "transaction",
-          targetId: tx.id,
+          targetId: txId,
           details: JSON.stringify({ provider, message: payoutResult.message }),
           ipAddress: req.ip || null,
         });
@@ -10953,8 +11001,20 @@ export async function registerRoutes(
         }
       }
     } catch (error: any) {
+      // lockAcquired=false → status was never changed, no revert needed.
+      // lockAcquired=true, providerSubmitted=false → pre-submit error, revert to pending_manual.
+      // lockAcquired=true, providerSubmitted=true → money already dispatched; keep
+      //   "processing" so recoverPendingPayouts() polls instead of re-executing.
+      if (lockAcquired && !providerSubmitted) {
+        await storage.updateTransactionStatus(txId, "pending_manual").catch(() => {});
+      } else if (providerSubmitted) {
+        console.warn(`[Admin] Post-submit error (payout already dispatched, keeping processing): ${error.message}`);
+      }
       console.error("Admin execute pending-payout error:", error.message);
       res.status(500).json({ message: "Erreur serveur" });
+    } finally {
+      // Always release the in-memory guard, even on error.
+      executingPayouts.delete(txId);
     }
   });
 
