@@ -1,5 +1,5 @@
 import { getAdminPath } from "@/lib/adminPath";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import { AdminLayout } from "./layout";
@@ -199,7 +199,6 @@ export default function AdminUserDetail() {
   const [convFrom, setConvFrom] = useState("");
   const [convTo, setConvTo] = useState("");
   const [convAmount, setConvAmount] = useState("");
-  const [convProvider, setConvProvider] = useState<"swychr" | "pixpay" | "afribapay">("swychr");
 
   const authHeaders = getAuthHeaders();
 
@@ -254,12 +253,30 @@ export default function AdminUserDetail() {
     ...(wallets || []).filter((w: any) => w.currency !== user.preferredCurrency).map((w: any) => ({ currency: w.currency, balance: w.balance, isPrimary: false })),
   ] : [];
 
-  const convFeeByProvider = {
-    swychr: depositConfig?.conversionFeePercentSwychr ?? depositConfig?.conversionFeePercent ?? 6,
-    pixpay: (depositConfig as any)?.conversionFeePercentPixpay ?? depositConfig?.conversionFeePercent ?? 6,
-    afribapay: (depositConfig as any)?.conversionFeePercentAfribapay ?? depositConfig?.conversionFeePercent ?? 6,
-  };
-  const convFeePercent = convFeeByProvider[convProvider] ?? 6;
+  // Per-pair fee logic — identical to user convert page
+  const XOF_FAM = new Set(["XOF","XOFC","XOFF","XOFN","XOFB","XOFT","XOFS","XOFM"]);
+  const XAF_FAM = new Set(["XAF","XAFC","XAFG"]);
+  const CFA_CODES = new Set(["XAF","XAFC","XAFG","XOF","XOFC","XOFF","XOFN","XOFB","XOFT","XOFS","XOFM"]);
+  const convFromFam = XOF_FAM.has(convFrom) ? "XOF" : XAF_FAM.has(convFrom) ? "XAF" : convFrom === "CDF" ? "CDF" : "OTHER";
+  const convToFam   = XOF_FAM.has(convTo)   ? "XOF" : XAF_FAM.has(convTo)   ? "XAF" : convTo   === "CDF" ? "CDF" : "OTHER";
+  const convFeePercent =
+    convFromFam === "XAF" && convToFam === "XAF"                                                     ? (depositConfig as any)?.convTotalXafXaf  ?? 0 :
+    convFromFam === "XOF" && convToFam === "XOF"                                                     ? (depositConfig as any)?.convTotalXofXof  ?? 0 :
+    convFromFam === "XOF" && convToFam === "XAF"                                                     ? (depositConfig as any)?.convTotalXofXaf  ?? 2 :
+    convFromFam === "XAF" && convToFam === "XOF"                                                     ? (depositConfig as any)?.convTotalXafXof  ?? 2 :
+    convFromFam === "CDF" && (convToFam === "XAF" || convToFam === "XOF")                            ? (depositConfig as any)?.convTotalCdfCfa  ?? 5 :
+    (convFromFam === "XAF" || convFromFam === "XOF") && convToFam === "CDF"                          ? (depositConfig as any)?.convTotalCfaCdf  ?? 5 :
+    (convFromFam === "XAF" || convFromFam === "XOF") && convTo === "USDT"                            ? (depositConfig as any)?.convTotalCfaUsdt ?? 2 :
+    convFrom === "USDT" && (convToFam === "XAF" || convToFam === "XOF")                              ? (depositConfig as any)?.convTotalUsdtCfa ?? 2 :
+    (depositConfig?.conversionFeePercent ?? 6);
+
+  // Auto-initialize currencies from user wallets when modal opens
+  useEffect(() => {
+    if (balanceModal && walletList.length >= 2 && !convFrom) {
+      setConvFrom(walletList[0].currency);
+      setConvTo(walletList[1].currency);
+    }
+  }, [balanceModal, walletList.length]);
 
   const getWalletBalance = (currency: string) => {
     if (!user) return "0.00";
@@ -273,9 +290,10 @@ export default function AdminUserDetail() {
     if (isNaN(amount) || amount <= 0) return null;
     const fee = (amount * convFeePercent) / 100;
     const afterFee = amount - fee;
-    const fromRate = (fxRates as Record<string, number>)[convFrom] || 1;
-    const toRate = (fxRates as Record<string, number>)[convTo] || 1;
-    const received = (afterFee * fromRate) / toRate;
+    const fromRate = CFA_CODES.has(convFrom) ? 1 : ((fxRates as Record<string, number>)[convFrom] || 1);
+    const toRate   = CFA_CODES.has(convTo)   ? 1 : ((fxRates as Record<string, number>)[convTo]   || 1);
+    const amountInXAF = afterFee * fromRate;
+    const received = amountInXAF / toRate;
     const srcBalance = parseFloat(walletList.find(w => w.currency === convFrom)?.balance || "0");
     return { fee, received, srcBalance, sufficient: srcBalance >= amount };
   })();
@@ -973,26 +991,13 @@ export default function AdminUserDetail() {
               </div>
             </TabsContent>
             <TabsContent value="convertir" className="space-y-4 mt-4">
-              <div className="space-y-1">
-                <Label>Fournisseur</Label>
-                <Select value={convProvider} onValueChange={(v) => setConvProvider(v as any)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="swychr">Swychr — {convFeeByProvider.swychr}%</SelectItem>
-                    <SelectItem value="pixpay">Pixpay — {convFeeByProvider.pixpay}%</SelectItem>
-                    <SelectItem value="afribapay">Afribapay — {convFeeByProvider.afribapay}%</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
               <div className="rounded-lg border bg-primary/5 p-3 text-sm text-muted-foreground">
                 Frais de conversion : <span className="font-semibold text-primary">{convFeePercent}%</span>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label>Devise source</Label>
-                  <Select value={convFrom} onValueChange={(v) => { setConvFrom(v); if (v === convTo) setConvTo(""); }}>
+                  <Select value={convFrom} onValueChange={(v) => { setConvFrom(v); if (v === convTo) setConvTo(""); setConvAmount(""); }}>
                     <SelectTrigger><SelectValue placeholder="De…" /></SelectTrigger>
                     <SelectContent className="max-h-60">
                       {walletList.map(w => (
@@ -1009,8 +1014,11 @@ export default function AdminUserDetail() {
                   <Select value={convTo} onValueChange={setConvTo}>
                     <SelectTrigger><SelectValue placeholder="Vers…" /></SelectTrigger>
                     <SelectContent className="max-h-60">
-                      {ALL_FX_CURRENCIES.filter(c => c.code !== convFrom).map(c => (
-                        <SelectItem key={c.code} value={c.code}>{CURRENCY_FLAGS[c.code] || "🌍"} {c.code} — {c.name}</SelectItem>
+                      {walletList.filter(w => w.currency !== convFrom).map(w => (
+                        <SelectItem key={w.currency} value={w.currency}>
+                          {CURRENCY_FLAGS[w.currency] || "🌍"} {w.currency}
+                          <span className="text-muted-foreground ml-1 text-xs">({parseFloat(w.balance).toLocaleString("fr-FR", { maximumFractionDigits: 2 })})</span>
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -1018,25 +1026,25 @@ export default function AdminUserDetail() {
               </div>
               <div className="space-y-1">
                 <Label>Montant à convertir {convFrom ? `(${convFrom})` : ""}</Label>
-                <Input type="text" inputMode="decimal" value={convAmount} onChange={(e) => setConvAmount(e.target.value)} placeholder="0.00" />
+                <Input type="text" inputMode="decimal" value={convAmount} onChange={(e) => setConvAmount(e.target.value.replace(/[^0-9.]/g, ""))} placeholder="0.00" />
               </div>
               {convPreview && (
                 <div className={`rounded-lg border p-3 space-y-2 text-sm ${convPreview.sufficient ? "bg-muted/30" : "bg-red-500/10 border-red-500/30"}`}>
-                  {!convPreview.sufficient && <p className="text-red-500 font-medium text-xs">Solde insuffisant en {convFrom}</p>}
+                  {!convPreview.sufficient && <p className="text-red-500 font-medium text-xs">Solde insuffisant en {convFrom} (disponible : {convPreview.srcBalance.toLocaleString("fr-FR", { maximumFractionDigits: 2 })})</p>}
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Frais ({convFeePercent}%)</span>
-                    <span className="font-medium text-orange-500">- {convPreview.fee.toLocaleString("fr-FR", { maximumFractionDigits: 4 })} {convFrom}</span>
+                    <span className="font-medium text-orange-500">− {convPreview.fee.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {convFrom}</span>
                   </div>
                   <div className="flex justify-between border-t pt-2">
-                    <span className="text-muted-foreground">Montant reçu (estimation)</span>
-                    <span className="font-bold text-green-600">{convPreview.received.toLocaleString("fr-FR", { maximumFractionDigits: 4 })} {convTo}</span>
+                    <span className="text-muted-foreground font-semibold">Montant reçu (estimation)</span>
+                    <span className="font-bold text-green-600">≈ {convPreview.received.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {convTo}</span>
                   </div>
                 </div>
               )}
               <Button
                 className="w-full"
                 onClick={() => convertMutation.mutate()}
-                disabled={convertMutation.isPending || !convFrom || !convTo || !convAmount || convFrom === convTo || (convPreview ? !convPreview.sufficient : false)}
+                disabled={convertMutation.isPending || !convFrom || !convTo || !convAmount || convFrom === convTo || (convPreview ? !convPreview.sufficient : true)}
               >
                 {convertMutation.isPending ? "Conversion en cours..." : convFrom && convTo ? `Convertir ${convFrom} → ${convTo}` : "Sélectionner les devises"}
               </Button>
