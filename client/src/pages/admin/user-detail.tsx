@@ -272,9 +272,9 @@ export default function AdminUserDetail() {
 
   // Auto-initialize currencies from user wallets when modal opens
   useEffect(() => {
-    if (balanceModal && walletList.length >= 2 && !convFrom) {
+    if (balanceModal && walletList.length >= 1 && !convFrom) {
       setConvFrom(walletList[0].currency);
-      setConvTo(walletList[1].currency);
+      if (walletList.length >= 2) setConvTo(walletList[1].currency);
     }
   }, [balanceModal, walletList.length]);
 
@@ -1014,10 +1014,9 @@ export default function AdminUserDetail() {
                   <Select value={convTo} onValueChange={setConvTo}>
                     <SelectTrigger><SelectValue placeholder="Vers…" /></SelectTrigger>
                     <SelectContent className="max-h-60">
-                      {walletList.filter(w => w.currency !== convFrom).map(w => (
-                        <SelectItem key={w.currency} value={w.currency}>
-                          {CURRENCY_FLAGS[w.currency] || "🌍"} {w.currency}
-                          <span className="text-muted-foreground ml-1 text-xs">({parseFloat(w.balance).toLocaleString("fr-FR", { maximumFractionDigits: 2 })})</span>
+                      {ALL_FX_CURRENCIES.filter(c => c.code !== convFrom).map(c => (
+                        <SelectItem key={c.code} value={c.code}>
+                          {CURRENCY_FLAGS[c.code] || "🌍"} {c.code} — {c.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
