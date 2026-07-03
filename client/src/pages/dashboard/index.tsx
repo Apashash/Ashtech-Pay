@@ -712,13 +712,11 @@ export default function DashboardHome() {
                     <Wallet className="w-4 h-4" />
                     Conversion
                   </button>
-                  {/* Logo — responsive, tap/click gesture pour admin uniquement */}
+                  {/* Zone de clic invisible — gesture admin uniquement */}
                   <div className="relative">
-                    <img
-                      src="/logo.png"
-                      alt="Tableau de bord Ashtech Pay"
+                    <div
                       onClick={isAdminRole ? handleLogoClick : undefined}
-                      className={`h-16 sm:h-28 w-auto object-contain transition-opacity duration-150 ${isAdminRole ? "cursor-pointer select-none" : "pointer-events-none"} ${logoFlash ? "opacity-50" : "opacity-100"}`}
+                      className={`h-16 sm:h-28 w-12 ${isAdminRole ? "cursor-pointer select-none" : "pointer-events-none"}`}
                     />
                     {isAdminRole && logoClickDisplay > 0 && (
                       <div className="absolute -bottom-4 sm:-bottom-5 left-0 right-0 flex justify-center gap-1">
