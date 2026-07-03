@@ -213,6 +213,11 @@ export default function AdminUserDetail() {
 
   const { data: wallets, refetch: refetchWallets } = useQuery<any[]>({
     queryKey: [`/api/admin/users/${id}/wallets`],
+    queryFn: async () => {
+      const res = await fetch(`/api/admin/users/${id}/wallets`, { credentials: "include", headers: authHeaders });
+      if (!res.ok) throw new Error("Erreur wallets");
+      return res.json();
+    },
     enabled: !!id,
   });
 
@@ -220,8 +225,15 @@ export default function AdminUserDetail() {
     queryKey: ["/api/public/exchange-rates"],
   });
 
-  const { data: depositConfig } = useQuery<{ conversionFeePercentSwychr?: number; conversionFeePercent?: number }>({
-    queryKey: ["/api/public/deposit-config"],
+  const { data: feeSettings } = useQuery<{
+    conversionFeePercent: number;
+    convTotalXafXaf: number; convTotalXofXof: number;
+    convTotalXofXaf: number; convTotalXafXof: number;
+    convTotalCdfCfa: number; convTotalCfaCdf: number;
+    convTotalCfaUsdt: number; convTotalUsdtCfa: number;
+  }>({
+    queryKey: ["/api/public/fee-settings"],
+    queryFn: async () => { const res = await fetch("/api/public/fee-settings", { credentials: "include" }); return res.json(); },
   });
 
   const { data: txData, isLoading: txLoading } = useQuery<{ data: Transaction[]; total: number; pages: number }>({
@@ -260,15 +272,15 @@ export default function AdminUserDetail() {
   const convFromFam = XOF_FAM.has(convFrom) ? "XOF" : XAF_FAM.has(convFrom) ? "XAF" : convFrom === "CDF" ? "CDF" : "OTHER";
   const convToFam   = XOF_FAM.has(convTo)   ? "XOF" : XAF_FAM.has(convTo)   ? "XAF" : convTo   === "CDF" ? "CDF" : "OTHER";
   const convFeePercent =
-    convFromFam === "XAF" && convToFam === "XAF"                                                     ? (depositConfig as any)?.convTotalXafXaf  ?? 0 :
-    convFromFam === "XOF" && convToFam === "XOF"                                                     ? (depositConfig as any)?.convTotalXofXof  ?? 0 :
-    convFromFam === "XOF" && convToFam === "XAF"                                                     ? (depositConfig as any)?.convTotalXofXaf  ?? 2 :
-    convFromFam === "XAF" && convToFam === "XOF"                                                     ? (depositConfig as any)?.convTotalXafXof  ?? 2 :
-    convFromFam === "CDF" && (convToFam === "XAF" || convToFam === "XOF")                            ? (depositConfig as any)?.convTotalCdfCfa  ?? 5 :
-    (convFromFam === "XAF" || convFromFam === "XOF") && convToFam === "CDF"                          ? (depositConfig as any)?.convTotalCfaCdf  ?? 5 :
-    (convFromFam === "XAF" || convFromFam === "XOF") && convTo === "USDT"                            ? (depositConfig as any)?.convTotalCfaUsdt ?? 2 :
-    convFrom === "USDT" && (convToFam === "XAF" || convToFam === "XOF")                              ? (depositConfig as any)?.convTotalUsdtCfa ?? 2 :
-    (depositConfig?.conversionFeePercent ?? 6);
+    convFromFam === "XAF" && convToFam === "XAF"                                                     ? (feeSettings?.convTotalXafXaf  ?? 0) :
+    convFromFam === "XOF" && convToFam === "XOF"                                                     ? (feeSettings?.convTotalXofXof  ?? 0) :
+    convFromFam === "XOF" && convToFam === "XAF"                                                     ? (feeSettings?.convTotalXofXaf  ?? 2) :
+    convFromFam === "XAF" && convToFam === "XOF"                                                     ? (feeSettings?.convTotalXafXof  ?? 2) :
+    convFromFam === "CDF" && (convToFam === "XAF" || convToFam === "XOF")                            ? (feeSettings?.convTotalCdfCfa  ?? 5) :
+    (convFromFam === "XAF" || convFromFam === "XOF") && convToFam === "CDF"                          ? (feeSettings?.convTotalCfaCdf  ?? 5) :
+    (convFromFam === "XAF" || convFromFam === "XOF") && convTo === "USDT"                            ? (feeSettings?.convTotalCfaUsdt ?? 2) :
+    convFrom === "USDT" && (convToFam === "XAF" || convToFam === "XOF")                              ? (feeSettings?.convTotalUsdtCfa ?? 2) :
+    (feeSettings?.conversionFeePercent ?? 6);
 
   // Auto-initialize currencies from user wallets when modal opens
   useEffect(() => {
