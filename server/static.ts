@@ -63,13 +63,14 @@ export function serveStatic(app: Express) {
     res.set("Content-Type", "text/html").send(html);
   });
 
-  // fall through to index.html — only inject admin path on admin/auth-flow pages
+  // fall through to index.html — injecte window.__ADMIN_PATH__ sur TOUTES les pages.
+  // Nécessaire car Apache (.htaccess) renvoie vers Node.js via passthrough ; si on
+  // n'injectait que sur les pages admin, un refresh sur /dashboard ou / effacerait
+  // la valeur en localStorage et le prochain chargement d'une page admin échouerait.
   app.use("*", (req, res) => {
     const indexPath = path.resolve(distPath, "index.html");
     let html = fs.readFileSync(indexPath, "utf-8");
-    if (isAdminRequest(req.originalUrl)) {
-      html = html.replace("</head>", `${adminInjection}</head>`);
-    }
+    html = html.replace("</head>", `${adminInjection}</head>`);
     res.set("Content-Type", "text/html").send(html);
   });
 }

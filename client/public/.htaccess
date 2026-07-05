@@ -157,9 +157,17 @@ RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 
-# ── Ne pas réécrire les routes API / uploads (laisser passer vers Node.js) ──
+# ── Ne pas réécrire les routes API / uploads (déjà gérées par Node.js) ─────
 RewriteRule ^api/ - [L]
 RewriteRule ^uploads/ - [L]
 
-# ── Toutes les autres routes → index.html (SPA routing) ─────────────────────
-RewriteRule ^ index.html [QSA,L]
+# ── Toutes les autres routes → passthrough vers Passenger / Node.js ──────────
+# On NE sert PAS index.html directement depuis Apache.
+# Passenger transmet la requête à Node.js qui injecte window.__ADMIN_PATH__
+# (chemin admin secret) dans le HTML avant de l'envoyer au client.
+# Si on servait index.html statiquement ici, Node.js serait court-circuité et
+# l'injection ne se ferait jamais → le router React utiliserait "/admin" par
+# défaut au lieu du chemin configuré → 404 sur tous les rafraîchissements admin.
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ - [QSA,L]

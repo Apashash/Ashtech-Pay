@@ -1,3 +1,30 @@
+// ── Chargement .env (Plesk : le fichier .env du répertoire app) ──────────────
+// Passenger ne transmet pas toujours les variables d'env Plesk au process Node.
+// Ce loader lit .env au démarrage (même format que dotenv) SANS dépendance externe.
+// Les variables déjà définies dans process.env (passées par Passenger) ont priorité.
+import { existsSync as _envExists, readFileSync as _envRead } from "fs";
+(function loadDotEnv() {
+  const envFile = ".env";
+  if (!_envExists(envFile)) return;
+  try {
+    const lines = _envRead(envFile, "utf-8").split("\n");
+    for (const raw of lines) {
+      const line = raw.trim();
+      if (!line || line.startsWith("#")) continue;
+      const eq = line.indexOf("=");
+      if (eq === -1) continue;
+      const key = line.slice(0, eq).trim();
+      if (!key || process.env[key] !== undefined) continue; // Passenger has priority
+      let val = line.slice(eq + 1).trim();
+      if ((val.startsWith('"') && val.endsWith('"')) ||
+          (val.startsWith("'") && val.endsWith("'"))) {
+        val = val.slice(1, -1);
+      }
+      process.env[key] = val;
+    }
+  } catch { /* .env unreadable — continue without it */ }
+})();
+
 import express, { type Request, Response, NextFunction } from "express";
 import compression from "compression";
 import helmet from "helmet";
