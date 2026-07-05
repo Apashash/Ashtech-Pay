@@ -3789,7 +3789,7 @@ export async function registerRoutes(
   // Send money externally (with operator and fees)
   app.post("/api/transfers/send", requireAuth, transferLimiter, otpConfirmLimiter, async (req, res) => {
     try {
-      const { recipientName, recipientPhone, countryId, operatorId, amount, description, sourceCurrency, feeBearer } = req.body;
+      const { recipientName, recipientPhone, countryId, operatorId, amount, description, feeBearer } = req.body;
 
       if (!recipientName || !recipientPhone || !countryId || !operatorId || !amount) {
         return res.status(400).json({ message: "Tous les champs sont requis" });
@@ -3851,14 +3851,11 @@ export async function registerRoutes(
       // TG→XOFT, BJ→XOFB, SN→XOFS, CM→XAF, GA→XAFG, etc.
       const txCurrency = COUNTRY_CURRENCY[country.code] || country.currency || sender.preferredCurrency || "XAF";
 
-      // walletCurrency = the key used to look up / debit the sender's wallet.
-      // The frontend sends sourceCurrency = the wallet the user explicitly selected.
-      // Wallets may be stored under the generic code (e.g. "XOF") while txCurrency uses
-      // the country-specific variant (e.g. "XOFB").  Both are 1:1 CFA — accept sourceCurrency
-      // when it belongs to the same CFA family as txCurrency, otherwise fall back to txCurrency.
-      const walletCurrency = (sourceCurrency && sameCfaFamily(sourceCurrency, txCurrency))
-        ? sourceCurrency
-        : txCurrency;
+      // walletCurrency = the wallet actually debited — always the exact currency of the
+      // destination country (txCurrency). No cross-family tolerance: a user sending to
+      // Bénin (XOFB) must have funds in their XOFB wallet specifically, even if they hold
+      // XOF/XOFT/XOFC (same CFA family). They must convert first, same as withdrawals.
+      const walletCurrency = txCurrency;
 
       const fxRates = await loadFxRates();
       const minTransferSetting = await storage.getSetting("min_transfer");
@@ -3917,11 +3914,10 @@ export async function registerRoutes(
       const creditedAmount = senderPaysFees ? parsedAmount : parsedAmount - feeAmount;
       const totalAmount = senderPaysFees ? parsedAmount + feeAmount : parsedAmount;
 
-      // Debit the wallet the sender selected (walletCurrency).
-      // walletCurrency may differ from txCurrency only in country suffix (e.g. "XOF" vs "XOFB")
-      // but both are 1:1 CFA — the sameCfaFamily check above ensures compatibility.
+      // Debit the wallet matching the destination country exactly (walletCurrency = txCurrency).
+      // Strict match only — no cross-family CFA tolerance (must convert first otherwise).
       const senderPrimaryCurrency = sender.preferredCurrency || "XAF";
-      const isPrimaryTransfer = sameCfaFamily(walletCurrency, senderPrimaryCurrency);
+      const isPrimaryTransfer = (walletCurrency === senderPrimaryCurrency);
 
       if (isPrimaryTransfer) {
         if (parseFloat(sender.balance) < totalAmount) {
