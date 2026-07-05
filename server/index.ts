@@ -65,39 +65,44 @@ declare module "http" {
   }
 }
 
-// ── Security: Block access to source code files ───────────────────────────────
-// In production: block .ts/.tsx and other source file types.
-// In development: only block server-side directories (Vite needs to serve client .ts/.tsx).
+// ── Security: Block access to source code and sensitive files ─────────────────
+// Always return 404 (not 403) so scanners cannot infer file existence.
+// Dev mode also blocks these — Vite only needs to serve files under client/src,
+// so blocking sensitive root-level files here prevents Vite's fs.strict from
+// returning a 403 (which signals the file exists) instead of 404.
 app.use((req: Request, res: Response, next: NextFunction) => {
   const p = req.path.toLowerCase();
 
-  const blocked = isProd
-    ? (
-        p.startsWith("/server/") ||
-        p.startsWith("/shared/") ||
-        p.startsWith("/node_modules/") ||
-        p.startsWith("/.") ||
-        p.endsWith(".ts") ||
-        p.endsWith(".tsx") ||
-        p.endsWith(".env") ||
-        p.endsWith(".config.js") ||
-        p.endsWith(".config.ts") ||
-        p.endsWith("package.json") ||
-        p.endsWith("package-lock.json") ||
-        p.endsWith("drizzle.config.ts") ||
-        p.endsWith(".cjs") ||
-        p.endsWith(".map")
-      )
-    : (
-        p.startsWith("/server/") ||
-        p.startsWith("/shared/") ||
-        p.startsWith("/node_modules/") ||
-        p.startsWith("/.") ||
-        p.endsWith(".env") ||
-        p.endsWith("package-lock.json")
-      );
+  const blocked =
+    // Server-side source directories (never serve to browser)
+    p.startsWith("/server/") ||
+    p.startsWith("/shared/") ||
+    p.startsWith("/node_modules/") ||
+    // All dot-files and dot-directories (.git, .gitignore, .env, .htaccess, etc.)
+    p.startsWith("/.") ||
+    p === "/.git" ||
+    p.startsWith("/.git/") ||
+    // Config and manifest files at root level
+    p === "/package.json" ||
+    p === "/package-lock.json" ||
+    p === "/drizzle.config.ts" ||
+    p === "/tsconfig.json" ||
+    p === "/tailwind.config.ts" ||
+    p === "/postcss.config.js" ||
+    p === "/vite.config.ts" ||
+    // Source file extensions (production + dev — Vite serves via virtual modules, not raw .ts)
+    p.endsWith(".env") ||
+    p.endsWith(".ts") ||
+    p.endsWith(".tsx") ||
+    p.endsWith(".config.js") ||
+    p.endsWith(".config.ts") ||
+    p.endsWith("package.json") ||
+    p.endsWith("package-lock.json") ||
+    p.endsWith(".cjs") ||
+    p.endsWith(".map");
 
   if (blocked) {
+    // Always 404 — never 403. 403 signals the file exists; 404 does not.
     return res.status(404).end();
   }
   next();

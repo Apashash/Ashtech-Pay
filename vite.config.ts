@@ -35,7 +35,10 @@ export default defineConfig({
     allowedHosts: true,
     fs: {
       strict: true,
-      deny: ["**/.*"],
+      // Deny dot-files, config files, and source manifests.
+      // Express middleware also blocks these first (returning 404 not 403),
+      // but this is a second-layer defence in case a request slips through.
+      deny: ["**/.*", "**/package.json", "**/package-lock.json", "**/*.config.ts", "**/*.config.js"],
     },
   },
 });
