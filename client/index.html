@@ -104,12 +104,25 @@
     })();
   </script>
   </head>
-  <body style="background:#0B0E11;margin:0;">
+  <body style="background:#F7F8FA;margin:0;">
     <!-- Shell de chargement HTML pur — juste le fond, sans spinner, pour un affichage
-         immédiat et instantané. React remplace le contenu dès que l'app monte. -->
+         immédiat et instantané. React remplace le contenu dès que l'app monte.
+         Couleur alignée sur le thème clair par défaut (voir script ci-dessus qui
+         ajuste document.documentElement AVANT le rendu si le thème stocké est 'dark'). -->
     <div id="root">
-      <div id="__loading_shell__" style="min-height:100vh;background:#0B0E11;"></div>
+      <div id="__loading_shell__" style="min-height:100vh;background:#F7F8FA;"></div>
     </div>
+    <script>
+      (function() {
+        try {
+          if (document.documentElement.classList.contains('dark')) {
+            document.body.style.background = '#0B0E11';
+            var shell = document.getElementById('__loading_shell__');
+            if (shell) shell.style.background = '#0B0E11';
+          }
+        } catch (e) {}
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
