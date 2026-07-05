@@ -104,6 +104,10 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 // ── Security: Helmet HTTP headers ────────────────────────────────────────────
+// HSTS is enabled whenever the app is served over HTTPS — in production and on
+// Replit (detected via REPL_ID). Replit proxies all traffic over HTTPS, so the
+// browser will always see the header even in development mode on *.replit.app.
+const isHttps = isProd || !!process.env.REPL_ID;
 app.use(
   helmet({
     contentSecurityPolicy: isProd
@@ -122,9 +126,17 @@ app.use(
         }
       : false,
     crossOriginEmbedderPolicy: false,
-    hsts: isProd ? { maxAge: 31536000, includeSubDomains: true } : false,
+    hsts: isHttps ? { maxAge: 31536000, includeSubDomains: true } : false,
   })
 );
+
+// ── Security: Permissions-Policy on all responses ────────────────────────────
+// Previously only set on /api routes. Added globally so HTML pages also
+// carry the header and scanners don't flag it as missing.
+app.use((_req, res, next) => {
+  res.setHeader("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
+  next();
+});
 
 // ── Security: Bot guard (UA check, honeypot, path injection, IP ban) ─────────
 app.use(botGuard);
