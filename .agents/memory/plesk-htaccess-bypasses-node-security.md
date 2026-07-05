@@ -44,3 +44,12 @@ are never real app routes.
 by Apache directly — it must be added to the `.htaccess` passthrough alongside `/api/` (`RewriteRule
 ^uploads/ - [L]`) or Apache's SPA fallback will intercept it and return `index.html` (200) instead of the
 actual file/Node 404, silently breaking uploads in production.
+
+**When repeated .htaccess fixes don't show up in re-scans at all:** if MULTIPLE rebuild+redeploy cycles
+still show the exact same 200s on paths the `.htaccess` already blocks (not just partial drift — literally
+no change at all), suspect Plesk is serving this domain with "serve static files directly by nginx" /
+"Smart static files processing" enabled. In that mode Nginx answers static-file-shaped requests directly
+and NEVER consults `.htaccess` (an Apache-only mechanism) — no amount of `.htaccess` editing will ever fix
+it. The real fix is an equivalent Nginx `location` block pasted into Plesk's "Additional nginx directives"
+for that domain (kept in `plesk-nginx-security.conf` at repo root). This is a manual, external panel change
+the agent cannot perform — must hand the file to the user with exact Plesk menu paths.
