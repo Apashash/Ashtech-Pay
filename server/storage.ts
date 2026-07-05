@@ -313,6 +313,7 @@ export interface IStorage {
   getAutoConversionRules(userId: string): Promise<AutoConversionRule[]>;
   getAutoConversionRuleByCurrency(userId: string, fromCurrency: string): Promise<AutoConversionRule | undefined>;
   createAutoConversionRule(data: InsertAutoConversionRule): Promise<AutoConversionRule>;
+  updateAutoConversionRule(id: string, userId: string, toCurrency: string): Promise<AutoConversionRule | undefined>;
   deleteAutoConversionRule(id: string, userId: string): Promise<void>;
 
   // Hosted Page
@@ -2047,6 +2048,15 @@ export class DatabaseStorage implements IStorage {
   async createAutoConversionRule(data: InsertAutoConversionRule): Promise<AutoConversionRule> {
     const [created] = await db.insert(autoConversionRules).values(data).returning();
     return created;
+  }
+
+  async updateAutoConversionRule(id: string, userId: string, toCurrency: string): Promise<AutoConversionRule | undefined> {
+    const [updated] = await db
+      .update(autoConversionRules)
+      .set({ toCurrency })
+      .where(and(eq(autoConversionRules.id, id), eq(autoConversionRules.userId, userId)))
+      .returning();
+    return updated;
   }
 
   async deleteAutoConversionRule(id: string, userId: string): Promise<void> {

@@ -67,7 +67,7 @@ import { createNowPaymentsInvoice, createNowPaymentsPayment, verifyNowPaymentsIp
 import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, getAfribaPayOtpInfo, confirmAfribaPayOtp } from "./afribapay";
 import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, initiatePixPayPayout, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType, getPixPayServiceId, PIXPAY_OTP_USSD_CODES } from "./pixpay";
 import { addPendingPayment, removePendingPayment } from "./paymentPoller";
-import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, sameCfaFamily, getConversionPairKey } from "./walletHelper";
+import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, sameCfaFamily, getConversionPairKey, maybeAutoConvert } from "./walletHelper";
 import { createSwychrPayout, formatInternationalPhone, detectMethodFromPhone, fiatToPusd, pusdToFiatRate, convertFiatToPusd, getPayoutToken, COUNTRY_CURRENCY } from "./swychrPayout";
 import { addPendingPayout, removePendingPayout } from "./payoutPoller";
 import { addSSEClient, removeSSEClient, setActiveTicket, isUserOnline, getOnlineUserIds, getAdminViewingTicket, getUserViewingTicket, notifyUser, notifyAdmins, broadcastOnlineStatus, notifyUserForceLogout, notifyOtherSessionsForceLogout, notifyAllUsersForceLogout, notifySpecificSessionForceLogout } from "./sse";
@@ -5475,11 +5475,65 @@ export async function registerRoutes(
 
       const rule = await storage.createAutoConversionRule({ userId, fromCurrency, toCurrency });
       res.json(rule);
+
+      // After saving, immediately check if there's a balance to convert right now
+      const user = await storage.getUser(userId);
+      if (user) {
+        const primary = user.preferredCurrency || "XAF";
+        let currentBalance = 0;
+        if (fromCurrency === primary) {
+          currentBalance = parseFloat(user.balance);
+        } else {
+          const w = await storage.getWallet(userId, fromCurrency);
+          currentBalance = w ? parseFloat(w.balance) : 0;
+        }
+        if (currentBalance > 0) {
+          maybeAutoConvert(userId, fromCurrency, currentBalance).catch((err) => {
+            console.error(`[AutoConversion] Immediate trigger error for user ${userId}:`, err?.message || err);
+          });
+        }
+      }
     } catch (error: any) {
       if (error?.code === "23505") {
         return res.status(400).json({ message: "Une conversion automatique existe déjà pour cette devise." });
       }
       console.error("Create auto-conversion rule error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // PATCH /api/auto-conversion/:id — update the target currency of a rule
+  app.patch("/api/auto-conversion/:id", requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId!;
+      const { toCurrency } = req.body;
+      if (!toCurrency || typeof toCurrency !== "string") {
+        return res.status(400).json({ message: "toCurrency est requis" });
+      }
+
+      const updated = await storage.updateAutoConversionRule(req.params.id, userId, toCurrency);
+      if (!updated) return res.status(404).json({ message: "Règle introuvable" });
+      res.json(updated);
+
+      // Immediately trigger conversion with current balance after update
+      const user = await storage.getUser(userId);
+      if (user) {
+        const primary = user.preferredCurrency || "XAF";
+        let currentBalance = 0;
+        if (updated.fromCurrency === primary) {
+          currentBalance = parseFloat(user.balance);
+        } else {
+          const w = await storage.getWallet(userId, updated.fromCurrency);
+          currentBalance = w ? parseFloat(w.balance) : 0;
+        }
+        if (currentBalance > 0) {
+          maybeAutoConvert(userId, updated.fromCurrency, currentBalance).catch((err) => {
+            console.error(`[AutoConversion] Immediate trigger (update) error for user ${userId}:`, err?.message || err);
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Update auto-conversion rule error:", error);
       res.status(500).json({ message: "Erreur serveur" });
     }
   });
