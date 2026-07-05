@@ -46,6 +46,7 @@ import {
   ALL_FX_CURRENCIES,
   type SupportedCurrency,
   type Transaction,
+  insertAutoConversionRuleSchema,
 } from "@shared/schema";
 import crypto from "crypto";
 import { z } from "zod";
@@ -5437,6 +5438,59 @@ export async function registerRoutes(
       }
       return res.json({ status: convReq.status, conversionId: convReq.id });
     } catch (error) {
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // ── Auto-conversion rules ───────────────────────────────────────────────────
+  // GET /api/auto-conversion — list the user's auto-conversion rules
+  app.get("/api/auto-conversion", requireAuth, async (req, res) => {
+    try {
+      const rules = await storage.getAutoConversionRules(req.userId!);
+      res.json(rules);
+    } catch (error) {
+      console.error("Get auto-conversion rules error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // POST /api/auto-conversion — create a new rule (one active rule per source currency)
+  app.post("/api/auto-conversion", requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId!;
+      const parsed = insertAutoConversionRuleSchema.safeParse({ ...req.body, userId });
+      if (!parsed.success) {
+        return res.status(400).json({ message: "fromCurrency et toCurrency sont requis" });
+      }
+      const { fromCurrency, toCurrency } = parsed.data;
+
+      if (fromCurrency === toCurrency) {
+        return res.status(400).json({ message: "Les deux devises doivent être différentes" });
+      }
+
+      const existing = await storage.getAutoConversionRuleByCurrency(userId, fromCurrency);
+      if (existing) {
+        return res.status(400).json({ message: `Une conversion automatique existe déjà pour ${fromCurrency}. Supprimez-la avant d'en créer une nouvelle.` });
+      }
+
+      const rule = await storage.createAutoConversionRule({ userId, fromCurrency, toCurrency });
+      res.json(rule);
+    } catch (error: any) {
+      if (error?.code === "23505") {
+        return res.status(400).json({ message: "Une conversion automatique existe déjà pour cette devise." });
+      }
+      console.error("Create auto-conversion rule error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // DELETE /api/auto-conversion/:id — remove a rule
+  app.delete("/api/auto-conversion/:id", requireAuth, async (req, res) => {
+    try {
+      await storage.deleteAutoConversionRule(req.params.id, req.userId!);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete auto-conversion rule error:", error);
       res.status(500).json({ message: "Erreur serveur" });
     }
   });

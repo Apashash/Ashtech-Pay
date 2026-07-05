@@ -1,5 +1,7 @@
+import crypto from "crypto";
 import { storage } from "./storage";
 import { ALL_FX_CURRENCIES } from "@shared/schema";
+import { notifyConversionStarted } from "./telegram";
 
 // CFA franc currencies — XAF and XOF and all Swychr country-specific variants
 // All have the same value (1 XAF = 1 XOF, both pegged to EUR at same rate)
@@ -156,10 +158,156 @@ export async function creditUserWallet(
   // Rule 1: Exact match → credit primary balance
   if (paymentCurrency === preferredCurrency) {
     await storage.updateUserBalance(userId, amount);
+  } else {
+    // Rule 2: Any other currency → own secondary wallet
+    console.log(`[walletHelper] Crediting secondary wallet ${paymentCurrency} for user ${userId}: +${amount}`);
+    await storage.upsertWallet(userId, paymentCurrency, amount);
+  }
+
+  // After crediting, check if the user has an auto-conversion rule set up
+  // for the currency they just received money in — if so, auto-convert it.
+  await maybeAutoConvert(userId, paymentCurrency, amount).catch((err) => {
+    console.error(`[AutoConversion] Unhandled error for user ${userId}:`, err?.message || err);
+  });
+}
+
+function generateAutoConversionReference(): string {
+  const timestamp = Date.now().toString(36).toUpperCase();
+  const random = crypto.randomBytes(3).toString("hex").toUpperCase();
+  return `ASHPAY-CONV-${timestamp}-${random}`;
+}
+
+// If the user has an active auto-conversion rule for `creditedCurrency`,
+// automatically debit the just-credited amount and schedule a conversion
+// to the rule's target currency (executed by the existing conversionPoller,
+// exactly like a manual conversion).
+export async function maybeAutoConvert(
+  userId: string,
+  creditedCurrency: string,
+  creditedAmount: number
+): Promise<void> {
+  const rule = await storage.getAutoConversionRuleByCurrency(userId, creditedCurrency);
+  if (!rule || rule.toCurrency === creditedCurrency) return;
+
+  const user = await storage.getUser(userId);
+  if (!user) return;
+  const userPrimary = user.preferredCurrency || "XAF";
+
+  // Re-check actual available balance for the credited currency (in case of
+  // concurrent debits happening between the credit and this check).
+  let available: number;
+  if (creditedCurrency === userPrimary) {
+    available = parseFloat(user.balance);
+  } else {
+    const w = await storage.getWallet(userId, creditedCurrency);
+    available = w ? parseFloat(w.balance) : 0;
+  }
+  const amountToConvert = Math.min(creditedAmount, available);
+  if (amountToConvert <= 0) return;
+
+  const pairKey = getConversionPairKey(creditedCurrency, rule.toCurrency);
+  const PAIR_DEFAULTS: Record<string, [number, number]> = {
+    xaf_xaf: [0, 0], xof_xof: [0, 0],
+    xof_xaf: [1, 1], xaf_xof: [1, 1],
+    cdf_cfa: [3, 2], cfa_cdf: [3, 2],
+    cfa_usdt: [1, 1], usdt_cfa: [1, 1],
+  };
+  const [defProvider, defAshtech] = (pairKey && PAIR_DEFAULTS[pairKey]) ? PAIR_DEFAULTS[pairKey] : [1, 1];
+  const [providerFeeSetting, ashtechFeeSetting] = pairKey
+    ? await Promise.all([
+        storage.getSetting(`conversion_provider_fee_${pairKey}`),
+        storage.getSetting(`conversion_ashtech_fee_${pairKey}`),
+      ])
+    : [null, null];
+  const providerFeePercent = providerFeeSetting ? parseFloat(providerFeeSetting.value) : defProvider;
+  const ashtechFeePercent  = ashtechFeeSetting  ? parseFloat(ashtechFeeSetting.value)  : defAshtech;
+  const totalFeePercent = providerFeePercent + ashtechFeePercent;
+
+  const providerFeeAmount = (amountToConvert * providerFeePercent) / 100;
+  const ashtechFeeAmount = (amountToConvert * ashtechFeePercent) / 100;
+  const totalFeeAmount = providerFeeAmount + ashtechFeeAmount;
+  const amountAfterFee = amountToConvert - totalFeeAmount;
+
+  const fxRates = await loadFxRates();
+  const amountInXAF = convertToXAF(amountAfterFee, creditedCurrency, fxRates);
+  const receivedAmount = convertFromXAF(amountInXAF, rule.toCurrency, fxRates);
+
+  if (!isFinite(receivedAmount) || receivedAmount <= 0) {
+    console.error(`[AutoConversion] Invalid computed amount for user ${userId}: ${creditedCurrency}->${rule.toCurrency}`);
     return;
   }
 
-  // Rule 2: Any other currency → own secondary wallet
-  console.log(`[walletHelper] Crediting secondary wallet ${paymentCurrency} for user ${userId}: +${amount}`);
-  await storage.upsertWallet(userId, paymentCurrency, amount);
+  const delaySeconds = Math.floor(Math.random() * (15 - 5 + 1)) + 5;
+  const executeAt = Date.now() + delaySeconds * 1000;
+  const reference = generateAutoConversionReference();
+
+  const transaction = await storage.createTransaction({
+    userId,
+    type: "conversion",
+    amount: amountToConvert.toFixed(2),
+    currency: creditedCurrency,
+    status: "pending",
+    description: `Conversion automatique ${amountToConvert.toFixed(2)} ${creditedCurrency} → ${receivedAmount.toFixed(2)} ${rule.toCurrency} (règle auto)`,
+    reference,
+    feeAmount: totalFeeAmount.toFixed(2),
+    ashtechFeeAmount: ashtechFeeAmount.toFixed(2),
+    totalAmount: receivedAmount.toFixed(2),
+    recipientCountry: rule.toCurrency,
+  });
+
+  const convReq = await storage.createConversionRequest({
+    userId,
+    fromCurrency: creditedCurrency,
+    toCurrency: rule.toCurrency,
+    fromAmount: amountToConvert.toFixed(2),
+    toAmount: receivedAmount.toFixed(2),
+    status: "pending",
+    notes: JSON.stringify({
+      executeAt,
+      txId: transaction.id,
+      feeAmount: totalFeeAmount.toFixed(2),
+      feePercent: `${providerFeePercent}% opérateurs + ${ashtechFeePercent}% Ashtech = ${totalFeePercent}`,
+      fromAmount: amountToConvert.toFixed(2),
+      toAmount: receivedAmount.toFixed(2),
+      auto: true,
+    }),
+  });
+
+  try {
+    if (creditedCurrency === userPrimary) {
+      await storage.updateUserBalance(userId, -amountToConvert);
+    } else {
+      await storage.upsertWallet(userId, creditedCurrency, -amountToConvert);
+    }
+  } catch (debitErr: any) {
+    await storage.updateConversionRequest(convReq.id, { status: "cancelled" }).catch(() => {});
+    await storage.updateTransactionStatus(transaction.id, "failed").catch(() => {});
+    console.error(`[AutoConversion] Debit failed for user ${userId}:`, debitErr.message);
+    return;
+  }
+
+  await storage.createUserNotification({
+    userId,
+    title: "Conversion automatique en cours...",
+    message: `Vous avez reçu ${amountToConvert.toFixed(2)} ${creditedCurrency}. Conversion automatique vers ${rule.toCurrency} en cours.`,
+    transactionId: transaction.id,
+    type: "info",
+  });
+
+  console.log(`[AutoConversion] ${reference} — user ${userId}: ${amountToConvert} ${creditedCurrency} → ${receivedAmount.toFixed(2)} ${rule.toCurrency} in ${delaySeconds}s`);
+
+  notifyConversionStarted({
+    userName: user.fullName || user.username,
+    userEmail: user.email || "",
+    fromAmount: amountToConvert.toFixed(2),
+    fromCurrency: creditedCurrency,
+    toAmount: receivedAmount.toFixed(2),
+    toCurrency: rule.toCurrency,
+    feeAmount: totalFeeAmount.toFixed(2),
+    feePercent: `${providerFeePercent}% opérateurs + ${ashtechFeePercent}% Ashtech = ${totalFeePercent}`,
+    reference: transaction.reference || "",
+    userCountry: user.country || "",
+    estimatedSeconds: delaySeconds,
+    conversionId: convReq.id,
+  }).catch(() => {});
 }

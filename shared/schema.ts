@@ -1022,6 +1022,24 @@ export const insertConversionRequestSchema = createInsertSchema(conversionReques
 export type ConversionRequest = typeof conversionRequests.$inferSelect;
 export type InsertConversionRequest = z.infer<typeof insertConversionRequestSchema>;
 
+// ─── Auto-conversion rules ────────────────────────────────────────────────
+// A user can set up rules like "whenever I receive XOF, auto-convert to XAF".
+// Each currency can only be the SOURCE of one active rule per user.
+export const autoConversionRules = pgTable("auto_conversion_rules", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  fromCurrency: text("from_currency").notNull(),
+  toCurrency: text("to_currency").notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (t) => ({
+  userFromCurrencyUnique: uniqueIndex("auto_conversion_user_from_currency_unique").on(t.userId, t.fromCurrency),
+}));
+
+export const insertAutoConversionRuleSchema = createInsertSchema(autoConversionRules).omit({ id: true, createdAt: true, isActive: true });
+export type AutoConversionRule = typeof autoConversionRules.$inferSelect;
+export type InsertAutoConversionRule = z.infer<typeof insertAutoConversionRuleSchema>;
+
 // ─── Currency zones mapping ───────────────────────────────────────────────────
 // Which wallet (currency) to use for each destination country
 export const CURRENCY_ZONE: Record<string, SupportedCurrency> = {

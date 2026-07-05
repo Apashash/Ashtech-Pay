@@ -75,6 +75,9 @@ import {
   type HostedPageConfig,
   hostedPaymentSessions,
   type HostedPaymentSession,
+  autoConversionRules,
+  type AutoConversionRule,
+  type InsertAutoConversionRule,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, sql, and, or, like, ilike, count, inArray, gt, gte, lt, lte } from "drizzle-orm";
@@ -305,6 +308,12 @@ export interface IStorage {
   getAllConversionRequests(): Promise<(ConversionRequest & { userFullName: string; userEmail: string })[]>;
   updateConversionRequest(id: string, data: Partial<ConversionRequest>): Promise<ConversionRequest>;
   countPendingConversions(): Promise<number>;
+
+  // Auto-conversion rules
+  getAutoConversionRules(userId: string): Promise<AutoConversionRule[]>;
+  getAutoConversionRuleByCurrency(userId: string, fromCurrency: string): Promise<AutoConversionRule | undefined>;
+  createAutoConversionRule(data: InsertAutoConversionRule): Promise<AutoConversionRule>;
+  deleteAutoConversionRule(id: string, userId: string): Promise<void>;
 
   // Hosted Page
   getHostedPageConfig(userId: string): Promise<HostedPageConfig | undefined>;
@@ -2011,6 +2020,39 @@ export class DatabaseStorage implements IStorage {
       .from(conversionRequests)
       .where(eq(conversionRequests.status, "pending"));
     return Number(cnt);
+  }
+
+  // ── Auto-conversion rules ───────────────────────────────────────────────────
+
+  async getAutoConversionRules(userId: string): Promise<AutoConversionRule[]> {
+    return db
+      .select()
+      .from(autoConversionRules)
+      .where(and(eq(autoConversionRules.userId, userId), eq(autoConversionRules.isActive, true)))
+      .orderBy(desc(autoConversionRules.createdAt));
+  }
+
+  async getAutoConversionRuleByCurrency(userId: string, fromCurrency: string): Promise<AutoConversionRule | undefined> {
+    const [rule] = await db
+      .select()
+      .from(autoConversionRules)
+      .where(and(
+        eq(autoConversionRules.userId, userId),
+        eq(autoConversionRules.fromCurrency, fromCurrency),
+        eq(autoConversionRules.isActive, true),
+      ));
+    return rule;
+  }
+
+  async createAutoConversionRule(data: InsertAutoConversionRule): Promise<AutoConversionRule> {
+    const [created] = await db.insert(autoConversionRules).values(data).returning();
+    return created;
+  }
+
+  async deleteAutoConversionRule(id: string, userId: string): Promise<void> {
+    await db
+      .delete(autoConversionRules)
+      .where(and(eq(autoConversionRules.id, id), eq(autoConversionRules.userId, userId)));
   }
 
   // Hosted Page — field-level encryption for sk_live, pk_live; HMAC hash for hp_live lookup
