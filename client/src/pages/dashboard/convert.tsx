@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,9 +45,13 @@ export default function ConvertPage() {
   const { toast } = useToast();
   const { t } = useLanguage();
   const [, navigate] = useLocation();
+  const search = useSearch();
+  const searchParams = useMemo(() => new URLSearchParams(search), [search]);
+  const presetFrom = searchParams.get("from");
+  const presetTo = searchParams.get("to");
 
-  const [fromCurrency, setFromCurrency] = useState("XAF");
-  const [toCurrency, setToCurrency] = useState("XOF");
+  const [fromCurrency, setFromCurrency] = useState(presetFrom || "XAF");
+  const [toCurrency, setToCurrency] = useState(presetTo || "XOF");
   const [convertAmount, setConvertAmount] = useState("");
   const [conversionPending, setConversionPending] = useState<{
     conversionId: string; fromCurrency: string; toCurrency: string; fromAmount: number; toAmount: number;
@@ -93,11 +97,12 @@ export default function ConvertPage() {
   const primaryCurrency = user?.preferredCurrency || "XAF";
 
   useEffect(() => {
+    if (presetFrom || presetTo) return;
     if (walletList.length >= 2) {
       setFromCurrency(walletList[0].currency);
       setToCurrency(walletList[1].currency);
     }
-  }, [walletList.length]);
+  }, [walletList.length, presetFrom, presetTo]);
 
   // Determine fee % by currency pair (XOF↔XAF, CDF↔CFA)
   const XOF_FAM = new Set(["XOF","XOFC","XOFF","XOFN","XOFB","XOFT","XOFS","XOFM"]);
@@ -128,6 +133,13 @@ export default function ConvertPage() {
   const previewAmount = amountInXAF / toRate;
 
   const walletSymbol = (currency: string) => (CURRENCY_SYMBOLS as Record<string, string>)[currency] || currency;
+
+  // Target account options: existing wallets + the requested preset currency even if the wallet doesn't exist yet
+  const toCurrencyOptions = useMemo(() => {
+    const codes = walletList.map(w => w.currency);
+    if (presetTo && !codes.includes(presetTo)) codes.push(presetTo);
+    return codes;
+  }, [walletList, presetTo]);
 
   const convertMutation = useMutation({
     mutationFn: async (data: { fromCurrency: string; toCurrency: string; amount: string }) => {
@@ -191,7 +203,7 @@ export default function ConvertPage() {
     );
   }
 
-  if (walletList.length < 2) {
+  if (walletList.length < 2 && !presetTo) {
     return (
       <DashboardLayout>
         <div className="max-w-lg mx-auto">
@@ -309,13 +321,16 @@ export default function ConvertPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {walletList.filter(w => w.currency !== fromCurrency).map(w => (
-                  <SelectItem key={w.currency} value={w.currency}>
-                    {CURRENCY_FLAGS[w.currency] || "🌍"} {w.currency} — {CURRENCY_NAMES[w.currency] || w.currency}
+                {toCurrencyOptions.filter(c => c !== fromCurrency).map(currency => (
+                  <SelectItem key={currency} value={currency}>
+                    {CURRENCY_FLAGS[currency] || "🌍"} {currency} — {CURRENCY_NAMES[currency] || currency}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {presetTo && !walletList.some(w => w.currency === presetTo) && toCurrency === presetTo && (
+              <p className="text-xs text-muted-foreground">Ce portefeuille sera créé automatiquement lors de la conversion.</p>
+            )}
           </div>
 
           {/* Amount */}

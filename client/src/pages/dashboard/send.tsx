@@ -182,11 +182,12 @@ export default function SendMoneyPage() {
       form.setValue("operatorId", "");
       setPrevCountryId(watchedCountryId);
       if (selectedCountry?.currency) {
-        const matchingWallet = wallets.find(w => w.currency === selectedCountry.currency);
-        if (matchingWallet) setSelectedWallet(selectedCountry.currency);
+        // Always align wallet selector with the destination country's currency,
+        // whether or not that wallet already exists with a balance.
+        setSelectedWallet(selectedCountry.currency);
       }
     }
-  }, [watchedCountryId, prevCountryId, form, selectedCountry, wallets]);
+  }, [watchedCountryId, prevCountryId, form, selectedCountry]);
 
   const fetchFeePreview = useCallback(async () => {
     if (!watchedOperatorId || amountValue <= 0) {
@@ -373,6 +374,16 @@ export default function SendMoneyPage() {
 
   const currencyMismatch = !isInternal && selectedCountry && selectedWallet !== selectedCountry.currency;
 
+  // True when the destination country's wallet doesn't exist yet or has no funds at all.
+  const destinationWallet = selectedCountry ? wallets.find(w => w.currency === selectedCountry.currency) : undefined;
+  const needsConversion = !isInternal && !!selectedCountry && parseFloat(destinationWallet?.balance || "0") <= 0;
+  // Suggest converting from the wallet with the highest balance (excluding the destination currency).
+  const bestSourceWallet = useMemo(() => {
+    return [...wallets]
+      .filter(w => w.currency !== selectedCountry?.currency)
+      .sort((a, b) => parseFloat(b.balance || "0") - parseFloat(a.balance || "0"))[0];
+  }, [wallets, selectedCountry]);
+
   // When sender pays fees: total deducted = amount + fee
   const totalDebitedBySender = feeBearer === "sender"
     ? amountValue + feePreview.feeAmount
@@ -389,7 +400,8 @@ export default function SendMoneyPage() {
     watchedOperatorId &&
     !externalMutation.isPending &&
     !feePreview.isLoading &&
-    !currencyMismatch;
+    !currencyMismatch &&
+    !needsConversion;
 
   if (user && !user.isVerified) {
     return (
@@ -789,14 +801,37 @@ export default function SendMoneyPage() {
                       </div>
                     )}
 
-                    {amountValue > balance && (
+                    {needsConversion && selectedCountry && (
+                      <Alert variant="destructive" className="rounded-xl">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>
+                          <p>
+                            Vous n'avez pas encore de fonds sur le portefeuille <strong>{selectedCountry.currency}</strong> ({selectedCountry.name}). Convertissez d'abord vos fonds vers ce portefeuille pour pouvoir envoyer.
+                          </p>
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="mt-3 rounded-lg"
+                            onClick={() => setLocation(
+                              `/dashboard/convert?to=${encodeURIComponent(selectedCountry.currency)}${bestSourceWallet ? `&from=${encodeURIComponent(bestSourceWallet.currency)}` : ""}`
+                            )}
+                            data-testid="button-convert-first"
+                          >
+                            <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                            Convertir vers {selectedCountry.currency}
+                          </Button>
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
+                    {!needsConversion && amountValue > balance && (
                       <Alert variant="destructive" className="rounded-xl">
                         <AlertCircle className="h-4 w-4" />
                         <AlertDescription>{t.send.insufficientBalance}</AlertDescription>
                       </Alert>
                     )}
 
-                    {currencyMismatch && (
+                    {!needsConversion && currencyMismatch && (
                       <Alert variant="destructive" className="rounded-xl">
                         <AlertCircle className="h-4 w-4" />
                         <AlertDescription>
