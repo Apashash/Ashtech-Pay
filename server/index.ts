@@ -67,11 +67,16 @@ declare module "http" {
 
 // ── Security: Block access to source code and sensitive files ─────────────────
 // Always return 404 (not 403) so scanners cannot infer file existence.
-// Dev mode also blocks these — Vite only needs to serve files under client/src,
-// so blocking sensitive root-level files here prevents Vite's fs.strict from
-// returning a 403 (which signals the file exists) instead of 404.
+// IMPORTANT: Do NOT block /src/* or /@* paths — Vite dev server serves .ts/.tsx
+// files directly from client/src/ in dev mode. Only block server-side paths and
+// root-level config files that browsers should never access.
 app.use((req: Request, res: Response, next: NextFunction) => {
   const p = req.path.toLowerCase();
+
+  // Vite dev server paths — never block these regardless of extension
+  if (p.startsWith("/src/") || p.startsWith("/@") || p.startsWith("/__vite")) {
+    return next();
+  }
 
   const blocked =
     // Server-side source directories (never serve to browser)
@@ -82,7 +87,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
     p.startsWith("/.") ||
     p === "/.git" ||
     p.startsWith("/.git/") ||
-    // Config and manifest files at root level
+    // Config and manifest files at root level only (exact match)
     p === "/package.json" ||
     p === "/package-lock.json" ||
     p === "/drizzle.config.ts" ||
@@ -90,16 +95,13 @@ app.use((req: Request, res: Response, next: NextFunction) => {
     p === "/tailwind.config.ts" ||
     p === "/postcss.config.js" ||
     p === "/vite.config.ts" ||
-    // Source file extensions (production + dev — Vite serves via virtual modules, not raw .ts)
+    // .env files anywhere
     p.endsWith(".env") ||
-    p.endsWith(".ts") ||
-    p.endsWith(".tsx") ||
-    p.endsWith(".config.js") ||
-    p.endsWith(".config.ts") ||
-    p.endsWith("package.json") ||
-    p.endsWith("package-lock.json") ||
-    p.endsWith(".cjs") ||
-    p.endsWith(".map");
+    p.endsWith(".env.local") ||
+    p.endsWith(".env.production") ||
+    // Root-level .cjs bundles (built server output, not client)
+    p === "/index.cjs" ||
+    p.endsWith("/index.cjs");
 
   if (blocked) {
     // Always 404 — never 403. 403 signals the file exists; 404 does not.
