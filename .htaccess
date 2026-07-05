@@ -4,42 +4,42 @@
 # Passenger (Plesk Node.js) gère le routage vers l'application.
 # Ce fichier bloque uniquement l'accès direct aux fichiers source.
 #
-# NOTE: [F,L] retourne 403 Forbidden (standard Apache, comportement stable).
-# [R=404,L] avec substitution "-" cause des téléchargements intempestifs dans
-# certains navigateurs (Location: header envoyé sur même URL = boucle vide).
+# NOTE: Toujours utiliser [F,L] (403 Forbidden) pour bloquer — JAMAIS [R=404,L].
+# [R=404,L] avec substitution "-" envoie un Location header vers la même URL,
+# créant une boucle vide que Safari iOS interprète comme un téléchargement (Zero KB).
 # =============================================================================
 
 Options -Indexes
 RewriteEngine On
 
 # ── Bloquer les scanners de bots / WordPress / exploits connus ───────────────
-RewriteRule ^wp-admin(/.*)?$ - [R=404,L]
-RewriteRule ^wp-login\.php$ - [R=404,L]
-RewriteRule ^wp-config\.php$ - [R=404,L]
-RewriteRule ^xmlrpc\.php$ - [R=404,L]
-RewriteRule ^phpmyadmin(/.*)?$ - [R=404,L]
-RewriteRule ^pma(/.*)?$ - [R=404,L]
-RewriteRule ^admin\.php$ - [R=404,L]
-RewriteRule ^administrator(/.*)?$ - [R=404,L]
-RewriteRule ^shell\.php$ - [R=404,L]
-RewriteRule ^c99\.php$ - [R=404,L]
-RewriteRule ^r57\.php$ - [R=404,L]
-RewriteRule ^cmd\.php$ - [R=404,L]
-RewriteRule ^eval\.php$ - [R=404,L]
-RewriteRule ^webshell\.php$ - [R=404,L]
-RewriteRule ^setup\.php$ - [R=404,L]
-RewriteRule ^install\.php$ - [R=404,L]
-RewriteRule ^config\.php$ - [R=404,L]
-RewriteRule ^database\.php$ - [R=404,L]
-RewriteRule ^backup\.(zip|sql|tar\.gz)$ - [R=404,L]
-RewriteRule ^dump\.sql$ - [R=404,L]
-RewriteRule ^db\.sql$ - [R=404,L]
-RewriteRule ^cgi-bin(/.*)?$ - [R=404,L]
-RewriteRule ^vendor/phpunit(/.*)?$ - [R=404,L]
-RewriteRule ^telescope(/.*)?$ - [R=404,L]
-RewriteRule ^horizon(/.*)?$ - [R=404,L]
-RewriteRule ^actuator(/.*)?$ - [R=404,L]
-RewriteRule ^\.htpasswd$ - [R=404,L]
+RewriteRule ^wp-admin(/.*)?$ - [F,L]
+RewriteRule ^wp-login\.php$ - [F,L]
+RewriteRule ^wp-config\.php$ - [F,L]
+RewriteRule ^xmlrpc\.php$ - [F,L]
+RewriteRule ^phpmyadmin(/.*)?$ - [F,L]
+RewriteRule ^pma(/.*)?$ - [F,L]
+RewriteRule ^admin\.php$ - [F,L]
+RewriteRule ^administrator(/.*)?$ - [F,L]
+RewriteRule ^shell\.php$ - [F,L]
+RewriteRule ^c99\.php$ - [F,L]
+RewriteRule ^r57\.php$ - [F,L]
+RewriteRule ^cmd\.php$ - [F,L]
+RewriteRule ^eval\.php$ - [F,L]
+RewriteRule ^webshell\.php$ - [F,L]
+RewriteRule ^setup\.php$ - [F,L]
+RewriteRule ^install\.php$ - [F,L]
+RewriteRule ^config\.php$ - [F,L]
+RewriteRule ^database\.php$ - [F,L]
+RewriteRule ^backup\.(zip|sql|tar\.gz)$ - [F,L]
+RewriteRule ^dump\.sql$ - [F,L]
+RewriteRule ^db\.sql$ - [F,L]
+RewriteRule ^cgi-bin(/.*)?$ - [F,L]
+RewriteRule ^vendor/phpunit(/.*)?$ - [F,L]
+RewriteRule ^telescope(/.*)?$ - [F,L]
+RewriteRule ^horizon(/.*)?$ - [F,L]
+RewriteRule ^actuator(/.*)?$ - [F,L]
+RewriteRule ^\.htpasswd$ - [F,L]
 
 # ── Bloquer les dossiers source serveur ──────────────────────────────────────
 RewriteRule ^server/ - [F,L]
@@ -60,7 +60,7 @@ RewriteRule ^vite\.config\.ts$ - [F,L]
 RewriteRule ^\.env$ - [F,L]
 RewriteRule ^\.env\..+$ - [F,L]
 
-# ── Bloquer par extension de fichier ─────────────────────────────────────────
+# ── Bloquer par extension de fichier (source brut) ───────────────────────────
 RewriteRule \.ts$ - [F,L]
 RewriteRule \.tsx$ - [F,L]
 RewriteRule \.map$ - [F,L]
@@ -69,3 +69,10 @@ RewriteRule \.cjs\.map$ - [F,L]
 # ── Bloquer tous les fichiers cachés (commençant par un point) ───────────────
 # Inclut .gitignore, .htaccess, .env, .git, etc.
 RewriteRule (^|/)\. - [F,L]
+
+# ── Pass-through vers Passenger / Node.js ────────────────────────────────────
+# Sert les fichiers statiques existants directement (assets, images, etc.)
+# Toutes les autres requêtes sont transmises à l'application Node.js.
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ - [QSA,L]
