@@ -202,12 +202,20 @@ const HONEYPOT_PATHS: string[] = [
   "/.DS_Store",
   "/backup.zip",
   "/backup.sql",
+  "/backup.tar.gz",
   "/dump.sql",
   "/db.sql",
   "/database.sql",
+  "/db_backup.sql",
   "/site.tar.gz",
   "/wwwroot.zip",
   "/sftp-config.json",
+  "/wp-config.php.bak",
+  "/wp-config.php~",
+  "/config.php.bak",
+  "/config.php~",
+  "/backup",
+  "/backups",
   "/.idea",
   "/boaform",             // Router exploit path
   "/Autodiscover",        // Exchange exploit
@@ -218,6 +226,29 @@ const HONEYPOT_PATHS: string[] = [
   "/telescope",           // Laravel Telescope
   "/horizon",             // Laravel Horizon
   "/debug/default/view",  // Yii debug
+  "/server-status",       // Apache mod_status
+  "/server-info",         // Apache mod_info
+  // API probe paths — these don't exist in this app; scanners probe them expecting
+  // Spring Boot / Django / Rails internals. Return 404 before the UA filter fires.
+  "/api/debug",
+  "/api/swagger",
+  "/api/graphql",
+  "/api/internal",
+  "/api/private",
+  "/api/admin",           // generic probe; real admin routes live under /api/admin/* with auth
+  "/graphql",
+  "/graphiql",
+  "/__graphql",
+  "/swagger",
+  "/swagger-ui",
+  "/swagger-ui.html",
+  "/swagger.json",
+  "/swagger.yaml",
+  "/openapi",
+  "/openapi.json",
+  "/openapi.yaml",
+  "/api-docs",
+  "/redoc",
 ];
 
 // ─── Patterns de chemins suspects (injection, traversal, etc.) ────────────
@@ -300,13 +331,13 @@ export function botGuard(req: Request, res: Response, next: NextFunction): void 
   // 0b. IPs de loopback — jamais bannies (health checks, dev local)
   const isLoopback = EXEMPT_IPS.includes(ip);
 
-  // 1. IP déjà bannie (sauf loopback)
-  if (!isLoopback && isIpBanned(ip)) {
-    res.status(403).json({ message: "Accès refusé." });
-    return;
-  }
-
-  // 2. Honeypot trap — ban 48h immédiat + persist DB + alerte Telegram (sauf loopback)
+  // 1. Honeypot trap — AVANT le check de ban IP, pour que les chemins honeypot
+  //    retournent toujours 404 même si l'IP est déjà bannie.
+  //    Raison : si on check le ban en premier, un scanner déjà banni reçoit 403
+  //    pour TOUS ses chemins (y compris les honeypots), révélant au scanner que
+  //    ces chemins "existent mais sont interdits" → vulnérabilité HIGH signalée.
+  //    En mettant le honeypot en premier, tous ces chemins retournent 404 sans
+  //    exception, quelle que soit l'IP.
   const isHoneypot = HONEYPOT_PATHS.some(
     (p) => pathLower === p.toLowerCase() || pathLower.startsWith(p.toLowerCase() + "/")
   );
@@ -320,6 +351,13 @@ export function botGuard(req: Request, res: Response, next: NextFunction): void 
       sendBotAlert(ip, rawPath, "Honeypot WordPress/PHP scan", 48);
     }
     res.status(404).send("Not Found");
+    return;
+  }
+
+  // 2. IP déjà bannie (sauf loopback) — retourne 404 (silencieux) plutôt que 403,
+  //    pour ne pas révéler à l'attaquant que son IP est reconnue et bannie.
+  if (!isLoopback && isIpBanned(ip)) {
+    res.status(404).end();
     return;
   }
 
