@@ -243,7 +243,6 @@ const HONEYPOT_PATHS: string[] = [
   "/api/graphql",
   "/api/internal",
   "/api/private",
-  "/api/admin",           // generic probe; real admin routes live under /api/admin/* with auth
   "/graphql",
   "/graphiql",
   "/__graphql",

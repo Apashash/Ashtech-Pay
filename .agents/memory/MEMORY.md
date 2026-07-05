@@ -1,2 +1,3 @@
 - [Admin TOTP mandatory](admin-totp-mandatory.md) — TOTP now enforced server-side in requireAdmin AND at login; no bypass possible; both OTP pages had disabled redirects that were removed.
 - [KYC guard trigger pgBouncer bug](kyc-guard-trigger.md) — sensitive-column guard trigger blocked is_verified updates on pgBouncer/Supavisor (application_name reset); fix: removed is_verified from blocked columns.
+- [botGuard IP-ban design](botguard-ip-ban-design.md) — no more IP bans for single bad-UA hits (CGNAT collateral damage); honeypot path list must never be a prefix of a real route or it self-bans the app.
