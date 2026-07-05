@@ -26,3 +26,21 @@ alone cannot validate the fix, since the vulnerability is in the Apache config, 
 
 Also remember: even after committing this fix, the actual Plesk production host must pull the latest code
 and restart before the fix takes effect there — Replit's environment has no control over that external host.
+
+**Diagnosing partial fixes from a re-scan:** if a follow-up scan shows some probe paths now 403 (e.g.
+package.json) but others still 200 (e.g. `/.git/HEAD`, `/actuator/env`, `/wp-config.php`), that's evidence
+production is running an *older intermediate* version of `.htaccess`/dist than what's currently committed —
+not that the fix approach is wrong. Ask the user to confirm they pulled the latest commit and restarted,
+rather than re-diagnosing from scratch.
+
+**False positives to expect from generic path scanners:** any path whose name matches sensitive keywords
+(`/wallet`, `/wallets`, `/transactions`, `/payments`, `/banking`, `/orders`, `/checkout`) will show HTTP 200
+in a scan simply because it's a legitimate SPA client route (wouter) — the SPA shell always returns 200 for
+unmatched client paths, and the real data behind them requires session auth at the API level. Don't block
+these in `.htaccess`/probe lists; blocking them would break real app functionality. Only block paths that
+are never real app routes.
+
+**Uploads passthrough gotcha:** `/uploads` is served by `express.static` in Node (KYC documents etc.), not
+by Apache directly — it must be added to the `.htaccess` passthrough alongside `/api/` (`RewriteRule
+^uploads/ - [L]`) or Apache's SPA fallback will intercept it and return `index.html` (200) instead of the
+actual file/Node 404, silently breaking uploads in production.

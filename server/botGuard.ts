@@ -269,11 +269,23 @@ const HONEYPOT_PATHS: string[] = [
   "/actuator",            // Spring Boot actuator
   "/console",             // H2/Grails consoles
   "/rest/v1",             // Supabase-style REST — not used by this app
+  "/realtime/v1",
+  "/storage/v1",
+  "/auth/v1",
   "/debug.log",
   "/logs",
   "/internal",
   "/private",
   "/debug",
+  "/__debug",
+  "/_debug",
+  "/trace",
+  "/.aws",
+  "/.aws/credentials",
+  "/.bzr",
+  "/.hg",
+  "/.gitconfig",
+  "/administrator/index.php",
   "/.DS_Store",
   "/backup.zip",
   "/backup.sql",

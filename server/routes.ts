@@ -1775,6 +1775,19 @@ export async function registerRoutes(
       "/install.php", "/backup", "/backups", "/backup.zip", "/backup.sql",
       "/backup.tar.gz", "/dump.sql", "/db.sql", "/database.sql", "/db_backup.sql",
       "/site.tar.gz", "/wwwroot.zip", "/sftp-config.json",
+      // Additional scanner probes (CMS, dev/ops leftovers, cloud creds, etc.)
+      "/drupal", "/joomla", "/flask-admin", "/django-admin", "/rails/info",
+      "/nginx_status", "/realtime/v1", "/storage/v1", "/auth/v1",
+      "/__debug", "/_debug", "/trace", "/.logs", "/var/log",
+      "/application.log", "/server.log", "/app.log", "/access.log", "/error.log", "/log",
+      "/qa", "/testing", "/test", "/staging", "/development", "/dev", "/hidden", "/secret",
+      "/webpack-stats.json", "/.nuxt", "/.next", "/vendor", "/.cache",
+      "/go.sum", "/go.mod", "/pipfile", "/pipfile.lock",
+      "/__status", "/_nodes", "/_cat/indices", "/archive", "/old",
+      "/www.zip", "/htdocs.zip", "/site.zip", "/website.zip",
+      "/.bzr", "/.hg", "/.gitconfig", "/.aws", "/.aws/credentials",
+      "/application.properties", "/application.yml",
+      "/administrator/index.php",
     ];
 
     const customAdminPath = process.env.VITE_ADMIN_PATH;
