@@ -228,6 +228,11 @@ const HONEYPOT_PATHS: string[] = [
   "/debug/default/view",  // Yii debug
   "/server-status",       // Apache mod_status
   "/server-info",         // Apache mod_info
+  // User/account probe paths — not real routes in this app
+  // (real auth routes: /login, /register; account UI: /dashboard/*)
+  "/user", "/users", "/user/login", "/user/register", "/user/profile",
+  "/profile", "/profiles", "/account", "/accounts",
+  "/customers", "/members", "/member",
   // API probe paths — these don't exist in this app; scanners probe them expecting
   // Spring Boot / Django / Rails internals. Return 404 before the UA filter fires.
   "/api/debug",

@@ -1741,6 +1741,11 @@ export async function registerRoutes(
       "/cpanel", "/whm", "/webmail",
       // Database UIs
       "/pma", "/phpmyadmin", "/adminer", "/dbadmin",
+      // User/account probe paths — not real routes in this app
+      // (real auth routes are /login, /register; account UI is at /dashboard/*)
+      "/user", "/users", "/user/login", "/user/register", "/user/profile",
+      "/profile", "/profiles", "/account", "/accounts",
+      "/customers", "/members", "/member",
       // Generic admin probes
       "/administrator", "/administration", "/administra",
       "/siteadmin", "/sitemanager",
