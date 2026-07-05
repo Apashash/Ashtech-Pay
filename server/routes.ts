@@ -3846,10 +3846,19 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Pays non trouvé" });
       }
 
-      // Source wallet = destination country's exact currency code.
-      // Use COUNTRY_CURRENCY (authoritative Swychr map) — country.currency in DB may be generic.
+      // txCurrency = the Swychr/provider-facing currency for the destination country.
+      // Use COUNTRY_CURRENCY (authoritative Swychr map) — country.currency in DB may be generic (e.g. "XOF" instead of "XOFB").
       // TG→XOFT, BJ→XOFB, SN→XOFS, CM→XAF, GA→XAFG, etc.
       const txCurrency = COUNTRY_CURRENCY[country.code] || country.currency || sender.preferredCurrency || "XAF";
+
+      // walletCurrency = the key used to look up / debit the sender's wallet.
+      // The frontend sends sourceCurrency = the wallet the user explicitly selected.
+      // Wallets may be stored under the generic code (e.g. "XOF") while txCurrency uses
+      // the country-specific variant (e.g. "XOFB").  Both are 1:1 CFA — accept sourceCurrency
+      // when it belongs to the same CFA family as txCurrency, otherwise fall back to txCurrency.
+      const walletCurrency = (sourceCurrency && sameCfaFamily(sourceCurrency, txCurrency))
+        ? sourceCurrency
+        : txCurrency;
 
       const fxRates = await loadFxRates();
       const minTransferSetting = await storage.getSetting("min_transfer");
@@ -3908,13 +3917,11 @@ export async function registerRoutes(
       const creditedAmount = senderPaysFees ? parsedAmount : parsedAmount - feeAmount;
       const totalAmount = senderPaysFees ? parsedAmount + feeAmount : parsedAmount;
 
-      // Debit the wallet that matches the destination country currency.
-      // Togo sender (XOFT) sending to Togo (XOFT) → primary wallet.
-      // Togo sender (XOFT) sending to Bénin (XOFB) → secondary XOFB wallet.
-      // Togo sender (XOFT) sending to Cameroun (XAF) → secondary XAF wallet.
-      // If insufficient in destination wallet → error (must convert first).
+      // Debit the wallet the sender selected (walletCurrency).
+      // walletCurrency may differ from txCurrency only in country suffix (e.g. "XOF" vs "XOFB")
+      // but both are 1:1 CFA — the sameCfaFamily check above ensures compatibility.
       const senderPrimaryCurrency = sender.preferredCurrency || "XAF";
-      const isPrimaryTransfer = (txCurrency === senderPrimaryCurrency);
+      const isPrimaryTransfer = sameCfaFamily(walletCurrency, senderPrimaryCurrency);
 
       if (isPrimaryTransfer) {
         if (parseFloat(sender.balance) < totalAmount) {
@@ -3923,21 +3930,21 @@ export async function registerRoutes(
           });
         }
       } else {
-        const senderWallet = await storage.getWallet(senderId, txCurrency);
+        const senderWallet = await storage.getWallet(senderId, walletCurrency);
         const walletBalance = senderWallet ? parseFloat(senderWallet.balance) : 0;
         if (walletBalance < totalAmount) {
           return res.status(400).json({
-            message: `Solde insuffisant dans votre compte ${txCurrency}. Vous avez ${walletBalance.toFixed(0)} ${txCurrency} — besoin de ${totalAmount.toFixed(0)} ${txCurrency}. Convertissez d'abord depuis votre compte ${senderPrimaryCurrency}.`,
+            message: `Solde insuffisant dans votre compte ${walletCurrency}. Vous avez ${walletBalance.toFixed(0)} ${walletCurrency} — besoin de ${totalAmount.toFixed(0)} ${walletCurrency}. Convertissez d'abord depuis votre compte ${senderPrimaryCurrency}.`,
           });
         }
       }
 
       // Debit the correct wallet immediately
-      console.log(`[Transfer] Sender=${senderId}, Amount=${parsedAmount}, Fee=${feeAmount}, Net=${creditedAmount} (${txCurrency})`);
+      console.log(`[Transfer] Sender=${senderId}, Amount=${parsedAmount}, Fee=${feeAmount}, Net=${creditedAmount} (${walletCurrency} → Swychr: ${txCurrency})`);
       if (isPrimaryTransfer) {
         await storage.updateUserBalance(senderId, -totalAmount);
       } else {
-        await storage.upsertWallet(senderId, txCurrency, -totalAmount);
+        await storage.upsertWallet(senderId, walletCurrency, -totalAmount);
       }
 
       // Create pending transaction
@@ -4013,7 +4020,7 @@ export async function registerRoutes(
             if (isPrimaryTransfer) {
               await storage.updateUserBalance(senderId, totalAmount);
             } else {
-              await storage.upsertWallet(senderId, txCurrency, totalAmount);
+              await storage.upsertWallet(senderId, walletCurrency, totalAmount);
             }
             return res.status(400).json({
               message: `Envoi PixPay non supporté pour cet opérateur (${operator?.name}) dans ce pays`,
@@ -4069,6 +4076,7 @@ export async function registerRoutes(
             countryCode:   transferCountryCode.toUpperCase(),
             txType:        "transfer_out",
             txCurrency:    txCurrency,
+            walletCurrency: walletCurrency,
           });
           notifyTransferSent({
             senderName: sender.fullName || sender.username,
@@ -4112,7 +4120,7 @@ export async function registerRoutes(
             if (isPrimaryTransfer) {
               await storage.updateUserBalance(senderId, totalAmount);
             } else {
-              await storage.upsertWallet(senderId, txCurrency, totalAmount);
+              await storage.upsertWallet(senderId, walletCurrency, totalAmount);
             }
             return res.status(400).json({
               message: `Le transfert a échoué: ${payoutResult.message}`,

@@ -425,10 +425,12 @@ export class DatabaseStorage implements IStorage {
 
   async refundToOriginalWallet(userId: string, txType: string, txCurrency: string, amount: number): Promise<void> {
     // Always refund to the exact wallet the transaction was debited from.
-    // Use the user's preferredCurrency to determine primary vs secondary wallet.
+    // Use sameCfaFamily to handle cases where the wallet was stored under a generic code
+    // (e.g. "XOF") while txCurrency is a country-specific variant (e.g. "XOFB") — both are 1:1 CFA.
+    const { sameCfaFamily } = await import("./walletHelper");
     const user = await this.getUser(userId);
     const userPrimary = user?.preferredCurrency || "XAF";
-    if (txCurrency === userPrimary) {
+    if (sameCfaFamily(txCurrency, userPrimary)) {
       await this.updateUserBalance(userId, amount);
     } else {
       await this.upsertWallet(userId, txCurrency, amount);

@@ -19,6 +19,8 @@ interface PendingPayout {
   countryCode:    string;
   txType:         string;
   txCurrency:     string;
+  /** The wallet key that was actually debited (may differ from txCurrency, e.g. "XOF" vs "XOFB"). Used for refunds. */
+  walletCurrency?: string;
 }
 
 const pendingPayouts = new Map<string, PendingPayout>();
@@ -134,7 +136,10 @@ async function processPayout(payout: PendingPayout, apiStatus: string) {
     } else {
       await storage.updateTransactionStatus(payout.transactionId, "failed");
       const refundAmount = parseFloat(payout.totalDebited || payout.amount);
-      await storage.refundToOriginalWallet(payout.userId, payout.txType, payout.txCurrency, refundAmount);
+      // Use walletCurrency (the key actually debited) when available; fall back to txCurrency.
+      // walletCurrency may differ from txCurrency when the wallet was stored under a generic code
+      // (e.g. "XOF") while the provider needed a country-specific variant (e.g. "XOFB").
+      await storage.refundToOriginalWallet(payout.userId, payout.txType, payout.walletCurrency || payout.txCurrency, refundAmount);
       await storage.createUserNotification({
         userId:        payout.userId,
         type:          "withdrawal_failed",
