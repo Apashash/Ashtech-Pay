@@ -70,6 +70,7 @@ import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserW
 import { createSwychrPayout, formatInternationalPhone, detectMethodFromPhone, fiatToPusd, pusdToFiatRate, convertFiatToPusd, getPayoutToken, COUNTRY_CURRENCY } from "./swychrPayout";
 import { addPendingPayout, removePendingPayout } from "./payoutPoller";
 import { addSSEClient, removeSSEClient, setActiveTicket, isUserOnline, getOnlineUserIds, getAdminViewingTicket, getUserViewingTicket, notifyUser, notifyAdmins, broadcastOnlineStatus, notifyUserForceLogout, notifyOtherSessionsForceLogout, notifyAllUsersForceLogout, notifySpecificSessionForceLogout } from "./sse";
+import { sendClean404 } from "./botGuard";
 import {
   notifyNewDeposit,
   notifyWithdrawalPendingManual,
@@ -1690,7 +1691,7 @@ export async function registerRoutes(
       // Also accept _apl (admin pending login) set during mid-login OTP step
       const sessionAdminPending = (req.session as any)?._apl;
       if (!req.userId && !sessionAdminPending) {
-        return res.status(404).end();
+        return sendClean404(res);
       }
       next();
     });
@@ -1782,11 +1783,11 @@ export async function registerRoutes(
       const p = normalisePath(req.path);
 
       // Block well-known non-app probe paths
-      if (isBlockedProbe(p)) return res.status(404).end();
+      if (isBlockedProbe(p)) return sendClean404(res);
 
       // Block "/admin" and sub-paths when a different secret path is configured
       if (defaultAdminBlocked && (p === "/admin" || p.startsWith("/admin/"))) {
-        return res.status(404).end();
+        return sendClean404(res);
       }
 
       next();

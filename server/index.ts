@@ -2,7 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import compression from "compression";
 import helmet from "helmet";
 import { globalLimiter } from "./rateLimiter";
-import { botGuard } from "./botGuard";
+import { botGuard, sendClean404 } from "./botGuard";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
@@ -106,7 +106,9 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 
   if (blocked) {
     // Always 404 — never 403. 403 signals the file exists; 404 does not.
-    return res.status(404).end();
+    // Serve a clean HTML 404 page (not a bare status/text) so automated
+    // scanners don't flag the response as an anomaly/false-positive.
+    return sendClean404(res);
   }
   next();
 });

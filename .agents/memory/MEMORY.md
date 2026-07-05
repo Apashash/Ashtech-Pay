@@ -1,3 +1,4 @@
 - [Admin TOTP mandatory](admin-totp-mandatory.md) — TOTP now enforced server-side in requireAdmin AND at login; no bypass possible; both OTP pages had disabled redirects that were removed.
 - [KYC guard trigger pgBouncer bug](kyc-guard-trigger.md) — sensitive-column guard trigger blocked is_verified updates on pgBouncer/Supavisor (application_name reset); fix: removed is_verified from blocked columns.
 - [botGuard/ipBlocker IP-ban design](botguard-ip-ban-design.md) — no whole-IP bans/lockouts from a single bad request or one account's failed logins (CGNAT collateral damage); honeypot paths must never prefix a real route; auth lockouts must be per-account first, IP-wide only at a much higher threshold.
+- [Clean 404 for scanner probe paths](clean-404-scanner-probes.md) — probe/honeypot paths must return a real branded HTML 404 page, not bare status/text, or scanners flag it as an anomaly.
