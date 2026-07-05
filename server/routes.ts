@@ -1695,6 +1695,85 @@ export async function registerRoutes(
     });
   }
 
+  // ─── Probe-path blocker ────────────────────────────────────────────────────
+  // Return 404 for paths that scanners commonly probe but that this app never
+  // serves. Without this the React SPA catch-all returns 200 for everything,
+  // making every probe path appear "accessible" to security scanners.
+  //
+  // Two categories:
+  //  1. Well-known non-app paths (WordPress, cPanel, phpMyAdmin, …) — always 404.
+  //  2. Default /admin/* paths — 404 when a custom VITE_ADMIN_PATH is configured,
+  //     so only the real secret path is reachable.
+  //
+  // Security notes:
+  //  - Paths are normalised (URI-decoded, double-slashes collapsed, lowercase)
+  //    before matching to prevent trivial encoding bypasses (%77p-admin, //wp-admin).
+  //  - All blocked prefixes use "exact OR starts-with-slash" logic so sub-paths
+  //    like /phpmyadmin/ and /pma/index.php are also caught.
+  {
+    /**
+     * Normalise a raw URL path for reliable probe matching:
+     *  1. Decode percent-encoding (catches %77p-admin → wp-admin)
+     *  2. Collapse runs of slashes (// → /)
+     *  3. Lower-case (case-insensitive comparison)
+     *
+     * Falls back to the original path if decoding throws (malformed URI).
+     */
+    function normalisePath(raw: string): string {
+      let decoded = raw;
+      try { decoded = decodeURIComponent(raw); } catch { /* keep raw */ }
+      return decoded.replace(/\/+/g, "/").toLowerCase();
+    }
+
+    // Paths (and their sub-paths) that are never part of this application.
+    // Each entry is treated as both an exact match AND a prefix (entry + "/…").
+    const PROBE_PREFIXES: readonly string[] = [
+      // WordPress
+      "/wp-admin", "/wp-login.php", "/wp-content", "/wp-includes",
+      // Hosting control panels
+      "/cpanel", "/whm", "/webmail",
+      // Database UIs
+      "/pma", "/phpmyadmin", "/adminer", "/dbadmin",
+      // Generic admin probes
+      "/administrator", "/administration", "/administra",
+      "/siteadmin", "/sitemanager",
+      "/admin1", "/admin2", "/admin123",
+      "/admin/login", "/admin/dashboard", "/admin/dash",
+      "/admin/panel", "/admin/portal", "/admin/console",
+      "/admin/config", "/admin/manage",
+      // Other common probes
+      "/shell", "/cmd", "/cgi-bin", "/xmlrpc.php",
+      "/.env", "/.git", "/.svn", "/.htaccess",
+    ];
+
+    const customAdminPath = process.env.VITE_ADMIN_PATH;
+    // When a custom admin path is configured (and it's not the generic "/admin"),
+    // all requests that start with "/admin" but don't match the real path get 404.
+    const defaultAdminBlocked =
+      customAdminPath && customAdminPath !== "/admin" && customAdminPath !== "/admin/";
+
+    /** True if the normalised path matches a blocked prefix exactly or as a sub-path. */
+    function isBlockedProbe(p: string): boolean {
+      return PROBE_PREFIXES.some(prefix => p === prefix || p.startsWith(prefix + "/"));
+    }
+
+    app.use((req: Request, res: Response, next: NextFunction) => {
+      if (req.path.startsWith("/api/")) return next();
+
+      const p = normalisePath(req.path);
+
+      // Block well-known non-app probe paths
+      if (isBlockedProbe(p)) return res.status(404).end();
+
+      // Block "/admin" and sub-paths when a different secret path is configured
+      if (defaultAdminBlocked && (p === "/admin" || p.startsWith("/admin/"))) {
+        return res.status(404).end();
+      }
+
+      next();
+    });
+  }
+
   // File upload endpoint using local storage
   app.post("/api/uploads/local", requireAuth, upload.single("file"), (req, res) => {
     try {
