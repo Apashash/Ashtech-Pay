@@ -25,3 +25,17 @@ even for the app's own admin panel, causing self-lockout.
 **How to apply:** before adding any path to `HONEYPOT_PATHS` in `server/botGuard.ts`, grep
 `server/routes.ts` for real routes starting with that same prefix. If any exist, don't add the bare
 prefix — only add the exact non-existent path.
+
+## Same collateral-damage pattern also existed in `server/ipBlocker.ts` (auth rate limit)
+The auth-failure rate limiter blocked the *whole IP* for 30 min after 4 failed logins, regardless of
+which account was targeted. On a shared CGNAT IP, one person mistyping their password 4 times locked
+out every other user on that IP — including redirecting `/login`/`/register` straight to a "blocked"
+page server-side, and force-logging-out already-authenticated users on that IP via `/api/auth/ping`.
+
+**Decision:** split into two tiers — per-ACCOUNT (identifier) lockout at the original low threshold (4
+attempts/30min), which is what actually stops brute-forcing one account, plus a much higher per-IP
+threshold (20 attempts) reserved for real distributed/credential-stuffing attacks. `recordAuthFailure`
+returns a `scope: "identifier" | "ip"` so session-revocation-by-IP only fires for genuine IP-wide blocks.
+
+**Why:** any shared-IP-punishing security control on this app's African mobile-network user base is a
+recurring bug category — check for it whenever adding new rate-limiting/ban logic keyed on bare IP.

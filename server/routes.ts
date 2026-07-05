@@ -4,6 +4,7 @@ import { storage, normalizePhone } from "./storage";
 import { audit, AUDIT } from "./auditLogger";
 import {
   checkAuthRateLimit,
+  checkIdentifierRateLimit,
   recordAuthFailure,
   clearAuthAttempts,
   getBlockedIps,
@@ -2381,6 +2382,18 @@ export async function registerRoutes(
 
       const data = loginSchema.parse(req.body);
 
+      // Per-account lockout (independent of IP) — stops brute-forcing one
+      // account's password without punishing other users on a shared IP
+      // (CGNAT / mobile carrier networks).
+      const identCheck = checkIdentifierRateLimit(data.identifier);
+      if (identCheck.blocked) {
+        return res.status(429).json({
+          message: "Trop de tentatives incorrectes. Accès bloqué pendant 30 minutes.",
+          blocked: true,
+          retryAfter: identCheck.retryAfter,
+        });
+      }
+
       const user = await storage.getUserByEmailOrPhone(data.identifier);
       // ── Timing-safe comparison (CWE-307 / user enumeration fix) ─────────────
       // Always run bcrypt regardless of whether the user exists, so response
@@ -2412,14 +2425,17 @@ export async function registerRoutes(
         if (user?.role === "admin") {
           notifyAdminLoginFailed({ identifier: data.identifier, ip }).catch(() => {});
         }
-        // Si l'IP est bloquée → déconnecter TOUS les utilisateurs connectés depuis cette IP
-        // (y compris ceux déjà connectés dans d'autres navigateurs/onglets)
-        if (failure.blocked && failure.retryAfter) {
+        // Ne déconnecter TOUTE l'IP que si c'est réellement le blocage IP global
+        // qui a été déclenché (scope "ip" — attaque distribuée sur plusieurs
+        // comptes). Un blocage sur UN SEUL compte (scope "identifier") ne doit
+        // jamais faire sauter les autres utilisateurs partageant la même IP
+        // (réseaux mobiles/CGNAT en Afrique).
+        if (failure.blocked && failure.retryAfter && failure.scope === "ip") {
           revokeSessionsByIp(ip, failure.retryAfter).catch(() => {});
-          // Également détruire les sessions de l'utilisateur ciblé si connu
-          if (user) {
-            destroyUserSessions(user.id, failure.retryAfter).catch(() => {});
-          }
+        }
+        // Détruire les sessions du compte ciblé dans tous les cas de blocage.
+        if (failure.blocked && failure.retryAfter && user) {
+          destroyUserSessions(user.id, failure.retryAfter).catch(() => {});
         }
 
         return res.status(failure.blocked ? 429 : 401).json({
@@ -2436,7 +2452,7 @@ export async function registerRoutes(
         });
       }
 
-      await clearAuthAttempts(ip);
+      await clearAuthAttempts(ip, data.identifier);
 
       // Admin/support/finance log in like normal users.
       // TOTP is only required when accessing the admin panel (requireAdmin middleware).
