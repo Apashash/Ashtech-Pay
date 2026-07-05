@@ -71,8 +71,27 @@ export async function setupVite(server: Server, app: Express) {
         `src="/src/main.tsx"`,
         `src="/src/main.tsx?v=${nanoid()}"`,
       );
-      template = template.replace("</head>", `${adminInjection}</head>`);
-      const page = await vite.transformIndexHtml(url, template);
+      // Run Vite's HTML transforms first (plugins may rewrite the template).
+      let page = await vite.transformIndexHtml(url, template);
+
+      // Only inject the admin path on admin pages and admin auth-flow pages
+      // (OTP/verify). Public pages must never receive this injection —
+      // previously it was global, exposing the secret path to scanners.
+      // Injected AFTER transformIndexHtml so Vite plugins cannot strip it.
+      // Boundary-safe check: exact match or "adminPath/" prefix so a path
+      // like "/secret-other" never matches admin path "/secret".
+      // Use req.originalUrl (already captured as `url`) instead of req.path —
+      // in app.use("*", ...) Express may set req.path to "/" rather than the
+      // full request path. Strip the query string for clean comparison.
+      const reqPathOnly = url.split("?")[0];
+      const ADMIN_AUTH_PATHS = ["/admin-login-otp", "/admin-panel-verify"];
+      const isAdminPage =
+        reqPathOnly === adminPath ||
+        reqPathOnly.startsWith(adminPath + "/") ||
+        ADMIN_AUTH_PATHS.some(p => reqPathOnly === p || reqPathOnly.startsWith(p + "/"));
+      if (isAdminPage) {
+        page = page.replace("</head>", `${adminInjection}</head>`);
+      }
       res.status(200).set({ "Content-Type": "text/html" }).end(page);
     } catch (e) {
       vite.ssrFixStacktrace(e as Error);

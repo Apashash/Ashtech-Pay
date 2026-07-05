@@ -27,15 +27,35 @@ export function serveStatic(app: Express) {
   const adminPath = process.env.VITE_ADMIN_PATH || "/admin";
   const adminInjection = `<script>window.__ADMIN_PATH__="${adminPath}"</script>`;
 
-  function injectAdminPath(html: string): string {
-    return html.replace("</head>", `${adminInjection}</head>`);
+  // Auth-flow pages outside the secret admin prefix that still need
+  // the admin path so post-OTP redirects go to the correct URL.
+  const ADMIN_AUTH_PATHS = ["/admin-login-otp", "/admin-panel-verify"];
+
+  /**
+   * Returns true when the request should receive the admin-path injection.
+   *
+   * Uses req.originalUrl (query-stripped) instead of req.path because
+   * app.use("*") in Express sets req.path to "/" rather than the full path.
+   * Boundary-safe: exact match or "<adminPath>/" prefix so "/secret-other"
+   * never matches admin path "/secret".
+   */
+  function isAdminRequest(originalUrl: string): boolean {
+    const p = originalUrl.split("?")[0];
+    return (
+      p === adminPath ||
+      p.startsWith(adminPath + "/") ||
+      ADMIN_AUTH_PATHS.some(a => p === a || p.startsWith(a + "/"))
+    );
   }
 
   // Serve payment pages without og:image so sharing shows no preview image
-  app.get(["/pay/:slug", "/hpay/:id"], (_req, res) => {
+  app.get(["/pay/:slug", "/hpay/:id"], (req, res) => {
     const indexPath = path.resolve(distPath, "index.html");
     let html = fs.readFileSync(indexPath, "utf-8");
-    html = injectAdminPath(html)
+    if (isAdminRequest(req.originalUrl)) {
+      html = html.replace("</head>", `${adminInjection}</head>`);
+    }
+    html = html
       .replace(/<meta property="og:image"[^>]*>/g, "")
       .replace(/<meta property="og:image:[^"]*"[^>]*>/g, "")
       .replace(/<meta name="twitter:image"[^>]*>/g, "")
@@ -43,10 +63,13 @@ export function serveStatic(app: Express) {
     res.set("Content-Type", "text/html").send(html);
   });
 
-  // fall through to index.html — inject admin path at runtime
-  app.use("*", (_req, res) => {
+  // fall through to index.html — only inject admin path on admin/auth-flow pages
+  app.use("*", (req, res) => {
     const indexPath = path.resolve(distPath, "index.html");
-    const html = injectAdminPath(fs.readFileSync(indexPath, "utf-8"));
+    let html = fs.readFileSync(indexPath, "utf-8");
+    if (isAdminRequest(req.originalUrl)) {
+      html = html.replace("</head>", `${adminInjection}</head>`);
+    }
     res.set("Content-Type", "text/html").send(html);
   });
 }
