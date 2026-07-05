@@ -1759,11 +1759,22 @@ export async function registerRoutes(
       "/shell", "/cmd", "/cgi-bin", "/xmlrpc.php",
       // Dotfiles and project metadata — leak repo structure / dependency info
       "/.env", "/.git", "/.svn", "/.htaccess", "/.gitignore", "/.gitmodules",
-      "/.gitattributes", "/.npmrc", "/.yarnrc", "/.dockerignore",
+      "/.gitattributes", "/.npmrc", "/.yarnrc", "/.dockerignore", "/.ssh",
+      "/.idea", "/.ds_store", "/.htpasswd",
       "/package.json", "/package-lock.json", "/yarn.lock", "/pnpm-lock.yaml",
       "/composer.json", "/composer.lock", "/gemfile", "/gemfile.lock",
       "/requirements.txt", "/pyproject.toml", "/dockerfile", "/docker-compose.yml",
       "/docker-compose.yaml", "/makefile",
+      // Framework/ops internals never exposed by this app
+      "/actuator", "/rest/v1", "/graphql", "/graphiql", "/__graphql",
+      "/swagger", "/swagger-ui", "/swagger-ui.html", "/swagger.json", "/swagger.yaml",
+      "/openapi", "/openapi.json", "/openapi.yaml", "/api-docs", "/redoc",
+      "/internal", "/private", "/debug", "/debug.log", "/logs",
+      "/wp-json", "/wp-config.php", "/shell.php", "/cmd.php", "/c99.php", "/r57.php",
+      "/eval.php", "/webshell.php", "/config.php", "/database.php", "/setup.php",
+      "/install.php", "/backup", "/backups", "/backup.zip", "/backup.sql",
+      "/backup.tar.gz", "/dump.sql", "/db.sql", "/database.sql", "/db_backup.sql",
+      "/site.tar.gz", "/wwwroot.zip", "/sftp-config.json",
     ];
 
     const customAdminPath = process.env.VITE_ADMIN_PATH;

@@ -1,14 +1,129 @@
+# =============================================================================
+# .htaccess — Ashtech Pay — servi depuis dist/public en production (Plesk)
+#
+# IMPORTANT: ce fichier est copié tel quel dans dist/public/.htaccess au build.
+# Sans les règles de blocage ci-dessous, Apache réécrit TOUTE requête non-fichier
+# vers index.html (SPA fallback) AVANT même que Node.js/Passenger ne voie la
+# requête — ce qui fait répondre 200 sur /.env, /wp-admin, /.git/config, etc.
+# et déclenche de faux rapports "CRITIQUE" dans les scans de sécurité.
+#
+# NOTE: Toujours utiliser [F,L] (403 Forbidden) pour bloquer — JAMAIS [R=404,L].
+# [R=404,L] avec substitution "-" envoie un Location header vers la même URL,
+# créant une boucle vide que Safari iOS interprète comme un téléchargement (Zero KB).
+# =============================================================================
+
 Options -Indexes -MultiViews
 RewriteEngine On
 RewriteBase /
 
-# Servir les fichiers et dossiers existants directement (assets, images, etc.)
+# ── Bloquer les scanners de bots / WordPress / exploits connus ───────────────
+RewriteRule ^wp-admin(/.*)?$ - [F,L]
+RewriteRule ^wp-login\.php$ - [F,L]
+RewriteRule ^wp-config\.php(\.bak|~)?$ - [F,L]
+RewriteRule ^wp-content(/.*)?$ - [F,L]
+RewriteRule ^wp-includes(/.*)?$ - [F,L]
+RewriteRule ^wp-json(/.*)?$ - [F,L]
+RewriteRule ^xmlrpc\.php$ - [F,L]
+RewriteRule ^phpmyadmin(/.*)?$ - [F,L]
+RewriteRule ^pma(/.*)?$ - [F,L]
+RewriteRule ^adminer(/.*)?$ - [F,L]
+RewriteRule ^dbadmin(/.*)?$ - [F,L]
+RewriteRule ^admin\.php$ - [F,L]
+RewriteRule ^administrator(/.*)?$ - [F,L]
+RewriteRule ^cpanel(/.*)?$ - [F,L]
+RewriteRule ^whm(/.*)?$ - [F,L]
+RewriteRule ^webmail(/.*)?$ - [F,L]
+RewriteRule ^shell\.php$ - [F,L]
+RewriteRule ^c99\.php$ - [F,L]
+RewriteRule ^r57\.php$ - [F,L]
+RewriteRule ^cmd\.php$ - [F,L]
+RewriteRule ^eval\.php$ - [F,L]
+RewriteRule ^webshell\.php$ - [F,L]
+RewriteRule ^setup\.php$ - [F,L]
+RewriteRule ^install\.php$ - [F,L]
+RewriteRule ^config\.php(\.bak|~)?$ - [F,L]
+RewriteRule ^database\.php$ - [F,L]
+RewriteRule ^backup\.(zip|sql|tar\.gz)$ - [F,L]
+RewriteRule ^(db_backup|db|dump|database|site)\.(sql|tar\.gz|zip)$ - [F,L]
+RewriteRule ^wwwroot\.zip$ - [F,L]
+RewriteRule ^sftp-config\.json$ - [F,L]
+RewriteRule ^cgi-bin(/.*)?$ - [F,L]
+RewriteRule ^vendor/phpunit(/.*)?$ - [F,L]
+RewriteRule ^telescope(/.*)?$ - [F,L]
+RewriteRule ^horizon(/.*)?$ - [F,L]
+RewriteRule ^actuator(/.*)?$ - [F,L]
+RewriteRule ^solr/admin(/.*)?$ - [F,L]
+RewriteRule ^manager/html(/.*)?$ - [F,L]
+RewriteRule ^console(/.*)?$ - [F,L]
+RewriteRule ^server-status$ - [F,L]
+RewriteRule ^server-info$ - [F,L]
+RewriteRule ^boaform(/.*)?$ - [F,L]
+RewriteRule ^autodiscover(/.*)?$ - [F,L]
+RewriteRule ^owa(/.*)?$ - [F,L]
+RewriteRule ^remote/login(/.*)?$ - [F,L]
+
+# ── API-style probe endpoints qui n'existent pas dans cette app ──────────────
+RewriteRule ^rest/v1(/.*)?$ - [F,L]
+RewriteRule ^graphql$ - [F,L]
+RewriteRule ^graphiql$ - [F,L]
+RewriteRule ^__graphql$ - [F,L]
+RewriteRule ^swagger(-ui(\.html)?)?$ - [F,L]
+RewriteRule ^swagger\.(json|yaml)$ - [F,L]
+RewriteRule ^openapi(\.(json|yaml))?$ - [F,L]
+RewriteRule ^api-docs$ - [F,L]
+RewriteRule ^redoc$ - [F,L]
+RewriteRule ^internal$ - [F,L]
+RewriteRule ^private$ - [F,L]
+RewriteRule ^debug$ - [F,L]
+RewriteRule ^debug\.log$ - [F,L]
+RewriteRule ^logs(/.*)?$ - [F,L]
+
+# ── Bloquer les dossiers source serveur ──────────────────────────────────────
+RewriteRule ^server/ - [F,L]
+RewriteRule ^shared/ - [F,L]
+RewriteRule ^node_modules/ - [F,L]
+RewriteRule ^migrations/ - [F,L]
+RewriteRule ^script/ - [F,L]
+RewriteRule ^attached_assets/ - [F,L]
+RewriteRule ^\.git/ - [F,L]
+RewriteRule ^\.git$ - [F,L]
+RewriteRule ^\.svn(/.*)?$ - [F,L]
+RewriteRule ^\.idea(/.*)?$ - [F,L]
+RewriteRule ^\.ssh(/.*)?$ - [F,L]
+RewriteRule ^backup(s)?(/.*)?$ - [F,L]
+
+# ── Bloquer les fichiers sensibles à la racine ───────────────────────────────
+RewriteRule ^package\.json$ - [F,L]
+RewriteRule ^package-lock\.json$ - [F,L]
+RewriteRule ^yarn\.lock$ - [F,L]
+RewriteRule ^pnpm-lock\.yaml$ - [F,L]
+RewriteRule ^tsconfig\.json$ - [F,L]
+RewriteRule ^drizzle\.config\.ts$ - [F,L]
+RewriteRule ^vite\.config\.ts$ - [F,L]
+RewriteRule ^docker-compose\.ya?ml$ - [F,L]
+RewriteRule ^dockerfile$ - [NC,F,L]
+RewriteRule ^makefile$ - [NC,F,L]
+RewriteRule ^\.env$ - [F,L]
+RewriteRule ^\.env\..+$ - [F,L]
+RewriteRule ^\.htpasswd$ - [F,L]
+
+# ── Bloquer par extension de fichier (source brut) ───────────────────────────
+RewriteRule \.ts$ - [F,L]
+RewriteRule \.tsx$ - [F,L]
+RewriteRule \.map$ - [F,L]
+RewriteRule \.cjs\.map$ - [F,L]
+
+# ── Bloquer tous les fichiers/dossiers cachés (commençant par un point) ─────
+# Inclut .gitignore, .htaccess, .env, .git, .DS_Store, etc.
+RewriteRule (^|/)\. - [F,L]
+
+# ── Servir les fichiers et dossiers existants directement (assets, images) ──
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 
-# Ne pas réécrire les routes API (laisser passer vers Node.js/Passenger)
+# ── Ne pas réécrire les routes API (laisser passer vers Node.js/Passenger) ──
 RewriteRule ^api/ - [L]
 
-# Toutes les autres routes → index.html (SPA routing)
+# ── Toutes les autres routes → index.html (SPA routing) ─────────────────────
 RewriteRule ^ index.html [QSA,L]

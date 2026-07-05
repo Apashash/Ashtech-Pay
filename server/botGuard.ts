@@ -244,8 +244,11 @@ const HONEYPOT_PATHS: string[] = [
   "/.env",
   "/.env.local",
   "/.env.production",
+  "/.env.development",
+  "/.env.backup",
   "/.git",
   "/.svn",
+  "/.ssh",
   "/xmlrpc.php",
   "/setup.php",
   "/install.php",
@@ -265,6 +268,12 @@ const HONEYPOT_PATHS: string[] = [
   "/solr/admin",          // Solr admin
   "/actuator",            // Spring Boot actuator
   "/console",             // H2/Grails consoles
+  "/rest/v1",             // Supabase-style REST — not used by this app
+  "/debug.log",
+  "/logs",
+  "/internal",
+  "/private",
+  "/debug",
   "/.DS_Store",
   "/backup.zip",
   "/backup.sql",
