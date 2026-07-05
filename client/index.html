@@ -52,7 +52,7 @@
   </script>
   <script>
     (function() {
-      var TIMEOUT_MS = 12000;
+      var TIMEOUT_MS = 25000;
       var shown = false;
       function showFallback(msg) {
         if (shown) return;
@@ -70,7 +70,7 @@
         showFallback(msg);
       });
       setTimeout(function() {
-        showFallback('Le chargement a pris trop de temps. Vérifiez votre connexion.');
+        showFallback('Le chargement a pris trop de temps. Vérifiez votre connexion ou visitez /api/ping pour diagnostiquer le serveur.');
       }, TIMEOUT_MS);
     })();
   </script>

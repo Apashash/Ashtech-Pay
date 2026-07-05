@@ -52,7 +52,7 @@
   </script>
   <script>
     (function() {
-      var TIMEOUT_MS = 12000;
+      var TIMEOUT_MS = 25000;
       var shown = false;
       function showFallback(msg) {
         if (shown) return;
@@ -70,11 +70,16 @@
         showFallback(msg);
       });
       setTimeout(function() {
-        showFallback('Le chargement a pris trop de temps. Vérifiez votre connexion.');
+        showFallback('Le chargement a pris trop de temps. Vérifiez votre connexion ou visitez /api/ping pour diagnostiquer le serveur.');
       }, TIMEOUT_MS);
     })();
   </script>
-    <script type="module" crossorigin src="/assets/index-415EMaFa.js"></script>
+    <script type="module" crossorigin src="/assets/index-B8m1MYs5.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/vendor-misc-ChYWVvQ2.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-query-CieuxKQ_.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-ui-BzKubs1B.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-charts-CU30tka_.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-form-C4j6PV5H.js">
     <link rel="stylesheet" crossorigin href="/assets/index-DNfCEKM4.css">
   </head>
   <body>

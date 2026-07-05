@@ -1,4 +1,5 @@
 import express, { type Request, Response, NextFunction } from "express";
+import compression from "compression";
 import helmet from "helmet";
 import { globalLimiter } from "./rateLimiter";
 import { botGuard } from "./botGuard";
@@ -149,6 +150,18 @@ app.use(
 app.use((_req, res, next) => {
   res.setHeader("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
   next();
+});
+
+// ── Performance: Gzip compression for all responses ──────────────────────────
+// Compresses JS/CSS/HTML assets: 2.8MB JS bundle → ~748KB over the wire.
+// Critical for mobile users in Africa on limited LTE connections.
+app.use(compression());
+
+// ── Diagnostic: Public ping endpoint (no auth, no DB) ────────────────────────
+// Used to check if Node.js is running on the production server.
+// Visit https://ashtechpay.top/api/ping to verify server health.
+app.get("/api/ping", (_req, res) => {
+  res.json({ ok: true, uptime: Math.floor(process.uptime()), env: process.env.NODE_ENV || "development" });
 });
 
 // ── Security: Bot guard (UA check, honeypot, path injection, IP ban) ─────────
