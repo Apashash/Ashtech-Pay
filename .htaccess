@@ -4,9 +4,9 @@
 # Passenger (Plesk Node.js) gère le routage vers l'application.
 # Ce fichier bloque uniquement l'accès direct aux fichiers source.
 #
-# IMPORTANT: Utiliser [R=404,L] et non [F,L] — le flag [F] retourne 403
-# (Forbidden) ce qui signale aux scanners que le fichier EXISTE mais est
-# protégé. Le flag [R=404] retourne 404 (Not Found) ce qui ne révèle rien.
+# NOTE: [F,L] retourne 403 Forbidden (standard Apache, comportement stable).
+# [R=404,L] avec substitution "-" cause des téléchargements intempestifs dans
+# certains navigateurs (Location: header envoyé sur même URL = boucle vide).
 # =============================================================================
 
 Options -Indexes
@@ -42,30 +42,30 @@ RewriteRule ^actuator(/.*)?$ - [R=404,L]
 RewriteRule ^\.htpasswd$ - [R=404,L]
 
 # ── Bloquer les dossiers source serveur ──────────────────────────────────────
-RewriteRule ^server/ - [R=404,L]
-RewriteRule ^shared/ - [R=404,L]
-RewriteRule ^node_modules/ - [R=404,L]
-RewriteRule ^migrations/ - [R=404,L]
-RewriteRule ^script/ - [R=404,L]
-RewriteRule ^attached_assets/ - [R=404,L]
-RewriteRule ^\.git/ - [R=404,L]
-RewriteRule ^\.git$ - [R=404,L]
+RewriteRule ^server/ - [F,L]
+RewriteRule ^shared/ - [F,L]
+RewriteRule ^node_modules/ - [F,L]
+RewriteRule ^migrations/ - [F,L]
+RewriteRule ^script/ - [F,L]
+RewriteRule ^attached_assets/ - [F,L]
+RewriteRule ^\.git/ - [F,L]
+RewriteRule ^\.git$ - [F,L]
 
 # ── Bloquer les fichiers sensibles à la racine ───────────────────────────────
-RewriteRule ^package\.json$ - [R=404,L]
-RewriteRule ^package-lock\.json$ - [R=404,L]
-RewriteRule ^tsconfig\.json$ - [R=404,L]
-RewriteRule ^drizzle\.config\.ts$ - [R=404,L]
-RewriteRule ^vite\.config\.ts$ - [R=404,L]
-RewriteRule ^\.env$ - [R=404,L]
-RewriteRule ^\.env\..+$ - [R=404,L]
+RewriteRule ^package\.json$ - [F,L]
+RewriteRule ^package-lock\.json$ - [F,L]
+RewriteRule ^tsconfig\.json$ - [F,L]
+RewriteRule ^drizzle\.config\.ts$ - [F,L]
+RewriteRule ^vite\.config\.ts$ - [F,L]
+RewriteRule ^\.env$ - [F,L]
+RewriteRule ^\.env\..+$ - [F,L]
 
 # ── Bloquer par extension de fichier ─────────────────────────────────────────
-RewriteRule \.ts$ - [R=404,L]
-RewriteRule \.tsx$ - [R=404,L]
-RewriteRule \.map$ - [R=404,L]
-RewriteRule \.cjs\.map$ - [R=404,L]
+RewriteRule \.ts$ - [F,L]
+RewriteRule \.tsx$ - [F,L]
+RewriteRule \.map$ - [F,L]
+RewriteRule \.cjs\.map$ - [F,L]
 
 # ── Bloquer tous les fichiers cachés (commençant par un point) ───────────────
 # Inclut .gitignore, .htaccess, .env, .git, etc.
-RewriteRule (^|/)\. - [R=404,L]
+RewriteRule (^|/)\. - [F,L]
