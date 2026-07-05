@@ -110,7 +110,9 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 const isHttps = isProd || !!process.env.REPL_ID;
 app.use(
   helmet({
-    contentSecurityPolicy: isProd
+    // CSP is enabled on all HTTPS contexts (production + Replit preview).
+    // Without this, scanners on *.replit.app flag the missing header as HIGH.
+    contentSecurityPolicy: isHttps
       ? {
           directives: {
             defaultSrc: ["'self'"],

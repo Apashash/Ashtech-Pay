@@ -1713,16 +1713,23 @@ export async function registerRoutes(
   {
     /**
      * Normalise a raw URL path for reliable probe matching:
-     *  1. Decode percent-encoding (catches %77p-admin → wp-admin)
+     *  1. Iteratively decode percent-encoding until stable (catches double-encoded
+     *     bypasses like /%252eenv → /%2eenv → /.env)
      *  2. Collapse runs of slashes (// → /)
-     *  3. Lower-case (case-insensitive comparison)
+     *  3. Lower-case for case-insensitive comparison
      *
-     * Falls back to the original path if decoding throws (malformed URI).
+     * Decoding stops after 5 passes or when the string no longer changes.
+     * Falls back to the previous value if a decode pass throws (malformed URI).
      */
     function normalisePath(raw: string): string {
-      let decoded = raw;
-      try { decoded = decodeURIComponent(raw); } catch { /* keep raw */ }
-      return decoded.replace(/\/+/g, "/").toLowerCase();
+      let current = raw;
+      for (let i = 0; i < 5; i++) {
+        let next = current;
+        try { next = decodeURIComponent(current); } catch { break; }
+        if (next === current) break;
+        current = next;
+      }
+      return current.replace(/\/+/g, "/").toLowerCase();
     }
 
     // Paths (and their sub-paths) that are never part of this application.
@@ -1743,7 +1750,13 @@ export async function registerRoutes(
       "/admin/config", "/admin/manage",
       // Other common probes
       "/shell", "/cmd", "/cgi-bin", "/xmlrpc.php",
-      "/.env", "/.git", "/.svn", "/.htaccess",
+      // Dotfiles and project metadata — leak repo structure / dependency info
+      "/.env", "/.git", "/.svn", "/.htaccess", "/.gitignore", "/.gitmodules",
+      "/.gitattributes", "/.npmrc", "/.yarnrc", "/.dockerignore",
+      "/package.json", "/package-lock.json", "/yarn.lock", "/pnpm-lock.yaml",
+      "/composer.json", "/composer.lock", "/gemfile", "/gemfile.lock",
+      "/requirements.txt", "/pyproject.toml", "/dockerfile", "/docker-compose.yml",
+      "/docker-compose.yaml", "/makefile",
     ];
 
     const customAdminPath = process.env.VITE_ADMIN_PATH;
