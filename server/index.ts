@@ -134,6 +134,10 @@ app.use(
       : false,
     crossOriginEmbedderPolicy: false,
     hsts: isHttps ? { maxAge: 31536000, includeSubDomains: true } : false,
+    // Disable X-Download-Options: noopen — legacy IE-only header that causes
+    // Safari iOS and some mobile browsers to show a download prompt instead
+    // of rendering the page inline.
+    xDownloadOptions: false,
   })
 );
 
