@@ -111,17 +111,11 @@
     <link rel="modulepreload" crossorigin href="/assets/vendor-form-C4j6PV5H.js">
     <link rel="stylesheet" crossorigin href="/assets/index-DNfCEKM4.css">
   </head>
-  <body>
-    <!-- Shell de chargement HTML pur — visible immédiatement, sans attendre JS/CSS.
-         React le remplace dès que l'app monte. Garantit qu'on ne voit jamais écran blanc. -->
+  <body style="background:#0B0E11;margin:0;">
+    <!-- Shell de chargement HTML pur — juste le fond, sans spinner, pour un affichage
+         immédiat et instantané. React remplace le contenu dès que l'app monte. -->
     <div id="root">
-      <div id="__loading_shell__" style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0B0E11;">
-        <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" style="animation:spin 1s linear infinite;" aria-hidden="true">
-          <circle cx="24" cy="24" r="20" stroke="#1E2329" stroke-width="4"/>
-          <path d="M24 4a20 20 0 0 1 20 20" stroke="#F59E0B" stroke-width="4" stroke-linecap="round"/>
-        </svg>
-        <style>#__loading_shell__{opacity:1;transition:opacity .2s}@keyframes spin{to{transform:rotate(360deg)}}</style>
-      </div>
+      <div id="__loading_shell__" style="min-height:100vh;background:#0B0E11;"></div>
     </div>
   </body>
 </html>
