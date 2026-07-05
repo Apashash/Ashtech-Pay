@@ -60,12 +60,15 @@ function sendBotAlert(ip: string, path: string, reason: string, durationH: numbe
   alertCooldown.set(ip, Date.now());
 
   const timestamp = new Date().toLocaleString("fr-FR", { timeZone: "Africa/Douala" });
+  const banLine = durationH > 0
+    ? `⏱️ IP bannie pour: <b>${durationH}h</b>\n`
+    : `⏱️ Requête rejetée (pas de ban IP)\n`;
   const msg =
     `🤖 <b>Bot/Scanner bloqué</b>\n\n` +
     `🔴 IP: <code>${ip}</code>\n` +
     `📂 Chemin: <code>${path}</code>\n` +
     `⚠️ Raison: ${reason}\n` +
-    `⏱️ Banni pour: <b>${durationH}h</b>\n` +
+    banLine +
     `🕐 ${timestamp}`;
 
   sendMessage(msg).catch(() => {});
@@ -397,14 +400,15 @@ export function botGuard(req: Request, res: Response, next: NextFunction): void 
         return;
       }
 
-      // UA d'outil malveillant connu → ban 12h + persist + alerte
+      // UA d'outil malveillant connu → rejet de CETTE requête uniquement (pas de ban IP).
+      // Raison : sur les réseaux mobiles africains (CGNAT/LTE), des milliers d'utilisateurs
+      // légitimes partagent la même IP publique. Bannir toute l'IP pour un UA suspect
+      // bloquerait aussi tous les vrais utilisateurs derrière cette IP (login, paiement, etc.).
+      // Chaque requête avec un mauvais UA est de toute façon rejetée individuellement ici,
+      // donc un vrai bot reste bloqué à chaque tentative sans punir les autres.
       if (BAD_UA_PATTERNS.some((p) => p.test(uaLower))) {
-        const durationMs = 12 * 60 * 60 * 1000;
-        const until = Date.now() + durationMs;
-        bannedIPs.set(ip, until);
-        persistBan(ip, until, rawPath).catch(() => {});
-        sendBotAlert(ip, rawPath, `User-Agent malveillant: ${ua.slice(0, 60)}`, 12);
-        console.warn(`[BotGuard] 🤖 Bot bloqué: ${ip} UA="${ua.slice(0, 80)}"`);
+        sendBotAlert(ip, rawPath, `User-Agent malveillant: ${ua.slice(0, 60)}`, 0);
+        console.warn(`[BotGuard] 🤖 Requête bot rejetée (sans ban IP): ${ip} UA="${ua.slice(0, 80)}"`);
         res.status(403).json({ message: "Accès refusé." });
         return;
       }
