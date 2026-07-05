@@ -45,6 +45,7 @@ import {
   Copy,
   Fingerprint,
   Megaphone,
+  Zap,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -550,6 +551,15 @@ export default function SettingsPage() {
             iconColor="text-orange-500"
             onClick={() => setLocation("/dashboard/withdrawal-numbers")}
             data-testid="row-withdrawal-numbers"
+          />
+          <Divider />
+          <SettingsRow
+            icon={Zap}
+            label="Conversion automatique"
+            value="Configurer"
+            iconColor="text-yellow-500"
+            onClick={() => setLocation("/dashboard/auto-conversion")}
+            data-testid="row-auto-conversion"
           />
         </SettingsCard>
 
