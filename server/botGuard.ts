@@ -361,7 +361,12 @@ export function botGuard(req: Request, res: Response, next: NextFunction): void 
 
   // 2. IP déjà bannie (sauf loopback) — retourne 404 (silencieux) plutôt que 403,
   //    pour ne pas révéler à l'attaquant que son IP est reconnue et bannie.
-  if (!isLoopback && isIpBanned(ip)) {
+  //    Limité aux routes /api : les IP partagées (CGNAT, box 4G/LTE africaines)
+  //    peuvent être bannies à cause du trafic d'un autre utilisateur sur la même IP.
+  //    Bloquer aussi les pages HTML (ex: /pay/:slug) rendrait le site totalement
+  //    inaccessible (écran noir) pour tous les autres clients légitimes derrière
+  //    cette IP partagée. On garde donc la protection uniquement sur l'API.
+  if (!isLoopback && rawPath.startsWith("/api") && isIpBanned(ip)) {
     res.status(404).end();
     return;
   }
