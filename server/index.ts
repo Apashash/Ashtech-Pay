@@ -131,7 +131,10 @@ app.use(
             connectSrc: ["'self'", "https:", "wss:"],
             frameSrc: ["https://challenges.cloudflare.com"],
             objectSrc: ["'none'"],
-            upgradeInsecureRequests: isProd ? [] : null,
+            // upgrade-insecure-requests retiré : le site est toujours servi en HTTPS
+            // (Nginx/Passenger termine TLS), ce header n'apporte rien et peut interférer
+            // avec Safari iOS sur des connexions LTE via proxy carrier.
+            upgradeInsecureRequests: null,
           },
         }
       : false,
