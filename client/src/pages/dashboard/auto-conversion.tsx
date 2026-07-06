@@ -559,20 +559,26 @@ export default function AutoConversionPage() {
     }
   }
 
-  // Create multiple rules sequentially
+  // Create multiple rules via bulk endpoint (single Telegram notification)
   async function handleCreate() {
     if (selectedSources.size === 0 || !toCurrency) return;
     setCreating(true);
     let successCount = 0;
     const errors: string[] = [];
 
-    for (const from of Array.from(selectedSources)) {
-      if (from === toCurrency) continue;
-      try {
-        await apiRequest("POST", "/api/auto-conversion", { fromCurrency: from, toCurrency });
-        successCount++;
-      } catch (err: any) {
-        errors.push(`${from}: ${err?.message || "Erreur"}`);
+    const sources = Array.from(selectedSources).filter((f) => f !== toCurrency);
+    try {
+      const result = await apiRequest("POST", "/api/auto-conversion/bulk", { fromCurrencies: sources, toCurrency });
+      successCount = (result as any)?.created ?? sources.length;
+    } catch (err: any) {
+      // Fallback: create one by one if bulk endpoint fails
+      for (const from of sources) {
+        try {
+          await apiRequest("POST", "/api/auto-conversion", { fromCurrency: from, toCurrency });
+          successCount++;
+        } catch (e: any) {
+          errors.push(`${from}: ${e?.message || "Erreur"}`);
+        }
       }
     }
 

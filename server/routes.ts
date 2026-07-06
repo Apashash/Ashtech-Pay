@@ -88,6 +88,7 @@ import {
   notifyConversionStarted,
   notifyConversionCompleted,
   notifyAutoConversionRuleCreated,
+  notifyAutoConversionRulesBulkCreated,
   notifyTransferSent,
   notifyKycSubmitted,
   notifyKycApproved,
@@ -5521,6 +5522,75 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Une conversion automatique existe déjà pour cette devise." });
       }
       console.error("Create auto-conversion rule error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  // POST /api/auto-conversion/bulk — create multiple rules at once, single Telegram notification
+  app.post("/api/auto-conversion/bulk", requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId!;
+      const { fromCurrencies, toCurrency } = req.body;
+      if (!Array.isArray(fromCurrencies) || fromCurrencies.length === 0 || !toCurrency) {
+        return res.status(400).json({ message: "fromCurrencies (array) et toCurrency sont requis" });
+      }
+
+      const allRules = await storage.getAutoConversionRules(userId);
+      const user = await storage.getUser(userId);
+      const created: { fromCurrency: string; toCurrency: string }[] = [];
+      const skipped: string[] = [];
+
+      for (const fromCurrency of fromCurrencies) {
+        if (fromCurrency === toCurrency) continue;
+
+        // Skip duplicates or constraint violations
+        const existing = allRules.find((r) => r.fromCurrency === fromCurrency);
+        if (existing) { skipped.push(fromCurrency); continue; }
+        const usedAsTarget = allRules.some((r) => r.toCurrency === fromCurrency);
+        if (usedAsTarget) { skipped.push(fromCurrency); continue; }
+        const usedAsSource = allRules.some((r) => r.fromCurrency === toCurrency);
+        if (usedAsSource) { skipped.push(fromCurrency); continue; }
+
+        try {
+          await storage.createAutoConversionRule({ userId, fromCurrency, toCurrency });
+          created.push({ fromCurrency, toCurrency });
+          // Also add to allRules so subsequent iterations see correct state
+          allRules.push({ id: "", userId, fromCurrency, toCurrency, isActive: true, createdAt: new Date() });
+        } catch {
+          skipped.push(fromCurrency);
+        }
+      }
+
+      res.json({ created: created.length, skipped: skipped.length });
+
+      // Single grouped Telegram notification for all created rules
+      if (user && created.length > 0) {
+        notifyAutoConversionRulesBulkCreated({
+          userName: user.username,
+          userEmail: user.email,
+          userCountry: user.country ?? undefined,
+          rules: created,
+        }).catch((err) => console.error("[Telegram] notifyAutoConversionRulesBulkCreated failed:", err?.message ?? err));
+
+        // Trigger immediate conversion for each rule if balance exists
+        for (const { fromCurrency } of created) {
+          const primary = user.preferredCurrency || "XAF";
+          let currentBalance = 0;
+          if (fromCurrency === primary) {
+            currentBalance = parseFloat(user.balance);
+          } else {
+            const w = await storage.getWallet(userId, fromCurrency);
+            currentBalance = w ? parseFloat(w.balance) : 0;
+          }
+          if (currentBalance > 0) {
+            maybeAutoConvert(userId, fromCurrency, currentBalance).catch((err) => {
+              console.error(`[AutoConversion] Bulk immediate trigger error for user ${userId}:`, err?.message || err);
+            });
+          }
+        }
+      }
+    } catch (error: any) {
+      console.error("Bulk create auto-conversion rules error:", error);
       res.status(500).json({ message: "Erreur serveur" });
     }
   });

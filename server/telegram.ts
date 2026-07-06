@@ -916,6 +916,36 @@ export async function notifyAutoConversionRuleCreated(opts: {
   await sendMessage(msg);
 }
 
+export async function notifyAutoConversionRulesBulkCreated(opts: {
+  userName: string;
+  userEmail: string;
+  userCountry?: string;
+  rules: { fromCurrency: string; toCurrency: string }[];
+}): Promise<void> {
+  if (opts.rules.length === 0) return;
+  const userPays = opts.userCountry ? countryDisplay(opts.userCountry) : "";
+  const toPays = opts.rules[0] ? countryDisplay(opts.rules[0].toCurrency) : "";
+  const rulesLines = opts.rules
+    .map((r) => {
+      const fromPays = countryDisplay(r.fromCurrency);
+      return `  💱 <b>${r.fromCurrency}</b>${fromPays ? ` — ${fromPays}` : ""} → <b>${r.toCurrency}</b>`;
+    })
+    .join("\n");
+  const count = opts.rules.length;
+  const msg =
+    `⚡ <b>${count > 1 ? `${count} RÈGLES` : "RÈGLE"} DE CONVERSION AUTOMATIQUE ACTIVÉE${count > 1 ? "S" : ""}</b>\n` +
+    `──────────────────\n` +
+    `👤 Utilisateur : <b>${opts.userName}</b>\n` +
+    `📧 Email : <code>${opts.userEmail}</code>\n` +
+    (userPays ? `🌍 Pays : <b>${userPays}</b>\n` : "") +
+    `──────────────────\n` +
+    `📥 Cible : <b>${opts.rules[0]?.toCurrency}</b>${toPays ? ` — ${toPays}` : ""}\n` +
+    `──────────────────\n` +
+    rulesLines + "\n" +
+    `🕐 Heure : ${now()}`;
+  await sendMessage(msg);
+}
+
 // ─── TRANSFERTS ──────────────────
 
 export async function notifyTransferSent(opts: {
