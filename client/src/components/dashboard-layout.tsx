@@ -571,13 +571,13 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                       {(notificationData?.unreadCount || 0) > 0 && (
                         <Button
                           variant="ghost"
-                          size="sm"
+                          size="icon"
                           onClick={() => markAllReadMutation.mutate()}
-                          className="text-xs h-8 px-2"
+                          className="h-8 w-8 p-0 text-primary hover:bg-primary/10"
+                          title={t.notifications.markAllRead}
                           data-testid="button-mark-all-read"
                         >
-                          <CheckCheck className="w-3 h-3 mr-1" />
-                          {t.notifications.markAllRead}
+                          <CheckCheck className="w-4 h-4" />
                         </Button>
                       )}
                       {(notificationData?.notifications && notificationData.notifications.length > 0) && (
@@ -594,7 +594,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                       )}
                     </div>
                   </div>
-                  <ScrollArea className="max-h-80">
+                  <ScrollArea
+                    className="max-h-80"
+                    onWheel={(e) => e.stopPropagation()}
+                    onTouchMove={(e) => e.stopPropagation()}
+                  >
                     {(!notificationData?.notifications || notificationData.notifications.length === 0) ? (
                       <div className="p-4 text-center text-muted-foreground text-sm">
                         {t.notifications.noNotifications}
