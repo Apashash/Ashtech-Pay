@@ -10,15 +10,31 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   ChevronLeft, ArrowRight, Trash2, Plus, RefreshCw,
-  Loader2, Zap, Info, Check, Pencil, X, Search, Wallet,
+  Loader2, Zap, Info, Check, Pencil, X, Search, Wallet, Globe,
 } from "lucide-react";
-import { ALL_FX_CURRENCIES } from "@shared/schema";
+import { ALL_FX_CURRENCIES, CURRENCY_ZONE } from "@shared/schema";
 import type { User, AutoConversionRule } from "@shared/schema";
 
 interface WalletEntry {
   currency: string;
   balance: string;
 }
+
+// Country code → display name (for CURRENCY_ZONE countries only)
+const COUNTRY_NAMES: Record<string, string> = {
+  CM: "Cameroun", CF: "Centrafrique", CG: "Congo Brazzaville", GA: "Gabon",
+  GQ: "Guinée Équatoriale", TD: "Tchad",
+  BJ: "Bénin", BF: "Burkina Faso", CI: "Côte d'Ivoire", GW: "Guinée-Bissau",
+  ML: "Mali", NE: "Niger", SN: "Sénégal", TG: "Togo",
+  GH: "Ghana", NG: "Nigeria", KE: "Kenya", RW: "Rwanda",
+  TZ: "Tanzanie", UG: "Ouganda", CD: "Congo RDC", GN: "Guinée",
+};
+
+// Countries for which a conversion rule makes sense (fromCurrency ≠ XAF)
+const COUNTRY_SUGGESTIONS = Object.entries(CURRENCY_ZONE)
+  .filter(([, currency]) => currency !== "XAF")
+  .map(([code, currency]) => ({ code, currency, name: COUNTRY_NAMES[code] ?? code }))
+  .sort((a, b) => a.name.localeCompare(b.name));
 
 const CURRENCY_FLAGS: Record<string, string> = {
   XAF: "🇨🇲", XAFC: "🇨🇬", XAFG: "🇬🇦",
@@ -446,6 +462,7 @@ export default function AutoConversionPage() {
   const [showForm, setShowForm] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [suggestCountry, setSuggestCountry] = useState("");
 
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const { data: wallets = [] } = useQuery<WalletEntry[]>({ queryKey: ["/api/wallets"] });
@@ -596,6 +613,7 @@ export default function AutoConversionPage() {
 
     setSelectedSources(new Set());
     setToCurrency("");
+    setSuggestCountry("");
     setShowForm(false);
   }
 
@@ -605,6 +623,7 @@ export default function AutoConversionPage() {
     setShowForm(false);
     setSelectedSources(new Set());
     setToCurrency("");
+    setSuggestCountry("");
   }
 
   return (
@@ -707,6 +726,76 @@ export default function AutoConversionPage() {
               <Plus className="w-4 h-4 text-primary" />
               Nouvelle règle de conversion
             </h2>
+
+            {/* ── Country suggestion shortcut ── */}
+            <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2.5">
+              <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                <Globe className="w-3.5 h-3.5" />
+                Remplir depuis un pays
+              </p>
+              <Select
+                value={suggestCountry}
+                onValueChange={(countryCode) => {
+                  setSuggestCountry(countryCode);
+                  const currency = CURRENCY_ZONE[countryCode];
+                  if (!currency) return;
+                  const primary = user?.preferredCurrency || "XAF";
+                  // Pre-fill source if it's free and different from primary
+                  if (currency !== primary && !lockedCurrencies.has(currency)) {
+                    setSelectedSources(new Set([currency]));
+                  }
+                  // Pre-fill target only when primary is actually usable as a target
+                  // (not already locked as a source in an existing rule)
+                  if (!lockedCurrencies.has(primary) || primary === user?.preferredCurrency) {
+                    // Verify primary is not already a fromCurrency in any existing rule
+                    const primaryUsedAsSource = rules.some((r) => r.fromCurrency === primary);
+                    if (!primaryUsedAsSource) {
+                      setToCurrency(primary);
+                    }
+                  }
+                }}
+              >
+                <SelectTrigger className="w-full h-9 text-sm">
+                  <SelectValue placeholder="Choisir un pays…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {COUNTRY_SUGGESTIONS.filter((c) => !lockedCurrencies.has(c.currency)).map((c) => (
+                    <SelectItem key={c.code} value={c.code}>
+                      <span className="flex items-center gap-2">
+                        <span className="font-medium">{c.name}</span>
+                        <span className="text-muted-foreground text-xs">
+                          {c.currency} → {user?.preferredCurrency || "XAF"}
+                        </span>
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {/* Preview of suggestion — only show when actually applied */}
+              {suggestCountry && CURRENCY_ZONE[suggestCountry] && (() => {
+                const sugCurrency = CURRENCY_ZONE[suggestCountry];
+                const isApplied = selectedSources.has(sugCurrency) && !!toCurrency;
+                return (
+                  <div className={`flex items-center gap-2 rounded-md px-3 py-2 border ${
+                    isApplied
+                      ? "bg-primary/8 border-primary/20"
+                      : "bg-muted/40 border-border"
+                  }`}>
+                    <span className="text-sm font-bold text-foreground">{sugCurrency}</span>
+                    <ArrowRight className="w-3.5 h-3.5 text-primary shrink-0" />
+                    <span className="text-sm font-bold text-foreground">
+                      {toCurrency || (user?.preferredCurrency || "XAF")}
+                    </span>
+                    <span className={`ml-auto text-[10px] font-medium uppercase tracking-wide ${
+                      isApplied ? "text-primary" : "text-muted-foreground"
+                    }`}>
+                      {isApplied ? "Appliqué ✓" : "Non disponible"}
+                    </span>
+                  </div>
+                );
+              })()}
+            </div>
 
             {/* Source selector button */}
             <div className="space-y-2">

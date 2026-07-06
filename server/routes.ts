@@ -87,6 +87,7 @@ import {
   notifyConversion,
   notifyConversionStarted,
   notifyConversionCompleted,
+  notifyAutoConversionRuleCreated,
   notifyTransferSent,
   notifyKycSubmitted,
   notifyKycApproved,
@@ -5492,6 +5493,15 @@ export async function registerRoutes(
       // After saving, immediately check if there's a balance to convert right now
       const user = await storage.getUser(userId);
       if (user) {
+        // Notify Telegram — rule activated
+        notifyAutoConversionRuleCreated({
+          userName: user.username,
+          userEmail: user.email,
+          fromCurrency,
+          toCurrency,
+          userCountry: user.country ?? undefined,
+        }).catch(() => {});
+
         const primary = user.preferredCurrency || "XAF";
         let currentBalance = 0;
         if (fromCurrency === primary) {

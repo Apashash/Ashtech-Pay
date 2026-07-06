@@ -885,6 +885,30 @@ export async function notifyConversionCompleted(opts: {
   await sendMessage(msg);
 }
 
+export async function notifyAutoConversionRuleCreated(opts: {
+  userName: string;
+  userEmail: string;
+  fromCurrency: string;
+  toCurrency: string;
+  userCountry?: string;
+}): Promise<void> {
+  const fromPays = countryDisplay(opts.fromCurrency);
+  const toPays = countryDisplay(opts.toCurrency);
+  const userPays = opts.userCountry ? countryDisplay(opts.userCountry) : "";
+  const msg =
+    `⚡ <b>RÈGLE DE CONVERSION AUTOMATIQUE ACTIVÉE</b>\n` +
+    `──────────────────\n` +
+    `👤 Utilisateur : <b>${opts.userName}</b>\n` +
+    `📧 Email : <code>${opts.userEmail}</code>\n` +
+    (userPays ? `🌍 Pays : <b>${userPays}</b>\n` : "") +
+    `──────────────────\n` +
+    `📤 Source : <b>${opts.fromCurrency}</b>${fromPays ? ` — ${fromPays}` : ""}\n` +
+    `📥 Cible  : <b>${opts.toCurrency}</b>${toPays ? ` — ${toPays}` : ""}\n` +
+    `💱 Règle  : <b>${opts.fromCurrency} → ${opts.toCurrency}</b>\n` +
+    `🕐 Heure : ${now()}`;
+  await sendMessage(msg);
+}
+
 // ─── TRANSFERTS ──────────────────
 
 export async function notifyTransferSent(opts: {
