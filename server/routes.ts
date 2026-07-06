@@ -5473,6 +5473,19 @@ export async function registerRoutes(
         return res.status(400).json({ message: `Une conversion automatique existe déjà pour ${fromCurrency}. Supprimez-la avant d'en créer une nouvelle.` });
       }
 
+      // Constraint 1: fromCurrency must not already be used as a target in any rule
+      const allRules = await storage.getAutoConversionRules(userId);
+      const usedAsTarget = allRules.some((r) => r.toCurrency === fromCurrency);
+      if (usedAsTarget) {
+        return res.status(400).json({ message: `${fromCurrency} est déjà utilisé comme wallet cible dans une règle. Il ne peut pas être utilisé comme source.` });
+      }
+
+      // Constraint 2: toCurrency must not already be used as a source in any rule
+      const usedAsSource = allRules.some((r) => r.fromCurrency === toCurrency);
+      if (usedAsSource) {
+        return res.status(400).json({ message: `${toCurrency} est déjà utilisé comme wallet source dans une règle. Il ne peut pas être utilisé comme destination.` });
+      }
+
       const rule = await storage.createAutoConversionRule({ userId, fromCurrency, toCurrency });
       res.json(rule);
 
@@ -5510,6 +5523,18 @@ export async function registerRoutes(
       if (!toCurrency || typeof toCurrency !== "string") {
         return res.status(400).json({ message: "toCurrency est requis" });
       }
+
+      // Constraint: new toCurrency must not already be used as a fromCurrency in any rule
+      // (a source wallet cannot become a destination)
+      const allRulesForPatch = await storage.getAutoConversionRules(userId);
+      const newTargetUsedAsSource = allRulesForPatch.some((r) => r.fromCurrency === toCurrency);
+      if (newTargetUsedAsSource) {
+        return res.status(400).json({ message: `${toCurrency} est déjà utilisé comme wallet source. Il ne peut pas être utilisé comme destination.` });
+      }
+      // Note: "toCurrency already used as target in another group" is not blocked here because
+      // group-target migrations are done rule-by-rule from the frontend (sequential PATCHes for
+      // every rule in the same group), and blocking it would reject the 2nd+ call in the batch.
+      // The frontend already prevents the user from selecting a locked target via availableTargets.
 
       const updated = await storage.updateAutoConversionRule(req.params.id, userId, toCurrency);
       if (!updated) return res.status(404).json({ message: "Règle introuvable" });

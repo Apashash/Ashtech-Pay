@@ -167,6 +167,7 @@ function GroupedRuleCard({
   rules,
   balanceMap,
   availableSources,   // currencies free to add (not used in any other rule)
+  availableTargets,   // currencies that can be set as target in edit mode
   onDelete,
   onDeleteAll,
   onUpdate,
@@ -176,6 +177,7 @@ function GroupedRuleCard({
   rules: AutoConversionRule[];
   balanceMap: Record<string, string>;
   availableSources: { code: string; name: string }[];
+  availableTargets: { code: string; name: string }[];
   onDelete: (id: string) => Promise<void>;
   onDeleteAll: (ids: string[]) => Promise<void>;
   onUpdate: (id: string, newToCurrency: string, silent?: boolean) => Promise<void>;
@@ -205,10 +207,10 @@ function GroupedRuleCard({
     return [...existing, ...free];
   }, [currentSources, availableSources]);
 
-  // Target options = all currencies not selected as source in the edit draft
+  // Target options = availableTargets filtered by current edit sources draft
   const targetOptions = useMemo(
-    () => ALL_FX_CURRENCIES.filter((c) => !editSources.has(c.code)),
-    [editSources]
+    () => availableTargets.filter((c) => !editSources.has(c.code)),
+    [availableTargets, editSources]
   );
 
   async function saveEdit() {
@@ -449,6 +451,13 @@ export default function AutoConversionPage() {
   });
 
   const usedFromCurrencies = useMemo(() => new Set(rules.map((r) => r.fromCurrency)), [rules]);
+  // All currencies already used as destination in any rule
+  const usedToCurrencies = useMemo(() => new Set(rules.map((r) => r.toCurrency)), [rules]);
+  // Union: any currency appearing in any rule (source OR target) is "locked"
+  const lockedCurrencies = useMemo(
+    () => new Set([...usedFromCurrencies, ...usedToCurrencies]),
+    [usedFromCurrencies, usedToCurrencies]
+  );
 
   const balanceMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -457,15 +466,16 @@ export default function AutoConversionPage() {
     return map;
   }, [wallets, user]);
 
-  // Currencies not yet used as source
+  // New-form source picker: exclude any currency already locked (source OR target in any rule)
   const sourceOptions = useMemo(
-    () => ALL_FX_CURRENCIES.filter((c) => !usedFromCurrencies.has(c.code)),
-    [usedFromCurrencies]
+    () => ALL_FX_CURRENCIES.filter((c) => !lockedCurrencies.has(c.code)),
+    [lockedCurrencies]
   );
 
+  // New-form target select: exclude locked currencies AND the currently selected sources
   const targetOptions = useMemo(
-    () => ALL_FX_CURRENCIES.filter((c) => !selectedSources.has(c.code)),
-    [selectedSources]
+    () => ALL_FX_CURRENCIES.filter((c) => !lockedCurrencies.has(c.code) && !selectedSources.has(c.code)),
+    [lockedCurrencies, selectedSources]
   );
 
   // Group existing rules by toCurrency
@@ -635,20 +645,34 @@ export default function AutoConversionPage() {
             {Object.keys(groupedRules).length > 0 && (
               <div className="space-y-3 mx-4 mb-4">
                 {Object.entries(groupedRules).map(([toCurr, groupRules]) => {
-                  // Sources free to add = all currencies not already used in ANY rule
-                  const usedInOtherGroups = new Set(
-                    rules.filter((r) => r.toCurrency !== toCurr).map((r) => r.fromCurrency)
+                  // Sources that belong to THIS group (can be toggled in edit mode)
+                  const thisGroupSources = new Set(groupRules.map((r) => r.fromCurrency));
+
+                  // availableSources for picker:
+                  //   - currencies in this group (already selected, can be deselected)
+                  //   - currencies not locked at all (completely free)
+                  //   - must NOT be the group's own target
+                  const availableSources = ALL_FX_CURRENCIES.filter(
+                    (c) =>
+                      c.code !== toCurr &&
+                      (thisGroupSources.has(c.code) || !lockedCurrencies.has(c.code))
                   );
-                  const free = ALL_FX_CURRENCIES.filter(
-                    (c) => !usedInOtherGroups.has(c.code) && c.code !== toCurr
+
+                  // availableTargets for target select in edit mode:
+                  //   - the current toCurr itself (user can keep it)
+                  //   - currencies that are completely free (not locked by any rule)
+                  const availableTargets = ALL_FX_CURRENCIES.filter(
+                    (c) => c.code === toCurr || !lockedCurrencies.has(c.code)
                   );
+
                   return (
                     <GroupedRuleCard
                       key={toCurr}
                       toCurrency={toCurr}
                       rules={groupRules}
                       balanceMap={balanceMap}
-                      availableSources={free}
+                      availableSources={availableSources}
+                      availableTargets={availableTargets}
                       onDelete={handleDeleteOne}
                       onDeleteAll={handleDeleteAll}
                       onUpdate={handleUpdate}
