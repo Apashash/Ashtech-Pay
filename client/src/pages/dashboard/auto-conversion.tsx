@@ -4,11 +4,13 @@ import { useLocation } from "wouter";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   ChevronLeft, ArrowRight, Trash2, Plus, RefreshCw,
-  Loader2, Zap, Info, Check, Pencil, X,
+  Loader2, Zap, Info, Check, Pencil, X, Search, Wallet,
 } from "lucide-react";
 import { ALL_FX_CURRENCIES } from "@shared/schema";
 import type { User, AutoConversionRule } from "@shared/schema";
@@ -29,81 +31,224 @@ const CURRENCY_FLAGS: Record<string, string> = {
 const CURRENCY_NAMES: Record<string, string> = {};
 ALL_FX_CURRENCIES.forEach((c) => { CURRENCY_NAMES[c.code] = c.name; });
 
-// ─── Rule card (with inline edit) ────────────────────────────────────────────
-function RuleCard({
-  rule,
+// ─── Source picker modal ──────────────────────────────────────────────────────
+function SourcePickerModal({
+  open,
+  onClose,
+  options,
+  selected,
+  onToggle,
+  balanceMap,
+}: {
+  open: boolean;
+  onClose: () => void;
+  options: { code: string; name: string }[];
+  selected: Set<string>;
+  onToggle: (code: string) => void;
+  balanceMap: Record<string, string>;
+}) {
+  const [search, setSearch] = useState("");
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    return options.filter(
+      (c) => c.code.toLowerCase().includes(q) || c.name.toLowerCase().includes(q)
+    );
+  }, [options, search]);
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-sm w-full p-0 gap-0 overflow-hidden">
+        <DialogHeader className="px-4 pt-4 pb-3 border-b border-border">
+          <DialogTitle className="text-base font-semibold">
+            Wallets source
+          </DialogTitle>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Sélectionnez une ou plusieurs devises à convertir automatiquement
+          </p>
+        </DialogHeader>
+
+        {/* Search */}
+        <div className="px-3 py-2.5 border-b border-border">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+            <Input
+              placeholder="Rechercher une devise…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-8 h-9 text-sm"
+              autoFocus
+            />
+          </div>
+        </div>
+
+        {/* List */}
+        <div className="overflow-y-auto max-h-[55vh]">
+          {filtered.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-8">Aucun résultat</p>
+          ) : (
+            filtered.map((c) => {
+              const isSelected = selected.has(c.code);
+              const balance = balanceMap[c.code];
+              const hasBalance = balance !== undefined && parseFloat(balance) > 0;
+              return (
+                <button
+                  key={c.code}
+                  type="button"
+                  onClick={() => onToggle(c.code)}
+                  className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors border-b border-border/50 last:border-0 ${
+                    isSelected ? "bg-primary/8" : "hover:bg-muted/40"
+                  }`}
+                >
+                  <span className="text-xl leading-none shrink-0">{CURRENCY_FLAGS[c.code] || "💱"}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm text-foreground leading-tight">{c.code}</p>
+                    <p className="text-xs text-muted-foreground truncate">{c.name}</p>
+                    {hasBalance && (
+                      <p className="text-[11px] text-primary font-medium mt-0.5">
+                        Solde : {parseFloat(balance).toLocaleString()} {c.code}
+                      </p>
+                    )}
+                  </div>
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${
+                    isSelected ? "bg-primary border-primary" : "border-border"
+                  }`}>
+                    {isSelected && <Check className="w-3 h-3 text-primary-foreground" />}
+                  </div>
+                </button>
+              );
+            })
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-4 py-3 border-t border-border bg-muted/20 flex gap-2">
+          <Button variant="outline" className="flex-1 h-9" onClick={onClose}>
+            Annuler
+          </Button>
+          <Button className="flex-1 h-9" onClick={onClose} disabled={selected.size === 0}>
+            <Check className="w-4 h-4 mr-1.5" />
+            Confirmer ({selected.size})
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Grouped rule card ────────────────────────────────────────────────────────
+// Groups all rules with the same toCurrency into one card.
+function GroupedRuleCard({
+  toCurrency,
+  rules,
+  balanceMap,
   onDelete,
   onUpdate,
   deletingId,
 }: {
-  rule: AutoConversionRule;
+  toCurrency: string;
+  rules: AutoConversionRule[];
+  balanceMap: Record<string, string>;
   onDelete: (id: string) => void;
-  onUpdate: (id: string, toCurrency: string) => Promise<void>;
+  onUpdate: (id: string, newToCurrency: string) => Promise<void>;
   deletingId: string | null;
 }) {
   const [editing, setEditing] = useState(false);
-  const [newTarget, setNewTarget] = useState(rule.toCurrency);
+  const [newTarget, setNewTarget] = useState(toCurrency);
   const [saving, setSaving] = useState(false);
 
-  const targetOptions = ALL_FX_CURRENCIES.filter((c) => c.code !== rule.fromCurrency);
+  // All codes used as sources in this group — can't be target
+  const usedSources = new Set(rules.map((r) => r.fromCurrency));
+  const targetOptions = ALL_FX_CURRENCIES.filter((c) => !usedSources.has(c.code));
 
-  async function save() {
-    if (!newTarget || newTarget === rule.toCurrency) { setEditing(false); return; }
+  async function saveAll() {
+    if (!newTarget || newTarget === toCurrency) { setEditing(false); return; }
     setSaving(true);
-    await onUpdate(rule.id, newTarget);
+    for (const rule of rules) {
+      await onUpdate(rule.id, newTarget);
+    }
     setSaving(false);
     setEditing(false);
   }
 
+  // Total sources with balance
+  const totalBalance = rules.reduce((sum, rule) => {
+    const bal = parseFloat(balanceMap[rule.fromCurrency] || "0");
+    return sum + (isFinite(bal) ? bal : 0);
+  }, 0);
+
   return (
     <div className="rounded-xl border border-border bg-card overflow-hidden">
-      {/* Main row */}
-      <div className="p-4 flex items-center gap-3">
-        {/* From */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="text-lg leading-none">{CURRENCY_FLAGS[rule.fromCurrency] || "💱"}</span>
-            <div className="min-w-0">
-              <p className="font-semibold text-foreground text-sm">{rule.fromCurrency}</p>
-              <p className="text-xs text-muted-foreground truncate">{CURRENCY_NAMES[rule.fromCurrency] || rule.fromCurrency}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Arrow */}
-        <div className="flex flex-col items-center gap-0.5 shrink-0 px-1">
-          <ArrowRight className="w-4 h-4 text-primary" />
-          <span className="text-[9px] uppercase tracking-widest text-muted-foreground font-semibold">auto</span>
-        </div>
-
-        {/* To */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="text-lg leading-none">{CURRENCY_FLAGS[rule.toCurrency] || "💱"}</span>
-            <div className="min-w-0">
-              <p className="font-semibold text-foreground text-sm">{rule.toCurrency}</p>
-              <p className="text-xs text-muted-foreground truncate">{CURRENCY_NAMES[rule.toCurrency] || rule.toCurrency}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div className="flex items-center gap-1.5 shrink-0">
+      {/* Header: all sources → destination */}
+      <div className="p-4">
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-[10px] uppercase tracking-widest font-semibold text-muted-foreground">
+            Conversion automatique
+          </span>
           <span className="text-[10px] font-semibold bg-green-500/10 text-green-500 rounded-full px-2 py-0.5">Actif</span>
+        </div>
+
+        {/* Sources list */}
+        <div className="space-y-2 mb-3">
+          {rules.map((rule) => {
+            const balance = balanceMap[rule.fromCurrency];
+            const hasBalance = balance !== undefined && parseFloat(balance) > 0;
+            return (
+              <div key={rule.id} className="flex items-center gap-2.5">
+                {/* Source wallet */}
+                <div className="flex items-center gap-2 flex-1 min-w-0 rounded-lg bg-muted/30 px-3 py-2">
+                  <span className="text-base leading-none shrink-0">{CURRENCY_FLAGS[rule.fromCurrency] || "💱"}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-sm text-foreground leading-tight">{rule.fromCurrency}</p>
+                    {hasBalance && (
+                      <p className="text-[10px] text-primary font-medium">
+                        {parseFloat(balance).toLocaleString()} {rule.fromCurrency}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Arrow */}
+                <ArrowRight className="w-3.5 h-3.5 text-primary shrink-0" />
+
+                {/* Destination */}
+                <div className="flex items-center gap-2 flex-1 min-w-0 rounded-lg bg-primary/8 border border-primary/20 px-3 py-2">
+                  <span className="text-base leading-none shrink-0">{CURRENCY_FLAGS[toCurrency] || "💱"}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-sm text-foreground leading-tight">{toCurrency}</p>
+                    <p className="text-[10px] text-muted-foreground truncate">{CURRENCY_NAMES[toCurrency] || toCurrency}</p>
+                  </div>
+                </div>
+
+                {/* Delete */}
+                <button
+                  onClick={() => onDelete(rule.id)}
+                  disabled={deletingId === rule.id}
+                  className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors disabled:opacity-50 shrink-0"
+                >
+                  {deletingId === rule.id
+                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    : <Trash2 className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Edit target / summary row */}
+        <div className="flex items-center justify-between">
+          {totalBalance > 0 && (
+            <p className="text-[10px] text-primary flex items-center gap-1">
+              <Zap className="w-3 h-3" />
+              Conversion active — soldes en cours de traitement
+            </p>
+          )}
           <button
-            onClick={() => { setEditing(!editing); setNewTarget(rule.toCurrency); }}
-            className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-            title="Modifier"
+            onClick={() => { setEditing(!editing); setNewTarget(toCurrency); }}
+            className="ml-auto p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+            title="Changer la devise cible pour tout le groupe"
           >
             <Pencil className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => onDelete(rule.id)}
-            disabled={deletingId === rule.id}
-            className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors disabled:opacity-50"
-            title="Supprimer"
-          >
-            {deletingId === rule.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
           </button>
         </div>
       </div>
@@ -111,7 +256,9 @@ function RuleCard({
       {/* Inline edit panel */}
       {editing && (
         <div className="border-t border-border px-4 py-3 bg-muted/20 space-y-3">
-          <p className="text-xs text-muted-foreground font-medium">Changer la devise cible :</p>
+          <p className="text-xs text-muted-foreground font-medium">
+            Changer la devise cible pour toutes les sources :
+          </p>
           <Select value={newTarget} onValueChange={setNewTarget}>
             <SelectTrigger className="w-full h-9 text-sm">
               <SelectValue />
@@ -132,15 +279,15 @@ function RuleCard({
             <Button variant="outline" size="sm" className="flex-1 h-8" onClick={() => setEditing(false)} disabled={saving}>
               <X className="w-3.5 h-3.5 mr-1" /> Annuler
             </Button>
-            <Button size="sm" className="flex-1 h-8" onClick={save} disabled={saving || !newTarget}>
+            <Button size="sm" className="flex-1 h-8" onClick={saveAll} disabled={saving || !newTarget}>
               {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Check className="w-3.5 h-3.5 mr-1" />}
               Enregistrer
             </Button>
           </div>
-          {newTarget !== rule.toCurrency && (
+          {newTarget !== toCurrency && (
             <p className="text-[10px] text-primary flex items-center gap-1">
               <Zap className="w-3 h-3" />
-              Si vous avez un solde en {rule.fromCurrency}, la conversion démarrera immédiatement.
+              La conversion démarrera immédiatement si un solde est disponible.
             </p>
           )}
         </div>
@@ -157,6 +304,7 @@ export default function AutoConversionPage() {
   const [selectedSources, setSelectedSources] = useState<Set<string>>(new Set());
   const [toCurrency, setToCurrency] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
@@ -175,7 +323,7 @@ export default function AutoConversionPage() {
     return map;
   }, [wallets, user]);
 
-  // All currencies not yet used as a source
+  // Currencies not yet used as source
   const sourceOptions = useMemo(
     () => ALL_FX_CURRENCIES.filter((c) => !usedFromCurrencies.has(c.code)),
     [usedFromCurrencies]
@@ -186,6 +334,16 @@ export default function AutoConversionPage() {
     [selectedSources]
   );
 
+  // Group existing rules by toCurrency
+  const groupedRules = useMemo(() => {
+    const groups: Record<string, AutoConversionRule[]> = {};
+    for (const rule of rules) {
+      if (!groups[rule.toCurrency]) groups[rule.toCurrency] = [];
+      groups[rule.toCurrency].push(rule);
+    }
+    return groups;
+  }, [rules]);
+
   function toggleSource(code: string) {
     setSelectedSources((prev) => {
       const next = new Set(prev);
@@ -193,15 +351,19 @@ export default function AutoConversionPage() {
       else next.add(code);
       return next;
     });
-    if (toCurrency && selectedSources.has(toCurrency)) setToCurrency("");
   }
 
   // Delete
   const deleteMutation = useMutation({
-    mutationFn: async (id: string) => { setDeletingId(id); return apiRequest("DELETE", `/api/auto-conversion/${id}`); },
+    mutationFn: async (id: string) => {
+      setDeletingId(id);
+      return apiRequest("DELETE", `/api/auto-conversion/${id}`);
+    },
     onSuccess: () => {
       setDeletingId(null);
       queryClient.invalidateQueries({ queryKey: ["/api/auto-conversion"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/wallets"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       toast({ title: "Règle supprimée" });
     },
     onError: (err: any) => {
@@ -214,7 +376,11 @@ export default function AutoConversionPage() {
   async function handleUpdate(id: string, newToCurrency: string) {
     try {
       await apiRequest("PATCH", `/api/auto-conversion/${id}`, { toCurrency: newToCurrency });
-      await queryClient.invalidateQueries({ queryKey: ["/api/auto-conversion"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["/api/auto-conversion"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/wallets"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/user"] }),
+      ]);
       toast({
         title: "Règle mise à jour",
         description: "La conversion démarre immédiatement si vous avez un solde à convertir.",
@@ -241,13 +407,18 @@ export default function AutoConversionPage() {
       }
     }
 
-    await queryClient.invalidateQueries({ queryKey: ["/api/auto-conversion"] });
+    // Refresh all balances and rules after creation — conversion may have started
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["/api/auto-conversion"] }),
+      queryClient.invalidateQueries({ queryKey: ["/api/wallets"] }),
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] }),
+    ]);
     setCreating(false);
 
     if (successCount > 0) {
       toast({
         title: successCount === 1 ? "Conversion automatique créée" : `${successCount} conversions créées`,
-        description: "La conversion démarre immédiatement si vous avez un solde à convertir.",
+        description: "La conversion démarre immédiatement si un solde est disponible.",
       });
     }
     if (errors.length > 0) {
@@ -259,7 +430,7 @@ export default function AutoConversionPage() {
     setShowForm(false);
   }
 
-  const canCreate = selectedSources.size > 0 && toCurrency && !selectedSources.has(toCurrency);
+  const canCreate = selectedSources.size > 0 && !!toCurrency && !selectedSources.has(toCurrency);
 
   function resetForm() {
     setShowForm(false);
@@ -293,24 +464,26 @@ export default function AutoConversionPage() {
         <div className="mx-4 mb-5 rounded-xl bg-primary/8 border border-primary/20 p-3.5 flex gap-2.5">
           <Info className="w-4 h-4 text-primary shrink-0 mt-0.5" />
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Sélectionnez une ou plusieurs devises source. Dès que de l'argent arrive (ou est déjà présent),
-            il est converti automatiquement vers la devise cible.
+            Chaque wallet source est converti automatiquement vers le wallet de destination dès réception des fonds,
+            ou immédiatement si un solde est déjà présent.
           </p>
         </div>
 
-        {/* Existing rules */}
+        {/* Existing rules grouped */}
         {rulesLoading ? (
           <div className="flex justify-center py-10">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
           </div>
         ) : (
           <>
-            {rules.length > 0 && (
+            {Object.keys(groupedRules).length > 0 && (
               <div className="space-y-3 mx-4 mb-4">
-                {rules.map((rule) => (
-                  <RuleCard
-                    key={rule.id}
-                    rule={rule}
+                {Object.entries(groupedRules).map(([toCurr, groupRules]) => (
+                  <GroupedRuleCard
+                    key={toCurr}
+                    toCurrency={toCurr}
+                    rules={groupRules}
+                    balanceMap={balanceMap}
                     deletingId={deletingId}
                     onDelete={(id) => deleteMutation.mutate(id)}
                     onUpdate={handleUpdate}
@@ -341,53 +514,77 @@ export default function AutoConversionPage() {
               Nouvelle règle de conversion
             </h2>
 
-            {/* Multi-select source grid */}
+            {/* Source selector button */}
             <div className="space-y-2">
               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 Wallet(s) source — argent reçu
-                {selectedSources.size > 0 && (
-                  <span className="ml-2 text-primary">({selectedSources.size} sélectionné{selectedSources.size > 1 ? "s" : ""})</span>
-                )}
               </label>
+
               {sourceOptions.length === 0 ? (
                 <p className="text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2.5">
                   Toutes les devises ont déjà une règle de conversion.
                 </p>
               ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  {sourceOptions.map((c) => {
-                    const selected = selectedSources.has(c.code);
-                    const balance = balanceMap[c.code];
-                    return (
-                      <button
-                        key={c.code}
-                        type="button"
-                        onClick={() => toggleSource(c.code)}
-                        className={`relative flex items-center gap-2.5 rounded-xl border p-3 text-left transition-all ${
-                          selected
-                            ? "border-primary bg-primary/10 ring-1 ring-primary"
-                            : "border-border bg-muted/20 hover:border-primary/40 hover:bg-muted/40"
-                        }`}
-                      >
-                        <span className="text-xl leading-none shrink-0">{CURRENCY_FLAGS[c.code] || "💱"}</span>
-                        <div className="min-w-0 flex-1">
-                          <p className="font-semibold text-foreground text-sm leading-tight">{c.code}</p>
-                          <p className="text-[10px] text-muted-foreground truncate leading-tight mt-0.5">{c.name}</p>
-                          {balance !== undefined && parseFloat(balance) > 0 && (
-                            <p className="text-[10px] text-primary font-medium mt-0.5">
-                              {parseFloat(balance).toLocaleString()}
-                            </p>
-                          )}
-                        </div>
-                        {selected && (
-                          <span className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
-                            <Check className="w-2.5 h-2.5 text-primary-foreground" />
+                <>
+                  {/* Trigger button */}
+                  <button
+                    type="button"
+                    onClick={() => setShowPicker(true)}
+                    className={`w-full flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition-all ${
+                      selectedSources.size > 0
+                        ? "border-primary bg-primary/8"
+                        : "border-border bg-muted/20 hover:border-primary/40 hover:bg-muted/30"
+                    }`}
+                  >
+                    <Wallet className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <span className="flex-1 text-sm">
+                      {selectedSources.size === 0 ? (
+                        <span className="text-muted-foreground">Choisir les wallets source…</span>
+                      ) : (
+                        <span className="text-foreground font-medium">
+                          {Array.from(selectedSources).join(", ")}
+                        </span>
+                      )}
+                    </span>
+                    {selectedSources.size > 0 && (
+                      <span className="text-xs font-semibold bg-primary text-primary-foreground rounded-full px-2 py-0.5 shrink-0">
+                        {selectedSources.size}
+                      </span>
+                    )}
+                    <ChevronLeft className="w-4 h-4 text-muted-foreground shrink-0 rotate-180" />
+                  </button>
+
+                  {/* Selected preview chips */}
+                  {selectedSources.size > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {Array.from(selectedSources).map((code) => {
+                        const bal = balanceMap[code];
+                        const hasBal = bal && parseFloat(bal) > 0;
+                        return (
+                          <span
+                            key={code}
+                            className="inline-flex items-center gap-1 text-xs font-medium bg-primary/10 text-primary rounded-full pl-2 pr-1 py-0.5"
+                          >
+                            <span>{CURRENCY_FLAGS[code] || "💱"}</span>
+                            <span>{code}</span>
+                            {hasBal && (
+                              <span className="text-[10px] text-primary/70">
+                                {parseFloat(bal).toLocaleString()}
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => toggleSource(code)}
+                              className="ml-0.5 w-4 h-4 rounded-full hover:bg-primary/20 flex items-center justify-center"
+                            >
+                              <X className="w-2.5 h-2.5" />
+                            </button>
                           </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
@@ -466,6 +663,16 @@ export default function AutoConversionPage() {
           </p>
         )}
       </div>
+
+      {/* Source picker modal */}
+      <SourcePickerModal
+        open={showPicker}
+        onClose={() => setShowPicker(false)}
+        options={sourceOptions}
+        selected={selectedSources}
+        onToggle={toggleSource}
+        balanceMap={balanceMap}
+      />
     </DashboardLayout>
   );
 }
