@@ -561,7 +561,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                     )}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-80 p-0" align="end">
+                <PopoverContent className="w-80 p-0 overflow-visible" align="end" sideOffset={8}>
                   <div className="p-3 border-b border-border flex items-center justify-between gap-2">
                     <h4 className="font-semibold flex items-center gap-2 shrink-0">
                       <Bell className="w-4 h-4 text-primary" />
@@ -594,9 +594,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                       )}
                     </div>
                   </div>
-                  <ScrollArea
-                    className="max-h-80"
+                  <div
+                    className="max-h-80 overflow-y-auto overscroll-contain"
                     onWheel={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
                     onTouchMove={(e) => e.stopPropagation()}
                   >
                     {(!notificationData?.notifications || notificationData.notifications.length === 0) ? (
@@ -687,18 +688,18 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                                   </button>
                                 )}
                               </div>
-                              <div className="flex items-center gap-1 shrink-0">
+                              <div className="flex items-center shrink-0 ml-1">
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                                  className="h-7 w-7 rounded-full text-muted-foreground/70 hover:text-destructive hover:bg-destructive/10"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     deleteNotificationMutation.mutate(notification.id);
                                   }}
                                   data-testid={`button-delete-notification-${notification.id}`}
                                 >
-                                  <X className="w-3 h-3" />
+                                  <X className="w-3.5 h-3.5" />
                                 </Button>
                               </div>
                             </div>
@@ -707,7 +708,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                         })}
                       </div>
                     )}
-                  </ScrollArea>
+                  </div>
                 </PopoverContent>
               </Popover>
               <div className="relative">
