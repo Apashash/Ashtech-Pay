@@ -5,7 +5,7 @@ import { format } from "date-fns";
 import { fr, enUS } from "date-fns/locale";
 import {
   Bell, ChevronLeft, ChevronRight, CheckCheck, Trash2, ArrowDownCircle,
-  ArrowUpCircle, Send, Megaphone, MessageSquare, ChevronDown, ChevronUp, X, Loader2,
+  ArrowUpCircle, Send, Megaphone, MessageSquare, X, Loader2, ExternalLink,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { Button } from "@/components/ui/button";
@@ -28,7 +28,6 @@ export default function NotificationsPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { t, language } = useLanguage();
-  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 20;
 
@@ -71,6 +70,26 @@ export default function NotificationsPage() {
       toast({ title: t.notifications.deletedAll, description: t.notifications.deletedAllDesc });
     },
   });
+
+  // ── Navigation par type ───────────────────────────────────────────────────────
+  function getDestination(type: string): string {
+    switch (type) {
+      case "deposit_confirmed":
+      case "deposit_failed":
+      case "withdrawal_confirmed":
+      case "withdrawal_failed":
+      case "payment_link_received":
+      case "payment_link_failed":
+      case "transfer_received":
+        return "/dashboard/transactions";
+      case "admin_message":
+        return "/dashboard/support";
+      case "global_message":
+        return "/dashboard/global-message";
+      default:
+        return "/dashboard/transactions";
+    }
+  }
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
   function getTitle(type: string, stored: string): string {
@@ -188,7 +207,6 @@ export default function NotificationsPage() {
         ) : (
           <div className="divide-y divide-border">
             {paged.map((notif) => {
-              const isExpanded = expandedId === notif.id;
               const isGlobal = notif.type === "global_message";
               return (
                 <div
@@ -199,13 +217,12 @@ export default function NotificationsPage() {
                       : !notif.isRead ? "bg-primary/5 hover:bg-muted/40"          : "hover:bg-muted/30"
                   }`}
                   onClick={() => {
-                    if (isGlobal) { setLocation("/dashboard/global-message"); return; }
-                    setExpandedId(isExpanded ? null : notif.id);
                     if (!notif.isRead) markAsReadMutation.mutate(notif.id);
+                    setLocation(getDestination(notif.type));
                   }}
                 >
                   <div className="flex items-start gap-3">
-                    {/* Unread dot */}
+                    {/* Icon + unread dot */}
                     <div className="relative mt-0.5 shrink-0">
                       {getIcon(notif.type)}
                       {!notif.isRead && (
@@ -226,14 +243,10 @@ export default function NotificationsPage() {
                             </span>
                           )}
                         </div>
-                        {!isGlobal && (
-                          <span className="text-muted-foreground shrink-0 mt-0.5">
-                            {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                          </span>
-                        )}
+                        <ExternalLink className="w-3.5 h-3.5 text-muted-foreground/40 shrink-0 mt-0.5" />
                       </div>
 
-                      <p className={`text-sm text-muted-foreground mt-1 leading-relaxed ${isExpanded ? "whitespace-pre-wrap break-words" : "line-clamp-2"}`}>
+                      <p className="text-sm text-muted-foreground mt-1 leading-relaxed line-clamp-2">
                         {getMessage(notif.type, notif.message || "", preferredCurrency)}
                       </p>
 
@@ -241,31 +254,6 @@ export default function NotificationsPage() {
                         <p className="text-xs text-muted-foreground/70 mt-1.5">
                           {format(new Date(notif.createdAt), language === "fr" ? "dd MMM 'à' HH:mm" : "dd MMM 'at' HH:mm", { locale: language === "fr" ? fr : enUS })}
                         </p>
-                      )}
-
-                      {isExpanded && notif.transactionId && (
-                        <button
-                          className="text-xs text-primary mt-2 underline underline-offset-2"
-                          onClick={(e) => { e.stopPropagation(); setLocation("/dashboard/transactions"); }}
-                        >
-                          {t.notifications.viewTransaction}
-                        </button>
-                      )}
-                      {isExpanded && notif.type === "admin_message" && (
-                        <button
-                          className="text-xs text-primary mt-2 underline underline-offset-2"
-                          onClick={(e) => { e.stopPropagation(); setLocation("/dashboard/support"); }}
-                        >
-                          {t.notifications.viewMessage}
-                        </button>
-                      )}
-                      {isExpanded && isGlobal && (
-                        <button
-                          className="text-xs text-purple-500 mt-2 underline underline-offset-2 font-medium"
-                          onClick={(e) => { e.stopPropagation(); setLocation("/dashboard/global-message"); }}
-                        >
-                          {t.notifications.viewOfficialMessage}
-                        </button>
                       )}
                     </div>
 
