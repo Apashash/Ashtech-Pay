@@ -5500,7 +5500,7 @@ export async function registerRoutes(
           fromCurrency,
           toCurrency,
           userCountry: user.country ?? undefined,
-        }).catch(() => {});
+        }).catch((err) => console.error("[Telegram] notifyAutoConversionRuleCreated failed:", err?.message ?? err));
 
         const primary = user.preferredCurrency || "XAF";
         let currentBalance = 0;

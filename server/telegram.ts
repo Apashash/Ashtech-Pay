@@ -18,16 +18,23 @@ function isConfigured(): boolean {
 }
 
 async function callBotApi(method: string, body: Record<string, any>): Promise<any> {
-  if (!BOT_API) return null;
+  if (!BOT_API) {
+    console.warn("[Telegram] callBotApi: BOT_API non configuré — TELEGRAM_BOT_TOKEN manquant.");
+    return null;
+  }
   try {
     const res = await fetch(`${BOT_API}/${method}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    return await res.json();
+    const json = await res.json();
+    if (!json.ok) {
+      console.error(`[Telegram] ${method} réponse d'erreur:`, JSON.stringify(json));
+    }
+    return json;
   } catch (err: any) {
-    console.warn(`[Telegram] ${method} error:`, err?.message);
+    console.error(`[Telegram] ${method} exception:`, err?.message);
     return null;
   }
 }
