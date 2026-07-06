@@ -225,8 +225,8 @@ function GroupedRuleCard({
 
   return (
     <div className="rounded-xl border border-border bg-card overflow-hidden">
-      {/* Header: all sources → destination */}
       <div className="p-4">
+        {/* Title row */}
         <div className="flex items-center justify-between mb-3">
           <span className="text-[10px] uppercase tracking-widest font-semibold text-muted-foreground">
             Conversion automatique
@@ -234,59 +234,71 @@ function GroupedRuleCard({
           <span className="text-[10px] font-semibold bg-green-500/10 text-green-500 rounded-full px-2 py-0.5">Actif</span>
         </div>
 
-        {/* Sources list */}
-        <div className="space-y-2 mb-3">
-          {rules.map((rule) => {
-            const balance = balanceMap[rule.fromCurrency];
-            const hasBalance = balance !== undefined && parseFloat(balance) > 0;
-            return (
-              <div key={rule.id} className="flex items-center gap-2.5">
-                {/* Source wallet */}
-                <div className="flex items-center gap-2 flex-1 min-w-0 rounded-lg bg-muted/30 px-3 py-2">
-                  <span className="text-base leading-none shrink-0">{CURRENCY_FLAGS[rule.fromCurrency] || "💱"}</span>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-sm text-foreground leading-tight">{rule.fromCurrency}</p>
-                    {hasBalance && (
-                      <p className="text-[10px] text-primary font-medium">
-                        {parseFloat(balance).toLocaleString()} {rule.fromCurrency}
-                      </p>
-                    )}
+        {/* Sources | arrow | destination */}
+        <div className="flex items-stretch gap-2">
+
+          {/* Left: source rows */}
+          <div className="flex-1 min-w-0 space-y-1.5">
+            {rules.map((rule) => {
+              const balance = balanceMap[rule.fromCurrency];
+              const hasBalance = balance !== undefined && parseFloat(balance) > 0;
+              return (
+                <div key={rule.id} className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-2 flex-1 min-w-0 rounded-lg bg-muted/30 px-2.5 py-2">
+                    <span className="text-base leading-none shrink-0">{CURRENCY_FLAGS[rule.fromCurrency] || "💱"}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-sm text-foreground leading-tight">{rule.fromCurrency}</p>
+                      {hasBalance && (
+                        <p className="text-[10px] text-primary font-medium leading-tight">
+                          {parseFloat(balance).toLocaleString()}
+                        </p>
+                      )}
+                    </div>
                   </div>
+                  {/* Delete per source */}
+                  <button
+                    onClick={() => onDelete(rule.id)}
+                    disabled={deletingId === rule.id}
+                    className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors disabled:opacity-50 shrink-0"
+                    title="Supprimer"
+                  >
+                    {deletingId === rule.id
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      : <Trash2 className="w-3.5 h-3.5" />}
+                  </button>
                 </div>
+              );
+            })}
+          </div>
 
-                {/* Arrow */}
-                <ArrowRight className="w-3.5 h-3.5 text-primary shrink-0" />
+          {/* Center: single arrow */}
+          <div className="flex items-center justify-center px-1 shrink-0">
+            <div className="flex flex-col items-center gap-0.5">
+              <ArrowRight className="w-4 h-4 text-primary" />
+              <span className="text-[8px] uppercase tracking-widest text-muted-foreground font-semibold leading-none">auto</span>
+            </div>
+          </div>
 
-                {/* Destination */}
-                <div className="flex items-center gap-2 flex-1 min-w-0 rounded-lg bg-primary/8 border border-primary/20 px-3 py-2">
-                  <span className="text-base leading-none shrink-0">{CURRENCY_FLAGS[toCurrency] || "💱"}</span>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-sm text-foreground leading-tight">{toCurrency}</p>
-                    <p className="text-[10px] text-muted-foreground truncate">{CURRENCY_NAMES[toCurrency] || toCurrency}</p>
-                  </div>
-                </div>
-
-                {/* Delete */}
-                <button
-                  onClick={() => onDelete(rule.id)}
-                  disabled={deletingId === rule.id}
-                  className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors disabled:opacity-50 shrink-0"
-                >
-                  {deletingId === rule.id
-                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    : <Trash2 className="w-3.5 h-3.5" />}
-                </button>
+          {/* Right: destination (once, vertically centered) */}
+          <div className="flex items-center">
+            <div className="flex items-center gap-2 rounded-xl bg-primary/8 border border-primary/20 px-3 py-3 min-w-[90px]">
+              <span className="text-xl leading-none shrink-0">{CURRENCY_FLAGS[toCurrency] || "💱"}</span>
+              <div className="min-w-0">
+                <p className="font-bold text-sm text-foreground leading-tight">{toCurrency}</p>
+                <p className="text-[10px] text-muted-foreground leading-tight truncate max-w-[60px]">
+                  {CURRENCY_NAMES[toCurrency] || toCurrency}
+                </p>
               </div>
-            );
-          })}
+            </div>
+          </div>
         </div>
 
-        {/* Edit target / summary row */}
-        <div className="flex items-center justify-between">
+        {/* Footer row */}
+        <div className="flex items-center justify-between mt-2.5">
           {totalBalance > 0 && (
             <p className="text-[10px] text-primary flex items-center gap-1">
               <Zap className="w-3 h-3" />
-              Conversion active — soldes en cours de traitement
+              Soldes en cours de conversion
             </p>
           )}
           <button
