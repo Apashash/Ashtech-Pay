@@ -32,7 +32,7 @@ export default function NotificationsPage() {
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 20;
 
-  const { data: user } = useUserQuery<User>({ queryKey: ["/api/user"] });
+  const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const preferredCurrency = user?.preferredCurrency || "XAF";
 
   const { data: notificationData, isLoading } = useQuery<{
