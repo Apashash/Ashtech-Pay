@@ -32,22 +32,47 @@ const CURRENCY_NAMES: Record<string, string> = {};
 ALL_FX_CURRENCIES.forEach((c) => { CURRENCY_NAMES[c.code] = c.name; });
 
 // ─── Source picker modal ──────────────────────────────────────────────────────
+// Uses a local draft so Cancel truly discards; Confirmer commits the selection.
 function SourcePickerModal({
   open,
   onClose,
+  onConfirm,
   options,
-  selected,
-  onToggle,
+  initialSelected,
   balanceMap,
 }: {
   open: boolean;
   onClose: () => void;
+  onConfirm: (selected: Set<string>) => void;
   options: { code: string; name: string }[];
-  selected: Set<string>;
-  onToggle: (code: string) => void;
+  initialSelected: Set<string>;
   balanceMap: Record<string, string>;
 }) {
   const [search, setSearch] = useState("");
+  // Local draft — copied from parent on open; never mutates parent until Confirm
+  const [draft, setDraft] = useState<Set<string>>(new Set());
+
+  // Sync draft when modal opens
+  useState(() => { setDraft(new Set(initialSelected)); });
+
+  // Reset draft each time the modal opens
+  const handleOpenChange = (v: boolean) => {
+    if (v) setDraft(new Set(initialSelected));
+    else onClose();
+  };
+
+  function toggleDraft(code: string) {
+    setDraft((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code); else next.add(code);
+      return next;
+    });
+  }
+
+  function handleConfirm() {
+    onConfirm(draft);
+    onClose();
+  }
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -57,7 +82,7 @@ function SourcePickerModal({
   }, [options, search]);
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-sm w-full p-0 gap-0 overflow-hidden">
         <DialogHeader className="px-4 pt-4 pb-3 border-b border-border">
           <DialogTitle className="text-base font-semibold">
@@ -88,14 +113,14 @@ function SourcePickerModal({
             <p className="text-xs text-muted-foreground text-center py-8">Aucun résultat</p>
           ) : (
             filtered.map((c) => {
-              const isSelected = selected.has(c.code);
+              const isSelected = draft.has(c.code);
               const balance = balanceMap[c.code];
               const hasBalance = balance !== undefined && parseFloat(balance) > 0;
               return (
                 <button
                   key={c.code}
                   type="button"
-                  onClick={() => onToggle(c.code)}
+                  onClick={() => toggleDraft(c.code)}
                   className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors border-b border-border/50 last:border-0 ${
                     isSelected ? "bg-primary/8" : "hover:bg-muted/40"
                   }`}
@@ -126,9 +151,9 @@ function SourcePickerModal({
           <Button variant="outline" className="flex-1 h-9" onClick={onClose}>
             Annuler
           </Button>
-          <Button className="flex-1 h-9" onClick={onClose} disabled={selected.size === 0}>
+          <Button className="flex-1 h-9" onClick={handleConfirm} disabled={draft.size === 0}>
             <Check className="w-4 h-4 mr-1.5" />
-            Confirmer ({selected.size})
+            Confirmer ({draft.size})
           </Button>
         </div>
       </DialogContent>
@@ -150,9 +175,10 @@ function GroupedRuleCard({
   rules: AutoConversionRule[];
   balanceMap: Record<string, string>;
   onDelete: (id: string) => void;
-  onUpdate: (id: string, newToCurrency: string) => Promise<void>;
+  onUpdate: (id: string, newToCurrency: string, silent?: boolean) => Promise<void>;
   deletingId: string | null;
 }) {
+  const { toast } = useToast();
   const [editing, setEditing] = useState(false);
   const [newTarget, setNewTarget] = useState(toCurrency);
   const [saving, setSaving] = useState(false);
@@ -164,11 +190,31 @@ function GroupedRuleCard({
   async function saveAll() {
     if (!newTarget || newTarget === toCurrency) { setEditing(false); return; }
     setSaving(true);
+    const failed: string[] = [];
     for (const rule of rules) {
-      await onUpdate(rule.id, newTarget);
+      try {
+        // silent=true: suppress per-rule toast and rethrow on error
+        await onUpdate(rule.id, newTarget, true);
+      } catch {
+        failed.push(rule.fromCurrency);
+      }
     }
     setSaving(false);
-    setEditing(false);
+    const ok = rules.length - failed.length;
+    if (failed.length === 0) {
+      setEditing(false);
+      toast({
+        title: ok === 1 ? "Règle mise à jour" : `${ok} règles mises à jour`,
+        description: "La conversion démarre immédiatement si un solde est disponible.",
+      });
+    } else {
+      toast({
+        title: "Mise à jour partielle",
+        description: `${ok} règle(s) mise(s) à jour. Échec pour : ${failed.join(", ")}.`,
+        variant: "destructive",
+      });
+      // edit mode stays open so user can retry
+    }
   }
 
   // Total sources with balance
@@ -372,8 +418,9 @@ export default function AutoConversionPage() {
     },
   });
 
-  // Update (edit toCurrency)
-  async function handleUpdate(id: string, newToCurrency: string) {
+  // Update (edit toCurrency).
+  // silent=true: skip toasts and rethrow so batch callers (saveAll) can aggregate.
+  async function handleUpdate(id: string, newToCurrency: string, silent = false) {
     try {
       await apiRequest("PATCH", `/api/auto-conversion/${id}`, { toCurrency: newToCurrency });
       await Promise.all([
@@ -381,12 +428,17 @@ export default function AutoConversionPage() {
         queryClient.invalidateQueries({ queryKey: ["/api/wallets"] }),
         queryClient.invalidateQueries({ queryKey: ["/api/user"] }),
       ]);
-      toast({
-        title: "Règle mise à jour",
-        description: "La conversion démarre immédiatement si vous avez un solde à convertir.",
-      });
+      if (!silent) {
+        toast({
+          title: "Règle mise à jour",
+          description: "La conversion démarre immédiatement si vous avez un solde à convertir.",
+        });
+      }
     } catch (err: any) {
-      toast({ title: "Erreur", description: err?.message || "Impossible de modifier.", variant: "destructive" });
+      if (!silent) {
+        toast({ title: "Erreur", description: err?.message || "Impossible de modifier.", variant: "destructive" });
+      }
+      throw err; // rethrow so batch callers detect partial failure
     }
   }
 
@@ -668,9 +720,9 @@ export default function AutoConversionPage() {
       <SourcePickerModal
         open={showPicker}
         onClose={() => setShowPicker(false)}
+        onConfirm={(confirmed) => setSelectedSources(confirmed)}
         options={sourceOptions}
-        selected={selectedSources}
-        onToggle={toggleSource}
+        initialSelected={selectedSources}
         balanceMap={balanceMap}
       />
     </DashboardLayout>
