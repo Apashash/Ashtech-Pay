@@ -162,68 +162,106 @@ function SourcePickerModal({
 }
 
 // ─── Grouped rule card ────────────────────────────────────────────────────────
-// Groups all rules with the same toCurrency into one card.
 function GroupedRuleCard({
   toCurrency,
   rules,
   balanceMap,
+  availableSources,   // currencies free to add (not used in any other rule)
   onDelete,
+  onDeleteAll,
   onUpdate,
-  deletingId,
+  onCreate,
 }: {
   toCurrency: string;
   rules: AutoConversionRule[];
   balanceMap: Record<string, string>;
-  onDelete: (id: string) => void;
+  availableSources: { code: string; name: string }[];
+  onDelete: (id: string) => Promise<void>;
+  onDeleteAll: (ids: string[]) => Promise<void>;
   onUpdate: (id: string, newToCurrency: string, silent?: boolean) => Promise<void>;
-  deletingId: string | null;
+  onCreate: (fromCurrency: string, toCurrency: string) => Promise<void>;
 }) {
   const { toast } = useToast();
   const [editing, setEditing] = useState(false);
-  const [newTarget, setNewTarget] = useState(toCurrency);
   const [saving, setSaving] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
+  const [showSourcePicker, setShowSourcePicker] = useState(false);
 
-  // All codes used as sources in this group — can't be target
-  const usedSources = new Set(rules.map((r) => r.fromCurrency));
-  const targetOptions = ALL_FX_CURRENCIES.filter((c) => !usedSources.has(c.code));
+  // Edit state — initialised when edit opens
+  const currentSources = useMemo(() => new Set(rules.map((r) => r.fromCurrency)), [rules]);
+  const [editSources, setEditSources] = useState<Set<string>>(new Set());
+  const [newTarget, setNewTarget] = useState(toCurrency);
 
-  async function saveAll() {
-    if (!newTarget || newTarget === toCurrency) { setEditing(false); return; }
+  function openEdit() {
+    setEditSources(new Set(currentSources));
+    setNewTarget(toCurrency);
+    setEditing(true);
+  }
+
+  // Picker options = current sources + globally free sources (so user can deselect existing ones too)
+  const pickerOptions = useMemo(() => {
+    const existing = ALL_FX_CURRENCIES.filter((c) => currentSources.has(c.code));
+    const free = availableSources.filter((c) => !currentSources.has(c.code));
+    return [...existing, ...free];
+  }, [currentSources, availableSources]);
+
+  // Target options = all currencies not selected as source in the edit draft
+  const targetOptions = useMemo(
+    () => ALL_FX_CURRENCIES.filter((c) => !editSources.has(c.code)),
+    [editSources]
+  );
+
+  async function saveEdit() {
+    if (editSources.size === 0) return;
     setSaving(true);
-    const failed: string[] = [];
-    for (const rule of rules) {
-      try {
-        // silent=true: suppress per-rule toast and rethrow on error
-        await onUpdate(rule.id, newTarget, true);
-      } catch {
-        failed.push(rule.fromCurrency);
+    const errors: string[] = [];
+
+    // 1. Sources to remove (were in old set, not in new set)
+    const toRemove = rules.filter((r) => !editSources.has(r.fromCurrency));
+    for (const rule of toRemove) {
+      try { await onDelete(rule.id); } catch { errors.push(`Suppression ${rule.fromCurrency}`); }
+    }
+
+    // 2. Sources to add (in new set, not in old set)
+    const toAdd = Array.from(editSources).filter((c) => !currentSources.has(c));
+    for (const from of toAdd) {
+      try { await onCreate(from, newTarget); } catch { errors.push(`Ajout ${from}`); }
+    }
+
+    // 3. Target changed — update all remaining rules
+    if (newTarget !== toCurrency) {
+      const remaining = rules.filter((r) => editSources.has(r.fromCurrency));
+      for (const rule of remaining) {
+        try { await onUpdate(rule.id, newTarget, true); } catch { errors.push(`Cible ${rule.fromCurrency}`); }
       }
     }
+
     setSaving(false);
-    const ok = rules.length - failed.length;
-    if (failed.length === 0) {
+
+    if (errors.length === 0) {
       setEditing(false);
-      toast({
-        title: ok === 1 ? "Règle mise à jour" : `${ok} règles mises à jour`,
-        description: "La conversion démarre immédiatement si un solde est disponible.",
-      });
+      toast({ title: "Règles mises à jour", description: "La conversion démarre immédiatement si un solde est disponible." });
     } else {
-      toast({
-        title: "Mise à jour partielle",
-        description: `${ok} règle(s) mise(s) à jour. Échec pour : ${failed.join(", ")}.`,
-        variant: "destructive",
-      });
-      // edit mode stays open so user can retry
+      toast({ title: "Mise à jour partielle", description: errors.join(", "), variant: "destructive" });
     }
   }
 
-  // Total sources with balance
+  async function handleDeleteAll() {
+    setDeletingAll(true);
+    try {
+      await onDeleteAll(rules.map((r) => r.id));
+    } finally {
+      setDeletingAll(false);
+    }
+  }
+
   const totalBalance = rules.reduce((sum, rule) => {
     const bal = parseFloat(balanceMap[rule.fromCurrency] || "0");
     return sum + (isFinite(bal) ? bal : 0);
   }, 0);
 
   return (
+    <>
     <div className="rounded-xl border border-border bg-card overflow-hidden">
       <div className="p-4">
         {/* Title row */}
@@ -236,36 +274,22 @@ function GroupedRuleCard({
 
         {/* Sources | arrow | destination */}
         <div className="flex items-stretch gap-2">
-
-          {/* Left: source rows */}
+          {/* Left: source rows (no delete buttons here) */}
           <div className="flex-1 min-w-0 space-y-1.5">
             {rules.map((rule) => {
               const balance = balanceMap[rule.fromCurrency];
               const hasBalance = balance !== undefined && parseFloat(balance) > 0;
               return (
-                <div key={rule.id} className="flex items-center gap-1.5">
-                  <div className="flex items-center gap-2 flex-1 min-w-0 rounded-lg bg-muted/30 px-2.5 py-2">
-                    <span className="text-base leading-none shrink-0">{CURRENCY_FLAGS[rule.fromCurrency] || "💱"}</span>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-sm text-foreground leading-tight">{rule.fromCurrency}</p>
-                      {hasBalance && (
-                        <p className="text-[10px] text-primary font-medium leading-tight">
-                          {parseFloat(balance).toLocaleString()}
-                        </p>
-                      )}
-                    </div>
+                <div key={rule.id} className="flex items-center gap-2 rounded-lg bg-muted/30 px-2.5 py-2">
+                  <span className="text-base leading-none shrink-0">{CURRENCY_FLAGS[rule.fromCurrency] || "💱"}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-sm text-foreground leading-tight">{rule.fromCurrency}</p>
+                    {hasBalance && (
+                      <p className="text-[10px] text-primary font-medium leading-tight">
+                        {parseFloat(balance).toLocaleString()}
+                      </p>
+                    )}
                   </div>
-                  {/* Delete per source */}
-                  <button
-                    onClick={() => onDelete(rule.id)}
-                    disabled={deletingId === rule.id}
-                    className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors disabled:opacity-50 shrink-0"
-                    title="Supprimer"
-                  >
-                    {deletingId === rule.id
-                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      : <Trash2 className="w-3.5 h-3.5" />}
-                  </button>
                 </div>
               );
             })}
@@ -293,64 +317,117 @@ function GroupedRuleCard({
           </div>
         </div>
 
-        {/* Footer row */}
-        <div className="flex items-center justify-between mt-2.5">
-          {totalBalance > 0 && (
+        {/* Footer: hint + edit + delete-all */}
+        <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-border/50">
+          {totalBalance > 0 ? (
             <p className="text-[10px] text-primary flex items-center gap-1">
               <Zap className="w-3 h-3" />
               Soldes en cours de conversion
             </p>
-          )}
-          <button
-            onClick={() => { setEditing(!editing); setNewTarget(toCurrency); }}
-            className="ml-auto p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-            title="Changer la devise cible pour tout le groupe"
-          >
-            <Pencil className="w-3.5 h-3.5" />
-          </button>
+          ) : <span />}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={openEdit}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+              Modifier
+            </button>
+            <button
+              onClick={handleDeleteAll}
+              disabled={deletingAll}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+            >
+              {deletingAll
+                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                : <Trash2 className="w-3.5 h-3.5" />}
+              Supprimer tout
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Inline edit panel */}
+      {/* ── Inline edit panel ── */}
       {editing && (
-        <div className="border-t border-border px-4 py-3 bg-muted/20 space-y-3">
-          <p className="text-xs text-muted-foreground font-medium">
-            Changer la devise cible pour toutes les sources :
-          </p>
-          <Select value={newTarget} onValueChange={setNewTarget}>
-            <SelectTrigger className="w-full h-9 text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {targetOptions.map((c) => (
-                <SelectItem key={c.code} value={c.code}>
-                  <span className="flex items-center gap-2">
-                    <span>{CURRENCY_FLAGS[c.code] || "💱"}</span>
-                    <span className="font-medium">{c.code}</span>
-                    <span className="text-muted-foreground text-xs">— {c.name}</span>
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" className="flex-1 h-8" onClick={() => setEditing(false)} disabled={saving}>
-              <X className="w-3.5 h-3.5 mr-1" /> Annuler
-            </Button>
-            <Button size="sm" className="flex-1 h-8" onClick={saveAll} disabled={saving || !newTarget}>
-              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Check className="w-3.5 h-3.5 mr-1" />}
-              Enregistrer
-            </Button>
+        <div className="border-t border-border px-4 py-4 bg-muted/20 space-y-4">
+
+          {/* Source selector */}
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Wallets source
+              {editSources.size > 0 && (
+                <span className="ml-1.5 text-primary normal-case">({editSources.size} sélectionné{editSources.size > 1 ? "s" : ""})</span>
+              )}
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowSourcePicker(true)}
+              className="w-full flex items-center gap-2.5 rounded-lg border border-border bg-background px-3 py-2.5 text-left hover:border-primary/50 transition-colors"
+            >
+              <Wallet className="w-4 h-4 text-muted-foreground shrink-0" />
+              <span className="flex-1 text-sm text-foreground font-medium truncate">
+                {editSources.size === 0
+                  ? <span className="text-muted-foreground">Aucun wallet sélectionné</span>
+                  : Array.from(editSources).join(", ")
+                }
+              </span>
+              <ChevronLeft className="w-4 h-4 text-muted-foreground rotate-180 shrink-0" />
+            </button>
           </div>
-          {newTarget !== toCurrency && (
+
+          {/* Target selector */}
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Wallet cible</p>
+            <Select value={newTarget} onValueChange={setNewTarget}>
+              <SelectTrigger className="w-full h-9 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {targetOptions.map((c) => (
+                  <SelectItem key={c.code} value={c.code}>
+                    <span className="flex items-center gap-2">
+                      <span>{CURRENCY_FLAGS[c.code] || "💱"}</span>
+                      <span className="font-medium">{c.code}</span>
+                      <span className="text-muted-foreground text-xs">— {c.name}</span>
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {(newTarget !== toCurrency || editSources.size !== currentSources.size || ![...editSources].every(c => currentSources.has(c))) && (
             <p className="text-[10px] text-primary flex items-center gap-1">
               <Zap className="w-3 h-3" />
               La conversion démarrera immédiatement si un solde est disponible.
             </p>
           )}
+
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" className="flex-1 h-9" onClick={() => setEditing(false)} disabled={saving}>
+              <X className="w-3.5 h-3.5 mr-1" /> Annuler
+            </Button>
+            <Button size="sm" className="flex-1 h-9" onClick={saveEdit}
+              disabled={saving || editSources.size === 0 || !newTarget || editSources.has(newTarget)}
+            >
+              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Check className="w-3.5 h-3.5 mr-1" />}
+              Enregistrer
+            </Button>
+          </div>
         </div>
       )}
     </div>
+
+    {/* Source picker for edit mode */}
+    <SourcePickerModal
+      open={showSourcePicker}
+      onClose={() => setShowSourcePicker(false)}
+      onConfirm={(confirmed) => setEditSources(confirmed)}
+      options={pickerOptions}
+      initialSelected={editSources}
+      balanceMap={balanceMap}
+    />
+    </>
   );
 }
 
@@ -363,7 +440,6 @@ export default function AutoConversionPage() {
   const [toCurrency, setToCurrency] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
@@ -411,24 +487,40 @@ export default function AutoConversionPage() {
     });
   }
 
-  // Delete
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      setDeletingId(id);
-      return apiRequest("DELETE", `/api/auto-conversion/${id}`);
-    },
-    onSuccess: () => {
-      setDeletingId(null);
-      queryClient.invalidateQueries({ queryKey: ["/api/auto-conversion"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/wallets"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
-      toast({ title: "Règle supprimée" });
-    },
-    onError: (err: any) => {
-      setDeletingId(null);
+  // Delete one rule (silent — caller handles toast)
+  async function handleDeleteOne(id: string): Promise<void> {
+    await apiRequest("DELETE", `/api/auto-conversion/${id}`);
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["/api/auto-conversion"] }),
+      queryClient.invalidateQueries({ queryKey: ["/api/wallets"] }),
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] }),
+    ]);
+  }
+
+  // Delete all rules in a group
+  async function handleDeleteAll(ids: string[]): Promise<void> {
+    try {
+      await Promise.all(ids.map((id) => apiRequest("DELETE", `/api/auto-conversion/${id}`)));
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["/api/auto-conversion"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/wallets"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/user"] }),
+      ]);
+      toast({ title: ids.length === 1 ? "Règle supprimée" : `${ids.length} règles supprimées` });
+    } catch (err: any) {
       toast({ title: "Erreur", description: err?.message || "Impossible de supprimer.", variant: "destructive" });
-    },
-  });
+    }
+  }
+
+  // Create a single rule (used by GroupedRuleCard edit to add a new source)
+  async function handleCreateOne(fromCurrency: string, toCurr: string): Promise<void> {
+    await apiRequest("POST", "/api/auto-conversion", { fromCurrency, toCurrency: toCurr });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["/api/auto-conversion"] }),
+      queryClient.invalidateQueries({ queryKey: ["/api/wallets"] }),
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] }),
+    ]);
+  }
 
   // Update (edit toCurrency).
   // silent=true: skip toasts and rethrow so batch callers (saveAll) can aggregate.
@@ -542,17 +634,28 @@ export default function AutoConversionPage() {
           <>
             {Object.keys(groupedRules).length > 0 && (
               <div className="space-y-3 mx-4 mb-4">
-                {Object.entries(groupedRules).map(([toCurr, groupRules]) => (
-                  <GroupedRuleCard
-                    key={toCurr}
-                    toCurrency={toCurr}
-                    rules={groupRules}
-                    balanceMap={balanceMap}
-                    deletingId={deletingId}
-                    onDelete={(id) => deleteMutation.mutate(id)}
-                    onUpdate={handleUpdate}
-                  />
-                ))}
+                {Object.entries(groupedRules).map(([toCurr, groupRules]) => {
+                  // Sources free to add = all currencies not already used in ANY rule
+                  const usedInOtherGroups = new Set(
+                    rules.filter((r) => r.toCurrency !== toCurr).map((r) => r.fromCurrency)
+                  );
+                  const free = ALL_FX_CURRENCIES.filter(
+                    (c) => !usedInOtherGroups.has(c.code) && c.code !== toCurr
+                  );
+                  return (
+                    <GroupedRuleCard
+                      key={toCurr}
+                      toCurrency={toCurr}
+                      rules={groupRules}
+                      balanceMap={balanceMap}
+                      availableSources={free}
+                      onDelete={handleDeleteOne}
+                      onDeleteAll={handleDeleteAll}
+                      onUpdate={handleUpdate}
+                      onCreate={handleCreateOne}
+                    />
+                  );
+                })}
               </div>
             )}
 
