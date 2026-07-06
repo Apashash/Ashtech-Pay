@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { DashboardLayout } from "@/components/dashboard-layout";
@@ -52,13 +52,16 @@ function SourcePickerModal({
   // Local draft — copied from parent on open; never mutates parent until Confirm
   const [draft, setDraft] = useState<Set<string>>(new Set());
 
-  // Sync draft when modal opens
-  useState(() => { setDraft(new Set(initialSelected)); });
+  // Sync draft from initialSelected every time the modal opens
+  useEffect(() => {
+    if (open) {
+      setDraft(new Set(initialSelected));
+      setSearch("");
+    }
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Reset draft each time the modal opens
   const handleOpenChange = (v: boolean) => {
-    if (v) setDraft(new Set(initialSelected));
-    else onClose();
+    if (!v) onClose();
   };
 
   function toggleDraft(code: string) {
