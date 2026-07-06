@@ -43,6 +43,7 @@ import HPayPage from "@/pages/hpay";
 import SettingsPage from "@/pages/dashboard/settings";
 import AutoConversionPage from "@/pages/dashboard/auto-conversion";
 import UpdatesPage from "@/pages/dashboard/updates";
+import NotificationsPage from "@/pages/dashboard/notifications";
 import PaymentPage from "@/pages/payment";
 import CheckoutPage from "@/pages/checkout";
 import NotFound from "@/pages/not-found";
@@ -188,6 +189,7 @@ function Router() {
       <Route path="/dashboard/settings" component={SettingsPage} />
       <Route path="/dashboard/auto-conversion" component={AutoConversionPage} />
       <Route path="/dashboard/updates" component={UpdatesPage} />
+      <Route path="/dashboard/notifications" component={NotificationsPage} />
       <Route path="/pay/:slug" component={PaymentPage} />
       <Route path="/checkout/:transactionId" component={CheckoutPage} />
       <Route path="/admin-panel-verify" component={AdminPanelVerifyPage} />

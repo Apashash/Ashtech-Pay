@@ -45,16 +45,10 @@ import {
   BadgeCheck,
   Send,
   Bell,
-  CheckCheck,
-  MessageSquare,
-  ArrowDownCircle,
-  ArrowUpCircle,
   X,
   Check,
   Coins,
   RefreshCw,
-  ChevronDown,
-  ChevronUp,
   Receipt,
   Megaphone,
   MessageCircle,
@@ -67,10 +61,6 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { format } from "date-fns";
-import { fr, enUS } from "date-fns/locale";
 import { Link as RouterLink } from "wouter";
 
 import { CurrencySelector } from "@/components/currency-selector";
@@ -205,43 +195,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     refetchInterval: 30000,
   });
 
-  const markAllReadMutation = useMutation({
-    mutationFn: async () => {
-      await apiRequest("POST", "/api/notifications/read-all");
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
-    },
-  });
-
-  const markAsReadMutation = useMutation({
-    mutationFn: async (id: string) => {
-      await apiRequest("POST", `/api/notifications/${id}/read`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
-    },
-  });
-
-  const deleteNotificationMutation = useMutation({
-    mutationFn: async (id: string) => {
-      await apiRequest("DELETE", `/api/notifications/${id}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
-    },
-  });
-
-  const deleteAllNotificationsMutation = useMutation({
-    mutationFn: async () => {
-      await apiRequest("DELETE", "/api/notifications");
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
-      toast({ title: t.notifications.deletedAll, description: t.notifications.deletedAllDesc });
-    },
-  });
-
   const hasUnreadGlobalMessage = (notificationData?.notifications ?? []).some(
     n => n.type === "global_message" && !n.isRead
   );
@@ -250,8 +203,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [showContactMenu, setShowContactMenu] = useState(false);
   const [pusdAmount, setPusdAmount] = useState("");
   const [pusdCountry, setPusdCountry] = useState("CM");
-  const [expandedNotifId, setExpandedNotifId] = useState<string | null>(null);
-
   const convertPusdMutation = useMutation({
     mutationFn: async () => {
       await apiRequest("POST", "/api/admin/convert-fiat-to-pusd", {
@@ -272,60 +223,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       });
     }
   });
-
-  const getNotifTitle = (type: string, storedTitle: string): string => {
-    const map: Record<string, string> = {
-      deposit_confirmed: t.notifications.typeDepositConfirmedTitle,
-      deposit_failed: t.notifications.typeDepositFailedTitle,
-      payment_link_received: t.notifications.typePaymentLinkReceivedTitle,
-      payment_link_failed: t.notifications.typePaymentLinkFailedTitle,
-      withdrawal_confirmed: t.notifications.typeWithdrawalConfirmedTitle,
-      withdrawal_failed: t.notifications.typeWithdrawalFailedTitle,
-    };
-    return map[type] || storedTitle;
-  };
-
-  const getNotifMessage = (type: string, storedMessage: string, currency: string): string => {
-    let params: { amount?: string; currency?: string } = {};
-    try { params = JSON.parse(storedMessage); } catch { /* old plain-text notification */ }
-    const amt = params.amount;
-    const cur = (params.currency || "XAF").replace(/\bXAF\b/g, currency);
-    const tpl = (tmpl: string) =>
-      tmpl.replace("{amount}", amt || "").replace("{currency}", cur);
-    switch (type) {
-      case "deposit_confirmed":
-        return amt ? tpl(t.notifications.typeDepositConfirmedMsg) : storedMessage.replace(/\bXAF\b/g, currency);
-      case "deposit_failed":
-        return t.notifications.typeDepositFailedMsg;
-      case "payment_link_received":
-        return amt ? tpl(t.notifications.typePaymentLinkReceivedMsg) : storedMessage.replace(/\bXAF\b/g, currency);
-      case "payment_link_failed":
-        return t.notifications.typePaymentLinkFailedMsg;
-      case "withdrawal_confirmed":
-        return amt ? tpl(t.notifications.typeWithdrawalConfirmedMsg) : storedMessage.replace(/\bXAF\b/g, currency);
-      case "withdrawal_failed":
-        return amt ? tpl(t.notifications.typeWithdrawalFailedMsg) : storedMessage.replace(/\bXAF\b/g, currency);
-      default:
-        return storedMessage.replace(/\bXAF\b/g, currency);
-    }
-  };
-
-  const getNotificationIcon = (type: string) => {
-    switch (type) {
-      case "deposit_confirmed":
-        return <ArrowDownCircle className="w-4 h-4 text-green-500" />;
-      case "withdrawal_confirmed":
-        return <ArrowUpCircle className="w-4 h-4 text-orange-500" />;
-      case "transfer_received":
-        return <Send className="w-4 h-4 text-blue-500" />;
-      case "global_message":
-        return <Megaphone className="w-4 h-4 text-purple-500" />;
-      case "admin_message":
-        return <MessageSquare className="w-4 h-4 text-purple-500" />;
-      default:
-        return <Bell className="w-4 h-4 text-muted-foreground" />;
-    }
-  };
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
@@ -547,170 +444,23 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                   )}
                 </Button>
               )}
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="ghost" size="icon" className="relative" data-testid="button-user-notifications">
-                    <Bell className={`w-5 h-5 ${(notificationData?.unreadCount || 0) > 0 ? "animate-bell-ring text-red-500" : ""}`} />
-                    {(notificationData?.unreadCount || 0) > 0 && (
-                      <>
-                        <span className="absolute inset-0 rounded-full animate-ping bg-red-500/30 pointer-events-none" />
-                        <Badge className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center bg-red-500 text-white text-xs">
-                          {notificationData!.unreadCount > 9 ? "9+" : notificationData!.unreadCount}
-                        </Badge>
-                      </>
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-80 p-0 overflow-visible" align="end" sideOffset={8}>
-                  <div className="p-3 border-b border-border flex items-center justify-between gap-2">
-                    <h4 className="font-semibold flex items-center gap-2 shrink-0">
-                      <Bell className="w-4 h-4 text-primary" />
-                      {t.notifications.title}
-                    </h4>
-                    <div className="flex items-center gap-1 shrink-0">
-                      {(notificationData?.unreadCount || 0) > 0 && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => markAllReadMutation.mutate()}
-                          className="h-8 w-8 p-0 text-primary hover:bg-primary/10"
-                          title={t.notifications.markAllRead}
-                          data-testid="button-mark-all-read"
-                        >
-                          <CheckCheck className="w-4 h-4" />
-                        </Button>
-                      )}
-                      {(notificationData?.notifications && notificationData.notifications.length > 0) && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => deleteAllNotificationsMutation.mutate()}
-                          className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
-                          title="Tout supprimer"
-                          data-testid="button-delete-all-notifications"
-                        >
-                          <X className="w-4 h-4" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                  <div
-                    className="max-h-80 overflow-y-auto overscroll-contain"
-                    onWheel={(e) => e.stopPropagation()}
-                    onTouchStart={(e) => e.stopPropagation()}
-                    onTouchMove={(e) => e.stopPropagation()}
-                  >
-                    {(!notificationData?.notifications || notificationData.notifications.length === 0) ? (
-                      <div className="p-4 text-center text-muted-foreground text-sm">
-                        {t.notifications.noNotifications}
-                      </div>
-                    ) : (
-                      <div className="divide-y divide-border">
-                        {notificationData.notifications.slice(0, 20).map((notification) => {
-                          const isExpanded = expandedNotifId === notification.id;
-                          return (
-                          <div
-                            key={notification.id}
-                            className={`p-3 transition-colors cursor-pointer ${
-                              notification.type === "global_message"
-                                ? !notification.isRead
-                                  ? "bg-purple-500/10 hover:bg-purple-500/15"
-                                  : "hover:bg-purple-500/5"
-                                : !notification.isRead
-                                  ? "bg-primary/5 hover:bg-muted/40"
-                                  : "hover:bg-muted/40"
-                            }`}
-                            data-testid={`notification-item-${notification.id}`}
-                            onClick={() => {
-                              if (notification.type === "global_message") {
-                                setLocation("/dashboard/global-message");
-                                return;
-                              }
-                              setExpandedNotifId(isExpanded ? null : notification.id);
-                              if (!notification.isRead) markAsReadMutation.mutate(notification.id);
-                            }}
-                          >
-                            <div className="flex items-start gap-3">
-                              <div className="mt-0.5 shrink-0">
-                                {getNotificationIcon(notification.type)}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center justify-between gap-1">
-                                  <div className="flex items-center gap-1.5 min-w-0">
-                                    <p className="text-sm font-medium truncate">{getNotifTitle(notification.type, notification.title)}</p>
-                                    {notification.type === "global_message" && (
-                                      <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/30">
-                                        {t.notifications.official}
-                                      </span>
-                                    )}
-                                  </div>
-                                  {notification.type !== "global_message" && (
-                                    <span className="text-muted-foreground shrink-0">
-                                      {isExpanded
-                                        ? <ChevronUp className="w-3 h-3" />
-                                        : <ChevronDown className="w-3 h-3" />}
-                                    </span>
-                                  )}
-                                </div>
-                                <p className={`text-xs text-muted-foreground mt-0.5 ${isExpanded ? "whitespace-pre-wrap break-words" : "line-clamp-2"}`}>
-                                  {getNotifMessage(notification.type, notification.message || "", preferredCurrency)}
-                                </p>
-                                {notification.createdAt && (
-                                  <p className="text-xs text-muted-foreground mt-1">
-                                    {format(new Date(notification.createdAt), language === "fr" ? "dd MMM 'à' HH:mm" : "dd MMM 'at' HH:mm", { locale: language === "fr" ? fr : enUS })}
-                                  </p>
-                                )}
-                                {isExpanded && notification.transactionId && (
-                                  <button
-                                    className="text-xs text-primary mt-2 underline"
-                                    onClick={(e) => { e.stopPropagation(); setLocation("/dashboard/transactions"); }}
-                                    data-testid={`button-notif-goto-tx-${notification.id}`}
-                                  >
-                                    {t.notifications.viewTransaction}
-                                  </button>
-                                )}
-                                {isExpanded && notification.type === "admin_message" && (
-                                  <button
-                                    className="text-xs text-primary mt-2 underline"
-                                    onClick={(e) => { e.stopPropagation(); setLocation("/dashboard/support"); }}
-                                    data-testid={`button-notif-goto-support-${notification.id}`}
-                                  >
-                                    {t.notifications.viewMessage}
-                                  </button>
-                                )}
-                                {isExpanded && notification.type === "global_message" && (
-                                  <button
-                                    className="text-xs text-purple-500 mt-2 underline font-medium"
-                                    onClick={(e) => { e.stopPropagation(); setLocation("/dashboard/global-message"); }}
-                                    data-testid={`button-notif-goto-global-${notification.id}`}
-                                  >
-                                    {t.notifications.viewOfficialMessage}
-                                  </button>
-                                )}
-                              </div>
-                              <div className="flex items-center shrink-0 ml-1">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 rounded-full text-muted-foreground/70 hover:text-destructive hover:bg-destructive/10"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    deleteNotificationMutation.mutate(notification.id);
-                                  }}
-                                  data-testid={`button-delete-notification-${notification.id}`}
-                                >
-                                  <X className="w-3.5 h-3.5" />
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </PopoverContent>
-              </Popover>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="relative"
+                onClick={() => setLocation("/dashboard/notifications")}
+                data-testid="button-user-notifications"
+              >
+                <Bell className={`w-5 h-5 ${(notificationData?.unreadCount || 0) > 0 ? "animate-bell-ring text-red-500" : ""}`} />
+                {(notificationData?.unreadCount || 0) > 0 && (
+                  <>
+                    <span className="absolute inset-0 rounded-full animate-ping bg-red-500/30 pointer-events-none" />
+                    <Badge className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center bg-red-500 text-white text-xs">
+                      {notificationData!.unreadCount > 9 ? "9+" : notificationData!.unreadCount}
+                    </Badge>
+                  </>
+                )}
+              </Button>
               <div className="relative">
                 {hasUnreadGlobalMessage && (
                   <span className="absolute -inset-1.5 rounded-full bg-red-500/40 animate-ping pointer-events-none" />
