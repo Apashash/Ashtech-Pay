@@ -1827,12 +1827,22 @@ export async function registerRoutes(
       if (!req.file) {
         return res.status(400).json({ message: "Aucun fichier fourni" });
       }
+
+      // Magic bytes check — the diskStorage saves before we can inspect content,
+      // so we read back the first 12 bytes and validate, then delete if invalid.
+      const fileBuffer = fs.readFileSync(req.file.path);
+      const magicCheck = validateFileMagicBytes(fileBuffer);
+      if (!magicCheck.valid) {
+        fs.unlinkSync(req.file.path);
+        console.warn(`[Upload/local] Magic bytes invalides pour ${req.file.originalname} — détecté: ${magicCheck.detected}`);
+        return res.status(400).json({ message: "Le contenu du fichier ne correspond pas à son type déclaré" });
+      }
+
       const filePath = `/uploads/${req.file.filename}`;
       res.json({ 
         success: true,
         objectPath: filePath,
         filename: req.file.filename,
-        originalName: req.file.originalname,
         size: req.file.size,
         mimetype: req.file.mimetype
       });
@@ -2003,6 +2013,11 @@ export async function registerRoutes(
   app.get("/api/img", externalProxyLimiter, async (req, res) => {
     const storagePath = req.query.path as string;
     if (!storagePath) return res.status(400).send("Path required");
+
+    // KYC documents are sensitive — require authentication to prevent enumeration
+    if (storagePath.startsWith("kyc/") && !req.session?.userId) {
+      return res.status(401).json({ message: "Authentification requise" });
+    }
 
     const ALLOWED_FOLDERS = ["payment-links", "kyc"];
     const isValid =
@@ -2177,9 +2192,10 @@ export async function registerRoutes(
     }
   });
 
-  // GET /api/admin/session-info — diagnostic endpoint (requireAuth only, NO requireAdmin)
-  // Returns session OTP state, IP whitelist status, and pool health so admins can debug
-  // "all zeros" issues without needing server logs.
+  // GET /api/admin/session-info — diagnostic endpoint
+  // Uses requireAuth + explicit role check (user.role === "admin") so only admins
+  // can access it. requireAdmin is skipped intentionally to avoid the TOTP gate
+  // when debugging session/OTP issues from outside the admin panel.
   app.get("/api/admin/session-info", requireAuth, async (req, res) => {
     try {
       const user = await storage.getUser(req.userId!).catch(() => null);
@@ -5827,6 +5843,11 @@ export async function registerRoutes(
   app.post("/api/admin/settings", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { key, value, description } = req.body;
+      // Validate key format: lowercase alphanumeric + underscore + colon + hyphen + dot
+      // Prevents injection of arbitrary internal keys (session secrets, botban:* patterns, etc.)
+      if (!key || typeof key !== "string" || !/^[a-z0-9_:.\-]{1,100}$/.test(key)) {
+        return res.status(400).json({ message: "Clé invalide — format non autorisé" });
+      }
       const setting = await storage.upsertSetting(key, value, description);
       res.json(setting);
     } catch (error) {
@@ -5840,6 +5861,11 @@ export async function registerRoutes(
       const { settings } = req.body as { settings: Array<{ key: string; value: string; description?: string }> };
       if (!Array.isArray(settings) || settings.length === 0) {
         return res.status(400).json({ message: "settings[] requis" });
+      }
+      // Validate all keys before writing any
+      const badKey = settings.find(s => !s.key || typeof s.key !== "string" || !/^[a-z0-9_:.\-]{1,100}$/.test(s.key));
+      if (badKey) {
+        return res.status(400).json({ message: `Clé invalide: ${badKey.key}` });
       }
       const results = await Promise.all(
         settings.map(({ key, value, description }) =>
@@ -8260,7 +8286,9 @@ export async function registerRoutes(
       // Log to admin_logs — do NOT log the OTP code itself
       const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
       storage.createAdminLog({ adminId: req.userId!, action: "otp_requested", details: `OTP demandé depuis IP ${ip}` }).catch(() => {});
-      console.log(`[AdminOTP] Code généré pour ${user.email.replace(/(.{2}).+(@.+)/, "$1***$2")} — email=${hasEmail} telegram=${hasTelegram}`);
+      if (process.env.NODE_ENV !== "production") {
+        console.log(`[AdminOTP] Code généré pour ${user.email.replace(/(.{2}).+(@.+)/, "$1***$2")} — email=${hasEmail} telegram=${hasTelegram}`);
+      }
       res.json({ sent: true, email: user.email.replace(/(.{2}).+(@.+)/, "$1***$2"), noChannel });
     } catch (error: any) {
       console.error("Admin OTP request error:", error.message);
