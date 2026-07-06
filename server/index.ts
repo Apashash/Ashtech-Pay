@@ -25,6 +25,9 @@ import { existsSync as _envExists, readFileSync as _envRead } from "fs";
   } catch { /* .env unreadable — continue without it */ }
 })();
 
+import { installProductionLogger } from "./logger";
+installProductionLogger();
+
 import express, { type Request, Response, NextFunction } from "express";
 import compression from "compression";
 import helmet from "helmet";
