@@ -9989,9 +9989,16 @@ export async function registerRoutes(
 
   app.patch("/api/admin/countries/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
+      // Log exchange rate updates explicitly so we can confirm they reach the DB
+      if (req.body.exchangeRate !== undefined) {
+        console.log(`[Admin] Updating country ${req.params.id} exchangeRate → ${req.body.exchangeRate}`);
+      }
       const country = await storage.updateCountry(req.params.id, req.body);
       if (!country) {
         return res.status(404).json({ message: "Pays non trouvé" });
+      }
+      if (req.body.exchangeRate !== undefined) {
+        console.log(`[Admin] Country ${country.code} (${country.currency}) exchangeRate saved as ${country.exchangeRate}`);
       }
       
       await storage.createAdminLog({

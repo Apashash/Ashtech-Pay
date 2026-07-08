@@ -124,6 +124,8 @@ export default function AdminCountries() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/countries"] });
+      // Also bust the public exchange-rates cache so the convert page picks up the new rate immediately
+      queryClient.invalidateQueries({ queryKey: ["/api/public/exchange-rates"] });
       toast({ title: "Pays mis à jour" });
       resetCountryForm();
     },
