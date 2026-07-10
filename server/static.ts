@@ -72,7 +72,12 @@ export function serveStatic(app: Express) {
     return;
   }
 
-  app.use(express.static(distPath));
+  // index:false empêche express.static de servir dist/public/index.html
+  // automatiquement sur "/" (comportement par défaut d'Express). Sans ça,
+  // TOUTE requête sur "/" recevait le fichier brut avant même d'atteindre
+  // notre middleware d'injection ci-dessous — d'où le placeholder
+  // "%VITE_ADMIN_PATH%" jamais remplacé et le fallback vers "/admin".
+  app.use(express.static(distPath, { index: false }));
 
   // Auth-flow pages outside the secret admin prefix that still need
   // the admin path so post-OTP redirects go to the correct URL.
