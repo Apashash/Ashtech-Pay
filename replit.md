@@ -21,6 +21,14 @@ Key features include:
 
 Preferred communication style: Simple, everyday language.
 
+## Running on Replit
+
+- `npm run dev` starts the app (bound to the "Start application" workflow) on port 5000.
+- Database is already provisioned via `DATABASE_URL`/`SUPABASE_DATABASE_URL`; run `npm run db:push` after schema changes.
+- Country/operator reference data is seeded via `npx tsx scripts/seed-countries.ts` (already run once).
+- Optional secrets not yet configured (see full list below) — related features are disabled/degraded until set. Notably: `ADMIN_PIN_CODE` fail-secure blocks all admin mutations without it; `FIELD_ENCRYPTION_KEY` absent means sensitive fields are stored in cleartext (security-sensitive, not just a feature toggle) — set it before handling real user data; `SWYCHR_EMAIL`/`SWYCHR_PASSWORD` disable the payment gateway; `SUPABASE_*` fall back to local file storage; `RESEND_API_KEY` disables email sending.
+- `db:push` applies the current Drizzle schema directly to whatever database `DATABASE_URL` points to — safe for this dev database, but do not run it against a production/shared database without reviewing the diff first.
+
 ## System Architecture
 
 ### Frontend Architecture
