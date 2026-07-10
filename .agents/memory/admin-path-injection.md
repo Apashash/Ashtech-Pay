@@ -22,6 +22,14 @@ description: How window.__ADMIN_PATH__ is injected and why the .htaccess must us
 ## Build-time injection (secondary)
 `client/index.html` also has a `%VITE_ADMIN_PATH%` Vite substitution as a secondary mechanism. Only works if `VITE_ADMIN_PATH` is available at Vite build time. The Replit build workflow does NOT have this var, so it's a no-op here — server-side injection is the primary mechanism.
 
+## Passenger multi-worker race (root cause of "sometimes falls back to /admin")
+Passenger runs several Node worker processes and load-balances requests across them.
+`resolveAdminPath()` MUST be called per-request, never cached once at process startup —
+otherwise a worker that failed to receive `VITE_ADMIN_PATH` at boot stays wrong for its
+entire lifetime, causing the exact "refresh sometimes lands on /admin" symptom depending
+on which worker answers. Per-request resolution + shared disk cache lets all workers
+converge on the same value as soon as any one of them has seen the env var.
+
 ## Server-side disk cache (added for extra resilience)
 `resolveAdminPath()` in `server/static.ts` also persists the last known-good
 `VITE_ADMIN_PATH` to `uploads/.admin-path-cache` whenever the env var is present.
