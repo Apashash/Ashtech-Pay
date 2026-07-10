@@ -9,6 +9,16 @@ import path from "path";
 // cache, etc. would otherwise silently fall back to "/admin".
 const ADMIN_PATH_CACHE_FILE = path.resolve(process.cwd(), "uploads", ".admin-path-cache");
 
+// IMPORTANT: this must be called on EVERY request, not once at process startup.
+// Passenger runs several Node worker processes in parallel and load-balances
+// requests across them. If even one worker fails to receive VITE_ADMIN_PATH at
+// boot, caching its resolved value at startup would permanently lock THAT
+// worker onto "/admin" for its entire lifetime — causing the exact symptom of
+// "it works on refresh... except sometimes" depending on which worker answers.
+// Re-reading process.env (and the shared disk cache) per-request means every
+// worker converges on the same value once at least one of them has seen it.
+let lastLoggedBadEnv = 0;
+
 function resolveAdminPath(): string {
   const envValue = process.env.VITE_ADMIN_PATH;
   if (envValue && envValue !== "/admin") {
@@ -21,20 +31,24 @@ function resolveAdminPath(): string {
     return envValue;
   }
 
-  console.error(
-    "[AdminPath] ⚠️ VITE_ADMIN_PATH absent de process.env (Passenger ne l'a probablement pas transmis)."
-  );
+  // Throttle this warning to once every 60s per process — it would otherwise
+  // spam the logs on every single request served by an affected worker.
+  const now = Date.now();
+  if (now - lastLoggedBadEnv > 60_000) {
+    lastLoggedBadEnv = now;
+    console.error(
+      "[AdminPath] ⚠️ VITE_ADMIN_PATH absent de process.env sur ce worker (Passenger ne l'a probablement pas transmis à ce process)."
+    );
+  }
   try {
     const cached = fs.readFileSync(ADMIN_PATH_CACHE_FILE, "utf-8").trim();
     if (cached && cached !== "/admin" && cached.startsWith("/") && !cached.includes("://")) {
-      console.error(`[AdminPath] Utilisation de la dernière valeur connue en cache disque: ${cached}`);
       return cached;
     }
   } catch {
-    // No cache file yet — first ever start with a broken env var.
+    // No cache file yet — no worker has ever seen the env var successfully.
   }
 
-  console.error("[AdminPath] ❌ Aucun cache disque disponible — repli sur \"/admin\" (INSÉCURISÉ).");
   return "/admin";
 }
 
@@ -60,9 +74,6 @@ export function serveStatic(app: Express) {
 
   app.use(express.static(distPath));
 
-  const adminPath = resolveAdminPath();
-  const adminInjection = `<script>window.__ADMIN_PATH__="${adminPath}"</script>`;
-
   // Auth-flow pages outside the secret admin prefix that still need
   // the admin path so post-OTP redirects go to the correct URL.
   const ADMIN_AUTH_PATHS = ["/admin-login-otp", "/admin-panel-verify"];
@@ -75,7 +86,7 @@ export function serveStatic(app: Express) {
    * Boundary-safe: exact match or "<adminPath>/" prefix so "/secret-other"
    * never matches admin path "/secret".
    */
-  function isAdminRequest(originalUrl: string): boolean {
+  function isAdminRequest(originalUrl: string, adminPath: string): boolean {
     const p = originalUrl.split("?")[0];
     return (
       p === adminPath ||
@@ -86,10 +97,11 @@ export function serveStatic(app: Express) {
 
   // Serve payment pages without og:image so sharing shows no preview image
   app.get(["/pay/:slug", "/hpay/:id"], (req, res) => {
+    const adminPath = resolveAdminPath();
     const indexPath = path.resolve(distPath, "index.html");
     let html = fs.readFileSync(indexPath, "utf-8");
-    if (isAdminRequest(req.originalUrl)) {
-      html = html.replace("</head>", `${adminInjection}</head>`);
+    if (isAdminRequest(req.originalUrl, adminPath)) {
+      html = html.replace("</head>", `<script>window.__ADMIN_PATH__="${adminPath}"</script></head>`);
     }
     html = html
       .replace(/<meta property="og:image"[^>]*>/g, "")
@@ -103,10 +115,14 @@ export function serveStatic(app: Express) {
   // Nécessaire car Apache (.htaccess) renvoie vers Node.js via passthrough ; si on
   // n'injectait que sur les pages admin, un refresh sur /dashboard ou / effacerait
   // la valeur en localStorage et le prochain chargement d'une page admin échouerait.
+  // adminPath est recalculé À CHAQUE requête (voir resolveAdminPath) pour que tous
+  // les workers Passenger convergent vers la même valeur, même si l'un d'eux n'a
+  // jamais reçu VITE_ADMIN_PATH dans son propre process.env.
   app.use("*", (req, res) => {
+    const adminPath = resolveAdminPath();
     const indexPath = path.resolve(distPath, "index.html");
     let html = fs.readFileSync(indexPath, "utf-8");
-    html = html.replace("</head>", `${adminInjection}</head>`);
+    html = html.replace("</head>", `<script>window.__ADMIN_PATH__="${adminPath}"</script></head>`);
     res.set("Content-Type", "text/html").send(html);
   });
 }
