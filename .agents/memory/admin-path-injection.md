@@ -22,6 +22,16 @@ description: How window.__ADMIN_PATH__ is injected and why the .htaccess must us
 ## Build-time injection (secondary)
 `client/index.html` also has a `%VITE_ADMIN_PATH%` Vite substitution as a secondary mechanism. Only works if `VITE_ADMIN_PATH` is available at Vite build time. The Replit build workflow does NOT have this var, so it's a no-op here — server-side injection is the primary mechanism.
 
+## express.static default index.html serving bypasses injection entirely
+`app.use(express.static(distPath))` with default options auto-serves
+`index.html` for `/` (and any directory-style request) *before* any later
+route/middleware runs — including our catch-all that injects
+`window.__ADMIN_PATH__`. Symptom: curl shows the raw unreplaced
+`%VITE_ADMIN_PATH%` placeholder and a `Last-Modified`/`ETag` header (proof
+Express's static file server answered, not our dynamic handler). Fix:
+`express.static(distPath, { index: false })` so index.html always falls
+through to the injection middleware.
+
 ## Passenger multi-worker race (root cause of "sometimes falls back to /admin")
 Passenger runs several Node worker processes and load-balances requests across them.
 `resolveAdminPath()` MUST be called per-request, never cached once at process startup —
