@@ -2,6 +2,42 @@ import express, { type Express } from "express";
 import fs from "fs";
 import path from "path";
 
+// Persisted on disk so the *server itself* remembers the last known-good
+// VITE_ADMIN_PATH even if Passenger fails to pass the env var to process.env
+// on a later restart. This protects EVERY client (not just browsers that
+// already have it in localStorage) — first-time visits, incognito, cleared
+// cache, etc. would otherwise silently fall back to "/admin".
+const ADMIN_PATH_CACHE_FILE = path.resolve(process.cwd(), "uploads", ".admin-path-cache");
+
+function resolveAdminPath(): string {
+  const envValue = process.env.VITE_ADMIN_PATH;
+  if (envValue && envValue !== "/admin") {
+    try {
+      fs.mkdirSync(path.dirname(ADMIN_PATH_CACHE_FILE), { recursive: true });
+      fs.writeFileSync(ADMIN_PATH_CACHE_FILE, envValue, "utf-8");
+    } catch (err) {
+      console.error("[AdminPath] Impossible d'écrire le cache disque:", (err as Error).message);
+    }
+    return envValue;
+  }
+
+  console.error(
+    "[AdminPath] ⚠️ VITE_ADMIN_PATH absent de process.env (Passenger ne l'a probablement pas transmis)."
+  );
+  try {
+    const cached = fs.readFileSync(ADMIN_PATH_CACHE_FILE, "utf-8").trim();
+    if (cached && cached !== "/admin" && cached.startsWith("/") && !cached.includes("://")) {
+      console.error(`[AdminPath] Utilisation de la dernière valeur connue en cache disque: ${cached}`);
+      return cached;
+    }
+  } catch {
+    // No cache file yet — first ever start with a broken env var.
+  }
+
+  console.error("[AdminPath] ❌ Aucun cache disque disponible — repli sur \"/admin\" (INSÉCURISÉ).");
+  return "/admin";
+}
+
 export function serveStatic(app: Express) {
   const distPath = path.resolve(process.cwd(), "dist", "public");
   if (!fs.existsSync(distPath)) {
@@ -24,7 +60,7 @@ export function serveStatic(app: Express) {
 
   app.use(express.static(distPath));
 
-  const adminPath = process.env.VITE_ADMIN_PATH || "/admin";
+  const adminPath = resolveAdminPath();
   const adminInjection = `<script>window.__ADMIN_PATH__="${adminPath}"</script>`;
 
   // Auth-flow pages outside the secret admin prefix that still need

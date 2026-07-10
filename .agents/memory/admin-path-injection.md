@@ -22,6 +22,15 @@ description: How window.__ADMIN_PATH__ is injected and why the .htaccess must us
 ## Build-time injection (secondary)
 `client/index.html` also has a `%VITE_ADMIN_PATH%` Vite substitution as a secondary mechanism. Only works if `VITE_ADMIN_PATH` is available at Vite build time. The Replit build workflow does NOT have this var, so it's a no-op here — server-side injection is the primary mechanism.
 
+## Server-side disk cache (added for extra resilience)
+`resolveAdminPath()` in `server/static.ts` also persists the last known-good
+`VITE_ADMIN_PATH` to `uploads/.admin-path-cache` whenever the env var is present.
+If Passenger fails to pass the env var on a later restart, the server reads this
+disk cache instead of hardcoding `/admin` — protects ALL clients (first visit,
+incognito, cleared cache), not just browsers with a populated localStorage.
+Logs `[AdminPath]` warnings when the env var is missing so it's visible which
+mechanism (env / disk cache / hardcoded fallback) is actually in play.
+
 ## Files involved
 - `client/public/.htaccess` — SPA passthrough rule (last block)
 - `server/static.ts` — always-inject logic in `app.use("*", ...)`
