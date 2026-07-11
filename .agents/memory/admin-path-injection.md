@@ -1,3 +1,16 @@
+## UPDATE (2026-07-11): dynamic VITE_ADMIN_PATH mechanism removed
+Per explicit user request, the entire env-var/injection/disk-cache system below
+was ripped out. The admin path is now a hardcoded constant in
+`client/src/lib/adminPath.ts` (`getAdminPath()` just returns it) — no
+`window.__ADMIN_PATH__`, no server-side injection, no `%VITE_ADMIN_PATH%`
+placeholder, no disk cache. `server/routes.ts`'s scanner-probe guard also
+hardcodes the same value now. To rotate the secret path, edit that one
+constant (and mirror it in `server/routes.ts` if the guard logic still
+references it directly) and rebuild/redeploy. Everything documented below
+this point is historical context for *why* the old approach existed and
+should not be reintroduced unless the user asks for env-driven configurability
+again.
+
 ---
 name: Admin path injection — Plesk/Passenger env var issue
 description: How window.__ADMIN_PATH__ is injected and why the .htaccess must use passthrough (not static index.html) for SPA refresh to work.
