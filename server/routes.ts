@@ -1679,7 +1679,7 @@ export async function registerRoutes(
   // The pages themselves are harmless — the TOTP verification API still requires a
   // valid session, so serving the HTML shell is safe.
   {
-    const ADMIN_FRONTEND_PATH = process.env.VITE_ADMIN_PATH || "";
+    const ADMIN_FRONTEND_PATH = "/Ashtech76638393947vdkdbdozyzujebfkdbdj";
     const ADMIN_REVEAL_PATHS = ["/admin-panel-verify", "/admin-login-otp"];
     app.use((req: Request, res: Response, next: NextFunction) => {
       const p = req.path;
@@ -1707,8 +1707,8 @@ export async function registerRoutes(
   //
   // Two categories:
   //  1. Well-known non-app paths (WordPress, cPanel, phpMyAdmin, …) — always 404.
-  //  2. Default /admin/* paths — 404 when a custom VITE_ADMIN_PATH is configured,
-  //     so only the real secret path is reachable.
+  //  2. Default /admin/* paths — always 404 since the real admin path is
+  //     hardcoded to a different, secret value.
   //
   // Security notes:
   //  - Paths are normalised (URI-decoded, double-slashes collapsed, lowercase)
@@ -1793,11 +1793,9 @@ export async function registerRoutes(
       "/administrator/index.php",
     ];
 
-    const customAdminPath = process.env.VITE_ADMIN_PATH;
-    // When a custom admin path is configured (and it's not the generic "/admin"),
-    // all requests that start with "/admin" but don't match the real path get 404.
-    const defaultAdminBlocked =
-      customAdminPath && customAdminPath !== "/admin" && customAdminPath !== "/admin/";
+    // The real admin path is hardcoded (not "/admin"), so any request that
+    // starts with the generic "/admin" prefix is always a scanner probe.
+    const defaultAdminBlocked = true;
 
     /** True if the normalised path matches a blocked prefix exactly or as a sub-path. */
     function isBlockedProbe(p: string): boolean {

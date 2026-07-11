@@ -45,22 +45,6 @@
          les connexions lentes (LTE Afrique). Un <link rel="stylesheet"> standard
          bloque tout rendu jusqu'à la réponse de Google ; l'injection JS ne bloque pas. -->
   <script>
-    // Admin path injecté au build (Vite remplace %VITE_ADMIN_PATH%).
-    // Garantit que le router React connaît le bon chemin même quand
-    // Apache sert index.html directement (sans passer par Node.js).
-    // Si la variable n'est pas définie au build, la valeur est vide
-    // et getAdminPath() utilise localStorage puis "/admin".
-    // Validation regex : seuls les caractères de chemin sûrs sont acceptés
-    // (évite les injections si la variable contient des guillemets ou caractères
-    // non-URL à cause d'une mauvaise configuration Plesk).
-    (function() {
-      var p = "%VITE_ADMIN_PATH%";
-      if (/^\/[a-zA-Z0-9_\-\/]*$/.test(p)) {
-        window.__ADMIN_PATH__ = p;
-      }
-    })();
-  </script>
-  <script>
     (function() {
       // 1. Thème (dark/light) — avant tout rendu pour éviter le flash
       try {
