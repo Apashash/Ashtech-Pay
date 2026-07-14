@@ -627,6 +627,7 @@ export function downloadSDKDocs() {
   y = paragraph(doc, "Retourne la liste complete des pays actifs et leurs operateurs Mobile Money disponibles. Cette liste est geree par l'administrateur — tout ajout ou retrait de pays/operateur est immediatement visible via cet endpoint.", y);
   y += 3;
   y = codeBlock(doc, `fetch("https://ashtechpay.top/v1/countries", {\n  headers: { "Authorization": "Bearer YOUR_API_KEY" }\n})`, y, "javascript");
+  y = codeBlock(doc, `curl https://ashtechpay.top/v1/countries \\\n  -H "Authorization: Bearer YOUR_API_KEY"`, y, "bash");
   y = subHeading(doc, "Reponse", y);
   y = codeBlock(doc, `[\n  {\n    "code": "CM",\n    "name": "Cameroun",\n    "currency": "XAF",\n    "operators": ["MTN Mobile Money", "Orange Money"]\n  },\n  {\n    "code": "SN",\n    "name": "Senegal",\n    "currency": "XOF",\n    "operators": ["Free Money", "Orange Money", "Wave"]\n  }\n  // ...\n]`, y, "json");
   y = subHeading(doc, "Pays disponibles (16)", y);
@@ -676,6 +677,7 @@ export function downloadSDKDocs() {
   );
   y = subHeading(doc, "Requete exemple", y);
   y = codeBlock(doc, `fetch("https://ashtechpay.top/v1/collect", {\n  method: "POST",\n  headers: {\n    "Authorization": "Bearer YOUR_API_KEY",\n    "Content-Type": "application/json"\n  },\n  body: JSON.stringify({\n    amount: 5000,\n    currency: "XAF",\n    phone: "670000000",\n    operator: "MTN Mobile Money",\n    country_code: "CM",\n    reference: "ORDER-001",\n    notify_url: "https://monsite.com/webhook"\n  })\n})`, y, "javascript");
+  y = codeBlock(doc, `curl https://ashtechpay.top/v1/collect \\\n  -X POST \\\n  -H "Authorization: Bearer YOUR_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '{"amount":5000,"currency":"XAF","phone":"670000000",\n       "operator":"MTN Mobile Money","country_code":"CM",\n       "reference":"ORDER-001",\n       "notify_url":"https://monsite.com/webhook"}'`, y, "bash");
   y = subHeading(doc, "Reponse 202 (succes USSD Push)", y);
   y = codeBlock(doc, `{\n  "transaction_id": "8f3e1c2d-...",\n  "reference":      "ORDER-001",\n  "status":         "pending",\n  "amount":         5000,\n  "credited_amount":4750,\n  "fee_amount":     250,\n  "currency":       "XAF",\n  "operator":       "MTN Mobile Money",\n  "phone":          "670000000",\n  "country_code":   "CM",\n  "created_at":     "2026-03-15T14:00:00Z"\n}`, y, "json");
 
@@ -706,6 +708,7 @@ export function downloadSDKDocs() {
   y = paragraph(doc, "Consultez le statut d'une transaction a tout moment via le transaction_id retourne lors de l'initiation. Vous pouvez utiliser ce endpoint en complement du webhook.", y);
   y += 3;
   y = codeBlock(doc, `fetch("https://ashtechpay.top/v1/transaction/8f3e1c2d-...", {\n  headers: { "Authorization": "Bearer YOUR_API_KEY" }\n})`, y, "javascript");
+  y = codeBlock(doc, `curl https://ashtechpay.top/v1/transaction/8f3e1c2d-... \\\n  -H "Authorization: Bearer YOUR_API_KEY"`, y, "bash");
   y = codeBlock(doc, `{\n  "transaction_id":  "8f3e1c2d-...",\n  "reference":       "ORDER-001",\n  "status":          "success",\n  "amount":          5000,\n  "credited_amount": 4750,\n  "fee_amount":      250,\n  "currency":        "XAF",\n  "phone":           "670000000",\n  "created_at":      "2026-03-15T14:00:00Z",\n  "confirmed_at":    "2026-03-15T14:02:17Z"\n}`, y, "json");
   y = table(doc,
     ["Statut", "Description", "Final ?"],
@@ -722,6 +725,7 @@ export function downloadSDKDocs() {
   y = paragraph(doc, "Retourne la grille tarifaire en vigueur pour chaque pays actif. Les frais sont configures par l'administrateur et peuvent changer a tout moment. Consultez cet endpoint pour calculer le montant net avant d'appeler /v1/collect.", y);
   y += 3;
   y = codeBlock(doc, `fetch("https://ashtechpay.top/v1/fees", {\n  headers: { "Authorization": "Bearer YOUR_API_KEY" }\n})`, y, "javascript");
+  y = codeBlock(doc, `curl https://ashtechpay.top/v1/fees \\\n  -H "Authorization: Bearer YOUR_API_KEY"`, y, "bash");
   y = subHeading(doc, "Reponse", y);
   y = codeBlock(doc, `[\n  {\n    "country_code": "CM",\n    "country_name": "Cameroun",\n    "currency": "XAF",\n    "deposit_fee_pct": 3.5,\n    "withdrawal_fee_pct": 1.5,\n    "transfer_fee_pct": 1.0,\n    "total_fee_pct": 5.5\n  },\n  // ...\n]`, y, "json");
   y = subHeading(doc, "Exemple — calculer le montant net avant d'appeler /v1/collect", y);
@@ -756,9 +760,11 @@ export function downloadSDKDocs() {
   y = table(doc,
     ["HTTP", "Erreur", "Signification"],
     [
-      ["400","bad_request",   "Parametre manquant ou format invalide"],
-      ["400","otp_required",  "OTP necessaire — verifiez ussd_code dans la reponse"],
-      ["401","unauthorized",  "Cle API manquante, invalide ou revoquee"],
+      ["400","bad_request",        "Parametre manquant ou format invalide"],
+      ["400","otp_required",       "OTP requis — conservez le champ reference de la reponse, obligatoire pour la confirmation"],
+      ["400","missing_reference",  "Confirmation OTP sans le champ reference — utilisez la valeur recue dans la reponse otp_required"],
+      ["400","otp_expired",        "Session OTP expiree (15 min) ou introuvable — relancez sans otp pour initier une nouvelle session"],
+      ["401","unauthorized",       "Cle API manquante, invalide ou revoquee"],
       ["403","forbidden",     "Cette transaction n'appartient pas a votre compte"],
       ["404","not_found",     "Transaction introuvable"],
       ["422","unprocessable", "Pays ou operateur non supporte / devise incorrecte"],
