@@ -31,7 +31,7 @@ const ALL_COUNTRIES = [
   { code: "CG", name: "Congo",              currency: "XAFC", operators: ["Airtel Money", "MTN Mobile Money"],                             otpOps: [] },
   { code: "CI", name: "Côte d'Ivoire",      currency: "XOFC", operators: ["Moov Money", "MTN Mobile Money", "Orange Money", "Wave"],       otpOps: ["Orange Money"] },
   { code: "GA", name: "Gabon",              currency: "XAFG", operators: ["Airtel Money", "Moov Money"],                                   otpOps: [] },
-  { code: "GN", name: "Guinée Conakry",     currency: "GNF",  operators: ["MTN Mobile Money", "Orange Money"],                            otpOps: ["Orange Money"] },
+  { code: "GN", name: "Guinée Conakry",     currency: "GNF",  operators: ["MTN Mobile Money", "Orange Money"],                            otpOps: [] },
   { code: "GQ", name: "Guinée équatoriale", currency: "XAF",  operators: ["Orange Money"],                                                  otpOps: ["Orange Money"] },
   { code: "GW", name: "Guinée-Bissau",      currency: "XOF",  operators: ["Orange Money"],                                                  otpOps: ["Orange Money"] },
   { code: "ML", name: "Mali",               currency: "XOF",  operators: ["Moov Money", "Orange Money"],                                   otpOps: ["Orange Money"] },
@@ -429,7 +429,7 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
               </div>
               <div className="flex flex-wrap gap-4 text-xs text-gray-500 pt-1">
                 <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-gray-200 inline-block" /> USSD Push — pas d'OTP</span>
-                <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-amber-200 inline-block" /> ⚡ OTP requis (SMS reçu)</span>
+                <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-amber-200 inline-block" /> ⚡ OTP requis (code USSD à composer)</span>
                 <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-purple-200 inline-block" /> 🔗 Wave — lien de paiement</span>
               </div>
             </div>
@@ -563,16 +563,16 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
                   <td className="px-3 py-3 text-gray-700 text-sm">Attendre le webhook. Le client valide directement sur son téléphone.</td>
                 </tr>
                 <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                  <td className="px-3 py-3 whitespace-nowrap"><span className="text-yellow-400 font-semibold text-sm">OTP SMS</span></td>
-                  <td className="px-3 py-3 text-gray-700 text-sm">Orange Money (CI, SN, ML, GN, CF, CG, GA, GW, GQ, CD, TD, TG) — reçoit SMS</td>
-                  <td className="px-3 py-3 font-mono text-orange-400 text-xs whitespace-nowrap">400 otp_required<br/><span className="text-zinc-500">ussd_code: null</span></td>
-                  <td className="px-3 py-3 text-gray-700 text-sm">Le client reçoit un SMS avec son OTP. Relancer la requête avec le champ <code className="text-blue-600 bg-blue-50 px-1 py-0.5 rounded">otp</code>.</td>
+                  <td className="px-3 py-3 whitespace-nowrap"><span className="text-orange-400 font-semibold text-sm">OTP USSD</span></td>
+                  <td className="px-3 py-3 text-gray-700 text-sm">Orange Money CI (#144*82#), SN (#144*391#), BF (*144*4*6*montant#)</td>
+                  <td className="px-3 py-3 font-mono text-orange-400 text-xs whitespace-nowrap">400 otp_required<br/><span className="text-zinc-500">ussd_code: "#144*82#"</span></td>
+                  <td className="px-3 py-3 text-gray-700 text-sm">Le client compose le code USSD fourni, saisit l'OTP reçu par SMS. Relancer avec <code className="text-blue-600 bg-blue-50 px-1 py-0.5 rounded">otp</code>.</td>
                 </tr>
                 <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                  <td className="px-3 py-3 whitespace-nowrap"><span className="text-orange-400 font-semibold text-sm">OTP USSD</span></td>
-                  <td className="px-3 py-3 text-gray-700 text-sm">Orange Money (BF) — compose un code USSD pour obtenir l'OTP</td>
-                  <td className="px-3 py-3 font-mono text-orange-400 text-xs whitespace-nowrap">400 otp_required<br/><span className="text-zinc-500">ussd_code: "*144*4*6*5000#"</span></td>
-                  <td className="px-3 py-3 text-gray-700 text-sm">Le client compose le code USSD fourni, saisit l'OTP reçu. Relancer avec <code className="text-blue-600 bg-blue-50 px-1 py-0.5 rounded">otp</code>.</td>
+                  <td className="px-3 py-3 whitespace-nowrap"><span className="text-yellow-400 font-semibold text-sm">OTP SMS</span></td>
+                  <td className="px-3 py-3 text-gray-700 text-sm">LigdiCash BF (wallet) — SMS envoyé automatiquement</td>
+                  <td className="px-3 py-3 font-mono text-orange-400 text-xs whitespace-nowrap">400 otp_required<br/><span className="text-zinc-500">ussd_code: null</span></td>
+                  <td className="px-3 py-3 text-gray-700 text-sm">Le client reçoit un SMS avec son OTP. Relancer la requête avec le champ <code className="text-blue-600 bg-blue-50 px-1 py-0.5 rounded">otp</code>.</td>
                 </tr>
                 <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                   <td className="px-3 py-3 whitespace-nowrap"><span className="text-purple-400 font-semibold text-sm">Wave</span></td>
@@ -638,21 +638,20 @@ const data = await res.json();
               </div>
             </div>
 
-            {/* Flow 2: OTP SMS */}
-            <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-5 space-y-4">
+            {/* Flow 2: OTP USSD */}
+            <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 p-5 space-y-4">
               <div className="flex items-center gap-2">
-                <span className="w-6 h-6 rounded-full bg-yellow-500 flex items-center justify-center text-xs font-bold text-white shrink-0">2</span>
-                <h3 className="font-semibold text-yellow-300">Flux OTP SMS — Orange Money (la plupart des pays)</h3>
+                <span className="w-6 h-6 rounded-full bg-orange-500 flex items-center justify-center text-xs font-bold text-white shrink-0">2</span>
+                <h3 className="font-semibold text-orange-300">Flux OTP USSD — Orange Money CI, SN, BF</h3>
               </div>
               <p className="text-sm text-gray-600">
-                Pour Orange Money dans la majorité des pays. L'API Ashtech Pay déclenche automatiquement
-                l'envoi d'un SMS contenant l'OTP au numéro du client. Votre interface doit demander au client de saisir cet OTP.
-                <strong className="text-zinc-200"> Le champ <code className="text-blue-600 bg-blue-50 px-1 py-0.5 rounded">ussd_code</code> est <code className="text-red-400">null</code></strong> — aucun code à composer.
+                Pour Orange Money en Côte d'Ivoire, Sénégal et Burkina Faso. L'API retourne un{" "}
+                <code className="text-blue-600 bg-blue-50 px-1 py-0.5 rounded">ussd_code</code>{" "}
+                que le client doit composer depuis son téléphone — Orange lui envoie ensuite l'OTP par SMS.
               </p>
-              <div className="text-xs text-gray-500">
-                <strong className="text-zinc-400">Opérateurs concernés :</strong>{" "}
-                Orange Money CI, Orange Money SN, Orange Money ML, Orange Money GN, Orange Money CF,
-                Orange Money CG, Orange Money GA, Orange Money GW, Orange Money GQ, Orange Money CD, Orange Money TD
+              <div className="text-xs text-gray-500 space-y-0.5">
+                <strong className="text-zinc-400">Codes USSD par pays :</strong>
+                <div>CI — <code className="text-orange-300 bg-gray-100 px-1 py-0.5 rounded font-mono">#144*82#</code> &nbsp;|&nbsp; SN — <code className="text-orange-300 bg-gray-100 px-1 py-0.5 rounded font-mono">#144*391#</code> &nbsp;|&nbsp; BF — <code className="text-orange-300 bg-gray-100 px-1 py-0.5 rounded font-mono">*144*4*6*montant#</code></div>
               </div>
               <div className="grid lg:grid-cols-2 gap-4">
                 <div className="space-y-1 min-w-0">
@@ -671,11 +670,66 @@ const res = await fetch("/v1/collect", {
   })
 });
 // → 400 otp_required
-// ussd_code est null
-// Le client reçoit l'OTP par SMS`} />
+// ussd_code contient le code à composer`} />
                 </div>
                 <div className="space-y-1 min-w-0">
                   <p className="text-xs text-gray-500 font-medium">Réponse 400 + Étape 2 — Avec OTP</p>
+                  <CodeBlock language="json" code={`// Réponse 400 :
+{
+  "error": "otp_required",
+  "message": "Composez #144*82# pour obtenir votre OTP.",
+  "ussd_code": "#144*82#"
+}
+
+// Afficher à l'utilisateur :
+// "Composez #144*82# sur votre téléphone,
+//  puis saisissez l'OTP reçu par SMS"`} />
+                  <CodeBlock language="javascript" code={`// Étape 2 : même requête + otp
+body: JSON.stringify({
+  amount: 1000, currency: "XOF",
+  phone: "0700000000",
+  operator: "Orange Money",
+  country_code: "CI",
+  otp: "123456",  // ← OTP reçu par SMS après le USSD
+  notify_url: "https://monsite.com/webhook"
+})
+// → 202 pending → webhook`} />
+                </div>
+              </div>
+            </div>
+
+            {/* Flow 3: OTP SMS (wallet) */}
+            <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-5 space-y-4">
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-yellow-500 flex items-center justify-center text-xs font-bold text-white shrink-0">3</span>
+                <h3 className="font-semibold text-yellow-300">Flux OTP SMS — LigdiCash BF (Wallet)</h3>
+              </div>
+              <p className="text-sm text-gray-600">
+                Pour LigdiCash (Burkina Faso). L'API déclenche automatiquement l'envoi d'un SMS OTP
+                au numéro du client — <strong className="text-zinc-200">aucun code USSD à composer.</strong>{" "}
+                Le champ <code className="text-blue-600 bg-blue-50 px-1 py-0.5 rounded">ussd_code</code> est <code className="text-red-400">null</code>.
+              </p>
+              <div className="grid lg:grid-cols-2 gap-4">
+                <div className="space-y-1 min-w-0">
+                  <p className="text-xs text-gray-500 font-medium">Étape 1 — Requête initiale (sans OTP)</p>
+                  <CodeBlock language="javascript" code={`// LigdiCash Burkina Faso — étape 1
+const res = await fetch("/v1/collect", {
+  method: "POST",
+  headers: { "Authorization": "Bearer ${apiKey}" },
+  body: JSON.stringify({
+    amount: 5000,
+    currency: "XOF",
+    phone: "04000000",
+    operator: "LigdiCash",
+    country_code: "BF",
+    notify_url: "https://monsite.com/webhook"
+  })
+});
+// → 400 otp_required
+// ussd_code est null — SMS envoyé automatiquement`} />
+                </div>
+                <div className="space-y-1 min-w-0">
+                  <p className="text-xs text-gray-500 font-medium">Réponse 400 + Étape 2</p>
                   <CodeBlock language="json" code={`// Réponse 400 :
 {
   "error": "otp_required",
@@ -687,67 +741,11 @@ const res = await fetch("/v1/collect", {
 // Étape 2 : relancer avec otp`} />
                   <CodeBlock language="javascript" code={`// Étape 2 : même requête + otp
 body: JSON.stringify({
-  amount: 1000, currency: "XOF",
-  phone: "0700000000",
-  operator: "Orange Money",
-  country_code: "CI",
-  otp: "123456",  // ← OTP reçu par SMS
-  notify_url: "https://monsite.com/webhook"
-})
-// → 202 pending → webhook`} />
-                </div>
-              </div>
-            </div>
-
-            {/* Flow 3: OTP USSD */}
-            <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 p-5 space-y-4">
-              <div className="flex items-center gap-2">
-                <span className="w-6 h-6 rounded-full bg-orange-500 flex items-center justify-center text-xs font-bold text-white shrink-0">3</span>
-                <h3 className="font-semibold text-orange-300">Flux OTP USSD — Orange Money Burkina Faso uniquement</h3>
-              </div>
-              <p className="text-sm text-gray-600">
-                Spécifique au Burkina Faso. L'API retourne un <code className="text-blue-600 bg-blue-50 px-1 py-0.5 rounded">ussd_code</code>{" "}
-                incluant le montant (ex : <code className="text-orange-300 bg-gray-100 px-1 py-0.5 rounded">*144*4*6*5000#</code>).
-                Le client compose ce code depuis son téléphone — Orange répond par SMS avec l'OTP.
-              </p>
-              <div className="grid lg:grid-cols-2 gap-4">
-                <div className="space-y-1 min-w-0">
-                  <p className="text-xs text-gray-500 font-medium">Étape 1 — Requête initiale (sans OTP)</p>
-                  <CodeBlock language="javascript" code={`// Orange Money Burkina Faso — étape 1
-const res = await fetch("/v1/collect", {
-  method: "POST",
-  headers: { "Authorization": "Bearer ${apiKey}" },
-  body: JSON.stringify({
-    amount: 5000,
-    currency: "XOF",
-    phone: "70000000",
-    operator: "Orange Money",
-    country_code: "BF",
-    notify_url: "https://monsite.com/webhook"
-  })
-});
-// → 400 otp_required
-// ussd_code contient le code USSD à composer`} />
-                </div>
-                <div className="space-y-1 min-w-0">
-                  <p className="text-xs text-gray-500 font-medium">Réponse 400 + Étape 2</p>
-                  <CodeBlock language="json" code={`// Réponse 400 :
-{
-  "error": "otp_required",
-  "message": "OTP requis. Composez *144*4*6*5000# pour obtenir votre code OTP.",
-  "ussd_code": "*144*4*6*5000#"
-}
-
-// Afficher à l'utilisateur :
-// "Composez *144*4*6*5000# sur votre téléphone,
-//  puis saisissez l'OTP reçu"`} />
-                  <CodeBlock language="javascript" code={`// Étape 2 : même requête + otp
-body: JSON.stringify({
   amount: 5000, currency: "XOF",
-  phone: "70000000",
-  operator: "Orange Money",
+  phone: "04000000",
+  operator: "LigdiCash",
   country_code: "BF",
-  otp: "456789",  // ← OTP reçu après le USSD
+  otp: "456789",  // ← OTP reçu par SMS
   notify_url: "https://monsite.com/webhook"
 })
 // → 202 pending → webhook`} />
