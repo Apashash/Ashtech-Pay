@@ -91,43 +91,160 @@ function paragraph(doc: jsPDF, str: string, y: number, indent = 0): number {
 /** Inline code chip in body text — just wraps with backtick style for PDF */
 function inlineCode(s: string) { return `\`${s}\``; }
 
-/** Code block with dark background */
+// ─── PDF Syntax Highlighting ────────────────────────────────────────────────
+type PdfTok = { t: string; r: number; g: number; b: number };
+
+function pt(t: string, r: number, g: number, b: number): PdfTok { return { t, r, g, b }; }
+
+// AfribaPAY dark theme palette
+const PK = { // key (JSON)
+  r: 244, g: 112, b: 103,
+};
+const PS = { r: 87, g: 171, b: 90 };   // strings/values
+const PN = { r: 108, g: 182, b: 255 }; // numbers
+const PW = { r: 246, g: 157, b: 80 };  // booleans/null
+const PM = { r: 118, g: 131, b: 144 }; // muted (comments, flags)
+const PB = { r: 121, g: 192, b: 255 }; // blue (curl, URLs)
+const PD = { r: 205, g: 217, b: 229 }; // default text
+const PP = { r: 173, g: 186, b: 199 }; // punctuation
+
+function _pdfJsonLine(line: string): PdfTok[] {
+  const out: PdfTok[] = [];
+  let i = 0;
+  while (i < line.length) {
+    if (line[i] === '"') {
+      let j = i + 1;
+      while (j < line.length) {
+        if (line[j] === '\\') { j += 2; continue; }
+        if (line[j] === '"') { j++; break; }
+        j++;
+      }
+      const s = line.slice(i, j);
+      let k = j;
+      while (k < line.length && (line[k] === ' ' || line[k] === '\t')) k++;
+      const c = line[k] === ':' ? PK : PS;
+      out.push(pt(s, c.r, c.g, c.b));
+      i = j;
+    } else if ((line[i] >= '0' && line[i] <= '9') || (line[i] === '-' && i + 1 < line.length && line[i+1] >= '0' && line[i+1] <= '9')) {
+      let j = i + (line[i] === '-' ? 1 : 0);
+      while (j < line.length && (line[j] >= '0' && line[j] <= '9' || line[j] === '.' || line[j] === 'e' || line[j] === 'E')) j++;
+      out.push(pt(line.slice(i, j), PN.r, PN.g, PN.b)); i = j;
+    } else if (line.startsWith('true', i))  { out.push(pt('true',  PW.r, PW.g, PW.b)); i += 4;
+    } else if (line.startsWith('false', i)) { out.push(pt('false', PW.r, PW.g, PW.b)); i += 5;
+    } else if (line.startsWith('null', i))  { out.push(pt('null',  PW.r, PW.g, PW.b)); i += 4;
+    } else { out.push(pt(line[i], PP.r, PP.g, PP.b)); i++; }
+  }
+  return out;
+}
+
+function _pdfBashLine(line: string): PdfTok[] {
+  const out: PdfTok[] = [];
+  if (line.trimStart().startsWith('#')) { out.push(pt(line, PM.r, PM.g, PM.b)); return out; }
+  let i = 0;
+  while (i < line.length) {
+    if (line[i] === ' ' || line[i] === '\t') {
+      let j = i; while (j < line.length && (line[j] === ' ' || line[j] === '\t')) j++;
+      out.push(pt(line.slice(i, j), PP.r, PP.g, PP.b)); i = j; continue;
+    }
+    if (line[i] === '\\') { out.push(pt('\\', PM.r, PM.g, PM.b)); i++; continue; }
+    if (line[i] === "'") {
+      let j = i + 1; while (j < line.length && line[j] !== "'") j++;
+      out.push(pt(line.slice(i, j + 1), PS.r, PS.g, PS.b)); i = j + 1; continue;
+    }
+    if (line[i] === '"') {
+      let j = i + 1; while (j < line.length && (line[j] !== '"' || line[j-1] === '\\')) j++;
+      out.push(pt(line.slice(i, j + 1), PS.r, PS.g, PS.b)); i = j + 1; continue;
+    }
+    if (line[i] === '-') {
+      let j = i; while (j < line.length && line[j] !== ' ' && line[j] !== '\t' && line[j] !== "'" && line[j] !== '"') j++;
+      out.push(pt(line.slice(i, j), PM.r, PM.g, PM.b)); i = j; continue;
+    }
+    let j = i;
+    while (j < line.length && line[j] !== ' ' && line[j] !== '\t' && line[j] !== "'" && line[j] !== '"' && line[j] !== '\\') j++;
+    const w = line.slice(i, j);
+    const isMeth = ['POST','GET','DELETE','PUT','PATCH'].includes(w);
+    const c = isMeth ? PK : (w === 'curl' ? PB : (w.startsWith('http') ? PB : PD));
+    out.push(pt(w, c.r, c.g, c.b)); i = j;
+  }
+  return out;
+}
+
+function _pdfTokenize(code: string, lang: string): PdfTok[][] {
+  const lines = code.split('\n');
+  if (lang === 'json') return lines.map(_pdfJsonLine);
+  if (lang === 'bash') return lines.map(_pdfBashLine);
+  return lines.map(l => [pt(l, PD.r, PD.g, PD.b)]);
+}
+
+function _renderLineToks(doc: jsPDF, toks: PdfTok[], x: number, y: number, maxX: number) {
+  let cx = x;
+  for (const tk of toks) {
+    if (!tk.t || cx >= maxX) break;
+    doc.setTextColor(tk.r, tk.g, tk.b);
+    const w = doc.getTextWidth(tk.t);
+    // Clip token if it would overflow
+    if (cx + w > maxX) {
+      const chars = Math.floor((maxX - cx) / (w / tk.t.length));
+      if (chars > 0) doc.text(tk.t.slice(0, chars), cx, y);
+      break;
+    }
+    doc.text(tk.t, cx, y);
+    cx += w;
+  }
+}
+// ────────────────────────────────────────────────────────────────────────────
+
+/** Code block with dark background + syntax highlighting */
 function codeBlock(doc: jsPDF, code: string, y: number, lang = ""): number {
+  const langLabel: Record<string, string> = {
+    json: "json", javascript: "Node.js", http: "HTTP",
+    bash: "curl", php: "PHP", python: "Python",
+  };
+  const label = langLabel[lang] ?? lang;
+
   const lines = code.split("\n");
   const lineH = 4.8;
   const padV = 4;
   const padH = 5;
-  const blockH = lines.length * lineH + padV * 2 + (lang ? 6 : 0);
+  const headerH = label ? 7 : 0;
+  const blockH = lines.length * lineH + padV * 2 + headerH;
 
   y = checkPage(doc, y, Math.min(blockH + 4, 60));
 
-  if (lang) {
-    fill(doc, [30, 40, 55]);
-    doc.rect(ML, y, CW, 6, "F");
+  // Header bar (AfribaPAY style: darker strip with label badge)
+  if (label) {
+    fill(doc, [28, 33, 40]); // #1c2128
+    doc.rect(ML, y, CW, headerH, "F");
+
+    // Label badge background
     doc.setFont("courier", "normal");
     doc.setFontSize(7.5);
-    doc.setTextColor(100, 120, 150);
-    doc.text(lang, ML + padH, y + 4.2);
-    y += 6;
+    const labelW = doc.getTextWidth(label) + 4;
+    fill(doc, [45, 51, 59]); // #2d333b
+    doc.rect(ML + padH - 1, y + 1.2, labelW, 4.5, "F");
+    doc.setTextColor(205, 217, 229); // #cdd9e5
+    doc.text(label, ML + padH + 1, y + 4.8);
+    y += headerH;
   }
 
-  fill(doc, C.codeBg);
+  // Code background
+  fill(doc, [22, 27, 34]); // #161b22 (AfribaPAY bg)
   doc.rect(ML, y, CW, lines.length * lineH + padV * 2, "F");
 
   doc.setFont("courier", "normal");
   doc.setFontSize(8);
-  rgb(doc, C.codeText);
+
+  const tokenizedLines = _pdfTokenize(code, lang);
 
   let cy = y + padV + lineH * 0.7;
-  for (const line of lines) {
+  for (let li = 0; li < lines.length; li++) {
     if (cy > PAGE_H - 20) {
       doc.addPage();
-      fill(doc, C.codeBg);
-      doc.rect(ML, 15, CW, (lines.length - lines.indexOf(line)) * lineH + padV * 2, "F");
+      fill(doc, [22, 27, 34]);
+      doc.rect(ML, 15, CW, (lines.length - li) * lineH + padV * 2, "F");
       cy = 22;
     }
-    const trimmed = line.slice(0, 90); // clip very long lines
-    doc.text(trimmed, ML + padH, cy);
+    _renderLineToks(doc, tokenizedLines[li] ?? [], ML + padH, cy, ML + CW - 2);
     cy += lineH;
   }
 
