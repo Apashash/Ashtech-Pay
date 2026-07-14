@@ -432,16 +432,49 @@ export async function getAfribaPayBalance(): Promise<any> {
 // ─── Countries cache for OTP detection ────────────────────────────────────────
 let _countriesCache: Record<string, AfribaPayCountry> | null = null;
 let _countriesCacheExpiry: number = 0;
+let _countriesFetchFailed = false;
 
 async function getCachedCountries(): Promise<Record<string, AfribaPayCountry>> {
   if (_countriesCache && Date.now() < _countriesCacheExpiry) return _countriesCache;
   try {
     _countriesCache = await fetchAfribaPayCountries();
     _countriesCacheExpiry = Date.now() + 24 * 60 * 60 * 1000; // 24h
-  } catch {
+    _countriesFetchFailed = false;
+  } catch (err: any) {
+    // IMPORTANT: do NOT silently pretend nothing needs OTP when this call fails —
+    // that previously caused Orange/Moov (which DO require OTP) to be sent through
+    // the plain payin flow, get rejected by AfribaPay with "This operation requires
+    // an OTP code.", and surface as an opaque 502/400 with no OTP UI shown at all.
+    _countriesFetchFailed = true;
+    console.error("[AfribaPay] Failed to fetch /v1/countries for OTP detection — falling back to static OTP overrides only:", err?.message || err);
     _countriesCache = _countriesCache || {};
   }
   return _countriesCache;
+}
+
+// ─── Static OTP-required overrides ────────────────────────────────────────────
+// Known, documented OTP-required operator/country combos on AfribaPay. Used as a
+// floor UNIONed with the live /v1/countries data — never relied on exclusively,
+// but also never allowed to be silently missed if the live call fails or the
+// operator_code in the live response doesn't match what we send (e.g. casing,
+// naming drift). Type "api" = AfribaPay sends the code by SMS via /v1/pay/otp.
+const AFRIBAPAY_STATIC_OTP_REQUIRED: Record<string, string[]> = {
+  CI: ["orange", "moov"],
+  SN: ["orange"],
+  BF: ["orange", "moov"],
+  GN: ["orange"],
+};
+
+function staticOtpOverride(country: string, operatorCode: string): boolean {
+  const ops = AFRIBAPAY_STATIC_OTP_REQUIRED[country.toUpperCase()];
+  return !!ops && ops.includes(operatorCode.toLowerCase());
+}
+
+/** True if an AfribaPay error message is the upstream "OTP required" rejection. */
+export function isAfribaPayOtpRequiredMessage(message: string | undefined | null): boolean {
+  if (!message) return false;
+  const m = message.toLowerCase();
+  return m.includes("otp") && (m.includes("require") || m.includes("requis") || m.includes("necessit") || m.includes("nécessit"));
 }
 
 export async function isAfribaPayOtpRequired(country: string, operatorCode: string): Promise<boolean> {
@@ -454,26 +487,38 @@ export async function getAfribaPayOtpInfo(country: string, operatorCode: string)
   type: "api" | "ussd" | "none";
   ussdCode: string;
 }> {
+  const staticRequired = staticOtpOverride(country, operatorCode);
   try {
     const countries = await getCachedCountries();
     const countryData = countries[country.toUpperCase()];
-    if (!countryData) return { required: false, type: "none", ussdCode: "" };
-    for (const [, curData] of Object.entries(countryData.currencies)) {
-      const op = curData.operators.find(o => o.operator_code === operatorCode.toLowerCase());
-      if (op) {
-        if (op.otp_required !== 1) return { required: false, type: "none", ussdCode: "" };
-        // Detect type: if ussd_code references AfribaPay endpoint → API OTP (AfribaPay sends SMS)
-        // Otherwise → USSD OTP (user dials the code themselves to get OTP)
-        const isApiOtp = !op.ussd_code || op.ussd_code.toLowerCase().includes("endpoint") || op.ussd_code.toLowerCase().includes("/pay/otp");
-        return {
-          required: true,
-          type: isApiOtp ? "api" : "ussd",
-          ussdCode: isApiOtp ? "" : op.ussd_code,
-        };
+    if (countryData) {
+      for (const [, curData] of Object.entries(countryData.currencies)) {
+        const op = curData.operators.find(o => o.operator_code === operatorCode.toLowerCase());
+        if (op) {
+          if (op.otp_required !== 1) {
+            // Live data says not required — still honor a known static override,
+            // since live data can be stale/incomplete for a given operator.
+            if (staticRequired) return { required: true, type: "api", ussdCode: "" };
+            return { required: false, type: "none", ussdCode: "" };
+          }
+          // Detect type: if ussd_code references AfribaPay endpoint → API OTP (AfribaPay sends SMS)
+          // Otherwise → USSD OTP (user dials the code themselves to get OTP)
+          const isApiOtp = !op.ussd_code || op.ussd_code.toLowerCase().includes("endpoint") || op.ussd_code.toLowerCase().includes("/pay/otp");
+          return {
+            required: true,
+            type: isApiOtp ? "api" : "ussd",
+            ussdCode: isApiOtp ? "" : op.ussd_code,
+          };
+        }
       }
     }
+    // Operator not found in live data (missing country, naming mismatch, or
+    // countries fetch failed) — fall back to the static override table.
+    if (staticRequired) return { required: true, type: "api", ussdCode: "" };
     return { required: false, type: "none", ussdCode: "" };
-  } catch {
+  } catch (err: any) {
+    console.error(`[AfribaPay] getAfribaPayOtpInfo(${country}, ${operatorCode}) failed:`, err?.message || err);
+    if (staticRequired) return { required: true, type: "api", ussdCode: "" };
     return { required: false, type: "none", ussdCode: "" };
   }
 }
