@@ -338,7 +338,7 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
             <div className="my-4 h-px bg-gray-200" />
             <div className="px-3 py-3 rounded-xl bg-gray-50 border border-gray-200 space-y-2">
               <p className="text-[11px] font-medium text-gray-500">Votre clé API</p>
-              <p className="text-xs font-mono text-gray-400 break-all line-clamp-2">{apiKey.slice(0, 24)}…</p>
+              <p className="text-xs font-mono text-gray-400 tracking-wider">{"•".repeat(28)}</p>
             </div>
           </nav>
         </aside>
@@ -409,7 +409,7 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
               Toutes les requêtes doivent inclure votre clé API dans l'en-tête HTTP{" "}
               <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">Authorization</code>.
             </p>
-            <CodeBlock language="http" code={`Authorization: Bearer ${apiKey}`} />
+            <CodeBlock language="http" code={`Authorization: Bearer YOUR_API_KEY`} />
             <div className="flex gap-3 items-start rounded-xl border border-orange-300 bg-orange-50 p-4">
               <span className="text-orange-500 mt-0.5 shrink-0">⚠</span>
               <p className="text-sm text-orange-800">
@@ -422,7 +422,7 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
               <CodeBlock language="javascript" code={`const response = await fetch("https://ashtechpay.top/v1/collect", {
   method: "POST",
   headers: {
-    "Authorization": "Bearer ${apiKey}",
+    "Authorization": "Bearer YOUR_API_KEY",
     "Content-Type": "application/json"
   },
   body: JSON.stringify({ /* ... */ })
@@ -455,11 +455,11 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
                 <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Requête</p>
                 <CodeBlock language="javascript" code={`fetch("https://ashtechpay.top/v1/countries", {
   headers: {
-    "Authorization": "Bearer ${apiKey}"
+    "Authorization": "Bearer YOUR_API_KEY"
   }
 })`} />
                 <CodeBlock language="bash" code={`curl https://ashtechpay.top/v1/countries \\
-  -H "Authorization: Bearer ${apiKey}"`} />
+  -H "Authorization: Bearer YOUR_API_KEY"`} />
               </div>
               <div className="space-y-2 min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Réponse</p>
@@ -569,7 +569,7 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
                 <CodeBlock language="javascript" code={`fetch("https://ashtechpay.top/v1/collect", {
   method: "POST",
   headers: {
-    "Authorization": "Bearer ${apiKey}",
+    "Authorization": "Bearer YOUR_API_KEY",
     "Content-Type": "application/json"
   },
   body: JSON.stringify({
@@ -584,7 +584,7 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
 })`} />
                 <CodeBlock language="bash" code={`curl https://ashtechpay.top/v1/collect \\
   -X POST \\
-  -H "Authorization: Bearer ${apiKey}" \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
     "amount": 5000,
@@ -745,7 +745,7 @@ curl https://ashtechpay.top/v1/collect \\
 const res = await fetch("https://ashtechpay.top/v1/collect", {
   method: "POST",
   headers: {
-    "Authorization": "Bearer ${apiKey}",
+    "Authorization": "Bearer YOUR_API_KEY",
     "Content-Type": "application/json"
   },
   body: JSON.stringify({
@@ -803,7 +803,7 @@ const data = await res.json();
 const res = await fetch("https://ashtechpay.top/v1/collect", {
   method: "POST",
   headers: {
-    "Authorization": "Bearer ${apiKey}",
+    "Authorization": "Bearer YOUR_API_KEY",
     "Content-Type": "application/json"
   },
   body: JSON.stringify({
@@ -863,7 +863,7 @@ body: JSON.stringify({
 const res = await fetch("https://ashtechpay.top/v1/collect", {
   method: "POST",
   headers: {
-    "Authorization": "Bearer ${apiKey}",
+    "Authorization": "Bearer YOUR_API_KEY",
     "Content-Type": "application/json"
   },
   body: JSON.stringify({
@@ -924,7 +924,7 @@ body: JSON.stringify({
 const res = await fetch("https://ashtechpay.top/v1/collect", {
   method: "POST",
   headers: {
-    "Authorization": "Bearer ${apiKey}",
+    "Authorization": "Bearer YOUR_API_KEY",
     "Content-Type": "application/json"
   },
   body: JSON.stringify({
@@ -1036,12 +1036,12 @@ if (data.flow === "wave") {
   "https://ashtechpay.top/v1/transaction/8f3e1c2d-...",
   {
     headers: {
-      "Authorization": "Bearer ${apiKey}"
+      "Authorization": "Bearer YOUR_API_KEY"
     }
   }
 )`} />
                 <CodeBlock language="bash" code={`curl https://ashtechpay.top/v1/transaction/8f3e1c2d-... \\
-  -H "Authorization: Bearer ${apiKey}"`} />
+  -H "Authorization: Bearer YOUR_API_KEY"`} />
               </div>
               <div className="space-y-2 min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Réponse</p>
@@ -1104,11 +1104,11 @@ if (data.flow === "wave") {
                 <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Requête</p>
                 <CodeBlock language="javascript" code={`fetch("https://ashtechpay.top/v1/fees", {
   headers: {
-    "Authorization": "Bearer ${apiKey}"
+    "Authorization": "Bearer YOUR_API_KEY"
   }
 })`} />
                 <CodeBlock language="bash" code={`curl https://ashtechpay.top/v1/fees \\
-  -H "Authorization: Bearer ${apiKey}"`} />
+  -H "Authorization: Bearer YOUR_API_KEY"`} />
               </div>
               <div className="space-y-2 min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Réponse</p>
@@ -1422,22 +1422,22 @@ console.log(computeNet(10000, "CM"));
             <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 p-5 space-y-3">
               <p className="text-sm font-semibold text-orange-300">Codes OTP de test (sandbox)</p>
               <p className="text-sm text-gray-600">
-                En sandbox, tout code OTP à 6 chiffres entre{" "}
-                <strong className="text-zinc-200">333334 et 999999</strong> est accepté comme valide.
-                Les codes <strong className="text-red-400">000000 à 333333</strong> simulent un OTP invalide/refusé.
+                En sandbox, utilisez le code OTP{" "}
+                <strong className="text-zinc-200">123456</strong> pour simuler un paiement réussi.
+                Tout autre code simule un OTP invalide/refusé.
               </p>
               <div className="grid sm:grid-cols-2 gap-3">
-                <CodeBlock language="json" code={`// ✅ OTP valide sandbox (333334–999999)
-{ "otp": "500000" }   // → succès garanti
+                <CodeBlock language="json" code={`// ✅ OTP valide sandbox → succès garanti
+{ "otp": "123456" }
 
-// ❌ OTP invalide sandbox (000000–333333)
-{ "otp": "111111" }   // → échec simulé
-{ "otp": "000000" }   // → échec simulé`} />
+// ❌ OTP invalide sandbox → échec simulé
+{ "otp": "000000" }
+{ "otp": "111111" }`} />
                 <CodeBlock language="javascript" code={`// Exemple complet — OTP USSD Orange SN (sandbox)
 // Numéro test CI XOF : 2252100000001 → SUCCESS
 const step1 = await fetch("https://ashtechpay.top/v1/collect", {
   method: "POST",
-  headers: { "Authorization": "Bearer YOUR_KEY", "Content-Type": "application/json" },
+  headers: { "Authorization": "Bearer YOUR_API_KEY", "Content-Type": "application/json" },
   body: JSON.stringify({
     amount: 5000, currency: "XOF",
     phone: "2252100000001",  // ← numéro de test officiel
@@ -1449,11 +1449,11 @@ const step1 = await fetch("https://ashtechpay.top/v1/collect", {
 
 const step2 = await fetch("https://ashtechpay.top/v1/collect", {
   method: "POST",
-  headers: { "Authorization": "Bearer YOUR_KEY", "Content-Type": "application/json" },
+  headers: { "Authorization": "Bearer YOUR_API_KEY", "Content-Type": "application/json" },
   body: JSON.stringify({
     amount: 5000, currency: "XOF",
     phone: "2252100000001", operator: "Orange Money", country_code: "CI",
-    otp: "500000",             // ← code OTP valide sandbox
+    otp: "123456",             // ← code OTP succès sandbox
     reference: "DEP-...",      // ← obligatoire : valeur du 400
     notify_url: "https://monsite.com/webhook"
   })
