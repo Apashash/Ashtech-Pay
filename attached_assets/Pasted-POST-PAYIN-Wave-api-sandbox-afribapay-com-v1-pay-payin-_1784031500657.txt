@@ -1,0 +1,78 @@
+POST
+PAYIN Wave
+api-sandbox.afribapay.com/v1/pay/payin
+With Wave Money, using our API, you need to redirect your customers to the payment link provided by the AfribaPAY API (provider_link), allowing them to scan and pay directly through their application, as shown in the example below.
+AUTHORIZATION
+Bearer Token
+Token
+Body
+raw (json)
+View More
+json
+{
+"operator":"wave",
+"country":"SN",
+"phone_number":"770000000",
+"amount":100,
+"currency":"XOF",
+"order_id":"order-1784031378",
+"merchant_key": "mk_Dv2c9Us240920061620",
+"reference_id":"Your reference",
+"lang":"fr",
+"return_url" : "https://example.com/success",
+"cancel_url" : "https://example.com/cancel",
+"notify_url" : "https://example.com/notification_ipn_webhook"
+}
+Example Request
+PAYIN-Wave
+
+View More
+curl
+curl --location 'api-sandbox.afribapay.com/v1/pay/payin' \
+--header 'Content-Type: application/json' \
+--header 'Authorization: Bearer <your_token_here> // Add the Bearer token here' \
+--data '{
+"operator":"wave",
+"country":"SN",
+"phone_number":"770000000",
+"amount":100,
+"currency":"XOF",
+"order_id":"order-1729006692",
+"merchant_key": "KS9n3tAgKeBpd50csSozsUXLK",
+"reference_id":"ref-Banana-House",
+"lang":"fr",
+"return_url" : "https://example.com/success",
+"cancel_url" : "https://example.com/cancel",
+"notify_url" : "https://example.com/notification_ipn_webhook"
+}'
+Example Response
+Body
+Headers (1)
+View More
+json
+{
+  "request_id": "107875321646083277270959605666",
+  "request_time": 1726238913.176919,
+  "request_ip": "180.126.205.237",
+  "data": {
+    "transaction_id": "PIM241315378778438124",
+    "order_id": "order-1726238911",
+    "operator": "wave",
+    "phone_number": "2217700000000",
+    "amount": 97,
+    "taxes": 1,
+    "fees": 2,
+    "fees_taxes_ttc": 3,
+    "amount_total": 100,
+    "currency": "XOF",
+    "status": "PENDING",
+    "country": "SN",
+    "lang": "fr",
+    "reference_id": "Your reference",
+    "provider_id": "241315378778438124",
+    "provider_link": "https://pay.wave.com/c/cos-1rjj40wkr11pa?a=100&c=XOF&m=AfribaPAY%20%2A%20OTH%20",
+    "date_created": "2024-09-13 15:48:33"
+  }
+}
+AfribaPAY-IN-WALLET
+AfribaPAY-IN supports partner wallets in several countries, regardless of the mobile carrier used. This capability allows users to fund accounts or make payments using mobile wallets that aren't tied to any specific phone operator.
