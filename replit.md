@@ -107,9 +107,9 @@ Exchange rate conversions use admin-configured rates (`fx_rate_XXX` settings fro
 ## External Dependencies
 
 ### Payment Gateways
-The platform uses two payment gateways that can be configured per operator:
+The platform actually supports three payment gateways, configured per operator via `operators.paymentProvider` / `operators.depositPaymentProvider` (`shared/schema.ts`): **Swychr** (default/fallback), **AfribaPay**, and **PixPay**. The overview above mentions Swychr as the historical default, but new countries/operators are increasingly routed to AfribaPay or PixPay — check the `operators` table, not just this doc, to see what's live for a given country.
 
-- **Swychr/AccountPE** (exclusive gateway — all countries):
+- **Swychr/AccountPE** (default/fallback gateway):
   - Credentials: `SWYCHR_EMAIL`, `SWYCHR_PASSWORD`
   - Payin API URL: `https://app.swychrconnect.com` (deposits)
   - Payout API URL: `https://api.accountpe.com/api/payout` (withdrawals/transfers)
@@ -130,6 +130,17 @@ Fee structure per country (db table: fees):
   - `feeValue`: Total = swychrFee + ashtechMargin (auto-calculated)
 
 Countries supported: CM, GA, CG, CD, SN, CI, BF, ML, BJ, TG, TZ, UG, NG, NE, RW, GN, GH, KE + others
+
+- **AfribaPay**:
+  - Credentials: `AFRIBAPAY_PUBLIC_KEY`, `AFRIBAPAY_SECRET_KEY` (plus merchant/agent config not yet in the secrets table above — check `server/afribapay.ts` for the full list expected at runtime).
+  - Service: `server/afribapay.ts` — token fetch/cache with circuit breaker, `initiateAfribaPayin` (`/v1/pay/payin`), `initiateAfribaPayOtp`/`confirmAfribaPayOtp` (`/v1/pay/otp`), `checkAfribaPayStatus`, `parseAfribaPayWebhook`, fee computation.
+  - Operator code resolution: AfribaPay expects specific `operator_code` values (e.g. "orange", "moov", "mtn"). `resolveAfribaPayOperatorCode()` in `server/routes.ts` derives this from `operators.afribapayOperatorCode` if set, else guesses from the operator's display name (strips "Money" suffix, lowercases). **Always use this helper** — never re-derive the operator code ad hoc; a past bug used a raw lowercased name in one code path and it silently broke OTP detection for that path only.
+  - **OTP handling (critical, previously buggy)**: Some operator/country pairs (Orange in CI/SN/BF/GN, Moov in CI/BF) require an OTP flow — AfribaPay rejects a direct `/v1/pay/payin` call for them with "This operation requires an OTP code." `getAfribaPayOtpInfo()` in `server/afribapay.ts` decides whether to route through the OTP flow (call `/v1/pay/otp` first, then confirm with the code) instead of `/v1/pay/payin` directly. It unions live `/v1/countries` data with a static fallback table (`AFRIBAPAY_STATIC_OTP_REQUIRED`) — never trust live data alone, since a failed/empty countries fetch or an operator-code mismatch can silently make it think no operator needs OTP. As a last-resort safety net, if AfribaPay's payin call rejects with an OTP-required-style message despite the pre-check saying no, the deposit, payment-link, and public `/v1/collect` flows all reactively switch into the OTP flow instead of failing the transaction (see `isAfribaPayOtpRequiredMessage`).
+  - When adding a new OTP-required operator/country pair, add it to `AFRIBAPAY_STATIC_OTP_REQUIRED` in `server/afribapay.ts` rather than relying solely on the live API.
+
+- **PixPay**:
+  - Credentials: `PIXPAY_API_KEY_XAF` (per-currency keys — check for others like `PIXPAY_API_KEY_XOF` if PixPay is enabled for XOF countries).
+  - Service functions referenced from `server/routes.ts`: `getPixPayServiceId`, `detectPixPayFlowType` — supports USSD, OTP, and Wave-style redirect flows similar to AfribaPay.
 
 ### Database
 - **PostgreSQL**: Primary database via `DATABASE_URL` environment variable
