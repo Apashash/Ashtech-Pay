@@ -75,9 +75,25 @@
         if (root.children.length > 0) return;
         // Bouton sans onclick inline (bloqué par script-src-attr 'none') :
         // on injecte le HTML puis on attache l'écouteur via addEventListener.
-        root.innerHTML = '<div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem;background:#0f172a;color:#f8fafc;font-family:sans-serif;text-align:center;gap:1.5rem"><svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><div><h1 style="font-size:1.25rem;font-weight:700;margin-bottom:.5rem">Erreur de chargement</h1><p style="color:#94a3b8;max-width:380px;line-height:1.6">' + (msg || 'Une ressource n\'a pas pu se charger. Videz le cache et rechargez.') + '</p></div><button id="__ashtech_reload__" style="padding:.65rem 1.75rem;background:#f59e0b;color:#0f172a;border:none;border-radius:.5rem;font-weight:700;font-size:1rem;cursor:pointer">Recharger la page</button></div>';
-        var btn = document.getElementById('__ashtech_reload__');
-        if (btn) btn.addEventListener('click', function() { try { sessionStorage.clear(); } catch(e) {} location.reload(); });
+        // Build DOM safely — no innerHTML string concatenation with external data (XSS prevention)
+        var wrap = document.createElement('div');
+        wrap.setAttribute('style', 'min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem;background:#0f172a;color:#f8fafc;font-family:sans-serif;text-align:center;gap:1.5rem');
+        wrap.innerHTML = '<svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+        var inner = document.createElement('div');
+        var h1 = document.createElement('h1');
+        h1.setAttribute('style', 'font-size:1.25rem;font-weight:700;margin-bottom:.5rem');
+        h1.textContent = 'Erreur de chargement';
+        var p = document.createElement('p');
+        p.setAttribute('style', 'color:#94a3b8;max-width:380px;line-height:1.6');
+        p.textContent = msg || 'Une ressource n\'a pas pu se charger. Videz le cache et rechargez.';
+        var btn = document.createElement('button');
+        btn.setAttribute('id', '__ashtech_reload__');
+        btn.setAttribute('style', 'padding:.65rem 1.75rem;background:#f59e0b;color:#0f172a;border:none;border-radius:.5rem;font-weight:700;font-size:1rem;cursor:pointer');
+        btn.textContent = 'Recharger la page';
+        btn.addEventListener('click', function() { try { sessionStorage.clear(); } catch(e) {} location.reload(); });
+        inner.appendChild(h1); inner.appendChild(p);
+        wrap.appendChild(inner); wrap.appendChild(btn);
+        root.appendChild(wrap);
       }
       window.onerror = function(msg, src, line, col, err) {
         showFallback(err && err.message ? err.message : String(msg));
@@ -103,7 +119,7 @@
       }, TIMEOUT_MS);
     })();
   </script>
-    <script type="module" crossorigin src="/assets/index-CDXDQ5P-.js"></script>
+    <script type="module" crossorigin src="/assets/index-lFqR1J5A.js"></script>
     <link rel="modulepreload" crossorigin href="/assets/vendor-misc-ChYWVvQ2.js">
     <link rel="modulepreload" crossorigin href="/assets/vendor-query-CieuxKQ_.js">
     <link rel="modulepreload" crossorigin href="/assets/vendor-ui-BzKubs1B.js">

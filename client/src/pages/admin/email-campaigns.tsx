@@ -143,16 +143,19 @@ export default function AdminEmailCampaigns() {
     body.trim() &&
     (!hasButton || (buttonText.trim() && buttonUrl.trim()));
 
+  // Escape HTML entities in admin-supplied strings before injecting into HTML preview (XSS prevention)
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#x27;");
+
   const buildPreviewHtml = () => {
     const btnHtml = hasButton && buttonText && buttonUrl
       ? `<div style="text-align:center;margin:28px 0;">
-          <a href="${buttonUrl}" style="display:inline-block;background:${buttonColor};color:${buttonTextColor};font-size:15px;font-weight:700;padding:14px 36px;border-radius:10px;text-decoration:none;">${buttonText}</a>
+          <a href="${esc(buttonUrl)}" style="display:inline-block;background:${esc(buttonColor)};color:${esc(buttonTextColor)};font-size:15px;font-weight:700;padding:14px 36px;border-radius:10px;text-decoration:none;">${esc(buttonText)}</a>
         </div>`
       : "";
 
     const bodyHtml = body
       .split("\n\n")
-      .map(p => `<p style="margin:0 0 16px;font-size:14px;color:#1F2937;line-height:1.75;">${p.replace(/\n/g, "<br/>")}</p>`)
+      .map(p => `<p style="margin:0 0 16px;font-size:14px;color:#1F2937;line-height:1.75;">${esc(p).replace(/\n/g, "<br/>")}</p>`)
       .join("");
 
     return `
@@ -168,7 +171,7 @@ export default function AdminEmailCampaigns() {
             </table>
           </div>
           <div style="padding:32px 36px;">
-            <h2 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#1F2937;">${subject || "(Objet du mail)"}</h2>
+            <h2 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#1F2937;">${esc(subject) || "(Objet du mail)"}</h2>
             ${bodyHtml || '<p style="color:#9CA3AF;">Corps du message…</p>'}
             ${btnHtml}
           </div>

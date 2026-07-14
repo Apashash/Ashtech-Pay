@@ -4473,7 +4473,8 @@ export async function registerRoutes(
             if (prefix && localPhone.startsWith(prefix)) {
               localPhone = localPhone.slice(prefix.length);
             }
-            console.log(`[Deposit] AfribaPay phone formatted: raw="${data.phoneNumber}" → local="${localPhone}" country=${countryCode}`);
+            // Dev-only: phone numbers must not appear in production logs (GDPR Art. 5(1)(f))
+            if (process.env.NODE_ENV !== "production") console.log(`[Deposit] AfribaPay phone formatted: raw="${data.phoneNumber}" → local="${localPhone}" country=${countryCode}`);
 
             // Build return/cancel URLs for Wave (redirect-based operators)
             const appBaseUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
@@ -4643,7 +4644,9 @@ export async function registerRoutes(
                 }
               });
             } else {
-              console.error(`[AfribaPay Payin FAILED] country=${countryCode} phone=${localPhone} operator=${afribapayOperatorCode} response=`, JSON.stringify(afribaResponse));
+              // Redact phone in production logs (GDPR Art. 5(1)(f))
+              const _phoneMasked = process.env.NODE_ENV !== "production" ? localPhone : `***${localPhone.slice(-3)}`;
+              console.error(`[AfribaPay Payin FAILED] country=${countryCode} phone=${_phoneMasked} operator=${afribapayOperatorCode} response=`, JSON.stringify(afribaResponse));
               await storage.updateTransactionStatus(transaction.id, "failed");
               res.status(400).json({ message: afribaResponse.message || "Échec de l'initiation du paiement AfribaPay" });
             }
@@ -14425,7 +14428,7 @@ export async function registerRoutes(
             });
             sent++;
           } catch (err) {
-            console.error(`[Campaign] Failed for ${user.email}:`, err);
+            console.error(`[Campaign] Failed for ${user.email?.replace(/(.{2}).+(@.+)/, "$1***$2")}:`, err);
             failed++;
           }
         }));
