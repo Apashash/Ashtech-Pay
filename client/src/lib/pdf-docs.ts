@@ -681,8 +681,8 @@ export function downloadSDKDocs() {
   y = subHeading(doc, "Reponse 202 (succes USSD Push)", y);
   y = codeBlock(doc, `{\n  "transaction_id": "8f3e1c2d-...",\n  "reference":      "ORDER-001",\n  "status":         "pending",\n  "amount":         5000,\n  "credited_amount":4750,\n  "fee_amount":     250,\n  "currency":       "XAF",\n  "operator":       "MTN Mobile Money",\n  "phone":          "670000000",\n  "country_code":   "CM",\n  "created_at":     "2026-03-15T14:00:00Z"\n}`, y, "json");
 
-  y = subHeading(doc, "OTP requis (Orange Money CI, SN, BF, ML — SMS automatique)", y);
-  y = paragraph(doc, "Pour ces operateurs, l'API envoie automatiquement le SMS OTP au client lors du premier appel. La reponse 400 contient un champ 'reference' a conserver. Le retry DOIT inclure otp ET reference.", y);
+  y = subHeading(doc, "OTP requis — Orange CI/SN/BF/ML (USSD) et LigdiCash BF (SMS)", y);
+  y = paragraph(doc, "Orange CI/SN/BF/ML → OTP USSD : le serveur retourne un ussd_code a afficher au client, qui le compose sur son telephone (l'OTP s'affiche dans le menu, aucun SMS envoye). LigdiCash BF → OTP SMS : le serveur envoie un SMS automatiquement (ussd_code = null). Dans les deux cas, la reponse 400 contient un champ 'reference' obligatoire pour l'etape 2.", y);
   y += 2;
   y = codeBlock(doc, `// Etape 1 — Requete initiale (sans otp) → reponse 400\n{\n  "error": "otp_required",\n  "message": "OTP requis. Un code a ete envoye par SMS.",\n  "reference": "DEP-A1B2C3D4",   // ← a conserver absolument\n  "ussd_code": null               // null=SMS auto | "#144*82#"=USSD a composer\n}\n\n// Etape 2 — Retry avec OTP recu + reference du 400 → reponse 202\n{\n  "amount": 5000, "currency": "XOF", "phone": "07XXXXXXXX",\n  "operator": "Orange Money", "country_code": "CI",\n  "otp": "123456",\n  "reference": "DEP-A1B2C3D4",   // ← meme valeur que la reponse 400\n  "notify_url": "https://monsite.com/webhook"\n}`, y, "json");
 

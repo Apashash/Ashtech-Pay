@@ -607,13 +607,13 @@ curl https://ashtechpay.top/v1/collect \\
                   <td className="px-3 py-3 whitespace-nowrap"><span className="text-orange-400 font-semibold text-sm">OTP USSD</span></td>
                   <td className="px-3 py-3 text-gray-700 text-sm">Orange Money CI (#144*82#), SN (#144*391#), BF (*144*4*6*montant#)</td>
                   <td className="px-3 py-3 font-mono text-orange-400 text-xs whitespace-nowrap">400 otp_required<br/><span className="text-zinc-500">ussd_code: "#144*82#"</span></td>
-                  <td className="px-3 py-3 text-gray-700 text-sm">L'API envoie l'OTP par SMS. Relancer avec <code className="text-blue-600 bg-blue-50 px-1 py-0.5 rounded">otp</code> + <code className="text-blue-600 bg-blue-50 px-1 py-0.5 rounded">reference</code> (valeur reçue dans le 400).</td>
+                  <td className="px-3 py-3 text-gray-700 text-sm">Afficher le <code className="text-blue-600 bg-blue-50 px-1 py-0.5 rounded">ussd_code</code> au client — il compose, l'OTP s'affiche dans le menu USSD. Relancer avec <code className="text-blue-600 bg-blue-50 px-1 py-0.5 rounded">otp</code> + <code className="text-blue-600 bg-blue-50 px-1 py-0.5 rounded">reference</code>. Aucun SMS n'est envoyé.</td>
                 </tr>
                 <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                   <td className="px-3 py-3 whitespace-nowrap"><span className="text-yellow-400 font-semibold text-sm">OTP SMS</span></td>
                   <td className="px-3 py-3 text-gray-700 text-sm">LigdiCash BF (wallet) — SMS envoyé automatiquement</td>
                   <td className="px-3 py-3 font-mono text-orange-400 text-xs whitespace-nowrap">400 otp_required<br/><span className="text-zinc-500">ussd_code: null</span></td>
-                  <td className="px-3 py-3 text-gray-700 text-sm">SMS envoyé automatiquement. Relancer avec <code className="text-blue-600 bg-blue-50 px-1 py-0.5 rounded">otp</code> + <code className="text-blue-600 bg-blue-50 px-1 py-0.5 rounded">reference</code> (valeur reçue dans le 400).</td>
+                  <td className="px-3 py-3 text-gray-700 text-sm">SMS OTP envoyé automatiquement par le serveur (LigdiCash BF uniquement). Relancer avec <code className="text-blue-600 bg-blue-50 px-1 py-0.5 rounded">otp</code> + <code className="text-blue-600 bg-blue-50 px-1 py-0.5 rounded">reference</code>.</td>
                 </tr>
                 <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                   <td className="px-3 py-3 whitespace-nowrap"><span className="text-purple-400 font-semibold text-sm">Wave</span></td>
@@ -686,12 +686,13 @@ const data = await res.json();
             <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 p-5 space-y-4">
               <div className="flex items-center gap-2">
                 <span className="w-6 h-6 rounded-full bg-orange-500 flex items-center justify-center text-xs font-bold text-white shrink-0">2</span>
-                <h3 className="font-semibold text-orange-300">Flux OTP USSD — Orange Money CI, SN, BF</h3>
+                <h3 className="font-semibold text-orange-300">Flux OTP USSD — Orange Money CI, SN, BF, ML</h3>
               </div>
               <p className="text-sm text-gray-600">
-                Pour Orange Money en Côte d'Ivoire, Sénégal et Burkina Faso. L'API retourne un{" "}
+                Pour Orange Money en Côte d'Ivoire, Sénégal, Burkina Faso et Mali. L'API retourne un{" "}
                 <code className="text-blue-600 bg-blue-50 px-1 py-0.5 rounded">ussd_code</code>{" "}
-                que le client doit composer depuis son téléphone — Orange lui envoie ensuite l'OTP par SMS.
+                que le client compose depuis son téléphone — l'OTP s'affiche directement dans le menu USSD (pas de SMS envoyé).{" "}
+                <strong className="text-zinc-300">Important :</strong> le serveur ne déclenche aucun SMS — il retourne simplement le code à composer.
               </p>
               <div className="text-xs text-gray-500 space-y-0.5">
                 <strong className="text-zinc-400">Codes USSD par pays :</strong>
@@ -721,23 +722,23 @@ const res = await fetch("https://ashtechpay.top/v1/collect", {
                 </div>
                 <div className="space-y-1 min-w-0">
                   <p className="text-xs text-gray-500 font-medium">Réponse 400 + Étape 2 — Avec OTP</p>
-                  <CodeBlock language="json" code={`// Réponse 400 :
+                  <CodeBlock language="json" code={`// Réponse 400 — CI (même structure pour SN, BF, ML) :
 {
   "error": "otp_required",
-  "message": "OTP requis. Un code a été envoyé par SMS.",
+  "message": "OTP requis. Composez #144*82# sur votre téléphone pour obtenir votre code...",
   "reference": "DEP-A1B2C3D4",  // ← stocker !
-  "ussd_code": "#144*82#"        // code USSD à composer (CI)
+  "ussd_code": "#144*82#"        // CI  |  SN: "#144*391#"  |  BF: "*144*4*6*montant#"
 }
 
-// Afficher : "Composez #144*82# sur votre téléphone,
-//  puis saisissez l'OTP reçu par SMS"`} />
+// Afficher le ussd_code au client :
+// "Composez #144*82# sur votre téléphone, puis saisissez l'OTP affiché"`} />
                   <CodeBlock language="javascript" code={`// Étape 2 : même requête + otp + reference
 body: JSON.stringify({
   amount: 1000, currency: "XOF",
   phone: "0700000000",
   operator: "Orange Money",
   country_code: "CI",
-  otp: "123456",              // ← OTP reçu par SMS
+  otp: "123456",              // ← OTP affiché dans le menu USSD
   reference: "DEP-A1B2C3D4", // ← référence du 400 (obligatoire)
   notify_url: "https://monsite.com/webhook"
 })
@@ -895,8 +896,8 @@ if (data.flow === "wave") {
   if (res.status === 400 && data.error === "otp_required") {
     // Toujours stocker data.reference — OBLIGATOIRE pour le retry OTP
     if (data.ussd_code) {
-      // ─── Flux OTP USSD : code USSD à composer (ex: #144*82# CI, #144*391# SN) ─
-      // Orange Money CI, SN, BF, ML — le client compose le USSD, reçoit l'OTP par SMS
+      // ─── Flux OTP USSD : code USSD à composer (ex: #144*82# CI, #144*391# SN, *144*4*6*montant# BF)
+      // Orange Money CI, SN, BF, ML — le client compose le USSD, l'OTP s'affiche dans le menu (pas de SMS)
       return { type: "otp_ussd", ussdCode: data.ussd_code, reference: data.reference };
     } else {
       // ─── Flux OTP SMS : SMS envoyé automatiquement, pas de USSD à composer ────
