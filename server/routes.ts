@@ -12979,6 +12979,9 @@ export async function registerRoutes(
         reference_id: ref,
         otp_code: otpCode,
         notify_url: callbackUrl,
+        return_url: `${process.env.APP_URL}/dashboard/deposit?status=success`,
+        cancel_url: `${process.env.APP_URL}/dashboard/deposit?status=cancelled`,
+        lang: "fr",
       });
 
       if (!result.success) {
@@ -13041,6 +13044,9 @@ export async function registerRoutes(
         reference_id: ref,
         otp_code: otpCode,
         notify_url: callbackUrl,
+        return_url: `${process.env.APP_URL}/pay/success`,
+        cancel_url: `${process.env.APP_URL}/pay/cancel`,
+        lang: "fr",
       });
 
       if (!result.success) {
@@ -13489,6 +13495,9 @@ export async function registerRoutes(
             reference_id: depositRef,
             otp_code: req.body.otp,
             notify_url: callbackUrl,
+            return_url: `${process.env.APP_URL}/dashboard/deposit?status=success`,
+            cancel_url: `${process.env.APP_URL}/dashboard/deposit?status=cancelled`,
+            lang: "fr",
           });
         } else {
           afribaResponse = await initiateAfribaPayin({
