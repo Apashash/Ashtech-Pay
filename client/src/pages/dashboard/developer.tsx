@@ -43,6 +43,80 @@ const ALL_COUNTRIES = [
   { code: "TG", name: "Togo",               currency: "XOFT", operators: ["Flooz (Moov)", "T-Money"],                                      otpOps: [] },
 ];
 
+// ── Syntax highlighting ─────────────────────────────────────────────────────
+type _ST = { t: string; c: string };
+
+function _hlJson(code: string): _ST[] {
+  const out: _ST[] = [];
+  let i = 0;
+  while (i < code.length) {
+    if (code[i] === '"') {
+      let j = i + 1;
+      while (j < code.length) {
+        if (code[j] === '\\') { j += 2; continue; }
+        if (code[j] === '"') { j++; break; }
+        j++;
+      }
+      const s = code.slice(i, j);
+      let k = j;
+      while (k < code.length && (code[k] === ' ' || code[k] === '\t')) k++;
+      out.push({ t: s, c: code[k] === ':' ? '#f47067' : '#57ab5a' });
+      i = j;
+    } else if ((code[i] >= '0' && code[i] <= '9') || (code[i] === '-' && i + 1 < code.length && code[i+1] >= '0' && code[i+1] <= '9')) {
+      let j = i + (code[i] === '-' ? 1 : 0);
+      while (j < code.length && (code[j] >= '0' && code[j] <= '9' || code[j] === '.' || code[j] === 'e' || code[j] === 'E')) j++;
+      out.push({ t: code.slice(i, j), c: '#6cb6ff' }); i = j;
+    } else if (code.startsWith('true', i))  { out.push({ t: 'true',  c: '#f69d50' }); i += 4;
+    } else if (code.startsWith('false', i)) { out.push({ t: 'false', c: '#f69d50' }); i += 5;
+    } else if (code.startsWith('null', i))  { out.push({ t: 'null',  c: '#f69d50' }); i += 4;
+    } else { out.push({ t: code[i], c: '#adbac7' }); i++; }
+  }
+  return out;
+}
+
+function _hlBash(code: string): _ST[] {
+  const out: _ST[] = [];
+  const lines = code.split('\n');
+  lines.forEach((line, li) => {
+    if (li > 0) out.push({ t: '\n', c: '' });
+    if (line.trimStart().startsWith('#')) { out.push({ t: line, c: '#768390' }); return; }
+    let i = 0;
+    while (i < line.length) {
+      if (line[i] === ' ' || line[i] === '\t') {
+        let j = i; while (j < line.length && (line[j] === ' ' || line[j] === '\t')) j++;
+        out.push({ t: line.slice(i, j), c: '#adbac7' }); i = j; continue;
+      }
+      if (line[i] === '\\') { out.push({ t: '\\', c: '#768390' }); i++; continue; }
+      if (line[i] === "'") {
+        let j = i + 1; while (j < line.length && line[j] !== "'") j++;
+        out.push({ t: line.slice(i, j + 1), c: '#57ab5a' }); i = j + 1; continue;
+      }
+      if (line[i] === '"') {
+        let j = i + 1; while (j < line.length && (line[j] !== '"' || line[j-1] === '\\')) j++;
+        out.push({ t: line.slice(i, j + 1), c: '#57ab5a' }); i = j + 1; continue;
+      }
+      if (line[i] === '-') {
+        let j = i; while (j < line.length && line[j] !== ' ' && line[j] !== '\t' && line[j] !== "'" && line[j] !== '"') j++;
+        out.push({ t: line.slice(i, j), c: '#768390' }); i = j; continue;
+      }
+      let j = i;
+      while (j < line.length && line[j] !== ' ' && line[j] !== '\t' && line[j] !== "'" && line[j] !== '"' && line[j] !== '\\') j++;
+      const w = line.slice(i, j);
+      const mc = ['POST','GET','DELETE','PUT','PATCH'].includes(w) ? '#f47067' : null;
+      out.push({ t: w, c: mc ?? (w === 'curl' ? '#79c0ff' : w.startsWith('http') ? '#79c0ff' : '#cdd9e5') });
+      i = j;
+    }
+  });
+  return out;
+}
+
+function _renderToks(tokens: _ST[]): React.ReactNode {
+  return tokens.map((tok, i) =>
+    tok.c ? <span key={i} style={{ color: tok.c }}>{tok.t}</span> : tok.t
+  );
+}
+// ────────────────────────────────────────────────────────────────────────────
+
 function CodeBlock({ code, language = "json" }: { code: string; language?: string }) {
   const [copied, setCopied] = useState(false);
   function copy() {
@@ -50,22 +124,30 @@ function CodeBlock({ code, language = "json" }: { code: string; language?: strin
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
+  const langLabel: Record<string, string> = {
+    json: "json", javascript: "Node.js", http: "HTTP",
+    bash: "curl", php: "PHP", python: "Python",
+  };
+  const tokens = language === 'json' ? _hlJson(code.trim())
+    : language === 'bash' ? _hlBash(code.trim())
+    : [{ t: code.trim(), c: '#cdd9e5' }];
   return (
-    <div className="rounded-xl overflow-hidden border border-gray-200 bg-[#0d1117] w-full min-w-0">
-      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 bg-[#161b22]">
-        <span className="text-xs font-mono text-gray-600">{language}</span>
+    <div className="rounded-xl overflow-hidden border border-[#2d333b] w-full min-w-0 shadow-sm">
+      <div className="flex items-center justify-between px-4 py-2.5 bg-[#1c2128] border-b border-[#2d333b]">
+        <span className="text-[11px] font-mono font-medium text-[#cdd9e5] bg-[#2d333b] px-2.5 py-1 rounded-md">
+          {langLabel[language] ?? language}
+        </span>
         <button
           onClick={copy}
-          className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-900 transition-colors shrink-0"
+          className="flex items-center gap-1.5 text-xs text-[#768390] hover:text-[#cdd9e5] transition-colors shrink-0"
           data-testid="button-copy-code"
         >
-          {copied ? <CheckCheck className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
-          {copied ? "Copié" : "Copier"}
+          {copied ? <><CheckCheck className="w-3.5 h-3.5 text-emerald-400" /><span>Copié</span></> : <><Copy className="w-3.5 h-3.5" /><span>Copier</span></>}
         </button>
       </div>
       <div className="overflow-x-auto w-full">
-        <pre className="p-4 text-sm leading-relaxed w-max min-w-full">
-          <code className="text-zinc-300 font-mono whitespace-pre">{code.trim()}</code>
+        <pre className="bg-[#161b22] px-5 py-4 leading-relaxed w-max min-w-full">
+          <code className="font-mono whitespace-pre text-sm">{_renderToks(tokens)}</code>
         </pre>
       </div>
     </div>
@@ -109,11 +191,12 @@ function TableHead({ cols }: { cols: string[] }) {
 
 function MethodBadge({ method }: { method: string }) {
   const colors: Record<string, string> = {
-    POST: "bg-green-500/20 text-green-400 border-green-500/30",
-    GET:  "bg-blue-500/20 text-blue-400 border-blue-500/30",
+    POST:   "bg-amber-500/20 text-amber-400 border-amber-500/40",
+    GET:    "bg-blue-500/20  text-blue-400  border-blue-500/30",
+    DELETE: "bg-red-500/20   text-red-400   border-red-500/30",
   };
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold font-mono border ${colors[method] ?? ""}`}>
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold font-mono border ${colors[method] ?? "border-gray-300 text-gray-500"}`}>
       {method}
     </span>
   );

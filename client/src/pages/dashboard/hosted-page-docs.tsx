@@ -6,6 +6,80 @@ import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Copy, CheckCheck, Terminal, Download, FlaskConical } from "lucide-react";
 import { downloadHostedPagePDF } from "@/lib/pdf-docs";
 
+// ── Syntax highlighting ────────────────────────────────────────────────────
+type _ST = { t: string; c: string };
+
+function _hlJson(code: string): _ST[] {
+  const out: _ST[] = [];
+  let i = 0;
+  while (i < code.length) {
+    if (code[i] === '"') {
+      let j = i + 1;
+      while (j < code.length) {
+        if (code[j] === '\\') { j += 2; continue; }
+        if (code[j] === '"') { j++; break; }
+        j++;
+      }
+      const s = code.slice(i, j);
+      let k = j;
+      while (k < code.length && (code[k] === ' ' || code[k] === '\t')) k++;
+      out.push({ t: s, c: code[k] === ':' ? '#f47067' : '#57ab5a' });
+      i = j;
+    } else if ((code[i] >= '0' && code[i] <= '9') || (code[i] === '-' && i + 1 < code.length && code[i+1] >= '0' && code[i+1] <= '9')) {
+      let j = i + (code[i] === '-' ? 1 : 0);
+      while (j < code.length && (code[j] >= '0' && code[j] <= '9' || code[j] === '.' || code[j] === 'e' || code[j] === 'E')) j++;
+      out.push({ t: code.slice(i, j), c: '#6cb6ff' }); i = j;
+    } else if (code.startsWith('true', i))  { out.push({ t: 'true',  c: '#f69d50' }); i += 4;
+    } else if (code.startsWith('false', i)) { out.push({ t: 'false', c: '#f69d50' }); i += 5;
+    } else if (code.startsWith('null', i))  { out.push({ t: 'null',  c: '#f69d50' }); i += 4;
+    } else { out.push({ t: code[i], c: '#adbac7' }); i++; }
+  }
+  return out;
+}
+
+function _hlBash(code: string): _ST[] {
+  const out: _ST[] = [];
+  const lines = code.split('\n');
+  lines.forEach((line, li) => {
+    if (li > 0) out.push({ t: '\n', c: '' });
+    if (line.trimStart().startsWith('#')) { out.push({ t: line, c: '#768390' }); return; }
+    let i = 0;
+    while (i < line.length) {
+      if (line[i] === ' ' || line[i] === '\t') {
+        let j = i; while (j < line.length && (line[j] === ' ' || line[j] === '\t')) j++;
+        out.push({ t: line.slice(i, j), c: '#adbac7' }); i = j; continue;
+      }
+      if (line[i] === '\\') { out.push({ t: '\\', c: '#768390' }); i++; continue; }
+      if (line[i] === "'") {
+        let j = i + 1; while (j < line.length && line[j] !== "'") j++;
+        out.push({ t: line.slice(i, j + 1), c: '#57ab5a' }); i = j + 1; continue;
+      }
+      if (line[i] === '"') {
+        let j = i + 1; while (j < line.length && (line[j] !== '"' || line[j-1] === '\\')) j++;
+        out.push({ t: line.slice(i, j + 1), c: '#57ab5a' }); i = j + 1; continue;
+      }
+      if (line[i] === '-') {
+        let j = i; while (j < line.length && line[j] !== ' ' && line[j] !== '\t' && line[j] !== "'" && line[j] !== '"') j++;
+        out.push({ t: line.slice(i, j), c: '#768390' }); i = j; continue;
+      }
+      let j = i;
+      while (j < line.length && line[j] !== ' ' && line[j] !== '\t' && line[j] !== "'" && line[j] !== '"' && line[j] !== '\\') j++;
+      const w = line.slice(i, j);
+      const mc = ['POST','GET','DELETE','PUT','PATCH'].includes(w) ? '#f47067' : null;
+      out.push({ t: w, c: mc ?? (w === 'curl' ? '#79c0ff' : w.startsWith('http') ? '#79c0ff' : '#cdd9e5') });
+      i = j;
+    }
+  });
+  return out;
+}
+
+function _renderToks(tokens: _ST[]): React.ReactNode {
+  return tokens.map((tok, i) =>
+    tok.c ? <span key={i} style={{ color: tok.c }}>{tok.t}</span> : tok.t
+  );
+}
+// ──────────────────────────────────────────────────────────────────────────
+
 function CodeBlock({ code, language = "json" }: { code: string; language?: string }) {
   const [copied, setCopied] = useState(false);
   const { toast } = useToast();
@@ -16,21 +90,26 @@ function CodeBlock({ code, language = "json" }: { code: string; language?: strin
     toast({ title: "Copié !" });
   }
   const langLabel: Record<string, string> = {
-    json: "JSON", javascript: "Node.js", http: "HTTP",
-    bash: "cURL", php: "PHP", python: "Python",
+    json: "json", javascript: "Node.js", http: "HTTP",
+    bash: "curl", php: "PHP", python: "Python",
   };
+  const tokens = language === 'json' ? _hlJson(code.trim())
+    : language === 'bash' ? _hlBash(code.trim())
+    : [{ t: code.trim(), c: '#cdd9e5' }];
   return (
-    <div className="rounded-lg overflow-hidden border border-gray-200 text-sm">
-      <div className="flex items-center justify-between px-4 py-2 bg-gray-100 border-b border-gray-200">
-        <span className="text-xs text-gray-500 font-mono">{langLabel[language] ?? language}</span>
-        <button onClick={copy} className="flex items-center gap-1.5 text-gray-400 hover:text-gray-700 transition-colors text-xs">
+    <div className="rounded-xl overflow-hidden border border-[#2d333b] text-sm shadow-sm">
+      <div className="flex items-center justify-between px-4 py-2.5 bg-[#1c2128] border-b border-[#2d333b]">
+        <span className="text-[11px] font-mono font-medium text-[#cdd9e5] bg-[#2d333b] px-2.5 py-1 rounded-md">
+          {langLabel[language] ?? language}
+        </span>
+        <button onClick={copy} className="flex items-center gap-1.5 text-[#768390] hover:text-[#cdd9e5] transition-colors text-xs">
           {copied
-            ? <><CheckCheck className="h-3.5 w-3.5 text-emerald-500" /><span>Copié</span></>
+            ? <><CheckCheck className="h-3.5 w-3.5 text-emerald-400" /><span>Copié</span></>
             : <><Copy className="h-3.5 w-3.5" /><span>Copier</span></>}
         </button>
       </div>
-      <pre className="bg-[#0d1117] px-4 py-4 overflow-x-auto leading-relaxed">
-        <code className="text-zinc-300 font-mono whitespace-pre text-xs">{code.trim()}</code>
+      <pre className="bg-[#161b22] px-5 py-4 overflow-x-auto leading-relaxed">
+        <code className="font-mono whitespace-pre text-xs">{_renderToks(tokens)}</code>
       </pre>
     </div>
   );
@@ -48,7 +127,7 @@ function Section({ id, title, children }: { id: string; title: string; children:
 function Method({ m }: { m: "GET" | "POST" }) {
   return (
     <span className={`text-[11px] font-mono font-bold px-1.5 py-0.5 rounded border ${
-      m === "POST" ? "border-sky-300 text-sky-700 bg-sky-50" : "border-gray-300 text-gray-600 bg-gray-100"
+      m === "POST" ? "border-amber-400 text-amber-600 bg-amber-50" : "border-blue-300 text-blue-600 bg-blue-50"
     }`}>{m}</span>
   );
 }
