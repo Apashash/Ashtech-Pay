@@ -1,0 +1,481 @@
+Data about countries, their currencies, and mobile operators within those countries usied by AfribaPAY. The specific information being selected includes:
+country_code: The unique code identifying the country.
+country_name: The name of the country.
+currency: The currency used in the country.
+prefix: The telephone prefix for the country.
+taxes: The tax rate or information related to the country.
+operator_code: The code of the mobile operator within the country.
+operator_name: The name of the mobile operator.
+otp_required: A flag indicating whether the operator supports OTP (One-Time Password) services.
+ussd_code: The text message sent as part of the OTP process or simply the USSD to validate the transaction.
+AUTHORIZATION
+Bearer Token
+Token
+PARAMS
+Example Request
+COUNTRIES
+
+View More
+curl
+curl --location 'https://api-sandbox.afribapay.com/v1/countries' \
+--header 'Authorization: Bearer <your_token_here> // Add the Bearer token here' \
+--header 'Content-Type: application/json'
+Example Response
+Body
+Headers (1)
+View More
+json
+{
+  "request_id": "25030103035817068574",
+  "request_time": 1740843958.79002,
+  "request_ip": "199.126.205.237",
+  "data": {
+    "BF": {
+      "country_code": "BF",
+      "country_name": "Burkina Faso",
+      "country_flag": "🇧🇫",
+      "prefix": "226",
+      "taxes": 18,
+      "currencies": {
+        "XOF": {
+          "currency": "XOF",
+          "operators": [
+            {
+              "operator_code": "moov",
+              "operator_name": "Moov Money",
+              "otp_required": 0,
+              "ussd_code": ""
+            },
+            {
+              "operator_code": "orange",
+              "operator_name": "Orange Money",
+              "otp_required": 1,
+              "ussd_code": "*144*4*6*montant#"
+            },
+            {
+              "operator_code": "wligdicash",
+              "operator_name": "Wallet LigdiCash",
+              "otp_required": 1,
+              "ussd_code": "Get OTP from endpoint .../pay/otp"
+            }
+          ]
+        }
+      }
+    },
+    "CD": {
+      "country_code": "CD",
+      "country_name": "R.D.C",
+      "country_flag": "🇨🇩",
+      "prefix": "243",
+      "taxes": 16,
+      "currencies": {
+        "CDF": {
+          "currency": "CDF",
+          "operators": [
+            {
+              "operator_code": "airtel",
+              "operator_name": "Airtel Money",
+              "otp_required": 0,
+              "ussd_code": ""
+            },
+            {
+              "operator_code": "mpesa",
+              "operator_name": "Mpesa Money",
+              "otp_required": 0,
+              "ussd_code": ""
+            },
+            {
+              "operator_code": "orange",
+              "operator_name": "Orange Money",
+              "otp_required": 0,
+              "ussd_code": ""
+            },
+            {
+              "operator_code": "afrimoney",
+              "operator_name": "Afri Money",
+              "otp_required": 0,
+              "ussd_code": ""
+            },
+            {
+              "operator_code": "vodacom",
+              "operator_name": "Vodacom",
+              "otp_required": 0,
+              "ussd_code": ""
+            },
+            {
+              "operator_code": "vodacom",
+              "operator_name": "Vodacom",
+              "otp_required": 0,
+              "ussd_code": ""
+            }
+          ]
+        },
+        "USD": {
+          "currency": "USD",
+          "operators": [
+            {
+              "operator_code": "airtel",
+              "operator_name": "Airtel Money",
+              "otp_required": 0,
+              "ussd_code": ""
+            },
+            {
+              "operator_code": "mpesa",
+              "operator_name": "Mpesa Money",
+              "otp_required": 0,
+              "ussd_code": ""
+            },
+            {
+              "operator_code": "orange",
+              "operator_name": "Orange Money",
+              "otp_required": 0,
+              "ussd_code": ""
+            },
+            {
+              "operator_code": "afrimoney",
+              "operator_name": "Afri Money",
+              "otp_required": 0,
+              "ussd_code": ""
+            },
+            {
+              "operator_code": "vodacom",
+              "operator_name": "Vodacom",
+              "otp_required": 0,
+              "ussd_code": ""
+            },
+            {
+              "operator_code": "vodacom",
+              "operator_name": "Vodacom",
+              "otp_required": 0,
+              "ussd_code": ""
+            }
+          ]
+        }
+      }
+    },
+    "CI": {
+      "country_code": "CI",
+      "country_name": "Côte d'Ivoire",
+      "country_flag": "🇨🇮",
+      "prefix": "225",
+      "taxes": 18,
+      "currencies": {
+        "XOF": {
+          "currency": "XOF",
+          "operators": [
+            {
+              "operator_code": "moov",
+              "operator_name": "Moov Money",
+              "otp_required": 0,
+              "ussd_code": ""
+            },
+            {
+              "operator_code": "mtn",
+              "operator_name": "MTN Money",
+              "otp_required": 0,
+              "ussd_code": "*133#"
+            },
+            {
+              "operator_code": "orange",
+              "operator_name": "Orange Money",
+              "otp_required": 1,
+              "ussd_code": "#144*82#"
+            },
+            {
+              "operator_code": "wave",
+              "operator_name": "Wave Money",
+              "otp_required": 0,
+              "ussd_code": ""
+            }
+          ]
+        }
+      }
+    },
+    "CM": {
+      "country_code": "CM",
+      "country_name": "Cameroon",
+      "country_flag": "🇨🇲",
+      "prefix": "237",
+      "taxes": 19.25,
+      "currencies": {
+        "XAF": {
+          "currency": "XAF",
+          "operators": [
+            {
+              "operator_code": "mtn",
+              "operator_name": "MTN Money",
+              "otp_required": 0,
+              "ussd_code": "*126#"
+            },
+            {
+              "operator_code": "orange",
+              "operator_name": "Orange Money",
+              "otp_required": 0,
+              "ussd_code": "#150*50#"
+            }
+          ]
+        }
+      }
+    },
+    "GA": {
+      "country_code": "GA",
+      "country_name": "Gabon",
+      "country_flag": "🇬🇦",
+      "prefix": "241",
+      "taxes": 18,
+      "currencies": {
+        "XAF": {
+          "currency": "XAF",
+          "operators": [
+            {
+              "operator_code": "airtel",
+              "operator_name": "Airtel Money",
+              "otp_required": 0,
+              "ussd_code": ""
+            },
+            {
+              "operator_code": "moov",
+              "operator_name": "Moov Money",
+              "otp_required": 0,
+              "ussd_code": ""
+            }
+          ]
+        }
+      }
+    },
+    "GN": {
+      "country_code": "GN",
+      "country_name": "Guinea Conakry",
+      "country_flag": "🇬🇳",
+      "prefix": "224",
+      "taxes": 18,
+      "currencies": {
+        "GNF": {
+          "currency": "GNF",
+          "operators": [
+            {
+              "operator_code": "mtn",
+              "operator_name": "MTN Money",
+              "otp_required": 0,
+              "ussd_code": ""
+            },
+            {
+              "operator_code": "orange",
+              "operator_name": "Orange Money",
+              "otp_required": 0,
+              "ussd_code": "*144*4*2*1#"
+            }
+          ]
+        }
+      }
+    },
+    "ML": {
+      "country_code": "ML",
+      "country_name": "Mali",
+      "country_flag": "🇲🇱",
+      "prefix": "223",
+      "taxes": 18,
+      "currencies": {
+        "XOF": {
+          "currency": "XOF",
+          "operators": [
+            {
+              "operator_code": "moov",
+              "operator_name": "Moov Money",
+              "otp_required": 0,
+              "ussd_code": ""
+            },
+            {
+              "operator_code": "orange",
+              "operator_name": "Orange Money",
+              "otp_required": 0,
+              "ussd_code": "#144#37#"
+            }
+          ]
+        }
+      }
+    },
+    "NE": {
+      "country_code": "NE",
+      "country_name": "Niger",
+      "country_flag": "🇳🇪",
+      "prefix": "227",
+      "taxes": 18,
+      "currencies": {
+        "XOF": {
+          "currency": "XOF",
+          "operators": [
+            {
+              "operator_code": "airtel",
+              "operator_name": "Airtel Money",
+              "otp_required": 0,
+              "ussd_code": ""
+            }
+          ]
+        }
+      }
+    },
+    "SN": {
+      "country_code": "SN",
+      "country_name": "Senegal",
+      "country_flag": "🇸🇳",
+      "prefix": "221",
+      "taxes": 18,
+      "currencies": {
+        "XOF": {
+          "currency": "XOF",
+          "operators": [
+            {
+              "operator_code": "expresso",
+              "operator_name": "E-money",
+              "otp_required": 0,
+              "ussd_code": ""
+            },
+            {
+              "operator_code": "free",
+              "operator_name": "Free Money",
+              "otp_required": 0,
+              "ussd_code": ""
+            },
+            {
+              "operator_code": "orange",
+              "operator_name": "Orange Money",
+              "otp_required": 1,
+              "ussd_code": "#144*391#"
+            },
+            {
+              "operator_code": "wave",
+              "operator_name": "Wave Money",
+              "otp_required": 0,
+              "ussd_code": ""
+            }
+          ]
+        }
+      }
+    },
+    "TG": {
+      "country_code": "TG",
+      "country_name": "Togo",
+      "country_flag": "🇹🇬",
+      "prefix": "228",
+      "taxes": 18,
+      "currencies": {
+        "XOF": {
+          "currency": "XOF",
+          "operators": [
+            {
+              "operator_code": "moov",
+              "operator_name": "Moov Money",
+              "otp_required": 0,
+              "ussd_code": ""
+            },
+            {
+              "operator_code": "tmoney",
+              "operator_name": "T-Money",
+              "otp_required": 0,
+              "ussd_code": ""
+            }
+          ]
+        }
+      }
+    },
+    "BJ": {
+      "country_code": "BJ",
+      "country_name": "Benin",
+      "country_flag": "🇧🇯",
+      "prefix": "229",
+      "taxes": 18,
+      "currencies": {
+        "XOF": {
+          "currency": "XOF",
+          "operators": [
+            {
+              "operator_code": "moov",
+              "operator_name": "Moov Money",
+              "otp_required": 0,
+              "ussd_code": ""
+            },
+            {
+              "operator_code": "mtn",
+              "operator_name": "MTN Money",
+              "otp_required": 0,
+              "ussd_code": ""
+            },
+            {
+              "operator_code": "celtiis",
+              "operator_name": "Celtiis Money",
+              "otp_required": 0,
+              "ussd_code": ""
+            },
+            {
+              "operator_code": "coris",
+              "operator_name": "Coris Money",
+              "otp_required": 0,
+              "ussd_code": ""
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+TEST PHONE NUMBERS
+This is the list of phone numbers and currencies for AfribaPay sandbox, along with their respective statuses.
+Currency and Test Information
+1. Currency: XOF
+Test Country: Ivory Coast
+ Phone Number	Status
+ 2252100000001	SUCCESS
+ 2252100000002	PENDING
+ 2252100000003	FAILED
+2. Currency: XAF
+Test Country: Cameroon
+ Phone Number	Status
+ 237660000001	SUCCESS
+ 237660000002	PENDING
+ 237660000003	FAILED
+3. Currency: GNF
+Test Country: Guinea Conakry
+ Phone Number	Status
+ 224600000001	SUCCESS
+ 224600000002	PENDING
+ 224600000003	FAILED
+4. Currency: USD
+Test Country: RDC
+ Phone Number	Status
+ 243120000001	SUCCESS
+ 243120000002	PENDING
+ 243120000003	FAILED
+5. Currency: CDF
+Test Country: RDC
+ Phone Number	Status
+ 243120000011	SUCCESS
+ 243120000012	PENDING
+ 243120000013	FAILED
+6. Currency: XOF
+Test Country: SN
+ Phone Number	Status
+ 221700000001	SUCCESS
+ 221700000002	PENDING
+ 221700000003	FAILED
+7. Currency: XOF
+Test Country: BF
+ Phone Number	Status
+ 22660000001	SUCCESS
+ 22660000002	PENDING
+ 22660000003	FAILED
+OTP Verification
+OTP Verification – Sandbox Overview
+Some providers require an OTP (One-Time Password) after you initiate a transaction.
+In sandbox mode, you can enter any 6-digit code to simulate a successful verification — except for a reserved set of test codes that always return a FAILED status.
+This allows you to test both happy paths (OTP success) and negative scenarios (OTP failure).
+Test FAILED OTP Codes
+When using the following codes, the API will always respond with FAILED:
+ View More
+ Test Country	Phone Number	OTP Code	Result
+ Any country with OTP	Any	000000	FAILED
+ Any country with OTP	Any	111111	FAILED
+ Any country with OTP	Any	222222	FAILED
+ Any country with OTP	Any	333333	FAILED
+ Any country with OTP	Any	444444	FAILED
+❌ Reserved failure codes (000000 →
