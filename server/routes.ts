@@ -2191,9 +2191,9 @@ export async function registerRoutes(
   });
 
   // GET — IP check (polled by admin frontend)
-  // Uses requireAdmin — non-admin users receive 403 before reaching the handler.
-  // The IP blocklist check is handled inside requireAdmin middleware.
-  app.get("/api/admin/ip-check", requireAdmin, async (req, res) => {
+  // requireAuth first: enforces singleDeviceKick, inactivity expiry, forceLogout.
+  // requireAdmin second: enforces role=admin + TOTP verification.
+  app.get("/api/admin/ip-check", requireAuth, requireAdmin, async (req, res) => {
     try {
       const ip = getClientIp(req);
       res.json({ allowed: true, ip });
