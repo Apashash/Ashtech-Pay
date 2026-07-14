@@ -4506,8 +4506,12 @@ export async function registerRoutes(
                 otpType: otpInfo.type,
               });
 
+              // Substitute "montant" placeholder with the actual amount (e.g. BF Orange: *144*4*6*5000#)
+              const ussdCodeForDeposit = otpInfo.ussdCode?.includes("montant")
+                ? otpInfo.ussdCode.replace(/montant/gi, String(Math.round(totalAmount)))
+                : (otpInfo.ussdCode || "");
               const otpMessage = otpInfo.type === "ussd"
-                ? `Composez ${otpInfo.ussdCode} sur votre téléphone pour obtenir votre code OTP, puis saisissez-le ci-dessous.`
+                ? `Composez ${ussdCodeForDeposit} sur votre téléphone pour obtenir votre code OTP, puis saisissez-le ci-dessous.`
                 : "Entrez le code OTP que vous allez recevoir par SMS sur votre téléphone.";
 
               return res.json({
@@ -4515,7 +4519,7 @@ export async function registerRoutes(
                 gateway: "afribapay",
                 otpRequired: true,
                 otpType: otpInfo.type,
-                ussdCode: otpInfo.ussdCode,
+                ussdCode: ussdCodeForDeposit,
                 status: "otp_required",
                 message: otpMessage,
                 feeDetails: {
@@ -7418,8 +7422,12 @@ export async function registerRoutes(
                 otpType: otpInfo.type,
               });
 
+              // Substitute "montant" placeholder with the actual amount (e.g. BF Orange: *144*4*6*5000#)
+              const ussdCodeForLink = otpInfo.ussdCode?.includes("montant")
+                ? otpInfo.ussdCode.replace(/montant/gi, String(Math.round(numAmount)))
+                : (otpInfo.ussdCode || "");
               const otpMessage = otpInfo.type === "ussd"
-                ? `Composez ${otpInfo.ussdCode} sur votre téléphone pour obtenir votre code OTP, puis saisissez-le ci-dessous.`
+                ? `Composez ${ussdCodeForLink} sur votre téléphone pour obtenir votre code OTP, puis saisissez-le ci-dessous.`
                 : "Entrez le code OTP que vous allez recevoir par SMS sur votre téléphone.";
 
               return res.json({
@@ -7428,7 +7436,7 @@ export async function registerRoutes(
                 gateway: "afribapay",
                 otpRequired: true,
                 otpType: otpInfo.type,
-                ussdCode: otpInfo.ussdCode,
+                ussdCode: ussdCodeForLink,
                 redirectUrl: paymentLink.redirectUrl || null,
                 amount: numAmount,
                 feeAmount: afribaFees.totalFeeAmount,
@@ -13567,15 +13575,19 @@ export async function registerRoutes(
             otpType: otpInfoPre.type,
           });
 
+          // Substitute "montant" placeholder with the actual amount (e.g. BF Orange: *144*4*6*5000#)
+          const ussdCodeForCollect = otpInfoPre.ussdCode?.includes("montant")
+            ? otpInfoPre.ussdCode.replace(/montant/gi, String(Math.round(amountNum)))
+            : (otpInfoPre.ussdCode || null);
           const otpMsg = otpInfoPre.type === "ussd"
-            ? `OTP requis. Composez ${otpInfoPre.ussdCode} sur votre téléphone pour obtenir votre code, puis relancez la requête avec les champs 'otp' et 'reference'.`
+            ? `OTP requis. Composez ${ussdCodeForCollect} sur votre téléphone pour obtenir votre code, puis relancez la requête avec les champs 'otp' et 'reference'.`
             : "OTP requis. Un code a été envoyé par SMS. Relancez la requête avec les champs 'otp' et 'reference'.";
 
           return res.status(400).json({
             error: "otp_required",
             message: otpMsg,
             reference: depositRef, // client MUST include this in the confirmation call
-            ussd_code: otpInfoPre.ussdCode || null,
+            ussd_code: ussdCodeForCollect,
           });
         }
       }

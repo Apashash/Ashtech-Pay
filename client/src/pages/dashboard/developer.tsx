@@ -20,6 +20,7 @@ const SECTIONS = [
   { id: "fees",           label: "GET /v1/fees",         icon: ArrowRight },
   { id: "webhooks",       label: "Webhooks",             icon: Webhook },
   { id: "errors",         label: "Codes d'erreur",       icon: ArrowRight },
+  { id: "sandbox",        label: "Sandbox & Tests",      icon: FlaskConical },
 ];
 
 // All active countries — currencies are standard ISO codes (XOF/XAF/GNF/CDF)
@@ -531,49 +532,63 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
             </div>
 
             <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-5 space-y-3">
-              <p className="text-sm font-semibold text-yellow-300">OTP requis (Orange Money CI, SN, ML, BF…)</p>
+              <p className="text-sm font-semibold text-yellow-300">OTP requis — deux variantes selon l'opérateur</p>
               <p className="text-sm text-gray-600">
-                Certains opérateurs nécessitent un code OTP. Si c'est le cas, l'API retourne une erreur{" "}
+                Certains opérateurs nécessitent un code OTP. L'API retourne{" "}
                 <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">400 otp_required</code>{" "}
-                avec un champ <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">reference</code> à conserver.
-                Pour Orange Money CI/BF/SN/ML : l'API envoie automatiquement le SMS OTP au client.
-                Relancez ensuite la requête en ajoutant <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">otp</code>{" "}
-                <strong>et</strong> <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">reference</code> (la valeur reçue dans le 400).
+                avec un champ <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">reference</code>{" "}
+                et un champ <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">ussd_code</code>.
+                Il existe deux variantes :{" "}
+                <strong className="text-orange-300">OTP USSD</strong>{" "}
+                (Orange CI, SN, BF — le client compose le code USSD affiché, l'OTP s'affiche dans le menu téléphonique,{" "}
+                <em>aucun SMS n'est envoyé</em>) et{" "}
+                <strong className="text-yellow-300">OTP SMS</strong>{" "}
+                (LigdiCash BF uniquement — SMS déclenché automatiquement,{" "}
+                <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">ussd_code</code>{" "}
+                est <code className="text-red-400">null</code>).
+                Dans les deux cas, relancez la requête avec{" "}
+                <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">otp</code>{" "}
+                <strong>et</strong>{" "}
+                <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">reference</code>{" "}
+                (valeur reçue dans le 400).
               </p>
               <CodeBlock language="json" code={`// Étape 1 — Requête initiale (sans otp) → réponse 400
 {
   "error": "otp_required",
-  "message": "OTP requis. Un code a été envoyé par SMS.",
-  "reference": "DEP-A1B2C3D4",   // ← à conserver absolument
-  "ussd_code": null               // null = SMS automatique | "#144*82#" = USSD à composer
+  "reference": "DEP-A1B2C3D4",    // ← à conserver absolument !
+  "ussd_code": "#144*391#",        // OTP USSD → CI: "#144*82#", SN: "#144*391#", BF: "*144*4*6*5000#"
+  // "ussd_code": null             // OTP SMS  → LigdiCash BF uniquement (SMS envoyé automatiquement)
+  "message": "OTP requis. Composez #144*391# sur votre téléphone pour obtenir votre code…"
 }
 
-// Étape 2 — Retry avec l'OTP reçu par SMS + le reference du 400 → réponse 202
+// Étape 2 — Retry avec otp + reference (identique pour OTP USSD et OTP SMS)
 {
-  "amount": 5000, "currency": "XOF", "phone": "07XXXXXXXX",
-  "operator": "Orange Money", "country_code": "CI",
-  "otp": "123456",
-  "reference": "DEP-A1B2C3D4",   // ← obligatoire, même valeur que la réponse 400
+  "amount": 5000, "currency": "XOF", "phone": "77XXXXXXX",
+  "operator": "Orange Money", "country_code": "SN",
+  "otp": "123456",                 // ← code du menu USSD (ou SMS pour LigdiCash)
+  "reference": "DEP-A1B2C3D4",    // ← obligatoire, même valeur que la réponse 400
   "notify_url": "https://monsite.com/webhook"
-}`} />
-              <CodeBlock language="bash" code={`# Étape 1 — sans OTP (Orange Money CI)
+}
+// → 202 pending → webhook payment.completed`} />
+              <CodeBlock language="bash" code={`# Étape 1 — sans OTP (Orange Money SN — flux OTP USSD)
 curl https://ashtechpay.top/v1/collect \\
   -X POST \\
   -H "Authorization: Bearer YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
-  -d '{"amount":5000,"currency":"XOF","phone":"07XXXXXXXX",
-       "operator":"Orange Money","country_code":"CI",
+  -d '{"amount":5000,"currency":"XOF","phone":"77XXXXXXX",
+       "operator":"Orange Money","country_code":"SN",
        "notify_url":"https://monsite.com/webhook"}'
 
-# → 400 : {"error":"otp_required","reference":"DEP-A1B2C3D4",...}
+# → 400 : {"error":"otp_required","reference":"DEP-A1B2C3D4","ussd_code":"#144*391#",...}
+# Afficher le ussd_code au client → il compose → l'OTP s'affiche dans le menu USSD
 
 # Étape 2 — avec OTP + reference (OBLIGATOIRE)
 curl https://ashtechpay.top/v1/collect \\
   -X POST \\
   -H "Authorization: Bearer YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
-  -d '{"amount":5000,"currency":"XOF","phone":"07XXXXXXXX",
-       "operator":"Orange Money","country_code":"CI",
+  -d '{"amount":5000,"currency":"XOF","phone":"77XXXXXXX",
+       "operator":"Orange Money","country_code":"SN",
        "otp":"123456","reference":"DEP-A1B2C3D4",
        "notify_url":"https://monsite.com/webhook"}'
 
@@ -1259,6 +1274,124 @@ console.log(computeNet(10000, "CM"));
             <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 text-sm text-gray-600">
               Pour toute question technique non résolue par cette documentation, contactez notre équipe via{" "}
               <Link href="/dashboard/support" className="text-primary hover:underline">le support</Link>.
+            </div>
+          </section>
+
+          {/* Sandbox & Tests */}
+          <section id="sandbox" ref={el => sectionRefs.current.sandbox = el} className="scroll-mt-20 space-y-6">
+            <div className="flex items-center gap-2 border-b border-gray-200 pb-4">
+              <FlaskConical className="w-5 h-5 text-primary shrink-0" />
+              <h2 className="text-xl font-semibold text-gray-900">Sandbox &amp; Tests</h2>
+            </div>
+
+            <p className="text-gray-600 leading-relaxed">
+              En sandbox, votre clé API pointe vers l'environnement de test AfribaPay.
+              Les paiements ne sont pas réels. Utilisez les numéros et codes OTP ci-dessous pour simuler chaque scénario.
+              La logique de gestion des flux (OTP USSD, OTP SMS, Wave, USSD Push) est identique en production.
+            </p>
+
+            {/* Test numbers by country */}
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Numéros de test par pays (sandbox uniquement)</p>
+              <div className="rounded-xl border border-gray-200 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-200">
+                      <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Pays</th>
+                      <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Opérateur</th>
+                      <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Numéro de test</th>
+                      <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Devise</th>
+                      <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Flux OTP</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      { country: "CI", name: "Côte d'Ivoire", op: "Orange Money",   num: "0700000001",  cur: "XOF", otp: "OTP USSD → #144*82#" },
+                      { country: "CI", name: "Côte d'Ivoire", op: "Wave",           num: "0700000001",  cur: "XOF", otp: "Wave URL (pas d'OTP)" },
+                      { country: "CI", name: "Côte d'Ivoire", op: "MTN Mobile Money",num:"0500000001",  cur: "XOF", otp: "USSD Push (pas d'OTP)" },
+                      { country: "SN", name: "Sénégal",        op: "Orange Money",   num: "770000001",   cur: "XOF", otp: "OTP USSD → #144*391#" },
+                      { country: "SN", name: "Sénégal",        op: "Free Money",     num: "760000001",   cur: "XOF", otp: "USSD Push (pas d'OTP)" },
+                      { country: "SN", name: "Sénégal",        op: "Wave",           num: "770000001",   cur: "XOF", otp: "Wave URL (pas d'OTP)" },
+                      { country: "BF", name: "Burkina Faso",   op: "Orange Money",   num: "70000001",    cur: "XOF", otp: "OTP USSD → *144*4*6*{montant}#" },
+                      { country: "BF", name: "Burkina Faso",   op: "LigdiCash",      num: "04000001",    cur: "XOF", otp: "OTP SMS (automatique)" },
+                      { country: "BF", name: "Burkina Faso",   op: "Moov Money",     num: "70000001",    cur: "XOF", otp: "USSD Push (pas d'OTP)" },
+                      { country: "CM", name: "Cameroun",       op: "MTN Mobile Money",num:"679000001",   cur: "XAF", otp: "USSD Push (pas d'OTP)" },
+                      { country: "CM", name: "Cameroun",       op: "Orange Money",   num: "699000001",   cur: "XAF", otp: "USSD Push (pas d'OTP)" },
+                    ].map(({ country, name, op, num, cur, otp }, i) => (
+                      <tr key={i} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                        <td className="px-3 py-3 whitespace-nowrap text-xs text-gray-500">{country} — {name}</td>
+                        <td className="px-3 py-3 text-xs text-gray-700">{op}</td>
+                        <td className="px-3 py-3 font-mono text-blue-600 text-xs whitespace-nowrap">{num}</td>
+                        <td className="px-3 py-3 font-mono text-xs text-gray-500">{cur}</td>
+                        <td className="px-3 py-3 text-xs text-gray-600">{otp}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* OTP test codes */}
+            <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 p-5 space-y-3">
+              <p className="text-sm font-semibold text-orange-300">Codes OTP de test (sandbox)</p>
+              <p className="text-sm text-gray-600">
+                En sandbox, n'importe quel code OTP à 6 chiffres est accepté,{" "}
+                <strong className="text-zinc-200">sauf les codes 000000 à 333333</strong> qui simulent un OTP invalide.
+                Utilisez par exemple <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">500000</code>{" "}
+                (ou tout code entre 333334 et 999999) pour simuler un succès OTP.
+              </p>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <CodeBlock language="json" code={`// ✅ OTP valide en sandbox (succès)
+{ "otp": "500000" }   // ou 333334–999999
+
+// ❌ OTP invalide en sandbox (échec simulé)
+{ "otp": "000000" }   // ou 000001–333333`} />
+                <CodeBlock language="javascript" code={`// Exemple complet — OTP USSD (Orange SN sandbox)
+const step1 = await fetch("/v1/collect", { method:"POST", ... });
+// step1 → 400 otp_required, ussd_code: "#144*391#"
+// Afficher: "Composez #144*391# → saisissez l'OTP"
+
+const step2 = await fetch("/v1/collect", {
+  method: "POST",
+  body: JSON.stringify({
+    ...originalParams,
+    otp: "500000",       // ← code OTP sandbox valide
+    reference: step1.reference
+  })
+});
+// step2 → 202 pending → webhook payment.completed`} />
+              </div>
+            </div>
+
+            {/* OTP expiry warning */}
+            <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-5 space-y-2">
+              <p className="text-sm font-semibold text-yellow-300">Expiration OTP</p>
+              <ul className="space-y-1.5 text-sm text-gray-600">
+                {[
+                  "La session OTP est valide 15 minutes après la réponse 400 otp_required",
+                  "Si le délai est dépassé, l'API retourne 400 otp_expired — relancez la requête sans otp pour démarrer une nouvelle session",
+                  "Un même code OTP ne peut être utilisé qu'une seule fois (protection anti-rejeu)",
+                  "Pour Orange BF, le code USSD contient le montant exact : *144*4*6*5000# pour 5000 XOF",
+                  "Ne stockez jamais le code OTP côté serveur — il doit être saisi directement par le client",
+                ].map(item => (
+                  <li key={item} className="flex items-start gap-2">
+                    <ChevronRight className="w-3.5 h-3.5 mt-0.5 text-yellow-400 shrink-0" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Wave sandbox note */}
+            <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 p-5 space-y-2">
+              <p className="text-sm font-semibold text-purple-300">Test Wave en sandbox</p>
+              <p className="text-sm text-gray-600">
+                En sandbox, le <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">wave_url</code> retourné est une URL Wave de test.
+                Ouvrez-la dans un navigateur pour simuler l'approbation ou le refus du paiement.
+                Le webhook <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">payment.completed</code>{" "}
+                ou <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">payment.failed</code>{" "}
+                est envoyé automatiquement après la simulation.
+              </p>
             </div>
           </section>
 
