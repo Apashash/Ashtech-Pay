@@ -470,8 +470,8 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
                   <ParamRow name="phone"        type="string" required desc="Numéro de téléphone du payeur" />
                   <ParamRow name="operator"     type="string" required desc="Nom exact de l'opérateur (depuis /v1/countries)" />
                   <ParamRow name="country_code" type="string" required desc="Code ISO du pays (CM, SN, CI…)" />
-                  <ParamRow name="reference"    type="string" required={false} desc="Référence unique de votre commande" />
-                  <ParamRow name="otp"          type="string" required={false} desc="Code OTP si requis (voir réponse 400 otp_required)" />
+                  <ParamRow name="reference"    type="string" required={false} desc="Référence unique de votre commande. Obligatoire lors du retry OTP : renvoyer la valeur reçue dans la réponse 400." />
+                  <ParamRow name="otp"          type="string" required={false} desc="Code OTP reçu par SMS. Doit toujours être accompagné du champ reference (valeur reçue dans le 400 otp_required)." />
                   <ParamRow name="notify_url"   type="string" required={false} desc="URL webhook pour recevoir le résultat du paiement" />
                 </tbody>
               </TableWrapper>
@@ -520,21 +520,25 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
               <p className="text-sm text-gray-600">
                 Certains opérateurs nécessitent un code OTP. Si c'est le cas, l'API retourne une erreur{" "}
                 <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">400 otp_required</code>{" "}
-                avec le code USSD à composer. Relancez ensuite la requête en ajoutant le champ{" "}
-                <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">otp</code>.
+                avec un champ <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">reference</code> à conserver.
+                Pour Orange Money CI/BF/SN/ML : l'API envoie automatiquement le SMS OTP au client.
+                Relancez ensuite la requête en ajoutant <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">otp</code>{" "}
+                <strong>et</strong> <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">reference</code> (la valeur reçue dans le 400).
               </p>
-              <CodeBlock language="json" code={`// Réponse 400 initiale
+              <CodeBlock language="json" code={`// Étape 1 — Requête initiale (sans otp) → réponse 400
 {
   "error": "otp_required",
-  "message": "OTP requis. Composez #144*82# pour obtenir votre code OTP.",
-  "ussd_code": "#144*82#"
+  "message": "OTP requis. Un code a été envoyé par SMS.",
+  "reference": "DEP-A1B2C3D4",   // ← à conserver absolument
+  "ussd_code": null               // null = SMS automatique | "#144*82#" = USSD à composer
 }
 
-// Relancer avec l'OTP
+// Étape 2 — Retry avec l'OTP reçu par SMS + le reference du 400 → réponse 202
 {
   "amount": 5000, "currency": "XOF", "phone": "07XXXXXXXX",
   "operator": "Orange Money", "country_code": "CI",
   "otp": "123456",
+  "reference": "DEP-A1B2C3D4",   // ← obligatoire, même valeur que la réponse 400
   "notify_url": "https://monsite.com/webhook"
 }`} />
             </div>
@@ -566,13 +570,13 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
                   <td className="px-3 py-3 whitespace-nowrap"><span className="text-orange-400 font-semibold text-sm">OTP USSD</span></td>
                   <td className="px-3 py-3 text-gray-700 text-sm">Orange Money CI (#144*82#), SN (#144*391#), BF (*144*4*6*montant#)</td>
                   <td className="px-3 py-3 font-mono text-orange-400 text-xs whitespace-nowrap">400 otp_required<br/><span className="text-zinc-500">ussd_code: "#144*82#"</span></td>
-                  <td className="px-3 py-3 text-gray-700 text-sm">Le client compose le code USSD fourni, saisit l'OTP reçu par SMS. Relancer avec <code className="text-blue-600 bg-blue-50 px-1 py-0.5 rounded">otp</code>.</td>
+                  <td className="px-3 py-3 text-gray-700 text-sm">L'API envoie l'OTP par SMS. Relancer avec <code className="text-blue-600 bg-blue-50 px-1 py-0.5 rounded">otp</code> + <code className="text-blue-600 bg-blue-50 px-1 py-0.5 rounded">reference</code> (valeur reçue dans le 400).</td>
                 </tr>
                 <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                   <td className="px-3 py-3 whitespace-nowrap"><span className="text-yellow-400 font-semibold text-sm">OTP SMS</span></td>
                   <td className="px-3 py-3 text-gray-700 text-sm">LigdiCash BF (wallet) — SMS envoyé automatiquement</td>
                   <td className="px-3 py-3 font-mono text-orange-400 text-xs whitespace-nowrap">400 otp_required<br/><span className="text-zinc-500">ussd_code: null</span></td>
-                  <td className="px-3 py-3 text-gray-700 text-sm">Le client reçoit un SMS avec son OTP. Relancer la requête avec le champ <code className="text-blue-600 bg-blue-50 px-1 py-0.5 rounded">otp</code>.</td>
+                  <td className="px-3 py-3 text-gray-700 text-sm">SMS envoyé automatiquement. Relancer avec <code className="text-blue-600 bg-blue-50 px-1 py-0.5 rounded">otp</code> + <code className="text-blue-600 bg-blue-50 px-1 py-0.5 rounded">reference</code> (valeur reçue dans le 400).</td>
                 </tr>
                 <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                   <td className="px-3 py-3 whitespace-nowrap"><span className="text-purple-400 font-semibold text-sm">Wave</span></td>
@@ -677,20 +681,21 @@ const res = await fetch("/v1/collect", {
                   <CodeBlock language="json" code={`// Réponse 400 :
 {
   "error": "otp_required",
-  "message": "Composez #144*82# pour obtenir votre OTP.",
-  "ussd_code": "#144*82#"
+  "message": "OTP requis. Un code a été envoyé par SMS.",
+  "reference": "DEP-A1B2C3D4",  // ← stocker !
+  "ussd_code": "#144*82#"        // code USSD à composer (CI)
 }
 
-// Afficher à l'utilisateur :
-// "Composez #144*82# sur votre téléphone,
+// Afficher : "Composez #144*82# sur votre téléphone,
 //  puis saisissez l'OTP reçu par SMS"`} />
-                  <CodeBlock language="javascript" code={`// Étape 2 : même requête + otp
+                  <CodeBlock language="javascript" code={`// Étape 2 : même requête + otp + reference
 body: JSON.stringify({
   amount: 1000, currency: "XOF",
   phone: "0700000000",
   operator: "Orange Money",
   country_code: "CI",
-  otp: "123456",  // ← OTP reçu par SMS après le USSD
+  otp: "123456",              // ← OTP reçu par SMS
+  reference: "DEP-A1B2C3D4", // ← référence du 400 (obligatoire)
   notify_url: "https://monsite.com/webhook"
 })
 // → 202 pending → webhook`} />
@@ -733,19 +738,21 @@ const res = await fetch("/v1/collect", {
                   <CodeBlock language="json" code={`// Réponse 400 :
 {
   "error": "otp_required",
-  "message": "OTP requis pour cet opérateur.",
+  "message": "OTP requis. Un code a été envoyé par SMS.",
+  "reference": "DEP-X9Y8Z7W6",  // ← stocker !
   "ussd_code": null
 }
 
 // Le client reçoit son OTP par SMS
-// Étape 2 : relancer avec otp`} />
-                  <CodeBlock language="javascript" code={`// Étape 2 : même requête + otp
+// Étape 2 : relancer avec otp + reference`} />
+                  <CodeBlock language="javascript" code={`// Étape 2 : même requête + otp + reference
 body: JSON.stringify({
   amount: 5000, currency: "XOF",
   phone: "04000000",
   operator: "LigdiCash",
   country_code: "BF",
-  otp: "456789",  // ← OTP reçu par SMS
+  otp: "456789",              // ← OTP reçu par SMS
+  reference: "DEP-X9Y8Z7W6", // ← référence du 400 (obligatoire)
   notify_url: "https://monsite.com/webhook"
 })
 // → 202 pending → webhook`} />
@@ -837,12 +844,13 @@ if (data.flow === "wave") {
   }
 
   if (res.status === 400 && data.error === "otp_required") {
+    // Stocker data.reference — obligatoire pour le retry OTP
     if (data.ussd_code) {
-      // ─── Flux OTP USSD (BF Orange) : code à composer ─────────
-      return { type: "otp_ussd", ussdCode: data.ussd_code };
+      // ─── Flux OTP USSD : code à composer (ex: #144*82# CI) ───
+      return { type: "otp_ussd", ussdCode: data.ussd_code, reference: data.reference };
     } else {
-      // ─── Flux OTP SMS (Orange CI, SN, ML…) : SMS automatique ─
-      return { type: "otp_sms" };
+      // ─── Flux OTP SMS : SMS automatique (Orange CI, SN, ML…) ─
+      return { type: "otp_sms", reference: data.reference };
     }
   }
 

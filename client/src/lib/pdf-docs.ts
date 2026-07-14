@@ -668,8 +668,8 @@ export function downloadSDKDocs() {
       ["phone",        "string", "Requis",    "Numero de telephone du payeur"],
       ["operator",     "string", "Requis",    "Nom exact de l'operateur (depuis /v1/countries)"],
       ["country_code", "string", "Requis",    "Code ISO du pays (CM, SN, CI…)"],
-      ["reference",    "string", "Optionnel", "Reference unique de votre commande"],
-      ["otp",          "string", "Optionnel", "Code OTP si requis (voir reponse 400 otp_required)"],
+      ["reference",    "string", "Optionnel*", "Reference unique de votre commande. *Obligatoire lors du retry OTP."],
+      ["otp",          "string", "Optionnel", "Code OTP recu par SMS. Doit etre accompagne du champ reference (valeur recue dans le 400)."],
       ["notify_url",   "string", "Optionnel", "URL webhook pour recevoir le resultat du paiement"],
     ],
     y, [35, 22, 24, 89]
@@ -679,10 +679,10 @@ export function downloadSDKDocs() {
   y = subHeading(doc, "Reponse 202 (succes USSD Push)", y);
   y = codeBlock(doc, `{\n  "transaction_id": "8f3e1c2d-...",\n  "reference":      "ORDER-001",\n  "status":         "pending",\n  "amount":         5000,\n  "credited_amount":4750,\n  "fee_amount":     250,\n  "currency":       "XAF",\n  "operator":       "MTN Mobile Money",\n  "phone":          "670000000",\n  "country_code":   "CM",\n  "created_at":     "2026-03-15T14:00:00Z"\n}`, y, "json");
 
-  y = subHeading(doc, "OTP USSD requis (Orange Money CI, SN, BF)", y);
-  y = paragraph(doc, "Ces operateurs retournent un code USSD a composer. Le client compose ce code depuis son telephone et recoit l'OTP par SMS. Relancez ensuite la requete avec le champ otp.", y);
+  y = subHeading(doc, "OTP requis (Orange Money CI, SN, BF, ML — SMS automatique)", y);
+  y = paragraph(doc, "Pour ces operateurs, l'API envoie automatiquement le SMS OTP au client lors du premier appel. La reponse 400 contient un champ 'reference' a conserver. Le retry DOIT inclure otp ET reference.", y);
   y += 2;
-  y = codeBlock(doc, `// Reponse 400 — ussd_code contient le code a composer :\n{\n  "error": "otp_required",\n  "message": "Composez #144*82# pour obtenir votre code OTP.",\n  "ussd_code": "#144*82#"   // CI: #144*82#  |  SN: #144*391#  |  BF: *144*4*6*montant#\n}\n\n// Afficher a l'utilisateur : "Composez [ussd_code] sur votre telephone"\n// Puis relancer avec l'OTP recu par SMS :\n{\n  "amount": 5000, "currency": "XOF", "phone": "07XXXXXXXX",\n  "operator": "Orange Money", "country_code": "CI",\n  "otp": "123456",\n  "notify_url": "https://monsite.com/webhook"\n}`, y, "json");
+  y = codeBlock(doc, `// Etape 1 — Requete initiale (sans otp) → reponse 400\n{\n  "error": "otp_required",\n  "message": "OTP requis. Un code a ete envoye par SMS.",\n  "reference": "DEP-A1B2C3D4",   // ← a conserver absolument\n  "ussd_code": null               // null=SMS auto | "#144*82#"=USSD a composer\n}\n\n// Etape 2 — Retry avec OTP recu + reference du 400 → reponse 202\n{\n  "amount": 5000, "currency": "XOF", "phone": "07XXXXXXXX",\n  "operator": "Orange Money", "country_code": "CI",\n  "otp": "123456",\n  "reference": "DEP-A1B2C3D4",   // ← meme valeur que la reponse 400\n  "notify_url": "https://monsite.com/webhook"\n}`, y, "json");
 
   // ── §5  Flux ──────────────────────────────────────────────────────────────
   y = sectionTitle(doc, "5. Flux de paiement", y);
@@ -692,14 +692,14 @@ export function downloadSDKDocs() {
     ["Flux", "Operateurs concernes", "Reponse initiale", "Action requise"],
     [
       ["USSD Push", "MTN, Moov, Airtel, Orange CM, Free SN, T-Money, Flooz, M-Pesa, Afrimoney", "202 pending", "Attendre le webhook. Le client valide sur son telephone."],
-      ["OTP USSD",  "Orange CI (#144*82#), SN (#144*391#), BF (*144*4*6*montant#)", "400 otp_required, ussd_code: \"#144*82#\"", "Le client compose le code USSD fourni, recoit OTP par SMS. Relancer avec otp."],
-      ["OTP SMS",   "LigdiCash BF (wallet) — SMS envoye automatiquement", "400 otp_required, ussd_code: null", "Le client recoit un SMS OTP. Relancer la requete avec otp."],
+      ["OTP USSD",  "Orange CI (#144*82#), SN (#144*391#), BF (*144*4*6*montant#)", "400 otp_required, reference: \"DEP-...\", ussd_code: \"#144*82#\"", "L'API envoie l'OTP par SMS. Relancer avec otp + reference (valeur recue dans le 400)."],
+      ["OTP SMS",   "LigdiCash BF (wallet) — SMS envoye automatiquement", "400 otp_required, reference: \"DEP-...\", ussd_code: null", "SMS envoye automatiquement. Relancer avec otp + reference (valeur recue dans le 400)."],
       ["Wave",      "Wave CI, Wave SN", "202 pending, flow: wave, wave_url: ...", "Afficher le wave_url en bouton ou QR code. Le client ouvre Wave."],
     ],
     y, [25, 52, 42, 51]
   );
   y = subHeading(doc, "Detection du flux dans votre code", y);
-  y = codeBlock(doc, `async function collectPayment(params) {\n  const res  = await fetch("https://ashtechpay.top/v1/collect", {\n    method: "POST",\n    headers: { "Authorization": "Bearer YOUR_API_KEY", "Content-Type": "application/json" },\n    body: JSON.stringify(params)\n  });\n  const data = await res.json();\n\n  if (res.status === 202 && data.flow === "wave") {\n    // Flux Wave : afficher data.wave_url\n    return { type: "wave", waveUrl: data.wave_url, transactionId: data.transaction_id };\n  }\n  if (res.status === 202) {\n    // Flux USSD Push : attendre webhook\n    return { type: "ussd_push", transactionId: data.transaction_id };\n  }\n  if (res.status === 400 && data.error === "otp_required") {\n    if (data.ussd_code) {\n      // OTP USSD (Orange CI, SN, BF) : afficher le code a composer\n      // CI=#144*82#  SN=#144*391#  BF=*144*4*6*montant#\n      return { type: "otp_ussd", ussdCode: data.ussd_code };\n    } else {\n      // OTP SMS (LigdiCash BF) : SMS envoye automatiquement\n      return { type: "otp_sms" };\n    }\n  }\n  throw new Error(data.message);\n}`, y, "javascript");
+  y = codeBlock(doc, `async function collectPayment(params) {\n  const res  = await fetch("https://ashtechpay.top/v1/collect", {\n    method: "POST",\n    headers: { "Authorization": "Bearer YOUR_API_KEY", "Content-Type": "application/json" },\n    body: JSON.stringify(params)\n  });\n  const data = await res.json();\n\n  if (res.status === 202 && data.flow === "wave") {\n    // Flux Wave : afficher data.wave_url\n    return { type: "wave", waveUrl: data.wave_url, transactionId: data.transaction_id };\n  }\n  if (res.status === 202) {\n    // Flux USSD Push : attendre webhook\n    return { type: "ussd_push", transactionId: data.transaction_id };\n  }\n  if (res.status === 400 && data.error === "otp_required") {\n    // Stocker data.reference — obligatoire pour le retry OTP\n    if (data.ussd_code) {\n      // OTP USSD (Orange CI, SN, BF) : afficher le code a composer\n      // CI=#144*82#  SN=#144*391#  BF=*144*4*6*montant#\n      return { type: "otp_ussd", ussdCode: data.ussd_code, reference: data.reference };\n    } else {\n      // OTP SMS (Orange CI, SN, ML, LigdiCash BF…) : SMS envoye automatiquement\n      return { type: "otp_sms", reference: data.reference };\n    }\n  }\n  throw new Error(data.message);\n}`, y, "javascript");
 
   // ── §6  Transaction ───────────────────────────────────────────────────────
   y = sectionTitle(doc, "6. Statut d'une transaction — GET /v1/transaction/:id", y);
