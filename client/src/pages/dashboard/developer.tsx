@@ -1285,31 +1285,17 @@ console.log(computeNet(10000, "CM"));
             </div>
 
             <p className="text-gray-600 leading-relaxed">
-              En sandbox, votre clé API pointe vers l'environnement de test AfribaPay.
-              Les paiements ne sont pas réels. Utilisez les numéros et codes OTP ci-dessous pour simuler chaque scénario.
+              En sandbox, les paiements ne sont pas réels. Utilisez les numéros et codes OTP ci-dessous pour simuler chaque scénario.
               La logique de gestion des flux (OTP USSD, OTP SMS, Wave, USSD Push) est identique en production.
             </p>
-
-            {/* Supported countries note */}
-            <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 space-y-2">
-              <p className="text-sm font-semibold text-blue-300">Pays confirmés dans le système AfribaPay</p>
-              <p className="text-sm text-gray-600">
-                Les pays suivants sont officiellement listés dans l'API AfribaPay :{" "}
-                <strong className="text-zinc-200">BF, BJ, CD, CI, CM, GA, GN, ML, NE, SN, TG</strong>.
-                Les autres pays de votre compte (CF, CG, GQ, GW, TD…) passent par une passerelle différente (PixPay).
-                Si un opérateur de ces pays est configuré sur AfribaPay, les requêtes échoueront avec <code className="text-orange-300 font-mono text-xs">502 gateway_error</code>.
-                Contactez le support pour les reconfigurer.
-              </p>
-            </div>
 
             {/* Test numbers by country */}
             <div className="space-y-3">
               <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">
-                Numéros de test officiels AfribaPay — sandbox uniquement
+                Numéros de test — sandbox uniquement
               </p>
               <p className="text-xs text-gray-500 -mt-1">
                 Envoyez ces numéros <strong>avec le préfixe pays</strong> dans le champ <code className="font-mono">phone</code> de <code className="font-mono">/v1/collect</code>.
-                Le serveur retire automatiquement le préfixe avant de transmettre à AfribaPay.
                 Le résultat dépend du numéro choisi (SUCCESS / PENDING / FAILED).
               </p>
               <div className="rounded-xl border border-gray-200 overflow-x-auto">
@@ -1345,13 +1331,13 @@ console.log(computeNet(10000, "CM"));
                 </table>
               </div>
               <p className="text-xs text-gray-500">
-                ⚠️ BJ, GA, ML, NE, TG n'ont pas de numéros de test publiés par AfribaPay — utilisez des numéros fictifs commençant par le préfixe pays.
+                ⚠️ BJ, GA, ML, NE, TG — utilisez des numéros fictifs commençant par le préfixe pays (ex : <code className="font-mono">22960000001</code> pour BJ).
               </p>
             </div>
 
             {/* OTP test codes */}
             <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 p-5 space-y-3">
-              <p className="text-sm font-semibold text-orange-300">Codes OTP de test (sandbox AfribaPay)</p>
+              <p className="text-sm font-semibold text-orange-300">Codes OTP de test (sandbox)</p>
               <p className="text-sm text-gray-600">
                 En sandbox, tout code OTP à 6 chiffres entre{" "}
                 <strong className="text-zinc-200">333334 et 999999</strong> est accepté comme valide.
