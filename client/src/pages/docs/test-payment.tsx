@@ -112,6 +112,9 @@ function SDKForm() {
   const [otpRequired, setOtpRequired] = useState(false);
   const [ussdCode, setUssdCode] = useState<string | null>(null);
   const [otp, setOtp] = useState("");
+  // Reference assigned by the server in the 400 otp_required response — MUST be
+  // sent back in the OTP confirmation call so the server can find the cached session.
+  const [otpReference, setOtpReference] = useState<string | null>(null);
 
   const selectedCountry = ALL_COUNTRIES.find(c => c.code === countryCode);
   const operators = selectedCountry?.operators ?? [];
@@ -120,7 +123,7 @@ function SDKForm() {
   function reset() {
     setCountryCode(""); setOperator(""); setAmount(""); setPhone("");
     setReference(""); setNotifyUrl(""); setResponse(null); setError(null);
-    setOtpRequired(false); setUssdCode(null); setOtp("");
+    setOtpRequired(false); setUssdCode(null); setOtp(""); setOtpReference(null);
   }
 
   async function submit(otpValue?: string) {
@@ -135,7 +138,13 @@ function SDKForm() {
     };
     if (reference.trim()) payload.reference = reference.trim();
     if (notifyUrl.trim()) payload.notify_url = notifyUrl.trim();
-    if (otpValue) payload.otp = otpValue;
+    if (otpValue) {
+      payload.otp = otpValue;
+      // Always include the server-assigned reference on OTP confirmation so the
+      // server can look up the cached OTP session (otpContextCache).
+      // Without it the server cannot find the session and returns a 502 error.
+      if (otpReference) payload.reference = otpReference;
+    }
 
     setLoading(true); setError(null); setResponse(null);
     try {
@@ -147,9 +156,13 @@ function SDKForm() {
       const data = await res.json();
       setResponse({ status: res.status, data });
       if (res.status === 400 && (data as any).error === "otp_required") {
-        setOtpRequired(true); setUssdCode((data as any).ussd_code ?? null);
+        setOtpRequired(true);
+        setUssdCode((data as any).ussd_code ?? null);
+        // Save the server-assigned reference — needed for OTP confirmation
+        setOtpReference((data as any).reference ?? null);
       } else {
         setOtpRequired(false);
+        setOtpReference(null);
       }
     } catch (e: any) { setError("Erreur réseau : " + e.message); }
     finally { setLoading(false); }

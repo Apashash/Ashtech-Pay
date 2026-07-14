@@ -13412,6 +13412,18 @@ export async function registerRoutes(
       // They now resend with otp + reference. We must NOT call initiateAfribaPayOtp
       // again (that would trigger a new SMS and invalidate the cached session on
       // AfribaPay's side). Just call confirmAfribaPayOtp directly.
+      //
+      // Guard: if otp is present but reference is absent, the client cannot have
+      // the correct session — return a clear 400 rather than creating a duplicate
+      // transaction and calling the wrong (non-OTP) AfribaPay endpoint, which
+      // causes a 502 gateway_error. This was the root cause of the merchant bug
+      // where the second call omitted the reference field.
+      if (paymentProvider === "afribapay" && req.body.otp && !req.body.reference) {
+        return res.status(400).json({
+          error: "missing_reference",
+          message: "Le champ 'reference' est obligatoire lors de la confirmation OTP. Utilisez la valeur reçue dans la réponse 400 otp_required initiale.",
+        });
+      }
       if (paymentProvider === "afribapay" && req.body.otp && req.body.reference) {
         const ctx = otpContextCache.get(req.body.reference as string);
         if (!ctx) {
