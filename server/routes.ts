@@ -139,6 +139,18 @@ const AFRIBAPAY_ISO_CURRENCY: Record<string, string> = {
   UG: "UGX", GH: "GHS",
 };
 
+// Countries confirmed in AfribaPay's /v1/countries API docs (verified 2026-07).
+// CF, CG, GQ, GW, TD, RW are NOT listed — requests for them will fail on AfribaPay's side.
+// Use PixPay or mark operators as unsupported for those countries.
+const AFRIBAPAY_CONFIRMED_COUNTRIES = new Set([
+  "BF", "BJ", "CD", "CI", "CM", "GA", "GN", "ML", "NE", "SN", "TG",
+]);
+function warnIfAfribaPayUnsupportedCountry(countryCode: string, context: string) {
+  if (!AFRIBAPAY_CONFIRMED_COUNTRIES.has(countryCode.toUpperCase())) {
+    console.warn(`[AfribaPay] ${context}: country "${countryCode}" is NOT in AfribaPay's confirmed country list. Request will likely fail. Consider routing via PixPay.`);
+  }
+}
+
 // ─── AfribaPay: operator name → AfribaPay operator code ──────────────────────
 // Fallback if afribapayOperatorCode is not set in DB.
 const AFRIBAPAY_OPERATOR_CODE_MAP: Record<string, string> = {
@@ -13615,6 +13627,7 @@ export async function registerRoutes(
       const pixpayIpnUrl = buildWebhookUrl("/api/pixpay/webhook");
 
       if (paymentProvider === "afribapay") {
+        warnIfAfribaPayUnsupportedCountry(country.code, "v1/collect");
         const afribaOpCode = resolveAfribaPayOperatorCode(operatorRecord, operatorName);
         const afribapayCurrency = AFRIBAPAY_ISO_CURRENCY[country.code.toUpperCase()] || country.currency;
 

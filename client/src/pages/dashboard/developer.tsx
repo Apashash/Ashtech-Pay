@@ -1290,73 +1290,103 @@ console.log(computeNet(10000, "CM"));
               La logique de gestion des flux (OTP USSD, OTP SMS, Wave, USSD Push) est identique en production.
             </p>
 
+            {/* Supported countries note */}
+            <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 space-y-2">
+              <p className="text-sm font-semibold text-blue-300">Pays confirmés dans le système AfribaPay</p>
+              <p className="text-sm text-gray-600">
+                Les pays suivants sont officiellement listés dans l'API AfribaPay :{" "}
+                <strong className="text-zinc-200">BF, BJ, CD, CI, CM, GA, GN, ML, NE, SN, TG</strong>.
+                Les autres pays de votre compte (CF, CG, GQ, GW, TD…) passent par une passerelle différente (PixPay).
+                Si un opérateur de ces pays est configuré sur AfribaPay, les requêtes échoueront avec <code className="text-orange-300 font-mono text-xs">502 gateway_error</code>.
+                Contactez le support pour les reconfigurer.
+              </p>
+            </div>
+
             {/* Test numbers by country */}
             <div className="space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Numéros de test par pays (sandbox uniquement)</p>
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">
+                Numéros de test officiels AfribaPay — sandbox uniquement
+              </p>
+              <p className="text-xs text-gray-500 -mt-1">
+                Envoyez ces numéros <strong>avec le préfixe pays</strong> dans le champ <code className="font-mono">phone</code> de <code className="font-mono">/v1/collect</code>.
+                Le serveur retire automatiquement le préfixe avant de transmettre à AfribaPay.
+                Le résultat dépend du numéro choisi (SUCCESS / PENDING / FAILED).
+              </p>
               <div className="rounded-xl border border-gray-200 overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-200">
                       <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Pays</th>
-                      <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Opérateur</th>
-                      <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Numéro de test</th>
                       <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Devise</th>
-                      <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Flux OTP</th>
+                      <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Numéro → SUCCESS</th>
+                      <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Numéro → PENDING</th>
+                      <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Numéro → FAILED</th>
                     </tr>
                   </thead>
                   <tbody>
                     {[
-                      { country: "CI", name: "Côte d'Ivoire", op: "Orange Money",   num: "0700000001",  cur: "XOF", otp: "OTP USSD → #144*82#" },
-                      { country: "CI", name: "Côte d'Ivoire", op: "Wave",           num: "0700000001",  cur: "XOF", otp: "Wave URL (pas d'OTP)" },
-                      { country: "CI", name: "Côte d'Ivoire", op: "MTN Mobile Money",num:"0500000001",  cur: "XOF", otp: "USSD Push (pas d'OTP)" },
-                      { country: "SN", name: "Sénégal",        op: "Orange Money",   num: "770000001",   cur: "XOF", otp: "OTP USSD → #144*391#" },
-                      { country: "SN", name: "Sénégal",        op: "Free Money",     num: "760000001",   cur: "XOF", otp: "USSD Push (pas d'OTP)" },
-                      { country: "SN", name: "Sénégal",        op: "Wave",           num: "770000001",   cur: "XOF", otp: "Wave URL (pas d'OTP)" },
-                      { country: "BF", name: "Burkina Faso",   op: "Orange Money",   num: "70000001",    cur: "XOF", otp: "OTP USSD → *144*4*6*{montant}#" },
-                      { country: "BF", name: "Burkina Faso",   op: "LigdiCash",      num: "04000001",    cur: "XOF", otp: "OTP SMS (automatique)" },
-                      { country: "BF", name: "Burkina Faso",   op: "Moov Money",     num: "70000001",    cur: "XOF", otp: "USSD Push (pas d'OTP)" },
-                      { country: "CM", name: "Cameroun",       op: "MTN Mobile Money",num:"679000001",   cur: "XAF", otp: "USSD Push (pas d'OTP)" },
-                      { country: "CM", name: "Cameroun",       op: "Orange Money",   num: "699000001",   cur: "XAF", otp: "USSD Push (pas d'OTP)" },
-                    ].map(({ country, name, op, num, cur, otp }, i) => (
+                      { country: "CI", name: "Côte d'Ivoire", cur: "XOF", ok: "2252100000001", pend: "2252100000002", fail: "2252100000003" },
+                      { country: "CM", name: "Cameroun",       cur: "XAF", ok: "237660000001",  pend: "237660000002",  fail: "237660000003"  },
+                      { country: "SN", name: "Sénégal",        cur: "XOF", ok: "221700000001",  pend: "221700000002",  fail: "221700000003"  },
+                      { country: "BF", name: "Burkina Faso",   cur: "XOF", ok: "22660000001",   pend: "22660000002",   fail: "22660000003"   },
+                      { country: "GN", name: "Guinée Conakry", cur: "GNF", ok: "224600000001",  pend: "224600000002",  fail: "224600000003"  },
+                      { country: "CD", name: "RD Congo",       cur: "CDF", ok: "243120000011",  pend: "243120000012",  fail: "243120000013"  },
+                      { country: "CD", name: "RD Congo",       cur: "USD", ok: "243120000001",  pend: "243120000002",  fail: "243120000003"  },
+                    ].map(({ country, name, cur, ok, pend, fail }, i) => (
                       <tr key={i} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                         <td className="px-3 py-3 whitespace-nowrap text-xs text-gray-500">{country} — {name}</td>
-                        <td className="px-3 py-3 text-xs text-gray-700">{op}</td>
-                        <td className="px-3 py-3 font-mono text-blue-600 text-xs whitespace-nowrap">{num}</td>
                         <td className="px-3 py-3 font-mono text-xs text-gray-500">{cur}</td>
-                        <td className="px-3 py-3 text-xs text-gray-600">{otp}</td>
+                        <td className="px-3 py-3 font-mono text-green-600 text-xs whitespace-nowrap">{ok}</td>
+                        <td className="px-3 py-3 font-mono text-yellow-600 text-xs whitespace-nowrap">{pend}</td>
+                        <td className="px-3 py-3 font-mono text-red-500 text-xs whitespace-nowrap">{fail}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+              <p className="text-xs text-gray-500">
+                ⚠️ BJ, GA, ML, NE, TG n'ont pas de numéros de test publiés par AfribaPay — utilisez des numéros fictifs commençant par le préfixe pays.
+              </p>
             </div>
 
             {/* OTP test codes */}
             <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 p-5 space-y-3">
-              <p className="text-sm font-semibold text-orange-300">Codes OTP de test (sandbox)</p>
+              <p className="text-sm font-semibold text-orange-300">Codes OTP de test (sandbox AfribaPay)</p>
               <p className="text-sm text-gray-600">
-                En sandbox, n'importe quel code OTP à 6 chiffres est accepté,{" "}
-                <strong className="text-zinc-200">sauf les codes 000000 à 333333</strong> qui simulent un OTP invalide.
-                Utilisez par exemple <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">500000</code>{" "}
-                (ou tout code entre 333334 et 999999) pour simuler un succès OTP.
+                En sandbox, tout code OTP à 6 chiffres entre{" "}
+                <strong className="text-zinc-200">333334 et 999999</strong> est accepté comme valide.
+                Les codes <strong className="text-red-400">000000 à 333333</strong> simulent un OTP invalide/refusé.
               </p>
               <div className="grid sm:grid-cols-2 gap-3">
-                <CodeBlock language="json" code={`// ✅ OTP valide en sandbox (succès)
-{ "otp": "500000" }   // ou 333334–999999
+                <CodeBlock language="json" code={`// ✅ OTP valide sandbox (333334–999999)
+{ "otp": "500000" }   // → succès garanti
 
-// ❌ OTP invalide en sandbox (échec simulé)
-{ "otp": "000000" }   // ou 000001–333333`} />
-                <CodeBlock language="javascript" code={`// Exemple complet — OTP USSD (Orange SN sandbox)
-const step1 = await fetch("/v1/collect", { method:"POST", ... });
-// step1 → 400 otp_required, ussd_code: "#144*391#"
-// Afficher: "Composez #144*391# → saisissez l'OTP"
-
-const step2 = await fetch("/v1/collect", {
+// ❌ OTP invalide sandbox (000000–333333)
+{ "otp": "111111" }   // → échec simulé
+{ "otp": "000000" }   // → échec simulé`} />
+                <CodeBlock language="javascript" code={`// Exemple complet — OTP USSD Orange SN (sandbox)
+// Numéro test CI XOF : 2252100000001 → SUCCESS
+const step1 = await fetch("https://ashtechpay.top/v1/collect", {
   method: "POST",
+  headers: { "Authorization": "Bearer YOUR_KEY", "Content-Type": "application/json" },
   body: JSON.stringify({
-    ...originalParams,
-    otp: "500000",       // ← code OTP sandbox valide
-    reference: step1.reference
+    amount: 5000, currency: "XOF",
+    phone: "2252100000001",  // ← numéro de test officiel
+    operator: "Orange Money", country_code: "CI",
+    notify_url: "https://monsite.com/webhook"
+  })
+});
+// step1 → 400 { error: "otp_required", ussd_code: "#144*82#", reference: "DEP-..." }
+
+const step2 = await fetch("https://ashtechpay.top/v1/collect", {
+  method: "POST",
+  headers: { "Authorization": "Bearer YOUR_KEY", "Content-Type": "application/json" },
+  body: JSON.stringify({
+    amount: 5000, currency: "XOF",
+    phone: "2252100000001", operator: "Orange Money", country_code: "CI",
+    otp: "500000",             // ← code OTP valide sandbox
+    reference: "DEP-...",      // ← obligatoire : valeur du 400
+    notify_url: "https://monsite.com/webhook"
   })
 });
 // step2 → 202 pending → webhook payment.completed`} />

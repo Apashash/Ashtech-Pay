@@ -231,7 +231,9 @@ export async function initiateAfribaPayin(params: AfribaPayinParams): Promise<Af
     console.log(`[AfribaPay Payin] Response:`, JSON.stringify(maskPiiInObject(data)));
 
     if (!res.ok || data.error) {
-      return { success: false, message: data.error?.message || data.data?.message || "Erreur AfribaPay", raw: data };
+      // AfribaPay error shape: { "error": "server_error", "message": "..." }
+      // data.error is a string code, not an object — read data.message for the human text.
+      return { success: false, message: data.error?.message || data.message || data.data?.message || "Erreur AfribaPay", raw: data };
     }
 
     const d = data.data;
@@ -577,6 +579,8 @@ export async function initiateAfribaPayOtp(params: Omit<AfribaPayinParams, "retu
     // caused the OTP screen to appear even when no SMS was sent).
     if (!res.ok) {
       const errObj = typeof data === "object" ? data : null;
+      // AfribaPay error shape: { "error": "server_error", "message": "..." }
+      // data.error is a string code — read data.message for the human-readable text.
       const msg = errObj?.error?.message || errObj?.message || errObj?.data?.message
         || (typeof data === "string" && data.length < 200 ? data : null)
         || `Échec d'envoi du code OTP (HTTP ${res.status})`;
@@ -644,6 +648,8 @@ export async function confirmAfribaPayOtp(params: AfribaPayOtpParams): Promise<A
 
     if (!res.ok) {
       const errObj = typeof data === "object" ? data : null;
+      // AfribaPay error shape: { "error": "server_error", "message": "..." }
+      // data.error is a string code — read data.message for the human-readable text.
       const msg = errObj?.error?.message || errObj?.message || errObj?.data?.message
         || (typeof data === "string" && data.length < 200 ? data : null)
         || "Code OTP invalide ou expiré";
