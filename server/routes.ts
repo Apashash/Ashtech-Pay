@@ -13407,22 +13407,149 @@ export async function registerRoutes(
         }
       }
 
-      // ── AfribaPay OTP pre-check ──────────────────────────────────────────
+      // ── AfribaPay OTP: second call — confirm OTP from cached session ────────
+      // The client previously received a 400 otp_required with a `reference` field.
+      // They now resend with otp + reference. We must NOT call initiateAfribaPayOtp
+      // again (that would trigger a new SMS and invalidate the cached session on
+      // AfribaPay's side). Just call confirmAfribaPayOtp directly.
+      if (paymentProvider === "afribapay" && req.body.otp && req.body.reference) {
+        const ctx = otpContextCache.get(req.body.reference as string);
+        if (!ctx) {
+          return res.status(400).json({
+            error: "otp_expired",
+            message: "Session OTP expirée ou introuvable. Relancez la requête sans le champ 'otp' pour initier une nouvelle session.",
+          });
+        }
+        const callbackUrlOtp = buildWebhookUrl("/api/afribapay/webhook");
+        const afribapayCurrencyOtp = AFRIBAPAY_ISO_CURRENCY[country.code.toUpperCase()] || country.currency;
+        const confirmedResponse = await confirmAfribaPayOtp({
+          operator: ctx.operator,
+          country: ctx.country,
+          phone_number: ctx.phone,
+          amount: ctx.amount,
+          currency: afribapayCurrencyOtp,
+          order_id: req.body.reference as string,
+          reference_id: req.body.reference as string,
+          otp_code: req.body.otp as string,
+          notify_url: callbackUrlOtp,
+          return_url: `${process.env.APP_URL}/dashboard/deposit?status=success`,
+          cancel_url: `${process.env.APP_URL}/dashboard/deposit?status=cancelled`,
+          lang: "fr",
+        });
+        otpContextCache.delete(req.body.reference as string);
+        const existingTxOtp = await storage.getTransactionByReference(req.body.reference as string);
+        if (!confirmedResponse.success) {
+          if (existingTxOtp) await storage.updateTransactionStatus(existingTxOtp.id, "failed");
+          return res.status(502).json({ error: "gateway_error", message: confirmedResponse.message || "Code OTP invalide ou expiré." });
+        }
+        const extRefOtp = confirmedResponse.transaction_id || (req.body.reference as string);
+        if (existingTxOtp) {
+          await storage.updateTransactionExternalReference(existingTxOtp.id, extRefOtp);
+          addPendingPayment({
+            transactionId: existingTxOtp.id,
+            reference: req.body.reference as string,
+            externalReference: extRefOtp,
+            attempts: 0,
+            userId: merchant.id,
+            type: "deposit",
+            amount: ctx.amount.toString(),
+            provider: "afribapay",
+            countryCode: country.code,
+          });
+        }
+        return res.status(202).json({
+          transaction_id: existingTxOtp?.id || (req.body.reference as string),
+          reference: req.body.reference as string,
+          status: "pending",
+          amount: amountNum,
+          credited_amount: creditedAmount,
+          fee_amount: ashtechFeeAmount,
+          currency: normalizeApiCurrency(country.currency),
+          operator: operatorName,
+          phone,
+          country_code: country.code,
+          created_at: (existingTxOtp as any)?.createdAt,
+        });
+      }
+
+      // ── AfribaPay OTP: first call — detect, initiate, cache, and return 400 ─
+      // If the operator requires OTP and no otp is present in the request, we must:
+      // 1. Create the transaction (so it's tracked during the 15-min OTP window)
+      // 2. Call initiateAfribaPayOtp so AfribaPay sends the SMS
+      // 3. Cache the session keyed by depositRef
+      // 4. Return 400 otp_required WITH reference so the client can confirm later
       if (paymentProvider === "afribapay") {
-        // Use the SAME operator-code resolution as the actual payin call below
-        // (resolveAfribaPayOperatorCode strips "Money" suffixes etc. — e.g. "Orange
-        // Money" → "orange"). Previously this used a raw lowercase of the operator
-        // name ("orange money"), which never matched AfribaPay's operator_code
-        // ("orange") in the OTP lookup, so Orange/Moov in CI (which require OTP)
-        // were never flagged and were sent straight to /v1/pay/payin, which
-        // AfribaPay rejects — surfacing as an opaque 502 with no otp_required.
-        const afribaOpCode = resolveAfribaPayOperatorCode(operatorRecord, operatorName);
-        const otpInfo = await getAfribaPayOtpInfo(country.code, afribaOpCode);
-        if (otpInfo.required && !req.body.otp) {
+        const afribaOpCodePre = resolveAfribaPayOperatorCode(operatorRecord, operatorName);
+        const otpInfoPre = await getAfribaPayOtpInfo(country.code, afribaOpCodePre);
+        if (otpInfoPre.required && !req.body.otp) {
+          // Normalize phone (same logic as main AfribaPay block below)
+          const COUNTRY_PREFIXES_PRE: Record<string, string> = {
+            CM: "237", SN: "221", CI: "225", BF: "226", ML: "223",
+            GN: "224", BJ: "229", TG: "228", NE: "227", CD: "243",
+            CG: "242", CF: "236", TD: "235", GA: "241", GQ: "240",
+            MG: "261", RW: "250", KE: "254", TZ: "255", UG: "256",
+            GH: "233", NG: "234",
+          };
+          let localPhonePre = phone.replace(/\s/g, "");
+          if (localPhonePre.startsWith("+")) localPhonePre = localPhonePre.slice(1);
+          const countryPrefixPre = COUNTRY_PREFIXES_PRE[country.code.toUpperCase()];
+          if (countryPrefixPre && localPhonePre.startsWith(countryPrefixPre)) {
+            localPhonePre = localPhonePre.slice(countryPrefixPre.length);
+          }
+          const afribapayCurrencyPre = AFRIBAPAY_ISO_CURRENCY[country.code.toUpperCase()] || country.currency;
+          const callbackUrlPre = buildWebhookUrl("/api/afribapay/webhook");
+
+          // Create the transaction NOW so it exists when the client confirms the OTP
+          const txPre = await storage.createTransaction({
+            userId: merchant.id,
+            type: "deposit",
+            amount: creditedAmount.toString(),
+            currency: country.currency,
+            status: "pending",
+            description: `Paiement API — ${operatorName} — ${phone}`,
+            paymentMethod: "mobile_money",
+            reference: depositRef,
+            operatorId: (operatorRecord as any).id,
+            feeAmount: ashtechFeeAmount.toFixed(2),
+            totalAmount: amountNum.toFixed(2),
+            recipientPhone: phone,
+            notifyUrl: notify_url || null,
+            source: "api",
+          });
+
+          // Initiate OTP — AfribaPay sends the SMS to the user now
+          const otpInitResultPre = await initiateAfribaPayOtp({
+            operator: afribaOpCodePre,
+            country: country.code,
+            phone_number: localPhonePre,
+            amount: amountNum,
+            currency: afribapayCurrencyPre,
+            order_id: depositRef,
+            reference_id: depositRef,
+            notify_url: callbackUrlPre,
+          });
+          if (!otpInitResultPre.success) {
+            await storage.updateTransactionStatus(txPre.id, "failed");
+            return res.status(502).json({ error: "gateway_error", message: otpInitResultPre.message || "Impossible d'envoyer le code OTP." });
+          }
+
+          // Cache the session so the second call can confirm without re-initiating
+          otpContextCache.set(depositRef, {
+            operator: afribaOpCodePre,
+            country: country.code,
+            phone: localPhonePre,
+            amount: amountNum,
+            currency: afribapayCurrencyPre,
+            afribaTransactionId: depositRef,
+            expiresAt: Date.now() + 15 * 60 * 1000, // 15 min
+            otpType: "api",
+          });
+
           return res.status(400).json({
             error: "otp_required",
-            message: `OTP requis pour cet opérateur. ${otpInfo.instructions || ""}`,
-            ussd_code: otpInfo.ussdCode || null,
+            message: "OTP requis. Un code a été envoyé par SMS. Relancez la requête avec les champs 'otp' et 'reference'.",
+            reference: depositRef, // client MUST include this in the confirmation call
+            ussd_code: otpInfoPre.ussdCode || null,
           });
         }
       }
@@ -13468,51 +13595,22 @@ export async function registerRoutes(
           localPhone = localPhone.slice(countryPrefix.length);
         }
 
-        const otpInfo = await getAfribaPayOtpInfo(country.code, afribaOpCode);
-        let afribaResponse: any;
-        if (otpInfo.required && req.body.otp) {
-          const otpInitResult = await initiateAfribaPayOtp({
-            operator: afribaOpCode,
-            country: country.code,
-            phone_number: localPhone,
-            amount: amountNum,
-            currency: afribapayCurrency,
-            order_id: depositRef,
-            reference_id: depositRef,
-            notify_url: callbackUrl,
-          });
-          if (!otpInitResult.success) {
-            await storage.updateTransactionStatus(transaction.id, "failed");
-            return res.status(502).json({ error: "gateway_error", message: otpInitResult.message || "Échec de l'initiation OTP." });
-          }
-          afribaResponse = await confirmAfribaPayOtp({
-            operator: afribaOpCode,
-            country: country.code,
-            phone_number: localPhone,
-            amount: amountNum,
-            currency: afribapayCurrency,
-            order_id: depositRef,
-            reference_id: depositRef,
-            otp_code: req.body.otp,
-            notify_url: callbackUrl,
-            return_url: `${process.env.APP_URL}/dashboard/deposit?status=success`,
-            cancel_url: `${process.env.APP_URL}/dashboard/deposit?status=cancelled`,
-            lang: "fr",
-          });
-        } else {
-          afribaResponse = await initiateAfribaPayin({
-            operator: afribaOpCode,
-            country: country.code,
-            phone_number: localPhone,
-            amount: amountNum,
-            currency: afribapayCurrency,
-            order_id: depositRef,
-            reference_id: depositRef,
-            notify_url: callbackUrl,
-            return_url: `${process.env.APP_URL}/dashboard/deposit?status=success`,
-            cancel_url: `${process.env.APP_URL}/dashboard/deposit?status=cancelled`,
-          });
-        }
+        // OTP operators (Orange CI/BF, Moov CI/BF, etc.) are fully handled above:
+        //   first call  → initiate OTP + cache (returns 400 otp_required + reference)
+        //   second call → early-exit via otpContextCache (returns 202 after confirmAfribaPayOtp)
+        // This block only executes for non-OTP operators → direct /v1/pay/payin.
+        const afribaResponse = await initiateAfribaPayin({
+          operator: afribaOpCode,
+          country: country.code,
+          phone_number: localPhone,
+          amount: amountNum,
+          currency: afribapayCurrency,
+          order_id: depositRef,
+          reference_id: depositRef,
+          notify_url: callbackUrl,
+          return_url: `${process.env.APP_URL}/dashboard/deposit?status=success`,
+          cancel_url: `${process.env.APP_URL}/dashboard/deposit?status=cancelled`,
+        });
         if (afribaResponse.success) {
           const extRef = afribaResponse.transaction_id || depositRef;
           await storage.updateTransactionExternalReference(transaction.id, extRef);
@@ -13527,14 +13625,26 @@ export async function registerRoutes(
             provider: "afribapay",
             countryCode: country.code,
           });
-        } else if (!req.body.otp && isAfribaPayOtpRequiredMessage(afribaResponse.message)) {
-          // Safety net: our own OTP-requirement detection missed this operator
-          // (e.g. AfribaPay's live data didn't mark it, or naming drift), but
-          // AfribaPay itself just told us this call needs an OTP. Surface that
-          // properly instead of an opaque 502.
+        } else if (isAfribaPayOtpRequiredMessage(afribaResponse.message)) {
+          // Safety net: AfribaPay rejected the (non-OTP-pre-detected) payin call and
+          // triggered an OTP SMS automatically on its side. Cache the session so the
+          // client can confirm with otp + reference — do NOT call initiateAfribaPayOtp
+          // again (that would invalidate the already-sent SMS).
+          console.warn(`[API v1/collect] OTP required but not pre-detected for operator=${afribaOpCode} country=${country.code} — caching session for client confirmation`);
+          otpContextCache.set(depositRef, {
+            operator: afribaOpCode,
+            country: country.code,
+            phone: localPhone,
+            amount: amountNum,
+            currency: afribapayCurrency,
+            afribaTransactionId: depositRef,
+            expiresAt: Date.now() + 15 * 60 * 1000,
+            otpType: "api",
+          });
           return res.status(400).json({
             error: "otp_required",
-            message: "OTP requis. Relancez la requête avec le champ 'otp' après réception du code.",
+            message: "OTP requis. Un code a été envoyé par SMS. Relancez la requête avec les champs 'otp' et 'reference'.",
+            reference: depositRef,
           });
         } else {
           await storage.updateTransactionStatus(transaction.id, "failed");
