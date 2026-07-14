@@ -13484,12 +13484,19 @@ export async function registerRoutes(
         });
       }
 
-      // ── AfribaPay OTP: first call — detect, initiate, cache, and return 400 ─
-      // If the operator requires OTP and no otp is present in the request, we must:
-      // 1. Create the transaction (so it's tracked during the 15-min OTP window)
-      // 2. Call initiateAfribaPayOtp so AfribaPay sends the SMS
-      // 3. Cache the session keyed by depositRef
-      // 4. Return 400 otp_required WITH reference so the client can confirm later
+      // ── AfribaPay OTP: first call — detect, initiate (if SMS), cache, return 400 ─
+      // Two OTP sub-types handled differently:
+      //
+      //   type "api"  (Orange CI, LigdiCash BF…):
+      //     AfribaPay sends an SMS when we POST /v1/pay/otp with otp_code: "".
+      //     → Call initiateAfribaPayOtp, cache session, return 400 with reference.
+      //
+      //   type "ussd" (Orange BF *144*4*6*montant#, Orange SN #144*391#…):
+      //     The user dials the USSD code themselves. AfribaPay does NOT expose an
+      //     SMS initiation endpoint for these — calling initiateAfribaPayOtp for
+      //     them returns an error and causes a 502. Instead:
+      //     → Skip initiateAfribaPayOtp, cache session, return 400 with ussd_code.
+      //     The second call (with otp + reference) calls confirmAfribaPayOtp.
       if (paymentProvider === "afribapay") {
         const afribaOpCodePre = resolveAfribaPayOperatorCode(operatorRecord, operatorName);
         const otpInfoPre = await getAfribaPayOtpInfo(country.code, afribaOpCodePre);
@@ -13529,23 +13536,26 @@ export async function registerRoutes(
             source: "api",
           });
 
-          // Initiate OTP — AfribaPay sends the SMS to the user now
-          const otpInitResultPre = await initiateAfribaPayOtp({
-            operator: afribaOpCodePre,
-            country: country.code,
-            phone_number: localPhonePre,
-            amount: amountNum,
-            currency: afribapayCurrencyPre,
-            order_id: depositRef,
-            reference_id: depositRef,
-            notify_url: callbackUrlPre,
-          });
-          if (!otpInitResultPre.success) {
-            await storage.updateTransactionStatus(txPre.id, "failed");
-            return res.status(502).json({ error: "gateway_error", message: otpInitResultPre.message || "Impossible d'envoyer le code OTP." });
+          if (otpInfoPre.type === "api") {
+            // SMS-type OTP: AfribaPay sends the code — trigger it now.
+            const otpInitResultPre = await initiateAfribaPayOtp({
+              operator: afribaOpCodePre,
+              country: country.code,
+              phone_number: localPhonePre,
+              amount: amountNum,
+              currency: afribapayCurrencyPre,
+              order_id: depositRef,
+              reference_id: depositRef,
+              notify_url: callbackUrlPre,
+            });
+            if (!otpInitResultPre.success) {
+              await storage.updateTransactionStatus(txPre.id, "failed");
+              return res.status(502).json({ error: "gateway_error", message: otpInitResultPre.message || "Impossible d'envoyer le code OTP." });
+            }
           }
+          // USSD-type OTP: user dials the USSD code shown in ussd_code — no SMS
+          // endpoint to call. Cache immediately so the confirm call can find the session.
 
-          // Cache the session so the second call can confirm without re-initiating
           otpContextCache.set(depositRef, {
             operator: afribaOpCodePre,
             country: country.code,
@@ -13554,12 +13564,16 @@ export async function registerRoutes(
             currency: afribapayCurrencyPre,
             afribaTransactionId: depositRef,
             expiresAt: Date.now() + 15 * 60 * 1000, // 15 min
-            otpType: "api",
+            otpType: otpInfoPre.type,
           });
+
+          const otpMsg = otpInfoPre.type === "ussd"
+            ? `OTP requis. Composez ${otpInfoPre.ussdCode} sur votre téléphone pour obtenir votre code, puis relancez la requête avec les champs 'otp' et 'reference'.`
+            : "OTP requis. Un code a été envoyé par SMS. Relancez la requête avec les champs 'otp' et 'reference'.";
 
           return res.status(400).json({
             error: "otp_required",
-            message: "OTP requis. Un code a été envoyé par SMS. Relancez la requête avec les champs 'otp' et 'reference'.",
+            message: otpMsg,
             reference: depositRef, // client MUST include this in the confirmation call
             ussd_code: otpInfoPre.ussdCode || null,
           });
