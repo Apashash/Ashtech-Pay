@@ -523,7 +523,9 @@ export async function getAfribaPayOtpInfo(country: string, operatorCode: string)
   }
 }
 
-// ─── OTP initiation (POST /v1/pay/otp WITHOUT otp_code — sends SMS) ─────────
+// ─── OTP initiation (POST /v1/pay/otp with empty otp_code — sends SMS) ──────
+// AfribaPay requires otp_code to be present in the body (even empty "") to
+// distinguish initiation from confirmation. Without it the endpoint returns 500.
 export async function initiateAfribaPayOtp(params: Omit<AfribaPayinParams, "return_url" | "cancel_url">): Promise<{ success: boolean; message?: string; raw?: any }> {
   try {
     const headers = await authHeaders();
@@ -538,6 +540,7 @@ export async function initiateAfribaPayOtp(params: Omit<AfribaPayinParams, "retu
       reference_id: params.reference_id || params.order_id,
       lang: params.lang || "fr",
       notify_url: params.notify_url || "",
+      otp_code: "",   // Required by AfribaPay even for initiation; empty = "send SMS"
     };
 
     console.log(`[AfribaPay OTP Init] Sending OTP SMS: ${params.amount} ${params.currency} for ${maskPhone(params.phone_number)} (${params.operator}/${params.country})`);
@@ -553,9 +556,15 @@ export async function initiateAfribaPayOtp(params: Omit<AfribaPayinParams, "retu
     try { data = JSON.parse(text); } catch { data = text; }
     console.log(`[AfribaPay OTP Init] Response status=${res.status} body=${JSON.stringify(maskPiiInObject(data))}`);
 
-    // AfribaPay returns "" (empty string) or 2xx on success — treat non-5xx as success
-    if (res.status >= 500) {
-      const msg = (typeof data === "object" && data?.error?.message) || "Échec d'envoi du code OTP";
+    // Treat any non-2xx as failure (previously only >= 500 was checked,
+    // which meant 4xx errors were silently treated as success — a bug that
+    // caused the OTP screen to appear even when no SMS was sent).
+    if (!res.ok) {
+      const errObj = typeof data === "object" ? data : null;
+      const msg = errObj?.error?.message || errObj?.message || errObj?.data?.message
+        || (typeof data === "string" && data.length < 200 ? data : null)
+        || `Échec d'envoi du code OTP (HTTP ${res.status})`;
+      console.error(`[AfribaPay OTP Init] FAILED status=${res.status} msg="${msg}"`);
       return { success: false, message: msg, raw: data };
     }
 

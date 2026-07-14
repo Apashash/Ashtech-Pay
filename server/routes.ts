@@ -4596,21 +4596,10 @@ export async function registerRoutes(
               // Safety net: our OTP-requirement detection missed this operator, but
               // AfribaPay's actual rejection says an OTP is needed — switch to the
               // OTP flow instead of showing the raw upstream error with no way forward.
-              console.warn(`[AfribaPay Payin] OTP required but not pre-detected for operator=${afribapayOperatorCode} country=${countryCode} — falling back to OTP flow`);
-              const otpInitResult = await initiateAfribaPayOtp({
-                operator: afribapayOperatorCode,
-                country: countryCode,
-                phone_number: localPhone,
-                amount: totalAmount,
-                currency: afribapayCurrency,
-                order_id: depositRef,
-                reference_id: depositRef,
-                notify_url: callbackUrl,
-              });
-              if (!otpInitResult.success) {
-                await storage.updateTransactionStatus(transaction.id, "failed");
-                return res.status(400).json({ message: otpInitResult.message || "Impossible d'envoyer le code OTP" });
-              }
+              // NOTE: do NOT call initiateAfribaPayOtp here — the /v1/pay/payin call
+              // above already triggered the OTP SMS on AfribaPay's side. A second
+              // initiation call with the same order_id causes a 5xx on their end.
+              console.warn(`[AfribaPay Payin] OTP required but not pre-detected for operator=${afribapayOperatorCode} country=${countryCode} — SMS already sent by payin, switching to OTP confirmation flow`);
               otpContextCache.set(depositRef, {
                 operator: afribapayOperatorCode,
                 country: countryCode,
@@ -7509,23 +7498,10 @@ export async function registerRoutes(
               // Safety net: our OTP-requirement detection missed this operator, but
               // AfribaPay's actual rejection says an OTP is needed — switch to the
               // OTP flow instead of showing the raw upstream error with no way forward.
-              console.warn(`[AfribaPay PaymentLink] OTP required but not pre-detected for operator=${afribapayOperatorCode} country=${paymentCountryCode} — falling back to OTP flow`);
-              const otpInitResult = await initiateAfribaPayOtp({
-                operator: afribapayOperatorCode,
-                country: paymentCountryCode,
-                phone_number: localPhone,
-                amount: numAmount,
-                currency: afribapayCurrency,
-                order_id: reference,
-                reference_id: reference,
-                notify_url: callbackUrl,
-              });
-              if (!otpInitResult.success) {
-                await storage.updatePaymentIntentStatus(intent.id, "failed");
-                const failedTx0 = await storage.getTransactionByReference(reference);
-                if (failedTx0) await storage.updateTransactionStatus(failedTx0.id, "failed");
-                return res.status(400).json({ message: otpInitResult.message || "Impossible d'envoyer le code OTP" });
-              }
+              // NOTE: do NOT call initiateAfribaPayOtp here — the /v1/pay/payin call
+              // above already triggered the OTP SMS on AfribaPay's side. A second
+              // initiation call with the same order_id causes a 5xx on their end.
+              console.warn(`[AfribaPay PaymentLink] OTP required but not pre-detected for operator=${afribapayOperatorCode} country=${paymentCountryCode} — SMS already sent by payin, switching to OTP confirmation flow`);
               otpContextCache.set(reference, {
                 operator: afribapayOperatorCode,
                 country: paymentCountryCode,
