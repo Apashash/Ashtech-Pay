@@ -374,6 +374,8 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
     "Authorization": "Bearer ${apiKey}"
   }
 })`} />
+                <CodeBlock language="bash" code={`curl https://ashtechpay.top/v1/countries \\
+  -H "Authorization: Bearer ${apiKey}"`} />
               </div>
               <div className="space-y-2 min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Réponse</p>
@@ -496,6 +498,19 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
     notify_url: "https://monsite.com/webhook"
   })
 })`} />
+                <CodeBlock language="bash" code={`curl https://ashtechpay.top/v1/collect \\
+  -X POST \\
+  -H "Authorization: Bearer ${apiKey}" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "amount": 5000,
+    "currency": "XAF",
+    "phone": "670000000",
+    "operator": "MTN Mobile Money",
+    "country_code": "CM",
+    "reference": "ORDER-001",
+    "notify_url": "https://monsite.com/webhook"
+  }'`} />
               </div>
               <div className="space-y-2 min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Réponse (202)</p>
@@ -541,6 +556,28 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
   "reference": "DEP-A1B2C3D4",   // ← obligatoire, même valeur que la réponse 400
   "notify_url": "https://monsite.com/webhook"
 }`} />
+              <CodeBlock language="bash" code={`# Étape 1 — sans OTP (Orange Money CI)
+curl https://ashtechpay.top/v1/collect \\
+  -X POST \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"amount":5000,"currency":"XOF","phone":"07XXXXXXXX",
+       "operator":"Orange Money","country_code":"CI",
+       "notify_url":"https://monsite.com/webhook"}'
+
+# → 400 : {"error":"otp_required","reference":"DEP-A1B2C3D4",...}
+
+# Étape 2 — avec OTP + reference (OBLIGATOIRE)
+curl https://ashtechpay.top/v1/collect \\
+  -X POST \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"amount":5000,"currency":"XOF","phone":"07XXXXXXXX",
+       "operator":"Orange Money","country_code":"CI",
+       "otp":"123456","reference":"DEP-A1B2C3D4",
+       "notify_url":"https://monsite.com/webhook"}'
+
+# → 202 pending`} />
             </div>
           </section>
 
@@ -607,9 +644,12 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
                 <div className="space-y-1 min-w-0">
                   <p className="text-xs text-gray-500 font-medium">Requête</p>
                   <CodeBlock language="javascript" code={`// Orange Money Cameroun — flux USSD push
-const res = await fetch("/v1/collect", {
+const res = await fetch("https://ashtechpay.top/v1/collect", {
   method: "POST",
-  headers: { "Authorization": "Bearer ${apiKey}" },
+  headers: {
+    "Authorization": "Bearer ${apiKey}",
+    "Content-Type": "application/json"
+  },
   body: JSON.stringify({
     amount: 5000,
     currency: "XAF",
@@ -661,9 +701,12 @@ const data = await res.json();
                 <div className="space-y-1 min-w-0">
                   <p className="text-xs text-gray-500 font-medium">Étape 1 — Requête initiale (sans OTP)</p>
                   <CodeBlock language="javascript" code={`// Orange Money CI — étape 1 : sans OTP
-const res = await fetch("/v1/collect", {
+const res = await fetch("https://ashtechpay.top/v1/collect", {
   method: "POST",
-  headers: { "Authorization": "Bearer ${apiKey}" },
+  headers: {
+    "Authorization": "Bearer ${apiKey}",
+    "Content-Type": "application/json"
+  },
   body: JSON.stringify({
     amount: 1000,
     currency: "XOF",
@@ -718,9 +761,12 @@ body: JSON.stringify({
                 <div className="space-y-1 min-w-0">
                   <p className="text-xs text-gray-500 font-medium">Étape 1 — Requête initiale (sans OTP)</p>
                   <CodeBlock language="javascript" code={`// LigdiCash Burkina Faso — étape 1
-const res = await fetch("/v1/collect", {
+const res = await fetch("https://ashtechpay.top/v1/collect", {
   method: "POST",
-  headers: { "Authorization": "Bearer ${apiKey}" },
+  headers: {
+    "Authorization": "Bearer ${apiKey}",
+    "Content-Type": "application/json"
+  },
   body: JSON.stringify({
     amount: 5000,
     currency: "XOF",
@@ -776,9 +822,12 @@ body: JSON.stringify({
                 <div className="space-y-1 min-w-0">
                   <p className="text-xs text-gray-500 font-medium">Requête</p>
                   <CodeBlock language="javascript" code={`// Wave Côte d'Ivoire
-const res = await fetch("/v1/collect", {
+const res = await fetch("https://ashtechpay.top/v1/collect", {
   method: "POST",
-  headers: { "Authorization": "Bearer ${apiKey}" },
+  headers: {
+    "Authorization": "Bearer ${apiKey}",
+    "Content-Type": "application/json"
+  },
   body: JSON.stringify({
     amount: 2000,
     currency: "XOF",
@@ -844,12 +893,14 @@ if (data.flow === "wave") {
   }
 
   if (res.status === 400 && data.error === "otp_required") {
-    // Stocker data.reference — obligatoire pour le retry OTP
+    // Toujours stocker data.reference — OBLIGATOIRE pour le retry OTP
     if (data.ussd_code) {
-      // ─── Flux OTP USSD : code à composer (ex: #144*82# CI) ───
+      // ─── Flux OTP USSD : code USSD à composer (ex: #144*82# CI, #144*391# SN) ─
+      // Orange Money CI, SN, BF, ML — le client compose le USSD, reçoit l'OTP par SMS
       return { type: "otp_ussd", ussdCode: data.ussd_code, reference: data.reference };
     } else {
-      // ─── Flux OTP SMS : SMS automatique (Orange CI, SN, ML…) ─
+      // ─── Flux OTP SMS : SMS envoyé automatiquement, pas de USSD à composer ────
+      // LigdiCash BF — ussd_code est null
       return { type: "otp_sms", reference: data.reference };
     }
   }
@@ -890,6 +941,8 @@ if (data.flow === "wave") {
     }
   }
 )`} />
+                <CodeBlock language="bash" code={`curl https://ashtechpay.top/v1/transaction/8f3e1c2d-... \\
+  -H "Authorization: Bearer ${apiKey}"`} />
               </div>
               <div className="space-y-2 min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Réponse</p>
@@ -955,6 +1008,8 @@ if (data.flow === "wave") {
     "Authorization": "Bearer ${apiKey}"
   }
 })`} />
+                <CodeBlock language="bash" code={`curl https://ashtechpay.top/v1/fees \\
+  -H "Authorization: Bearer ${apiKey}"`} />
               </div>
               <div className="space-y-2 min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Réponse</p>
@@ -1179,9 +1234,11 @@ console.log(computeNet(10000, "CM"));
               <TableHead cols={["Code HTTP", "Erreur", "Signification"]} />
               <tbody>
                 {[
-                  { code: "400", error: "bad_request",   msg: "Paramètre manquant ou format invalide" },
-                  { code: "400", error: "otp_required",  msg: "OTP nécessaire — vérifiez ussd_code dans la réponse" },
-                  { code: "401", error: "unauthorized",  msg: "Clé API manquante, invalide ou révoquée" },
+                  { code: "400", error: "bad_request",        msg: "Paramètre manquant ou format invalide" },
+                  { code: "400", error: "otp_required",       msg: "OTP requis — conservez le champ reference de cette réponse, il est obligatoire pour la confirmation" },
+                  { code: "400", error: "missing_reference",  msg: "Confirmation OTP sans le champ reference — utilisez la valeur reçue dans la réponse otp_required" },
+                  { code: "400", error: "otp_expired",        msg: "Session OTP expirée (15 min) ou introuvable — relancez sans otp pour initier une nouvelle session" },
+                  { code: "401", error: "unauthorized",       msg: "Clé API manquante, invalide ou révoquée" },
                   { code: "403", error: "forbidden",     msg: "Cette transaction n'appartient pas à votre compte" },
                   { code: "404", error: "not_found",     msg: "Transaction introuvable" },
                   { code: "422", error: "unprocessable", msg: "Pays ou opérateur non supporté / devise incorrecte" },
