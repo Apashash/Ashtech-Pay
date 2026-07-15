@@ -1211,7 +1211,7 @@ export default function PaymentPage() {
                 <p className="text-3xl font-bold text-foreground" data-testid="text-payment-amount">
                   {formatAmount(convertedDisplayAmount, selectedDisplayCurrency)}
                 </p>
-                {selectedDisplayCurrency !== linkCurrency && (
+                {selectedDisplayCurrency !== linkCurrency && (adminExchangeRates[selectedDisplayCurrency] || 0) > 0 && (
                   <p className="text-sm text-muted-foreground mt-1">= {formatAmount(displayAmount, linkCurrency)}</p>
                 )}
               </div>
@@ -1249,7 +1249,7 @@ export default function PaymentPage() {
                   data-testid="input-payment-amount"
                 />
                 {errors.amount && <p className="text-xs text-red-500">{errors.amount}</p>}
-                {selectedDisplayCurrency !== linkCurrency && customAmount && (
+                {selectedDisplayCurrency !== linkCurrency && customAmount && (adminExchangeRates[selectedDisplayCurrency] || 0) > 0 && (
                   <p className="text-xs text-muted-foreground text-center">≈ {formatAmount(amountInLinkCurrency, linkCurrency)}</p>
                 )}
               </div>

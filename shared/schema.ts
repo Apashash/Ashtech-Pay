@@ -172,7 +172,7 @@ export const ALL_FX_CURRENCIES: FxCurrency[] = [
   { code: "RWF", name: "Rwandan Franc", defaultRate: 1480.00 },
   { code: "TZS", name: "Tanzanian Shilling", defaultRate: 2650.00 },
   { code: "UGX", name: "Ugandan Shilling", defaultRate: 3600.00 },
-  { code: "CDF", name: "Congolese Franc", defaultRate: 2500.00 },
+  { code: "CDF", name: "Congolese Franc", defaultRate: 0 }, // No hardcoded default — must be set by admin via fx_rate_CDF setting
   { code: "GNF", name: "Franc Guinéen", defaultRate: 9095.00 },
   { code: "INR", name: "Roupie Indienne", defaultRate: 84.00 },
   { code: "USDT", name: "USDT TRC20 (Tron)", defaultRate: 1.00 },

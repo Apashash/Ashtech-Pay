@@ -6838,7 +6838,9 @@ export async function registerRoutes(
         }
       });
       ALL_FX_CURRENCIES.forEach(c => {
-        if (!exchangeRates[c.code]) exchangeRates[c.code] = c.defaultRate;
+        // Only apply defaultRate if it's a real value (> 0).
+        // CDF and others with defaultRate: 0 must be configured by admin — no hardcoded fallback.
+        if (!exchangeRates[c.code] && c.defaultRate > 0) exchangeRates[c.code] = c.defaultRate;
       });
 
       res.json({ countries: config, exchangeRates });
