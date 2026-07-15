@@ -678,8 +678,10 @@ export default function DepositPage() {
 
                   <div className="space-y-2">
                     <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Montant (USDT)</label>
-                    <div className="relative">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold text-sm">USDT</span>
+                    <div className="flex rounded-xl border border-border overflow-hidden focus-within:ring-2 focus-within:ring-primary/40">
+                      <span className="flex items-center px-3 bg-muted border-r border-border text-sm font-bold text-muted-foreground shrink-0 whitespace-nowrap">
+                        {selectedCryptoNetwork?.label || "USDT"}
+                      </span>
                       <input
                         type="number"
                         inputMode="decimal"
@@ -688,7 +690,7 @@ export default function DepositPage() {
                         placeholder="0.00"
                         value={cryptoAmountUsd}
                         onChange={e => setCryptoAmountUsd(e.target.value)}
-                        className="w-full pl-16 pr-4 h-12 rounded-xl border border-border bg-background text-base font-semibold focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        className="flex-1 min-w-0 pr-4 h-12 bg-background text-base font-semibold focus:outline-none"
                         data-testid="input-crypto-amount"
                       />
                     </div>

@@ -1365,9 +1365,11 @@ export default function PaymentPage() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="amount">{p.amountToPay} ({selectedCryptoNetwork?.label || "USDT"}) *</Label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold text-sm">{selectedCryptoNetwork?.label || "USDT"}</span>
+                  <Label htmlFor="amount">{p.amountToPay} *</Label>
+                  <div className={`flex rounded-xl border overflow-hidden focus-within:ring-2 focus-within:ring-primary/40 ${errors.amount ? "border-red-500" : "border-border"}`}>
+                    <span className="flex items-center px-3 bg-muted border-r border-border text-sm font-bold text-muted-foreground shrink-0 whitespace-nowrap">
+                      {selectedCryptoNetwork?.label || "USDT"}
+                    </span>
                     <Input
                       id="amount"
                       type="number"
@@ -1377,7 +1379,7 @@ export default function PaymentPage() {
                       step="0.01"
                       value={customAmount}
                       onChange={(e) => { setCustomAmount(e.target.value); setErrors(p => ({...p, amount: undefined as any})); }}
-                      className={`pl-16 text-xl h-12 ${errors.amount ? "border-red-500" : ""}`}
+                      className="border-0 rounded-none focus-visible:ring-0 text-xl h-12 flex-1 min-w-0"
                       data-testid="input-payment-amount"
                     />
                   </div>
