@@ -273,7 +273,11 @@ export default function PaymentPage() {
     if (!email.trim()) newErrors.email = p.errEmail;
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = p.errEmailInvalid;
     if (!paymentLink?.isFixedAmount && (!customAmount || parseFloat(customAmount) <= 0)) newErrors.amount = p.errAmount;
-    if (!paymentLink?.isFixedAmount && paymentMethod === "crypto" && customAmount && parseFloat(customAmount) < cryptoMinDeposit) newErrors.amount = `Minimum ${cryptoMinDeposit} $ pour ${selectedCryptoNetwork?.label || "ce réseau"} (${selectedCryptoNetwork?.network})`;
+    if (!paymentLink?.isFixedAmount && paymentMethod === "crypto" && customAmount && parseFloat(customAmount) < cryptoMinDeposit) {
+      const net = selectedCryptoNetwork;
+      const networkSuffix = net && net.network && net.network !== net.label ? ` (${net.network})` : "";
+      newErrors.amount = `Minimum ${parseFloat(cryptoMinDeposit.toFixed(2))} $ pour ${net?.label || "ce réseau"}${networkSuffix}`;
+    }
     if (!paymentMethod) newErrors.paymentMethod = p.errPaymentMethod;
     if (paymentMethod !== "crypto") {
       if (!country) newErrors.country = p.errCountry;
@@ -305,7 +309,11 @@ export default function PaymentPage() {
       if (!email.trim()) newErrors.email = p.errEmail;
       else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = p.errEmailInvalid;
       if (!paymentLink?.isFixedAmount && (!customAmount || parseFloat(customAmount) <= 0)) newErrors.amount = p.errAmount;
-      if (!paymentLink?.isFixedAmount && paymentMethod === "crypto" && customAmount && parseFloat(customAmount) < cryptoMinDeposit) newErrors.amount = `Minimum ${cryptoMinDeposit} $ pour ${selectedCryptoNetwork?.label || "ce réseau"} (${selectedCryptoNetwork?.network})`;
+      if (!paymentLink?.isFixedAmount && paymentMethod === "crypto" && customAmount && parseFloat(customAmount) < cryptoMinDeposit) {
+        const net = selectedCryptoNetwork;
+        const networkSuffix = net && net.network && net.network !== net.label ? ` (${net.network})` : "";
+        newErrors.amount = `Minimum ${parseFloat(cryptoMinDeposit.toFixed(2))} $ pour ${net?.label || "ce réseau"}${networkSuffix}`;
+      }
       if (!paymentMethod) newErrors.paymentMethod = p.errPaymentMethod;
       if (paymentMethod !== "crypto") {
         if (!country) newErrors.country = p.errCountry;
@@ -1329,7 +1337,7 @@ export default function PaymentPage() {
                       {isFetchingEstimate ? (
                         <span className="flex items-center justify-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Calcul…</span>
                       ) : estimatedCryptoAmount !== null ? (
-                        <span>≈ <strong className="text-foreground">{estimatedCryptoAmount.toFixed(6)} {selectedCryptoNetwork?.label || "USDT"}</strong> à envoyer ({selectedCryptoNetwork?.network})</span>
+                        <span>≈ <strong className="text-foreground">{estimatedCryptoAmount.toFixed(6)} {selectedCryptoNetwork?.label || "USDT"}</strong> à envoyer{selectedCryptoNetwork?.network && selectedCryptoNetwork.network !== selectedCryptoNetwork.label ? ` (${selectedCryptoNetwork.network})` : ""}</span>
                       ) : null}
                     </div>
                   )}
@@ -1396,7 +1404,9 @@ export default function PaymentPage() {
                           <span className="font-semibold text-foreground">
                             {estimatedCryptoAmount.toFixed(6)} {selectedCryptoNetwork?.label || "USDT"}
                           </span>
-                          <span className="text-muted-foreground">({selectedCryptoNetwork?.network})</span>
+                          {selectedCryptoNetwork?.network && selectedCryptoNetwork.network !== selectedCryptoNetwork.label && (
+                            <span className="text-muted-foreground">({selectedCryptoNetwork.network})</span>
+                          )}
                         </>
                       ) : null}
                     </div>
@@ -1500,7 +1510,9 @@ export default function PaymentPage() {
                   ) : estimatedCryptoAmount !== null ? (
                     <>
                       <span>≈ <strong className="text-foreground">{estimatedCryptoAmount.toFixed(6)} {selectedCryptoNetwork?.label || "USDT"}</strong> à envoyer</span>
-                      {selectedCryptoNetwork?.network && <span className="ml-1 text-muted-foreground">({selectedCryptoNetwork.network})</span>}
+                      {selectedCryptoNetwork?.network && selectedCryptoNetwork.network !== selectedCryptoNetwork.label && (
+                        <span className="ml-1 text-muted-foreground">({selectedCryptoNetwork.network})</span>
+                      )}
                     </>
                   ) : null}
                 </div>

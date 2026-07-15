@@ -730,7 +730,11 @@ export default function DepositPage() {
 
                   {cryptoAmtNum > 0 && cryptoMinDeposit && cryptoAmtNum < cryptoMinDeposit && (
                     <p className="text-xs text-amber-500 font-medium text-center -mt-1">
-                      ⚠️ Minimum {cryptoMinDeposit} $ pour {selectedCryptoNetwork?.label || "ce réseau"} ({selectedCryptoNetwork?.network})
+                      {(() => {
+                        const net = selectedCryptoNetwork;
+                        const suffix = net && net.network && net.network !== net.label ? ` (${net.network})` : "";
+                        return `⚠️ Minimum ${parseFloat(cryptoMinDeposit.toFixed(2))} $ pour ${net?.label || "ce réseau"}${suffix}`;
+                      })()}
                     </p>
                   )}
 
