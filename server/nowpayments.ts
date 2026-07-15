@@ -254,6 +254,25 @@ function extractTickers(payload: any): string[] {
     .filter((t: any): t is string => typeof t === "string" && t.length > 0);
 }
 
+export async function getEstimatedPrice(amount: number, currencyFrom: string, currencyTo: string): Promise<number | null> {
+  if (!NOWPAYMENTS_API_KEY) return null;
+  try {
+    const params = new URLSearchParams({
+      amount: amount.toString(),
+      currency_from: currencyFrom.toLowerCase(),
+      currency_to: currencyTo.toLowerCase(),
+    });
+    const res = await fetch(`${BASE_URL}/estimate?${params}`, {
+      headers: { "x-api-key": NOWPAYMENTS_API_KEY },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return parseFloat(data.estimated_amount) || null;
+  } catch {
+    return null;
+  }
+}
+
 let currenciesCache: { at: number; data: NowPaymentsCurrencyOption[] } | null = null;
 const CURRENCIES_CACHE_TTL_MS = 10 * 60 * 1000;
 

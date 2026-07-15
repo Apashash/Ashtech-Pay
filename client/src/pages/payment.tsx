@@ -92,6 +92,10 @@ export default function PaymentPage() {
   const [cryptoPayCurrency, setCryptoPayCurrency] = useState("usdttrc20");
   const cryptoPollingRef = useRef<NodeJS.Timeout | null>(null);
 
+  const [estimatedCryptoAmount, setEstimatedCryptoAmount] = useState<number | null>(null);
+  const [isFetchingEstimate, setIsFetchingEstimate] = useState(false);
+  const estimateDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
   const { data: paymentLink, isLoading, error } = useQuery<PaymentLink & { hasPdf?: boolean }>({
     queryKey: ["/api/payment-links/public", params?.slug],
     queryFn: async () => {
@@ -426,6 +430,38 @@ export default function PaymentPage() {
       if (cryptoPollingRef.current) clearInterval(cryptoPollingRef.current);
     };
   }, []);
+
+  // Fetch estimated crypto amount whenever the amount or network changes
+  useEffect(() => {
+    if (paymentMethod !== "crypto") { setEstimatedCryptoAmount(null); return; }
+    const amountNum = parseFloat(customAmount || "0");
+    // For fixed-amount: use USDT equivalent
+    const fixedUsdtAmount = paymentLink?.isFixedAmount
+      ? (amountInXAF / (adminExchangeRates["USDT"] || 620))
+      : 0;
+    const baseAmount = paymentLink?.isFixedAmount ? fixedUsdtAmount : amountNum;
+    if (!baseAmount || baseAmount <= 0 || !cryptoPayCurrency) { setEstimatedCryptoAmount(null); return; }
+
+    if (estimateDebounceRef.current) clearTimeout(estimateDebounceRef.current);
+    estimateDebounceRef.current = setTimeout(async () => {
+      setIsFetchingEstimate(true);
+      try {
+        const res = await fetch(`/api/nowpayments/estimate?amount=${baseAmount}&currency_from=usd&currency_to=${cryptoPayCurrency}`);
+        if (res.ok) {
+          const data = await res.json();
+          setEstimatedCryptoAmount(parseFloat(data.estimated_amount) || null);
+        } else {
+          setEstimatedCryptoAmount(null);
+        }
+      } catch {
+        setEstimatedCryptoAmount(null);
+      } finally {
+        setIsFetchingEstimate(false);
+      }
+    }, 600);
+
+    return () => { if (estimateDebounceRef.current) clearTimeout(estimateDebounceRef.current); };
+  }, [customAmount, cryptoPayCurrency, paymentMethod, paymentLink?.isFixedAmount, amountInXAF, adminExchangeRates]);
 
   const formatCountdown = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -1276,6 +1312,16 @@ export default function PaymentPage() {
                   {selectedDisplayCurrency !== linkCurrency && (adminExchangeRates[selectedDisplayCurrency] || 0) > 0 && (
                     <p className="text-sm text-muted-foreground mt-1">= {formatAmount(displayAmount, linkCurrency)}</p>
                   )}
+                  {/* Estimate for fixed-amount crypto */}
+                  {paymentMethod === "crypto" && (
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      {isFetchingEstimate ? (
+                        <span className="flex items-center justify-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Calcul…</span>
+                      ) : estimatedCryptoAmount !== null ? (
+                        <span>≈ <strong className="text-foreground">{estimatedCryptoAmount.toFixed(6)} {selectedCryptoNetwork?.label || "USDT"}</strong> à envoyer ({selectedCryptoNetwork?.network})</span>
+                      ) : null}
+                    </div>
+                  )}
                 </div>
               </div>
             ) : paymentMethod === "crypto" ? (
@@ -1325,6 +1371,23 @@ export default function PaymentPage() {
                     />
                   </div>
                   {errors.amount && <p className="text-xs text-red-500">{errors.amount}</p>}
+                  {/* Estimate display */}
+                  {parseFloat(customAmount || "0") > 0 && (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
+                      {isFetchingEstimate ? (
+                        <><Loader2 className="w-3 h-3 animate-spin" /> Calcul en cours…</>
+                      ) : estimatedCryptoAmount !== null ? (
+                        <>
+                          <span>≈ <strong>{parseFloat(customAmount).toFixed(2)} USDT</strong></span>
+                          <span className="text-muted-foreground">→</span>
+                          <span className="font-semibold text-foreground">
+                            {estimatedCryptoAmount.toFixed(6)} {selectedCryptoNetwork?.label || "USDT"}
+                          </span>
+                          <span className="text-muted-foreground">({selectedCryptoNetwork?.network})</span>
+                        </>
+                      ) : null}
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (
@@ -1407,16 +1470,28 @@ export default function PaymentPage() {
             )}
 
             {/* Summary */}
-            <div className="rounded-lg border bg-primary/5 border-primary/20 p-4">
+            <div className="rounded-lg border bg-primary/5 border-primary/20 p-4 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="font-medium text-foreground">{p.totalAmount}</span>
                 <span className="text-2xl font-bold text-primary" data-testid="text-payment-amount">
                   {paymentMethod === "crypto" && !paymentLink.isFixedAmount
-                    ? `${parseFloat(customAmount || "0").toFixed(2)} USDT`
+                    ? `${parseFloat(customAmount || "0").toFixed(2)} ${selectedCryptoNetwork?.label || "USDT"}`
                     : formatAmount(paymentLink.isFixedAmount ? convertedDisplayAmount : displayAmount, selectedDisplayCurrency)
                   }
                 </span>
               </div>
+              {paymentMethod === "crypto" && (
+                <div className="text-xs text-muted-foreground text-right">
+                  {isFetchingEstimate ? (
+                    <span className="flex items-center justify-end gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Calcul en cours…</span>
+                  ) : estimatedCryptoAmount !== null ? (
+                    <>
+                      <span>≈ <strong className="text-foreground">{estimatedCryptoAmount.toFixed(6)} {selectedCryptoNetwork?.label || "USDT"}</strong> à envoyer</span>
+                      {selectedCryptoNetwork?.network && <span className="ml-1 text-muted-foreground">({selectedCryptoNetwork.network})</span>}
+                    </>
+                  ) : null}
+                </div>
+              )}
             </div>
 
             {/* Submit */}

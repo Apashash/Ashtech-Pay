@@ -64,7 +64,7 @@ import { uploadToSupabase, getSignedImageUrl, downloadFromSupabase } from "./sup
 import { decryptField } from "./fieldEncryption";
 import { requireAdminPin } from "./adminPin";
 import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, fetchPaymentLinkDetails, ASHTECH_MARGIN } from "./swychr";
-import { createNowPaymentsInvoice, createNowPaymentsPayment, verifyNowPaymentsIpn, mapNowPaymentsStatus, getNowPaymentsCurrencies, isStableTicker } from "./nowpayments";
+import { createNowPaymentsInvoice, createNowPaymentsPayment, verifyNowPaymentsIpn, mapNowPaymentsStatus, getNowPaymentsCurrencies, isStableTicker, getEstimatedPrice } from "./nowpayments";
 import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, getAfribaPayOtpInfo, confirmAfribaPayOtp, isAfribaPayOtpRequiredMessage } from "./afribapay";
 import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, initiatePixPayPayout, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType, getPixPayServiceId, PIXPAY_OTP_USSD_CODES } from "./pixpay";
 import { addPendingPayment, removePendingPayment } from "./paymentPoller";
@@ -12427,6 +12427,31 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("[NowPayments IPN] Error:", error);
       res.status(500).json({ message: "Internal error" });
+    }
+  });
+
+  // ── NowPayments: estimated price for a given currency pair (public) ──────────
+  app.get("/api/nowpayments/estimate", async (req, res) => {
+    try {
+      const { amount, currency_from, currency_to } = req.query;
+      if (!amount || !currency_from || !currency_to) {
+        return res.status(400).json({ message: "Paramètres manquants: amount, currency_from, currency_to" });
+      }
+      const parsed = parseFloat(amount as string);
+      if (isNaN(parsed) || parsed <= 0) {
+        return res.status(400).json({ message: "Montant invalide" });
+      }
+      const estimated = await getEstimatedPrice(
+        parsed,
+        (currency_from as string).toLowerCase(),
+        (currency_to as string).toLowerCase()
+      );
+      if (estimated === null) {
+        return res.status(503).json({ message: "Estimation indisponible" });
+      }
+      res.json({ estimated_amount: estimated, currency_from, currency_to });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
     }
   });
 
