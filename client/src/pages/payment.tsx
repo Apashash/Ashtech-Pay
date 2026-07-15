@@ -273,10 +273,13 @@ export default function PaymentPage() {
     if (!email.trim()) newErrors.email = p.errEmail;
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = p.errEmailInvalid;
     if (!paymentLink?.isFixedAmount && (!customAmount || parseFloat(customAmount) <= 0)) newErrors.amount = p.errAmount;
-    if (!paymentLink?.isFixedAmount && paymentMethod === "crypto" && customAmount && parseFloat(customAmount) < cryptoMinDeposit) {
-      const net = selectedCryptoNetwork;
-      const networkSuffix = net && net.network && net.network !== net.label ? ` (${net.network})` : "";
-      newErrors.amount = `Minimum ${parseFloat(cryptoMinDeposit.toFixed(2))} $ pour ${net?.label || "ce réseau"}${networkSuffix}`;
+    if (!paymentLink?.isFixedAmount && paymentMethod === "crypto" && customAmount && parseFloat(customAmount) > 0) {
+      // estimatedCryptoAmount is now the USDT equivalent; compare against USD minimum
+      if (estimatedCryptoAmount === null || estimatedCryptoAmount < cryptoMinDeposit) {
+        const net = selectedCryptoNetwork;
+        const networkSuffix = net && net.network && net.network !== net.label ? ` (${net.network})` : "";
+        newErrors.amount = `Minimum ${parseFloat(cryptoMinDeposit.toFixed(2))} $ pour ${net?.label || "ce réseau"}${networkSuffix}`;
+      }
     }
     if (!paymentMethod) newErrors.paymentMethod = p.errPaymentMethod;
     if (paymentMethod !== "crypto") {
@@ -309,10 +312,12 @@ export default function PaymentPage() {
       if (!email.trim()) newErrors.email = p.errEmail;
       else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = p.errEmailInvalid;
       if (!paymentLink?.isFixedAmount && (!customAmount || parseFloat(customAmount) <= 0)) newErrors.amount = p.errAmount;
-      if (!paymentLink?.isFixedAmount && paymentMethod === "crypto" && customAmount && parseFloat(customAmount) < cryptoMinDeposit) {
-        const net = selectedCryptoNetwork;
-        const networkSuffix = net && net.network && net.network !== net.label ? ` (${net.network})` : "";
-        newErrors.amount = `Minimum ${parseFloat(cryptoMinDeposit.toFixed(2))} $ pour ${net?.label || "ce réseau"}${networkSuffix}`;
+      if (!paymentLink?.isFixedAmount && paymentMethod === "crypto" && customAmount && parseFloat(customAmount) > 0) {
+        if (estimatedCryptoAmount === null || estimatedCryptoAmount < cryptoMinDeposit) {
+          const net = selectedCryptoNetwork;
+          const networkSuffix = net && net.network && net.network !== net.label ? ` (${net.network})` : "";
+          newErrors.amount = `Minimum ${parseFloat(cryptoMinDeposit.toFixed(2))} $ pour ${net?.label || "ce réseau"}${networkSuffix}`;
+        }
       }
       if (!paymentMethod) newErrors.paymentMethod = p.errPaymentMethod;
       if (paymentMethod !== "crypto") {
@@ -326,12 +331,12 @@ export default function PaymentPage() {
 
       const isPixpayOtpOp = selectedOperatorData?.paymentProvider === "pixpay" &&
         selectedOperatorData?.pixpayOperatorType === "otp";
-      // For crypto non-fixed: amount is already in USDT, send with currency USDT
+      // For crypto non-fixed: user entered crypto amount; send USDT equivalent to backend
       const isCryptoFreeAmount = paymentMethod === "crypto" && !paymentLink?.isFixedAmount;
       const body: any = {
         fullName: fullName.trim() || email,
         email, country, phone,
-        amount: paymentLink?.isFixedAmount ? convertedDisplayAmount.toString() : customAmount,
+        amount: paymentLink?.isFixedAmount ? convertedDisplayAmount.toString() : (isCryptoFreeAmount && estimatedCryptoAmount !== null ? estimatedCryptoAmount.toFixed(6) : customAmount),
         currency: isCryptoFreeAmount ? "USDT" : selectedDisplayCurrency,
         paymentMethod,
         operator: paymentMethod === "mobile_money" ? operator : null,
@@ -465,7 +470,11 @@ export default function PaymentPage() {
     estimateDebounceRef.current = setTimeout(async () => {
       setIsFetchingEstimate(true);
       try {
-        const res = await fetch(`/api/nowpayments/estimate?amount=${baseAmount}&currency_from=usd&currency_to=${cryptoPayCurrency}`);
+        // Free-amount: user enters crypto → estimate gives USDT equivalent
+        // Fixed-amount: amount is USDT → estimate gives crypto to send
+        const currFrom = paymentLink?.isFixedAmount ? "usd" : cryptoPayCurrency;
+        const currTo   = paymentLink?.isFixedAmount ? cryptoPayCurrency : "usd";
+        const res = await fetch(`/api/nowpayments/estimate?amount=${baseAmount}&currency_from=${currFrom}&currency_to=${currTo}`);
         if (res.ok) {
           const data = await res.json();
           setEstimatedCryptoAmount(parseFloat(data.estimated_amount) || null);
@@ -1376,7 +1385,7 @@ export default function PaymentPage() {
                   <Label htmlFor="amount">{p.amountToPay} *</Label>
                   <div className={`flex rounded-xl border overflow-hidden focus-within:ring-2 focus-within:ring-primary/40 ${errors.amount ? "border-red-500" : "border-border"}`}>
                     <span className="flex items-center px-3 bg-muted border-r border-border text-sm font-bold text-muted-foreground shrink-0 whitespace-nowrap">
-                      USDT
+                      {selectedCryptoNetwork?.label || "USDT"}
                     </span>
                     <Input
                       id="amount"
@@ -1399,14 +1408,14 @@ export default function PaymentPage() {
                         <><Loader2 className="w-3 h-3 animate-spin" /> Calcul en cours…</>
                       ) : estimatedCryptoAmount !== null ? (
                         <>
-                          <span>≈ <strong>{parseFloat(customAmount).toFixed(2)} USDT</strong></span>
-                          <span className="text-muted-foreground">→</span>
                           <span className="font-semibold text-foreground">
-                            {estimatedCryptoAmount.toFixed(6)} {selectedCryptoNetwork?.label || "USDT"}
+                            ≈ {parseFloat(customAmount).toFixed(6)} {selectedCryptoNetwork?.label || "USDT"}
                           </span>
                           {selectedCryptoNetwork?.network && selectedCryptoNetwork.network !== selectedCryptoNetwork.label && (
                             <span className="text-muted-foreground">({selectedCryptoNetwork.network})</span>
                           )}
+                          <span className="text-muted-foreground">→</span>
+                          <span>≈ <strong>{estimatedCryptoAmount.toFixed(2)} USDT</strong> à créditer</span>
                         </>
                       ) : null}
                     </div>
@@ -1498,7 +1507,7 @@ export default function PaymentPage() {
                 <span className="font-medium text-foreground">{p.totalAmount}</span>
                 <span className="text-2xl font-bold text-primary" data-testid="text-payment-amount">
                   {paymentMethod === "crypto" && !paymentLink.isFixedAmount
-                    ? `${parseFloat(customAmount || "0").toFixed(2)} USDT`
+                    ? `${parseFloat(customAmount || "0").toFixed(2)} ${selectedCryptoNetwork?.label || "USDT"}`
                     : formatAmount(paymentLink.isFixedAmount ? convertedDisplayAmount : displayAmount, selectedDisplayCurrency)
                   }
                 </span>
@@ -1509,9 +1518,15 @@ export default function PaymentPage() {
                     <span className="flex items-center justify-end gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Calcul en cours…</span>
                   ) : estimatedCryptoAmount !== null ? (
                     <>
-                      <span>≈ <strong className="text-foreground">{estimatedCryptoAmount.toFixed(6)} {selectedCryptoNetwork?.label || "USDT"}</strong> à envoyer</span>
-                      {selectedCryptoNetwork?.network && selectedCryptoNetwork.network !== selectedCryptoNetwork.label && (
-                        <span className="ml-1 text-muted-foreground">({selectedCryptoNetwork.network})</span>
+                      {paymentLink.isFixedAmount ? (
+                        <>
+                          <span>≈ <strong className="text-foreground">{estimatedCryptoAmount.toFixed(6)} {selectedCryptoNetwork?.label || "USDT"}</strong> à envoyer</span>
+                          {selectedCryptoNetwork?.network && selectedCryptoNetwork.network !== selectedCryptoNetwork.label && (
+                            <span className="ml-1 text-muted-foreground">({selectedCryptoNetwork.network})</span>
+                          )}
+                        </>
+                      ) : (
+                        <span>≈ <strong className="text-foreground">{estimatedCryptoAmount.toFixed(2)} USDT</strong> à créditer</span>
                       )}
                     </>
                   ) : null}

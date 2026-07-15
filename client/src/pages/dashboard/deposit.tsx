@@ -305,8 +305,9 @@ export default function DepositPage() {
     mutationFn: async () => {
       const amt = parseFloat(cryptoAmountUsd);
       if (!amt || amt <= 0) throw new Error("Entrez un montant valide");
-      if (cryptoMinDeposit && amt < cryptoMinDeposit) throw new Error(`Le dépôt minimum est de ${cryptoMinDeposit} $ pour ce réseau`);
-      const res = await apiRequest("POST", "/api/deposits/crypto", { amountUsd: cryptoAmountUsd, payCurrency: cryptoPayCurrency });
+      if (!estimatedUsdt || estimatedUsdt <= 0) throw new Error("Conversion en cours, veuillez patienter");
+      if (cryptoMinDeposit && estimatedUsdt < cryptoMinDeposit) throw new Error(`Le dépôt minimum est de ${cryptoMinDeposit} $ pour ce réseau`);
+      const res = await apiRequest("POST", "/api/deposits/crypto", { amountUsd: estimatedUsdt.toFixed(6), payCurrency: cryptoPayCurrency });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Erreur lors du dépôt crypto");
       return data;
@@ -427,8 +428,39 @@ export default function DepositPage() {
   const cryptoMinDeposit = minAmountData?.min_amount ?? feeSettings?.cryptoMinDeposit ?? 1;
 
   const cryptoAmtNum = parseFloat(cryptoAmountUsd) || 0;
-  const cryptoFee = cryptoAmtNum * (cryptoFeePercent / 100);
-  const cryptoNet = cryptoAmtNum - cryptoFee;
+
+  // Estimate USDT equivalent for the entered crypto amount (debounced)
+  const [estimatedUsdt, setEstimatedUsdt] = useState<number | null>(null);
+  const [isFetchingEstimate, setIsFetchingEstimate] = useState(false);
+  const estimateDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  useEffect(() => {
+    if (depositMode !== "crypto" || !cryptoPayCurrency || cryptoAmtNum <= 0) {
+      setEstimatedUsdt(null);
+      return;
+    }
+    if (estimateDebounceRef.current) clearTimeout(estimateDebounceRef.current);
+    estimateDebounceRef.current = setTimeout(async () => {
+      setIsFetchingEstimate(true);
+      try {
+        const res = await fetch(`/api/nowpayments/estimate?amount=${cryptoAmtNum}&currency_from=${cryptoPayCurrency}&currency_to=usd`);
+        if (res.ok) {
+          const data = await res.json();
+          setEstimatedUsdt(parseFloat(data.estimated_amount) || null);
+        } else {
+          setEstimatedUsdt(null);
+        }
+      } catch {
+        setEstimatedUsdt(null);
+      } finally {
+        setIsFetchingEstimate(false);
+      }
+    }, 600);
+    return () => { if (estimateDebounceRef.current) clearTimeout(estimateDebounceRef.current); };
+  }, [cryptoAmtNum, cryptoPayCurrency, depositMode]);
+
+  // Fees and net are calculated on the USDT equivalent
+  const cryptoFee = (estimatedUsdt ?? 0) * (cryptoFeePercent / 100);
+  const cryptoNet = (estimatedUsdt ?? 0) - cryptoFee;
 
   return (
     <DashboardLayout>
@@ -680,7 +712,7 @@ export default function DepositPage() {
                     <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Montant</label>
                     <div className="flex rounded-xl border border-border overflow-hidden focus-within:ring-2 focus-within:ring-primary/40">
                       <span className="flex items-center px-3 bg-muted border-r border-border text-sm font-bold text-muted-foreground shrink-0 whitespace-nowrap">
-                        USDT
+                        {selectedCryptoNetwork?.label || "USDT"}
                       </span>
                       <input
                         type="number"
@@ -702,7 +734,7 @@ export default function DepositPage() {
                           onClick={() => setCryptoAmountUsd(String(v))}
                           className="text-xs px-3 py-1.5 rounded-lg border border-border bg-muted/30 hover:bg-muted/60 font-semibold transition-all"
                         >
-                          {v} USDT
+                          {v} {selectedCryptoNetwork?.label || "TRX"}
                         </button>
                       ))}
                     </div>
@@ -712,7 +744,13 @@ export default function DepositPage() {
                     <div className="rounded-xl border border-border bg-muted/30 overflow-hidden">
                       <div className="px-4 py-3 flex items-center justify-between border-b border-border">
                         <span className="text-sm text-muted-foreground">Montant saisi</span>
-                        <span className="text-sm font-semibold tabular-nums">{cryptoAmtNum.toFixed(2)} USDT</span>
+                        <span className="text-sm font-semibold tabular-nums">{cryptoAmtNum.toFixed(6)} {selectedCryptoNetwork?.label || "USDT"}</span>
+                      </div>
+                      <div className="px-4 py-3 flex items-center justify-between border-b border-border">
+                        <span className="text-sm text-muted-foreground">≈ Équivalent USDT</span>
+                        <span className="text-sm font-semibold tabular-nums">
+                          {isFetchingEstimate ? <Loader2 className="w-3 h-3 animate-spin inline" /> : estimatedUsdt !== null ? `${estimatedUsdt.toFixed(2)} USDT` : "—"}
+                        </span>
                       </div>
                       <div className="px-4 py-3 flex items-center justify-between border-b border-border">
                         <span className="text-sm text-muted-foreground flex items-center gap-1.5">
@@ -728,7 +766,7 @@ export default function DepositPage() {
                     </div>
                   )}
 
-                  {cryptoAmtNum > 0 && cryptoMinDeposit && cryptoAmtNum < cryptoMinDeposit && (
+                  {cryptoAmtNum > 0 && cryptoMinDeposit && estimatedUsdt !== null && estimatedUsdt < cryptoMinDeposit && (
                     <p className="text-xs text-amber-500 font-medium text-center -mt-1">
                       {(() => {
                         const net = selectedCryptoNetwork;
@@ -741,7 +779,7 @@ export default function DepositPage() {
                   <Button
                     className="w-full h-12 rounded-xl font-bold"
                     size="lg"
-                    disabled={cryptoAmtNum < cryptoMinDeposit || cryptoDepositMutation.isPending}
+                    disabled={!estimatedUsdt || estimatedUsdt < cryptoMinDeposit || cryptoDepositMutation.isPending}
                     onClick={() => cryptoDepositMutation.mutate()}
                     data-testid="button-crypto-deposit"
                   >
