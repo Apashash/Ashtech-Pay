@@ -1319,17 +1319,16 @@ export default function PaymentPage() {
                           <SelectValue placeholder="Choisir un réseau" />
                         )}
                       </SelectTrigger>
-                      <SelectContent>
-                        {cryptoNetworkOptions.map(opt => (
-                          <SelectItem key={opt.ticker} value={opt.ticker}>
-                            <div className="flex items-center gap-2.5">
-                              <img src={opt.logoUrl} alt={opt.label} className="w-5 h-5 rounded-full shrink-0 object-contain bg-white" onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }} />
-                              <span className="font-semibold">{opt.label}</span>
-                              <span className="text-muted-foreground text-xs">· {opt.network}</span>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
+                      <SearchableSelectContent
+                        searchPlaceholder="Rechercher une devise…"
+                        emptyMessage="Aucune devise trouvée"
+                        options={cryptoNetworkOptions.map(opt => ({
+                          value: opt.ticker,
+                          label: opt.label,
+                          sub: opt.network,
+                          iconUrl: opt.logoUrl,
+                        }))}
+                      />
                     </Select>
                   </div>
                 )}
@@ -1369,17 +1368,16 @@ export default function PaymentPage() {
                         <SelectValue placeholder="Choisir un réseau" />
                       )}
                     </SelectTrigger>
-                    <SelectContent>
-                      {cryptoNetworkOptions.map(opt => (
-                        <SelectItem key={opt.ticker} value={opt.ticker}>
-                          <div className="flex items-center gap-2.5">
-                            <img src={opt.logoUrl} alt={opt.label} className="w-5 h-5 rounded-full shrink-0 object-contain bg-white" onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }} />
-                            <span className="font-semibold">{opt.label}</span>
-                            <span className="text-muted-foreground text-xs">· {opt.network}</span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
+                    <SearchableSelectContent
+                      searchPlaceholder="Rechercher une devise…"
+                      emptyMessage="Aucune devise trouvée"
+                      options={cryptoNetworkOptions.map(opt => ({
+                        value: opt.ticker,
+                        label: opt.label,
+                        sub: opt.network,
+                        iconUrl: opt.logoUrl,
+                      }))}
+                    />
                   </Select>
                 </div>
                 <div className="space-y-2">

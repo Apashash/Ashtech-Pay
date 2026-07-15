@@ -9,6 +9,7 @@ export interface SelectOption {
   flag?: string;
   sub?: string;
   testId?: string;
+  iconUrl?: string;
 }
 
 interface SearchableSelectContentProps {
@@ -78,9 +79,17 @@ export function SearchableSelectContent({
           filtered.map(o => (
             <SelectItem key={o.value} value={o.value} data-testid={o.testId}>
               <span className="flex items-center gap-2">
+                {o.iconUrl && (
+                  <img
+                    src={o.iconUrl}
+                    alt={o.label}
+                    className="w-5 h-5 rounded-full shrink-0 object-contain bg-white"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }}
+                  />
+                )}
                 {o.flag && <span>{o.flag}</span>}
-                <span>{o.label}</span>
-                {o.sub && <span className="text-muted-foreground text-xs">({o.sub})</span>}
+                <span className="font-semibold">{o.label}</span>
+                {o.sub && <span className="text-muted-foreground text-xs">· {o.sub}</span>}
               </span>
             </SelectItem>
           ))
