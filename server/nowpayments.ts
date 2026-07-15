@@ -161,35 +161,56 @@ export interface NowPaymentsCurrencyOption {
 // listed here still shows up (uppercased) so new networks NowPayments adds
 // are never hidden from the picker.
 const NOWPAYMENTS_TICKER_LABELS: Record<string, { label: string; network: string }> = {
-  usdttrc20: { label: "USDT", network: "Tron (TRC20)" },
-  usdterc20: { label: "USDT", network: "Ethereum (ERC20)" },
-  usdtbsc: { label: "USDT", network: "BNB Smart Chain (BEP20)" },
-  usdtsol: { label: "USDT", network: "Solana" },
-  usdtmatic: { label: "USDT", network: "Polygon" },
-  usdtton: { label: "USDT", network: "TON" },
-  usdcerc20: { label: "USDC", network: "Ethereum (ERC20)" },
-  usdcbsc: { label: "USDC", network: "BNB Smart Chain (BEP20)" },
-  usdcmatic: { label: "USDC", network: "Polygon" },
-  usdcsol: { label: "USDC", network: "Solana" },
-  btc: { label: "BTC", network: "Bitcoin" },
-  eth: { label: "ETH", network: "Ethereum" },
-  bnbbsc: { label: "BNB", network: "BNB Smart Chain" },
-  bnbmainnet: { label: "BNB", network: "BNB Chain" },
-  trx: { label: "TRX", network: "Tron" },
-  ltc: { label: "LTC", network: "Litecoin" },
-  doge: { label: "DOGE", network: "Dogecoin" },
-  sol: { label: "SOL", network: "Solana" },
-  ton: { label: "TON", network: "TON" },
-  matic: { label: "MATIC", network: "Polygon" },
-  xrp: { label: "XRP", network: "Ripple" },
-  ada: { label: "ADA", network: "Cardano" },
-  dot: { label: "DOT", network: "Polkadot" },
-  shib: { label: "SHIB", network: "Ethereum" },
-  usdc: { label: "USDC", network: "Ethereum (ERC20)" },
-  busd: { label: "BUSD", network: "BNB Smart Chain (BEP20)" },
-  busdbsc: { label: "BUSD", network: "BNB Smart Chain (BEP20)" },
-  busdmatic: { label: "BUSD", network: "Polygon" },
+  // ── USDT variants ───────────────────────────────────────────────────────────
+  usdttrc20:  { label: "USDT", network: "Tron (TRC20)" },
+  usdterc20:  { label: "USDT", network: "Ethereum (ERC20)" },
+  usdtbsc:    { label: "USDT", network: "BNB Smart Chain (BEP20)" },
+  usdtsol:    { label: "USDT", network: "Solana" },
+  usdtmatic:  { label: "USDT", network: "Polygon" },
+  usdtton:    { label: "USDT", network: "TON" },
+  usdtarb:    { label: "USDT", network: "Arbitrum" },
+  usdtarc20:  { label: "USDT", network: "Avalanche (C-Chain)" },
+  usdtcelo:   { label: "USDT", network: "Celo" },
+  usdtkava:   { label: "USDT", network: "Kava" },
+  usdtop:     { label: "USDT", network: "Optimism" },
+  // ── USDC variants ───────────────────────────────────────────────────────────
+  usdc:       { label: "USDC", network: "Ethereum (ERC20)" },
+  usdcerc20:  { label: "USDC", network: "Ethereum (ERC20)" },
+  usdcbsc:    { label: "USDC", network: "BNB Smart Chain (BEP20)" },
+  usdcmatic:  { label: "USDC", network: "Polygon" },
+  usdcsol:    { label: "USDC", network: "Solana" },
+  usdcalgo:   { label: "USDC", network: "Algorand" },
+  usdcarb:    { label: "USDC", network: "Arbitrum" },
+  usdcarc20:  { label: "USDC", network: "Avalanche (C-Chain)" },
+  usdcbase:   { label: "USDC", network: "Base" },
+  usdcop:     { label: "USDC", network: "Optimism" },
+  // ── DAI / BUSD ──────────────────────────────────────────────────────────────
+  dai:        { label: "DAI",  network: "Ethereum" },
+  busdbsc:    { label: "BUSD", network: "BNB Smart Chain (BEP20)" },
+  // ── Non-stablecoins ─────────────────────────────────────────────────────────
+  btc:        { label: "BTC",  network: "Bitcoin" },
+  eth:        { label: "ETH",  network: "Ethereum" },
+  bnbbsc:     { label: "BNB",  network: "BNB Smart Chain" },
+  bnbmainnet: { label: "BNB",  network: "BNB Chain" },
+  trx:        { label: "TRX",  network: "Tron" },
+  ltc:        { label: "LTC",  network: "Litecoin" },
+  doge:       { label: "DOGE", network: "Dogecoin" },
+  sol:        { label: "SOL",  network: "Solana" },
+  ton:        { label: "TON",  network: "TON" },
+  matic:      { label: "MATIC", network: "Polygon" },
+  xrp:        { label: "XRP",  network: "Ripple" },
+  ada:        { label: "ADA",  network: "Cardano" },
+  shib:       { label: "SHIB", network: "Ethereum" },
 };
+
+// Tickers confirmed broken on NowPayments: estimate API returns ERR (no swap route
+// to USDT TRC20) or min-amount returns null. Exclude from the currency picker.
+const BROKEN_TICKERS = new Set([
+  "busd", "busdmatic",        // BUSD variants with no swap route
+  "dot",                       // Polkadot — no USDT swap route
+  "usdtalgo", "usdtdot", "usdteos", "usdtnear", "usdtxtz", // USDT chains with no route
+  "usdckcc", "usdcxlm",       // USDC chains with no route
+]);
 
 // Maps a ticker to the base coin symbol used to look up a logo image. Most
 // tickers are "<coin><network suffix>" (e.g. usdtbsc -> usdt); this table
@@ -241,13 +262,15 @@ export function isStableTicker(ticker: string): boolean {
 // Tickers allowed for deposit/payment beyond stablecoins.
 // For these, NowPayments receives price_currency="usd" and handles
 // the crypto conversion internally; the IPN credits price_amount (USD).
+// Note: "dot" removed — confirmed broken (no USDT swap route on NowPayments).
 const SUPPORTED_NON_STABLE_TICKERS = new Set([
   "trx", "ton", "btc", "eth", "ltc", "sol", "xrp", "doge",
-  "bnbbsc", "bnbmainnet", "matic", "ada", "dot", "shib",
+  "bnbbsc", "bnbmainnet", "matic", "ada", "shib",
 ]);
 
 export function isSupportedCrypto(ticker: string): boolean {
   const t = ticker.toLowerCase();
+  if (BROKEN_TICKERS.has(t)) return false;
   return isStableTicker(t) || SUPPORTED_NON_STABLE_TICKERS.has(t);
 }
 
