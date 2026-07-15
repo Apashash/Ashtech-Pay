@@ -232,12 +232,23 @@ function buildCurrencyOption(rawTicker: string): NowPaymentsCurrencyOption {
 // Ledger crediting only ever records "USDT" (1:1 parity). We can only trust
 // that parity for USD-pegged stablecoins — for a floating asset (BTC, ETH, ...)
 // the amount NowPayments reports as "actually_paid" is denominated in that
-// coin, not USD, and crediting it 1:1 as USDT would wildly over/under-credit
-// the user. So the selectable list (and the server-side allowlist below) is
-// restricted to stablecoin tickers until real-time conversion is added.
+// coin, not USD, so we must use price_amount (USD) for crediting instead.
 export function isStableTicker(ticker: string): boolean {
   const t = ticker.toLowerCase();
   return t.startsWith("usdt") || t.startsWith("usdc") || t === "dai" || t.startsWith("busd");
+}
+
+// Tickers allowed for deposit/payment beyond stablecoins.
+// For these, NowPayments receives price_currency="usd" and handles
+// the crypto conversion internally; the IPN credits price_amount (USD).
+const SUPPORTED_NON_STABLE_TICKERS = new Set([
+  "trx", "ton", "btc", "eth", "ltc", "sol", "xrp", "doge",
+  "bnbbsc", "bnbmainnet", "matic", "ada", "dot", "shib",
+]);
+
+export function isSupportedCrypto(ticker: string): boolean {
+  const t = ticker.toLowerCase();
+  return isStableTicker(t) || SUPPORTED_NON_STABLE_TICKERS.has(t);
 }
 
 // Extracts a flat list of ticker strings from whatever shape NowPayments
@@ -311,7 +322,7 @@ export async function getNowPaymentsCurrencies(): Promise<NowPaymentsCurrencyOpt
       const res = await fetch(url, { headers: { "x-api-key": NOWPAYMENTS_API_KEY } });
       if (!res.ok) continue;
       const json = await res.json();
-      const tickers = extractTickers(json).filter(isStableTicker);
+      const tickers = extractTickers(json).filter(isSupportedCrypto);
       if (tickers.length > 0) {
         const options = tickers.map(buildCurrencyOption).sort((a, b) => a.label.localeCompare(b.label));
         currenciesCache = { at: Date.now(), data: options };
