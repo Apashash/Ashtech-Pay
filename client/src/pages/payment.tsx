@@ -118,7 +118,8 @@ export default function PaymentPage() {
   const { data: minAmountData } = useQuery<{ min_amount: number }>({
     queryKey: ["/api/nowpayments/min-amount", cryptoPayCurrency],
     queryFn: async () => {
-      const res = await fetch(`/api/nowpayments/min-amount?currency_from=usd&currency_to=${cryptoPayCurrency}`);
+      // currency_from=ticker gives minimum in the chosen crypto (not in USD)
+      const res = await fetch(`/api/nowpayments/min-amount?currency_from=${cryptoPayCurrency}&currency_to=usdttrc20`);
       if (!res.ok) throw new Error("Indisponible");
       return res.json();
     },
@@ -274,11 +275,11 @@ export default function PaymentPage() {
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = p.errEmailInvalid;
     if (!paymentLink?.isFixedAmount && (!customAmount || parseFloat(customAmount) <= 0)) newErrors.amount = p.errAmount;
     if (!paymentLink?.isFixedAmount && paymentMethod === "crypto" && customAmount && parseFloat(customAmount) > 0) {
-      // estimatedCryptoAmount is now the USDT equivalent; compare against USD minimum
-      if (estimatedCryptoAmount === null || estimatedCryptoAmount < cryptoMinDeposit) {
+      // cryptoMinDeposit is now in the chosen crypto (TRX, BTC…), compare directly
+      if (parseFloat(customAmount) < cryptoMinDeposit) {
         const net = selectedCryptoNetwork;
         const networkSuffix = net && net.network && net.network !== net.label ? ` (${net.network})` : "";
-        newErrors.amount = `Minimum ${parseFloat(cryptoMinDeposit.toFixed(2))} $ pour ${net?.label || "ce réseau"}${networkSuffix}`;
+        newErrors.amount = `Minimum ${parseFloat(cryptoMinDeposit.toFixed(6)).replace(/\.?0+$/, "")} ${net?.label || "crypto"}${networkSuffix}`;
       }
     }
     if (!paymentMethod) newErrors.paymentMethod = p.errPaymentMethod;
@@ -313,10 +314,10 @@ export default function PaymentPage() {
       else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = p.errEmailInvalid;
       if (!paymentLink?.isFixedAmount && (!customAmount || parseFloat(customAmount) <= 0)) newErrors.amount = p.errAmount;
       if (!paymentLink?.isFixedAmount && paymentMethod === "crypto" && customAmount && parseFloat(customAmount) > 0) {
-        if (estimatedCryptoAmount === null || estimatedCryptoAmount < cryptoMinDeposit) {
+        if (parseFloat(customAmount) < cryptoMinDeposit) {
           const net = selectedCryptoNetwork;
           const networkSuffix = net && net.network && net.network !== net.label ? ` (${net.network})` : "";
-          newErrors.amount = `Minimum ${parseFloat(cryptoMinDeposit.toFixed(2))} $ pour ${net?.label || "ce réseau"}${networkSuffix}`;
+          newErrors.amount = `Minimum ${parseFloat(cryptoMinDeposit.toFixed(6)).replace(/\.?0+$/, "")} ${net?.label || "crypto"}${networkSuffix}`;
         }
       }
       if (!paymentMethod) newErrors.paymentMethod = p.errPaymentMethod;

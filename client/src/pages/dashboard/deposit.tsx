@@ -306,7 +306,10 @@ export default function DepositPage() {
       const amt = parseFloat(cryptoAmountUsd);
       if (!amt || amt <= 0) throw new Error("Entrez un montant valide");
       if (!estimatedUsdt || estimatedUsdt <= 0) throw new Error("Conversion en cours, veuillez patienter");
-      if (cryptoMinDeposit && estimatedUsdt < cryptoMinDeposit) throw new Error(`Le dépôt minimum est de ${cryptoMinDeposit} $ pour ce réseau`);
+      if (cryptoMinDeposit && amt < cryptoMinDeposit) {
+        const ticker = selectedCryptoNetwork?.label || "crypto";
+        throw new Error(`Le dépôt minimum est de ${parseFloat(cryptoMinDeposit.toFixed(6)).replace(/\.?0+$/, "")} ${ticker}`);
+      }
       const res = await apiRequest("POST", "/api/deposits/crypto", { amountUsd: estimatedUsdt.toFixed(6), payCurrency: cryptoPayCurrency });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Erreur lors du dépôt crypto");
@@ -418,7 +421,8 @@ export default function DepositPage() {
   const { data: minAmountData } = useQuery<{ min_amount: number }>({
     queryKey: ["/api/nowpayments/min-amount", cryptoPayCurrency],
     queryFn: async () => {
-      const res = await fetch(`/api/nowpayments/min-amount?currency_from=usd&currency_to=${cryptoPayCurrency}`);
+      // currency_from=ticker gives minimum in the chosen crypto (not in USD)
+      const res = await fetch(`/api/nowpayments/min-amount?currency_from=${cryptoPayCurrency}&currency_to=usdttrc20`);
       if (!res.ok) throw new Error("Indisponible");
       return res.json();
     },
@@ -766,12 +770,12 @@ export default function DepositPage() {
                     </div>
                   )}
 
-                  {cryptoAmtNum > 0 && cryptoMinDeposit && estimatedUsdt !== null && estimatedUsdt < cryptoMinDeposit && (
+                  {cryptoAmtNum > 0 && cryptoMinDeposit && cryptoAmtNum < cryptoMinDeposit && (
                     <p className="text-xs text-amber-500 font-medium text-center -mt-1">
                       {(() => {
                         const net = selectedCryptoNetwork;
                         const suffix = net && net.network && net.network !== net.label ? ` (${net.network})` : "";
-                        return `⚠️ Minimum ${parseFloat(cryptoMinDeposit.toFixed(2))} $ pour ${net?.label || "ce réseau"}${suffix}`;
+                        return `⚠️ Minimum ${parseFloat(cryptoMinDeposit.toFixed(6)).replace(/\.?0+$/, "")} ${net?.label || "crypto"}${suffix}`;
                       })()}
                     </p>
                   )}
@@ -779,7 +783,7 @@ export default function DepositPage() {
                   <Button
                     className="w-full h-12 rounded-xl font-bold"
                     size="lg"
-                    disabled={!estimatedUsdt || estimatedUsdt < cryptoMinDeposit || cryptoDepositMutation.isPending}
+                    disabled={!cryptoAmtNum || cryptoAmtNum < cryptoMinDeposit || !estimatedUsdt || cryptoDepositMutation.isPending}
                     onClick={() => cryptoDepositMutation.mutate()}
                     data-testid="button-crypto-deposit"
                   >
