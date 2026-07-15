@@ -1376,7 +1376,7 @@ export default function PaymentPage() {
                   <Label htmlFor="amount">{p.amountToPay} *</Label>
                   <div className={`flex rounded-xl border overflow-hidden focus-within:ring-2 focus-within:ring-primary/40 ${errors.amount ? "border-red-500" : "border-border"}`}>
                     <span className="flex items-center px-3 bg-muted border-r border-border text-sm font-bold text-muted-foreground shrink-0 whitespace-nowrap">
-                      {selectedCryptoNetwork?.label || "USDT"}
+                      USDT
                     </span>
                     <Input
                       id="amount"
@@ -1498,7 +1498,7 @@ export default function PaymentPage() {
                 <span className="font-medium text-foreground">{p.totalAmount}</span>
                 <span className="text-2xl font-bold text-primary" data-testid="text-payment-amount">
                   {paymentMethod === "crypto" && !paymentLink.isFixedAmount
-                    ? `${parseFloat(customAmount || "0").toFixed(2)} ${selectedCryptoNetwork?.label || "USDT"}`
+                    ? `${parseFloat(customAmount || "0").toFixed(2)} USDT`
                     : formatAmount(paymentLink.isFixedAmount ? convertedDisplayAmount : displayAmount, selectedDisplayCurrency)
                   }
                 </span>
