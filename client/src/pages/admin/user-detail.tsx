@@ -371,16 +371,7 @@ export default function AdminUserDetail() {
   });
 
   const impersonateMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch(`/api/admin/users/${id}/impersonate`, {
-        method: "POST",
-        credentials: "include",
-        headers: getAuthHeaders(),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.message || "Erreur");
-      return json;
-    },
+    mutationFn: async () => apiRequest("POST", `/api/admin/users/${id}/impersonate`),
     onSuccess: (data) => {
       sessionStorage.setItem("impersonatedBy", data.adminId || "admin");
       sessionStorage.setItem("impersonatedUsername", data.username);
