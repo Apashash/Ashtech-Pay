@@ -305,7 +305,7 @@ export default function DepositPage() {
     mutationFn: async () => {
       const amt = parseFloat(cryptoAmountUsd);
       if (!amt || amt <= 0) throw new Error("Entrez un montant valide");
-      if (amt < 11) throw new Error("Le dépôt minimum est de 11 $");
+      if (cryptoMinDeposit && amt < cryptoMinDeposit) throw new Error(`Le dépôt minimum est de ${cryptoMinDeposit} $ pour ce réseau`);
       const res = await apiRequest("POST", "/api/deposits/crypto", { amountUsd: cryptoAmountUsd, payCurrency: cryptoPayCurrency });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Erreur lors du dépôt crypto");
@@ -413,7 +413,18 @@ export default function DepositPage() {
     queryKey: ["/api/public/fee-settings"],
   });
   const cryptoFeePercent = feeSettings?.cryptoFeePercent ?? 2.5;
-  const cryptoMinDeposit = feeSettings?.cryptoMinDeposit ?? 11;
+
+  const { data: minAmountData } = useQuery<{ min_amount: number }>({
+    queryKey: ["/api/nowpayments/min-amount", cryptoPayCurrency],
+    queryFn: async () => {
+      const res = await fetch(`/api/nowpayments/min-amount?currency_from=usd&currency_to=${cryptoPayCurrency}`);
+      if (!res.ok) throw new Error("Indisponible");
+      return res.json();
+    },
+    enabled: depositMode === "crypto" && !!cryptoPayCurrency,
+    staleTime: 5 * 60 * 1000,
+  });
+  const cryptoMinDeposit = minAmountData?.min_amount ?? feeSettings?.cryptoMinDeposit ?? 1;
 
   const cryptoAmtNum = parseFloat(cryptoAmountUsd) || 0;
   const cryptoFee = cryptoAmtNum * (cryptoFeePercent / 100);
@@ -715,9 +726,9 @@ export default function DepositPage() {
                     </div>
                   )}
 
-                  {cryptoAmtNum > 0 && cryptoAmtNum < cryptoMinDeposit && (
+                  {cryptoAmtNum > 0 && cryptoMinDeposit && cryptoAmtNum < cryptoMinDeposit && (
                     <p className="text-xs text-amber-500 font-medium text-center -mt-1">
-                      ⚠️ Le dépôt minimum est de {cryptoMinDeposit} $
+                      ⚠️ Minimum {cryptoMinDeposit} $ pour {selectedCryptoNetwork?.label || "ce réseau"} ({selectedCryptoNetwork?.network})
                     </p>
                   )}
 

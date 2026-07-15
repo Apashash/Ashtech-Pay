@@ -64,7 +64,7 @@ import { uploadToSupabase, getSignedImageUrl, downloadFromSupabase } from "./sup
 import { decryptField } from "./fieldEncryption";
 import { requireAdminPin } from "./adminPin";
 import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, fetchPaymentLinkDetails, ASHTECH_MARGIN } from "./swychr";
-import { createNowPaymentsInvoice, createNowPaymentsPayment, verifyNowPaymentsIpn, mapNowPaymentsStatus, getNowPaymentsCurrencies, isStableTicker, getEstimatedPrice } from "./nowpayments";
+import { createNowPaymentsInvoice, createNowPaymentsPayment, verifyNowPaymentsIpn, mapNowPaymentsStatus, getNowPaymentsCurrencies, isStableTicker, getEstimatedPrice, getMinAmount } from "./nowpayments";
 import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, getAfribaPayOtpInfo, confirmAfribaPayOtp, isAfribaPayOtpRequiredMessage } from "./afribapay";
 import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, initiatePixPayPayout, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType, getPixPayServiceId, PIXPAY_OTP_USSD_CODES } from "./pixpay";
 import { addPendingPayment, removePendingPayment } from "./paymentPoller";
@@ -12427,6 +12427,22 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("[NowPayments IPN] Error:", error);
       res.status(500).json({ message: "Internal error" });
+    }
+  });
+
+  // ── NowPayments: minimum payment amount per network (public) ─────────────────
+  app.get("/api/nowpayments/min-amount", async (req, res) => {
+    try {
+      const { currency_from = "usd", currency_to } = req.query;
+      if (!currency_to) return res.status(400).json({ message: "currency_to requis" });
+      const min = await getMinAmount(
+        (currency_from as string).toLowerCase(),
+        (currency_to as string).toLowerCase()
+      );
+      if (min === null) return res.status(503).json({ message: "Indisponible" });
+      res.json({ min_amount: min, currency_from, currency_to });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
     }
   });
 

@@ -114,7 +114,18 @@ export default function PaymentPage() {
   const { data: feeSettings } = useQuery<{ cryptoMinDeposit: number }>({
     queryKey: ["/api/fee-settings"],
   });
-  const cryptoMinDeposit = feeSettings?.cryptoMinDeposit ?? 11;
+
+  const { data: minAmountData } = useQuery<{ min_amount: number }>({
+    queryKey: ["/api/nowpayments/min-amount", cryptoPayCurrency],
+    queryFn: async () => {
+      const res = await fetch(`/api/nowpayments/min-amount?currency_from=usd&currency_to=${cryptoPayCurrency}`);
+      if (!res.ok) throw new Error("Indisponible");
+      return res.json();
+    },
+    enabled: paymentMethod === "crypto" && !!cryptoPayCurrency,
+    staleTime: 5 * 60 * 1000,
+  });
+  const cryptoMinDeposit = minAmountData?.min_amount ?? feeSettings?.cryptoMinDeposit ?? 1;
 
   const { data: nowPaymentsCurrenciesData } = useQuery<{ currencies: { ticker: string; label: string; network: string; logoUrl: string }[] }>({
     queryKey: ["/api/nowpayments/currencies"],
@@ -262,7 +273,7 @@ export default function PaymentPage() {
     if (!email.trim()) newErrors.email = p.errEmail;
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = p.errEmailInvalid;
     if (!paymentLink?.isFixedAmount && (!customAmount || parseFloat(customAmount) <= 0)) newErrors.amount = p.errAmount;
-    if (!paymentLink?.isFixedAmount && paymentMethod === "crypto" && customAmount && parseFloat(customAmount) < cryptoMinDeposit) newErrors.amount = `${p.errAmountMin} ${cryptoMinDeposit} $`;
+    if (!paymentLink?.isFixedAmount && paymentMethod === "crypto" && customAmount && parseFloat(customAmount) < cryptoMinDeposit) newErrors.amount = `Minimum ${cryptoMinDeposit} $ pour ${selectedCryptoNetwork?.label || "ce réseau"} (${selectedCryptoNetwork?.network})`;
     if (!paymentMethod) newErrors.paymentMethod = p.errPaymentMethod;
     if (paymentMethod !== "crypto") {
       if (!country) newErrors.country = p.errCountry;
@@ -294,7 +305,7 @@ export default function PaymentPage() {
       if (!email.trim()) newErrors.email = p.errEmail;
       else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = p.errEmailInvalid;
       if (!paymentLink?.isFixedAmount && (!customAmount || parseFloat(customAmount) <= 0)) newErrors.amount = p.errAmount;
-      if (!paymentLink?.isFixedAmount && paymentMethod === "crypto" && customAmount && parseFloat(customAmount) < cryptoMinDeposit) newErrors.amount = `${p.errAmountMin} ${cryptoMinDeposit} $`;
+      if (!paymentLink?.isFixedAmount && paymentMethod === "crypto" && customAmount && parseFloat(customAmount) < cryptoMinDeposit) newErrors.amount = `Minimum ${cryptoMinDeposit} $ pour ${selectedCryptoNetwork?.label || "ce réseau"} (${selectedCryptoNetwork?.network})`;
       if (!paymentMethod) newErrors.paymentMethod = p.errPaymentMethod;
       if (paymentMethod !== "crypto") {
         if (!country) newErrors.country = p.errCountry;
