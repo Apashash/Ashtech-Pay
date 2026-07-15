@@ -72,22 +72,30 @@ import { useLanguage } from "@/lib/language";
 import { LanguageSwitcher } from "@/components/language-switcher";
 
 const MENU_URLS = [
-  { key: "dashboard", url: "/dashboard", icon: LayoutDashboard },
-  { key: "links", url: "/dashboard/links", icon: Link2 },
-  { key: "transactions", url: "/dashboard/transactions", icon: History },
-  { key: "deposit", url: "/dashboard/deposit", icon: CreditCard },
-  { key: "withdraw", url: "/dashboard/withdraw", icon: Wallet },
-  { key: "send", url: "/dashboard/send", icon: Send },
-  { key: "wallets", url: "/dashboard/wallets", icon: Coins },
+  { key: "dashboard", url: "/dashboard", icon: LayoutDashboard, color: "bg-primary/10 text-primary" },
+  { key: "links", url: "/dashboard/links", icon: Link2, color: "bg-blue-500/10 text-blue-500" },
+  { key: "transactions", url: "/dashboard/transactions", icon: History, color: "bg-purple-500/10 text-purple-500" },
+  { key: "deposit", url: "/dashboard/deposit", icon: CreditCard, color: "bg-green-500/10 text-green-500" },
+  { key: "withdraw", url: "/dashboard/withdraw", icon: Wallet, color: "bg-orange-500/10 text-orange-500" },
+  { key: "send", url: "/dashboard/send", icon: Send, color: "bg-sky-500/10 text-sky-500" },
+  { key: "wallets", url: "/dashboard/wallets", icon: Coins, color: "bg-teal-500/10 text-teal-500" },
 ] as const;
 
 const SETTINGS_URLS = [
-  { key: "kyc", url: "/dashboard/kyc", icon: Shield },
-  { key: "support", url: "/dashboard/support", icon: Headphones },
-  { key: "apiKeys", url: "/dashboard/api-keys", icon: Key },
-  { key: "settings", url: "/dashboard/settings", icon: Settings },
-  { key: "fees", url: "/dashboard/fee-details", icon: Receipt },
+  { key: "kyc", url: "/dashboard/kyc", icon: Shield, color: "bg-green-500/10 text-green-500" },
+  { key: "support", url: "/dashboard/support", icon: Headphones, color: "bg-blue-500/10 text-blue-500" },
+  { key: "apiKeys", url: "/dashboard/api-keys", icon: Key, color: "bg-purple-500/10 text-purple-500" },
+  { key: "settings", url: "/dashboard/settings", icon: Settings, color: "bg-slate-500/10 text-slate-500" },
+  { key: "fees", url: "/dashboard/fee-details", icon: Receipt, color: "bg-amber-500/10 text-amber-500" },
 ] as const;
+
+function SidebarIconBadge({ icon: Icon, color, className = "" }: { icon: React.ComponentType<{ className?: string }>; color: string; className?: string }) {
+  return (
+    <span className={`flex items-center justify-center w-7 h-7 rounded-lg shrink-0 ${color} ${className}`}>
+      <Icon className="w-4 h-4" />
+    </span>
+  );
+}
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
@@ -115,8 +123,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     });
   }, [setLocation]);
 
-  const menuItems = MENU_URLS.map(item => ({ title: t.sidebar[item.key], url: item.url, icon: item.icon }));
-  const settingsItems = SETTINGS_URLS.map(item => ({ title: t.sidebar[item.key], url: item.url, icon: item.icon }));
+  const menuItems = MENU_URLS.map(item => ({ title: t.sidebar[item.key], url: item.url, icon: item.icon, color: item.color }));
+  const settingsItems = SETTINGS_URLS.map(item => ({ title: t.sidebar[item.key], url: item.url, icon: item.icon, color: item.color }));
 
   const { data: user, isLoading } = useQuery<User>({
     queryKey: ["/api/user"],
@@ -311,8 +319,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           
           <SidebarContent>
             <SidebarGroup>
-              <div className="px-4 py-3 mx-2 my-2 bg-primary/10 rounded-lg border border-primary/20">
-                <p className="text-xs text-muted-foreground mb-1">{t.sidebar.availableBalance}</p>
+              <div className="px-4 py-3.5 mx-2 my-2 bg-gradient-to-br from-primary/15 to-primary/5 rounded-xl border border-primary/20 shadow-sm">
+                <p className="text-[11px] font-medium text-muted-foreground mb-1 uppercase tracking-wide">{t.sidebar.availableBalance}</p>
                 <p className="text-lg font-bold text-primary" data-testid="text-sidebar-balance">
                   {formatWalletBalance(sidebarBalance, preferredCurrency)}
                 </p>
@@ -320,14 +328,14 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             </SidebarGroup>
 
             <SidebarGroup>
-              <SidebarGroupLabel>{t.sidebar.mainMenu}</SidebarGroupLabel>
-              <SidebarGroupContent>
+              <SidebarGroupLabel className="px-4">{t.sidebar.mainMenu}</SidebarGroupLabel>
+              <SidebarGroupContent className="px-2">
                 <SidebarMenu>
                   {menuItems.map((item) => (
                     <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton asChild isActive={location === item.url}>
+                      <SidebarMenuButton asChild isActive={location === item.url} className="h-11 rounded-xl gap-3 group-data-[collapsible=icon]:h-9!">
                         <Link href={item.url}>
-                          <item.icon className="w-4 h-4" />
+                          <SidebarIconBadge icon={item.icon} color={item.color} />
                           <span>{item.title}</span>
                         </Link>
                       </SidebarMenuButton>
@@ -338,8 +346,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             </SidebarGroup>
 
             <SidebarGroup>
-              <SidebarGroupLabel>{t.sidebar.settingsSupport}</SidebarGroupLabel>
-              <SidebarGroupContent>
+              <SidebarGroupLabel className="px-4">{t.sidebar.settingsSupport}</SidebarGroupLabel>
+              <SidebarGroupContent className="px-2">
                 <SidebarMenu>
                   {settingsItems.map((item) => {
                     const badgeCount = item.url === "/dashboard/support" ? (ticketStats?.unreadCount || 0) : 0;
@@ -351,9 +359,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                           <SidebarMenuButton 
                             isActive={location === item.url}
                             onClick={handleKycClick}
-                            className="cursor-pointer"
+                            className="cursor-pointer h-11 rounded-xl gap-3 group-data-[collapsible=icon]:h-9!"
                           >
-                            <item.icon className="w-4 h-4" />
+                            <SidebarIconBadge icon={item.icon} color={item.color} />
                             <span className="flex-1">{item.title}</span>
                             <Badge className="ml-auto bg-green-500 text-white h-5 px-1.5 text-xs">
                               {t.sidebar.verified}
@@ -366,9 +374,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                     if (isKyc && user?.kycStatus !== "approved" && user?.kycStatus !== "verified") {
                       return (
                         <SidebarMenuItem key={item.title}>
-                          <SidebarMenuButton asChild isActive={location === item.url}>
+                          <SidebarMenuButton asChild isActive={location === item.url} className="h-11 rounded-xl gap-3 group-data-[collapsible=icon]:h-9!">
                             <Link href={item.url}>
-                              <item.icon className="w-4 h-4 animate-bell-ring text-red-500" />
+                              <SidebarIconBadge icon={item.icon} color="bg-red-500/10 text-red-500" className="animate-bell-ring" />
                               <span className="flex-1 text-red-500 font-semibold">{item.title}</span>
                               <span className="relative ml-auto flex h-2 w-2">
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
@@ -382,9 +390,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                     
                     return (
                       <SidebarMenuItem key={item.title}>
-                        <SidebarMenuButton asChild isActive={location === item.url}>
+                        <SidebarMenuButton asChild isActive={location === item.url} className="h-11 rounded-xl gap-3 group-data-[collapsible=icon]:h-9!">
                           <Link href={item.url}>
-                            <item.icon className="w-4 h-4" />
+                            <SidebarIconBadge icon={item.icon} color={item.color} />
                             <span className="flex-1">{item.title}</span>
                             {badgeCount > 0 && (
                               <Badge className="ml-auto bg-red-500 text-white h-5 min-w-5 px-1.5 text-xs">
@@ -402,23 +410,23 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
           </SidebarContent>
 
-          <SidebarFooter className="p-4 border-t border-sidebar-border">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+          <SidebarFooter className="p-3 border-t border-sidebar-border">
+            <div className="flex items-center gap-3 mb-2 px-2 py-2 rounded-xl hover:bg-sidebar-accent/60 transition-colors">
+              <div className="w-10 h-10 rounded-full bg-primary/15 border border-primary/20 flex items-center justify-center shrink-0">
                 <UserIcon className="w-5 h-5 text-primary" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-sidebar-foreground truncate">{user.fullName}</p>
+                <p className="text-sm font-semibold text-sidebar-foreground truncate">{user.fullName}</p>
                 <p className="text-xs text-muted-foreground truncate">{user.email}</p>
               </div>
             </div>
             <Button 
               variant="ghost" 
-              className="w-full justify-start" 
+              className="w-full justify-start h-10 rounded-xl gap-3 text-red-500 hover:text-red-500 hover:bg-red-500/10" 
               onClick={() => logoutMutation.mutate()}
               data-testid="button-logout"
             >
-              <LogOut className="w-4 h-4 mr-2" />
+              <SidebarIconBadge icon={LogOut} color="bg-red-500/10 text-red-500" />
               {t.sidebar.logout}
             </Button>
           </SidebarFooter>
