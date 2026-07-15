@@ -154,6 +154,7 @@ export interface NowPaymentsCurrencyOption {
   ticker: string;
   label: string;
   network: string;
+  logoUrl: string;
 }
 
 // Friendly labels for the most common NowPayments tickers. Any ticker not
@@ -184,7 +185,38 @@ const NOWPAYMENTS_TICKER_LABELS: Record<string, { label: string; network: string
   ada: { label: "ADA", network: "Cardano" },
   dot: { label: "DOT", network: "Polkadot" },
   shib: { label: "SHIB", network: "Ethereum" },
+  usdc: { label: "USDC", network: "Ethereum (ERC20)" },
+  busd: { label: "BUSD", network: "BNB Smart Chain (BEP20)" },
+  busdbsc: { label: "BUSD", network: "BNB Smart Chain (BEP20)" },
+  busdmatic: { label: "BUSD", network: "Polygon" },
 };
+
+// Maps a ticker to the base coin symbol used to look up a logo image. Most
+// tickers are "<coin><network suffix>" (e.g. usdtbsc -> usdt); this table
+// only needs entries where that simple prefix guess would be wrong.
+const TICKER_LOGO_SYMBOL: Record<string, string> = {
+  bnbbsc: "bnb",
+  bnbmainnet: "bnb",
+};
+
+// Two CDNs cover the full set: jsdelivr mirrors the spothq/cryptocurrency-icons
+// svg set (most coins), coincap has a few this set is missing (busd, ton, shib).
+const COINCAP_LOGO_SYMBOLS = new Set(["busd", "ton", "shib"]);
+
+function getLogoUrl(baseSymbol: string): string {
+  if (COINCAP_LOGO_SYMBOLS.has(baseSymbol)) {
+    return `https://assets.coincap.io/assets/icons/${baseSymbol}@2x.png`;
+  }
+  return `https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/svg/color/${baseSymbol}.svg`;
+}
+
+function getBaseLogoSymbol(ticker: string): string {
+  if (TICKER_LOGO_SYMBOL[ticker]) return TICKER_LOGO_SYMBOL[ticker];
+  // Strip a known network suffix so e.g. "usdttrc20" -> "usdt", "usdcmatic" -> "usdc".
+  const prefixMatch = ticker.match(/^(usdt|usdc|busd)/);
+  if (prefixMatch) return prefixMatch[1];
+  return ticker;
+}
 
 function buildCurrencyOption(rawTicker: string): NowPaymentsCurrencyOption {
   const ticker = rawTicker.toLowerCase();
@@ -193,6 +225,7 @@ function buildCurrencyOption(rawTicker: string): NowPaymentsCurrencyOption {
     ticker,
     label: known?.label || ticker.toUpperCase(),
     network: known?.network || ticker.toUpperCase(),
+    logoUrl: getLogoUrl(getBaseLogoSymbol(ticker)),
   };
 }
 

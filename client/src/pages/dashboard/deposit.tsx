@@ -401,7 +401,7 @@ export default function DepositPage() {
 
   const usdtWallet = wallets?.find(w => w.currency === "USDT");
 
-  const { data: nowPaymentsCurrenciesData } = useQuery<{ currencies: { ticker: string; label: string; network: string }[] }>({
+  const { data: nowPaymentsCurrenciesData } = useQuery<{ currencies: { ticker: string; label: string; network: string; logoUrl: string }[] }>({
     queryKey: ["/api/nowpayments/currencies"],
     enabled: depositMode === "crypto",
     staleTime: 5 * 60 * 1000,
@@ -645,11 +645,20 @@ export default function DepositPage() {
                           key={opt.ticker}
                           type="button"
                           onClick={() => setCryptoPayCurrency(opt.ticker)}
-                          className={`flex flex-col items-start gap-0.5 px-3 py-2.5 rounded-xl border-2 text-left transition-all ${cryptoPayCurrency === opt.ticker ? "border-primary bg-primary/5" : "border-border bg-background hover:border-primary/40"}`}
+                          className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border-2 text-left transition-all ${cryptoPayCurrency === opt.ticker ? "border-primary bg-primary/5" : "border-border bg-background hover:border-primary/40"}`}
                           data-testid={`button-crypto-network-${opt.ticker}`}
                         >
-                          <span className="text-sm font-bold text-foreground">{opt.label}</span>
-                          <span className="text-xs text-muted-foreground">{opt.network}</span>
+                          <img
+                            src={opt.logoUrl}
+                            alt={opt.label}
+                            className="w-7 h-7 rounded-full shrink-0 object-contain bg-white"
+                            loading="lazy"
+                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }}
+                          />
+                          <div className="flex flex-col items-start gap-0.5 min-w-0">
+                            <span className="text-sm font-bold text-foreground">{opt.label}</span>
+                            <span className="text-xs text-muted-foreground">{opt.network}</span>
+                          </div>
                         </button>
                       ))}
                     </div>
