@@ -308,7 +308,7 @@ export default function DepositPage() {
       if (!estimatedUsdt || estimatedUsdt <= 0) throw new Error("Conversion en cours, veuillez patienter");
       if (cryptoMinDeposit && amt < cryptoMinDeposit) {
         const ticker = selectedCryptoNetwork?.label || "crypto";
-        throw new Error(`Le dépôt minimum est de ${parseFloat(cryptoMinDeposit.toFixed(6)).replace(/\.?0+$/, "")} ${ticker}`);
+        throw new Error(`Le dépôt minimum est de ${cryptoMinDeposit.toFixed(6).replace(/\.?0+$/, "")} ${ticker}`);
       }
       const res = await apiRequest("POST", "/api/deposits/crypto", { amountUsd: estimatedUsdt.toFixed(6), payCurrency: cryptoPayCurrency });
       const data = await res.json();
@@ -775,7 +775,7 @@ export default function DepositPage() {
                       {(() => {
                         const net = selectedCryptoNetwork;
                         const suffix = net && net.network && net.network !== net.label ? ` (${net.network})` : "";
-                        return `⚠️ Minimum ${parseFloat(cryptoMinDeposit.toFixed(6)).replace(/\.?0+$/, "")} ${net?.label || "crypto"}${suffix}`;
+                        return `⚠️ Minimum ${cryptoMinDeposit.toFixed(6).replace(/\.?0+$/, "")} ${net?.label || "crypto"}${suffix}`;
                       })()}
                     </p>
                   )}

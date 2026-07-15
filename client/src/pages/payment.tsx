@@ -279,7 +279,7 @@ export default function PaymentPage() {
       if (parseFloat(customAmount) < cryptoMinDeposit) {
         const net = selectedCryptoNetwork;
         const networkSuffix = net && net.network && net.network !== net.label ? ` (${net.network})` : "";
-        newErrors.amount = `Minimum ${parseFloat(cryptoMinDeposit.toFixed(6)).replace(/\.?0+$/, "")} ${net?.label || "crypto"}${networkSuffix}`;
+        newErrors.amount = `Minimum ${cryptoMinDeposit.toFixed(6).replace(/\.?0+$/, "")} ${net?.label || "crypto"}${networkSuffix}`;
       }
     }
     if (!paymentMethod) newErrors.paymentMethod = p.errPaymentMethod;
@@ -317,7 +317,7 @@ export default function PaymentPage() {
         if (parseFloat(customAmount) < cryptoMinDeposit) {
           const net = selectedCryptoNetwork;
           const networkSuffix = net && net.network && net.network !== net.label ? ` (${net.network})` : "";
-          newErrors.amount = `Minimum ${parseFloat(cryptoMinDeposit.toFixed(6)).replace(/\.?0+$/, "")} ${net?.label || "crypto"}${networkSuffix}`;
+          newErrors.amount = `Minimum ${cryptoMinDeposit.toFixed(6).replace(/\.?0+$/, "")} ${net?.label || "crypto"}${networkSuffix}`;
         }
       }
       if (!paymentMethod) newErrors.paymentMethod = p.errPaymentMethod;
