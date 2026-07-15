@@ -136,27 +136,30 @@ export default function PaymentPage() {
     return customAmount ? parseFloat(customAmount) : 0;
   }, [paymentLink, customAmount]);
 
+  // exchangeRates[currency] = "XAF per 1 unit" (direct rate, e.g. CDF→0.2, USDT→620)
+  // amountInXAF  = displayAmount * rate   (multiply to convert currency → XAF)
+  // reverse      = amountInXAF  / rate    (divide  to convert XAF → currency)
   const amountInXAF = useMemo(() => {
     if (!paymentLink) return 0;
     if (paymentLink.isFixedAmount) {
       const linkRate = adminExchangeRates[linkCurrency] || 1;
-      return displayAmount / linkRate;
+      return displayAmount * linkRate;
     } else {
       const inputRate = adminExchangeRates[selectedDisplayCurrency] || 1;
-      return displayAmount / inputRate;
+      return displayAmount * inputRate;
     }
   }, [paymentLink, displayAmount, linkCurrency, selectedDisplayCurrency, adminExchangeRates]);
 
   const amountInLinkCurrency = useMemo(() => {
     if (paymentLink?.isFixedAmount) return displayAmount;
     const linkRate = adminExchangeRates[linkCurrency] || 1;
-    return amountInXAF * linkRate;
+    return amountInXAF / linkRate;
   }, [paymentLink, displayAmount, amountInXAF, linkCurrency, adminExchangeRates]);
 
   const convertedDisplayAmount = useMemo(() => {
     if (selectedDisplayCurrency === linkCurrency) return displayAmount;
     const targetRate = adminExchangeRates[selectedDisplayCurrency] || 1;
-    return amountInXAF * targetRate;
+    return amountInXAF / targetRate;
   }, [displayAmount, selectedDisplayCurrency, linkCurrency, amountInXAF, adminExchangeRates]);
 
   const operators = useMemo(() => selectedCountryData?.operators || [], [selectedCountryData]);
