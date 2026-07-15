@@ -638,6 +638,24 @@ export default function DepositPage() {
                   )}
 
                   <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Réseau de paiement</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {cryptoNetworkOptions.map(opt => (
+                        <button
+                          key={opt.ticker}
+                          type="button"
+                          onClick={() => setCryptoPayCurrency(opt.ticker)}
+                          className={`flex flex-col items-start gap-0.5 px-3 py-2.5 rounded-xl border-2 text-left transition-all ${cryptoPayCurrency === opt.ticker ? "border-primary bg-primary/5" : "border-border bg-background hover:border-primary/40"}`}
+                          data-testid={`button-crypto-network-${opt.ticker}`}
+                        >
+                          <span className="text-sm font-bold text-foreground">{opt.label}</span>
+                          <span className="text-xs text-muted-foreground">{opt.network}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
                     <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Montant (USDT)</label>
                     <div className="relative">
                       <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold text-sm">USDT</span>
@@ -662,24 +680,6 @@ export default function DepositPage() {
                           className="text-xs px-3 py-1.5 rounded-lg border border-border bg-muted/30 hover:bg-muted/60 font-semibold transition-all"
                         >
                           {v} USDT
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Réseau de paiement</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {cryptoNetworkOptions.map(opt => (
-                        <button
-                          key={opt.ticker}
-                          type="button"
-                          onClick={() => setCryptoPayCurrency(opt.ticker)}
-                          className={`flex flex-col items-start gap-0.5 px-3 py-2.5 rounded-xl border-2 text-left transition-all ${cryptoPayCurrency === opt.ticker ? "border-primary bg-primary/5" : "border-border bg-background hover:border-primary/40"}`}
-                          data-testid={`button-crypto-network-${opt.ticker}`}
-                        >
-                          <span className="text-sm font-bold text-foreground">{opt.label}</span>
-                          <span className="text-xs text-muted-foreground">{opt.network}</span>
                         </button>
                       ))}
                     </div>
