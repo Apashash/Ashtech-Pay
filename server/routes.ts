@@ -6862,6 +6862,14 @@ export async function registerRoutes(
         }
       });
 
+      // 4. XAF and all XAF/XOF sub-codes must always be 1 (not the USD-based 585 default).
+      // Semantic: "how many XAF = 1 unit of that currency" → XAF = 1 by definition.
+      // The ALL_FX_CURRENCIES defaultRate of 585 for XAF/XOF is a USD-pivot rate and
+      // must never bleed into this exchange-rate table, or link-currency conversion
+      // divides the amount by 585 instead of 1.
+      const XAF_FAMILY = ["XAF", "XAFC", "XAFG", "XOF", "XOFC", "XOFF", "XOFN", "XOFB", "XOFT", "XOFS", "XOFM"];
+      XAF_FAMILY.forEach(code => { exchangeRates[code] = 1; });
+
       res.json({ countries: config, exchangeRates });
     } catch (error) {
       console.error("Get public deposit config error:", error);
