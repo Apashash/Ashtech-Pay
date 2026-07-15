@@ -1308,9 +1308,9 @@ export default function PaymentPage() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="amount">{p.amountToPayUsdt} *</Label>
+                  <Label htmlFor="amount">{p.amountToPay} ({selectedCryptoNetwork?.label || "USDT"}) *</Label>
                   <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold text-sm">USDT</span>
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold text-sm">{selectedCryptoNetwork?.label || "USDT"}</span>
                     <Input
                       id="amount"
                       type="number"
