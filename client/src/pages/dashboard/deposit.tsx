@@ -677,7 +677,7 @@ export default function DepositPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Montant (USDT)</label>
+                    <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Montant</label>
                     <div className="flex rounded-xl border border-border overflow-hidden focus-within:ring-2 focus-within:ring-primary/40">
                       <span className="flex items-center px-3 bg-muted border-r border-border text-sm font-bold text-muted-foreground shrink-0 whitespace-nowrap">
                         {selectedCryptoNetwork?.label || "USDT"}
