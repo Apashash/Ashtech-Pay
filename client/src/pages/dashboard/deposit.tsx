@@ -3,7 +3,7 @@ import { DashboardLayout } from "@/components/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Select, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -639,29 +639,30 @@ export default function DepositPage() {
 
                   <div className="space-y-2">
                     <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Réseau de paiement</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {cryptoNetworkOptions.map(opt => (
-                        <button
-                          key={opt.ticker}
-                          type="button"
-                          onClick={() => setCryptoPayCurrency(opt.ticker)}
-                          className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border-2 text-left transition-all ${cryptoPayCurrency === opt.ticker ? "border-primary bg-primary/5" : "border-border bg-background hover:border-primary/40"}`}
-                          data-testid={`button-crypto-network-${opt.ticker}`}
-                        >
-                          <img
-                            src={opt.logoUrl}
-                            alt={opt.label}
-                            className="w-7 h-7 rounded-full shrink-0 object-contain bg-white"
-                            loading="lazy"
-                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }}
-                          />
-                          <div className="flex flex-col items-start gap-0.5 min-w-0">
-                            <span className="text-sm font-bold text-foreground">{opt.label}</span>
-                            <span className="text-xs text-muted-foreground">{opt.network}</span>
+                    <Select value={cryptoPayCurrency} onValueChange={setCryptoPayCurrency}>
+                      <SelectTrigger className="h-12 rounded-xl" data-testid="select-crypto-network">
+                        {selectedCryptoNetwork ? (
+                          <div className="flex items-center gap-2.5">
+                            <img src={selectedCryptoNetwork.logoUrl} alt={selectedCryptoNetwork.label} className="w-6 h-6 rounded-full shrink-0 object-contain bg-white" onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }} />
+                            <span className="font-semibold">{selectedCryptoNetwork.label}</span>
+                            <span className="text-muted-foreground text-sm">· {selectedCryptoNetwork.network}</span>
                           </div>
-                        </button>
-                      ))}
-                    </div>
+                        ) : (
+                          <SelectValue placeholder="Choisir un réseau" />
+                        )}
+                      </SelectTrigger>
+                      <SelectContent>
+                        {cryptoNetworkOptions.map(opt => (
+                          <SelectItem key={opt.ticker} value={opt.ticker}>
+                            <div className="flex items-center gap-2.5">
+                              <img src={opt.logoUrl} alt={opt.label} className="w-5 h-5 rounded-full shrink-0 object-contain bg-white" onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }} />
+                              <span className="font-semibold">{opt.label}</span>
+                              <span className="text-muted-foreground text-xs">· {opt.network}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div className="space-y-2">

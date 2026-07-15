@@ -1242,29 +1242,30 @@ export default function PaymentPage() {
                 {paymentMethod === "crypto" && (
                   <div className="space-y-2">
                     <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Réseau de paiement</Label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {cryptoNetworkOptions.map(opt => (
-                        <button
-                          key={opt.ticker}
-                          type="button"
-                          onClick={() => setCryptoPayCurrency(opt.ticker)}
-                          className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg border-2 text-left transition-all ${cryptoPayCurrency === opt.ticker ? "border-primary bg-primary/5" : "border-border bg-background hover:border-primary/40"}`}
-                          data-testid={`button-crypto-network-fixed-${opt.ticker}`}
-                        >
-                          <img
-                            src={opt.logoUrl}
-                            alt={opt.label}
-                            className="w-7 h-7 rounded-full shrink-0 object-contain bg-white"
-                            loading="lazy"
-                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }}
-                          />
-                          <div className="flex flex-col items-start gap-0.5 min-w-0">
-                            <span className="text-sm font-bold text-foreground">{opt.label}</span>
-                            <span className="text-xs text-muted-foreground">{opt.network}</span>
+                    <Select value={cryptoPayCurrency} onValueChange={setCryptoPayCurrency}>
+                      <SelectTrigger className="h-12" data-testid="select-crypto-network-fixed">
+                        {selectedCryptoNetwork ? (
+                          <div className="flex items-center gap-2.5">
+                            <img src={selectedCryptoNetwork.logoUrl} alt={selectedCryptoNetwork.label} className="w-6 h-6 rounded-full shrink-0 object-contain bg-white" onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }} />
+                            <span className="font-semibold">{selectedCryptoNetwork.label}</span>
+                            <span className="text-muted-foreground text-sm">· {selectedCryptoNetwork.network}</span>
                           </div>
-                        </button>
-                      ))}
-                    </div>
+                        ) : (
+                          <SelectValue placeholder="Choisir un réseau" />
+                        )}
+                      </SelectTrigger>
+                      <SelectContent>
+                        {cryptoNetworkOptions.map(opt => (
+                          <SelectItem key={opt.ticker} value={opt.ticker}>
+                            <div className="flex items-center gap-2.5">
+                              <img src={opt.logoUrl} alt={opt.label} className="w-5 h-5 rounded-full shrink-0 object-contain bg-white" onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }} />
+                              <span className="font-semibold">{opt.label}</span>
+                              <span className="text-muted-foreground text-xs">· {opt.network}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 )}
                 <div className="bg-muted/30 border border-border rounded-xl p-4 text-center">
@@ -1281,29 +1282,30 @@ export default function PaymentPage() {
               <div className="space-y-3">
                 <div className="space-y-2">
                   <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Réseau de paiement</Label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {cryptoNetworkOptions.map(opt => (
-                      <button
-                        key={opt.ticker}
-                        type="button"
-                        onClick={() => setCryptoPayCurrency(opt.ticker)}
-                        className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg border-2 text-left transition-all ${cryptoPayCurrency === opt.ticker ? "border-primary bg-primary/5" : "border-border bg-background hover:border-primary/40"}`}
-                        data-testid={`button-crypto-network-${opt.ticker}`}
-                      >
-                        <img
-                          src={opt.logoUrl}
-                          alt={opt.label}
-                          className="w-7 h-7 rounded-full shrink-0 object-contain bg-white"
-                          loading="lazy"
-                          onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }}
-                        />
-                        <div className="flex flex-col items-start gap-0.5 min-w-0">
-                          <span className="text-sm font-bold text-foreground">{opt.label}</span>
-                          <span className="text-xs text-muted-foreground">{opt.network}</span>
+                  <Select value={cryptoPayCurrency} onValueChange={setCryptoPayCurrency}>
+                    <SelectTrigger className="h-12" data-testid="select-crypto-network">
+                      {selectedCryptoNetwork ? (
+                        <div className="flex items-center gap-2.5">
+                          <img src={selectedCryptoNetwork.logoUrl} alt={selectedCryptoNetwork.label} className="w-6 h-6 rounded-full shrink-0 object-contain bg-white" onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }} />
+                          <span className="font-semibold">{selectedCryptoNetwork.label}</span>
+                          <span className="text-muted-foreground text-sm">· {selectedCryptoNetwork.network}</span>
                         </div>
-                      </button>
-                    ))}
-                  </div>
+                      ) : (
+                        <SelectValue placeholder="Choisir un réseau" />
+                      )}
+                    </SelectTrigger>
+                    <SelectContent>
+                      {cryptoNetworkOptions.map(opt => (
+                        <SelectItem key={opt.ticker} value={opt.ticker}>
+                          <div className="flex items-center gap-2.5">
+                            <img src={opt.logoUrl} alt={opt.label} className="w-5 h-5 rounded-full shrink-0 object-contain bg-white" onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }} />
+                            <span className="font-semibold">{opt.label}</span>
+                            <span className="text-muted-foreground text-xs">· {opt.network}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="amount">{p.amountToPayUsdt} *</Label>
