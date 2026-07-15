@@ -196,6 +196,17 @@ function buildCurrencyOption(rawTicker: string): NowPaymentsCurrencyOption {
   };
 }
 
+// Ledger crediting only ever records "USDT" (1:1 parity). We can only trust
+// that parity for USD-pegged stablecoins — for a floating asset (BTC, ETH, ...)
+// the amount NowPayments reports as "actually_paid" is denominated in that
+// coin, not USD, and crediting it 1:1 as USDT would wildly over/under-credit
+// the user. So the selectable list (and the server-side allowlist below) is
+// restricted to stablecoin tickers until real-time conversion is added.
+export function isStableTicker(ticker: string): boolean {
+  const t = ticker.toLowerCase();
+  return t.startsWith("usdt") || t.startsWith("usdc") || t === "dai" || t.startsWith("busd");
+}
+
 // Extracts a flat list of ticker strings from whatever shape NowPayments
 // returns (plain string array, or array/object of currency objects).
 function extractTickers(payload: any): string[] {
@@ -230,7 +241,7 @@ export async function getNowPaymentsCurrencies(): Promise<NowPaymentsCurrencyOpt
       const res = await fetch(url, { headers: { "x-api-key": NOWPAYMENTS_API_KEY } });
       if (!res.ok) continue;
       const json = await res.json();
-      const tickers = extractTickers(json);
+      const tickers = extractTickers(json).filter(isStableTicker);
       if (tickers.length > 0) {
         const options = tickers.map(buildCurrencyOption).sort((a, b) => a.label.localeCompare(b.label));
         currenciesCache = { at: Date.now(), data: options };

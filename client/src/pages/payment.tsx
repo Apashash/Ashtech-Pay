@@ -1238,13 +1238,34 @@ export default function PaymentPage() {
 
             {/* Amount */}
             {paymentLink.isFixedAmount ? (
-              <div className="bg-muted/30 border border-border rounded-xl p-4 text-center">
-                <p className="text-sm text-muted-foreground mb-1">{p.amountToPay}</p>
-                <p className="text-3xl font-bold text-foreground" data-testid="text-payment-amount">
-                  {formatAmount(convertedDisplayAmount, selectedDisplayCurrency)}
-                </p>
-                {selectedDisplayCurrency !== linkCurrency && (adminExchangeRates[selectedDisplayCurrency] || 0) > 0 && (
-                  <p className="text-sm text-muted-foreground mt-1">= {formatAmount(displayAmount, linkCurrency)}</p>
+              <div className="space-y-3">
+                <div className="bg-muted/30 border border-border rounded-xl p-4 text-center">
+                  <p className="text-sm text-muted-foreground mb-1">{p.amountToPay}</p>
+                  <p className="text-3xl font-bold text-foreground" data-testid="text-payment-amount">
+                    {formatAmount(convertedDisplayAmount, selectedDisplayCurrency)}
+                  </p>
+                  {selectedDisplayCurrency !== linkCurrency && (adminExchangeRates[selectedDisplayCurrency] || 0) > 0 && (
+                    <p className="text-sm text-muted-foreground mt-1">= {formatAmount(displayAmount, linkCurrency)}</p>
+                  )}
+                </div>
+                {paymentMethod === "crypto" && (
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Réseau de paiement</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {cryptoNetworkOptions.map(opt => (
+                        <button
+                          key={opt.ticker}
+                          type="button"
+                          onClick={() => setCryptoPayCurrency(opt.ticker)}
+                          className={`flex flex-col items-start gap-0.5 px-3 py-2.5 rounded-lg border-2 text-left transition-all ${cryptoPayCurrency === opt.ticker ? "border-primary bg-primary/5" : "border-border bg-background hover:border-primary/40"}`}
+                          data-testid={`button-crypto-network-fixed-${opt.ticker}`}
+                        >
+                          <span className="text-sm font-bold text-foreground">{opt.label}</span>
+                          <span className="text-xs text-muted-foreground">{opt.network}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
             ) : paymentMethod === "crypto" ? (

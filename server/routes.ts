@@ -64,7 +64,7 @@ import { uploadToSupabase, getSignedImageUrl, downloadFromSupabase } from "./sup
 import { decryptField } from "./fieldEncryption";
 import { requireAdminPin } from "./adminPin";
 import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, fetchPaymentLinkDetails, ASHTECH_MARGIN } from "./swychr";
-import { createNowPaymentsInvoice, createNowPaymentsPayment, verifyNowPaymentsIpn, mapNowPaymentsStatus, getNowPaymentsCurrencies } from "./nowpayments";
+import { createNowPaymentsInvoice, createNowPaymentsPayment, verifyNowPaymentsIpn, mapNowPaymentsStatus, getNowPaymentsCurrencies, isStableTicker } from "./nowpayments";
 import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, getAfribaPayOtpInfo, confirmAfribaPayOtp, isAfribaPayOtpRequiredMessage } from "./afribapay";
 import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, initiatePixPayPayout, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType, getPixPayServiceId, PIXPAY_OTP_USSD_CODES } from "./pixpay";
 import { addPendingPayment, removePendingPayment } from "./paymentPoller";
@@ -7258,9 +7258,14 @@ export async function registerRoutes(
         const appBase = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
 
         const selectedPayCurrency = (req.body.payCurrency || "usdttrc20").toString().toLowerCase();
-        const isStableSelection = selectedPayCurrency.startsWith("usdt") || selectedPayCurrency.startsWith("usdc");
-        // Wallet crediting always happens in USD-equivalent (USDT parity); the
-        // selected network only changes which chain/address the payer sees.
+        // Wallet crediting always happens in USD-equivalent (USDT parity), so
+        // only USD-pegged stablecoin tickers may be selected — a floating
+        // asset's "actually_paid" amount is denominated in that coin, not USD,
+        // and would silently mis-credit the payer's/merchant's ledger.
+        if (!isStableTicker(selectedPayCurrency)) {
+          return res.status(400).json({ message: "Devise crypto non supportée pour ce paiement." });
+        }
+        const isStableSelection = true;
         const cryptoLedgerCurrency = "USDT";
 
         const cryptoIntent = await storage.createPaymentIntent({
@@ -12468,7 +12473,13 @@ export async function registerRoutes(
       const appBase = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
 
       const selectedPayCurrency = (req.body.payCurrency || "usdttrc20").toString().toLowerCase();
-      const isStableSelection = selectedPayCurrency.startsWith("usdt") || selectedPayCurrency.startsWith("usdc");
+      // Wallet crediting always happens in USD-equivalent (USDT parity), so
+      // only USD-pegged stablecoin tickers may be selected — see comment in
+      // the payment-link crypto branch above for why floating assets are unsafe.
+      if (!isStableTicker(selectedPayCurrency)) {
+        return res.status(400).json({ message: "Devise crypto non supportée pour ce paiement." });
+      }
+      const isStableSelection = true;
 
       await storage.createTransaction({
         userId,
