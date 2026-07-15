@@ -6827,20 +6827,35 @@ export async function registerRoutes(
         };
       });
       
-      // Load fx rates from DB (units per 1 USD) with fallback to defaults
+      // Build fx rates for the payment page.
+      // Priority (lowest → highest):
+      //   1. Country exchangeRate field (admin-editable in Pays → Taux de change vers XAF)
+      //      country.exchangeRate = "1 unit → X XAF", so we invert it: "X units → 1 XAF"
+      //   2. ALL_FX_CURRENCIES hardcoded defaults (non-zero only)
+      //   3. fx_rate_* admin settings (highest priority — explicit override)
       const allSettings = await storage.getAllSettings();
       const exchangeRates: Record<string, number> = {};
-      allSettings.forEach(s => {
+
+      // 1. Seed from country records (inverted: payment page divides by this value)
+      config.forEach((c: any) => {
+        const rate = parseFloat(c.exchangeRate);
+        if (!isNaN(rate) && rate > 0 && c.currency && c.currency !== "XAF") {
+          exchangeRates[c.currency] = 1 / rate;
+        }
+      });
+
+      // 2. Fill remaining from hardcoded defaults (skip zero-default currencies like CDF)
+      ALL_FX_CURRENCIES.forEach(c => {
+        if (!exchangeRates[c.code] && c.defaultRate > 0) exchangeRates[c.code] = c.defaultRate;
+      });
+
+      // 3. Admin explicit overrides (fx_rate_* settings) win over everything
+      allSettings.forEach((s: any) => {
         if (s.key.startsWith("fx_rate_")) {
           const code = s.key.replace("fx_rate_", "");
           const val = parseFloat(s.value);
           if (!isNaN(val) && val > 0) exchangeRates[code] = val;
         }
-      });
-      ALL_FX_CURRENCIES.forEach(c => {
-        // Only apply defaultRate if it's a real value (> 0).
-        // CDF and others with defaultRate: 0 must be configured by admin — no hardcoded fallback.
-        if (!exchangeRates[c.code] && c.defaultRate > 0) exchangeRates[c.code] = c.defaultRate;
       });
 
       res.json({ countries: config, exchangeRates });

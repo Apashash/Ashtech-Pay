@@ -40,13 +40,13 @@ export default function AdminCountries() {
   const [showCountryModal, setShowCountryModal] = useState(false);
 
   // Crypto USDT + CDF settings
-  const [cryptoSettings, setCryptoSettings] = useState({ fx_rate_USDT: "620", fx_rate_CDF: "", nowpayments_fee_percent: "2.5", nowpayments_min_deposit: "11" });
+  const [cryptoSettings, setCryptoSettings] = useState({ fx_rate_USDT: "620", nowpayments_fee_percent: "2.5", nowpayments_min_deposit: "11" });
   const { data: savedSettings } = useQuery<PlatformSetting[]>({ queryKey: ["/api/admin/settings"] });
   useEffect(() => {
     if (savedSettings) {
       const patch: Record<string, string> = {};
       savedSettings.forEach(s => {
-        if (["fx_rate_USDT", "fx_rate_CDF", "nowpayments_fee_percent", "nowpayments_min_deposit"].includes(s.key)) patch[s.key] = s.value;
+        if (["fx_rate_USDT", "nowpayments_fee_percent", "nowpayments_min_deposit"].includes(s.key)) patch[s.key] = s.value;
       });
       if (Object.keys(patch).length) setCryptoSettings(prev => ({ ...prev, ...patch }));
     }
@@ -394,30 +394,6 @@ export default function AdminCountries() {
                 </Button>
               </div>
 
-              {/* CDF — Franc Congolais */}
-              <div className="border-t pt-4 space-y-2">
-                <Label>🇨🇩 Taux CDF/FCFA (1 FCFA = X FC)</Label>
-                <Input
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  value={cryptoSettings.fx_rate_CDF}
-                  onChange={(e) => setCryptoSettings(p => ({ ...p, fx_rate_CDF: e.target.value }))}
-                  placeholder="ex : 4.27"
-                  data-testid="input-fx-rate-cdf"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Taux d'affichage sur la page de paiement RDC. Combien de Francs Congolais (FC) valent 1 FCFA.
-                  Si non configuré, aucune conversion n'est affichée.
-                </p>
-                <Button
-                  size="sm"
-                  onClick={() => saveSettingMutation.mutate({ key: "fx_rate_CDF", value: cryptoSettings.fx_rate_CDF })}
-                  disabled={saveSettingMutation.isPending || !cryptoSettings.fx_rate_CDF}
-                >
-                  <Save className="w-4 h-4 mr-2" />Enregistrer
-                </Button>
-              </div>
             </CardContent>
           </Card>
         </div>
