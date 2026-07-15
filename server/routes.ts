@@ -3496,8 +3496,11 @@ export async function registerRoutes(
   // Transaction routes
   app.get("/api/transactions", requireAuth, async (req, res) => {
     try {
-      const transactions = await storage.getTransactionsByUserId(req.userId!);
-      res.json(transactions);
+      const all = await storage.getTransactionsByUserId(req.userId!);
+      // Admin-only adjustments (admin_debit / admin_credit) must not appear
+      // in the user's transaction history — they are internal ledger operations.
+      const HIDDEN_TYPES = new Set(["admin_debit", "admin_credit"]);
+      res.json(all.filter(t => !HIDDEN_TYPES.has(t.type)));
     } catch (error) {
       console.error("Get transactions error:", error);
       res.status(500).json({ message: "Erreur serveur" });
