@@ -64,7 +64,7 @@ import { uploadToSupabase, getSignedImageUrl, downloadFromSupabase } from "./sup
 import { decryptField } from "./fieldEncryption";
 import { requireAdminPin } from "./adminPin";
 import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, fetchPaymentLinkDetails, ASHTECH_MARGIN } from "./swychr";
-import { createNowPaymentsInvoice, createNowPaymentsPayment, verifyNowPaymentsIpn, mapNowPaymentsStatus, getNowPaymentsCurrencies, isStableTicker, isSupportedCrypto, getEstimatedPrice, getMinAmount } from "./nowpayments";
+import { createNowPaymentsInvoice, createNowPaymentsPayment, verifyNowPaymentsIpn, mapNowPaymentsStatus, getNowPaymentsCurrencies, isStableTicker, isSupportedCrypto, getEstimatedPrice, getMinAmount, getMinAmountInUSD } from "./nowpayments";
 import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, getAfribaPayOtpInfo, confirmAfribaPayOtp, isAfribaPayOtpRequiredMessage } from "./afribapay";
 import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, initiatePixPayPayout, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType, getPixPayServiceId, PIXPAY_OTP_USSD_CODES } from "./pixpay";
 import { addPendingPayment, removePendingPayment } from "./paymentPoller";
@@ -7229,12 +7229,12 @@ export async function registerRoutes(
           return res.status(400).json({ message: "Devise crypto non supportée pour ce paiement." });
         }
 
-        // Per-ticker minimum from NowPayments API (falls back to DB setting then 1)
-        const cryptoMinFromApi = await getMinAmount("usd", selectedPayCurrencyEarly);
+        // Per-ticker minimum in USD from NowPayments API (correct pair per doc)
+        const cryptoMinFromApi = await getMinAmountInUSD(selectedPayCurrencyEarly);
         const cryptoMinSetting = await storage.getSetting("nowpayments_min_deposit");
         const cryptoMinDeposit = cryptoMinFromApi ?? (cryptoMinSetting ? parseFloat(cryptoMinSetting.value) : 1);
         if (numAmount < cryptoMinDeposit) {
-          return res.status(400).json({ message: `Le dépôt minimum est de ${parseFloat(cryptoMinDeposit.toFixed(6))} $ pour ce réseau` });
+          return res.status(400).json({ message: `Le dépôt minimum est de ${parseFloat(cryptoMinDeposit.toFixed(2))} $ pour ce réseau` });
         }
 
         // Get USDT rate: XAF per 1 USDT (admin-configurable via fx_rate_USDT setting)
@@ -12439,10 +12439,14 @@ export async function registerRoutes(
     try {
       const { currency_from = "usd", currency_to } = req.query;
       if (!currency_to) return res.status(400).json({ message: "currency_to requis" });
-      const min = await getMinAmount(
-        (currency_from as string).toLowerCase(),
-        (currency_to as string).toLowerCase()
-      );
+      // When currency_from is "usd" (client default), use the smart helper that
+      // picks the correct NowPayments pair per crypto type and returns USD-equivalent.
+      // Raw pairs (e.g. currency_from=bnbbsc&currency_to=usdttrc20) are passed through.
+      const cfStr = (currency_from as string).toLowerCase();
+      const ctStr = (currency_to as string).toLowerCase();
+      const min = cfStr === "usd"
+        ? await getMinAmountInUSD(ctStr)
+        : await getMinAmount(cfStr, ctStr);
       if (min === null) return res.status(503).json({ message: "Indisponible" });
       res.json({ min_amount: min, currency_from, currency_to });
     } catch (error: any) {
@@ -12507,12 +12511,12 @@ export async function registerRoutes(
       const cryptoFeeSettings = await storage.getSetting("nowpayments_fee_percent");
       const cryptoFeePercent = cryptoFeeSettings ? parseFloat(cryptoFeeSettings.value) : 2.5;
 
-      // Per-ticker minimum from NowPayments API (falls back to DB setting then 1)
-      const cryptoMinFromApi = await getMinAmount("usd", selectedPayCurrency);
+      // Per-ticker minimum in USD from NowPayments API (correct pair per doc)
+      const cryptoMinFromApi = await getMinAmountInUSD(selectedPayCurrency);
       const cryptoMinSetting = await storage.getSetting("nowpayments_min_deposit");
       const cryptoMinDeposit = cryptoMinFromApi ?? (cryptoMinSetting ? parseFloat(cryptoMinSetting.value) : 1);
       if (numAmountUSD < cryptoMinDeposit) {
-        return res.status(400).json({ message: `Le dépôt minimum est de ${parseFloat(cryptoMinDeposit.toFixed(6))} $ pour ce réseau` });
+        return res.status(400).json({ message: `Le dépôt minimum est de ${parseFloat(cryptoMinDeposit.toFixed(2))} $ pour ce réseau` });
       }
 
       const feeAmountUSD = numAmountUSD * (cryptoFeePercent / 100);

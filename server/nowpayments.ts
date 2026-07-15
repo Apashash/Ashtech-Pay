@@ -283,6 +283,29 @@ export async function getMinAmount(currencyFrom: string, currencyTo: string): Pr
   }
 }
 
+/**
+ * Returns the minimum deposit amount in USD for the given pay currency,
+ * using the correct NowPayments pair as per their documentation:
+ *   - Stablecoins  → ticker:ticker   (result already in USDT ≈ USD)
+ *   - Non-stables  → ticker:usdttrc20 (result in crypto) then estimate → USD via usdttrc20
+ */
+export async function getMinAmountInUSD(payCurrency: string): Promise<number | null> {
+  if (!NOWPAYMENTS_API_KEY) return null;
+  const ticker = payCurrency.toLowerCase();
+
+  if (isStableTicker(ticker)) {
+    // Same-pair minimum is already denominated in USDT ≈ USD
+    return getMinAmount(ticker, ticker);
+  }
+
+  // For non-stablecoins: get minimum in the native crypto, then convert to USD
+  const minInCrypto = await getMinAmount(ticker, "usdttrc20");
+  if (minInCrypto === null) return null;
+  // Estimate how many USDT (≈ USD) that crypto amount is worth
+  const minInUSD = await getEstimatedPrice(minInCrypto, ticker, "usdttrc20");
+  return minInUSD;
+}
+
 export async function getEstimatedPrice(amount: number, currencyFrom: string, currencyTo: string): Promise<number | null> {
   if (!NOWPAYMENTS_API_KEY) return null;
   try {
