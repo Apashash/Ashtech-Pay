@@ -1144,7 +1144,7 @@ export default function PaymentPage() {
                   onClick={() => { setPaymentMethod("mobile_money"); setErrors(prev => ({...prev, paymentMethod: undefined as any})); }}
                   data-testid="button-payment-mobile"
                 >
-                  <img src="/payment-mobile-money.jpeg" alt="Mobile Money" className="w-10 h-10 rounded-full object-cover" />
+                  <img src="/payment-mobile-money.jpeg" alt="Mobile Money" className="w-12 h-12 rounded-md object-contain bg-white" loading="eager" decoding="async" />
                   <span className="text-xs font-medium">Mobile Money</span>
                 </button>
                 <button
@@ -1153,7 +1153,7 @@ export default function PaymentPage() {
                   onClick={() => { setPaymentMethod("crypto"); setErrors(prev => ({...prev, paymentMethod: undefined as any})); }}
                   data-testid="button-payment-crypto"
                 >
-                  <img src="/payment-crypto.jpeg" alt="Crypto" className="w-10 h-10 rounded-full object-cover" />
+                  <img src="/payment-crypto.jpeg" alt="Crypto" className="w-12 h-12 rounded-md object-contain bg-white" loading="eager" decoding="async" />
                   <span className="text-xs font-medium">Crypto</span>
                 </button>
                 <button
@@ -1162,7 +1162,7 @@ export default function PaymentPage() {
                   onClick={() => setPaymentMethod("paypal")}
                   data-testid="button-payment-paypal"
                 >
-                  <img src="/payment-paypal.jpeg" alt="PayPal / Card" className="w-10 h-10 rounded-full object-cover" />
+                  <img src="/payment-paypal.jpeg" alt="PayPal / Card" className="w-12 h-12 rounded-md object-contain bg-white" loading="eager" decoding="async" />
                   <span className="text-xs font-medium">PayPal / Card</span>
                 </button>
               </div>
@@ -1202,7 +1202,7 @@ export default function PaymentPage() {
                         }`}
                       >
                         {logo ? (
-                          <img src={logo} alt={op.name} className="w-12 h-12 object-contain rounded-lg" />
+                          <img src={logo} alt={op.name} className="w-12 h-12 object-contain rounded-lg bg-white" loading="eager" decoding="async" />
                         ) : (
                           <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
                             <Smartphone className="w-6 h-6 text-primary" />
