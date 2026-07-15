@@ -1138,36 +1138,33 @@ export default function PaymentPage() {
             <div className="space-y-2">
               <Label>{p.paymentMethod} *</Label>
               <div className="grid grid-cols-3 gap-2">
-                <Button
+                <button
                   type="button"
-                  variant={paymentMethod === "mobile_money" ? "default" : "outline"}
-                  className="flex flex-col items-center gap-1 h-auto py-3"
-                  onClick={() => { setPaymentMethod("mobile_money"); setErrors(p => ({...p, paymentMethod: undefined as any})); }}
+                  className={`flex flex-col items-center gap-1.5 h-auto py-3 px-2 rounded-lg border-2 transition-all w-full ${paymentMethod === "mobile_money" ? "border-primary bg-primary/5 shadow-sm" : "border-border bg-background hover:border-primary/40 hover:bg-muted/40"}`}
+                  onClick={() => { setPaymentMethod("mobile_money"); setErrors(prev => ({...prev, paymentMethod: undefined as any})); }}
                   data-testid="button-payment-mobile"
                 >
-                  <Smartphone className="w-5 h-5" />
-                  <span className="text-xs">Mobile Money</span>
-                </Button>
-                <Button
+                  <img src="/payment-mobile-money.jpeg" alt="Mobile Money" className="w-10 h-10 rounded-full object-cover" />
+                  <span className="text-xs font-medium">Mobile Money</span>
+                </button>
+                <button
                   type="button"
-                  variant={paymentMethod === "crypto" ? "default" : "outline"}
-                  className="flex flex-col items-center gap-1 h-auto py-3"
-                  onClick={() => { setPaymentMethod("crypto"); setErrors(p => ({...p, paymentMethod: undefined as any})); }}
+                  className={`flex flex-col items-center gap-1.5 h-auto py-3 px-2 rounded-lg border-2 transition-all w-full ${paymentMethod === "crypto" ? "border-primary bg-primary/5 shadow-sm" : "border-border bg-background hover:border-primary/40 hover:bg-muted/40"}`}
+                  onClick={() => { setPaymentMethod("crypto"); setErrors(prev => ({...prev, paymentMethod: undefined as any})); }}
                   data-testid="button-payment-crypto"
                 >
-                  <Bitcoin className="w-5 h-5" />
-                  <span className="text-xs">Crypto</span>
-                </Button>
-                <Button
+                  <img src="/payment-crypto.jpeg" alt="Crypto" className="w-10 h-10 rounded-full object-cover" />
+                  <span className="text-xs font-medium">Crypto</span>
+                </button>
+                <button
                   type="button"
-                  variant={paymentMethod === "paypal" ? "default" : "outline"}
-                  className="flex flex-col items-center gap-1 h-auto py-3"
+                  className={`flex flex-col items-center gap-1.5 h-auto py-3 px-2 rounded-lg border-2 transition-all w-full ${paymentMethod === "paypal" ? "border-primary bg-primary/5 shadow-sm" : "border-border bg-background hover:border-primary/40 hover:bg-muted/40"}`}
                   onClick={() => setPaymentMethod("paypal")}
                   data-testid="button-payment-paypal"
                 >
-                  <SiPaypal className="w-5 h-5" />
-                  <span className="text-xs">PayPal</span>
-                </Button>
+                  <img src="/payment-paypal.jpeg" alt="PayPal / Card" className="w-10 h-10 rounded-full object-cover" />
+                  <span className="text-xs font-medium">PayPal / Card</span>
+                </button>
               </div>
               {errors.paymentMethod && <p className="text-xs text-red-500">{errors.paymentMethod}</p>}
             </div>
