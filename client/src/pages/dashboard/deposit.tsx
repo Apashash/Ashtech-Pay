@@ -88,6 +88,7 @@ export default function DepositPage() {
   const [cryptoPaymentId, setCryptoPaymentId] = useState("");
   const [cryptoExpiresAt, setCryptoExpiresAt] = useState<Date | null>(null);
   const [cryptoAddressCopied, setCryptoAddressCopied] = useState(false);
+  const [cryptoPayCurrency, setCryptoPayCurrency] = useState("usdttrc20");
   const cryptoPollingRef = useRef<NodeJS.Timeout | null>(null);
 
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
@@ -305,7 +306,7 @@ export default function DepositPage() {
       const amt = parseFloat(cryptoAmountUsd);
       if (!amt || amt <= 0) throw new Error("Entrez un montant valide");
       if (amt < 11) throw new Error("Le dépôt minimum est de 11 $");
-      const res = await apiRequest("POST", "/api/deposits/crypto", { amountUsd: cryptoAmountUsd });
+      const res = await apiRequest("POST", "/api/deposits/crypto", { amountUsd: cryptoAmountUsd, payCurrency: cryptoPayCurrency });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Erreur lors du dépôt crypto");
       return data;
@@ -399,6 +400,14 @@ export default function DepositPage() {
   }, []);
 
   const usdtWallet = wallets?.find(w => w.currency === "USDT");
+
+  const { data: nowPaymentsCurrenciesData } = useQuery<{ currencies: { ticker: string; label: string; network: string }[] }>({
+    queryKey: ["/api/nowpayments/currencies"],
+    enabled: depositMode === "crypto",
+    staleTime: 5 * 60 * 1000,
+  });
+  const cryptoNetworkOptions = nowPaymentsCurrenciesData?.currencies || [];
+  const selectedCryptoNetwork = cryptoNetworkOptions.find(o => o.ticker === cryptoPayCurrency);
 
   const { data: feeSettings } = useQuery<{ cryptoFeePercent: number; cryptoMinDeposit: number }>({
     queryKey: ["/api/public/fee-settings"],
@@ -529,7 +538,7 @@ export default function DepositPage() {
                   <div className="bg-primary/10 border border-primary/20 rounded-xl px-4 py-4 text-center">
                     <p className="text-xs text-muted-foreground mb-1">Montant exact à envoyer</p>
                     <p className="text-3xl font-bold text-primary tabular-nums">{cryptoPayAmount.toFixed(6)}</p>
-                    <p className="text-sm font-semibold text-muted-foreground mt-0.5">USDT TRC20</p>
+                    <p className="text-sm font-semibold text-muted-foreground mt-0.5">{selectedCryptoNetwork ? `${selectedCryptoNetwork.label} · ${selectedCryptoNetwork.network}` : cryptoPayCurrency.toUpperCase()}</p>
                   </div>
 
                   {/* QR Code */}
@@ -548,18 +557,18 @@ export default function DepositPage() {
                           `}</style>
                           <img
                             src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(cryptoPayAddress)}&color=000000&bgcolor=FFFFFF`}
-                            alt="QR Code adresse USDT"
+                            alt={`QR Code adresse ${selectedCryptoNetwork?.label || cryptoPayCurrency}`}
                             className="w-44 h-44 rounded-xl"
                           />
                         </div>
                       </div>
-                      <p className="text-xs text-muted-foreground">Réseau : <span className="font-semibold text-foreground">TRC20 (Tron)</span></p>
+                      <p className="text-xs text-muted-foreground">Réseau : <span className="font-semibold text-foreground">{selectedCryptoNetwork?.network || cryptoPayCurrency.toUpperCase()}</span></p>
                     </div>
                   )}
 
                   {/* Address to copy */}
                   <div className="space-y-1">
-                    <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide">Adresse USDT TRC20</p>
+                    <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide">Adresse {selectedCryptoNetwork?.label || cryptoPayCurrency.toUpperCase()}</p>
                     <div className="flex items-center gap-2 bg-muted/40 rounded-xl px-3 py-3 border border-border">
                       <p className="font-mono text-xs text-foreground flex-1 break-all leading-relaxed">{cryptoPayAddress}</p>
                       <button
@@ -578,7 +587,7 @@ export default function DepositPage() {
                   <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3 flex items-start gap-2">
                     <ExternalLink className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                     <div className="text-xs text-muted-foreground">
-                      <span className="font-semibold text-amber-500">Important :</span> Envoyez uniquement sur le réseau <strong>TRC20 (Tron)</strong>. Tout envoi sur un autre réseau sera perdu.
+                      <span className="font-semibold text-amber-500">Important :</span> Envoyez uniquement sur le réseau <strong>{selectedCryptoNetwork?.network || cryptoPayCurrency.toUpperCase()}</strong>. Tout envoi sur un autre réseau sera perdu.
                     </div>
                   </div>
 
@@ -658,6 +667,24 @@ export default function DepositPage() {
                     </div>
                   </div>
 
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Réseau de paiement</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {cryptoNetworkOptions.map(opt => (
+                        <button
+                          key={opt.ticker}
+                          type="button"
+                          onClick={() => setCryptoPayCurrency(opt.ticker)}
+                          className={`flex flex-col items-start gap-0.5 px-3 py-2.5 rounded-xl border-2 text-left transition-all ${cryptoPayCurrency === opt.ticker ? "border-primary bg-primary/5" : "border-border bg-background hover:border-primary/40"}`}
+                          data-testid={`button-crypto-network-${opt.ticker}`}
+                        >
+                          <span className="text-sm font-bold text-foreground">{opt.label}</span>
+                          <span className="text-xs text-muted-foreground">{opt.network}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   {cryptoAmtNum > 0 && (
                     <div className="rounded-xl border border-border bg-muted/30 overflow-hidden">
                       <div className="px-4 py-3 flex items-center justify-between border-b border-border">
@@ -693,7 +720,7 @@ export default function DepositPage() {
                   >
                     {cryptoDepositMutation.isPending
                       ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Génération de l'adresse…</>
-                      : <><Bitcoin className="w-4 h-4 mr-2" />Générer l'adresse USDT</>
+                      : <><Bitcoin className="w-4 h-4 mr-2" />Générer l'adresse {selectedCryptoNetwork?.label || "crypto"}</>
                     }
                   </Button>
 

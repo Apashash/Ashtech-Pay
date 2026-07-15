@@ -89,6 +89,7 @@ export default function PaymentPage() {
   const [cryptoPayAddress, setCryptoPayAddress] = useState("");
   const [cryptoPayAmount, setCryptoPayAmount] = useState(0);
   const [cryptoAddressCopied, setCryptoAddressCopied] = useState(false);
+  const [cryptoPayCurrency, setCryptoPayCurrency] = useState("usdttrc20");
   const cryptoPollingRef = useRef<NodeJS.Timeout | null>(null);
 
   const { data: paymentLink, isLoading, error } = useQuery<PaymentLink & { hasPdf?: boolean }>({
@@ -110,6 +111,14 @@ export default function PaymentPage() {
     queryKey: ["/api/fee-settings"],
   });
   const cryptoMinDeposit = feeSettings?.cryptoMinDeposit ?? 11;
+
+  const { data: nowPaymentsCurrenciesData } = useQuery<{ currencies: { ticker: string; label: string; network: string }[] }>({
+    queryKey: ["/api/nowpayments/currencies"],
+    enabled: paymentMethod === "crypto",
+    staleTime: 5 * 60 * 1000,
+  });
+  const cryptoNetworkOptions = nowPaymentsCurrenciesData?.currencies || [];
+  const selectedCryptoNetwork = cryptoNetworkOptions.find(o => o.ticker === cryptoPayCurrency);
 
   const allCountries = depositConfigData?.countries || [];
   const adminExchangeRates = depositConfigData?.exchangeRates || { XAF: 1, XOF: 1 };
@@ -303,6 +312,7 @@ export default function PaymentPage() {
         currency: isCryptoFreeAmount ? "USDT" : selectedDisplayCurrency,
         paymentMethod,
         operator: paymentMethod === "mobile_money" ? operator : null,
+        payCurrency: paymentMethod === "crypto" ? cryptoPayCurrency : undefined,
       };
       if (isPixpayOtpOp && pixpayOtpCode) {
         body.pixpayOtp = pixpayOtpCode;
@@ -582,14 +592,14 @@ export default function PaymentPage() {
                       <Clock className="w-6 h-6 text-blue-500" />
                     </div>
                     <h2 className="text-base font-bold text-foreground">En attente de paiement</h2>
-                    <p className="text-xs text-muted-foreground">Envoyez exactement le montant ci-dessous à l'adresse USDT TRC20</p>
+                    <p className="text-xs text-muted-foreground">Envoyez exactement le montant ci-dessous à l'adresse {selectedCryptoNetwork?.label || cryptoPayCurrency.toUpperCase()}</p>
                   </div>
 
                   {/* Amount */}
                   <div className="bg-primary/10 border border-primary/20 rounded-xl px-4 py-4 text-center">
                     <p className="text-xs text-muted-foreground mb-1">Montant exact à envoyer</p>
                     <p className="text-3xl font-bold text-primary tabular-nums">{cryptoPayAmount.toFixed(6)}</p>
-                    <p className="text-sm font-semibold text-muted-foreground mt-0.5">USDT TRC20</p>
+                    <p className="text-sm font-semibold text-muted-foreground mt-0.5">{selectedCryptoNetwork ? `${selectedCryptoNetwork.label} · ${selectedCryptoNetwork.network}` : cryptoPayCurrency.toUpperCase()}</p>
                   </div>
 
                   {/* QR Code */}
@@ -608,18 +618,18 @@ export default function PaymentPage() {
                           `}</style>
                           <img
                             src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(cryptoPayAddress)}&color=000000&bgcolor=FFFFFF`}
-                            alt="QR Code USDT TRC20"
+                            alt={`QR Code ${selectedCryptoNetwork?.label || cryptoPayCurrency}`}
                             className="w-44 h-44 rounded-xl"
                           />
                         </div>
                       </div>
-                      <p className="text-xs text-muted-foreground">Réseau : <span className="font-semibold text-foreground">TRC20 (Tron)</span></p>
+                      <p className="text-xs text-muted-foreground">Réseau : <span className="font-semibold text-foreground">{selectedCryptoNetwork?.network || cryptoPayCurrency.toUpperCase()}</span></p>
                     </div>
                   )}
 
                   {/* Address copy */}
                   <div className="space-y-1">
-                    <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide">Adresse USDT TRC20</p>
+                    <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide">Adresse {selectedCryptoNetwork?.label || cryptoPayCurrency.toUpperCase()}</p>
                     <div className="flex items-center gap-2 bg-muted/40 rounded-xl px-3 py-3 border border-border">
                       <p className="font-mono text-xs text-foreground flex-1 break-all leading-relaxed">{cryptoPayAddress}</p>
                       <button
@@ -643,7 +653,7 @@ export default function PaymentPage() {
                   <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3 flex items-start gap-2">
                     <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                     <p className="text-xs text-muted-foreground">
-                      <span className="font-semibold text-amber-500">Important :</span> Envoyez uniquement sur le réseau <strong>TRC20 (Tron)</strong>. Tout envoi sur un autre réseau sera perdu.
+                      <span className="font-semibold text-amber-500">Important :</span> Envoyez uniquement sur le réseau <strong>{selectedCryptoNetwork?.network || cryptoPayCurrency.toUpperCase()}</strong>. Tout envoi sur un autre réseau sera perdu.
                     </p>
                   </div>
 
@@ -1238,24 +1248,43 @@ export default function PaymentPage() {
                 )}
               </div>
             ) : paymentMethod === "crypto" ? (
-              <div className="space-y-2">
-                <Label htmlFor="amount">{p.amountToPayUsdt} *</Label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold text-sm">USDT</span>
-                  <Input
-                    id="amount"
-                    type="number"
-                    inputMode="decimal"
-                    placeholder="0.00"
-                    min="1"
-                    step="0.01"
-                    value={customAmount}
-                    onChange={(e) => { setCustomAmount(e.target.value); setErrors(p => ({...p, amount: undefined as any})); }}
-                    className={`pl-16 text-xl h-12 ${errors.amount ? "border-red-500" : ""}`}
-                    data-testid="input-payment-amount"
-                  />
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label htmlFor="amount">{p.amountToPayUsdt} *</Label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold text-sm">USDT</span>
+                    <Input
+                      id="amount"
+                      type="number"
+                      inputMode="decimal"
+                      placeholder="0.00"
+                      min="1"
+                      step="0.01"
+                      value={customAmount}
+                      onChange={(e) => { setCustomAmount(e.target.value); setErrors(p => ({...p, amount: undefined as any})); }}
+                      className={`pl-16 text-xl h-12 ${errors.amount ? "border-red-500" : ""}`}
+                      data-testid="input-payment-amount"
+                    />
+                  </div>
+                  {errors.amount && <p className="text-xs text-red-500">{errors.amount}</p>}
                 </div>
-                {errors.amount && <p className="text-xs text-red-500">{errors.amount}</p>}
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Réseau de paiement</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {cryptoNetworkOptions.map(opt => (
+                      <button
+                        key={opt.ticker}
+                        type="button"
+                        onClick={() => setCryptoPayCurrency(opt.ticker)}
+                        className={`flex flex-col items-start gap-0.5 px-3 py-2.5 rounded-lg border-2 text-left transition-all ${cryptoPayCurrency === opt.ticker ? "border-primary bg-primary/5" : "border-border bg-background hover:border-primary/40"}`}
+                        data-testid={`button-crypto-network-${opt.ticker}`}
+                      >
+                        <span className="text-sm font-bold text-foreground">{opt.label}</span>
+                        <span className="text-xs text-muted-foreground">{opt.network}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="space-y-2">

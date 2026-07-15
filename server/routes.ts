@@ -64,7 +64,7 @@ import { uploadToSupabase, getSignedImageUrl, downloadFromSupabase } from "./sup
 import { decryptField } from "./fieldEncryption";
 import { requireAdminPin } from "./adminPin";
 import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, fetchPaymentLinkDetails, ASHTECH_MARGIN } from "./swychr";
-import { createNowPaymentsInvoice, createNowPaymentsPayment, verifyNowPaymentsIpn, mapNowPaymentsStatus } from "./nowpayments";
+import { createNowPaymentsInvoice, createNowPaymentsPayment, verifyNowPaymentsIpn, mapNowPaymentsStatus, getNowPaymentsCurrencies } from "./nowpayments";
 import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, getAfribaPayOtpInfo, confirmAfribaPayOtp, isAfribaPayOtpRequiredMessage } from "./afribapay";
 import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, initiatePixPayPayout, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType, getPixPayServiceId, PIXPAY_OTP_USSD_CODES } from "./pixpay";
 import { addPendingPayment, removePendingPayment } from "./paymentPoller";
@@ -7257,6 +7257,12 @@ export async function registerRoutes(
         const reference = generateTransactionReference("payment_link");
         const appBase = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
 
+        const selectedPayCurrency = (req.body.payCurrency || "usdttrc20").toString().toLowerCase();
+        const isStableSelection = selectedPayCurrency.startsWith("usdt") || selectedPayCurrency.startsWith("usdc");
+        // Wallet crediting always happens in USD-equivalent (USDT parity); the
+        // selected network only changes which chain/address the payer sees.
+        const cryptoLedgerCurrency = "USDT";
+
         const cryptoIntent = await storage.createPaymentIntent({
           paymentLinkId: paymentLink.id,
           merchantId: paymentLink.userId,
@@ -7266,7 +7272,7 @@ export async function registerRoutes(
           payerCountry: resolvedCountryName,
           amount: netAmountUSD.toFixed(6),
           feeAmount: feeAmountUSD.toFixed(6),
-          currency: "USDT",
+          currency: cryptoLedgerCurrency,
           paymentMethod: "crypto",
           operator: null,
           reference,
@@ -7278,9 +7284,9 @@ export async function registerRoutes(
           amount: netAmountUSD.toFixed(6),
           totalAmount: amountInUSD.toFixed(6),
           feeAmount: feeAmountUSD.toFixed(6),
-          currency: "USDT",
+          currency: cryptoLedgerCurrency,
           status: "pending",
-          description: `Paiement crypto de ${fullName} (${email}) via ${paymentLink.title}`,
+          description: `Paiement crypto de ${fullName} (${email}) via ${paymentLink.title} — réseau ${selectedPayCurrency.toUpperCase()}`,
           paymentMethod: "crypto",
           reference,
           paymentLinkId: paymentLink.id,
@@ -7294,8 +7300,8 @@ export async function registerRoutes(
         try {
           cryptoPayment = await createNowPaymentsPayment({
             priceAmount: Math.round(amountInUSD * 1000000) / 1000000,
-            priceCurrency: "usdttrc20",
-            payCurrency: "usdttrc20",
+            priceCurrency: isStableSelection ? selectedPayCurrency : "usd",
+            payCurrency: selectedPayCurrency,
             orderId: reference,
             orderDescription: `${paymentLink.title} — Ashtech Pay`,
             ipnCallbackUrl: `${appBase}/api/nowpayments/ipn`,
@@ -12419,6 +12425,17 @@ export async function registerRoutes(
     }
   });
 
+  // ── NowPayments: available crypto networks (deposit page + public pay page) ──
+  app.get("/api/nowpayments/currencies", async (req, res) => {
+    try {
+      const currencies = await getNowPaymentsCurrencies();
+      res.json({ currencies });
+    } catch (error: any) {
+      console.error("[NowPayments Currencies] Error:", error);
+      res.json({ currencies: [{ ticker: "usdttrc20", label: "USDT", network: "Tron (TRC20)" }] });
+    }
+  });
+
   // ── Crypto deposit via NowPayments ─────────────────────────────────────────
   app.post("/api/deposits/crypto", requireAuth, depositLimiter, async (req, res) => {
     try {
@@ -12450,6 +12467,9 @@ export async function registerRoutes(
       const reference = generateTransactionReference("deposit");
       const appBase = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
 
+      const selectedPayCurrency = (req.body.payCurrency || "usdttrc20").toString().toLowerCase();
+      const isStableSelection = selectedPayCurrency.startsWith("usdt") || selectedPayCurrency.startsWith("usdc");
+
       await storage.createTransaction({
         userId,
         type: "deposit",
@@ -12458,7 +12478,7 @@ export async function registerRoutes(
         feeAmount: feeAmountUSD.toFixed(6),
         currency: "USDT",
         status: "pending",
-        description: "Dépôt crypto USDT TRC20 via NowPayments",
+        description: `Dépôt crypto via NowPayments — réseau ${selectedPayCurrency.toUpperCase()}`,
         paymentMethod: "crypto",
         reference,
       });
@@ -12467,10 +12487,10 @@ export async function registerRoutes(
       try {
         payment = await createNowPaymentsPayment({
           priceAmount: Math.round(numAmountUSD * 1000000) / 1000000,
-          priceCurrency: "usdttrc20",
-          payCurrency: "usdttrc20",
+          priceCurrency: isStableSelection ? selectedPayCurrency : "usd",
+          payCurrency: selectedPayCurrency,
           orderId: reference,
-          orderDescription: "Dépôt Ashtech Pay — USDT TRC20",
+          orderDescription: `Dépôt Ashtech Pay — ${selectedPayCurrency.toUpperCase()}`,
           ipnCallbackUrl: `${appBase}/api/nowpayments/ipn`,
         });
       } catch (invErr: any) {

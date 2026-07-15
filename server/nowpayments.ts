@@ -149,3 +149,99 @@ export function mapNowPaymentsStatus(status: string): "pending" | "completed" | 
   if (["failed", "refunded", "expired"].includes(status)) return "failed";
   return "pending";
 }
+
+export interface NowPaymentsCurrencyOption {
+  ticker: string;
+  label: string;
+  network: string;
+}
+
+// Friendly labels for the most common NowPayments tickers. Any ticker not
+// listed here still shows up (uppercased) so new networks NowPayments adds
+// are never hidden from the picker.
+const NOWPAYMENTS_TICKER_LABELS: Record<string, { label: string; network: string }> = {
+  usdttrc20: { label: "USDT", network: "Tron (TRC20)" },
+  usdterc20: { label: "USDT", network: "Ethereum (ERC20)" },
+  usdtbsc: { label: "USDT", network: "BNB Smart Chain (BEP20)" },
+  usdtsol: { label: "USDT", network: "Solana" },
+  usdtmatic: { label: "USDT", network: "Polygon" },
+  usdtton: { label: "USDT", network: "TON" },
+  usdcerc20: { label: "USDC", network: "Ethereum (ERC20)" },
+  usdcbsc: { label: "USDC", network: "BNB Smart Chain (BEP20)" },
+  usdcmatic: { label: "USDC", network: "Polygon" },
+  usdcsol: { label: "USDC", network: "Solana" },
+  btc: { label: "BTC", network: "Bitcoin" },
+  eth: { label: "ETH", network: "Ethereum" },
+  bnbbsc: { label: "BNB", network: "BNB Smart Chain" },
+  bnbmainnet: { label: "BNB", network: "BNB Chain" },
+  trx: { label: "TRX", network: "Tron" },
+  ltc: { label: "LTC", network: "Litecoin" },
+  doge: { label: "DOGE", network: "Dogecoin" },
+  sol: { label: "SOL", network: "Solana" },
+  ton: { label: "TON", network: "TON" },
+  matic: { label: "MATIC", network: "Polygon" },
+  xrp: { label: "XRP", network: "Ripple" },
+  ada: { label: "ADA", network: "Cardano" },
+  dot: { label: "DOT", network: "Polkadot" },
+  shib: { label: "SHIB", network: "Ethereum" },
+};
+
+function buildCurrencyOption(rawTicker: string): NowPaymentsCurrencyOption {
+  const ticker = rawTicker.toLowerCase();
+  const known = NOWPAYMENTS_TICKER_LABELS[ticker];
+  return {
+    ticker,
+    label: known?.label || ticker.toUpperCase(),
+    network: known?.network || ticker.toUpperCase(),
+  };
+}
+
+// Extracts a flat list of ticker strings from whatever shape NowPayments
+// returns (plain string array, or array/object of currency objects).
+function extractTickers(payload: any): string[] {
+  const raw = payload?.selectedCurrencies ?? payload?.currencies ?? payload;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item: any) => {
+      if (typeof item === "string") return item;
+      if (item && typeof item === "object") return item.code || item.ticker || item.currency || null;
+      return null;
+    })
+    .filter((t: any): t is string => typeof t === "string" && t.length > 0);
+}
+
+let currenciesCache: { at: number; data: NowPaymentsCurrencyOption[] } | null = null;
+const CURRENCIES_CACHE_TTL_MS = 10 * 60 * 1000;
+
+// Returns the crypto currencies the merchant account can accept, falling
+// back to the full platform currency list, and finally to a safe default
+// of USDT-TRC20 only if NowPayments is unreachable/misconfigured.
+export async function getNowPaymentsCurrencies(): Promise<NowPaymentsCurrencyOption[]> {
+  if (currenciesCache && Date.now() - currenciesCache.at < CURRENCIES_CACHE_TTL_MS) {
+    return currenciesCache.data;
+  }
+  if (!NOWPAYMENTS_API_KEY) {
+    return [buildCurrencyOption("usdttrc20")];
+  }
+
+  const endpoints = [`${BASE_URL}/merchant/coins`, `${BASE_URL}/currencies`];
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url, { headers: { "x-api-key": NOWPAYMENTS_API_KEY } });
+      if (!res.ok) continue;
+      const json = await res.json();
+      const tickers = extractTickers(json);
+      if (tickers.length > 0) {
+        const options = tickers.map(buildCurrencyOption).sort((a, b) => a.label.localeCompare(b.label));
+        currenciesCache = { at: Date.now(), data: options };
+        return options;
+      }
+    } catch {
+      // try next endpoint
+    }
+  }
+
+  const fallback = [buildCurrencyOption("usdttrc20")];
+  currenciesCache = { at: Date.now(), data: fallback };
+  return fallback;
+}
