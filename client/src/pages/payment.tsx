@@ -6,14 +6,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelectContent } from "@/components/ui/searchable-select-content";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
+import { useLanguage } from "@/lib/language";
 import type { PaymentLink, SupportedCurrency } from "@shared/schema";
 import { CURRENCY_SYMBOLS, SUPPORTED_CURRENCIES } from "@shared/schema";
 import { getImageSrc } from "@/lib/image";
 import { 
   Loader2, CheckCircle, XCircle, Shield, 
   Smartphone, CreditCard, ExternalLink, FileText, AlertTriangle, Globe,
-  User, Mail, Phone, Hash, Clock, Copy, Bitcoin
+  User, Mail, Phone, Hash, Clock, Copy, Bitcoin, ChevronDown
 } from "lucide-react";
 import { getOperatorLogo } from "@/lib/operator-logos";
 import { useState, useMemo, useEffect, useRef } from "react";
@@ -54,6 +56,8 @@ function formatAmount(amount: number, currency: string): string {
 export default function PaymentPage() {
   const [, params] = useRoute("/pay/:slug");
   const { toast } = useToast();
+  const { language, setLanguage, t } = useLanguage();
+  const p = t.payPage;
   const [paymentComplete, setPaymentComplete] = useState(false);
   const [paymentReference, setPaymentReference] = useState("");
   const [pdfDownloadUrl, setPdfDownloadUrl] = useState<string | null>(null);
@@ -241,17 +245,17 @@ export default function PaymentPage() {
 
   const validatePaymentForm = (): boolean => {
     const newErrors: Record<string, string> = {};
-    if (paymentMethod !== "crypto" && !fullName.trim()) newErrors.fullName = "Le nom est requis";
-    if (!email.trim()) newErrors.email = "L'email est requis";
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = "Email invalide";
-    if (!paymentLink?.isFixedAmount && (!customAmount || parseFloat(customAmount) <= 0)) newErrors.amount = "Le montant doit être supérieur à 0";
-    if (!paymentLink?.isFixedAmount && paymentMethod === "crypto" && customAmount && parseFloat(customAmount) < cryptoMinDeposit) newErrors.amount = `Le dépôt minimum est de ${cryptoMinDeposit} $`;
-    if (!paymentMethod) newErrors.paymentMethod = "Veuillez choisir un mode de paiement";
+    if (paymentMethod !== "crypto" && !fullName.trim()) newErrors.fullName = p.errName;
+    if (!email.trim()) newErrors.email = p.errEmail;
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = p.errEmailInvalid;
+    if (!paymentLink?.isFixedAmount && (!customAmount || parseFloat(customAmount) <= 0)) newErrors.amount = p.errAmount;
+    if (!paymentLink?.isFixedAmount && paymentMethod === "crypto" && customAmount && parseFloat(customAmount) < cryptoMinDeposit) newErrors.amount = `${p.errAmountMin} ${cryptoMinDeposit} $`;
+    if (!paymentMethod) newErrors.paymentMethod = p.errPaymentMethod;
     if (paymentMethod !== "crypto") {
-      if (!country) newErrors.country = "Veuillez sélectionner votre pays";
-      if (paymentMethod === "mobile_money" && !operator) newErrors.operator = "Veuillez sélectionner un opérateur";
-      if (!phone.trim()) newErrors.phone = "Le numéro est requis";
-      else if (phone.replace(/\s/g, "").length < 8) newErrors.phone = "Numéro trop court";
+      if (!country) newErrors.country = p.errCountry;
+      if (paymentMethod === "mobile_money" && !operator) newErrors.operator = p.errOperator;
+      if (!phone.trim()) newErrors.phone = p.errPhone;
+      else if (phone.replace(/\s/g, "").length < 8) newErrors.phone = p.errPhoneShort;
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -273,20 +277,20 @@ export default function PaymentPage() {
   const payMutation = useMutation({
     mutationFn: async () => {
       const newErrors: Record<string, string> = {};
-      if (paymentMethod !== "crypto" && !fullName.trim()) newErrors.fullName = "Le nom est requis";
-      if (!email.trim()) newErrors.email = "L'email est requis";
-      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = "Email invalide";
-      if (!paymentLink?.isFixedAmount && (!customAmount || parseFloat(customAmount) <= 0)) newErrors.amount = "Le montant doit être supérieur à 0";
-      if (!paymentLink?.isFixedAmount && paymentMethod === "crypto" && customAmount && parseFloat(customAmount) < cryptoMinDeposit) newErrors.amount = `Le dépôt minimum est de ${cryptoMinDeposit} $`;
-      if (!paymentMethod) newErrors.paymentMethod = "Veuillez choisir un mode de paiement";
+      if (paymentMethod !== "crypto" && !fullName.trim()) newErrors.fullName = p.errName;
+      if (!email.trim()) newErrors.email = p.errEmail;
+      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = p.errEmailInvalid;
+      if (!paymentLink?.isFixedAmount && (!customAmount || parseFloat(customAmount) <= 0)) newErrors.amount = p.errAmount;
+      if (!paymentLink?.isFixedAmount && paymentMethod === "crypto" && customAmount && parseFloat(customAmount) < cryptoMinDeposit) newErrors.amount = `${p.errAmountMin} ${cryptoMinDeposit} $`;
+      if (!paymentMethod) newErrors.paymentMethod = p.errPaymentMethod;
       if (paymentMethod !== "crypto") {
-        if (!country) newErrors.country = "Veuillez sélectionner votre pays";
-        if (paymentMethod === "mobile_money" && !operator) newErrors.operator = "Veuillez sélectionner un opérateur";
-        if (!phone.trim()) newErrors.phone = "Le numéro est requis";
-        else if (phone.replace(/\s/g, "").length < 8) newErrors.phone = "Numéro trop court";
+        if (!country) newErrors.country = p.errCountry;
+        if (paymentMethod === "mobile_money" && !operator) newErrors.operator = p.errOperator;
+        if (!phone.trim()) newErrors.phone = p.errPhone;
+        else if (phone.replace(/\s/g, "").length < 8) newErrors.phone = p.errPhoneShort;
       }
       setErrors(newErrors);
-      if (Object.keys(newErrors).length > 0) throw new Error("Veuillez corriger les erreurs ci-dessus");
+      if (Object.keys(newErrors).length > 0) throw new Error(language === "fr" ? "Veuillez corriger les erreurs ci-dessus" : "Please fix the errors above");
 
       const isPixpayOtpOp = selectedOperatorData?.paymentProvider === "pixpay" &&
         selectedOperatorData?.pixpayOperatorType === "otp";
@@ -378,7 +382,7 @@ export default function PaymentPage() {
       }
     },
     onError: (error: Error) => {
-      if (error.message !== "Veuillez corriger les erreurs ci-dessus") {
+      if (error.message !== "Veuillez corriger les erreurs ci-dessus" && error.message !== "Please fix the errors above") {
         toast({ title: "Erreur", description: error.message, variant: "destructive" });
       }
     },
@@ -452,13 +456,13 @@ export default function PaymentPage() {
           <Card className="w-full max-w-md text-center">
             <CardContent className="pt-6">
               <XCircle className="w-16 h-16 text-destructive mx-auto mb-4" />
-              <h2 className="text-xl font-bold text-foreground mb-2">Lien introuvable</h2>
-              <p className="text-muted-foreground mb-6">Ce lien de paiement n'existe pas ou a expiré.</p>
-              <Link href="/"><Button variant="outline">Retour à l'accueil</Button></Link>
+              <h2 className="text-xl font-bold text-foreground mb-2">{p.linkNotFound}</h2>
+              <p className="text-muted-foreground mb-6">{p.linkNotFoundDesc}</p>
+              <Link href="/"><Button variant="outline">{p.backHome}</Button></Link>
             </CardContent>
           </Card>
         </div>
-        <Footer />
+        <Footer p={p} />
       </div>
     );
   }
@@ -530,7 +534,7 @@ export default function PaymentPage() {
                   data-testid="button-confirm-pixpay-otp"
                 >
                   {payMutation.isPending
-                    ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Traitement...</>
+                    ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{p.processing}</>
                     : <><Shield className="w-4 h-4 mr-2" />Confirmer le paiement</>}
                 </Button>
                 <Button
@@ -553,12 +557,12 @@ export default function PaymentPage() {
 
               <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
                 <Shield className="w-4 h-4" />
-                <span>Paiement sécurisé — Vos données sont protégées</span>
+                <span>{p.securePayment}</span>
               </div>
             </CardContent>
           </Card>
         </div>
-        <Footer />
+        <Footer p={p} />
       </div>
     );
   }
@@ -1035,7 +1039,7 @@ export default function PaymentPage() {
             </CardContent>
           </Card>
         </div>
-        <Footer />
+        <Footer p={p} />
       </div>
     );
   }
@@ -1048,17 +1052,35 @@ export default function PaymentPage() {
         <div className="flex items-center gap-2">
           <img src="/logo.png" alt="AshTech Pay" className="h-24 object-contain" data-testid="img-logo" />
         </div>
-        <Select value={displayCurrency || linkCurrency} onValueChange={(val) => setDisplayCurrency(val as SupportedCurrency)}>
-          <SelectTrigger className="w-auto gap-2 bg-muted/50 border-border">
-            <Globe className="w-4 h-4" />
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {SUPPORTED_CURRENCIES.map((curr) => (
-              <SelectItem key={curr} value={curr}>{CURRENCY_FLAGS[curr]} {curr}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-2 border-border bg-muted/50 hover:bg-muted font-medium" data-testid="button-language-selector">
+              <Globe className="w-4 h-4 text-primary" />
+              <span className="text-sm font-semibold">{language === "fr" ? "FR" : "EN"}</span>
+              <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-36">
+            <DropdownMenuItem
+              onClick={() => setLanguage("fr")}
+              className={`flex items-center gap-2 cursor-pointer ${language === "fr" ? "font-semibold text-primary" : ""}`}
+              data-testid="lang-option-fr"
+            >
+              <span>🇫🇷</span>
+              <span>Français</span>
+              {language === "fr" && <span className="ml-auto text-primary text-xs">✓</span>}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => setLanguage("en")}
+              className={`flex items-center gap-2 cursor-pointer ${language === "en" ? "font-semibold text-primary" : ""}`}
+              data-testid="lang-option-en"
+            >
+              <span>🇬🇧</span>
+              <span>English</span>
+              {language === "en" && <span className="ml-auto text-primary text-xs">✓</span>}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </header>
       
       <div className="flex-1 flex items-start justify-center p-4 relative z-10">
@@ -1077,7 +1099,7 @@ export default function PaymentPage() {
           {paymentLink.hasPdfDelivery && (
             <div className="flex items-center gap-2 text-amber-500 text-sm bg-amber-500/10 p-3 mx-4 mt-4 rounded-lg">
               <FileText className="w-4 h-4 shrink-0" />
-              <span>Un lien de téléchargement vous sera envoyé après le paiement</span>
+              <span>{p.pdfDelivery}</span>
             </div>
           )}
           
@@ -1097,7 +1119,7 @@ export default function PaymentPage() {
                       <span className="text-muted-foreground text-sm shrink-0">({selectedCountryData.currency})</span>
                     </div>
                   ) : (
-                    <span className="text-muted-foreground text-sm">Sélectionnez votre pays</span>
+                    <span className="text-muted-foreground text-sm">{p.selectCountry}</span>
                   )}
                 </SelectTrigger>
                 <SearchableSelectContent
@@ -1114,7 +1136,7 @@ export default function PaymentPage() {
 
             {/* Payment Method */}
             <div className="space-y-2">
-              <Label>Mode de paiement *</Label>
+              <Label>{p.paymentMethod} *</Label>
               <div className="grid grid-cols-3 gap-2">
                 <Button
                   type="button"
@@ -1154,8 +1176,8 @@ export default function PaymentPage() {
               <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 flex items-start gap-3">
                 <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-medium text-amber-500 text-sm">Non disponible</p>
-                  <p className="text-sm text-muted-foreground">Le paiement par PayPal n'est pas encore disponible. Veuillez utiliser Mobile Money ou Crypto.</p>
+                  <p className="font-medium text-amber-500 text-sm">{p.paypalUnavailable}</p>
+                  <p className="text-sm text-muted-foreground">{p.paypalUnavailableDesc}</p>
                 </div>
               </div>
             )}
@@ -1164,7 +1186,7 @@ export default function PaymentPage() {
             {/* Operator */}
             {paymentMethod === "mobile_money" && country && operators.length > 0 && (
               <div className="space-y-2">
-                <Label>Opérateur Mobile Money *</Label>
+                <Label>{p.operator} *</Label>
                 <div className="w-full overflow-hidden">
                 <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
                   {operators.map((op) => {
@@ -1203,14 +1225,14 @@ export default function PaymentPage() {
 
             {paymentMethod === "mobile_money" && country && operators.length === 0 && (
               <div className="bg-muted/50 rounded-lg p-3 text-center text-sm text-muted-foreground">
-                Aucun opérateur disponible pour ce pays
+                {p.noOperator}
               </div>
             )}
 
             {/* Amount */}
             {paymentLink.isFixedAmount ? (
               <div className="bg-muted/30 border border-border rounded-xl p-4 text-center">
-                <p className="text-sm text-muted-foreground mb-1">Montant à payer</p>
+                <p className="text-sm text-muted-foreground mb-1">{p.amountToPay}</p>
                 <p className="text-3xl font-bold text-foreground" data-testid="text-payment-amount">
                   {formatAmount(convertedDisplayAmount, selectedDisplayCurrency)}
                 </p>
@@ -1220,7 +1242,7 @@ export default function PaymentPage() {
               </div>
             ) : paymentMethod === "crypto" ? (
               <div className="space-y-2">
-                <Label htmlFor="amount">Montant à payer (USDT) *</Label>
+                <Label htmlFor="amount">{p.amountToPayUsdt} *</Label>
                 <div className="relative">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold text-sm">USDT</span>
                   <Input
@@ -1240,12 +1262,12 @@ export default function PaymentPage() {
               </div>
             ) : (
               <div className="space-y-2">
-                <Label htmlFor="amount">Montant à payer ({CURRENCY_SYMBOLS[selectedDisplayCurrency]}) *</Label>
+                <Label htmlFor="amount">{p.amountToPayCurrency} ({CURRENCY_SYMBOLS[selectedDisplayCurrency]}) *</Label>
                 <Input
                   id="amount"
                   type="text"
                   inputMode="decimal"
-                  placeholder="Entrez le montant"
+                  placeholder={p.enterAmount}
                   value={customAmount}
                   onChange={(e) => { setCustomAmount(e.target.value); setErrors(p => ({...p, amount: undefined as any})); }}
                   className={`text-xl h-12 text-center ${errors.amount ? "border-red-500" : ""}`}
@@ -1261,13 +1283,13 @@ export default function PaymentPage() {
             {/* Name — hidden for crypto */}
             {paymentMethod !== "crypto" && (
             <div className="space-y-2">
-              <Label htmlFor="fullName">Nom complet *</Label>
+              <Label htmlFor="fullName">{p.fullName} *</Label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   id="fullName"
                   type="text"
-                  placeholder="Votre nom complet"
+                  placeholder={p.fullNamePlaceholder}
                   value={fullName}
                   onChange={(e) => { setFullName(e.target.value); setErrors(p => ({...p, fullName: undefined as any})); }}
                   className={`pl-10 ${errors.fullName ? "border-red-500" : ""}`}
@@ -1299,14 +1321,14 @@ export default function PaymentPage() {
             {/* Phone — hidden for crypto */}
             {paymentMethod !== "crypto" && (
             <div className="space-y-2">
-              <Label htmlFor="phone">Numéro de téléphone Mobile Money *</Label>
+              <Label htmlFor="phone">{p.phone} *</Label>
               <div className="relative">
                 <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   id="phone"
                   type="text"
                   inputMode="numeric"
-                  placeholder="XXXX XXX XXX"
+                  placeholder={p.phonePlaceholder}
                   value={phone}
                   onChange={(e) => { setPhone(e.target.value); setErrors(p => ({...p, phone: undefined as any})); }}
                   className={`pl-10 ${errors.phone ? "border-red-500" : ""}`}
@@ -1320,7 +1342,7 @@ export default function PaymentPage() {
             {/* Summary */}
             <div className="rounded-lg border bg-primary/5 border-primary/20 p-4">
               <div className="flex items-center justify-between">
-                <span className="font-medium text-foreground">Montant total</span>
+                <span className="font-medium text-foreground">{p.totalAmount}</span>
                 <span className="text-2xl font-bold text-primary" data-testid="text-payment-amount">
                   {paymentMethod === "crypto" && !paymentLink.isFixedAmount
                     ? `${parseFloat(customAmount || "0").toFixed(2)} USDT`
@@ -1339,26 +1361,26 @@ export default function PaymentPage() {
               data-testid="button-pay"
             >
               {payMutation.isPending ? (
-                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Traitement...</>
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{p.processing}</>
               ) : (
-                <><Shield className="w-4 h-4 mr-2" />Payer maintenant</>
+                <><Shield className="w-4 h-4 mr-2" />{p.payNow}</>
               )}
             </Button>
             
             <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
               <Shield className="w-4 h-4" />
-              <span>Paiement sécurisé — Vos données sont protégées</span>
+              <span>{p.securePayment}</span>
             </div>
           </CardContent>
         </Card>
       </div>
       
-      <Footer />
+      <Footer p={p} />
     </div>
   );
 }
 
-function Footer() {
+function Footer({ p }: { p: { poweredBy: string; discover: string; secureLabel: string } }) {
   return (
     <footer className="border-t border-border bg-white/70 py-6 px-4">
       <div className="max-w-lg mx-auto text-center space-y-4">
@@ -1366,16 +1388,16 @@ function Footer() {
           <img src="/logo.png" alt="AshTech Pay" className="h-20 w-auto" />
         </div>
         <p className="text-sm text-muted-foreground">
-          Propulsé par <span className="font-semibold text-foreground">Ashtech Pay</span>
+          {p.poweredBy} <span className="font-semibold text-foreground">Ashtech Pay</span>
         </p>
         <Link href="/">
           <Button variant="outline" size="sm" className="gap-2">
             <ExternalLink className="w-4 h-4" />
-            Découvrir Ashtech Pay
+            {p.discover}
           </Button>
         </Link>
         <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1"><Shield className="w-3 h-3" />Paiement sécurisé</span>
+          <span className="flex items-center gap-1"><Shield className="w-3 h-3" />{p.secureLabel}</span>
           <span>•</span>
           <span>© 2026 Ashtech Pay</span>
         </div>
