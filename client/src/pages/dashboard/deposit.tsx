@@ -305,12 +305,12 @@ export default function DepositPage() {
     mutationFn: async () => {
       const amt = parseFloat(cryptoAmountUsd);
       if (!amt || amt <= 0) throw new Error("Entrez un montant valide");
-      if (!estimatedUsdt || estimatedUsdt <= 0) throw new Error("Conversion en cours, veuillez patienter");
       if (cryptoMinDeposit && amt < cryptoMinDeposit) {
         const ticker = selectedCryptoNetwork?.label || "crypto";
         throw new Error(`Le dépôt minimum est de ${cryptoMinDeposit.toFixed(6).replace(/\.?0+$/, "")} ${ticker}`);
       }
-      const res = await apiRequest("POST", "/api/deposits/crypto", { amountUsd: estimatedUsdt.toFixed(6), payCurrency: cryptoPayCurrency });
+      // Send raw crypto amount — backend estimates USDT itself (single consistent call)
+      const res = await apiRequest("POST", "/api/deposits/crypto", { amountUsd: cryptoAmountUsd, payCurrency: cryptoPayCurrency });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Erreur lors du dépôt crypto");
       return data;

@@ -332,13 +332,13 @@ export default function PaymentPage() {
 
       const isPixpayOtpOp = selectedOperatorData?.paymentProvider === "pixpay" &&
         selectedOperatorData?.pixpayOperatorType === "otp";
-      // For crypto non-fixed: user entered crypto amount; send USDT equivalent to backend
+      // For crypto non-fixed: send raw crypto amount + ticker — backend estimates USDT itself
       const isCryptoFreeAmount = paymentMethod === "crypto" && !paymentLink?.isFixedAmount;
       const body: any = {
         fullName: fullName.trim() || email,
         email, country, phone,
-        amount: paymentLink?.isFixedAmount ? convertedDisplayAmount.toString() : (isCryptoFreeAmount && estimatedCryptoAmount !== null ? estimatedCryptoAmount.toFixed(6) : customAmount),
-        currency: isCryptoFreeAmount ? "USDT" : selectedDisplayCurrency,
+        amount: paymentLink?.isFixedAmount ? convertedDisplayAmount.toString() : customAmount,
+        currency: isCryptoFreeAmount ? cryptoPayCurrency : selectedDisplayCurrency,
         paymentMethod,
         operator: paymentMethod === "mobile_money" ? operator : null,
         payCurrency: paymentMethod === "crypto" ? cryptoPayCurrency : undefined,

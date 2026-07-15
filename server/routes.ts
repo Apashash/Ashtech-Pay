@@ -7229,28 +7229,40 @@ export async function registerRoutes(
           return res.status(400).json({ message: "Devise crypto non supportée pour ce paiement." });
         }
 
-        // Per-ticker minimum in USD from NowPayments API (correct pair per doc)
-        const cryptoMinFromApi = await getMinAmountInUSD(selectedPayCurrencyEarly);
-        const cryptoMinSetting = await storage.getSetting("nowpayments_min_deposit");
-        const cryptoMinDeposit = cryptoMinFromApi ?? (cryptoMinSetting ? parseFloat(cryptoMinSetting.value) : 1);
-        if (numAmount < cryptoMinDeposit) {
-          return res.status(400).json({ message: `Le dépôt minimum est de ${parseFloat(cryptoMinDeposit.toFixed(2))} $ pour ce réseau` });
-        }
-
-        // Get USDT rate: XAF per 1 USDT (admin-configurable via fx_rate_USDT setting)
-        const usdtRateSetting = await storage.getSetting("fx_rate_USDT");
-        const usdtRateXaf = usdtRateSetting ? parseFloat(usdtRateSetting.value) : 620;
-
         // Get crypto fee % (admin-configurable via nowpayments_fee_percent)
         const cryptoFeeSettings = await storage.getSetting("nowpayments_fee_percent");
         const cryptoFeePercent = cryptoFeeSettings ? parseFloat(cryptoFeeSettings.value) : 2.5;
 
-        // If amount is already in USDT (user entered USDT directly), skip XAF conversion
+        const cryptoMinSetting = await storage.getSetting("nowpayments_min_deposit");
+        const providedCurrencyNorm = (providedCurrency || "").toLowerCase();
+        // Native crypto input: user sent TRX/BTC/… amount directly (not USDT)
+        const isNativeCryptoInput = !isStableTicker(selectedPayCurrencyEarly) &&
+          providedCurrencyNorm === selectedPayCurrencyEarly;
+
         let amountInUSD: number;
-        if ((providedCurrency || "").toUpperCase() === "USDT") {
-          amountInUSD = numAmount; // 1 USDT ≈ 1 USD
+        if (isNativeCryptoInput) {
+          // Validate against min in native crypto (single consistent NowPayments call)
+          const minInCrypto = await getMinAmount(selectedPayCurrencyEarly, "usdttrc20");
+          const effectiveMin = minInCrypto ?? (cryptoMinSetting ? parseFloat(cryptoMinSetting.value) : 1);
+          if (numAmount < effectiveMin) {
+            return res.status(400).json({ message: `Minimum ${effectiveMin.toFixed(6).replace(/\.?0+$/, "")} ${providedCurrency?.toUpperCase()} pour ce réseau` });
+          }
+          // Estimate USDT equivalent (single call — no double-estimation drift)
+          const estimated = await getEstimatedPrice(numAmount, selectedPayCurrencyEarly, "usdttrc20");
+          amountInUSD = estimated ?? 0;
+          if (amountInUSD <= 0) return res.status(503).json({ message: "Impossible d'estimer la valeur USDT. Veuillez réessayer." });
+        } else if ((providedCurrency || "").toUpperCase() === "USDT") {
+          // Legacy path: user sent USDT amount directly
+          const cryptoMinFromApi = await getMinAmountInUSD(selectedPayCurrencyEarly);
+          const cryptoMinDeposit = cryptoMinFromApi ?? (cryptoMinSetting ? parseFloat(cryptoMinSetting.value) : 1);
+          if (numAmount < cryptoMinDeposit) {
+            return res.status(400).json({ message: `Le dépôt minimum est de ${parseFloat(cryptoMinDeposit.toFixed(2))} $ pour ce réseau` });
+          }
+          amountInUSD = numAmount;
         } else {
           // Convert link amount to USD via XAF pivot
+          const usdtRateSetting = await storage.getSetting("fx_rate_USDT");
+          const usdtRateXaf = usdtRateSetting ? parseFloat(usdtRateSetting.value) : 620;
           const fxRatesCrypto = await loadFxRates();
           const amountInXAF = convertToXAF(numAmount, providedCurrency || paymentLink.currency, fxRatesCrypto);
           amountInUSD = amountInXAF / usdtRateXaf;
@@ -7303,8 +7315,14 @@ export async function registerRoutes(
         let cryptoPayment: any;
         try {
           cryptoPayment = await createNowPaymentsPayment({
-            priceAmount: Math.round(amountInUSD * 1000000) / 1000000,
-            priceCurrency: isStableSelection ? selectedPayCurrency : "usd",
+            // Native input: price in the exact crypto amount the user entered (no conversion drift)
+            // USDT/stable input: price in USD as before
+            priceAmount: isNativeCryptoInput
+              ? Math.round(numAmount * 1000000) / 1000000
+              : Math.round(amountInUSD * 1000000) / 1000000,
+            priceCurrency: isNativeCryptoInput
+              ? selectedPayCurrency
+              : (isStableSelection ? selectedPayCurrency : "usd"),
             payCurrency: selectedPayCurrency,
             orderId: reference,
             orderDescription: `${paymentLink.title} — Ashtech Pay`,
@@ -12511,16 +12529,37 @@ export async function registerRoutes(
       const cryptoFeeSettings = await storage.getSetting("nowpayments_fee_percent");
       const cryptoFeePercent = cryptoFeeSettings ? parseFloat(cryptoFeeSettings.value) : 2.5;
 
-      // Per-ticker minimum in USD from NowPayments API (correct pair per doc)
-      const cryptoMinFromApi = await getMinAmountInUSD(selectedPayCurrency);
       const cryptoMinSetting = await storage.getSetting("nowpayments_min_deposit");
-      const cryptoMinDeposit = cryptoMinFromApi ?? (cryptoMinSetting ? parseFloat(cryptoMinSetting.value) : 1);
-      if (numAmountUSD < cryptoMinDeposit) {
-        return res.status(400).json({ message: `Le dépôt minimum est de ${parseFloat(cryptoMinDeposit.toFixed(2))} $ pour ce réseau` });
+      // Native crypto input: amountUsd field holds TRX/BTC/… amount (not USDT) for non-stables
+      const isNativeInput = !isStableTicker(selectedPayCurrency);
+      let numAmountForInvoice: number;
+
+      if (isNativeInput) {
+        // Validate against min in native crypto (one consistent NowPayments call)
+        const minInCrypto = await getMinAmount(selectedPayCurrency, "usdttrc20");
+        const effectiveMin = minInCrypto ?? (cryptoMinSetting ? parseFloat(cryptoMinSetting.value) : 1);
+        if (numAmountUSD < effectiveMin) {
+          return res.status(400).json({ message: `Minimum ${effectiveMin.toFixed(6).replace(/\.?0+$/, "")} ${selectedPayCurrency.toUpperCase()} pour ce réseau` });
+        }
+        // Estimate USDT equivalent (single call — no double-estimation drift)
+        const estimated = await getEstimatedPrice(numAmountUSD, selectedPayCurrency, "usdttrc20");
+        if (!estimated || estimated <= 0) return res.status(503).json({ message: "Impossible d'estimer la valeur USDT. Veuillez réessayer." });
+        numAmountForInvoice = numAmountUSD; // will use native amount for invoice
+        // Override numAmountUSD to USDT value for fees + ledger
+        (req as any)._estimatedUSDT = estimated;
+      } else {
+        // Stable coin (USDT): existing USD minimum check
+        const cryptoMinFromApi = await getMinAmountInUSD(selectedPayCurrency);
+        const cryptoMinDeposit = cryptoMinFromApi ?? (cryptoMinSetting ? parseFloat(cryptoMinSetting.value) : 1);
+        if (numAmountUSD < cryptoMinDeposit) {
+          return res.status(400).json({ message: `Le dépôt minimum est de ${parseFloat(cryptoMinDeposit.toFixed(2))} $ pour ce réseau` });
+        }
+        numAmountForInvoice = numAmountUSD;
       }
 
-      const feeAmountUSD = numAmountUSD * (cryptoFeePercent / 100);
-      const netAmountUSD = numAmountUSD - feeAmountUSD;
+      const ledgerAmountUSD = isNativeInput ? ((req as any)._estimatedUSDT as number) : numAmountUSD;
+      const feeAmountUSD = ledgerAmountUSD * (cryptoFeePercent / 100);
+      const netAmountUSD = ledgerAmountUSD - feeAmountUSD;
 
       const reference = generateTransactionReference("deposit");
       const appBase = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
@@ -12531,7 +12570,7 @@ export async function registerRoutes(
         userId,
         type: "deposit",
         amount: netAmountUSD.toFixed(6),
-        totalAmount: numAmountUSD.toFixed(6),
+        totalAmount: ledgerAmountUSD.toFixed(6),
         feeAmount: feeAmountUSD.toFixed(6),
         currency: "USDT",
         status: "pending",
@@ -12543,8 +12582,11 @@ export async function registerRoutes(
       let payment: any;
       try {
         payment = await createNowPaymentsPayment({
-          priceAmount: Math.round(numAmountUSD * 1000000) / 1000000,
-          priceCurrency: isStableSelection ? selectedPayCurrency : "usd",
+          // Native input: invoice for exact crypto amount → no conversion drift
+          priceAmount: isNativeInput
+            ? Math.round(numAmountForInvoice * 1000000) / 1000000
+            : Math.round(ledgerAmountUSD * 1000000) / 1000000,
+          priceCurrency: isNativeInput ? selectedPayCurrency : (isStableSelection ? selectedPayCurrency : "usd"),
           payCurrency: selectedPayCurrency,
           orderId: reference,
           orderDescription: `Dépôt Ashtech Pay — ${selectedPayCurrency.toUpperCase()}`,
