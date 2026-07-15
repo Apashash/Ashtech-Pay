@@ -13668,6 +13668,12 @@ export async function registerRoutes(
         if (afribaResponse.success) {
           const extRef = afribaResponse.transaction_id || depositRef;
           await storage.updateTransactionExternalReference(transaction.id, extRef);
+          // Wave (and other redirect-based operators): AfribaPay returns provider_link.
+          // Capture it so the unified Wave response logic below can include it.
+          if (afribaResponse.provider_link) {
+            (transaction as any)._waveUrl = afribaResponse.provider_link;
+            console.log(`[API v1/collect] AfribaPay Wave link for ${depositRef}: ${afribaResponse.provider_link}`);
+          }
           addPendingPayment({
             transactionId: transaction.id,
             reference: depositRef,
