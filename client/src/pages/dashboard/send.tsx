@@ -152,6 +152,8 @@ export default function SendMoneyPage() {
   const [showOtpDialog, setShowOtpDialog] = useState(false);
   const [showLockedDialog, setShowLockedDialog] = useState(false);
   const [lockRemaining, setLockRemaining] = useState(0);
+  const [showCooldownDialog, setShowCooldownDialog] = useState(false);
+  const [cooldownRemaining, setCooldownRemaining] = useState(0);
 
   useEffect(() => {
     fetch("/api/user/otp-lock", { credentials: "include" })
@@ -240,6 +242,17 @@ export default function SendMoneyPage() {
     return () => clearInterval(id);
   }, [showLockedDialog]);
 
+  useEffect(() => {
+    if (!showCooldownDialog || cooldownRemaining <= 0) return;
+    const id = setInterval(() => {
+      setCooldownRemaining(prev => {
+        if (prev <= 1) { clearInterval(id); setShowCooldownDialog(false); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, [showCooldownDialog]);
+
   const requestOtpMutation = useMutation({
     mutationFn: async (payload: {
       type: "external" | "internal";
@@ -258,6 +271,12 @@ export default function SendMoneyPage() {
         const err = new Error(data.message || "Opération en cours");
         (err as any).code = "OTP_LOCKED";
         (err as any).remainingSeconds = data.remainingSeconds ?? 0;
+        throw err;
+      }
+      if (data.code === "COOLDOWN_ACTIVE") {
+        const err = new Error(data.message || "Réessayez dans quelques minutes");
+        (err as any).code = "COOLDOWN_ACTIVE";
+        (err as any).waitUntil = data.waitUntil ?? (Date.now() + 5 * 60 * 1000);
         throw err;
       }
       if (!res.ok) throw new Error(data.message || "Erreur lors de l'envoi du code");
@@ -287,7 +306,12 @@ export default function SendMoneyPage() {
       setShowOtpDialog(false);
       setTimeout(() => setShowOtpDialog(true), 50);
     },
-    onError: (error: Error & { code?: string; remainingSeconds?: number }) => {
+    onError: (error: Error & { code?: string; remainingSeconds?: number; waitUntil?: number }) => {
+      if (error.code === "COOLDOWN_ACTIVE") {
+        setCooldownRemaining(Math.max(0, Math.ceil(((error.waitUntil ?? Date.now()) - Date.now()) / 1000)));
+        setShowCooldownDialog(true);
+        return;
+      }
       if (error.code === "OTP_LOCKED") {
         setLockRemaining(error.remainingSeconds ?? 900);
         setShowLockedDialog(true);
@@ -310,7 +334,12 @@ export default function SendMoneyPage() {
         otpCode,
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Erreur lors du transfert");
+      if (!res.ok) {
+        const err = new Error(data.message || "Erreur lors du transfert");
+        (err as any).code = data.code;
+        (err as any).waitUntil = data.waitUntil;
+        throw err;
+      }
       return data;
     },
     onSuccess: (data) => {
@@ -327,11 +356,16 @@ export default function SendMoneyPage() {
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 4000);
     },
-    onError: (error: Error) => {
+    onError: (error: Error & { code?: string; waitUntil?: number }) => {
       clearOtpLock();
       setOtpRef(null);
       setOtpCode("");
       setShowOtpDialog(false);
+      if (error.code === "COOLDOWN_ACTIVE") {
+        setCooldownRemaining(Math.max(0, Math.ceil(((error.waitUntil ?? Date.now()) - Date.now()) / 1000)));
+        setShowCooldownDialog(true);
+        return;
+      }
       toast({ title: "Erreur", description: error.message, variant: "destructive" });
     },
   });
@@ -346,7 +380,12 @@ export default function SendMoneyPage() {
         otpCode,
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.message || "Erreur lors du transfert");
+      if (!res.ok) {
+        const err = new Error(json.message || "Erreur lors du transfert");
+        (err as any).code = json.code;
+        (err as any).waitUntil = json.waitUntil;
+        throw err;
+      }
       return json;
     },
     onSuccess: () => {
@@ -363,11 +402,16 @@ export default function SendMoneyPage() {
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 4000);
     },
-    onError: (error: Error) => {
+    onError: (error: Error & { code?: string; waitUntil?: number }) => {
       clearOtpLock();
       setOtpRef(null);
       setOtpCode("");
       setShowOtpDialog(false);
+      if (error.code === "COOLDOWN_ACTIVE") {
+        setCooldownRemaining(Math.max(0, Math.ceil(((error.waitUntil ?? Date.now()) - Date.now()) / 1000)));
+        setShowCooldownDialog(true);
+        return;
+      }
       toast({ title: "Erreur", description: error.message, variant: "destructive" });
     },
   });
@@ -1166,6 +1210,32 @@ export default function SendMoneyPage() {
           </div>
           <BottomSheetFooter>
             <Button className="w-full" variant="outline" onClick={() => setShowLockedDialog(false)}>
+              Fermer
+            </Button>
+          </BottomSheetFooter>
+        </BottomSheetContent>
+      </BottomSheet>
+
+      {/* ── Cooldown 5min dialog ── */}
+      <BottomSheet open={showCooldownDialog} onOpenChange={setShowCooldownDialog}>
+        <BottomSheetContent>
+          <BottomSheetHeader>
+            <BottomSheetTitle className="text-center text-lg">Opération rejetée</BottomSheetTitle>
+          </BottomSheetHeader>
+          <div className="space-y-4 py-2 text-center">
+            <div className="w-16 h-16 rounded-full bg-red-500/15 flex items-center justify-center mx-auto">
+              <Clock className="w-8 h-8 text-red-500" />
+            </div>
+            <p className="text-sm text-muted-foreground px-4">
+              Votre dernière opération a été rejetée. Vous pourrez réessayer dans :
+            </p>
+            <div className="text-4xl font-bold tabular-nums text-red-500" data-testid="text-cooldown-remaining">
+              {Math.floor(cooldownRemaining / 60)}:{String(cooldownRemaining % 60).padStart(2, "0")}
+            </div>
+            <p className="text-xs text-muted-foreground">Le délai expire automatiquement, la page se déverrouille seule.</p>
+          </div>
+          <BottomSheetFooter>
+            <Button className="w-full" variant="outline" onClick={() => setShowCooldownDialog(false)}>
               Fermer
             </Button>
           </BottomSheetFooter>

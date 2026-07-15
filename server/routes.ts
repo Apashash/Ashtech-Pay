@@ -2,6 +2,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage, normalizePhone } from "./storage";
 import { audit, AUDIT } from "./auditLogger";
+import { setFailedCooldown, getFailedCooldown } from "./failedCooldown";
 import {
   checkAuthRateLimit,
   checkIdentifierRateLimit,
@@ -3791,6 +3792,18 @@ export async function registerRoutes(
         });
       }
 
+      // Cooldown 5min après rejet d'une opération précédente
+      const xferCooldown = getFailedCooldown(userId);
+      if (xferCooldown.active) {
+        const rem = xferCooldown.remainingMs;
+        const m = Math.floor(rem / 60000), s = Math.floor((rem % 60000) / 1000);
+        return res.status(429).json({
+          message: `Votre dernière opération a été rejetée. Veuillez attendre encore ${m}:${String(s).padStart(2, "0")} avant de réessayer.`,
+          code: "COOLDOWN_ACTIVE",
+          waitUntil: xferCooldown.waitUntilMs,
+        });
+      }
+
       const { type, recipient, phone, countryOperator, feeBearer, amount, fee, net, currency } = req.body;
       const otpType = type === "internal" ? "transfer_internal" : "transfer_external";
 
@@ -3866,6 +3879,18 @@ export async function registerRoutes(
       if (sender.withdrawalBlocked) {
         const reason = sender.withdrawalBlockReason || "Votre compte a été restreint. Contactez le support.";
         return res.status(403).json({ message: reason, code: "WITHDRAWAL_BLOCKED" });
+      }
+
+      // Cooldown 5min après rejet d'une opération précédente
+      const sendCooldown = getFailedCooldown(senderId);
+      if (sendCooldown.active) {
+        const rem = sendCooldown.remainingMs;
+        const m = Math.floor(rem / 60000), s = Math.floor((rem % 60000) / 1000);
+        return res.status(429).json({
+          message: `Votre dernière opération a été rejetée. Veuillez attendre encore ${m}:${String(s).padStart(2, "0")} avant de réessayer.`,
+          code: "COOLDOWN_ACTIVE",
+          waitUntil: sendCooldown.waitUntilMs,
+        });
       }
 
       const operator = await storage.getOperator(operatorId);
@@ -4223,6 +4248,18 @@ export async function registerRoutes(
         clearOtpOpLock(senderId);
       }
       // ── End OTP ──
+
+      // Cooldown 5min après rejet d'une opération précédente
+      const intCooldown = getFailedCooldown(senderId);
+      if (intCooldown.active) {
+        const rem = intCooldown.remainingMs;
+        const m = Math.floor(rem / 60000), s = Math.floor((rem % 60000) / 1000);
+        return res.status(429).json({
+          message: `Votre dernière opération a été rejetée. Veuillez attendre encore ${m}:${String(s).padStart(2, "0")} avant de réessayer.`,
+          code: "COOLDOWN_ACTIVE",
+          waitUntil: intCooldown.waitUntilMs,
+        });
+      }
 
       // Lookup recipient by email, phone or username
       const identifier = recipientIdentifier.trim();
@@ -4860,6 +4897,18 @@ export async function registerRoutes(
         });
       }
 
+      // Cooldown 5min après rejet d'une opération précédente
+      const wdCooldown = getFailedCooldown(userId);
+      if (wdCooldown.active) {
+        const rem = wdCooldown.remainingMs;
+        const m = Math.floor(rem / 60000), s = Math.floor((rem % 60000) / 1000);
+        return res.status(429).json({
+          message: `Votre dernière opération a été rejetée. Veuillez attendre encore ${m}:${String(s).padStart(2, "0")} avant de réessayer.`,
+          code: "COOLDOWN_ACTIVE",
+          waitUntil: wdCooldown.waitUntilMs,
+        });
+      }
+
       const { method, country, operator, phone, amount, fee, net, currency } = req.body;
 
       if (!(await isOtpEmailEnabled())) {
@@ -4924,6 +4973,18 @@ export async function registerRoutes(
       if (user.withdrawalBlocked) {
         const reason = user.withdrawalBlockReason || "Votre compte a été restreint. Contactez le support.";
         return res.status(403).json({ message: reason, code: "WITHDRAWAL_BLOCKED" });
+      }
+
+      // Cooldown 5min après rejet d'une opération précédente
+      const wdSubmitCooldown = getFailedCooldown(userId);
+      if (wdSubmitCooldown.active) {
+        const rem = wdSubmitCooldown.remainingMs;
+        const m = Math.floor(rem / 60000), s = Math.floor((rem % 60000) / 1000);
+        return res.status(429).json({
+          message: `Votre dernière opération a été rejetée. Veuillez attendre encore ${m}:${String(s).padStart(2, "0")} avant de réessayer.`,
+          code: "COOLDOWN_ACTIVE",
+          waitUntil: wdSubmitCooldown.waitUntilMs,
+        });
       }
 
       const userCurrency = user.preferredCurrency || "XAF";
@@ -10004,6 +10065,8 @@ export async function registerRoutes(
       const isNowRejected = status === "failed" || status === "cancelled";
       
       if (wasNotRejected && isNowRejected && (transaction.type === "transfer_out" || transaction.type === "withdrawal") && existingTx.status !== "completed") {
+        // Cooldown 5min — l'utilisateur doit attendre avant de relancer
+        setFailedCooldown(transaction.userId);
         // Refund total amount (amount + fee) to the wallet that was originally debited
         const refundAmount = transaction.totalAmount 
           ? parseFloat(transaction.totalAmount) 
@@ -11594,6 +11657,7 @@ export async function registerRoutes(
       // Refund FIRST — if this throws, status stays pending_manual and money is safe
       await storage.refundToOriginalWallet(tx.userId, tx.type, tx.currency || "XAF", totalAmount);
       await storage.updateTransactionStatus(tx.id, "failed");
+      setFailedCooldown(tx.userId); // Cooldown 5min avant la prochaine tentative
       await storage.createUserNotification({
         userId: tx.userId,
         type: tx.type === "withdrawal" ? "withdrawal_failed" : "transfer_failed",

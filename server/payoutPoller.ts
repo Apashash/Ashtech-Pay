@@ -4,6 +4,7 @@ import { checkAfribaPayStatus, checkAfribaPayoutStatus } from "./afribapay";
 import { checkPixPayStatus } from "./pixpay";
 import { sendWithdrawalApprovedEmail } from "./email";
 import { notifyWithdrawalAutoValidated, notifyWithdrawalFailed } from "./telegram";
+import { setFailedCooldown } from "./failedCooldown";
 
 const POLL_INTERVAL  = 6_000; // 6 seconds
 const MAX_ATTEMPTS   = 600;    // 600 × 6s = 60 minutes max
@@ -135,6 +136,8 @@ async function processPayout(payout: PendingPayout, apiStatus: string) {
 
     } else {
       await storage.updateTransactionStatus(payout.transactionId, "failed");
+      // Déclenche le cooldown 5min — l'utilisateur doit attendre avant de relancer
+      setFailedCooldown(payout.userId);
       const refundAmount = parseFloat(payout.totalDebited || payout.amount);
       // Use walletCurrency (the key actually debited) when available; fall back to txCurrency.
       // walletCurrency may differ from txCurrency when the wallet was stored under a generic code

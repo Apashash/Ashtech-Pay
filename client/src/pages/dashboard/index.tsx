@@ -925,7 +925,7 @@ export default function DashboardHome() {
                     </div>
                     <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
                       <span className={`text-sm font-semibold ${isIncoming ? 'text-green-500' : 'text-red-500'}`}>
-                        {isIncoming ? '+' : '-'}{formatCurrency(tx.amount, (user?.preferredCurrency || "XAF") as SupportedCurrency, rates)}
+                        {isIncoming ? '+' : '-'}{formatWalletBalance(tx.amount, tx.currency || user?.preferredCurrency || "XAF")}
                       </span>
                       <span className={`text-[10px] font-medium uppercase tracking-wide ${statusColors[tx.status] || 'text-muted-foreground'}`}>
                         {tx.status === "completed" ? t.dashboard.statusCompleted : tx.status === "pending" ? t.dashboard.statusPending : t.dashboard.statusFailed}

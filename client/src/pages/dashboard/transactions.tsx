@@ -13,7 +13,7 @@ import {
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { formatCurrency } from "@/lib/currency";
+import { formatCurrency, formatWalletBalance } from "@/lib/currency";
 import { useLocation } from "wouter";
 import { useExchangeRates } from "@/hooks/use-exchange-rates";
 import { useLanguage } from "@/lib/language";
@@ -436,7 +436,7 @@ export default function TransactionsPage() {
 
                           <div className="flex flex-col items-end gap-1 shrink-0">
                             <span className={`text-sm font-bold whitespace-nowrap ${getAmountColor(tx)}`}>
-                              {getAmountPrefix(tx)}{formatCurrency(tx.amount, (tx.currency || user?.preferredCurrency || "XAF") as SupportedCurrency)}
+                              {getAmountPrefix(tx)}{formatWalletBalance(tx.amount, tx.currency || user?.preferredCurrency || "XAF")}
                             </span>
                             {getStatusBadge(tx.status)}
                           </div>
