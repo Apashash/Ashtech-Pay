@@ -608,14 +608,16 @@ app.use((req, res, next) => {
   // que React affiche sa page d'erreur — seul le code HTTP change.
   app.use((req, res, next) => {
     const p = req.path;
+    // Chemins avec extension (.js, .css, .png, .svg…) → laisser passer.
+    // express.static / Vite les servent directement et gèrent leur propre
+    // statut HTTP. Interférer ici casserait le chargement des assets React
+    // (page blanche en production).
+    if (/\.\w+$/.test(p)) return next();
     // Routes SPA connues → 200
     if (isSpaRoute(p)) return next();
-    // Chemin inconnu → poser 404.
-    // Les vrais fichiers statiques (assets, favicon…) sont servis par le
-    // middleware static/Vite en aval et écrasent ce statut avec 200.
-    // Les chemins inexistants (probes de scanner) restent en 404 et le
-    // catch-all sert quand même index.html pour que React affiche sa page
-    // d'erreur.
+    // Chemin inconnu sans extension (probe scanner: /webadmin, /manager…)
+    // → marquer 404 ; le catch-all SPA sert quand même index.html afin que
+    // React affiche sa page d'erreur.
     res.status(404);
     next();
   });
