@@ -126,10 +126,10 @@ app.use((req: Request, res: Response, next: NextFunction) => {
     p === "/tailwind.config.ts" ||
     p === "/postcss.config.js" ||
     p === "/vite.config.ts" ||
-    // .env files anywhere
-    p.endsWith(".env") ||
-    p.endsWith(".env.local") ||
-    p.endsWith(".env.production") ||
+    // .env files anywhere — catches .env, .env.example, .env.backup, .env.prod.local, etc.
+    // Matches any path segment that is ".env" or starts with ".env." (case-insensitive).
+    // Example: /.env, /.env.example, /subdir/.env.staging, /a/b/.env.prod.local
+    /(?:^|\/)\.env(?:\.|$)/i.test(p) ||
     // Root-level .cjs bundles (built server output, not client)
     p === "/index.cjs" ||
     p.endsWith("/index.cjs");
