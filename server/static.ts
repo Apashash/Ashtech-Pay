@@ -1,6 +1,7 @@
 import express, { type Express } from "express";
 import fs from "fs";
 import path from "path";
+import { isSpaRoute } from "./spaRoutes";
 
 export function serveStatic(app: Express) {
   const distPath = path.resolve(process.cwd(), "dist", "public");
@@ -40,6 +41,9 @@ export function serveStatic(app: Express) {
   });
 
   // fall through to index.html (SPA)
+  // Le statut est déjà posé par le middleware spaRoute dans index.ts (404 pour
+  // chemins inconnus, 200 pour les vraies routes). On se contente de servir
+  // index.html sans modifier le code retour.
   app.use("*", (_req, res) => {
     const indexPath = path.resolve(distPath, "index.html");
     res.set("Content-Type", "text/html").sendFile(indexPath);

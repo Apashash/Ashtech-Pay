@@ -35,6 +35,7 @@ import { globalLimiter } from "./rateLimiter";
 import { botGuard, sendClean404 } from "./botGuard";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
+import { isSpaRoute } from "./spaRoutes";
 import { createServer } from "http";
 import { startPaymentPoller, recoverPendingDeposits } from "./paymentPoller";
 import { startPayoutPoller, recoverPendingPayouts } from "./payoutPoller";
@@ -598,6 +599,25 @@ app.use((req, res, next) => {
       console.error("[Error]", isProd ? `${err.message}` : err);
     }
     res.status(status).json({ message });
+  });
+
+  // ── SPA route guard ───────────────────────────────────────────────────────
+  // Pose le statut 404 AVANT que Vite/static serve index.html, pour les chemins
+  // inconnus. Les vraies routes React et les fichiers statiques (.js, .css…)
+  // passent avec 200. Le catch-all SPA en aval sert quand même index.html afin
+  // que React affiche sa page d'erreur — seul le code HTTP change.
+  app.use((req, res, next) => {
+    const p = req.path;
+    // Routes SPA connues → 200
+    if (isSpaRoute(p)) return next();
+    // Chemin inconnu → poser 404.
+    // Les vrais fichiers statiques (assets, favicon…) sont servis par le
+    // middleware static/Vite en aval et écrasent ce statut avec 200.
+    // Les chemins inexistants (probes de scanner) restent en 404 et le
+    // catch-all sert quand même index.html pour que React affiche sa page
+    // d'erreur.
+    res.status(404);
+    next();
   });
 
   if (isProd) {

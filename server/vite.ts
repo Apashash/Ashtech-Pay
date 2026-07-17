@@ -5,6 +5,7 @@ import viteConfig from "../vite.config";
 import fs from "fs";
 import path from "path";
 import { nanoid } from "nanoid";
+import { isSpaRoute } from "./spaRoutes";
 
 const viteLogger = createLogger();
 
@@ -69,7 +70,9 @@ export async function setupVite(server: Server, app: Express) {
         `src="/src/main.tsx?v=${nanoid()}"`,
       );
       const page = await vite.transformIndexHtml(url, template);
-      res.status(200).set({ "Content-Type": "text/html" }).end(page);
+      // Le statut est déjà posé par le middleware spaRoute dans index.ts (404
+      // pour chemins inconnus, 200 pour vraies routes). On préserve ce statut.
+      res.set({ "Content-Type": "text/html" }).end(page);
     } catch (e) {
       vite.ssrFixStacktrace(e as Error);
       next(e);
