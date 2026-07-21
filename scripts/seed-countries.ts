@@ -23,7 +23,7 @@ async function seedCountriesAndOperators() {
       (gen_random_uuid(), 'Côte d''Ivoire', 'CI', '🇨🇮', '+225', 'XOF', 1, true, 100, 5000000, 500, 2000000),
       (gen_random_uuid(), 'Mali', 'ML', '🇲🇱', '+223', 'XOF', 1, true, 100, 5000000, 500, 2000000),
       (gen_random_uuid(), 'Burkina Faso', 'BF', '🇧🇫', '+226', 'XOF', 1, true, 100, 5000000, 500, 2000000),
-      (gen_random_uuid(), 'Niger', 'NE', '🇳🇪', '+227', 'XOF', 1, true, 100, 5000000, 500, 2000000),
+      (gen_random_uuid(), 'Niger', 'NE', '🇳🇪', '+227', 'XOFN', 1, true, 100, 5000000, 500, 2000000),
       (gen_random_uuid(), 'Togo', 'TG', '🇹🇬', '+228', 'XOF', 1, true, 100, 5000000, 500, 2000000),
       (gen_random_uuid(), 'Bénin', 'BJ', '🇧🇯', '+229', 'XOFB', 1, true, 100, 5000000, 500, 2000000),
       (gen_random_uuid(), 'Guinée-Bissau', 'GW', '🇬🇼', '+245', 'XOF', 1, true, 100, 5000000, 500, 2000000),
