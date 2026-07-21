@@ -19,12 +19,12 @@ async function seedCountriesAndOperators() {
       (gen_random_uuid(), 'Congo', 'CG', '🇨🇬', '+242', 'XAF', 1, true, 100, 5000000, 500, 2000000),
       (gen_random_uuid(), 'Gabon', 'GA', '🇬🇦', '+241', 'XAF', 1, true, 100, 5000000, 500, 2000000),
       (gen_random_uuid(), 'Guinée équatoriale', 'GQ', '🇬🇶', '+240', 'XAF', 1, true, 100, 5000000, 500, 2000000),
-      (gen_random_uuid(), 'Sénégal', 'SN', '🇸🇳', '+221', 'XOF', 1, true, 100, 5000000, 500, 2000000),
-      (gen_random_uuid(), 'Côte d''Ivoire', 'CI', '🇨🇮', '+225', 'XOF', 1, true, 100, 5000000, 500, 2000000),
-      (gen_random_uuid(), 'Mali', 'ML', '🇲🇱', '+223', 'XOF', 1, true, 100, 5000000, 500, 2000000),
-      (gen_random_uuid(), 'Burkina Faso', 'BF', '🇧🇫', '+226', 'XOF', 1, true, 100, 5000000, 500, 2000000),
+      (gen_random_uuid(), 'Sénégal', 'SN', '🇸🇳', '+221', 'XOFS', 1, true, 100, 5000000, 500, 2000000),
+      (gen_random_uuid(), 'Côte d''Ivoire', 'CI', '🇨🇮', '+225', 'XOFC', 1, true, 100, 5000000, 500, 2000000),
+      (gen_random_uuid(), 'Mali', 'ML', '🇲🇱', '+223', 'XOFM', 1, true, 100, 5000000, 500, 2000000),
+      (gen_random_uuid(), 'Burkina Faso', 'BF', '🇧🇫', '+226', 'XOFF', 1, true, 100, 5000000, 500, 2000000),
       (gen_random_uuid(), 'Niger', 'NE', '🇳🇪', '+227', 'XOFN', 1, true, 100, 5000000, 500, 2000000),
-      (gen_random_uuid(), 'Togo', 'TG', '🇹🇬', '+228', 'XOF', 1, true, 100, 5000000, 500, 2000000),
+      (gen_random_uuid(), 'Togo', 'TG', '🇹🇬', '+228', 'XOFT', 1, true, 100, 5000000, 500, 2000000),
       (gen_random_uuid(), 'Bénin', 'BJ', '🇧🇯', '+229', 'XOFB', 1, true, 100, 5000000, 500, 2000000),
       (gen_random_uuid(), 'Guinée-Bissau', 'GW', '🇬🇼', '+245', 'XOF', 1, true, 100, 5000000, 500, 2000000),
       (gen_random_uuid(), 'RD Congo', 'CD', '🇨🇩', '+243', 'CDF', 0.27, true, 100, 5000000, 500, 2000000),
@@ -33,7 +33,7 @@ async function seedCountriesAndOperators() {
       (gen_random_uuid(), 'Kenya', 'KE', '🇰🇪', '+254', 'KES', 0.0016, true, 100, 5000000, 500, 2000000),
       (gen_random_uuid(), 'Gambie', 'GM', '🇬🇲', '+220', 'GMD', 0.0016, true, 100, 5000000, 500, 2000000),
       (gen_random_uuid(), 'Guinée Conakry', 'GN', '🇬🇳', '+224', 'GNF', 0.0076, true, 100, 5000000, 500, 2000000)
-      ON CONFLICT (code) DO NOTHING
+      ON CONFLICT (code) DO UPDATE SET currency = EXCLUDED.currency
       RETURNING id, code;
     `);
     
