@@ -3908,11 +3908,11 @@ export async function registerRoutes(
       // TG→XOFT, BJ→XOFB, SN→XOFS, CM→XAF, GA→XAFG, etc.
       const txCurrency = COUNTRY_CURRENCY[country.code] || country.currency || sender.preferredCurrency || "XAF";
 
-      // walletCurrency = the wallet actually debited — always the exact currency of the
-      // destination country (txCurrency). No cross-family tolerance: a user sending to
-      // Bénin (XOFB) must have funds in their XOFB wallet specifically, even if they hold
-      // XOF/XOFT/XOFC (same CFA family). They must convert first, same as withdrawals.
-      const walletCurrency = txCurrency;
+      // walletCurrency = the internal wallet code to debit. Uses CURRENCY_ZONE (which holds
+      // Ashtech's internal per-country codes, e.g. NE→XOFN, ML→XOFM) so we look up the
+      // correct secondary wallet. This may differ from txCurrency (e.g. NE: XOFN vs Swychr XOF).
+      // No cross-family tolerance: a user sending to Bénin (XOFB) must have XOFB funds.
+      const walletCurrency = CURRENCY_ZONE[country.code] || txCurrency;
 
       const fxRates = await loadFxRates();
       const minTransferSetting = await storage.getSetting("min_transfer");
@@ -5007,9 +5007,10 @@ export async function registerRoutes(
       // Resolve country info for currency and country code
       const withdrawalCountry = await storage.getCountry(data.countryId);
       const withdrawalCountryCode = withdrawalCountry?.code || "CM";
-      // Use COUNTRY_CURRENCY for the exact wallet code (XOFT for TG, XOFB for BJ, etc.)
-      // This is the authoritative Swychr map — country.currency in DB may be generic (XOF).
-      const withdrawalCurrency = COUNTRY_CURRENCY[withdrawalCountryCode] || withdrawalCountry?.currency || userCurrency;
+      // Use CURRENCY_ZONE for the internal wallet code (XOFN for NE, XOFM for ML, XOFT for TG, etc.)
+      // CURRENCY_ZONE holds Ashtech's per-country wallet codes; COUNTRY_CURRENCY holds Swychr-facing codes.
+      // For wallet debit we must use the internal code so we find the right secondary wallet.
+      const withdrawalCurrency = CURRENCY_ZONE[withdrawalCountryCode] || COUNTRY_CURRENCY[withdrawalCountryCode] || withdrawalCountry?.currency || userCurrency;
 
       // Fetch operator early to determine provider before fee calculation
       const withdrawalOperator = await storage.getOperator(data.operatorId);

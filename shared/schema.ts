@@ -1046,7 +1046,7 @@ export const CURRENCY_ZONE: Record<string, SupportedCurrency> = {
   // XAF zone — Central Africa (stored in user.balance)
   CM: "XAF", CF: "XAF", CG: "XAF", GA: "XAF", GQ: "XAF", TD: "XAF",
   // XOF zone — West Africa
-  BJ: "XOFB", BF: "XOFF", CI: "XOFC", GW: "XOF", ML: "XOFM", NE: "XOF", SN: "XOFS", TG: "XOFT",
+  BJ: "XOFB", BF: "XOFF", CI: "XOFC", GW: "XOF", ML: "XOFM", NE: "XOFN", SN: "XOFS", TG: "XOFT",
   // Other countries
   GH: "GHS", NG: "NGN", KE: "KES", RW: "RWF", TZ: "TZS", UG: "UGX",
   CD: "CDF", GN: "GNF",
