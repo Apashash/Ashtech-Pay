@@ -24,7 +24,8 @@ export function convertCurrency(amountXAF: number, toCurrency: string, customRat
 
 // Currencies whose amounts are stored natively (not as XAF equivalents)
 // and must NOT be converted through the XAF pivot before display.
-const NATIVE_CRYPTO_CURRENCIES = new Set(["USDT"]);
+// CDF and GNF have defaultRate 0 in schema — they are stored in their own unit.
+const NATIVE_CRYPTO_CURRENCIES = new Set(["USDT", "CDF", "GNF"]);
 
 export function formatCurrency(amount: string | number, currency: SupportedCurrency = "XAF", customRates?: Record<string, number>): string {
   const num = typeof amount === "string" ? parseFloat(amount) : amount;
