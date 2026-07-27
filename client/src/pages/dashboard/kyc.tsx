@@ -108,6 +108,7 @@ export default function KYCPage() {
 
   const frontInputRef = useRef<HTMLInputElement>(null);
   const backInputRef = useRef<HTMLInputElement>(null);
+  const selfieInputRef = useRef<HTMLInputElement>(null);
 
   // Camera (selfie — front camera only, no file import)
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -353,10 +354,9 @@ export default function KYCPage() {
   const removeUpload = (field: UploadField) => {
     setUploadedPaths(prev => ({ ...prev, [field]: null }));
     setUploadPreviews(prev => ({ ...prev, [field]: null }));
-    if (field !== "selfie") {
-      const inputRef = field === "front" ? frontInputRef : backInputRef;
-      if (inputRef.current) inputRef.current.value = "";
-    }
+    if (field === "front" && frontInputRef.current) frontInputRef.current.value = "";
+    if (field === "back" && backInputRef.current) backInputRef.current.value = "";
+    if (field === "selfie" && selfieInputRef.current) selfieInputRef.current.value = "";
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -769,10 +769,18 @@ export default function KYCPage() {
                     backInputRef as React.RefObject<HTMLInputElement>
                   )}
 
-                  {/* Selfie — caméra frontale uniquement, import désactivé */}
+                  {/* Selfie — caméra frontale ou galerie */}
                   <div className="space-y-2">
                     <Label>{t.kyc.selfieLabel}</Label>
                     <canvas ref={canvasRef} className="hidden" />
+                    <input
+                      type="file"
+                      ref={selfieInputRef}
+                      accept="image/jpeg,image/png,image/webp"
+                      onChange={handleInputChange("selfie")}
+                      className="hidden"
+                      data-testid="input-file-selfie"
+                    />
 
                     {uploadedPaths.selfie && uploadPreviews.selfie ? (
                       <div className="relative border-2 border-green-500/50 bg-green-500/5 rounded-lg p-4">
@@ -796,18 +804,38 @@ export default function KYCPage() {
                         {cameraError && (
                           <p className="text-xs text-destructive">{cameraError}</p>
                         )}
-                        <button
-                          type="button"
-                          onClick={startCamera}
-                          disabled={cameraStarting}
-                          className="w-full border-2 border-dashed border-border rounded-lg p-6 text-center hover:border-primary/50 transition-colors cursor-pointer disabled:opacity-50"
-                        >
-                          <div className="w-12 h-12 mx-auto text-muted-foreground mb-2 flex items-center justify-center">
-                            {cameraStarting ? <Loader2 className="w-8 h-8 animate-spin" /> : <Camera className="w-8 h-8" />}
-                          </div>
-                          <p className="text-sm text-muted-foreground">{cameraStarting ? "Ouverture de la caméra…" : t.kyc.selfieDesc}</p>
-                          <p className="text-xs text-muted-foreground mt-1">Caméra frontale uniquement • Aucun import de fichier autorisé</p>
-                        </button>
+                        <div className="grid grid-cols-2 gap-3">
+                          {/* Caméra */}
+                          <button
+                            type="button"
+                            onClick={startCamera}
+                            disabled={cameraStarting || uploading.selfie}
+                            className="border-2 border-dashed border-border rounded-lg p-5 text-center hover:border-primary/50 transition-colors cursor-pointer disabled:opacity-50"
+                          >
+                            <div className="w-10 h-10 mx-auto text-muted-foreground mb-2 flex items-center justify-center">
+                              {cameraStarting ? <Loader2 className="w-7 h-7 animate-spin" /> : <Camera className="w-7 h-7" />}
+                            </div>
+                            <p className="text-sm text-muted-foreground font-medium">
+                              {cameraStarting ? "Ouverture…" : "Caméra"}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-0.5">Prendre une photo</p>
+                          </button>
+                          {/* Galerie */}
+                          <button
+                            type="button"
+                            onClick={() => selfieInputRef.current?.click()}
+                            disabled={uploading.selfie || cameraStarting}
+                            className="border-2 border-dashed border-border rounded-lg p-5 text-center hover:border-primary/50 transition-colors cursor-pointer disabled:opacity-50"
+                          >
+                            <div className="w-10 h-10 mx-auto text-muted-foreground mb-2 flex items-center justify-center">
+                              {uploading.selfie ? <Loader2 className="w-7 h-7 animate-spin" /> : <ImageIcon className="w-7 h-7" />}
+                            </div>
+                            <p className="text-sm text-muted-foreground font-medium">
+                              {uploading.selfie ? "Envoi…" : "Galerie"}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-0.5">Depuis vos photos</p>
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
