@@ -199,27 +199,6 @@ export default function PaymentPage() {
   const operators = useMemo(() => selectedCountryData?.operators || [], [selectedCountryData]);
   const selectedOperatorData = useMemo(() => operators.find(o => o.id === operator), [operators, operator]);
 
-  // Keep the requested default crypto selection (USDT on Tron/TRC20) when the
-  // dynamic catalogue loads, while still falling back safely if an asset or
-  // network is unavailable.
-  useEffect(() => {
-    const availableCoins = Object.keys(payCoinList);
-    if (!availableCoins.length) return;
-
-    const activeCoin = payCoinList[payCryptoCoin]
-      ? payCryptoCoin
-      : (payCoinList.USDT ? "USDT" : availableCoins[0]);
-    if (activeCoin !== payCryptoCoin) setPayCryptoCoin(activeCoin);
-
-    const networks = payCoinList[activeCoin]?.networks ?? [];
-    if (networks.length && !networks.some(net => net.id === payCryptoNetwork)) {
-      const preferredNetwork = networks.some(net => net.id === "TRC20")
-        ? "TRC20"
-        : networks[0].id;
-      setPayCryptoNetwork(preferredNetwork);
-    }
-  }, [payCoinList, payCryptoCoin, payCryptoNetwork]);
-
   const parseFailureMessage = (description?: string): string => {
     if (!description) return "";
     const errorCodeMap: Record<string, string> = {
@@ -498,15 +477,22 @@ export default function PaymentPage() {
     },
   });
 
-  // Keep the selected coin and network valid when admin filtering changes the catalogue.
+  // Keep USDT/TRC20 as the default when the dynamic catalogue loads. If an
+  // administrator disables it, fall back to the first active option instead.
   useEffect(() => {
     const availableCoins = Object.keys(payCoinList);
     if (!availableCoins.length) return;
-    const activeCoin = payCoinList[payCryptoCoin] ? payCryptoCoin : availableCoins[0];
+    const activeCoin = payCoinList[payCryptoCoin]
+      ? payCryptoCoin
+      : (payCoinList.USDT ? "USDT" : availableCoins[0]);
     if (activeCoin !== payCryptoCoin) setPayCryptoCoin(activeCoin);
     const nets = payCoinList[activeCoin]?.networks ?? [];
     if (nets.length && !nets.some(net => net.id === payCryptoNetwork)) {
-      setPayCryptoNetwork(nets[0].id);
+      setPayCryptoNetwork(
+        activeCoin === "USDT" && nets.some(net => net.id === "TRC20")
+          ? "TRC20"
+          : nets[0].id,
+      );
     }
   }, [payCoinList, payCryptoCoin, payCryptoNetwork]);
 
@@ -1261,7 +1247,7 @@ export default function PaymentPage() {
               <img
                 src={getImageSrc(paymentLink.imagePath)}
                 alt={paymentLink.title}
-                className="block w-auto max-w-full h-auto max-h-72 sm:max-h-80 mx-auto object-contain rounded-lg bg-muted"
+                className="block w-auto max-w-full h-auto max-h-32 sm:max-h-48 md:max-h-56 mx-auto object-contain rounded-lg bg-muted"
                 data-testid="img-payment-link"
               />
             </div>
@@ -1280,7 +1266,7 @@ export default function PaymentPage() {
 
             {/* Country — first field */}
             <div className="space-y-2">
-              <Label htmlFor="country">Pays *</Label>
+              <Label htmlFor="country">{p.country} *</Label>
               <Select value={country} onValueChange={(val) => { setCountry(val); setOperator(""); setErrors(p => ({...p, country: undefined as any})); }}>
                 <SelectTrigger data-testid="select-country" className={`h-14 ${errors.country ? "border-red-500" : ""}`}>
                   {selectedCountryData ? (
@@ -1323,7 +1309,13 @@ export default function PaymentPage() {
                 <button
                   type="button"
                   className={`flex flex-col items-center gap-1.5 h-auto py-3 px-2 rounded-lg border-2 transition-all w-full ${paymentMethod === "crypto" ? "border-primary bg-primary/5 shadow-sm" : "border-border bg-background hover:border-primary/40 hover:bg-muted/40"}`}
-                  onClick={() => { setPaymentMethod("crypto"); setErrors(prev => ({...prev, paymentMethod: undefined as any})); }}
+                  onClick={() => {
+                    setPaymentMethod("crypto");
+                    setPayCryptoCoin("USDT");
+                    setPayCryptoNetwork("TRC20");
+                    setPayCryptoAssetCode("USDT.TRC20");
+                    setErrors(prev => ({...prev, paymentMethod: undefined as any}));
+                  }}
                   data-testid="button-payment-crypto"
                 >
                   <img src="/payment-crypto.jpeg" alt="Crypto" className="w-12 h-12 rounded-md object-contain bg-white" loading="eager" decoding="async" />
@@ -1404,7 +1396,7 @@ export default function PaymentPage() {
               <>
                 {/* ── Coin selector ── */}
                 <div className="space-y-1.5">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cryptomonnaie</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{p.cryptoCurrency}</p>
                   <CoinSelect
                     value={payCryptoCoin}
                     onChange={setPayCryptoCoin}
@@ -1415,7 +1407,7 @@ export default function PaymentPage() {
 
                 {/* ── Network selector ── */}
                 <div className="space-y-1.5">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Réseau</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{p.network}</p>
                   <div className="relative">
                     <select
                       value={payCryptoNetwork}
@@ -1440,7 +1432,7 @@ export default function PaymentPage() {
                   </div>
                   {payCoinList[payCryptoCoin]?.networks.find(n => n.id === payCryptoNetwork)?.memoRequired && (
                     <p className="text-xs text-amber-600 dark:text-amber-400">
-                      ⚠️ Ce réseau nécessite un mémo/tag — il sera affiché avec l'adresse.
+                       ⚠️ {p.memoRequired}
                     </p>
                   )}
                 </div>
@@ -1449,7 +1441,7 @@ export default function PaymentPage() {
                 {!paymentLink.isFixedAmount ? (
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Montant ({payCryptoCoin})
+                       {p.cryptoAmount} ({payCryptoCoin})
                     </label>
                     <div className="flex rounded-xl border border-border overflow-hidden focus-within:ring-2 focus-within:ring-primary/40">
                       <span className="flex items-center px-3 bg-muted border-r border-border text-sm font-bold text-muted-foreground shrink-0">
@@ -1473,9 +1465,9 @@ export default function PaymentPage() {
                       </p>
                     )}
                     <p className="text-xs text-muted-foreground px-1">
-                      Minimum : <span className="font-semibold text-foreground">
+                      {p.cryptoMinimum} : <span className="font-semibold text-foreground">
                         {payCryptoMinimumAmount ? `${formatCryptoAmount(payCryptoMinimumAmount)} ${payCryptoCoin}` : "1 USDT"}
-                      </span> (soit 1 USDT, avant frais)
+                      </span> (1 USDT, {p.beforeFees})
                     </p>
                     {/* Quick-select presets (click sets coin equivalent of USDT amount) */}
                     <div className="flex gap-2 flex-wrap">
@@ -1499,7 +1491,7 @@ export default function PaymentPage() {
                 ) : (
                   /* Fixed amount — show reference */
                   <div className="bg-muted/30 rounded-xl px-4 py-3 text-center space-y-0.5">
-                    <p className="text-xs text-muted-foreground">Montant à régler</p>
+                    <p className="text-xs text-muted-foreground">{p.fixedAmount}</p>
                     <p className="text-2xl font-bold text-foreground" data-testid="text-payment-amount">
                       {formatCryptoAmount(fixedCryptoAmountUsdt)} USDT
                     </p>
@@ -1508,7 +1500,7 @@ export default function PaymentPage() {
                     </p>
                     {fixedCryptoAmountUsdt > 0 && fixedCryptoAmountUsdt < 1 && (
                       <p className="text-xs text-red-600 dark:text-red-400 mt-2">
-                        Ce lien est inférieur au minimum crypto de 1 USDT et ne peut pas être payé en crypto.
+                        {p.minimumCryptoWarning}
                       </p>
                     )}
                   </div>
@@ -1516,7 +1508,7 @@ export default function PaymentPage() {
 
                 {/* ── Email ── */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Email *</label>
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{p.email} *</label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
@@ -1538,12 +1530,12 @@ export default function PaymentPage() {
                     onClick={() => setShowPayRefundField(v => !v)}
                     className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
                   >
-                    {showPayRefundField ? "▲" : "▼"} Adresse de remboursement (optionnel)
+                    {showPayRefundField ? "▲" : "▼"} {p.refundAddress} ({p.optional})
                   </button>
                   {showPayRefundField && (
                     <div className="mt-2 space-y-1">
                       <p className="text-xs text-muted-foreground">
-                        En cas de problème, Ashtechpay utilisera cette adresse pour vous rembourser.
+                        {p.refundHint}
                       </p>
                       <input
                         type="text"
@@ -1562,8 +1554,8 @@ export default function PaymentPage() {
                   size="lg"
                   onClick={() => {
                     const errs: Record<string, string> = {};
-                    if (!email.trim()) errs.email = "Email requis";
-                    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errs.email = "Email invalide";
+                    if (!email.trim()) errs.email = p.errEmail;
+                    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errs.email = p.errEmailInvalid;
                     // country is optional for crypto — do not block on it
                     if (Object.keys(errs).length > 0) { setErrors(prev => ({ ...prev, ...errs })); return; }
                     generatePayLinkCryptoMutation.mutate();
@@ -1576,8 +1568,8 @@ export default function PaymentPage() {
                   data-testid="button-pay"
                 >
                   {generatePayLinkCryptoMutation.isPending
-                    ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Génération…</>
-                    : <><Bitcoin className="w-4 h-4 mr-2" />Générer l'adresse de paiement</>
+                    ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{p.generatingAddress}</>
+                    : <><Bitcoin className="w-4 h-4 mr-2" />{p.generateAddress}</>
                   }
                 </Button>
               </>
@@ -1585,7 +1577,7 @@ export default function PaymentPage() {
               <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
                 <AlertDescription>
-                  Aucun réseau crypto n’est actuellement disponible pour ce lien de paiement.
+                  {p.noCryptoNetwork}
                 </AlertDescription>
               </Alert>
             ) : (
