@@ -97,6 +97,8 @@ export default function DepositPage() {
   const [cryptoMemoType, setCryptoMemoType] = useState<string | null>(null);
   const [cryptoShared, setCryptoShared] = useState(false);
   const [cryptoAssetCode, setCryptoAssetCode] = useState("");
+  const [cryptoCountdown, setCryptoCountdown] = useState(30 * 60);
+  const cryptoCountdownRef = useRef<NodeJS.Timeout | null>(null);
 
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const { data: wallets } = useQuery<{ id: string; currency: string; balance: string }[]>({
@@ -482,20 +484,81 @@ export default function DepositPage() {
               {/* ── STEP: waiting for blockchain confirmation ── */}
               {cryptoStep === "waiting" ? (
                 <div className="text-center py-6 space-y-5">
+
+                  {/* Icon animé */}
                   <div className="relative flex items-center justify-center">
-                    <div className="absolute w-20 h-20 rounded-full bg-amber-500/10 animate-pulse" />
+                    <div className="absolute w-24 h-24 rounded-full bg-amber-500/10 animate-ping" style={{ animationDuration: "2s" }} />
                     <div className="w-16 h-16 rounded-full bg-amber-500/15 flex items-center justify-center relative z-10">
                       <Clock className="w-7 h-7 text-amber-500" />
                     </div>
                   </div>
+
+                  {/* Titre */}
                   <div>
                     <h3 className="text-lg font-bold text-foreground">En attente de confirmation</h3>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Votre dépôt sera crédité automatiquement après confirmation sur la blockchain.
+                      Surveillance automatique de la blockchain en cours…
                     </p>
                   </div>
+
+                  {/* Montant */}
+                  {cryptoAmtNum > 0 && (
+                    <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3 text-center">
+                      <p className="text-xs text-muted-foreground mb-0.5">Montant envoyé</p>
+                      <p className="text-xl font-bold text-amber-600 dark:text-amber-400 tabular-nums">
+                        {cryptoAmtNum.toFixed(4)} USDT
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{cryptoAssetCode}</p>
+                    </div>
+                  )}
+
+                  {/* Étapes */}
+                  <div className="w-full space-y-2 text-left">
+                    {/* Étape 1 — Envoyé */}
+                    <div className="flex items-center gap-3">
+                      <div className="w-7 h-7 rounded-full bg-green-500/15 border border-green-500/40 flex items-center justify-center shrink-0">
+                        <CheckCircle className="w-4 h-4 text-green-500" />
+                      </div>
+                      <span className="text-sm font-medium text-green-600 dark:text-green-400">Fonds envoyés</span>
+                    </div>
+                    {/* Connecteur */}
+                    <div className="ml-3.5 w-px h-4 bg-border" />
+                    {/* Étape 2 — Confirmation blockchain */}
+                    <div className="flex items-center gap-3">
+                      <div className="w-7 h-7 rounded-full bg-amber-500/15 border border-amber-500/40 flex items-center justify-center shrink-0">
+                        <div className="w-3 h-3 rounded-full bg-amber-500 animate-pulse" />
+                      </div>
+                      <div className="flex-1">
+                        <span className="text-sm font-medium text-foreground">Confirmation blockchain</span>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          {[0, 150, 300].map((d) => (
+                            <span key={d} className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-bounce" style={{ animationDelay: `${d}ms` }} />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    {/* Connecteur */}
+                    <div className="ml-3.5 w-px h-4 bg-border" />
+                    {/* Étape 3 — Créditement */}
+                    <div className="flex items-center gap-3">
+                      <div className="w-7 h-7 rounded-full bg-muted border border-border flex items-center justify-center shrink-0">
+                        <span className="text-xs font-bold text-muted-foreground">3</span>
+                      </div>
+                      <span className="text-sm text-muted-foreground">Créditement automatique</span>
+                    </div>
+                  </div>
+
+                  {/* Barre de progression */}
+                  <CountdownBar
+                    countdown={cryptoCountdown}
+                    max={30 * 60}
+                    color="amber"
+                    label="Temps de surveillance estimé"
+                  />
+
+                  {/* Référence */}
                   {cryptoRef && (
-                    <div className="bg-muted/40 rounded-xl p-3 text-left">
+                    <div className="bg-muted/40 rounded-xl p-3 text-left w-full">
                       <p className="text-xs text-muted-foreground mb-0.5">Référence</p>
                       <div className="flex items-center gap-2">
                         <p className="font-mono text-xs font-bold text-foreground truncate flex-1">{cryptoRef}</p>
@@ -507,10 +570,12 @@ export default function DepositPage() {
                       </div>
                     </div>
                   )}
+
                   <Button
                     variant="outline"
                     className="w-full"
                     onClick={() => {
+                      if (cryptoCountdownRef.current) clearInterval(cryptoCountdownRef.current);
                       setCryptoStep("form");
                       setCryptoAmount("");
                       setCryptoAddr("");
@@ -609,7 +674,17 @@ export default function DepositPage() {
                   {/* Actions */}
                   <Button
                     className="w-full h-12 rounded-xl font-bold"
-                    onClick={() => setCryptoStep("waiting")}
+                    onClick={() => {
+                      setCryptoStep("waiting");
+                      setCryptoCountdown(30 * 60);
+                      if (cryptoCountdownRef.current) clearInterval(cryptoCountdownRef.current);
+                      cryptoCountdownRef.current = setInterval(() => {
+                        setCryptoCountdown(prev => {
+                          if (prev <= 1) { clearInterval(cryptoCountdownRef.current!); return 0; }
+                          return prev - 1;
+                        });
+                      }, 1000);
+                    }}
                   >
                     <CheckCircle className="w-4 h-4 mr-2" />
                     J'ai envoyé les fonds
