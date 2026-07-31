@@ -389,7 +389,8 @@ export default function PaymentPage() {
       const net = CRYPTO_COIN_LIST[payCryptoCoin]?.networks.find(n => n.id === payCryptoNetwork);
       if (!net) throw new Error("Réseau invalide");
       if (!email.trim()) throw new Error("Email requis");
-      const body: Record<string, string> = { assetCode: net.assetCode, email: email.trim() };
+      if (!country) throw new Error("Pays requis");
+      const body: Record<string, string> = { assetCode: net.assetCode, email: email.trim(), country };
       if (!(paymentLink as any)?.isFixedAmount && payCryptoAmount)
         body.amountUsdt = payCryptoAmount;
       if (payCryptoRefundAddress.trim())
@@ -1452,10 +1453,11 @@ export default function PaymentPage() {
                   className="w-full h-12 rounded-xl font-bold"
                   size="lg"
                   onClick={() => {
-                    if (!email.trim()) {
-                      setErrors(prev => ({ ...prev, email: "Email requis" }));
-                      return;
-                    }
+                    const errs: Record<string, string> = {};
+                    if (!email.trim()) errs.email = "Email requis";
+                    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errs.email = "Email invalide";
+                    if (!country) errs.country = "Pays requis";
+                    if (Object.keys(errs).length > 0) { setErrors(prev => ({ ...prev, ...errs })); return; }
                     generatePayLinkCryptoMutation.mutate();
                   }}
                   disabled={generatePayLinkCryptoMutation.isPending}

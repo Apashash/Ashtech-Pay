@@ -64,6 +64,7 @@ interface TransactionDetails extends Transaction {
   paymentIntent?: any;
   recipient?: { fullName: string; email: string; username: string; country?: string } | null;
   operator?: { id: string; name: string; type: string; paymentProvider: string; depositPaymentProvider?: string | null } | null;
+  metadata?: { assetCode?: string; payerEmail?: string; payerCountry?: string; address?: string; memo?: string; [key: string]: any } | null;
 }
 
 export default function AdminTransactions() {
@@ -475,58 +476,72 @@ export default function AdminTransactions() {
                 </>
               )}
 
-              {(txDetails.payerName || txDetails.payerEmail || txDetails.paymentIntent?.payerName || txDetails.paymentIntent?.payerPhone) && (
-                <>
-                  <Separator />
-                  <div className="space-y-3">
-                    <p className="text-sm font-semibold text-muted-foreground">Informations du payeur</p>
-                    
-                    {(txDetails.payerName || txDetails.paymentIntent?.payerName) && (
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <UserIcon className="w-4 h-4" />
-                          <span className="text-sm">Nom</span>
-                        </div>
-                        <span className="text-sm font-medium">
-                          {txDetails.payerName || txDetails.paymentIntent?.payerName}
-                        </span>
-                      </div>
-                    )}
+              {(() => {
+                const pEmail = txDetails.payerEmail || txDetails.paymentIntent?.payerEmail || txDetails.metadata?.payerEmail;
+                const pName  = txDetails.payerName  || txDetails.paymentIntent?.payerName;
+                const pPhone = txDetails.paymentIntent?.payerPhone;
+                const pCountry = txDetails.paymentIntent?.payerCountry || txDetails.metadata?.payerCountry;
+                const assetCode = txDetails.metadata?.assetCode;
+                if (!pEmail && !pName && !pPhone && !pCountry && !assetCode) return null;
+                return (
+                  <>
+                    <Separator />
+                    <div className="space-y-3">
+                      <p className="text-sm font-semibold text-muted-foreground">Informations du payeur</p>
 
-                    {(txDetails.payerEmail || txDetails.paymentIntent?.payerEmail) && (
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <Mail className="w-4 h-4" />
-                          <span className="text-sm">Email</span>
+                      {pName && (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <UserIcon className="w-4 h-4" />
+                            <span className="text-sm">Nom</span>
+                          </div>
+                          <span className="text-sm font-medium">{pName}</span>
                         </div>
-                        <span className="text-sm font-medium">
-                          {txDetails.payerEmail || txDetails.paymentIntent?.payerEmail}
-                        </span>
-                      </div>
-                    )}
+                      )}
 
-                    {txDetails.paymentIntent?.payerPhone && (
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <Phone className="w-4 h-4" />
-                          <span className="text-sm">Téléphone</span>
+                      {pEmail && (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Mail className="w-4 h-4" />
+                            <span className="text-sm">Email</span>
+                          </div>
+                          <span className="text-sm font-medium">{pEmail}</span>
                         </div>
-                        <span className="text-sm font-medium">{txDetails.paymentIntent.payerPhone}</span>
-                      </div>
-                    )}
+                      )}
 
-                    {txDetails.paymentIntent?.payerCountry && (
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <MapPin className="w-4 h-4" />
-                          <span className="text-sm">Pays</span>
+                      {pPhone && (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Phone className="w-4 h-4" />
+                            <span className="text-sm">Téléphone</span>
+                          </div>
+                          <span className="text-sm font-medium">{pPhone}</span>
                         </div>
-                        <span className="text-sm font-medium">{txDetails.paymentIntent.payerCountry}</span>
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
+                      )}
+
+                      {pCountry && (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <MapPin className="w-4 h-4" />
+                            <span className="text-sm">Pays</span>
+                          </div>
+                          <span className="text-sm font-medium">{pCountry}</span>
+                        </div>
+                      )}
+
+                      {assetCode && (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Globe className="w-4 h-4" />
+                            <span className="text-sm">Réseau</span>
+                          </div>
+                          <span className="text-sm font-mono font-semibold">{assetCode}</span>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
 
               {txDetails.operator && (
                 <>

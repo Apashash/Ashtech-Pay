@@ -7157,7 +7157,7 @@ export async function registerRoutes(
   app.post("/api/payment-links/:slug/crypto/address", publicPayLimiter, async (req, res) => {
     try {
       const { slug } = req.params;
-      const { assetCode, email, amountUsdt: clientAmountUsdt, refundAddress } = req.body;
+      const { assetCode, email, amountUsdt: clientAmountUsdt, refundAddress, country: payerCountry } = req.body;
 
       const link = await storage.getPaymentLinkBySlug(slug);
       if (!link || !link.isActive) {
@@ -7250,7 +7250,9 @@ export async function registerRoutes(
         paymentMethod: "crypto",
         reference,
         paymentLinkId: link.id,
-        metadata: { assetCode, address: depositAddr.address, memo: depositAddr.memo, payerEmail: email },
+        payerEmail: email || null,
+        payerName: email || null,
+        metadata: { assetCode, address: depositAddr.address, memo: depositAddr.memo, payerEmail: email, payerCountry: payerCountry || null },
       });
 
       console.log(`[PayLink/WaaS] addr=${depositAddr.address} asset=${assetCode} ref=${reference} merchant=${merchantId}`);
