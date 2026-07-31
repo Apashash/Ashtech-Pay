@@ -6881,6 +6881,34 @@ export async function registerRoutes(
     });
   }
 
+  // ── Crypto spot price in USDT (Binance public API, 5-min cache) ────────────
+  {
+    const _priceCache: Record<string, { p: number; ts: number }> = {};
+    const STABLE_COINS = new Set(["USDT","USDC","BUSD","TUSD","DAI","USDP","FRAX","USDD"]);
+    app.get("/api/crypto/price/:symbol", publicInfoLimiter, async (req, res) => {
+      try {
+        const sym = (req.params.symbol as string).toUpperCase();
+        if (STABLE_COINS.has(sym)) return res.json({ symbol: sym, priceUsd: 1 });
+        const now = Date.now();
+        if (_priceCache[sym] && now - _priceCache[sym].ts < 5 * 60_000)
+          return res.json({ symbol: sym, priceUsd: _priceCache[sym].p });
+        const binResp = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${sym}USDT`);
+        if (!binResp.ok) {
+          const cached = _priceCache[sym]?.p;
+          if (cached) return res.json({ symbol: sym, priceUsd: cached });
+          return res.status(404).json({ message: `Prix introuvable pour ${sym}` });
+        }
+        const { price } = await binResp.json() as { price: string };
+        const priceUsd = parseFloat(price);
+        _priceCache[sym] = { p: priceUsd, ts: now };
+        return res.json({ symbol: sym, priceUsd });
+      } catch (err: any) {
+        console.error("[crypto/price]", err.message);
+        return res.status(502).json({ message: "Erreur lors de la récupération du prix" });
+      }
+    });
+  }
+
   // Public deposit config for payment links (uses deposit fees)
   app.get("/api/public/deposit-config", publicInfoLimiter, async (_req, res) => {
     try {

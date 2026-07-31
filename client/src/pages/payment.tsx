@@ -23,6 +23,7 @@ import { getOperatorLogo } from "@/lib/operator-logos";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { SiPaypal } from "react-icons/si";
 import { useIziAssets, coinLogoUrl, networkLogoUrl } from "@/lib/use-crypto-assets";
+import { useCoinPrice } from "@/lib/use-coin-price";
 
 const CURRENCY_FLAGS: Record<SupportedCurrency, string> = {
   "XAF": "🇨🇲", "XOF": "🇸🇳", "CDF": "🇨🇩", "GHS": "🇬🇭",
@@ -107,6 +108,7 @@ export default function PaymentPage() {
 
   // Dynamic IziChange asset list (falls back to static if API not configured)
   const { coins: payCoinList } = useIziAssets();
+  const { priceUsd: payCryptoCoinPrice } = useCoinPrice(payCryptoCoin);
 
   const { data: paymentLink, isLoading, error } = useQuery<PaymentLink & { hasPdf?: boolean }>({
     queryKey: ["/api/payment-links/public", params?.slug],
@@ -395,8 +397,12 @@ export default function PaymentPage() {
       // country is optional for crypto (not needed by IziChange Direct Charge)
       const body: Record<string, string> = { assetCode: net.assetCode, email: email.trim() };
       if (country) body.country = country;
-      if (!(paymentLink as any)?.isFixedAmount && payCryptoAmount)
-        body.amountUsdt = payCryptoAmount;
+      if (!(paymentLink as any)?.isFixedAmount && payCryptoAmount) {
+        const usdtEquiv = payCryptoCoinPrice > 0
+          ? (parseFloat(payCryptoAmount) * payCryptoCoinPrice).toFixed(4)
+          : payCryptoAmount;
+        body.amountUsdt = usdtEquiv;
+      }
       if (payCryptoRefundAddress.trim())
         body.refundAddress = payCryptoRefundAddress.trim();
       const res = await fetch(`/api/payment-links/${params?.slug}/crypto/address`, {
@@ -626,10 +632,15 @@ export default function PaymentPage() {
             </div>
 
             {/* Amount banner */}
-            {payCryptoAmountUsdt && (
+            {(payCryptoAmount || payCryptoAmountUsdt) && (
               <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-3 text-center">
                 <p className="text-xs text-amber-700 dark:text-amber-400">Montant à envoyer (estimé)</p>
-                <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">{payCryptoAmountUsdt} USDT</p>
+                <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">
+                  {payCryptoAmount || payCryptoAmountUsdt} {payCryptoCoin}
+                </p>
+                {payCryptoAmountUsdt && payCryptoCoin !== "USDT" && (
+                  <p className="text-xs text-amber-600 dark:text-amber-500 mt-0.5">≈ {payCryptoAmountUsdt} USDT</p>
+                )}
               </div>
             )}
 
@@ -1381,38 +1392,50 @@ export default function PaymentPage() {
                   )}
                 </div>
 
-                {/* ── Amount (USDT) — only for non-fixed links ── */}
+                {/* ── Amount in selected coin — only for non-fixed links ── */}
                 {!paymentLink.isFixedAmount ? (
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Montant (USDT)
+                      Montant ({payCryptoCoin})
                     </label>
                     <div className="flex rounded-xl border border-border overflow-hidden focus-within:ring-2 focus-within:ring-primary/40">
                       <span className="flex items-center px-3 bg-muted border-r border-border text-sm font-bold text-muted-foreground shrink-0">
-                        USDT
+                        {payCryptoCoin}
                       </span>
                       <input
                         type="number"
                         inputMode="decimal"
-                        min="1"
-                        step="0.01"
+                        min="0"
+                        step="any"
                         placeholder="0.00"
                         value={payCryptoAmount}
                         onChange={e => setPayCryptoAmount(e.target.value)}
                         className="flex-1 min-w-0 px-4 h-12 bg-background text-base font-semibold focus:outline-none"
                       />
                     </div>
+                    {/* USDT equivalent estimate */}
+                    {parseFloat(payCryptoAmount) > 0 && payCryptoCoinPrice > 0 && (
+                      <p className="text-xs text-muted-foreground px-1">
+                        ≈ <span className="font-semibold text-foreground">{(parseFloat(payCryptoAmount) * payCryptoCoinPrice).toFixed(2)} USDT</span>
+                      </p>
+                    )}
+                    {/* Quick-select presets (click sets coin equivalent of USDT amount) */}
                     <div className="flex gap-2 flex-wrap">
-                      {["10", "50", "100", "250", "500"].map(v => (
-                        <button
-                          key={v}
-                          type="button"
-                          onClick={() => setPayCryptoAmount(v)}
-                          className="text-xs px-3 py-1.5 rounded-lg border border-border bg-muted/30 hover:bg-muted/60 font-semibold transition-all"
-                        >
-                          {v} USDT
-                        </button>
-                      ))}
+                      {["10", "50", "100", "250", "500"].map(v => {
+                        const usdtVal = parseFloat(v);
+                        const coinVal = payCryptoCoinPrice > 0 ? usdtVal / payCryptoCoinPrice : 0;
+                        return (
+                          <button
+                            key={v}
+                            type="button"
+                            disabled={coinVal <= 0}
+                            onClick={() => setPayCryptoAmount(coinVal < 1 ? coinVal.toFixed(6) : coinVal.toFixed(2))}
+                            className="text-xs px-3 py-1.5 rounded-lg border border-border bg-muted/30 hover:bg-muted/60 font-semibold transition-all disabled:opacity-40"
+                          >
+                            ~{v} USDT
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 ) : (

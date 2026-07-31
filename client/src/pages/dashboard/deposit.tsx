@@ -60,6 +60,7 @@ const QUICK_AMOUNTS = [5000, 10000, 25000, 50000, 100000];
 
 // ── Dynamic IziChange crypto-asset list ────────────────────────────────────────
 import { useIziAssets, coinLogoUrl, networkLogoUrl } from "@/lib/use-crypto-assets";
+import { useCoinPrice } from "@/lib/use-coin-price";
 
 export default function DepositPage() {
   const { toast } = useToast();
@@ -103,6 +104,7 @@ export default function DepositPage() {
 
   // Dynamic IziChange asset list (falls back to static if API not configured)
   const { coins: cryptoCoinList } = useIziAssets();
+  const { priceUsd: cryptoCoinPrice, isLoading: coinPriceLoading } = useCoinPrice(cryptoCoin);
 
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const { data: wallets } = useQuery<{ id: string; currency: string; balance: string }[]>({
@@ -320,10 +322,12 @@ export default function DepositPage() {
       if (!net) throw new Error("Réseau invalide");
       const amt = parseFloat(cryptoAmount);
       if (!amt || amt <= 0) throw new Error("Entrez un montant valide");
+      if (cryptoCoinPrice <= 0) throw new Error("Prix du coin introuvable, veuillez patienter…");
+      const usdtEquiv = (amt * cryptoCoinPrice).toFixed(4);
       const res = await apiRequest("POST", "/api/deposits/crypto/address", {
         assetCode: net.assetCode,
-        amount: cryptoAmount,
-        currency: "USDT", // user enters USDT amounts directly
+        amount: usdtEquiv,
+        currency: "USDT",
         ...(refundAddress ? { refundAddress } : {}),
       });
       const data = await res.json();
@@ -412,9 +416,10 @@ export default function DepositPage() {
   });
   const cryptoFeePercent = feeSettings?.cryptoFeePercent ?? 2.5;
 
-  const cryptoAmtNum = parseFloat(cryptoAmount) || 0;
-  const cryptoFee = (cryptoAmtNum * cryptoFeePercent) / 100;
-  const cryptoNet = cryptoAmtNum - cryptoFee;
+  const cryptoAmtNum = parseFloat(cryptoAmount) || 0; // amount in selected coin
+  const cryptoUsdtEquiv = cryptoCoinPrice > 0 ? cryptoAmtNum * cryptoCoinPrice : 0; // USDT value
+  const cryptoFee = (cryptoUsdtEquiv * cryptoFeePercent) / 100;
+  const cryptoNet = cryptoUsdtEquiv - cryptoFee;
   const userCurrency = (user?.preferredCurrency || "XOF") as SupportedCurrency;
 
   return (
@@ -521,8 +526,11 @@ export default function DepositPage() {
                     <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3 text-center">
                       <p className="text-xs text-muted-foreground mb-0.5">Montant envoyé</p>
                       <p className="text-xl font-bold text-amber-600 dark:text-amber-400 tabular-nums">
-                        {cryptoAmtNum.toFixed(4)} USDT
+                        {cryptoAmtNum.toFixed(cryptoAmtNum < 1 ? 6 : 4)} {cryptoCoin}
                       </p>
+                      {cryptoCoin !== "USDT" && cryptoUsdtEquiv > 0 && (
+                        <p className="text-xs text-muted-foreground mt-0.5">≈ {cryptoUsdtEquiv.toFixed(2)} USDT</p>
+                      )}
                       <p className="text-xs text-muted-foreground mt-0.5">{cryptoAssetCode}</p>
                     </div>
                   )}
@@ -673,8 +681,11 @@ export default function DepositPage() {
                     <div className="bg-muted/30 rounded-xl px-4 py-3 space-y-1.5">
                       <div className="flex justify-between text-sm font-semibold">
                         <span className="text-muted-foreground">Envoyez exactement</span>
-                        <span className="text-foreground">{cryptoAmtNum.toFixed(4)} USDT</span>
+                        <span className="text-foreground">{cryptoAmtNum.toFixed(cryptoAmtNum < 1 ? 6 : 4)} {cryptoCoin}</span>
                       </div>
+                      {cryptoCoin !== "USDT" && cryptoUsdtEquiv > 0 && (
+                        <p className="text-xs text-muted-foreground text-right">≈ {cryptoUsdtEquiv.toFixed(2)} USDT</p>
+                      )}
                       <div className="flex justify-between text-xs text-muted-foreground">
                         <span>Frais ({cryptoFeePercent}%)</span>
                         <span className="text-red-500 font-semibold">-{cryptoFee.toFixed(4)} USDT</span>
@@ -818,20 +829,20 @@ export default function DepositPage() {
                     )}
                   </div>
 
-                  {/* ── Amount in USDT ── */}
+                  {/* ── Amount in selected coin ── */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Montant (USDT)
+                      Montant ({cryptoCoin})
                     </label>
                     <div className="flex rounded-xl border border-border overflow-hidden focus-within:ring-2 focus-within:ring-primary/40">
                       <span className="flex items-center px-3 bg-muted border-r border-border text-sm font-bold text-muted-foreground shrink-0">
-                        USDT
+                        {cryptoCoin}
                       </span>
                       <input
                         type="number"
                         inputMode="decimal"
-                        min="1"
-                        step="0.01"
+                        min="0"
+                        step="any"
                         placeholder="0.00"
                         value={cryptoAmount}
                         onChange={e => setCryptoAmount(e.target.value)}
@@ -839,17 +850,30 @@ export default function DepositPage() {
                         data-testid="input-crypto-amount"
                       />
                     </div>
+                    {/* USDT equivalent estimate */}
+                    {cryptoAmtNum > 0 && cryptoUsdtEquiv > 0 && (
+                      <p className="text-xs text-muted-foreground px-1">
+                        ≈ <span className="font-semibold text-foreground">{cryptoUsdtEquiv.toFixed(2)} USDT</span>
+                        {coinPriceLoading && <span className="ml-1 opacity-60">(chargement…)</span>}
+                      </p>
+                    )}
+                    {/* Quick-select presets (expressed as USDT equivalents, click sets coin amount) */}
                     <div className="flex gap-2 flex-wrap">
-                      {["10", "50", "100", "250", "500"].map(v => (
-                        <button
-                          key={v}
-                          type="button"
-                          onClick={() => setCryptoAmount(v)}
-                          className="text-xs px-3 py-1.5 rounded-lg border border-border bg-muted/30 hover:bg-muted/60 font-semibold transition-all"
-                        >
-                          {v} USDT
-                        </button>
-                      ))}
+                      {["10", "50", "100", "250", "500"].map(v => {
+                        const usdtVal = parseFloat(v);
+                        const coinVal = cryptoCoinPrice > 0 ? usdtVal / cryptoCoinPrice : 0;
+                        return (
+                          <button
+                            key={v}
+                            type="button"
+                            disabled={coinVal <= 0}
+                            onClick={() => setCryptoAmount(coinVal < 1 ? coinVal.toFixed(6) : coinVal.toFixed(2))}
+                            className="text-xs px-3 py-1.5 rounded-lg border border-border bg-muted/30 hover:bg-muted/60 font-semibold transition-all disabled:opacity-40"
+                          >
+                            ~{v} USDT
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
 
