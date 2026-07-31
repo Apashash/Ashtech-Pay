@@ -24,6 +24,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { SiPaypal } from "react-icons/si";
 import { useIziAssets, coinLogoUrl, networkLogoUrl } from "@/lib/use-crypto-assets";
 import { useCoinPrice } from "@/lib/use-coin-price";
+import { CoinSelect } from "@/components/ui/coin-select";
 
 const CURRENCY_FLAGS: Record<SupportedCurrency, string> = {
   "XAF": "🇨🇲", "XOF": "🇸🇳", "CDF": "🇨🇩", "GHS": "🇬🇭",
@@ -1346,27 +1347,12 @@ export default function PaymentPage() {
                 {/* ── Coin selector ── */}
                 <div className="space-y-1.5">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cryptomonnaie</p>
-                  <div className="relative">
-                    <select
-                      value={payCryptoCoin}
-                      onChange={e => setPayCryptoCoin(e.target.value)}
-                      className="w-full h-12 pl-11 pr-4 rounded-xl border border-border bg-background text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/40 appearance-none cursor-pointer"
-                    >
-                      {Object.entries(payCoinList).map(([sym, def]) => (
-                        <option key={sym} value={sym}>{sym} — {def.name}</option>
-                      ))}
-                    </select>
-                    <div className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full overflow-hidden bg-muted flex items-center justify-center">
-                      <img
-                        src={coinLogoUrl(payCryptoCoin.toLowerCase())}
-                        alt={payCryptoCoin}
-                        className="w-6 h-6 object-contain"
-                        onLoad={(e) => { (e.target as HTMLImageElement).style.display = ""; }}
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-                      />
-                    </div>
-                    <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">▼</div>
-                  </div>
+                  <CoinSelect
+                    value={payCryptoCoin}
+                    onChange={setPayCryptoCoin}
+                    coinList={payCoinList}
+                    coinLogoUrl={coinLogoUrl}
+                  />
                 </div>
 
                 {/* ── Network selector ── */}
