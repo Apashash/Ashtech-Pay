@@ -45,7 +45,8 @@ import {
   FileText,
   Calendar,
   Globe,
-  Coins
+  Coins,
+  Hash
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -543,7 +544,7 @@ export default function AdminTransactions() {
                 );
               })()}
 
-              {txDetails.operator && (
+              {txDetails.operator ? (
                 <>
                   <Separator />
                   <div className="space-y-3">
@@ -582,7 +583,46 @@ export default function AdminTransactions() {
                     </div>
                   </div>
                 </>
-              )}
+              ) : txDetails.paymentMethod === "crypto" && txDetails.metadata?.assetCode ? (
+                <>
+                  <Separator />
+                  <div className="space-y-3">
+                    <p className="text-sm font-semibold text-muted-foreground">Fournisseur</p>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <CreditCard className="w-4 h-4" />
+                        <span className="text-sm">Opérateur</span>
+                      </div>
+                      <span className="text-sm font-medium">IziChange WaaS</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Globe className="w-4 h-4" />
+                        <span className="text-sm">Réseau</span>
+                      </div>
+                      <span className="text-sm font-mono font-semibold">{txDetails.metadata.assetCode}</span>
+                    </div>
+                    {txDetails.metadata.address && (
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-2 text-muted-foreground shrink-0">
+                          <FileText className="w-4 h-4" />
+                          <span className="text-sm">Adresse</span>
+                        </div>
+                        <span className="text-xs font-mono text-right break-all">{txDetails.metadata.address}</span>
+                      </div>
+                    )}
+                    {txDetails.metadata.memo && (
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Hash className="w-4 h-4" />
+                          <span className="text-sm">Mémo</span>
+                        </div>
+                        <span className="text-sm font-mono font-semibold">{txDetails.metadata.memo}</span>
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : null}
 
               {txDetails.recipient && (
                 <>
