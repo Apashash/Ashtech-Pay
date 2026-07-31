@@ -517,7 +517,12 @@ export default function DepositPage() {
           </button>
           {cryptoAssetsLoading || hasCryptoAssets ? <button
             type="button"
-            onClick={() => setDepositMode("crypto")}
+            onClick={() => {
+              setDepositMode("crypto");
+              setCryptoCoin("USDT");
+              setCryptoNetwork("TRC20");
+              setCryptoAssetCode("USDT.TRC20");
+            }}
             className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-semibold transition-all ${depositMode === "crypto" ? "bg-card shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
             data-testid="tab-crypto"
           >
