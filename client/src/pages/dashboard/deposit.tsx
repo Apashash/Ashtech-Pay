@@ -588,23 +588,20 @@ export default function DepositPage() {
                     </div>
                   )}
 
-                  {/* Info banner */}
-                  {cryptoShared && (
-                    <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl px-3 py-2.5 text-xs text-blue-600 dark:text-blue-400">
-                      ℹ️ Adresse partagée — envoyez depuis votre propre portefeuille, ne pas utiliser en échange direct.
-                    </div>
-                  )}
-
                   {/* Amount reminder */}
                   {cryptoAmtNum > 0 && (
-                    <div className="bg-muted/30 rounded-xl px-4 py-3 space-y-1">
+                    <div className="bg-muted/30 rounded-xl px-4 py-3 space-y-1.5">
+                      <div className="flex justify-between text-sm font-semibold">
+                        <span className="text-muted-foreground">Envoyez exactement</span>
+                        <span className="text-foreground">{cryptoAmtNum.toFixed(4)} USDT</span>
+                      </div>
                       <div className="flex justify-between text-xs text-muted-foreground">
                         <span>Frais ({cryptoFeePercent}%)</span>
-                        <span className="text-red-500 font-semibold">-{cryptoFee.toFixed(0)} {userCurrency}</span>
+                        <span className="text-red-500 font-semibold">-{cryptoFee.toFixed(4)} USDT</span>
                       </div>
                       <div className="flex justify-between text-sm border-t border-border pt-1.5">
-                        <span className="text-muted-foreground">Montant net crédité</span>
-                        <span className="font-bold text-green-500">{cryptoNet.toFixed(0)} {userCurrency}</span>
+                        <span className="text-muted-foreground font-medium">Montant net crédité</span>
+                        <span className="font-bold text-green-500">{cryptoNet.toFixed(4)} USDT</span>
                       </div>
                     </div>
                   )}
