@@ -6791,7 +6791,9 @@ export async function registerRoutes(
       const convAshtechFeeCfaUsdt  = parseFloat(settings.find(s => s.key === "conversion_ashtech_fee_cfa_usdt")?.value || "1");
       const convProviderFeeUsdtCfa = parseFloat(settings.find(s => s.key === "conversion_provider_fee_usdt_cfa")?.value || "1");
       const convAshtechFeeUsdtCfa  = parseFloat(settings.find(s => s.key === "conversion_ashtech_fee_usdt_cfa")?.value || "1");
-      const cryptoFeePercent = parseFloat(settings.find(s => s.key === "izichange_fee_percent")?.value || "2.5");
+      const cryptoAshtechFeePercent = parseFloat(settings.find(s => s.key === "izichange_fee_percent")?.value || "2.5");
+      const cryptoProviderFeePercent = parseFloat(settings.find(s => s.key === "izichange_provider_fee_percent")?.value || "0");
+      const cryptoFeePercent = cryptoAshtechFeePercent + cryptoProviderFeePercent; // total déduit
       const cryptoMinDeposit = parseFloat(settings.find(s => s.key === "izichange_min_deposit_usd")?.value || "5");
       res.json({
         conversionFeePercent,
@@ -6817,7 +6819,10 @@ export async function registerRoutes(
         convTotalUsdtCfa: convProviderFeeUsdtCfa + convAshtechFeeUsdtCfa,
         depositFeePercent,
         paymentLinkFeePercent,
-        cryptoFeePercent,
+        // Crypto: frais détaillés
+        cryptoAshtechFeePercent,
+        cryptoProviderFeePercent,
+        cryptoFeePercent,           // total déduit = AshtechPay + fournisseur
         cryptoMinDeposit,
       });
     } catch (error) {
@@ -7331,8 +7336,13 @@ export async function registerRoutes(
         }
       }
 
-      const cryptoFeeStr = await storage.getSetting("izichange_fee_percent");
-      const cryptoFeePercent = cryptoFeeStr ? parseFloat(cryptoFeeStr.value) : 2.5;
+      const [cryptoFeeStr, cryptoProviderFeeStr] = await Promise.all([
+        storage.getSetting("izichange_fee_percent"),
+        storage.getSetting("izichange_provider_fee_percent"),
+      ]);
+      const cryptoAshtechFeePercent = cryptoFeeStr ? parseFloat(cryptoFeeStr.value) : 2.5;
+      const cryptoProviderFeePercent = cryptoProviderFeeStr ? parseFloat(cryptoProviderFeeStr.value) : 0;
+      const cryptoFeePercent = cryptoAshtechFeePercent + cryptoProviderFeePercent;  // total déduit
       const feeUSDT = amountUSDT * (cryptoFeePercent / 100);
       const netUSDT = amountUSDT - feeUSDT;
 
@@ -7480,9 +7490,14 @@ export async function registerRoutes(
         const linkCurrency = (providedCurrency || paymentLink.currency || "XOF").toUpperCase();
         const izipayCurrency = toIziPayCurrency(linkCurrency);
 
-        // Get fee setting
-        const cryptoFeeSettings = await storage.getSetting("izichange_fee_percent");
-        const cryptoFeePercent = cryptoFeeSettings ? parseFloat(cryptoFeeSettings.value) : 2.5;
+        // Get fee settings (AshtechPay + provider → total)
+        const [cryptoFeeSettingsRedir, cryptoProviderFeeSettingsRedir] = await Promise.all([
+          storage.getSetting("izichange_fee_percent"),
+          storage.getSetting("izichange_provider_fee_percent"),
+        ]);
+        const cryptoAshtechFeeRedir = cryptoFeeSettingsRedir ? parseFloat(cryptoFeeSettingsRedir.value) : 2.5;
+        const cryptoProviderFeeRedir = cryptoProviderFeeSettingsRedir ? parseFloat(cryptoProviderFeeSettingsRedir.value) : 0;
+        const cryptoFeePercentRedir = cryptoAshtechFeeRedir + cryptoProviderFeeRedir;  // total déduit
 
         // Convert to USDT using admin-configured rate (fx_rate_USDT) or fallback to live FX
         const fxRatesCrypto = await loadFxRates();
@@ -7490,7 +7505,7 @@ export async function registerRoutes(
         const adminRateSetting = await storage.getSetting("fx_rate_USDT");
         const usdtPerXaf = adminRateSetting ? parseFloat(adminRateSetting.value) : (fxRatesCrypto["USDT"] ?? 655);
         const amountInUSD = amountInXAF / usdtPerXaf;
-        const feeAmountUSD = amountInUSD * (cryptoFeePercent / 100);
+        const feeAmountUSD = amountInUSD * (cryptoFeePercentRedir / 100);
         const netAmountUSD = amountInUSD - feeAmountUSD;
 
         const reference = generateTransactionReference("payment_link");
@@ -12697,8 +12712,13 @@ export async function registerRoutes(
       const fiatCurrency = ((reqCurrency || user.preferredCurrency || "XOF") as string).toUpperCase();
       const izipayCurrency = toIziPayCurrency(fiatCurrency);
 
-      const cryptoFeeSettings = await storage.getSetting("izichange_fee_percent");
-      const cryptoFeePercent = cryptoFeeSettings ? parseFloat(cryptoFeeSettings.value) : 2.5;
+      const [cryptoFeeSettings, cryptoProviderFeeSettings2] = await Promise.all([
+        storage.getSetting("izichange_fee_percent"),
+        storage.getSetting("izichange_provider_fee_percent"),
+      ]);
+      const cryptoAshtechFeePercent2 = cryptoFeeSettings ? parseFloat(cryptoFeeSettings.value) : 2.5;
+      const cryptoProviderFeePercent2 = cryptoProviderFeeSettings2 ? parseFloat(cryptoProviderFeeSettings2.value) : 0;
+      const cryptoFeePercent2 = cryptoAshtechFeePercent2 + cryptoProviderFeePercent2;  // total déduit
 
       // Convert fiat amount to USDT using admin-configured rate (fx_rate_USDT) or fallback to live FX
       const fxRates = await loadFxRates();
@@ -12706,7 +12726,7 @@ export async function registerRoutes(
       const adminRateSetting = await storage.getSetting("fx_rate_USDT");
       const usdtPerXaf = adminRateSetting ? parseFloat(adminRateSetting.value) : (fxRates["USDT"] ?? 655);
       const amountInUSDT = amountInXAF / usdtPerXaf;
-      const feeAmountUSDT = amountInUSDT * (cryptoFeePercent / 100);
+      const feeAmountUSDT = amountInUSDT * (cryptoFeePercent2 / 100);
       const netAmountUSDT = amountInUSDT - feeAmountUSDT;
 
       const reference = generateTransactionReference("deposit");
@@ -12782,9 +12802,15 @@ export async function registerRoutes(
       if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
 
       // Frontend sends amounts in USDT directly; no fiat conversion needed.
-      const cryptoFeeStr    = await storage.getSetting("izichange_fee_percent");
-      const cryptoFeePercent = cryptoFeeStr ? parseFloat(cryptoFeeStr.value) : 2.5;
-      const feeAmountUSDT   = numAmount * (cryptoFeePercent / 100);
+      // Total fee = AshtechPay margin + IziChange provider fee
+      const [cryptoFeeStrAddr, cryptoProviderFeeStrAddr] = await Promise.all([
+        storage.getSetting("izichange_fee_percent"),
+        storage.getSetting("izichange_provider_fee_percent"),
+      ]);
+      const cryptoAshtechFeeAddr = cryptoFeeStrAddr ? parseFloat(cryptoFeeStrAddr.value) : 2.5;
+      const cryptoProviderFeeAddr = cryptoProviderFeeStrAddr ? parseFloat(cryptoProviderFeeStrAddr.value) : 0;
+      const cryptoTotalFeePercent = cryptoAshtechFeeAddr + cryptoProviderFeeAddr;
+      const feeAmountUSDT   = numAmount * (cryptoTotalFeePercent / 100);
       const netAmountUSDT   = numAmount - feeAmountUSDT;
 
       const reference = generateTransactionReference("deposit");

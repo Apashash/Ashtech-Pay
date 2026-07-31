@@ -39,14 +39,19 @@ export default function AdminCountries() {
   const { toast } = useToast();
   const [showCountryModal, setShowCountryModal] = useState(false);
 
-  // Crypto USDT + CDF settings
-  const [cryptoSettings, setCryptoSettings] = useState({ fx_rate_USDT: "620", izichange_fee_percent: "2.5" });
+  // Crypto USDT settings
+  const [cryptoSettings, setCryptoSettings] = useState({
+    fx_rate_USDT: "620",
+    izichange_fee_percent: "2.5",
+    izichange_provider_fee_percent: "0",
+  });
   const { data: savedSettings } = useQuery<PlatformSetting[]>({ queryKey: ["/api/admin/settings"] });
   useEffect(() => {
     if (savedSettings) {
       const patch: Record<string, string> = {};
       savedSettings.forEach(s => {
-        if (["fx_rate_USDT", "izichange_fee_percent"].includes(s.key)) patch[s.key] = s.value;
+        if (["fx_rate_USDT", "izichange_fee_percent", "izichange_provider_fee_percent"].includes(s.key))
+          patch[s.key] = s.value;
       });
       if (Object.keys(patch).length) setCryptoSettings(prev => ({ ...prev, ...patch }));
     }
@@ -351,8 +356,9 @@ export default function AdminCountries() {
                 </Button>
               </div>
 
+              {/* ── Frais AshtechPay (marge) ── */}
               <div className="space-y-2">
-                <Label>Frais crypto Ashtechpay (%)</Label>
+                <Label>Frais AshtechPay — dépôt &amp; lien de paiement (%)</Label>
                 <Input
                   type="number"
                   min="0"
@@ -363,7 +369,7 @@ export default function AdminCountries() {
                   placeholder="2.5"
                   data-testid="input-izichange-fee"
                 />
-                <p className="text-xs text-muted-foreground">Pourcentage déduit du montant sur les dépôts et liens de paiement crypto Ashtechpay.</p>
+                <p className="text-xs text-muted-foreground">Marge AshtechPay sur les dépôts et liens de paiement crypto.</p>
                 <Button
                   size="sm"
                   onClick={() => saveSettingMutation.mutate({ key: "izichange_fee_percent", value: cryptoSettings.izichange_fee_percent })}
@@ -372,6 +378,46 @@ export default function AdminCountries() {
                   <Save className="w-4 h-4 mr-2" />Enregistrer
                 </Button>
               </div>
+
+              {/* ── Frais fournisseur (IziChange) ── */}
+              <div className="space-y-2">
+                <Label>Frais fournisseur IziChange (%)</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value={cryptoSettings.izichange_provider_fee_percent}
+                  onChange={(e) => setCryptoSettings(p => ({ ...p, izichange_provider_fee_percent: e.target.value }))}
+                  placeholder="0"
+                  data-testid="input-izichange-provider-fee"
+                />
+                <p className="text-xs text-muted-foreground">Frais prélevés par IziChange (coût fournisseur, non reversé à Ashtech).</p>
+                <Button
+                  size="sm"
+                  onClick={() => saveSettingMutation.mutate({ key: "izichange_provider_fee_percent", value: cryptoSettings.izichange_provider_fee_percent })}
+                  disabled={saveSettingMutation.isPending}
+                >
+                  <Save className="w-4 h-4 mr-2" />Enregistrer
+                </Button>
+              </div>
+
+              {/* ── Total frais (calculé, lecture seule) ── */}
+              {(() => {
+                const ashtech = parseFloat(cryptoSettings.izichange_fee_percent || "0");
+                const provider = parseFloat(cryptoSettings.izichange_provider_fee_percent || "0");
+                const total = (ashtech + provider).toFixed(2);
+                return (
+                  <div className="rounded-lg border bg-muted/30 px-4 py-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-semibold">Total frais crypto</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">AshtechPay {ashtech}% + Fournisseur {provider}%</p>
+                    </div>
+                    <span className="text-xl font-bold text-primary">{total}%</span>
+                  </div>
+                );
+              })()}
+              <p className="text-xs text-amber-500 font-medium">⚠️ Ce total est déduit du montant de chaque dépôt et lien de paiement crypto.</p>
 
             </CardContent>
           </Card>
