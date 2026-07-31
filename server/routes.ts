@@ -4144,6 +4144,7 @@ export async function registerRoutes(
             feeAmount: feeAmount.toFixed(2),
             currency: txCurrency,
             reference,
+            externalReference: payoutResult?.transaction_id || payoutResult?.order_id || undefined,
             operator: (operator as any)?.name || undefined,
             provider: transferProvider,
             isInternal: false,
@@ -7320,7 +7321,8 @@ export async function registerRoutes(
         fiatCurrency = link.currency || "XOF";
         const fxRates = await loadFxRates();
         const amountXAF = convertToXAF(fiatAmount, fiatCurrency, fxRates);
-        const usdtPerXaf = fxRates["USDT"] ?? 655;
+        const adminRateSetting = await storage.getSetting("fx_rate_USDT");
+        const usdtPerXaf = adminRateSetting ? parseFloat(adminRateSetting.value) : (fxRates["USDT"] ?? 655);
         amountUSDT = amountXAF / usdtPerXaf;
       } else {
         amountUSDT = parseFloat(clientAmountUsdt || "0");
@@ -7482,10 +7484,11 @@ export async function registerRoutes(
         const cryptoFeeSettings = await storage.getSetting("izichange_fee_percent");
         const cryptoFeePercent = cryptoFeeSettings ? parseFloat(cryptoFeeSettings.value) : 2.5;
 
-        // Convert to USDT for ledger
+        // Convert to USDT using admin-configured rate (fx_rate_USDT) or fallback to live FX
         const fxRatesCrypto = await loadFxRates();
         const amountInXAF = convertToXAF(numAmount, linkCurrency, fxRatesCrypto);
-        const usdtPerXaf = fxRatesCrypto["USDT"] ?? 655;
+        const adminRateSetting = await storage.getSetting("fx_rate_USDT");
+        const usdtPerXaf = adminRateSetting ? parseFloat(adminRateSetting.value) : (fxRatesCrypto["USDT"] ?? 655);
         const amountInUSD = amountInXAF / usdtPerXaf;
         const feeAmountUSD = amountInUSD * (cryptoFeePercent / 100);
         const netAmountUSD = amountInUSD - feeAmountUSD;
@@ -11848,6 +11851,7 @@ export async function registerRoutes(
         grossAmount: (tx as any).totalAmount || tx.amount,
         currency: tx.currency || "XAF",
         reference: tx.reference || tx.id,
+        externalReference: (tx as any).externalReference || undefined,
         recipientName: tx.recipientName || undefined,
         recipientPhone: tx.recipientPhone || undefined,
         recipientCountry: tx.recipientCountry || undefined,
@@ -12658,6 +12662,7 @@ export async function registerRoutes(
         amount: creditAmount.toFixed(6),
         currency: "USDT",
         reference: merchantReference,
+        externalReference: (transaction as any).externalReference || undefined,
         depositType: transaction.type,
         paymentMethod: "crypto",
         operator: txAssetCode || undefined,        // réseau crypto ex: "USDT.TRC20"
@@ -12695,10 +12700,11 @@ export async function registerRoutes(
       const cryptoFeeSettings = await storage.getSetting("izichange_fee_percent");
       const cryptoFeePercent = cryptoFeeSettings ? parseFloat(cryptoFeeSettings.value) : 2.5;
 
-      // Convert fiat amount to USDT for ledger
+      // Convert fiat amount to USDT using admin-configured rate (fx_rate_USDT) or fallback to live FX
       const fxRates = await loadFxRates();
       const amountInXAF = convertToXAF(numAmount, fiatCurrency, fxRates);
-      const usdtPerXaf = fxRates["USDT"] ?? 655;
+      const adminRateSetting = await storage.getSetting("fx_rate_USDT");
+      const usdtPerXaf = adminRateSetting ? parseFloat(adminRateSetting.value) : (fxRates["USDT"] ?? 655);
       const amountInUSDT = amountInXAF / usdtPerXaf;
       const feeAmountUSDT = amountInUSDT * (cryptoFeePercent / 100);
       const netAmountUSDT = amountInUSDT - feeAmountUSDT;

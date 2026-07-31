@@ -240,6 +240,7 @@ export async function notifyNewDeposit(opts: {
   phone?: string;
   operator?: string;
   reference: string;
+  externalReference?: string;
   provider?: string;
   country?: string;
   grossAmount?: string | number;
@@ -257,6 +258,7 @@ export async function notifyNewDeposit(opts: {
     `💳 Montant crédité : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
     (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +
     `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
+    (opts.externalReference ? `🔗 Réf. Fournisseur : <code>${opts.externalReference}</code>\n` : "") +
     `🕐 Heure : ${now()}\n` +
     `──── 📤 EXPÉDITEUR (PAYEUR) ────\n` +
     (opts.phone ? `📞 Téléphone : ${opts.phone}\n` : "") +
@@ -279,6 +281,7 @@ export async function notifyDepositConfirmed(opts: {
   amount: string | number;
   currency: string;
   reference: string;
+  externalReference?: string;
   provider?: string;
   country?: string;
   grossAmount?: string | number;
@@ -317,6 +320,7 @@ export async function notifyDepositConfirmed(opts: {
     (opts.creditedCurrency ? `💱 Compte crédité : <b>${opts.creditedCurrency}</b>\n` : "") +
     (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +
     `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
+    (opts.externalReference ? `🔗 Réf. Fournisseur : <code>${opts.externalReference}</code>\n` : "") +
     `🕐 Heure : ${now()}\n` +
     `──── 📤 EXPÉDITEUR (PAYEUR) ────\n` +
     (payerName ? `👤 Nom : <b>${payerName}</b>\n` : "") +
@@ -343,6 +347,7 @@ export async function notifyDepositFailed(opts: {
   amount: string | number;
   currency: string;
   reference: string;
+  externalReference?: string;
   reason?: string;
   provider?: string;
   country?: string;
@@ -369,6 +374,7 @@ export async function notifyDepositFailed(opts: {
     (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +
     (opts.reason ? `⚠️ Raison : ${opts.reason}\n` : "") +
     `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
+    (opts.externalReference ? `🔗 Réf. Fournisseur : <code>${opts.externalReference}</code>\n` : "") +
     `🕐 Heure : ${now()}\n` +
     `──── 📤 EXPÉDITEUR (PAYEUR) ────\n` +
     (isLink && opts.payerName ? `👤 Nom : <b>${opts.payerName}</b>\n` : "") +
@@ -464,6 +470,7 @@ export async function notifyWithdrawalRequest(opts: {
   phone: string;
   operator?: string;
   reference: string;
+  externalReference?: string;
   provider?: string;
   senderCountry?: string;
   recipientCountry?: string;
@@ -480,6 +487,7 @@ export async function notifyWithdrawalRequest(opts: {
     `💳 Montant net : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
     (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +
     `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
+    (opts.externalReference ? `🔗 Réf. Fournisseur : <code>${opts.externalReference}</code>\n` : "") +
     `🕐 Heure : ${now()}\n` +
     `──── 👤 EXPÉDITEUR ────\n` +
     `👤 Nom : <b>${opts.userName}</b>\n` +
@@ -518,6 +526,7 @@ export async function notifyWithdrawalPendingManual(opts: {
   phone: string;
   operator?: string;
   reference: string;
+  externalReference?: string;
   senderCountry?: string;
   recipientCountry?: string;
   grossAmount?: string | number;
@@ -532,6 +541,7 @@ export async function notifyWithdrawalPendingManual(opts: {
     (hasGross ? `💰 Montant brut : <b>${fmt(opts.grossAmount!, opts.currency)}</b>\n` : "") +
     `💳 Montant net : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
     `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
+    (opts.externalReference ? `🔗 Réf. Fournisseur : <code>${opts.externalReference}</code>\n` : "") +
     `⚠️ <b>Validation manuelle requise !</b>\n` +
     `🕐 Heure : ${now()}\n` +
     `──── 👤 EXPÉDITEUR ────\n` +
@@ -565,6 +575,7 @@ export async function notifyWithdrawalAutoValidated(opts: {
   amount: string | number;
   currency: string;
   reference: string;
+  externalReference?: string;
   provider?: string;
   grossAmount?: string | number;
   recipientName?: string;
@@ -572,17 +583,23 @@ export async function notifyWithdrawalAutoValidated(opts: {
   recipientCountry?: string;
   operator?: string;
   senderCountry?: string;
+  txType?: string;  // "transfer_out" → shows TRANSFERT CONFIRMÉ instead of RETRAIT VALIDÉ
 }): Promise<void> {
   const hasGross = opts.grossAmount != null && String(opts.grossAmount) !== String(opts.amount);
   const senderPays = countryDisplay(opts.senderCountry || opts.currency);
   const recipientPays = countryDisplay(opts.recipientCountry || opts.currency);
+  const isTransfer = opts.txType === "transfer_out";
+  const header = isTransfer
+    ? `✅ <b>TRANSFERT CONFIRMÉ PAR ${(opts.provider || "FOURNISSEUR").toUpperCase()}</b>\n`
+    : `✅ <b>RETRAIT VALIDÉ AUTOMATIQUEMENT</b>\n`;
   const msg =
-    `✅ <b>RETRAIT VALIDÉ AUTOMATIQUEMENT</b>\n` +
+    header +
     `──────────────────\n` +
     (hasGross ? `💰 Montant brut : <b>${fmt(opts.grossAmount!, opts.currency)}</b>\n` : "") +
     `💳 Montant net : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
     (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +
     `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
+    (opts.externalReference ? `🔗 Réf. Fournisseur : <code>${opts.externalReference}</code>\n` : "") +
     `🕐 Heure : ${now()}\n` +
     `──── 👤 EXPÉDITEUR ────\n` +
     `👤 Nom : <b>${opts.userName}</b>\n` +
@@ -605,6 +622,7 @@ export async function notifyWithdrawalManuallyValidated(opts: {
   amount: string | number;
   currency: string;
   reference: string;
+  externalReference?: string;
   grossAmount?: string | number;
   recipientName?: string;
   recipientPhone?: string;
@@ -622,6 +640,7 @@ export async function notifyWithdrawalManuallyValidated(opts: {
     (hasGross ? `💰 Montant brut : <b>${fmt(opts.grossAmount!, opts.currency)}</b>\n` : "") +
     `💳 Montant net : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
     `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
+    (opts.externalReference ? `🔗 Réf. Fournisseur : <code>${opts.externalReference}</code>\n` : "") +
     `🕐 Heure : ${now()}\n` +
     `──── 👤 EXPÉDITEUR ────\n` +
     `👤 Nom : <b>${opts.userName}</b>\n` +
@@ -643,6 +662,7 @@ export async function notifyWithdrawalFailed(opts: {
   amount: string | number;
   currency: string;
   reference: string;
+  externalReference?: string;
   reason?: string;
   provider?: string;
   grossAmount?: string | number;
@@ -651,18 +671,22 @@ export async function notifyWithdrawalFailed(opts: {
   recipientCountry?: string;
   operator?: string;
   senderCountry?: string;
+  txType?: string;  // "transfer_out" → shows TRANSFERT ÉCHOUÉ instead of ÉCHEC DE RETRAIT
 }): Promise<void> {
   const hasGross = opts.grossAmount != null && String(opts.grossAmount) !== String(opts.amount);
   const senderPays = countryDisplay(opts.senderCountry || opts.currency);
   const recipientPays = countryDisplay(opts.recipientCountry || opts.currency);
+  const isTransfer = opts.txType === "transfer_out";
+  const header = isTransfer ? `❌ <b>TRANSFERT ÉCHOUÉ</b>\n` : `❌ <b>ÉCHEC DE RETRAIT</b>\n`;
   const msg =
-    `❌ <b>ÉCHEC DE RETRAIT</b>\n` +
+    header +
     `──────────────────\n` +
     (hasGross ? `💰 Montant brut : <b>${fmt(opts.grossAmount!, opts.currency)}</b>\n` : "") +
     `💳 Montant net : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
     (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +
     (opts.reason ? `⚠️ Raison : ${opts.reason}\n` : "") +
     `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
+    (opts.externalReference ? `🔗 Réf. Fournisseur : <code>${opts.externalReference}</code>\n` : "") +
     `🕐 Heure : ${now()}\n` +
     `──── 👤 EXPÉDITEUR ────\n` +
     `👤 Nom : <b>${opts.userName}</b>\n` +
@@ -962,6 +986,7 @@ export async function notifyTransferSent(opts: {
   feeAmount?: string | number;
   currency: string;
   reference: string;
+  externalReference?: string;
   operator?: string;
   provider?: string;
   isInternal?: boolean;
@@ -970,15 +995,21 @@ export async function notifyTransferSent(opts: {
   const senderPays = countryDisplay(opts.senderCountry || opts.currency);
   const recipientPays = countryDisplay(opts.recipientCountry || opts.currency);
   const typeLabel = opts.isInternal ? "🔄 Transfert interne Ashtech Pay" : "📲 Transfert Mobile Money";
+  // For external transfers (AfribaPay/Swychr), mention awaiting provider confirmation
+  const statusLine = !opts.isInternal && opts.provider
+    ? `⏳ Statut : <b>En attente confirmation ${opts.provider}</b>\n`
+    : "";
   const msg =
-    `💸 <b>TRANSFERT ENVOYÉ</b>\n` +
+    `💸 <b>TRANSFERT SOUMIS</b>\n` +
     `──────────────────\n` +
     `📋 Type : ${typeLabel}\n` +
     (hasGross ? `💰 Montant brut : <b>${fmt(opts.grossAmount!, opts.currency)}</b>\n` : "") +
     `💳 Montant net : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
     (opts.feeAmount && parseFloat(String(opts.feeAmount)) > 0 ? `💸 Frais : ${fmt(opts.feeAmount, opts.currency)}\n` : "") +
     (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +
+    statusLine +
     `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
+    (opts.externalReference ? `🔗 Réf. Fournisseur : <code>${opts.externalReference}</code>\n` : "") +
     `🕐 Heure : ${now()}\n` +
     `──── 👤 EXPÉDITEUR ────\n` +
     `👤 Nom : <b>${opts.senderName}</b>\n` +

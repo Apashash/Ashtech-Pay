@@ -127,11 +127,13 @@ async function processPayout(payout: PendingPayout, apiStatus: string) {
         amount: payout.amount,
         grossAmount: payout.totalDebited || payout.amount,
         currency,
-        reference: payout.reference,
+        reference: (transaction as any).reference || payout.reference,
+        externalReference: (transaction as any).externalReference || undefined,
         provider: payout.provider,
         recipientName: transaction.recipientName || undefined,
         recipientPhone: transaction.recipientPhone || undefined,
         recipientCountry: transaction.recipientCountry || undefined,
+        txType: payout.txType,   // "transfer_out" → TRANSFERT CONFIRMÉ
       }).catch(() => {});
 
     } else {
@@ -162,12 +164,14 @@ async function processPayout(payout: PendingPayout, apiStatus: string) {
         amount: payout.amount,
         grossAmount: payout.totalDebited || payout.amount,
         currency,
-        reference: payout.reference,
+        reference: (transaction as any).reference || payout.reference,
+        externalReference: (transaction as any).externalReference || undefined,
         reason: apiStatus,
         provider: payout.provider,
         recipientName: transaction.recipientName || undefined,
         recipientPhone: transaction.recipientPhone || undefined,
         recipientCountry: transaction.recipientCountry || undefined,
+        txType: payout.txType,   // "transfer_out" → TRANSFERT ÉCHOUÉ
       }).catch(() => {});
     }
 
