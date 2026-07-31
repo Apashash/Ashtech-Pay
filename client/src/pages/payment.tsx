@@ -1230,8 +1230,13 @@ export default function PaymentPage() {
             <CardTitle className="text-2xl" data-testid="text-payment-title">{paymentLink.title}</CardTitle>
           </CardHeader>
           {paymentLink.imagePath && (
-            <div className="w-full overflow-hidden mt-4">
-              <img src={getImageSrc(paymentLink.imagePath)} alt={paymentLink.title} className="w-full h-52 object-cover" data-testid="img-payment-link" />
+            <div className="w-full mt-4 px-4">
+              <img
+                src={getImageSrc(paymentLink.imagePath)}
+                alt={paymentLink.title}
+                className="block w-full h-auto max-h-[32rem] object-contain rounded-lg bg-muted"
+                data-testid="img-payment-link"
+              />
             </div>
           )}
           {paymentLink.description && (

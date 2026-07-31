@@ -2,6 +2,7 @@ import express, { type Express } from "express";
 import fs from "fs";
 import path from "path";
 import { isSpaRoute } from "./spaRoutes";
+import { renderPaymentLinkMeta } from "./paymentLinkMeta";
 
 export function serveStatic(app: Express) {
   const distPath = path.resolve(process.cwd(), "dist", "public");
@@ -28,16 +29,19 @@ export function serveStatic(app: Express) {
   // la route /pay et /hpay ci-dessous (sans og:image) puissent s'appliquer.
   app.use(express.static(distPath, { index: false }));
 
-  // Serve payment pages without og:image so sharing shows no preview image
-  app.get(["/pay/:slug", "/hpay/:id"], (req, res) => {
+  // Inject the payment product title/description/image before social crawlers
+  // receive the SPA shell.
+  app.get(["/pay/:slug", "/hpay/:id"], async (req, res, next) => {
     const indexPath = path.resolve(distPath, "index.html");
-    let html = fs.readFileSync(indexPath, "utf-8");
-    html = html
-      .replace(/<meta property="og:image"[^>]*>/g, "")
-      .replace(/<meta property="og:image:[^"]*"[^>]*>/g, "")
-      .replace(/<meta name="twitter:image"[^>]*>/g, "")
-      .replace(/<meta name="twitter:card"[^>]*>/g, '<meta name="twitter:card" content="summary" />');
-    res.set("Content-Type", "text/html").send(html);
+    try {
+      let html = await fs.promises.readFile(indexPath, "utf-8");
+      if (req.path.startsWith("/pay/")) {
+        html = await renderPaymentLinkMeta(req, html, req.params.slug);
+      }
+      res.set("Content-Type", "text/html").send(html);
+    } catch (error) {
+      next(error);
+    }
   });
 
   // fall through to index.html (SPA)
