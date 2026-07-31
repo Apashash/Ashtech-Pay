@@ -389,8 +389,9 @@ export default function PaymentPage() {
       const net = CRYPTO_COIN_LIST[payCryptoCoin]?.networks.find(n => n.id === payCryptoNetwork);
       if (!net) throw new Error("Réseau invalide");
       if (!email.trim()) throw new Error("Email requis");
-      if (!country) throw new Error("Pays requis");
-      const body: Record<string, string> = { assetCode: net.assetCode, email: email.trim(), country };
+      // country is optional for crypto (not needed by IziChange Direct Charge)
+      const body: Record<string, string> = { assetCode: net.assetCode, email: email.trim() };
+      if (country) body.country = country;
       if (!(paymentLink as any)?.isFixedAmount && payCryptoAmount)
         body.amountUsdt = payCryptoAmount;
       if (payCryptoRefundAddress.trim())
@@ -1456,7 +1457,7 @@ export default function PaymentPage() {
                     const errs: Record<string, string> = {};
                     if (!email.trim()) errs.email = "Email requis";
                     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errs.email = "Email invalide";
-                    if (!country) errs.country = "Pays requis";
+                    // country is optional for crypto — do not block on it
                     if (Object.keys(errs).length > 0) { setErrors(prev => ({ ...prev, ...errs })); return; }
                     generatePayLinkCryptoMutation.mutate();
                   }}
