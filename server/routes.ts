@@ -13888,6 +13888,7 @@ export async function registerRoutes(
    * contract and routing are left untouched.
    */
   app.post("/v1/crypto/collect", requireApiKey, async (req: any, res) => {
+    const requestId = crypto.randomUUID();
     try {
       const merchant = req.apiUser;
       if (!isIziPayConfigured()) {
@@ -13995,16 +13996,27 @@ export async function registerRoutes(
           },
         });
       } catch (chargeError: any) {
-        console.error("[API v1 /crypto/collect] createDirectCharge:", chargeError.message);
+        const providerStatus = Number(chargeError?.status);
+        const providerCode = chargeError?.code;
+        console.error(
+          `[API v1 /crypto/collect] request=${requestId} createDirectCharge:`,
+          chargeError?.message,
+          providerCode ? `code=${providerCode}` : "",
+        );
         return res.status(502).json({
-          error: "gateway_error",
-          message: chargeError.message || "Impossible de générer l'adresse crypto.",
+          error: providerCode === "provider_invalid_response"
+            ? "provider_invalid_response"
+            : "gateway_error",
+          message: chargeError?.message || "Impossible de générer l'adresse crypto.",
+          request_id: requestId,
+          ...(Number.isFinite(providerStatus) ? { provider_status: providerStatus } : {}),
         });
       }
        if (selectedNetwork.memoRequired && !charge.memo) {
          return res.status(502).json({
            error: "provider_missing_memo",
            message: `Le réseau ${request.assetCode} exige un ${selectedNetwork.memoType || "memo/tag"}, mais le fournisseur n'en a pas retourné.`,
+           request_id: requestId,
          });
        }
 
@@ -14062,8 +14074,12 @@ export async function registerRoutes(
         created_at: transaction.createdAt,
       });
     } catch (e: any) {
-      console.error("[API v1 /crypto/collect]", e);
-      return res.status(500).json({ error: "server_error", message: "Erreur interne." });
+      console.error(`[API v1 /crypto/collect] request=${requestId}`, e?.stack || e);
+      return res.status(500).json({
+        error: "server_error",
+        message: "Erreur interne lors de la création du paiement crypto.",
+        request_id: requestId,
+      });
     }
   });
 

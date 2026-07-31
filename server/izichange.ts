@@ -70,8 +70,16 @@ async function iziRequest(
   try { json = await res.json(); } catch { json = {}; }
 
   if (!res.ok) {
-    const msg = json?.message || `IziChange API error ${res.status}`;
-    throw new Error(msg);
+    const msg =
+      json?.message ||
+      json?.error?.message ||
+      json?.data?.message ||
+      `Erreur du service crypto (HTTP ${res.status}).`;
+    const error = new Error(String(msg)) as Error & { status?: number; code?: string };
+    error.name = "IziPayRequestError";
+    error.status = res.status;
+    error.code = json?.code || json?.error?.code;
+    throw error;
   }
   return json;
 }
@@ -149,6 +157,113 @@ export interface DirectChargeResult {
 }
 
 /**
+ * Normalise les réponses plates ou enveloppées (`data` / `object`) du service
+ * crypto. Cette fonction est exportée pour être testée sans appeler le réseau.
+ */
+export function normalizeDirectChargeResponse(
+  raw: any,
+  requestedCoin: string,
+  requestedAmount: string,
+): DirectChargeResult {
+  const payload = raw?.data?.object ?? raw?.data ?? raw?.object ?? raw;
+  const address = String(
+    payload?.depositAddress ??
+    payload?.address ??
+    payload?.destinationAddress ??
+    payload?.charge?.depositAddress ??
+    payload?.charge?.address ??
+    raw?.depositAddress ??
+    raw?.address ??
+    "",
+  ).trim();
+
+  if (!address) {
+    const error = new Error("Le service crypto a répondu sans adresse de dépôt.") as Error & { code?: string };
+    error.name = "IziPayResponseError";
+    error.code = "provider_invalid_response";
+    throw error;
+  }
+
+  const memoValue =
+    payload?.memo ??
+    payload?.destinationTag ??
+    payload?.destination_tag ??
+    payload?.tag ??
+    payload?.charge?.memo ??
+    raw?.memo ??
+    raw?.destinationTag ??
+    raw?.tag ??
+    null;
+  const memo = memoValue === null || memoValue === undefined ? null : String(memoValue);
+
+  const memoTypeValue =
+    payload?.memoType ??
+    payload?.memo_type ??
+    payload?.destinationTagType ??
+    payload?.destination_tag_type ??
+    raw?.memoType ??
+    raw?.memo_type ??
+    (memo !== null ? "memo" : null);
+  const memoType = memoTypeValue === null || memoTypeValue === undefined
+    ? null
+    : String(memoTypeValue);
+
+  const rawExpiry =
+    payload?.expiresAt ??
+    payload?.expiredAt ??
+    payload?.expiration ??
+    payload?.expire_at ??
+    payload?.expired_at ??
+    raw?.expiresAt ??
+    raw?.expiredAt ??
+    raw?.expiration ??
+    raw?.expire_at ??
+    raw?.expired_at ??
+    null;
+  let expiresAt: string | null = null;
+  if (typeof rawExpiry === "string") {
+    expiresAt = rawExpiry;
+  } else if (typeof rawExpiry === "number") {
+    expiresAt = new Date(rawExpiry < 1e10 ? rawExpiry * 1000 : rawExpiry).toISOString();
+  } else {
+    const ttl = payload?.ttl ?? raw?.ttl;
+    if (typeof ttl === "number" && ttl > 0) {
+      expiresAt = new Date(Date.now() + ttl * 1000).toISOString();
+    }
+  }
+
+  return {
+    id: String(payload?.id ?? raw?.id ?? ""),
+    status: String(payload?.status ?? raw?.status ?? "pending"),
+    merchantReference:
+      payload?.merchantReference ??
+      payload?.merchant_reference ??
+      raw?.merchantReference ??
+      raw?.merchant_reference,
+    address,
+    memo,
+    memoType,
+    requestedCoin: String(
+      payload?.requestedCoin ??
+      payload?.requested_coin ??
+      payload?.assetCode ??
+      payload?.asset_code ??
+      raw?.requestedCoin ??
+      raw?.assetCode ??
+      requestedCoin,
+    ),
+    amount: String(
+      payload?.amount ??
+      payload?.amountRequested ??
+      raw?.amount ??
+      raw?.amountRequested ??
+      requestedAmount,
+    ),
+    expiresAt,
+  };
+}
+
+/**
  * Create a direct crypto charge.
  * IziChange generates a unique deposit address for this payment and fires
  * `payment_intent.completed` webhook once the payment is confirmed.
@@ -167,49 +282,7 @@ export async function createDirectCharge(
   // Log full raw response so we can see the real field names in production logs.
   console.log("[IziChange/DirectCharge] raw response:", JSON.stringify(raw));
 
-  // IziChange Direct Charge returns 201 with depositAddress (confirmed in API docs).
-  // Fallbacks keep compatibility if the field name ever changes.
-  const address: string =
-    raw.depositAddress   ||   // ← confirmed primary field per IziChange docs
-    raw.address          ||
-    raw.data?.depositAddress ||
-    raw.data?.address    ||
-    "";
-
-  const memo: string | null =
-    raw.memo ?? raw.destinationTag ?? raw.tag ?? raw.data?.memo ?? null;
-
-  const memoType: string | null =
-    raw.memoType ?? raw.memo_type ?? (memo !== null ? "memo" : null);
-
-  // Capture expiry time — IziChange may return an ISO string or Unix timestamp (s or ms) or a TTL in seconds.
-  // Normalise to ISO string so the frontend can parse it uniformly.
-  let expiresAt: string | null = null;
-  const rawExpiry = raw.expiresAt ?? raw.expiredAt ?? raw.expiration ?? raw.expire_at ?? raw.expired_at ?? null;
-  if (rawExpiry) {
-    if (typeof rawExpiry === "string") {
-      expiresAt = rawExpiry; // already ISO
-    } else if (typeof rawExpiry === "number") {
-      // Unix seconds if < 1e10, milliseconds otherwise
-      const ms = rawExpiry < 1e10 ? rawExpiry * 1000 : rawExpiry;
-      expiresAt = new Date(ms).toISOString();
-    }
-  } else if (typeof raw.ttl === "number" && raw.ttl > 0) {
-    // ttl in seconds from now
-    expiresAt = new Date(Date.now() + raw.ttl * 1000).toISOString();
-  }
-
-  return {
-    id:               raw.id       ?? "",
-    status:           raw.status   ?? "pending",
-    merchantReference: raw.merchantReference ?? raw.merchant_reference,
-    address,
-    memo,
-    memoType,
-    requestedCoin:    raw.requestedCoin ?? raw.assetCode ?? params.requestedCoin,
-    amount:           raw.amount   ?? raw.amountRequested ?? params.amount,
-    expiresAt,
-  };
+  return normalizeDirectChargeResponse(raw, params.requestedCoin, params.amount);
 }
 
 // ── Webhook validation (manual HMAC-SHA256, toleranceSeconds = 5 min) ────────

@@ -444,6 +444,15 @@ export default function TestCryptoPage() {
                       </p>
                     </div>
                   )}
+                  {!isSuccess && (
+                    <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-800 space-y-1">
+                      <p className="font-semibold">La requête n’a pas été acceptée.</p>
+                      <p>
+                        Vérifiez le code HTTP, le message et le champ <code className="font-mono">request_id</code>.
+                        Pour un <code className="font-mono">gateway_error</code>, l’adresse crypto n’a pas pu être générée.
+                      </p>
+                    </div>
+                  )}
                   {isSuccess && <CopyValue label="Adresse de dépôt" value={responseAddress} />}
                   {isSuccess && responseMemo && <CopyValue label={String(responseData?.memo_type || "Memo / tag")} value={responseMemo} />}
                   {isSuccess && !responseMemo && selectedAsset?.memo_required && (

@@ -800,6 +800,8 @@ export function downloadSDKDocs() {
    y = codeBlock(doc, `{\n  "transaction_id": "8f3e1c2d-...",\n  "reference": "ORDER-CRYPTO-001",\n  "status": "pending",\n  "payment_method": "crypto",\n  "asset_code": "USDT.TRC20",\n  "network": "TRC20",\n  "address": "TX…",\n  "memo": null,\n  "memo_type": null,\n  "amount": 25,\n  "currency": "USDT",\n  "amount_usdt": 25,\n  "credited_amount": 24.375,\n  "fee_amount": 0.625,\n  "credited_amount_usdt": 24.375,\n  "fee_amount_usdt": 0.625,\n  "fee_percent": 2.5,\n  "expires_at": "2026-07-31T19:00:00Z"\n}`, y, "json");
     y = paragraph(doc, "Pour une devise fiat, amount est converti en USDT avec le taux USDT/XAF configure par l'administrateur. Les frais Ashtech Pay et fournisseur sont inclus dans fee_amount_usdt. Quand memo_required vaut true, memo_type indique memo ou tag : copiez address et memo separement, sans jamais concatener ou remplacer le memo par l'adresse.", y);
     y = paragraph(doc, "Apres confirmation par le prestataire crypto, Ashtech Pay credite automatiquement le wallet USDT du marchand avec credited_amount_usdt, puis envoie le webhook POST a notify_url. Le marchand ne doit pas crediter son wallet lui-meme. Les evenements sont payment.completed ou payment.failed et le payload crypto ajoute payment_method, asset_code, address et memo.", y);
+    y = subHeading(doc, "Erreurs et diagnostic", y);
+    y = paragraph(doc, "Une reponse 502 gateway_error signifie que l'adresse n'a pas pu etre generee. Une reponse 502 provider_invalid_response signifie que le service a repondu sans adresse exploitable. Une reponse 500 server_error contient toujours request_id : conservez-le pour le diagnostic. Si provider_status est present, il indique le code HTTP renvoye par le service crypto.", y);
 
    // ── §5  Collect ───────────────────────────────────────────────────────────
    y = sectionTitle(doc, "5. Initier un paiement — POST /v1/collect", y);
@@ -916,8 +918,9 @@ export function downloadSDKDocs() {
        ["422","asset_disabled", "Le reseau crypto a ete desactive par l'administrateur"],
        ["503","crypto_unavailable", "Le catalogue ou le service de paiement crypto est indisponible"],
       ["429","rate_limited",  "Trop de requetes — ralentissez"],
-      ["502","gateway_error", "Le reseau de l'operateur a rejete le paiement"],
-      ["500","server_error",  "Erreur interne — reessayez"],
+       ["502","gateway_error", "Adresse crypto impossible a generer ; consultez message et provider_status"],
+       ["502","provider_invalid_response", "Le service crypto a repondu sans adresse exploitable"],
+       ["500","server_error",  "Erreur interne ; conservez request_id pour le diagnostic"],
     ],
     y, [18, 38, 114]
   );

@@ -5,6 +5,7 @@ import {
   MIN_DIRECT_CRYPTO_USDT,
   parseDirectCryptoRequest,
 } from "../server/directCrypto";
+import { normalizeDirectChargeResponse } from "../server/izichange";
 import { filterCryptoAssets, getStaticCryptoAssets, parseDisabledCryptoAssets } from "../server/cryptoAssets";
 import { cryptoQrPayload } from "../client/src/lib/crypto-qr";
 
@@ -105,5 +106,47 @@ test("sandbox QR payload uses one data value and preserves memo separately", () 
   assert.equal(
     cryptoQrPayload("USDT.TRC20", "TAddress", "memo-1", "memo"),
     "TAddress",
+  );
+});
+
+test("provider direct charge response accepts flat and nested address shapes", () => {
+  const flat = normalizeDirectChargeResponse(
+    {
+      id: "charge-flat",
+      depositAddress: "TFlatAddress",
+      memo: null,
+      expiresAt: "2026-07-31T19:00:00Z",
+    },
+    "USDT.TRC20",
+    "25.000000",
+  );
+  assert.equal(flat.address, "TFlatAddress");
+  assert.equal(flat.id, "charge-flat");
+
+  const nested = normalizeDirectChargeResponse(
+    {
+      data: {
+        object: {
+          id: "charge-nested",
+          address: "0xNestedAddress",
+          destinationTag: "12345",
+          destinationTagType: "tag",
+          amountRequested: "25",
+        },
+      },
+    },
+    "XRP",
+    "25.000000",
+  );
+  assert.equal(nested.address, "0xNestedAddress");
+  assert.equal(nested.memo, "12345");
+  assert.equal(nested.memoType, "tag");
+  assert.equal(nested.amount, "25");
+});
+
+test("provider direct charge response without an address is rejected", () => {
+  assert.throws(
+    () => normalizeDirectChargeResponse({ id: "missing-address" }, "USDT.TRC20", "25"),
+    (error: any) => error?.code === "provider_invalid_response",
   );
 });

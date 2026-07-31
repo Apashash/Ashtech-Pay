@@ -632,6 +632,7 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
                 <ParamRow name="notify_url" type="string" required={false} desc="URL HTTPS recevant payment.completed ou payment.failed." />
                 <ParamRow name="customer" type="object" required={false} desc="email, firstName et lastName du payeur." />
                 <ParamRow name="refund_address" type="string" required={false} desc="Adresse de remboursement fournie au prestataire." />
+                <ParamRow name="request_id" type="string" required={false} desc="Présent dans les erreurs 500/502 pour le diagnostic." />
               </tbody>
             </TableWrapper>
 
@@ -681,6 +682,17 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
   "expires_at": "2026-07-31T19:00:00Z"
 }`} />
               </div>
+            </div>
+
+            <div className="rounded-xl border border-red-200 bg-red-50 p-5 space-y-2">
+              <p className="text-sm font-semibold text-red-900">Erreurs de création et diagnostic</p>
+              <p className="text-sm text-red-900/80">
+                Une réponse <code className="font-mono">502 gateway_error</code> signifie que l’adresse n’a pas pu être générée.
+                <code className="font-mono ml-1">provider_invalid_response</code> signifie que le service a répondu sans adresse exploitable.
+                Une réponse <code className="font-mono">500 server_error</code> contient un <code className="font-mono">request_id</code> :
+                conservez-le pour le diagnostic. Si <code className="font-mono">provider_status</code> est présent, il indique le code HTTP
+                renvoyé par le service crypto.
+              </p>
             </div>
 
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 space-y-2">
