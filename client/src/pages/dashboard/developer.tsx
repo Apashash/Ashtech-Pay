@@ -539,7 +539,7 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
               <p className="text-sm font-semibold text-green-900">Confirmation, crédit et webhook</p>
               <p className="text-sm text-green-900/80">
                 Après la création, le processus est le même que pour Mobile Money : gardez la
-                <code className="font-mono ml-1">reference</code> et attendez la confirmation. IziChange notifie Ashtech Pay,
+                <code className="font-mono ml-1">reference</code> et attendez la confirmation. Le prestataire crypto notifie Ashtech Pay,
                 puis Ashtech Pay passe la transaction à <code className="font-mono">completed</code>, crédite automatiquement
                 le wallet USDT du marchand avec <code className="font-mono">credited_amount_usdt</code> et envoie un POST à votre
                 <code className="font-mono ml-1">notify_url</code>. Vous n’avez donc pas à créditer le wallet vous-même.
