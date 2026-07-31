@@ -776,7 +776,7 @@ export function downloadSDKDocs() {
 
    // ── §4  Crypto Pay-In ─────────────────────────────────────────────────────
    y = sectionTitle(doc, "4. Pay-In Crypto — /v1/crypto/assets + /v1/crypto/collect", y);
-   y = paragraph(doc, "Le Pay-In Crypto utilise la meme cle API ak_… que Mobile Money, mais des endpoints dedies afin de ne modifier aucun contrat existant. Commencez par recuperer les reseaux autorises, puis creez une adresse de depot unique.", y);
+    y = paragraph(doc, "Le Pay-In Crypto utilise la meme cle API ak_… que Mobile Money, mais des endpoints dedies afin de ne modifier aucun contrat existant. Les cryptos utilisent uniquement GET /v1/crypto/assets et POST /v1/crypto/collect ; /v1/collect reste reserve a Mobile Money. Commencez par recuperer les reseaux autorises, puis creez une adresse de depot unique.", y);
     y = paragraph(doc, "GET /v1/crypto/assets ne retourne que les reseaux actifs. Une desactivation admin est appliquee immediatement ; un coin sans reseau actif disparait du catalogue et une creation directe sur un reseau desactive retourne asset_disabled. Utilisez toujours asset_code tel qu'il est retourne par ce catalogue.", y);
    y += 3;
    y = subHeading(doc, "GET /v1/crypto/assets", y);
@@ -799,6 +799,7 @@ export function downloadSDKDocs() {
    y = codeBlock(doc, `fetch("https://ashtechpay.top/v1/crypto/collect", {\n  method: "POST",\n  headers: {\n    "Authorization": "Bearer YOUR_API_KEY",\n    "Content-Type": "application/json"\n  },\n  body: JSON.stringify({\n    amount: 25,\n    currency: "USDT",\n    asset_code: "USDT.TRC20",\n    reference: "ORDER-CRYPTO-001",\n    notify_url: "https://monsite.com/webhook",\n    customer: { firstName: "Ada", lastName: "Lovelace", email: "ada@example.com" }\n  })\n})`, y, "javascript");
    y = codeBlock(doc, `{\n  "transaction_id": "8f3e1c2d-...",\n  "reference": "ORDER-CRYPTO-001",\n  "status": "pending",\n  "payment_method": "crypto",\n  "asset_code": "USDT.TRC20",\n  "network": "TRC20",\n  "address": "TX…",\n  "memo": null,\n  "memo_type": null,\n  "amount": 25,\n  "currency": "USDT",\n  "amount_usdt": 25,\n  "credited_amount": 24.375,\n  "fee_amount": 0.625,\n  "credited_amount_usdt": 24.375,\n  "fee_amount_usdt": 0.625,\n  "fee_percent": 2.5,\n  "expires_at": "2026-07-31T19:00:00Z"\n}`, y, "json");
     y = paragraph(doc, "Pour une devise fiat, amount est converti en USDT avec le taux USDT/XAF configure par l'administrateur. Les frais Ashtech Pay et fournisseur sont inclus dans fee_amount_usdt. Quand memo_required vaut true, memo_type indique memo ou tag : copiez address et memo separement, sans jamais concatener ou remplacer le memo par l'adresse.", y);
+    y = paragraph(doc, "Apres confirmation IziChange, Ashtech Pay credite automatiquement le wallet USDT du marchand avec credited_amount_usdt, puis envoie le webhook POST a notify_url. Le marchand ne doit pas crediter son wallet lui-meme. Les evenements sont payment.completed ou payment.failed et le payload crypto ajoute payment_method, asset_code, address et memo.", y);
 
    // ── §5  Collect ───────────────────────────────────────────────────────────
    y = sectionTitle(doc, "5. Initier un paiement — POST /v1/collect", y);

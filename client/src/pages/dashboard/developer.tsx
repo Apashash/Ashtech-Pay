@@ -535,6 +535,23 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
               Ce flux est séparé de <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">/v1/collect</code> :
               vos intégrations Mobile Money existantes ne changent pas.
             </p>
+            <div className="rounded-xl border border-green-200 bg-green-50 p-5 space-y-2">
+              <p className="text-sm font-semibold text-green-900">Confirmation, crédit et webhook</p>
+              <p className="text-sm text-green-900/80">
+                Après la création, le processus est le même que pour Mobile Money : gardez la
+                <code className="font-mono ml-1">reference</code> et attendez la confirmation. IziChange notifie Ashtech Pay,
+                puis Ashtech Pay passe la transaction à <code className="font-mono">completed</code>, crédite automatiquement
+                le wallet USDT du marchand avec <code className="font-mono">credited_amount_usdt</code> et envoie un POST à votre
+                <code className="font-mono ml-1">notify_url</code>. Vous n’avez donc pas à créditer le wallet vous-même.
+                Le webhook marchand contient <code className="font-mono">event</code> (
+                <code className="font-mono">payment.completed</code> ou <code className="font-mono">payment.failed</code>),
+                <code className="font-mono ml-1">reference</code>, <code className="font-mono">transaction_id</code>,
+                <code className="font-mono ml-1">amount</code>, <code className="font-mono">total_amount</code>,
+                <code className="font-mono ml-1">currency: "USDT"</code> et, pour la crypto,
+                <code className="font-mono ml-1">payment_method</code>, <code className="font-mono">asset_code</code>,
+                <code className="font-mono ml-1">address</code> et <code className="font-mono">memo</code>.
+              </p>
+            </div>
 
             <div className="flex items-center gap-3 flex-wrap">
               <MethodBadge method="GET" />
