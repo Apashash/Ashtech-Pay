@@ -7181,16 +7181,24 @@ export async function registerRoutes(
       if (!merchant) return res.status(404).json({ message: "Marchand introuvable" });
 
       // Get or create WaaS account for the merchant
-      let iziAccountId: string = (merchant as any).izichange_account_id ?? "";
+      let iziAccountId: string = (merchant as any).izichangeAccountId ?? (merchant as any).izichange_account_id ?? "";
       if (!iziAccountId) {
         const externalRef = `ashtech_${merchantId}`;
         let account = await findWaaSAccountByExternalRef(externalRef);
         if (!account) {
-          account = await createWaaSAccount(
-            externalRef,
-            (merchant as any).fullName || (merchant as any).username || `User-${merchantId.slice(0, 8)}`,
-            (merchant as any).email || undefined,
-          );
+          try {
+            account = await createWaaSAccount(
+              externalRef,
+              (merchant as any).fullName || (merchant as any).username || `User-${merchantId.slice(0, 8)}`,
+              (merchant as any).email || undefined,
+            );
+          } catch (createErr: any) {
+            account = await findWaaSAccountByExternalRef(externalRef);
+            if (!account) {
+              console.error("[PayLink/WaaS] createWaaSAccount failed:", createErr.message);
+              return res.status(500).json({ message: `Impossible de créer le compte WaaS: ${createErr.message}` });
+            }
+          }
         }
         iziAccountId = account.id;
         pool.query("UPDATE users SET izichange_account_id = $1 WHERE id = $2", [iziAccountId, merchantId]).catch(() => {});
@@ -12662,7 +12670,7 @@ export async function registerRoutes(
       if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
 
       // ── 1. Get or create WaaS account ─────────────────────────────────────
-      let iziAccountId: string = (user as any).izichange_account_id ?? "";
+      let iziAccountId: string = (user as any).izichangeAccountId ?? (user as any).izichange_account_id ?? "";
 
       if (!iziAccountId) {
         const externalRef = `ashtech_${userId}`;

@@ -30,6 +30,7 @@ export const users = pgTable("users", {
   registrationIp: text("registration_ip"),
   totpSecret: text("totp_secret"),
   totpEnabled: boolean("totp_enabled").default(false),
+  izichangeAccountId: text("izichange_account_id"),
   createdAt: timestamp("created_at").defaultNow(),
 }, (t) => ({
   // Case-insensitive email uniqueness — prevents TEST@mail.com vs test@mail.com duplicates

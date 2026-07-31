@@ -157,7 +157,12 @@ export async function findWaaSAccountByExternalRef(
       "GET",
       `/v1/accounts?externalRef=${encodeURIComponent(externalRef)}&limit=1`,
     );
-    return (result?.data as WaaSAccount[])?.[0] ?? null;
+    // IziChange API returns the list as a top-level array (NOT { data: [...] }).
+    // e.g. [{ id, label, externalRef, ... }]
+    const arr: WaaSAccount[] = Array.isArray(result)
+      ? result
+      : Array.isArray(result?.data) ? result.data : [];
+    return arr[0] ?? null;
   } catch {
     return null;
   }

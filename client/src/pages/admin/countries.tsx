@@ -352,7 +352,7 @@ export default function AdminCountries() {
               </div>
 
               <div className="space-y-2">
-                <Label>Frais crypto IziChange (%)</Label>
+                <Label>Frais crypto Ashtechpay (%)</Label>
                 <Input
                   type="number"
                   min="0"
@@ -363,7 +363,7 @@ export default function AdminCountries() {
                   placeholder="2.5"
                   data-testid="input-izichange-fee"
                 />
-                <p className="text-xs text-muted-foreground">Pourcentage déduit du montant sur les dépôts et liens de paiement crypto IziChange.</p>
+                <p className="text-xs text-muted-foreground">Pourcentage déduit du montant sur les dépôts et liens de paiement crypto Ashtechpay.</p>
                 <Button
                   size="sm"
                   onClick={() => saveSettingMutation.mutate({ key: "izichange_fee_percent", value: cryptoSettings.izichange_fee_percent })}

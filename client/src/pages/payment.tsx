@@ -100,6 +100,8 @@ export default function PaymentPage() {
   const [payCryptoAmount, setPayCryptoAmount] = useState("");
   const [payCryptoShared, setPayCryptoShared] = useState(false);
   const [payCryptoMemoType, setPayCryptoMemoType] = useState<"memo" | "tag">("memo");
+  const [payCryptoRefundAddress, setPayCryptoRefundAddress] = useState("");
+  const [showPayRefundField, setShowPayRefundField] = useState(false);
 
   const { data: paymentLink, isLoading, error } = useQuery<PaymentLink & { hasPdf?: boolean }>({
     queryKey: ["/api/payment-links/public", params?.slug],
@@ -388,6 +390,8 @@ export default function PaymentPage() {
       const body: Record<string, string> = { assetCode: net.assetCode, email: email.trim() };
       if (!(paymentLink as any)?.isFixedAmount && payCryptoAmount)
         body.amountUsdt = payCryptoAmount;
+      if (payCryptoRefundAddress.trim())
+        body.refundAddress = payCryptoRefundAddress.trim();
       const res = await fetch(`/api/payment-links/${params?.slug}/crypto/address`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1370,6 +1374,31 @@ export default function PaymentPage() {
                     />
                   </div>
                   {errors.email && <p className="text-xs text-red-500">{errors.email}</p>}
+                </div>
+
+                {/* ── Refund address (collapsible) ── */}
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setShowPayRefundField(v => !v)}
+                    className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+                  >
+                    {showPayRefundField ? "▲" : "▼"} Adresse de remboursement (optionnel)
+                  </button>
+                  {showPayRefundField && (
+                    <div className="mt-2 space-y-1">
+                      <p className="text-xs text-muted-foreground">
+                        En cas de problème, Ashtechpay utilisera cette adresse pour vous rembourser.
+                      </p>
+                      <input
+                        type="text"
+                        placeholder="0x... ou adresse crypto"
+                        value={payCryptoRefundAddress}
+                        onChange={e => setPayCryptoRefundAddress(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-border bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* ── Generate button ── */}

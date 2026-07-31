@@ -741,7 +741,7 @@ export default function DepositPage() {
                     {showRefundField && (
                       <div className="mt-2 space-y-1">
                         <p className="text-xs text-muted-foreground">
-                          En cas de problème, IziChange utilisera cette adresse pour vous rembourser.
+                          En cas de problème, Ashtechpay utilisera cette adresse pour vous rembourser.
                         </p>
                         <input
                           type="text"

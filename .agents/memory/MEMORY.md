@@ -7,3 +7,4 @@
 - [Countries table currency codes](countries-table-currency-codes.md) — `countries.currency` must match Swychr's per-country codes (GA→XAFG, CG→XAFC, etc.), not generic XAF/XOF, or wallet auto-select picks the wrong wallet.
 - [AfribaPay OTP detection](afribapay-otp-detection.md) — OTP-requirement check must union live API data with a static fallback table and never silently swallow fetch errors, or OTP-required operators (Orange/Moov CI) fail opaquely.
 - [BotGuard blocks payment webhooks](botguard-webhook-ua.md) — every new payment processor webhook must be added to API_UA_EXEMPT_PATHS in botGuard.ts or short/missing User-Agents from processor servers return 403.
+- [IziChange API quirks](izichange-api-quirks.md) — list endpoint returns bare array (not `{ data }`); ESM hoisting means env vars must use lazy getters not module-level constants.
