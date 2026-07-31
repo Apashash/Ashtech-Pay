@@ -39,6 +39,7 @@ import DeveloperPage from "@/pages/dashboard/developer";
 import HostedPageDashboard from "@/pages/dashboard/hosted-page";
 import HostedPageDocs from "@/pages/dashboard/hosted-page-docs";
 import TestPaymentPage from "@/pages/docs/test-payment";
+import TestCryptoPage from "@/pages/docs/test-crypto";
 import HPayPage from "@/pages/hpay";
 import SettingsPage from "@/pages/dashboard/settings";
 import AutoConversionPage from "@/pages/dashboard/auto-conversion";
@@ -152,6 +153,7 @@ function Router() {
       <Route path="/docs/api" component={() => <DeveloperPage publicMode />} />
       <Route path="/docs/hosted-page" component={() => <HostedPageDocs publicMode />} />
       <Route path="/docs/test-pay" component={TestPaymentPage} />
+      <Route path="/docs/test-crypto" component={TestCryptoPage} />
       <Route path="/blocked" component={BlockedPage} />
       <Route path="/login">
         <BlockGuard><LoginPage /></BlockGuard>

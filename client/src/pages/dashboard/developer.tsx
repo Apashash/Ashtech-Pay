@@ -599,6 +599,16 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
             <div className="flex items-center gap-3 flex-wrap">
               <MethodBadge method="POST" />
               <code className="text-sm font-mono text-gray-700 bg-gray-100 border border-gray-200 rounded-lg px-3 py-1.5">/v1/crypto/collect</code>
+              <Link href="/docs/test-crypto">
+                <Button
+                  size="sm"
+                  className="gap-1.5 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 hover:border-primary/50 text-xs"
+                  data-testid="button-test-crypto-api"
+                >
+                  <FlaskConical className="w-3.5 h-3.5" />
+                  Tester l'API crypto
+                </Button>
+              </Link>
             </div>
             <p className="text-gray-600 leading-relaxed">
               L'API accepte un montant en <strong className="text-gray-900">USDT</strong> ou dans une devise fiat supportée
