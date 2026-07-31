@@ -7164,13 +7164,17 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Lien de paiement introuvable ou inactif" });
       }
 
+      // Only chains where IziChange WaaS can auto-attribute deposits to a sub-wallet:
+      // - UTXO (BTC, LTC, DOGE, ADA, BCH): unique address per sub-wallet
+      // - Memo chains (XRP, TON, XLM): shared address + unique memo
+      // - TRC20 (Tron): unique address per sub-wallet
+      // EVM/account chains (BEP20, ERC20, Polygon, Solana) are EXCLUDED — shared
+      // merchant-level address, deposit never attributed → webhook never fires.
       const SUPPORTED = [
-        "USDT.TRC20","USDT.BEP20","USDT.ERC20","USDT.POLYGON","USDT.SOL","USDT.TON",
-        "USDC.ERC20","USDC.BEP20","USDC.SOL","USDC.POLYGON",
-        "BTC","ETH","BNB","SOL","XRP","TON","TRX","LTC","ADA","DOGE","MATIC","XLM","SUI","XTZ","BCH",
-        "ETH.BEP20","BTC.BEP20","XRP.BEP20","ADA.BEP20","DOGE.BEP20","DOT.BEP20","BCH.BEP20",
-        "SHIB.BEP20","SOL.BEP20","TON.BEP20","XLM.BEP20","TWT.BEP20","CAKE.BEP20",
-        "SHIB.ERC20","DOGS.TON",
+        "USDT.TRC20","USDT.TON",
+        "BTC","LTC","DOGE","ADA","BCH",
+        "XRP","TON","XLM","TRX",
+        "DOGS.TON",
       ];
       if (!assetCode || !SUPPORTED.includes(assetCode)) {
         return res.status(400).json({ message: "Crypto/réseau non supporté" });
@@ -12650,19 +12654,12 @@ export async function registerRoutes(
         return res.status(503).json({ message: "Paiement crypto non configuré. Contactez l'administrateur." });
       }
 
+      // Only chains where IziChange WaaS can auto-attribute deposits to a sub-wallet.
+      // EVM/account chains (BEP20, ERC20, Polygon, Solana) excluded — shared address.
       const SUPPORTED_ASSETS = [
-        // USDT
-        "USDT.TRC20","USDT.BEP20","USDT.ERC20","USDT.POLYGON","USDT.SOL","USDT.TON",
-        // USDC
-        "USDC.ERC20","USDC.BEP20","USDC.SOL","USDC.POLYGON",
-        // Major coins
-        "BTC","ETH","BNB","SOL","XRP","TON","TRX","LTC","ADA","DOGE","MATIC","XLM","SUI","XTZ","BCH",
-        // BEP20 tokens
-        "ETH.BEP20","BTC.BEP20","XRP.BEP20","ADA.BEP20","DOGE.BEP20","DOT.BEP20","BCH.BEP20",
-        "SHIB.BEP20","SOL.BEP20","TON.BEP20","XLM.BEP20","TWT.BEP20","CAKE.BEP20",
-        // ERC20 tokens
-        "SHIB.ERC20",
-        // Other
+        "USDT.TRC20","USDT.TON",
+        "BTC","LTC","DOGE","ADA","BCH",
+        "XRP","TON","XLM","TRX",
         "DOGS.TON",
       ];
       const { assetCode, amount, currency: reqCurrency, refundAddress } = req.body;
