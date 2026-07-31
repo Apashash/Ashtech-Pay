@@ -15,6 +15,7 @@ interface TransactionDetails extends Transaction {
   paymentLink?: { title: string; slug: string } | null;
   paymentIntent?: { payerCountry: string; payerPhone: string } | null;
   recipient?: { fullName: string; username: string } | null;
+  metadata?: Record<string, any> | null;
 }
 
 function formatDate(date: string | Date | null | undefined): string {
@@ -175,6 +176,18 @@ export default function TransactionDetailPage({ params }: { params: { id: string
   const payerCountry = tx.paymentIntent?.payerCountry || operatorInfo?.country;
 
   const txCurrency = (tx.currency || user?.preferredCurrency || "XAF") as SupportedCurrency;
+  const cryptoFeeDetails = tx.paymentMethod === "crypto" && tx.metadata
+    ? {
+        gross: Number(tx.metadata.grossAmountUsdt ?? tx.totalAmount ?? tx.amount),
+        providerPercent: Number(tx.metadata.providerFeePercent ?? 0),
+        providerAmount: Number(tx.metadata.providerFeeAmountUsdt ?? 0),
+        ashtechPercent: Number(tx.metadata.ashtechFeePercent ?? 0),
+        ashtechAmount: Number(tx.metadata.ashtechFeeAmountUsdt ?? tx.ashtechFeeAmount ?? 0),
+        totalPercent: Number(tx.metadata.totalFeePercent ?? feePercent ?? 0),
+        totalAmount: Number(tx.metadata.totalFeeAmountUsdt ?? tx.feeAmount ?? realFee),
+        credited: Number(tx.metadata.creditedAmountUsdt ?? tx.amount),
+      }
+    : null;
 
   return (
     <DashboardLayout>
@@ -271,6 +284,26 @@ export default function TransactionDetailPage({ params }: { params: { id: string
                   <Row
                     label={isOutgoing ? td.detailSentToRecipient : td.detailReceived}
                     value={<span className="text-green-500">{formatCurrency(tx.amount, txCurrency)}</span>}
+                  />
+                </>
+              )}
+              {cryptoFeeDetails && (
+                <>
+                  <Row
+                    label="Frais fournisseur"
+                    value={<span className="text-amber-500">{cryptoFeeDetails.providerAmount.toFixed(4)} USDT ({cryptoFeeDetails.providerPercent}%)</span>}
+                  />
+                  <Row
+                    label="Frais AshTechPay"
+                    value={<span className="text-amber-500">{cryptoFeeDetails.ashtechAmount.toFixed(4)} USDT ({cryptoFeeDetails.ashtechPercent}%)</span>}
+                  />
+                  <Row
+                    label="Total des frais"
+                    value={<span className="text-amber-500">{cryptoFeeDetails.totalAmount.toFixed(4)} USDT ({cryptoFeeDetails.totalPercent}%)</span>}
+                  />
+                  <Row
+                    label="Montant net crédité"
+                    value={<span className="text-green-500">{cryptoFeeDetails.credited.toFixed(4)} USDT</span>}
                   />
                 </>
               )}

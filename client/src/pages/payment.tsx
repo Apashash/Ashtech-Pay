@@ -105,6 +105,15 @@ export default function PaymentPage() {
   const [payCryptoRef, setPayCryptoRef] = useState("");
   const [payCryptoAssetCode, setPayCryptoAssetCode] = useState("USDT.TRC20");
   const [payCryptoAmountUsdt, setPayCryptoAmountUsdt] = useState("");
+  const [payCryptoFeeBreakdown, setPayCryptoFeeBreakdown] = useState<{
+    providerFeePercent: number;
+    providerFeeAmountUsdt: number;
+    ashtechFeePercent: number;
+    ashtechFeeAmountUsdt: number;
+    totalFeePercent: number;
+    totalFeeAmountUsdt: number;
+    creditedAmountUsdt: number;
+  } | null>(null);
   const [payCryptoAmount, setPayCryptoAmount] = useState("");
   const [payCryptoShared, setPayCryptoShared] = useState(false);
   const [payCryptoMemoType, setPayCryptoMemoType] = useState<"memo" | "tag">("memo");
@@ -286,8 +295,7 @@ export default function PaymentPage() {
   const validatePaymentForm = (): boolean => {
     const newErrors: Record<string, string> = {};
     if (paymentMethod !== "crypto" && !fullName.trim()) newErrors.fullName = p.errName;
-    if (!email.trim()) newErrors.email = p.errEmail;
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = p.errEmailInvalid;
+    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = p.errEmailInvalid;
     if (!paymentLink?.isFixedAmount && (!customAmount || parseFloat(customAmount) <= 0)) newErrors.amount = p.errAmount;
     if (!paymentMethod) newErrors.paymentMethod = p.errPaymentMethod;
     if (paymentMethod !== "crypto") {
@@ -317,8 +325,7 @@ export default function PaymentPage() {
     mutationFn: async () => {
       const newErrors: Record<string, string> = {};
       if (paymentMethod !== "crypto" && !fullName.trim()) newErrors.fullName = p.errName;
-      if (!email.trim()) newErrors.email = p.errEmail;
-      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = p.errEmailInvalid;
+      if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = p.errEmailInvalid;
       if (!paymentLink?.isFixedAmount && (!customAmount || parseFloat(customAmount) <= 0)) newErrors.amount = p.errAmount;
       if (!paymentMethod) newErrors.paymentMethod = p.errPaymentMethod;
       if (paymentMethod !== "crypto") {
@@ -333,7 +340,7 @@ export default function PaymentPage() {
       const isPixpayOtpOp = selectedOperatorData?.paymentProvider === "pixpay" &&
         selectedOperatorData?.pixpayOperatorType === "otp";
       const body: any = {
-        fullName: fullName.trim() || email,
+        fullName: fullName.trim() || "Client crypto",
         email, country, phone,
         amount: paymentLink?.isFixedAmount ? convertedDisplayAmount.toString() : customAmount,
         currency: selectedDisplayCurrency,
@@ -418,9 +425,9 @@ export default function PaymentPage() {
     mutationFn: async () => {
       const net = payCoinList[payCryptoCoin]?.networks.find(n => n.id === displayedPayCryptoNetwork);
       if (!net) throw new Error("Réseau invalide");
-      if (!email.trim()) throw new Error("Email requis");
       // country is optional for crypto (not needed by IziChange Direct Charge)
-      const body: Record<string, string> = { assetCode: net.assetCode, email: email.trim() };
+      const body: Record<string, string> = { assetCode: net.assetCode };
+      if (email.trim()) body.email = email.trim();
       if (country) body.country = country;
       if (!(paymentLink as any)?.isFixedAmount && payCryptoAmount) {
         const usdtEquiv = payCryptoCoinPrice > 0
@@ -460,6 +467,15 @@ export default function PaymentPage() {
       setPayCryptoRef(data.reference || "");
       setPayCryptoAssetCode(data.assetCode);
       setPayCryptoAmountUsdt(data.amountUsdt || "");
+      setPayCryptoFeeBreakdown(data.providerFeeAmountUsdt != null ? {
+        providerFeePercent: Number(data.providerFeePercent || 0),
+        providerFeeAmountUsdt: Number(data.providerFeeAmountUsdt || 0),
+        ashtechFeePercent: Number(data.ashtechFeePercent || 0),
+        ashtechFeeAmountUsdt: Number(data.ashtechFeeAmountUsdt || 0),
+        totalFeePercent: Number(data.totalFeePercent || 0),
+        totalFeeAmountUsdt: Number(data.totalFeeAmountUsdt || 0),
+        creditedAmountUsdt: Number(data.creditedAmountUsdt || 0),
+      } : null);
       setPayCryptoShared(data.shared ?? false);
       setPayCryptoMemoType(data.memoType ?? "memo");
       setPayCryptoStep("ready");
@@ -531,6 +547,7 @@ export default function PaymentPage() {
     setPayCryptoRef("");
     setPayCryptoAssetCode("USDT.TRC20");
     setPayCryptoAmountUsdt("");
+    setPayCryptoFeeBreakdown(null);
   };
 
   if (isLoading) {
@@ -692,6 +709,34 @@ export default function PaymentPage() {
                 </p>
                 {payCryptoAmountUsdt && payCryptoCoin !== "USDT" && (
                   <p className="text-xs text-amber-600 dark:text-amber-500 mt-0.5">≈ {payCryptoAmountUsdt} USDT</p>
+                )}
+              </div>
+            )}
+            {(payCryptoAmountUsdt || payCryptoAmount) && (
+              <div className="bg-muted/30 rounded-xl px-4 py-3 space-y-1.5">
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Montant brut</span>
+                  <span className="font-semibold">{Number(payCryptoAmountUsdt || fixedCryptoAmountUsdt || 0).toFixed(4)} USDT</span>
+                </div>
+                {payCryptoFeeBreakdown && (
+                  <>
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Frais fournisseur ({payCryptoFeeBreakdown.providerFeePercent}%)</span>
+                      <span className="font-semibold text-red-500">-{payCryptoFeeBreakdown.providerFeeAmountUsdt.toFixed(4)} USDT</span>
+                    </div>
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Frais AshTechPay ({payCryptoFeeBreakdown.ashtechFeePercent}%)</span>
+                      <span className="font-semibold text-red-500">-{payCryptoFeeBreakdown.ashtechFeeAmountUsdt.toFixed(4)} USDT</span>
+                    </div>
+                    <div className="flex justify-between text-xs font-semibold text-muted-foreground border-t border-border pt-1.5">
+                      <span>Total des frais ({payCryptoFeeBreakdown.totalFeePercent}%)</span>
+                      <span className="text-red-500">-{payCryptoFeeBreakdown.totalFeeAmountUsdt.toFixed(4)} USDT</span>
+                    </div>
+                    <div className="flex justify-between text-sm border-t border-border pt-1.5">
+                      <span className="font-medium text-muted-foreground">Montant net crédité</span>
+                      <span className="font-bold text-green-500">{payCryptoFeeBreakdown.creditedAmountUsdt.toFixed(4)} USDT</span>
+                    </div>
+                  </>
                 )}
               </div>
             )}
@@ -1564,8 +1609,7 @@ export default function PaymentPage() {
                   size="lg"
                   onClick={() => {
                     const errs: Record<string, string> = {};
-                    if (!email.trim()) errs.email = p.errEmail;
-                    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errs.email = p.errEmailInvalid;
+                    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errs.email = p.errEmailInvalid;
                     // country is optional for crypto — do not block on it
                     if (Object.keys(errs).length > 0) { setErrors(prev => ({ ...prev, ...errs })); return; }
                     generatePayLinkCryptoMutation.mutate();

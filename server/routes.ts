@@ -68,7 +68,7 @@ import { createPaymentIntent, createDirectCharge, validateWebhook, getIziPayWebh
 import { fetchCryptoAssets, filterCryptoAssets, parseDisabledCryptoAssets, getStaticCryptoAssets } from "./cryptoAssets";
 import {
   buildDirectCryptoCustomer,
-  computeDirectCryptoAmounts,
+  computeDirectCryptoFeeBreakdown,
   MIN_DIRECT_CRYPTO_USDT,
   parseDirectCryptoRequest,
   type DirectCryptoRequest,
@@ -1375,6 +1375,48 @@ export async function registerRoutes(
 ): Promise<Server> {
   // Restaurer les révocations de tokens depuis la DB (persistance après redémarrage)
   await loadTokenRevocationsFromDb();
+
+  /**
+   * Resolve the crypto Pay-In split from the configured deposit fee row.
+   * Operator-specific rows take precedence when an operator is supplied,
+   * followed by country and then the global crypto settings.
+   */
+  async function resolveCryptoFeeBreakdown(
+    grossUsdt: number,
+    countryValue?: string | null,
+    operatorId?: string | null,
+  ) {
+    const [ashtechSetting, providerSetting, allCountries] = await Promise.all([
+      storage.getSetting("izichange_fee_percent"),
+      storage.getSetting("izichange_provider_fee_percent"),
+      storage.getAllCountries(),
+    ]);
+
+    let ashtechPercent = parseFloat(ashtechSetting?.value || "2.5");
+    let providerPercent = parseFloat(providerSetting?.value || "0");
+    const normalizedCountry = String(countryValue || "").trim().toLowerCase();
+    if (normalizedCountry) {
+      const country = allCountries.find((candidate: any) =>
+        [candidate.id, candidate.code, candidate.name]
+          .filter(Boolean)
+          .some(value => String(value).trim().toLowerCase() === normalizedCountry),
+      );
+      const fee = country
+        ? await storage.resolveFee("deposit", country.id, operatorId || undefined)
+        : undefined;
+      if (fee) {
+        // For crypto, the Swychr fee field is the provider component and
+        // ashtechMargin is AshTechPay's component in the deposit fee screen.
+        if ((fee as any).swychrFee != null) {
+          providerPercent = parseFloat(String((fee as any).swychrFee)) || 0;
+        }
+        if ((fee as any).ashtechMargin != null) {
+          ashtechPercent = parseFloat(String((fee as any).ashtechMargin)) || 0;
+        }
+      }
+    }
+    return computeDirectCryptoFeeBreakdown(grossUsdt, providerPercent, ashtechPercent);
+  }
 
   // Serve uploaded files statically.
   // H-6 hardening: force download disposition + nosniff so a stray script-like
@@ -6791,6 +6833,7 @@ export async function registerRoutes(
   app.get("/api/public/fee-settings", publicInfoLimiter, async (_req, res) => {
     try {
       const settings = await storage.getAllSettings();
+      const requestedCountry = typeof _req.query.country === "string" ? _req.query.country : undefined;
       const conversionFeePercent = parseFloat(settings.find(s => s.key === "conversion_fee_percent")?.value || "6");
       const depositFeePercent = parseFloat(settings.find(s => s.key === "deposit_fee_percent")?.value || "0");
       const paymentLinkFeePercent = parseFloat(settings.find(s => s.key === "payment_link_fee_percent")?.value || "2");
@@ -6813,9 +6856,12 @@ export async function registerRoutes(
       const convAshtechFeeCfaUsdt  = parseFloat(settings.find(s => s.key === "conversion_ashtech_fee_cfa_usdt")?.value || "1");
       const convProviderFeeUsdtCfa = parseFloat(settings.find(s => s.key === "conversion_provider_fee_usdt_cfa")?.value || "1");
       const convAshtechFeeUsdtCfa  = parseFloat(settings.find(s => s.key === "conversion_ashtech_fee_usdt_cfa")?.value || "1");
-      const cryptoAshtechFeePercent = parseFloat(settings.find(s => s.key === "izichange_fee_percent")?.value || "2.5");
-      const cryptoProviderFeePercent = parseFloat(settings.find(s => s.key === "izichange_provider_fee_percent")?.value || "0");
-      const cryptoFeePercent = cryptoAshtechFeePercent + cryptoProviderFeePercent; // total déduit
+      const globalCryptoAshtechFeePercent = parseFloat(settings.find(s => s.key === "izichange_fee_percent")?.value || "2.5");
+      const globalCryptoProviderFeePercent = parseFloat(settings.find(s => s.key === "izichange_provider_fee_percent")?.value || "0");
+      const cryptoPreview = await resolveCryptoFeeBreakdown(1, requestedCountry);
+      const cryptoAshtechFeePercent = requestedCountry ? cryptoPreview.ashtechFeePercent : globalCryptoAshtechFeePercent;
+      const cryptoProviderFeePercent = requestedCountry ? cryptoPreview.providerFeePercent : globalCryptoProviderFeePercent;
+      const cryptoFeePercent = requestedCountry ? cryptoPreview.totalFeePercent : globalCryptoAshtechFeePercent + globalCryptoProviderFeePercent;
       const cryptoMinDeposit = parseFloat(settings.find(s => s.key === "izichange_min_deposit_usd")?.value || "5");
       res.json({
         conversionFeePercent,
@@ -7361,15 +7407,7 @@ export async function registerRoutes(
          });
        }
 
-      const [cryptoFeeStr, cryptoProviderFeeStr] = await Promise.all([
-        storage.getSetting("izichange_fee_percent"),
-        storage.getSetting("izichange_provider_fee_percent"),
-      ]);
-      const cryptoAshtechFeePercent = cryptoFeeStr ? parseFloat(cryptoFeeStr.value) : 2.5;
-      const cryptoProviderFeePercent = cryptoProviderFeeStr ? parseFloat(cryptoProviderFeeStr.value) : 0;
-      const cryptoFeePercent = cryptoAshtechFeePercent + cryptoProviderFeePercent;  // total déduit
-      const feeUSDT = amountUSDT * (cryptoFeePercent / 100);
-      const netUSDT = amountUSDT - feeUSDT;
+       const amounts = await resolveCryptoFeeBreakdown(amountUSDT, payerCountry);
 
       const reference = generateTransactionReference("payment_link");
 
@@ -7401,9 +7439,10 @@ export async function registerRoutes(
       await storage.createTransaction({
         userId: merchantId,
         type: "payment_link",
-        amount: netUSDT.toFixed(6),
+         amount: amounts.creditedUsdt.toFixed(6),
         totalAmount: amountUSDT.toFixed(6),
-        feeAmount: feeUSDT.toFixed(6),
+         feeAmount: amounts.feeUsdt.toFixed(6),
+         ashtechFeeAmount: amounts.ashtechFeeUsdt.toFixed(6),
         currency: "USDT",
         status: "pending",
         description: `Paiement crypto ${assetCode} — Lien: ${link.title}${email ? ` (${email})` : ""}`,
@@ -7413,7 +7452,14 @@ export async function registerRoutes(
         payerEmail: email || null,
         payerName: firstName && lastName ? `${firstName} ${lastName}` : (email || null),
         externalReference: charge.id || undefined,   // IziChange transaction ID
-        metadata: { assetCode, address: charge.address, memo: charge.memo, payerEmail: email, payerCountry: payerCountry || null, izichangeId: charge.id || null },
+         metadata: {
+           assetCode, address: charge.address, memo: charge.memo, memoType: charge.memoType ?? null,
+           payerEmail: email, payerCountry: payerCountry || null, izichangeId: charge.id || null,
+           grossAmountUsdt: amounts.grossUsdt, providerFeePercent: amounts.providerFeePercent,
+           providerFeeAmountUsdt: amounts.providerFeeUsdt, ashtechFeePercent: amounts.ashtechFeePercent,
+           ashtechFeeAmountUsdt: amounts.ashtechFeeUsdt, totalFeePercent: amounts.totalFeePercent,
+           totalFeeAmountUsdt: amounts.feeUsdt, creditedAmountUsdt: amounts.creditedUsdt,
+         },
       });
 
       console.log(`[PayLink/Crypto] Direct charge: addr=${charge.address} asset=${assetCode} ref=${reference} merchant=${merchantId} expiresAt=${charge.expiresAt ?? "n/a"}`);
@@ -7423,7 +7469,15 @@ export async function registerRoutes(
         memoType:   charge.memoType ?? null,
         assetCode,
         reference,
-        amountUsdt: amountUSDT.toFixed(4),
+         amountUsdt: amounts.grossUsdt.toFixed(4),
+         grossAmountUsdt: amounts.grossUsdt.toFixed(6),
+         providerFeePercent: amounts.providerFeePercent,
+         providerFeeAmountUsdt: amounts.providerFeeUsdt.toFixed(6),
+         ashtechFeePercent: amounts.ashtechFeePercent,
+         ashtechFeeAmountUsdt: amounts.ashtechFeeUsdt.toFixed(6),
+         totalFeePercent: amounts.totalFeePercent,
+         totalFeeAmountUsdt: amounts.feeUsdt.toFixed(6),
+         creditedAmountUsdt: amounts.creditedUsdt.toFixed(6),
         fiatAmount,
         fiatCurrency,
         expiresAt:  charge.expiresAt ?? null,
@@ -7451,7 +7505,7 @@ export async function registerRoutes(
       }
 
       // Validate required fields
-      if (!fullName || !email || !paymentMethod) {
+      if (!fullName || !paymentMethod) {
         return res.status(400).json({ message: "Tous les champs requis doivent être remplis" });
       }
       if (paymentMethod !== "crypto" && (!country || !phone)) {
@@ -7460,7 +7514,7 @@ export async function registerRoutes(
 
       // Validate email format
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
+      if (email && !emailRegex.test(email)) {
         return res.status(400).json({ message: "Email invalide" });
       }
 
@@ -7515,23 +7569,13 @@ export async function registerRoutes(
         const linkCurrency = (providedCurrency || paymentLink.currency || "XOF").toUpperCase();
         const izipayCurrency = toIziPayCurrency(linkCurrency);
 
-        // Get fee settings (AshtechPay + provider → total)
-        const [cryptoFeeSettingsRedir, cryptoProviderFeeSettingsRedir] = await Promise.all([
-          storage.getSetting("izichange_fee_percent"),
-          storage.getSetting("izichange_provider_fee_percent"),
-        ]);
-        const cryptoAshtechFeeRedir = cryptoFeeSettingsRedir ? parseFloat(cryptoFeeSettingsRedir.value) : 2.5;
-        const cryptoProviderFeeRedir = cryptoProviderFeeSettingsRedir ? parseFloat(cryptoProviderFeeSettingsRedir.value) : 0;
-        const cryptoFeePercentRedir = cryptoAshtechFeeRedir + cryptoProviderFeeRedir;  // total déduit
-
         // Convert to USDT using admin-configured rate (fx_rate_USDT) or fallback to live FX
         const fxRatesCrypto = await loadFxRates();
         const amountInXAF = convertToXAF(numAmount, linkCurrency, fxRatesCrypto);
         const adminRateSetting = await storage.getSetting("fx_rate_USDT");
         const usdtPerXaf = adminRateSetting ? parseFloat(adminRateSetting.value) : (fxRatesCrypto["USDT"] ?? 585);
         const amountInUSD = amountInXAF / usdtPerXaf;
-        const feeAmountUSD = amountInUSD * (cryptoFeePercentRedir / 100);
-        const netAmountUSD = amountInUSD - feeAmountUSD;
+        const amounts = await resolveCryptoFeeBreakdown(amountInUSD, country);
 
         const reference = generateTransactionReference("payment_link");
         const appBase = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
@@ -7541,11 +7585,11 @@ export async function registerRoutes(
           paymentLinkId: paymentLink.id,
           merchantId: paymentLink.userId,
           payerName: fullName,
-          payerEmail: email,
+          payerEmail: email || null,
           payerPhone: phone || "",
           payerCountry: resolvedCountryName,
-          amount: netAmountUSD.toFixed(6),
-          feeAmount: feeAmountUSD.toFixed(6),
+          amount: amounts.creditedUsdt.toFixed(6),
+          feeAmount: amounts.feeUsdt.toFixed(6),
           currency: "USDT",
           paymentMethod: "crypto",
           operator: null,
@@ -7556,19 +7600,30 @@ export async function registerRoutes(
         await storage.createTransaction({
           userId: paymentLink.userId,
           type: "payment_link",
-          amount: netAmountUSD.toFixed(6),
+          amount: amounts.creditedUsdt.toFixed(6),
           totalAmount: amountInUSD.toFixed(6),
-          feeAmount: feeAmountUSD.toFixed(6),
+          feeAmount: amounts.feeUsdt.toFixed(6),
+          ashtechFeeAmount: amounts.ashtechFeeUsdt.toFixed(6),
           currency: "USDT",
           status: "pending",
-          description: `Paiement crypto IziChange de ${fullName} (${email}) via ${paymentLink.title}`,
+          description: `Paiement crypto IziChange de ${fullName}${email ? ` (${email})` : ""} via ${paymentLink.title}`,
           paymentMethod: "crypto",
           reference,
           paymentLinkId: paymentLink.id,
           paymentIntentId: cryptoIntent.id,
           payerName: fullName,
-          payerEmail: email,
+          payerEmail: email || null,
           recipientCountry: country || "International",
+          metadata: {
+            grossAmountUsdt: amounts.grossUsdt,
+            providerFeePercent: amounts.providerFeePercent,
+            providerFeeAmountUsdt: amounts.providerFeeUsdt,
+            ashtechFeePercent: amounts.ashtechFeePercent,
+            ashtechFeeAmountUsdt: amounts.ashtechFeeUsdt,
+            totalFeePercent: amounts.totalFeePercent,
+            totalFeeAmountUsdt: amounts.feeUsdt,
+            creditedAmountUsdt: amounts.creditedUsdt,
+          },
         });
 
         // Create IziChange payment intent
@@ -7592,7 +7647,7 @@ export async function registerRoutes(
           if (tx?.id && iziIntent?.id) await storage.updateTransaction(tx.id, { paymentIntentId: iziIntent.id });
         } catch {}
 
-        console.log(`[PaymentLink Crypto] IziChange intent created: id=${iziIntent.id} ${izipayCurrency}${numAmount} ≈ ${netAmountUSD.toFixed(4)} USDT ref=${reference}`);
+        console.log(`[PaymentLink Crypto] IziChange intent created: id=${iziIntent.id} ${izipayCurrency}${numAmount} ≈ ${amounts.creditedUsdt.toFixed(4)} USDT net ref=${reference}`);
         return res.json({
           paymentUrl: iziIntent.paymentUrl,
           intentId: iziIntent.id,
@@ -12557,6 +12612,13 @@ export async function registerRoutes(
       type: transaction.type,
       phone: transaction.recipientPhone ?? null,
       timestamp: new Date().toISOString(),
+      fee_amount: transaction.feeAmount || "0",
+      provider_fee_amount: (transaction as any).metadata?.providerFeeAmountUsdt ?? "0",
+      provider_fee_percent: (transaction as any).metadata?.providerFeePercent ?? 0,
+      ashtech_fee_amount: transaction.ashtechFeeAmount || ((transaction as any).metadata?.ashtechFeeAmountUsdt ?? "0"),
+      ashtech_fee_percent: (transaction as any).metadata?.ashtechFeePercent ?? 0,
+      total_fee_amount: transaction.feeAmount || "0",
+      total_fee_percent: (transaction as any).metadata?.totalFeePercent ?? 0,
       ...(transaction.paymentMethod === "crypto"
         ? {
             payment_method: "crypto",
@@ -12734,6 +12796,13 @@ export async function registerRoutes(
         paymentMethod: "crypto",
         operator: txAssetCode || undefined,        // réseau crypto ex: "USDT.TRC20"
         provider: "IziChange",
+        grossAmount: transaction.totalAmount || transaction.amount,
+        providerFeeAmount: (transaction as any).metadata?.providerFeeAmountUsdt,
+        providerFeePercent: (transaction as any).metadata?.providerFeePercent,
+        ashtechFeeAmount: transaction.ashtechFeeAmount || (transaction as any).metadata?.ashtechFeeAmountUsdt,
+        ashtechFeePercent: (transaction as any).metadata?.ashtechFeePercent,
+        totalFeeAmount: transaction.feeAmount || (transaction as any).metadata?.totalFeeAmountUsdt,
+        totalFeePercent: (transaction as any).metadata?.totalFeePercent,
       }).catch(() => {});
 
       console.log(`[IziChange Webhook] ✓ Credited ${creditAmount.toFixed(4)} USDT — ref=${merchantReference}`);
@@ -12763,22 +12832,13 @@ export async function registerRoutes(
       const fiatCurrency = ((reqCurrency || user.preferredCurrency || "XOF") as string).toUpperCase();
       const izipayCurrency = toIziPayCurrency(fiatCurrency);
 
-      const [cryptoFeeSettings, cryptoProviderFeeSettings2] = await Promise.all([
-        storage.getSetting("izichange_fee_percent"),
-        storage.getSetting("izichange_provider_fee_percent"),
-      ]);
-      const cryptoAshtechFeePercent2 = cryptoFeeSettings ? parseFloat(cryptoFeeSettings.value) : 2.5;
-      const cryptoProviderFeePercent2 = cryptoProviderFeeSettings2 ? parseFloat(cryptoProviderFeeSettings2.value) : 0;
-      const cryptoFeePercent2 = cryptoAshtechFeePercent2 + cryptoProviderFeePercent2;  // total déduit
-
       // Convert fiat amount to USDT using admin-configured rate (fx_rate_USDT) or fallback to live FX
       const fxRates = await loadFxRates();
       const amountInXAF = convertToXAF(numAmount, fiatCurrency, fxRates);
       const adminRateSetting = await storage.getSetting("fx_rate_USDT");
        const usdtPerXaf = adminRateSetting ? parseFloat(adminRateSetting.value) : (fxRates["USDT"] ?? 585);
       const amountInUSDT = amountInXAF / usdtPerXaf;
-      const feeAmountUSDT = amountInUSDT * (cryptoFeePercent2 / 100);
-      const netAmountUSDT = amountInUSDT - feeAmountUSDT;
+      const amounts = await resolveCryptoFeeBreakdown(amountInUSDT, user.country);
 
       const reference = generateTransactionReference("deposit");
       const appBase = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
@@ -12786,14 +12846,25 @@ export async function registerRoutes(
       const tx = await storage.createTransaction({
         userId,
         type: "deposit",
-        amount: netAmountUSDT.toFixed(6),
+        amount: amounts.creditedUsdt.toFixed(6),
         totalAmount: amountInUSDT.toFixed(6),
-        feeAmount: feeAmountUSDT.toFixed(6),
+        feeAmount: amounts.feeUsdt.toFixed(6),
+        ashtechFeeAmount: amounts.ashtechFeeUsdt.toFixed(6),
         currency: "USDT",
         status: "pending",
         description: `Dépôt crypto IziChange — ${fiatCurrency} ${numAmount}`,
         paymentMethod: "crypto",
         reference,
+        metadata: {
+          grossAmountUsdt: amounts.grossUsdt,
+          providerFeePercent: amounts.providerFeePercent,
+          providerFeeAmountUsdt: amounts.providerFeeUsdt,
+          ashtechFeePercent: amounts.ashtechFeePercent,
+          ashtechFeeAmountUsdt: amounts.ashtechFeeUsdt,
+          totalFeePercent: amounts.totalFeePercent,
+          totalFeeAmountUsdt: amounts.feeUsdt,
+          creditedAmountUsdt: amounts.creditedUsdt,
+        },
       });
 
       let iziIntent: any;
@@ -12815,13 +12886,21 @@ export async function registerRoutes(
         await storage.updateTransaction(tx.id, { paymentIntentId: iziIntent.id }).catch(() => {});
       }
 
-      console.log(`[Deposits Crypto] IziChange intent: ${fiatCurrency}${numAmount} ≈ ${netAmountUSDT.toFixed(4)} USDT ref=${reference}`);
+      console.log(`[Deposits Crypto] IziChange intent: ${fiatCurrency}${numAmount} ≈ ${amounts.creditedUsdt.toFixed(4)} USDT ref=${reference}`);
       res.json({
         paymentUrl: iziIntent.paymentUrl,
         intentId: iziIntent.id,
         reference,
         currency: fiatCurrency,
-        amountUsdt: netAmountUSDT.toFixed(4),
+        amountUsdt: amounts.grossUsdt.toFixed(4),
+        grossAmountUsdt: amounts.grossUsdt.toFixed(6),
+        providerFeePercent: amounts.providerFeePercent,
+        providerFeeAmountUsdt: amounts.providerFeeUsdt.toFixed(6),
+        ashtechFeePercent: amounts.ashtechFeePercent,
+        ashtechFeeAmountUsdt: amounts.ashtechFeeUsdt.toFixed(6),
+        totalFeePercent: amounts.totalFeePercent,
+        totalFeeAmountUsdt: amounts.feeUsdt.toFixed(6),
+        creditedAmountUsdt: amounts.creditedUsdt.toFixed(6),
       });
     } catch (error: any) {
       console.error("[Deposits Crypto] Error:", error.message, error.stack?.split("\n")[1]);
@@ -12866,16 +12945,7 @@ export async function registerRoutes(
       if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
 
       // Frontend sends amounts in USDT directly; no fiat conversion needed.
-      // Total fee = AshtechPay margin + IziChange provider fee
-      const [cryptoFeeStrAddr, cryptoProviderFeeStrAddr] = await Promise.all([
-        storage.getSetting("izichange_fee_percent"),
-        storage.getSetting("izichange_provider_fee_percent"),
-      ]);
-      const cryptoAshtechFeeAddr = cryptoFeeStrAddr ? parseFloat(cryptoFeeStrAddr.value) : 2.5;
-      const cryptoProviderFeeAddr = cryptoProviderFeeStrAddr ? parseFloat(cryptoProviderFeeStrAddr.value) : 0;
-      const cryptoTotalFeePercent = cryptoAshtechFeeAddr + cryptoProviderFeeAddr;
-      const feeAmountUSDT   = numAmount * (cryptoTotalFeePercent / 100);
-      const netAmountUSDT   = numAmount - feeAmountUSDT;
+      const amounts = await resolveCryptoFeeBreakdown(numAmount, user.country);
 
       const reference = generateTransactionReference("deposit");
 
@@ -12909,9 +12979,10 @@ export async function registerRoutes(
       await storage.createTransaction({
         userId,
         type: "deposit",
-        amount: netAmountUSDT.toFixed(6),
+        amount: amounts.creditedUsdt.toFixed(6),
         totalAmount: numAmount.toFixed(6),
-        feeAmount: feeAmountUSDT.toFixed(6),
+        feeAmount: amounts.feeUsdt.toFixed(6),
+        ashtechFeeAmount: amounts.ashtechFeeUsdt.toFixed(6),
         currency: "USDT",
         status: "pending",
         description: `Dépôt crypto ${assetCode} — ${numAmount} USDT`,
@@ -12923,6 +12994,14 @@ export async function registerRoutes(
           address: charge.address,
           memo: charge.memo ?? null,
           izichangeId: charge.id || null,
+          grossAmountUsdt: amounts.grossUsdt,
+          providerFeePercent: amounts.providerFeePercent,
+          providerFeeAmountUsdt: amounts.providerFeeUsdt,
+          ashtechFeePercent: amounts.ashtechFeePercent,
+          ashtechFeeAmountUsdt: amounts.ashtechFeeUsdt,
+          totalFeePercent: amounts.totalFeePercent,
+          totalFeeAmountUsdt: amounts.feeUsdt,
+          creditedAmountUsdt: amounts.creditedUsdt,
           ...(refundAddress ? { refundAddress } : {}),
         },
       });
@@ -12935,7 +13014,15 @@ export async function registerRoutes(
         memoType:   charge.memoType ?? null,
         assetCode,
         reference,
-        amountUsdt: netAmountUSDT.toFixed(4),
+        grossAmountUsdt: amounts.grossUsdt.toFixed(6),
+        providerFeePercent: amounts.providerFeePercent,
+        providerFeeAmountUsdt: amounts.providerFeeUsdt.toFixed(6),
+        ashtechFeePercent: amounts.ashtechFeePercent,
+        ashtechFeeAmountUsdt: amounts.ashtechFeeUsdt.toFixed(6),
+        totalFeePercent: amounts.totalFeePercent,
+        totalFeeAmountUsdt: amounts.feeUsdt.toFixed(6),
+        creditedAmountUsdt: amounts.creditedUsdt.toFixed(6),
+        amountUsdt: amounts.grossUsdt.toFixed(4),
         fiatAmount: numAmount,
         expiresAt:  charge.expiresAt ?? null,
       });
@@ -13985,14 +14072,7 @@ export async function registerRoutes(
         });
       }
 
-      const [ashtechSetting, providerSetting] = await Promise.all([
-        storage.getSetting("izichange_fee_percent"),
-        storage.getSetting("izichange_provider_fee_percent"),
-      ]);
-      const ashtechFee = ashtechSetting ? parseFloat(ashtechSetting.value) : 2.5;
-      const providerFee = providerSetting ? parseFloat(providerSetting.value) : 0;
-      const totalFeePercent = ashtechFee + providerFee;
-      const amounts = computeDirectCryptoAmounts(grossUsdt, totalFeePercent);
+      const amounts = await resolveCryptoFeeBreakdown(grossUsdt, merchant.country);
 
       const reference = request.reference || generateTransactionReference("deposit");
        const customer = buildDirectCryptoCustomer(request);
@@ -14042,6 +14122,7 @@ export async function registerRoutes(
         amount: amounts.creditedUsdt.toFixed(6),
         totalAmount: amounts.grossUsdt.toFixed(6),
         feeAmount: amounts.feeUsdt.toFixed(6),
+        ashtechFeeAmount: amounts.ashtechFeeUsdt.toFixed(6),
         currency: "USDT",
         status: "pending",
         description: `Paiement API crypto ${request.assetCode} — ${originalAmount ?? amounts.grossUsdt} ${originalCurrency}`,
@@ -14060,6 +14141,14 @@ export async function registerRoutes(
           originalAmount,
           originalCurrency,
           feePercent: amounts.feePercent,
+          grossAmountUsdt: amounts.grossUsdt,
+          providerFeePercent: amounts.providerFeePercent,
+          providerFeeAmountUsdt: amounts.providerFeeUsdt,
+          ashtechFeePercent: amounts.ashtechFeePercent,
+          ashtechFeeAmountUsdt: amounts.ashtechFeeUsdt,
+          totalFeePercent: amounts.totalFeePercent,
+          totalFeeAmountUsdt: amounts.feeUsdt,
+          creditedAmountUsdt: amounts.creditedUsdt,
           expiresAt: charge.expiresAt ?? null,
         },
       });
@@ -14083,6 +14172,13 @@ export async function registerRoutes(
         amount_usdt: amounts.grossUsdt,
         credited_amount: amounts.creditedUsdt,
         fee_amount: amounts.feeUsdt,
+        gross_amount_usdt: amounts.grossUsdt,
+        provider_fee_percent: amounts.providerFeePercent,
+        provider_fee_amount_usdt: amounts.providerFeeUsdt,
+        ashtech_fee_percent: amounts.ashtechFeePercent,
+        ashtech_fee_amount_usdt: amounts.ashtechFeeUsdt,
+        total_fee_percent: amounts.totalFeePercent,
+        total_fee_amount_usdt: amounts.feeUsdt,
         credited_amount_usdt: amounts.creditedUsdt,
         fee_amount_usdt: amounts.feeUsdt,
         fee_percent: amounts.feePercent,

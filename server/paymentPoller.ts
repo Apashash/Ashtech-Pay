@@ -160,6 +160,7 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
       console.log(`[PaymentPoller] ✓ Payment COMPLETED for ${payment.reference} (${payment.provider || "swychr"}) → credited ${payment.amount} ${paymentCurrency}`);
 
       const isLink = payment.type === "payment_link";
+      const feeMetadata = ((transaction as any).metadata || {}) as Record<string, any>;
       const [txUser, txOperator, txIntent, txPaymentLink] = await Promise.all([
         storage.getUser(payment.userId).catch(() => null),
         transaction.operatorId ? storage.getOperator(transaction.operatorId).catch(() => null) : Promise.resolve(null),
@@ -182,6 +183,12 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
         phone: transaction.recipientPhone || undefined,
         operator: (txOperator as any)?.name || undefined,
         source: (transaction as any).source || undefined,
+        providerFeeAmount: feeMetadata.providerFeeAmountUsdt,
+        providerFeePercent: feeMetadata.providerFeePercent,
+        ashtechFeeAmount: (transaction as any).ashtechFeeAmount || feeMetadata.ashtechFeeAmountUsdt,
+        ashtechFeePercent: feeMetadata.ashtechFeePercent,
+        totalFeeAmount: transaction.feeAmount || feeMetadata.totalFeeAmountUsdt,
+        totalFeePercent: feeMetadata.totalFeePercent,
         ...(isLink && {
           payerName: transaction.payerName || undefined,
           payerEmail: transaction.payerEmail || undefined,
@@ -275,6 +282,12 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
           amount: parseFloat(transaction.amount),
           total_amount: parseFloat(transaction.totalAmount || transaction.amount),
           fee_amount: parseFloat(transaction.feeAmount || "0"),
+          provider_fee_amount: (transaction as any).metadata?.providerFeeAmountUsdt ?? 0,
+          provider_fee_percent: (transaction as any).metadata?.providerFeePercent ?? 0,
+          ashtech_fee_amount: (transaction as any).ashtechFeeAmount || ((transaction as any).metadata?.ashtechFeeAmountUsdt ?? 0),
+          ashtech_fee_percent: (transaction as any).metadata?.ashtechFeePercent ?? 0,
+          total_fee_amount: parseFloat(transaction.feeAmount || "0"),
+          total_fee_percent: (transaction as any).metadata?.totalFeePercent ?? 0,
           currency: transaction.currency,
           type: transaction.type || "deposit",
           phone: transaction.recipientPhone,

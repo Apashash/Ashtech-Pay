@@ -112,12 +112,22 @@ test("sandbox fee calculation returns gross, fee, and credited amounts", () => {
     feeUsdt: 2.5,
     creditedUsdt: 97.5,
     feePercent: 2.5,
+    providerFeePercent: 0,
+    providerFeeUsdt: 0,
+    ashtechFeePercent: 2.5,
+    ashtechFeeUsdt: 2.5,
+    totalFeePercent: 2.5,
   });
   assert.deepEqual(computeDirectCryptoAmounts(12.3456789, 3), {
     grossUsdt: 12.345679,
     feeUsdt: 0.37037,
     creditedUsdt: 11.975309,
     feePercent: 3,
+    providerFeePercent: 0,
+    providerFeeUsdt: 0,
+    ashtechFeePercent: 3,
+    ashtechFeeUsdt: 0.37037,
+    totalFeePercent: 3,
   });
 });
 

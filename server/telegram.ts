@@ -297,6 +297,12 @@ export async function notifyDepositConfirmed(opts: {
   creditedCurrency?: string;
   linkTitle?: string;
   source?: string;
+  providerFeeAmount?: string | number;
+  providerFeePercent?: string | number;
+  ashtechFeeAmount?: string | number;
+  ashtechFeePercent?: string | number;
+  totalFeeAmount?: string | number;
+  totalFeePercent?: string | number;
 }): Promise<void> {
   const payerPays = opts.country ? countryDisplay(opts.country) : countryDisplay(opts.currency);
   const beneficiaryPays = opts.userCountry ? countryDisplay(opts.userCountry) : "";
@@ -308,6 +314,12 @@ export async function notifyDepositConfirmed(opts: {
   const payerPhone = isLink ? (opts.payerPhone || opts.phone) : opts.phone;
   const payerName = isLink ? opts.payerName : undefined;
   const payerEmail = isLink ? opts.payerEmail : undefined;
+  const isCrypto = opts.paymentMethod === "crypto";
+  const hasFeeBreakdown = isCrypto && (
+    opts.providerFeeAmount != null ||
+    opts.ashtechFeeAmount != null ||
+    opts.totalFeeAmount != null
+  );
 
   const msg =
     `✅ <b>PAIEMENT REÇU / DÉPÔT CONFIRMÉ</b>\n` +
@@ -315,7 +327,10 @@ export async function notifyDepositConfirmed(opts: {
     (sourceLabel ? sourceLabel : "") +
     `📋 Type : <b>${typeLabel}</b>\n` +
     (isLink && opts.linkTitle ? `🔗 Lien : <b>${opts.linkTitle}</b>\n` : "") +
-    (hasGross ? `💰 Montant brut : <b>${fmt(opts.grossAmount!, opts.currency)}</b>\n` : "") +
+    (hasGross || isCrypto ? `💰 Montant brut : <b>${fmt(opts.grossAmount ?? opts.amount, opts.currency)}</b>\n` : "") +
+    (hasFeeBreakdown ? `🏦 Frais fournisseur${opts.providerFeePercent != null ? ` (${opts.providerFeePercent}%)` : ""} : <b>${fmt(opts.providerFeeAmount ?? 0, opts.currency)}</b>\n` : "") +
+    (hasFeeBreakdown ? `🧾 Frais AshTechPay${opts.ashtechFeePercent != null ? ` (${opts.ashtechFeePercent}%)` : ""} : <b>${fmt(opts.ashtechFeeAmount ?? 0, opts.currency)}</b>\n` : "") +
+    (hasFeeBreakdown ? `📊 Total des frais${opts.totalFeePercent != null ? ` (${opts.totalFeePercent}%)` : ""} : <b>${fmt(opts.totalFeeAmount ?? 0, opts.currency)}</b>\n` : "") +
     `💳 Montant crédité : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
     (opts.creditedCurrency ? `💱 Compte crédité : <b>${opts.creditedCurrency}</b>\n` : "") +
     (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +

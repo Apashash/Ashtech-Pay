@@ -103,6 +103,15 @@ export default function DepositPage() {
   const [cryptoMemoType, setCryptoMemoType] = useState<string | null>(null);
   const [cryptoShared, setCryptoShared] = useState(false);
   const [cryptoAssetCode, setCryptoAssetCode] = useState("");
+  const [cryptoFeeBreakdown, setCryptoFeeBreakdown] = useState<{
+    providerFeePercent: number;
+    providerFeeAmountUsdt: number;
+    ashtechFeePercent: number;
+    ashtechFeeAmountUsdt: number;
+    totalFeePercent: number;
+    totalFeeAmountUsdt: number;
+    creditedAmountUsdt: number;
+  } | null>(null);
   const [cryptoCountdown, setCryptoCountdown] = useState(CRYPTO_COUNTDOWN_SECONDS);
   const cryptoCountdownRef = useRef<NodeJS.Timeout | null>(null);
   const [cryptoReadyCountdown, setCryptoReadyCountdown] = useState(CRYPTO_COUNTDOWN_SECONDS);
@@ -360,6 +369,15 @@ export default function DepositPage() {
       setCryptoShared(data.shared ?? false);
       setCryptoAssetCode(data.assetCode);
       setCryptoRef(data.reference || "");
+      setCryptoFeeBreakdown(data.providerFeeAmountUsdt != null ? {
+        providerFeePercent: Number(data.providerFeePercent || 0),
+        providerFeeAmountUsdt: Number(data.providerFeeAmountUsdt || 0),
+        ashtechFeePercent: Number(data.ashtechFeePercent || 0),
+        ashtechFeeAmountUsdt: Number(data.ashtechFeeAmountUsdt || 0),
+        totalFeePercent: Number(data.totalFeePercent || 0),
+        totalFeeAmountUsdt: Number(data.totalFeeAmountUsdt || 0),
+        creditedAmountUsdt: Number(data.creditedAmountUsdt || 0),
+      } : null);
       setCryptoStep("ready");
       // Keep the crypto UI countdown short and consistent with the payment page.
       // The server-side 15-minute pending timeout is independent of this timer.
@@ -441,9 +459,17 @@ export default function DepositPage() {
   const usdtWallet = wallets?.find(w => w.currency === "USDT");
 
   const { data: feeSettings } = useQuery<{ cryptoFeePercent: number }>({
-    queryKey: ["/api/public/fee-settings"],
+    queryKey: ["/api/public/fee-settings", watchedCountryId],
+    queryFn: async () => {
+      const suffix = watchedCountryId ? `?country=${encodeURIComponent(watchedCountryId)}` : "";
+      const response = await fetch(`/api/public/fee-settings${suffix}`);
+      if (!response.ok) throw new Error("Impossible de charger les frais crypto");
+      return response.json();
+    },
   });
   const cryptoFeePercent = feeSettings?.cryptoFeePercent ?? 2.5;
+  const cryptoProviderFeePercent = (feeSettings as any)?.cryptoProviderFeePercent ?? 0;
+  const cryptoAshtechFeePercent = (feeSettings as any)?.cryptoAshtechFeePercent ?? (cryptoFeePercent - cryptoProviderFeePercent);
 
   const cryptoAmtNum = parseFloat(cryptoAmount) || 0; // amount in selected coin
   const cryptoUsdtEquiv = cryptoCoinPrice > 0 ? cryptoAmtNum * cryptoCoinPrice : 0; // USDT value
@@ -725,12 +751,20 @@ export default function DepositPage() {
                         <p className="text-xs text-muted-foreground text-right">≈ {cryptoUsdtEquiv.toFixed(2)} USDT</p>
                       )}
                       <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>Frais ({cryptoFeePercent}%)</span>
-                        <span className="text-red-500 font-semibold">-{cryptoFee.toFixed(4)} USDT</span>
+                        <span>Frais fournisseur ({cryptoFeeBreakdown?.providerFeePercent ?? cryptoProviderFeePercent}%)</span>
+                        <span className="text-red-500 font-semibold">-{(cryptoFeeBreakdown?.providerFeeAmountUsdt ?? (cryptoUsdtEquiv * cryptoProviderFeePercent / 100)).toFixed(4)} USDT</span>
+                      </div>
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>Frais AshTechPay ({cryptoFeeBreakdown?.ashtechFeePercent ?? cryptoAshtechFeePercent}%)</span>
+                        <span className="text-red-500 font-semibold">-{(cryptoFeeBreakdown?.ashtechFeeAmountUsdt ?? (cryptoUsdtEquiv * cryptoAshtechFeePercent / 100)).toFixed(4)} USDT</span>
+                      </div>
+                      <div className="flex justify-between text-xs font-semibold text-muted-foreground border-t border-border pt-1.5">
+                        <span>Total des frais ({cryptoFeeBreakdown?.totalFeePercent ?? cryptoFeePercent}%)</span>
+                        <span className="text-red-500">-{(cryptoFeeBreakdown?.totalFeeAmountUsdt ?? cryptoFee).toFixed(4)} USDT</span>
                       </div>
                       <div className="flex justify-between text-sm border-t border-border pt-1.5">
                         <span className="text-muted-foreground font-medium">Montant net crédité</span>
-                        <span className="font-bold text-green-500">{cryptoNet.toFixed(4)} USDT</span>
+                        <span className="font-bold text-green-500">{(cryptoFeeBreakdown?.creditedAmountUsdt ?? cryptoNet).toFixed(4)} USDT</span>
                       </div>
                     </div>
                   )}
@@ -914,7 +948,15 @@ export default function DepositPage() {
                   {cryptoAmtNum > 0 && (
                     <div className="bg-muted/30 rounded-xl px-4 py-3 space-y-1.5">
                       <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>Frais ({cryptoFeePercent}%)</span>
+                        <span>Frais fournisseur ({cryptoProviderFeePercent}%)</span>
+                        <span className="font-semibold text-red-500">-{(cryptoUsdtEquiv * cryptoProviderFeePercent / 100).toFixed(4)} USDT</span>
+                      </div>
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>Frais AshTechPay ({cryptoAshtechFeePercent}%)</span>
+                        <span className="font-semibold text-red-500">-{(cryptoUsdtEquiv * cryptoAshtechFeePercent / 100).toFixed(4)} USDT</span>
+                      </div>
+                      <div className="flex justify-between text-xs font-semibold text-muted-foreground border-t border-border pt-1.5">
+                        <span>Total des frais ({cryptoFeePercent}%)</span>
                         <span className="font-semibold text-red-500">-{cryptoFee.toFixed(4)} USDT</span>
                       </div>
                       <div className="flex justify-between text-sm border-t border-border pt-1.5">

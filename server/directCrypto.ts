@@ -27,6 +27,11 @@ export interface DirectCryptoAmounts {
   feeUsdt: number;
   creditedUsdt: number;
   feePercent: number;
+  providerFeePercent: number;
+  providerFeeUsdt: number;
+  ashtechFeePercent: number;
+  ashtechFeeUsdt: number;
+  totalFeePercent: number;
 }
 
 export interface DirectCryptoCustomer {
@@ -129,5 +134,41 @@ export function computeDirectCryptoAmounts(grossUsdt: number, feePercent: number
     feeUsdt: Number(feeUsdt.toFixed(6)),
     creditedUsdt: Number((safeGross - feeUsdt).toFixed(6)),
     feePercent: Number(safeFeePercent.toFixed(4)),
+    providerFeePercent: 0,
+    providerFeeUsdt: 0,
+    ashtechFeePercent: Number(safeFeePercent.toFixed(4)),
+    ashtechFeeUsdt: Number(feeUsdt.toFixed(6)),
+    totalFeePercent: Number(safeFeePercent.toFixed(4)),
+  };
+}
+
+/**
+ * Calculate the complete crypto Pay-In fee split. The provider and AshTechPay
+ * components are deliberately calculated from the same gross amount so that
+ * the displayed breakdown, persisted transaction and wallet credit agree.
+ */
+export function computeDirectCryptoFeeBreakdown(
+  grossUsdt: number,
+  providerFeePercent: number,
+  ashtechFeePercent: number,
+): DirectCryptoAmounts {
+  const safeGross = Number(grossUsdt);
+  const safeProviderPercent = Number(providerFeePercent) || 0;
+  const safeAshtechPercent = Number(ashtechFeePercent) || 0;
+  const totalFeePercent = safeProviderPercent + safeAshtechPercent;
+  const providerFeeUsdt = safeGross * (safeProviderPercent / 100);
+  const ashtechFeeUsdt = safeGross * (safeAshtechPercent / 100);
+  const feeUsdt = providerFeeUsdt + ashtechFeeUsdt;
+
+  return {
+    grossUsdt: Number(safeGross.toFixed(6)),
+    feeUsdt: Number(feeUsdt.toFixed(6)),
+    creditedUsdt: Number((safeGross - feeUsdt).toFixed(6)),
+    feePercent: Number(totalFeePercent.toFixed(4)),
+    providerFeePercent: Number(safeProviderPercent.toFixed(4)),
+    providerFeeUsdt: Number(providerFeeUsdt.toFixed(6)),
+    ashtechFeePercent: Number(safeAshtechPercent.toFixed(4)),
+    ashtechFeeUsdt: Number(ashtechFeeUsdt.toFixed(6)),
+    totalFeePercent: Number(totalFeePercent.toFixed(4)),
   };
 }

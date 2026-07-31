@@ -240,6 +240,14 @@ export default function AdminTransactionDetail() {
                 <div className="mt-2 space-y-1 text-sm text-muted-foreground">
                   <p>Frais : {formatCurrency(tx.feeAmount, (tx.currency || "XAF") as SupportedCurrency)}</p>
                   <p>Total payé : {formatCurrency(tx.totalAmount || tx.amount, (tx.currency || "XAF") as SupportedCurrency)}</p>
+                  {tx.paymentMethod === "crypto" && (
+                    <>
+                      <p>Frais fournisseur : {Number(tx.metadata?.providerFeeAmountUsdt || 0).toFixed(4)} USDT ({Number(tx.metadata?.providerFeePercent || 0)}%)</p>
+                      <p>Frais AshTechPay : {Number(tx.metadata?.ashtechFeeAmountUsdt || tx.ashtechFeeAmount || 0).toFixed(4)} USDT ({Number(tx.metadata?.ashtechFeePercent || 0)}%)</p>
+                      <p>Total des frais crypto : {Number(tx.metadata?.totalFeeAmountUsdt || tx.feeAmount || 0).toFixed(4)} USDT ({Number(tx.metadata?.totalFeePercent || 0)}%)</p>
+                      <p className="font-semibold text-green-500">Montant net crédité : {Number(tx.metadata?.creditedAmountUsdt || tx.amount || 0).toFixed(4)} USDT</p>
+                    </>
+                  )}
                 </div>
               )}
             </div>
