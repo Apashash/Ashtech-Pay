@@ -80,16 +80,10 @@ export default function DepositPage() {
   const [pendingDepositData, setPendingDepositData] = useState<DepositFormData | null>(null);
 
   const [depositMode, setDepositMode] = useState<"mobile_money" | "crypto">("mobile_money");
-  const [cryptoAmountUsd, setCryptoAmountUsd] = useState("");
-  const [cryptoStatus, setCryptoStatus] = useState<"idle" | "pending" | "waiting" | "success" | "cancelled">("idle");
+  const [cryptoAmount, setCryptoAmount] = useState("");
+  const [cryptoStatus, setCryptoStatus] = useState<"idle" | "opening" | "success" | "failed">("idle");
   const [cryptoRef, setCryptoRef] = useState("");
-  const [cryptoPayAddress, setCryptoPayAddress] = useState("");
-  const [cryptoPayAmount, setCryptoPayAmount] = useState(0);
-  const [cryptoPaymentId, setCryptoPaymentId] = useState("");
-  const [cryptoExpiresAt, setCryptoExpiresAt] = useState<Date | null>(null);
-  const [cryptoAddressCopied, setCryptoAddressCopied] = useState(false);
-  const [cryptoPayCurrency, setCryptoPayCurrency] = useState("usdttrc20");
-  const cryptoPollingRef = useRef<NodeJS.Timeout | null>(null);
+  const cryptoSucceededRef = useRef(false);
 
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const { data: wallets } = useQuery<{ id: string; currency: string; balance: string }[]>({
@@ -303,53 +297,45 @@ export default function DepositPage() {
 
   const cryptoDepositMutation = useMutation({
     mutationFn: async () => {
-      const amt = parseFloat(cryptoAmountUsd);
+      const amt = parseFloat(cryptoAmount);
       if (!amt || amt <= 0) throw new Error("Entrez un montant valide");
-      if (cryptoMinDeposit && amt < cryptoMinDeposit) {
-        const ticker = selectedCryptoNetwork?.label || "crypto";
-        throw new Error(`Le dépôt minimum est de ${cryptoMinDeposit.toFixed(6).replace(/\.?0+$/, "")} ${ticker}`);
-      }
-      // Send raw crypto amount — backend estimates USDT itself (single consistent call)
-      const res = await apiRequest("POST", "/api/deposits/crypto", { amountUsd: cryptoAmountUsd, payCurrency: cryptoPayCurrency });
+      const res = await apiRequest("POST", "/api/deposits/crypto", {
+        amount: cryptoAmount,
+        currency: user?.preferredCurrency || "XOF",
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Erreur lors du dépôt crypto");
       return data;
     },
     onSuccess: (data) => {
       setCryptoRef(data.reference || "");
-      setCryptoPayAddress(data.payAddress || "");
-      setCryptoPayAmount(data.payAmount || 0);
-      setCryptoPaymentId(data.paymentId || "");
-      setCryptoExpiresAt(data.expiresAt ? new Date(data.expiresAt) : null);
-      setCryptoStatus("waiting");
-      // Start polling for payment status every 15s
-      if (cryptoPollingRef.current) clearInterval(cryptoPollingRef.current);
-      cryptoPollingRef.current = setInterval(async () => {
-        try {
-          const r = await apiRequest("GET", `/api/transactions?ref=${data.reference}`);
-          const txData = await r.json();
-          const tx = Array.isArray(txData) ? txData.find((t: any) => t.reference === data.reference) : null;
-          if (tx && tx.status === "completed") {
-            if (cryptoPollingRef.current) clearInterval(cryptoPollingRef.current);
+      cryptoSucceededRef.current = false;
+      setCryptoStatus("opening");
+      // Open IziPay checkout modal (retry until embed.js is loaded)
+      const openModal = () => {
+        if (!window.IziPay) { setTimeout(openModal, 300); return; }
+        window.IziPay.open({
+          url: data.paymentUrl,
+          onSuccess: () => {
+            cryptoSucceededRef.current = true;
             setCryptoStatus("success");
             queryClient.invalidateQueries({ queryKey: ["/api/wallets"] });
             queryClient.invalidateQueries({ queryKey: ["/api/user"] });
             queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
-          }
-        } catch {}
-      }, 15000);
+          },
+          onClose: () => {
+            if (!cryptoSucceededRef.current) setCryptoStatus("idle");
+          },
+          onError: () => { setCryptoStatus("failed"); },
+          onExpired: () => { setCryptoStatus("failed"); },
+        });
+      };
+      openModal();
     },
     onError: (error: Error) => {
       toast({ title: "Erreur", description: error.message, variant: "destructive" });
     },
   });
-
-  const copyCryptoAddress = () => {
-    navigator.clipboard.writeText(cryptoPayAddress).then(() => {
-      setCryptoAddressCopied(true);
-      setTimeout(() => setCryptoAddressCopied(false), 2000);
-    });
-  };
 
   useEffect(() => {
     return () => {
@@ -400,71 +386,31 @@ export default function DepositPage() {
     const cs = params.get("crypto_status");
     const ref = params.get("ref");
     if (cs === "success") { setCryptoStatus("success"); if (ref) setCryptoRef(ref); setDepositMode("crypto"); }
-    else if (cs === "cancelled") { setCryptoStatus("cancelled"); setDepositMode("crypto"); }
+    else if (cs === "failed") { setCryptoStatus("failed"); setDepositMode("crypto"); }
+  }, []);
+
+  // Load IziPay embed.js once
+  useEffect(() => {
+    if (typeof window !== "undefined" && !document.getElementById("izipay-embed-js")) {
+      const script = document.createElement("script");
+      script.id = "izipay-embed-js";
+      script.src = "https://checkout.pay.izichange.com/embed.js";
+      script.async = true;
+      document.head.appendChild(script);
+    }
   }, []);
 
   const usdtWallet = wallets?.find(w => w.currency === "USDT");
 
-  const { data: nowPaymentsCurrenciesData } = useQuery<{ currencies: { ticker: string; label: string; network: string; logoUrl: string }[] }>({
-    queryKey: ["/api/nowpayments/currencies"],
-    enabled: depositMode === "crypto",
-    staleTime: 5 * 60 * 1000,
-  });
-  const cryptoNetworkOptions = nowPaymentsCurrenciesData?.currencies || [];
-  const selectedCryptoNetwork = cryptoNetworkOptions.find(o => o.ticker === cryptoPayCurrency);
-
-  const { data: feeSettings } = useQuery<{ cryptoFeePercent: number; cryptoMinDeposit: number }>({
+  const { data: feeSettings } = useQuery<{ cryptoFeePercent: number }>({
     queryKey: ["/api/public/fee-settings"],
   });
   const cryptoFeePercent = feeSettings?.cryptoFeePercent ?? 2.5;
 
-  const { data: minAmountData } = useQuery<{ min_amount: number }>({
-    queryKey: ["/api/nowpayments/min-amount", cryptoPayCurrency],
-    queryFn: async () => {
-      // currency_from=ticker gives minimum in the chosen crypto (not in USD)
-      const res = await fetch(`/api/nowpayments/min-amount?currency_from=${cryptoPayCurrency}&currency_to=usdttrc20`);
-      if (!res.ok) throw new Error("Indisponible");
-      return res.json();
-    },
-    enabled: depositMode === "crypto" && !!cryptoPayCurrency,
-    staleTime: 5 * 60 * 1000,
-  });
-  const cryptoMinDeposit = minAmountData?.min_amount ?? feeSettings?.cryptoMinDeposit ?? 1;
-
-  const cryptoAmtNum = parseFloat(cryptoAmountUsd) || 0;
-
-  // Estimate USDT equivalent for the entered crypto amount (debounced)
-  const [estimatedUsdt, setEstimatedUsdt] = useState<number | null>(null);
-  const [isFetchingEstimate, setIsFetchingEstimate] = useState(false);
-  const estimateDebounceRef = useRef<NodeJS.Timeout | null>(null);
-  useEffect(() => {
-    if (depositMode !== "crypto" || !cryptoPayCurrency || cryptoAmtNum <= 0) {
-      setEstimatedUsdt(null);
-      return;
-    }
-    if (estimateDebounceRef.current) clearTimeout(estimateDebounceRef.current);
-    estimateDebounceRef.current = setTimeout(async () => {
-      setIsFetchingEstimate(true);
-      try {
-        const res = await fetch(`/api/nowpayments/estimate?amount=${cryptoAmtNum}&currency_from=${cryptoPayCurrency}&currency_to=usd`);
-        if (res.ok) {
-          const data = await res.json();
-          setEstimatedUsdt(parseFloat(data.estimated_amount) || null);
-        } else {
-          setEstimatedUsdt(null);
-        }
-      } catch {
-        setEstimatedUsdt(null);
-      } finally {
-        setIsFetchingEstimate(false);
-      }
-    }, 600);
-    return () => { if (estimateDebounceRef.current) clearTimeout(estimateDebounceRef.current); };
-  }, [cryptoAmtNum, cryptoPayCurrency, depositMode]);
-
-  // Fees and net are calculated on the USDT equivalent
-  const cryptoFee = (estimatedUsdt ?? 0) * (cryptoFeePercent / 100);
-  const cryptoNet = (estimatedUsdt ?? 0) - cryptoFee;
+  const cryptoAmtNum = parseFloat(cryptoAmount) || 0;
+  const cryptoFee = (cryptoAmtNum * cryptoFeePercent) / 100;
+  const cryptoNet = cryptoAmtNum - cryptoFee;
+  const userCurrency = (user?.preferredCurrency || "XOF") as SupportedCurrency;
 
   return (
     <DashboardLayout>
@@ -565,110 +511,32 @@ export default function DepositPage() {
                       <p className="font-mono text-sm font-bold text-foreground truncate">{cryptoRef}</p>
                     </div>
                   )}
-                  <Button variant="outline" className="w-full" onClick={() => { setCryptoStatus("idle"); setCryptoAmountUsd(""); setCryptoPayAddress(""); }} data-testid="button-crypto-new-deposit">
+                  <Button variant="outline" className="w-full" onClick={() => { setCryptoStatus("idle"); setCryptoAmount(""); }} data-testid="button-crypto-new-deposit">
                     Nouveau dépôt
                   </Button>
                 </div>
 
-              ) : cryptoStatus === "waiting" ? (
-                <div className="space-y-5 py-2">
-                  {/* Header */}
-                  <div className="text-center space-y-1">
-                    <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center mx-auto">
-                      <Clock className="w-6 h-6 text-blue-500" />
-                    </div>
-                    <h3 className="text-base font-bold text-foreground">En attente de paiement</h3>
-                    <p className="text-xs text-muted-foreground">Envoyez exactement le montant indiqué à l'adresse ci-dessous</p>
+              ) : cryptoStatus === "failed" ? (
+                <div className="text-center py-4 space-y-4">
+                  <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mx-auto">
+                    <XCircle className="w-8 h-8 text-red-500" />
                   </div>
-
-                  {/* Amount to send */}
-                  <div className="bg-primary/10 border border-primary/20 rounded-xl px-4 py-4 text-center">
-                    <p className="text-xs text-muted-foreground mb-1">Montant exact à envoyer</p>
-                    <p className="text-3xl font-bold text-primary tabular-nums">{cryptoPayAmount.toFixed(6)}</p>
-                    <p className="text-sm font-semibold text-muted-foreground mt-0.5">{selectedCryptoNetwork ? `${selectedCryptoNetwork.label} · ${selectedCryptoNetwork.network}` : cryptoPayCurrency.toUpperCase()}</p>
+                  <div>
+                    <h3 className="text-lg font-bold text-foreground">Paiement échoué ou expiré</h3>
+                    <p className="text-sm text-muted-foreground mt-1">Le paiement n'a pas abouti. Vous pouvez réessayer.</p>
                   </div>
-
-                  {/* QR Code */}
-                  {cryptoPayAddress && (
-                    <div className="flex flex-col items-center gap-3">
-                      <div className="relative flex items-center justify-center">
-                        {/* Pulsing rings */}
-                        <span className="absolute inset-0 rounded-2xl animate-ping bg-primary/20 pointer-events-none" style={{ animationDuration: "1.6s" }} />
-                        <span className="absolute inset-[-6px] rounded-[20px] animate-ping bg-primary/10 pointer-events-none" style={{ animationDuration: "1.6s", animationDelay: "0.3s" }} />
-                        <div className="relative bg-white rounded-2xl p-3 shadow-md ring-2 ring-primary/40" style={{ animation: "qr-pulse 1.6s ease-in-out infinite" }}>
-                          <style>{`
-                            @keyframes qr-pulse {
-                              0%, 100% { box-shadow: 0 0 0 0 rgba(240,185,11,0.5), 0 0 0 0 rgba(240,185,11,0.25); }
-                              50% { box-shadow: 0 0 0 8px rgba(240,185,11,0.15), 0 0 0 16px rgba(240,185,11,0.05); }
-                            }
-                          `}</style>
-                          <img
-                            src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(cryptoPayAddress)}&color=000000&bgcolor=FFFFFF`}
-                            alt={`QR Code adresse ${selectedCryptoNetwork?.label || cryptoPayCurrency}`}
-                            className="w-44 h-44 rounded-xl"
-                          />
-                        </div>
-                      </div>
-                      <p className="text-xs text-muted-foreground">Réseau : <span className="font-semibold text-foreground">{selectedCryptoNetwork?.network || cryptoPayCurrency.toUpperCase()}</span></p>
-                    </div>
-                  )}
-
-                  {/* Address to copy */}
-                  <div className="space-y-1">
-                    <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide">Adresse {selectedCryptoNetwork?.label || cryptoPayCurrency.toUpperCase()}</p>
-                    <div className="flex items-center gap-2 bg-muted/40 rounded-xl px-3 py-3 border border-border">
-                      <p className="font-mono text-xs text-foreground flex-1 break-all leading-relaxed">{cryptoPayAddress}</p>
-                      <button
-                        type="button"
-                        onClick={copyCryptoAddress}
-                        className={`shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${cryptoAddressCopied ? "bg-green-500/20 text-green-500" : "bg-primary/10 text-primary hover:bg-primary/20"}`}
-                        data-testid="button-copy-crypto-address"
-                      >
-                        {cryptoAddressCopied ? <CheckCircle className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                        {cryptoAddressCopied ? "Copié !" : "Copier"}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Warning */}
-                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3 flex items-start gap-2">
-                    <ExternalLink className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                    <div className="text-xs text-muted-foreground">
-                      <span className="font-semibold text-amber-500">Important :</span> Envoyez uniquement sur le réseau <strong>{selectedCryptoNetwork?.network || cryptoPayCurrency.toUpperCase()}</strong>. Tout envoi sur un autre réseau sera perdu.
-                    </div>
-                  </div>
-
-                  {/* Ref + polling indicator */}
-                  <div className="flex items-center justify-between text-xs text-muted-foreground bg-muted/30 rounded-xl px-3 py-2">
-                    <span className="font-mono truncate flex-1">{cryptoRef}</span>
-                    <span className="flex items-center gap-1 shrink-0 ml-2">
-                      <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                      Surveillance active
-                    </span>
-                  </div>
-
-                  <Button variant="outline" size="sm" className="w-full text-xs" onClick={() => {
-                    if (cryptoPollingRef.current) clearInterval(cryptoPollingRef.current);
-                    setCryptoStatus("idle");
-                    setCryptoAmountUsd("");
-                    setCryptoPayAddress("");
-                  }}>
-                    Annuler / Nouveau dépôt
+                  <Button className="w-full" onClick={() => setCryptoStatus("idle")} data-testid="button-crypto-retry">
+                    Réessayer
                   </Button>
                 </div>
 
-              ) : cryptoStatus === "cancelled" ? (
-                <div className="text-center py-4 space-y-4">
-                  <div className="w-16 h-16 rounded-full bg-amber-500/10 flex items-center justify-center mx-auto">
-                    <XCircle className="w-8 h-8 text-amber-500" />
-                  </div>
+              ) : cryptoStatus === "opening" ? (
+                <div className="text-center py-8 space-y-4">
+                  <Loader2 className="w-10 h-10 animate-spin text-primary mx-auto" />
                   <div>
-                    <h3 className="text-lg font-bold text-foreground">Paiement annulé</h3>
-                    <p className="text-sm text-muted-foreground mt-1">Le paiement crypto a expiré ou a été annulé. Vous pouvez réessayer.</p>
+                    <h3 className="text-base font-bold text-foreground">Ouverture du checkout…</h3>
+                    <p className="text-xs text-muted-foreground mt-1">La fenêtre de paiement IziChange s'ouvre. Veuillez patienter.</p>
                   </div>
-                  <Button variant="outline" className="w-full" onClick={() => { setCryptoStatus("idle"); setCryptoAmountUsd(""); }} data-testid="button-crypto-retry">
-                    Réessayer
-                  </Button>
                 </div>
 
               ) : (
@@ -685,115 +553,67 @@ export default function DepositPage() {
                   )}
 
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Réseau de paiement</label>
-                    <Select value={cryptoPayCurrency} onValueChange={setCryptoPayCurrency}>
-                      <SelectTrigger className="h-12 rounded-xl" data-testid="select-crypto-network">
-                        {selectedCryptoNetwork ? (
-                          <div className="flex items-center gap-2.5">
-                            <img src={selectedCryptoNetwork.logoUrl} alt={selectedCryptoNetwork.label} className="w-6 h-6 rounded-full shrink-0 object-contain bg-white" onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }} />
-                            <span className="font-semibold">{selectedCryptoNetwork.label}</span>
-                            <span className="text-muted-foreground text-sm">· {selectedCryptoNetwork.network}</span>
-                          </div>
-                        ) : (
-                          <SelectValue placeholder="Choisir un réseau" />
-                        )}
-                      </SelectTrigger>
-                      <SearchableSelectContent
-                        searchPlaceholder="Rechercher une devise…"
-                        emptyMessage="Aucune devise trouvée"
-                        options={cryptoNetworkOptions.map(opt => ({
-                          value: opt.ticker,
-                          label: opt.label,
-                          sub: opt.network,
-                          iconUrl: opt.logoUrl,
-                        }))}
-                      />
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Montant</label>
+                    <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Montant ({userCurrency})
+                    </label>
                     <div className="flex rounded-xl border border-border overflow-hidden focus-within:ring-2 focus-within:ring-primary/40">
-                      <span className="flex items-center px-3 bg-muted border-r border-border text-sm font-bold text-muted-foreground shrink-0 whitespace-nowrap">
-                        {selectedCryptoNetwork?.label || "USDT"}
+                      <span className="flex items-center px-3 bg-muted border-r border-border text-sm font-bold text-muted-foreground shrink-0">
+                        {userCurrency}
                       </span>
                       <input
                         type="number"
                         inputMode="decimal"
                         min="1"
-                        step="0.01"
-                        placeholder="0.00"
-                        value={cryptoAmountUsd}
-                        onChange={e => setCryptoAmountUsd(e.target.value)}
-                        className="flex-1 min-w-0 pr-4 h-12 bg-background text-base font-semibold focus:outline-none"
+                        step="1"
+                        placeholder="0"
+                        value={cryptoAmount}
+                        onChange={e => setCryptoAmount(e.target.value)}
+                        className="flex-1 min-w-0 px-4 h-12 bg-background text-base font-semibold focus:outline-none"
                         data-testid="input-crypto-amount"
                       />
                     </div>
                     <div className="flex gap-2 flex-wrap">
-                      {[11, 25, 50, 100, 200].map(v => (
+                      {["1000", "2500", "5000", "10000", "25000"].map(v => (
                         <button
                           key={v}
                           type="button"
-                          onClick={() => setCryptoAmountUsd(String(v))}
+                          onClick={() => setCryptoAmount(v)}
                           className="text-xs px-3 py-1.5 rounded-lg border border-border bg-muted/30 hover:bg-muted/60 font-semibold transition-all"
                         >
-                          {v} {selectedCryptoNetwork?.label || "TRX"}
+                          {parseInt(v).toLocaleString()} {userCurrency}
                         </button>
                       ))}
                     </div>
                   </div>
 
                   {cryptoAmtNum > 0 && (
-                    <div className="rounded-xl border border-border bg-muted/30 overflow-hidden">
-                      <div className="px-4 py-3 flex items-center justify-between border-b border-border">
-                        <span className="text-sm text-muted-foreground">Montant saisi</span>
-                        <span className="text-sm font-semibold tabular-nums">{cryptoAmtNum.toFixed(6)} {selectedCryptoNetwork?.label || "USDT"}</span>
+                    <div className="bg-muted/30 rounded-xl px-4 py-3 space-y-1.5">
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>Frais ({cryptoFeePercent}%)</span>
+                        <span className="font-semibold text-red-500">-{cryptoFee.toFixed(0)} {userCurrency}</span>
                       </div>
-                      <div className="px-4 py-3 flex items-center justify-between border-b border-border">
-                        <span className="text-sm text-muted-foreground">≈ Équivalent USDT</span>
-                        <span className="text-sm font-semibold tabular-nums">
-                          {isFetchingEstimate ? <Loader2 className="w-3 h-3 animate-spin inline" /> : estimatedUsdt !== null ? `${estimatedUsdt.toFixed(2)} USDT` : "—"}
-                        </span>
-                      </div>
-                      <div className="px-4 py-3 flex items-center justify-between border-b border-border">
-                        <span className="text-sm text-muted-foreground flex items-center gap-1.5">
-                          <TrendingDown className="w-3.5 h-3.5" />
-                          Frais ({cryptoFeePercent}%)
-                        </span>
-                        <span className="text-sm font-semibold tabular-nums text-red-500">-{cryptoFee.toFixed(4)} USDT</span>
-                      </div>
-                      <div className="px-4 py-3 flex items-center justify-between bg-green-500/5">
-                        <span className="text-sm font-semibold text-foreground">Crédité (USDT)</span>
-                        <span className="text-lg font-bold text-green-500 tabular-nums">{cryptoNet.toFixed(4)} USDT</span>
+                      <div className="flex justify-between text-sm border-t border-border pt-1.5">
+                        <span className="text-muted-foreground font-medium">Montant net crédité</span>
+                        <span className="font-bold text-green-500">{cryptoNet.toFixed(0)} {userCurrency}</span>
                       </div>
                     </div>
-                  )}
-
-                  {cryptoAmtNum > 0 && cryptoMinDeposit && cryptoAmtNum < cryptoMinDeposit && (
-                    <p className="text-xs text-amber-500 font-medium text-center -mt-1">
-                      {(() => {
-                        const net = selectedCryptoNetwork;
-                        const suffix = net && net.network && net.network !== net.label ? ` (${net.network})` : "";
-                        return `⚠️ Minimum ${cryptoMinDeposit.toFixed(6).replace(/\.?0+$/, "")} ${net?.label || "crypto"}${suffix}`;
-                      })()}
-                    </p>
                   )}
 
                   <Button
                     className="w-full h-12 rounded-xl font-bold"
                     size="lg"
-                    disabled={!cryptoAmtNum || cryptoAmtNum < cryptoMinDeposit || !estimatedUsdt || cryptoDepositMutation.isPending}
+                    disabled={!cryptoAmtNum || cryptoDepositMutation.isPending}
                     onClick={() => cryptoDepositMutation.mutate()}
                     data-testid="button-crypto-deposit"
                   >
                     {cryptoDepositMutation.isPending
-                      ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Génération de l'adresse…</>
-                      : <><Bitcoin className="w-4 h-4 mr-2" />Générer l'adresse {selectedCryptoNetwork?.label || "crypto"}</>
+                      ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Traitement…</>
+                      : <><Bitcoin className="w-4 h-4 mr-2" />Payer en crypto via IziChange</>
                     }
                   </Button>
 
                   <p className="text-xs text-center text-muted-foreground">
-                    Une adresse unique USDT TRC20 sera générée. Pas de redirection externe.
+                    Vous serez redirigé vers la fenêtre de paiement IziChange.
                   </p>
                 </>
               )}

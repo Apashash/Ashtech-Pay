@@ -40,13 +40,13 @@ export default function AdminCountries() {
   const [showCountryModal, setShowCountryModal] = useState(false);
 
   // Crypto USDT + CDF settings
-  const [cryptoSettings, setCryptoSettings] = useState({ fx_rate_USDT: "620", nowpayments_fee_percent: "2.5", nowpayments_min_deposit: "11" });
+  const [cryptoSettings, setCryptoSettings] = useState({ fx_rate_USDT: "620", izichange_fee_percent: "2.5" });
   const { data: savedSettings } = useQuery<PlatformSetting[]>({ queryKey: ["/api/admin/settings"] });
   useEffect(() => {
     if (savedSettings) {
       const patch: Record<string, string> = {};
       savedSettings.forEach(s => {
-        if (["fx_rate_USDT", "nowpayments_fee_percent", "nowpayments_min_deposit"].includes(s.key)) patch[s.key] = s.value;
+        if (["fx_rate_USDT", "izichange_fee_percent"].includes(s.key)) patch[s.key] = s.value;
       });
       if (Object.keys(patch).length) setCryptoSettings(prev => ({ ...prev, ...patch }));
     }
@@ -352,42 +352,21 @@ export default function AdminCountries() {
               </div>
 
               <div className="space-y-2">
-                <Label>Frais crypto NowPayments (%)</Label>
+                <Label>Frais crypto IziChange (%)</Label>
                 <Input
                   type="number"
                   min="0"
                   max="100"
                   step="0.1"
-                  value={cryptoSettings.nowpayments_fee_percent}
-                  onChange={(e) => setCryptoSettings(p => ({ ...p, nowpayments_fee_percent: e.target.value }))}
+                  value={cryptoSettings.izichange_fee_percent}
+                  onChange={(e) => setCryptoSettings(p => ({ ...p, izichange_fee_percent: e.target.value }))}
                   placeholder="2.5"
-                  data-testid="input-nowpayments-fee"
+                  data-testid="input-izichange-fee"
                 />
-                <p className="text-xs text-muted-foreground">Pourcentage déduit du montant USDT sur les dépôts et liens de paiement crypto. Appliqué automatiquement.</p>
+                <p className="text-xs text-muted-foreground">Pourcentage déduit du montant sur les dépôts et liens de paiement crypto IziChange.</p>
                 <Button
                   size="sm"
-                  onClick={() => saveSettingMutation.mutate({ key: "nowpayments_fee_percent", value: cryptoSettings.nowpayments_fee_percent })}
-                  disabled={saveSettingMutation.isPending}
-                >
-                  <Save className="w-4 h-4 mr-2" />Enregistrer
-                </Button>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Dépôt minimum USDT</Label>
-                <Input
-                  type="number"
-                  min="1"
-                  step="0.5"
-                  value={cryptoSettings.nowpayments_min_deposit}
-                  onChange={(e) => setCryptoSettings(p => ({ ...p, nowpayments_min_deposit: e.target.value }))}
-                  placeholder="11"
-                  data-testid="input-nowpayments-min"
-                />
-                <p className="text-xs text-muted-foreground">Montant minimum accepté pour un dépôt USDT TRC20 (imposé par NowPayments). Appliqué sur la page dépôt.</p>
-                <Button
-                  size="sm"
-                  onClick={() => saveSettingMutation.mutate({ key: "nowpayments_min_deposit", value: cryptoSettings.nowpayments_min_deposit })}
+                  onClick={() => saveSettingMutation.mutate({ key: "izichange_fee_percent", value: cryptoSettings.izichange_fee_percent })}
                   disabled={saveSettingMutation.isPending}
                 >
                   <Save className="w-4 h-4 mr-2" />Enregistrer

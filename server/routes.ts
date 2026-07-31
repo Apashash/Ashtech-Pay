@@ -64,7 +64,7 @@ import { uploadToSupabase, getSignedImageUrl, downloadFromSupabase } from "./sup
 import { decryptField } from "./fieldEncryption";
 import { requireAdminPin } from "./adminPin";
 import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, fetchPaymentLinkDetails, ASHTECH_MARGIN } from "./swychr";
-import { createNowPaymentsInvoice, createNowPaymentsPayment, verifyNowPaymentsIpn, mapNowPaymentsStatus, getNowPaymentsCurrencies, isStableTicker, isSupportedCrypto, getEstimatedPrice, getMinAmount, getMinAmountInUSD } from "./nowpayments";
+import { izipay, IziPayClient, IZIPAY_WEBHOOK_SECRET, IZIPAY_API_KEY, toIziPayCurrency, isIziPayConfigured } from "./izichange";
 import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, getAfribaPayOtpInfo, confirmAfribaPayOtp, isAfribaPayOtpRequiredMessage } from "./afribapay";
 import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, initiatePixPayPayout, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType, getPixPayServiceId, PIXPAY_OTP_USSD_CODES } from "./pixpay";
 import { addPendingPayment, removePendingPayment } from "./paymentPoller";
@@ -1519,7 +1519,7 @@ export async function registerRoutes(
   // Endpoints webhook et paiement public exemptés (appelés par des serveurs, pas des navigateurs).
   const CSRF_EXEMPT_PREFIXES = [
     "/api/swychr/webhook", "/api/afribapay/webhook", "/api/pixpay/webhook",
-    "/api/nowpayments/ipn",
+    "/api/izichange/webhook",
     "/api/telegram/webhook", "/api/payment-links/", "/api/public/",
     "/api/v1/hosted-payment", "/api/public/hosted-session",
   ];
@@ -6790,8 +6790,8 @@ export async function registerRoutes(
       const convAshtechFeeCfaUsdt  = parseFloat(settings.find(s => s.key === "conversion_ashtech_fee_cfa_usdt")?.value || "1");
       const convProviderFeeUsdtCfa = parseFloat(settings.find(s => s.key === "conversion_provider_fee_usdt_cfa")?.value || "1");
       const convAshtechFeeUsdtCfa  = parseFloat(settings.find(s => s.key === "conversion_ashtech_fee_usdt_cfa")?.value || "1");
-      const cryptoFeePercent = parseFloat(settings.find(s => s.key === "nowpayments_fee_percent")?.value || "2.5");
-      const cryptoMinDeposit = parseFloat(settings.find(s => s.key === "nowpayments_min_deposit")?.value || "11");
+      const cryptoFeePercent = parseFloat(settings.find(s => s.key === "izichange_fee_percent")?.value || "2.5");
+      const cryptoMinDeposit = parseFloat(settings.find(s => s.key === "izichange_min_deposit_usd")?.value || "5");
       res.json({
         conversionFeePercent,
         // Intra-famille
@@ -7220,66 +7220,35 @@ export async function registerRoutes(
         } catch {}
       }
 
-      // ── Crypto (NowPayments) branch ─────────────────────────────────────────
+      // ── Crypto (IziChange) branch ─────────────────────────────────────────────
       if (paymentMethod === "crypto") {
+        if (!isIziPayConfigured()) {
+          return res.status(503).json({ message: "Paiement crypto non configuré. Contactez l'administrateur." });
+        }
+
         const numAmount = parseFloat(providedAmount || String(paymentLink.amount) || "0");
         if (numAmount <= 0) return res.status(400).json({ message: "Montant invalide" });
 
-        const selectedPayCurrencyEarly = (req.body.payCurrency || "usdttrc20").toString().toLowerCase();
-        if (!isSupportedCrypto(selectedPayCurrencyEarly)) {
-          return res.status(400).json({ message: "Devise crypto non supportée pour ce paiement." });
-        }
+        // Determine fiat currency for the IziChange intent
+        const linkCurrency = (providedCurrency || paymentLink.currency || "XOF").toUpperCase();
+        const izipayCurrency = toIziPayCurrency(linkCurrency);
 
-        // Get crypto fee % (admin-configurable via nowpayments_fee_percent)
-        const cryptoFeeSettings = await storage.getSetting("nowpayments_fee_percent");
+        // Get fee setting
+        const cryptoFeeSettings = await storage.getSetting("izichange_fee_percent");
         const cryptoFeePercent = cryptoFeeSettings ? parseFloat(cryptoFeeSettings.value) : 2.5;
 
-        const cryptoMinSetting = await storage.getSetting("nowpayments_min_deposit");
-        const providedCurrencyNorm = (providedCurrency || "").toLowerCase();
-        // Native crypto input: user sent TRX/BTC/… amount directly (not USDT)
-        const isNativeCryptoInput = !isStableTicker(selectedPayCurrencyEarly) &&
-          providedCurrencyNorm === selectedPayCurrencyEarly;
-
-        let amountInUSD: number;
-        if (isNativeCryptoInput) {
-          // Validate against min in native crypto (single consistent NowPayments call)
-          const minInCrypto = await getMinAmount(selectedPayCurrencyEarly, "usdttrc20");
-          const effectiveMin = minInCrypto ?? (cryptoMinSetting ? parseFloat(cryptoMinSetting.value) : 1);
-          if (numAmount < effectiveMin) {
-            return res.status(400).json({ message: `Minimum ${effectiveMin.toFixed(6).replace(/\.?0+$/, "")} ${providedCurrency?.toUpperCase()} pour ce réseau` });
-          }
-          // Estimate USDT equivalent (single call — no double-estimation drift)
-          const estimated = await getEstimatedPrice(numAmount, selectedPayCurrencyEarly, "usdttrc20");
-          amountInUSD = estimated ?? 0;
-          if (amountInUSD <= 0) return res.status(503).json({ message: "Impossible d'estimer la valeur USDT. Veuillez réessayer." });
-        } else if ((providedCurrency || "").toUpperCase() === "USDT") {
-          // Legacy path: user sent USDT amount directly
-          const cryptoMinFromApi = await getMinAmountInUSD(selectedPayCurrencyEarly);
-          const cryptoMinDeposit = cryptoMinFromApi ?? (cryptoMinSetting ? parseFloat(cryptoMinSetting.value) : 1);
-          if (numAmount < cryptoMinDeposit) {
-            return res.status(400).json({ message: `Le dépôt minimum est de ${parseFloat(cryptoMinDeposit.toFixed(2))} $ pour ce réseau` });
-          }
-          amountInUSD = numAmount;
-        } else {
-          // Convert link amount to USD via XAF pivot
-          const usdtRateSetting = await storage.getSetting("fx_rate_USDT");
-          const usdtRateXaf = usdtRateSetting ? parseFloat(usdtRateSetting.value) : 620;
-          const fxRatesCrypto = await loadFxRates();
-          const amountInXAF = convertToXAF(numAmount, providedCurrency || paymentLink.currency, fxRatesCrypto);
-          amountInUSD = amountInXAF / usdtRateXaf;
-        }
-
-        // Apply fee
+        // Convert to USDT for ledger
+        const fxRatesCrypto = await loadFxRates();
+        const amountInXAF = convertToXAF(numAmount, linkCurrency, fxRatesCrypto);
+        const usdtPerXaf = fxRatesCrypto["USDT"] ?? 655;
+        const amountInUSD = amountInXAF / usdtPerXaf;
         const feeAmountUSD = amountInUSD * (cryptoFeePercent / 100);
         const netAmountUSD = amountInUSD - feeAmountUSD;
 
         const reference = generateTransactionReference("payment_link");
         const appBase = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
 
-        const selectedPayCurrency = selectedPayCurrencyEarly;
-        const isStableSelection = isStableTicker(selectedPayCurrency);
-        const cryptoLedgerCurrency = "USDT";
-
+        // Create payment intent record
         const cryptoIntent = await storage.createPaymentIntent({
           paymentLinkId: paymentLink.id,
           merchantId: paymentLink.userId,
@@ -7289,21 +7258,22 @@ export async function registerRoutes(
           payerCountry: resolvedCountryName,
           amount: netAmountUSD.toFixed(6),
           feeAmount: feeAmountUSD.toFixed(6),
-          currency: cryptoLedgerCurrency,
+          currency: "USDT",
           paymentMethod: "crypto",
           operator: null,
           reference,
         });
 
+        // Create transaction record
         await storage.createTransaction({
           userId: paymentLink.userId,
           type: "payment_link",
           amount: netAmountUSD.toFixed(6),
           totalAmount: amountInUSD.toFixed(6),
           feeAmount: feeAmountUSD.toFixed(6),
-          currency: cryptoLedgerCurrency,
+          currency: "USDT",
           status: "pending",
-          description: `Paiement crypto de ${fullName} (${email}) via ${paymentLink.title} — réseau ${selectedPayCurrency.toUpperCase()}`,
+          description: `Paiement crypto IziChange de ${fullName} (${email}) via ${paymentLink.title}`,
           paymentMethod: "crypto",
           reference,
           paymentLinkId: paymentLink.id,
@@ -7313,55 +7283,34 @@ export async function registerRoutes(
           recipientCountry: country || "International",
         });
 
-        let cryptoPayment: any;
+        // Create IziChange payment intent
+        let iziIntent: any;
         try {
-          cryptoPayment = await createNowPaymentsPayment({
-            // Native input: price in the exact crypto amount the user entered (no conversion drift)
-            // USDT/stable input: price in USD as before
-            priceAmount: isNativeCryptoInput
-              ? Math.round(numAmount * 1000000) / 1000000
-              : Math.round(amountInUSD * 1000000) / 1000000,
-            priceCurrency: isNativeCryptoInput
-              ? selectedPayCurrency
-              : (isStableSelection ? selectedPayCurrency : "usd"),
-            payCurrency: selectedPayCurrency,
-            orderId: reference,
-            orderDescription: `${paymentLink.title} — Ashtech Pay`,
-            ipnCallbackUrl: `${appBase}/api/nowpayments/ipn`,
+          iziIntent = await izipay.paymentIntents.create({
+            requestedCurrencyType: "fiat",
+            currencyRequested: izipayCurrency,
+            amountRequested: numAmount,
+            merchantReference: reference,
+            returnUrl: `${appBase}/payment/${req.params.slug}?crypto_status=success&ref=${reference}`,
+            metadata: { paymentLinkId: paymentLink.id, intentId: cryptoIntent.id },
           });
-        } catch (invErr: any) {
-          console.error("[PaymentLink Crypto] NowPayments error:", invErr.message);
-          let friendlyMsg = "Une erreur est survenue. Veuillez réessayer.";
-          try {
-            const raw = invErr.message || "";
-            const jsonMatch = raw.match(/\{.*\}/s);
-            if (jsonMatch) {
-              const parsed = JSON.parse(jsonMatch[0]);
-              if (parsed.message && parsed.message.includes("less than minimal")) {
-                friendlyMsg = "Le dépôt minimum est de 11 $.";
-              } else if (parsed.message) {
-                friendlyMsg = parsed.message;
-              }
-            }
-          } catch {}
-          return res.status(400).json({ message: friendlyMsg });
+        } catch (err: any) {
+          console.error("[PaymentLink Crypto] IziChange error:", err.message);
+          return res.status(400).json({ message: "Une erreur est survenue lors de la création du paiement. Veuillez réessayer." });
         }
 
-        // Store NowPayments payment_id on the transaction
+        // Store IziChange intent ID on the transaction
         try {
           const tx = await storage.getTransactionByReference(reference);
-          if (tx?.id) await storage.updateTransaction(tx.id, { paymentIntentId: cryptoPayment.payment_id });
+          if (tx?.id && iziIntent?.id) await storage.updateTransaction(tx.id, { paymentIntentId: iziIntent.id });
         } catch {}
 
-        console.log(`[PaymentLink Crypto] Payment created: addr=${cryptoPayment.pay_address} amount=${cryptoPayment.pay_amount} USDT ref=${reference}`);
+        console.log(`[PaymentLink Crypto] IziChange intent created: id=${iziIntent.id} ${izipayCurrency}${numAmount} ≈ ${netAmountUSD.toFixed(4)} USDT ref=${reference}`);
         return res.json({
-          payAddress: cryptoPayment.pay_address,
-          payAmount: cryptoPayment.pay_amount,
-          payCurrency: cryptoPayment.pay_currency,
-          paymentId: cryptoPayment.payment_id,
-          expiresAt: cryptoPayment.expiration_estimate_date,
+          paymentUrl: iziIntent.paymentUrl,
+          intentId: iziIntent.id,
           reference,
-          message: "Adresse USDT générée",
+          message: "Intent de paiement IziChange créé",
         });
       }
 
@@ -12346,28 +12295,43 @@ export async function registerRoutes(
     res.redirect(`${baseUrl}/dashboard?payment=processing`);
   });
 
-  // ── NowPayments IPN webhook ────────────────────────────────────────────────
-  app.post("/api/nowpayments/ipn", webhookLimiter, async (req, res) => {
+  // ── IziChange webhook ───────────────────────────────────────────────────────
+  app.post("/api/izichange/webhook", webhookLimiter, async (req, res) => {
     try {
-      const signature = req.headers["x-nowpayments-sig"] as string | undefined;
-      const body = req.body;
-
-      if (process.env.NOWPAYMENTS_IPN_SECRET) {
-        if (!signature || !verifyNowPaymentsIpn(body, signature)) {
-          console.error("[NowPayments IPN] Invalid or missing signature");
+      // Validate signature
+      if (IZIPAY_WEBHOOK_SECRET) {
+        const rawBody = (req as any).rawBody as Buffer | undefined;
+        const signature = req.headers["x-izipay-signature"] as string | undefined;
+        if (!rawBody || !signature) {
+          console.error("[IziChange Webhook] Missing rawBody or signature header");
+          return res.status(400).json({ message: "Missing signature" });
+        }
+        try {
+          IziPayClient.validateWebhook(rawBody, signature, IZIPAY_WEBHOOK_SECRET);
+        } catch (sigErr: any) {
+          console.error("[IziChange Webhook] Signature validation failed:", sigErr.message);
           return res.status(401).json({ message: "Invalid signature" });
         }
+      } else {
+        console.warn("[IziChange Webhook] IZIPAY_WEBHOOK_SECRET not set — accepting without signature check");
       }
 
-      const { order_id, payment_status, actually_paid, pay_currency, price_amount } = body;
-      const ashStatus = mapNowPaymentsStatus(payment_status || "");
-      console.log(`[NowPayments IPN] order_id=${order_id} np_status=${payment_status} → ${ashStatus} paid=${actually_paid} ${pay_currency}`);
+      const { event: eventType, data: eventData } = req.body || {};
+      console.log(`[IziChange Webhook] event=${eventType} ref=${eventData?.merchantReference}`);
 
-      if (!order_id) return res.status(400).json({ message: "Missing order_id" });
+      if (eventType !== "payment_intent.completed") {
+        return res.json({ received: true });
+      }
 
-      const transaction = await storage.getTransactionByReference(order_id);
+      const merchantReference = eventData?.merchantReference;
+      if (!merchantReference) {
+        console.warn("[IziChange Webhook] Missing merchantReference");
+        return res.status(400).json({ message: "Missing merchantReference" });
+      }
+
+      const transaction = await storage.getTransactionByReference(merchantReference);
       if (!transaction) {
-        console.warn(`[NowPayments IPN] Transaction not found for order_id=${order_id}`);
+        console.warn(`[IziChange Webhook] Transaction not found: ${merchantReference}`);
         return res.status(200).json({ message: "ok" });
       }
 
@@ -12375,260 +12339,135 @@ export async function registerRoutes(
         return res.status(200).json({ message: "already processed" });
       }
 
-      if (ashStatus === "completed") {
-        await storage.updateTransactionStatus(transaction.id, "completed");
-        // For stablecoins: actually_paid is in the same unit as USD (USDT 1:1) — use it to handle partial payments.
-        // For non-stablecoins (TRX, TON, etc.): actually_paid is denominated in that coin, not USD.
-        //   Use price_amount (the USD amount we invoiced) so the ledger is credited in USD-equivalent.
-        const creditAmount = isStableTicker(pay_currency || "")
-          ? (actually_paid > 0 ? actually_paid : parseFloat(transaction.amount))
-          : (price_amount > 0 ? price_amount : parseFloat(transaction.amount));
-        await creditUserWallet(transaction.userId, creditAmount, "USDT");
+      const creditAmount = parseFloat(transaction.amount);
+      await storage.updateTransactionStatus(transaction.id, "completed");
+      await creditUserWallet(transaction.userId, creditAmount, "USDT");
 
-        await storage.createUserNotification({
-          userId: transaction.userId,
-          type: transaction.type === "payment_link" ? "payment_link_received" : "deposit_confirmed",
-          title: transaction.type === "payment_link" ? "payment_link_received" : "deposit_confirmed",
-          message: JSON.stringify({ amount: creditAmount.toFixed(6), currency: "USDT" }),
-          transactionId: transaction.id,
-          isRead: false,
-        });
 
-        if (transaction.paymentIntentId) {
-          await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "completed");
+      await storage.createUserNotification({
+        userId: transaction.userId,
+        type: transaction.type === "payment_link" ? "payment_link_received" : "deposit_confirmed",
+        title: transaction.type === "payment_link" ? "payment_link_received" : "deposit_confirmed",
+        message: JSON.stringify({ amount: creditAmount.toFixed(6), currency: "USDT" }),
+        transactionId: transaction.id,
+        isRead: false,
+      });
+
+      if (transaction.paymentIntentId) {
+        await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "completed").catch(() => {});
+      }
+
+      if (transaction.type === "payment_link" && transaction.payerEmail && transaction.paymentLinkId) {
+        try {
+          const paymentLinkRecord = await storage.getPaymentLinkById(transaction.paymentLinkId);
+          const pdfUrl = (paymentLinkRecord?.hasPdfDelivery && paymentLinkRecord?.pdfPath) ? paymentLinkRecord.pdfPath : null;
+          await sendPayerConfirmationEmail(
+            transaction.payerEmail,
+            transaction.payerName || "Client",
+            paymentLinkRecord?.title || "Lien de paiement",
+            creditAmount.toFixed(4),
+            "USDT",
+            transaction.reference || transaction.id,
+            pdfUrl,
+          );
+        } catch (emailErr: any) {
+          console.error("[IziChange Webhook] Email error:", emailErr.message);
         }
-
-        if (transaction.type === "payment_link" && transaction.payerEmail && transaction.paymentLinkId) {
-          try {
-            const paymentLinkRecord = await storage.getPaymentLinkById(transaction.paymentLinkId);
-            const pdfUrl = (paymentLinkRecord?.hasPdfDelivery && paymentLinkRecord?.pdfPath) ? paymentLinkRecord.pdfPath : null;
-            await sendPayerConfirmationEmail(
-              transaction.payerEmail,
-              transaction.payerName || "Client",
-              paymentLinkRecord?.title || "Lien de paiement",
-              creditAmount.toFixed(4),
-              "USDT",
-              transaction.reference || transaction.id,
-              pdfUrl,
-            );
-          } catch (emailErr: any) {
-            console.error("[NowPayments IPN] Email error:", emailErr.message);
-          }
-        }
-
-        const txUser = await storage.getUser(transaction.userId).catch(() => null);
-        notifyDepositConfirmed({
-          userName: (txUser as any)?.fullName || (txUser as any)?.username || "Utilisateur",
-          userEmail: (txUser as any)?.email || "",
-          amount: creditAmount.toFixed(6),
-          currency: "USDT",
-          reference: order_id,
-          provider: "nowpayments",
-          depositType: transaction.type,
-          paymentMethod: "crypto",
-        }).catch(() => {});
-
-      } else if (ashStatus === "failed") {
-        await storage.updateTransactionStatus(transaction.id, "failed");
-
-        await storage.createUserNotification({
-          userId: transaction.userId,
-          type: "deposit_failed",
-          title: "deposit_failed",
-          message: "{}",
-          transactionId: transaction.id,
-          isRead: false,
-        });
-
-        if (transaction.paymentIntentId) {
-          await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "failed");
-        }
-        console.log(`[NowPayments IPN] ✗ Payment FAILED for ${order_id}`);
       }
 
-      res.status(200).json({ message: "ok" });
+      const txUser = await storage.getUser(transaction.userId).catch(() => null);
+      notifyDepositConfirmed({
+        userName: (txUser as any)?.fullName || (txUser as any)?.username || "Utilisateur",
+        userEmail: (txUser as any)?.email || "",
+        amount: creditAmount.toFixed(6),
+        currency: "USDT",
+        reference: merchantReference,
+        depositType: transaction.type,
+        paymentMethod: "crypto",
+      }).catch(() => {});
+
+      console.log(`[IziChange Webhook] ✓ Credited ${creditAmount.toFixed(4)} USDT — ref=${merchantReference}`);
+      return res.json({ received: true });
     } catch (error: any) {
-      console.error("[NowPayments IPN] Error:", error);
-      res.status(500).json({ message: "Internal error" });
+      console.error("[IziChange Webhook] Error:", error);
+      if (!res.headersSent) res.status(500).json({ message: "Internal error" });
     }
   });
 
-  // ── NowPayments: minimum payment amount per network (public) ─────────────────
-  app.get("/api/nowpayments/min-amount", async (req, res) => {
-    try {
-      const { currency_from = "usd", currency_to } = req.query;
-      if (!currency_to) return res.status(400).json({ message: "currency_to requis" });
-      // When currency_from is "usd" (client default), use the smart helper that
-      // picks the correct NowPayments pair per crypto type and returns USD-equivalent.
-      // Raw pairs (e.g. currency_from=bnbbsc&currency_to=usdttrc20) are passed through.
-      const cfStr = (currency_from as string).toLowerCase();
-      const ctStr = (currency_to as string).toLowerCase();
-      const min = cfStr === "usd"
-        ? await getMinAmountInUSD(ctStr)
-        : await getMinAmount(cfStr, ctStr);
-      if (min === null) return res.status(503).json({ message: "Indisponible" });
-      res.json({ min_amount: min, currency_from, currency_to });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // ── NowPayments: estimated price for a given currency pair (public) ──────────
-  app.get("/api/nowpayments/estimate", async (req, res) => {
-    try {
-      const { amount, currency_from, currency_to } = req.query;
-      if (!amount || !currency_from || !currency_to) {
-        return res.status(400).json({ message: "Paramètres manquants: amount, currency_from, currency_to" });
-      }
-      const parsed = parseFloat(amount as string);
-      if (isNaN(parsed) || parsed <= 0) {
-        return res.status(400).json({ message: "Montant invalide" });
-      }
-      const estimated = await getEstimatedPrice(
-        parsed,
-        (currency_from as string).toLowerCase(),
-        (currency_to as string).toLowerCase()
-      );
-      if (estimated === null) {
-        return res.status(503).json({ message: "Estimation indisponible" });
-      }
-      res.json({ estimated_amount: estimated, currency_from, currency_to });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  // ── NowPayments: available crypto networks (deposit page + public pay page) ──
-  app.get("/api/nowpayments/currencies", async (req, res) => {
-    try {
-      const currencies = await getNowPaymentsCurrencies();
-      res.json({ currencies });
-    } catch (error: any) {
-      console.error("[NowPayments Currencies] Error:", error);
-      res.json({ currencies: [{ ticker: "usdttrc20", label: "USDT", network: "Tron (TRC20)" }] });
-    }
-  });
-
-  // ── Crypto deposit via NowPayments ─────────────────────────────────────────
+  // ── Crypto deposit via IziChange ───────────────────────────────────────────
   app.post("/api/deposits/crypto", requireAuth, depositLimiter, async (req, res) => {
     try {
-      const { amountUsd } = req.body;
-      const numAmountUSD = parseFloat(amountUsd || "0");
-      if (!amountUsd || numAmountUSD <= 0) {
-        return res.status(400).json({ message: "Montant invalide" });
+      if (!isIziPayConfigured()) {
+        return res.status(503).json({ message: "Paiement crypto non configuré. Contactez l'administrateur." });
       }
 
-      const selectedPayCurrency = (req.body.payCurrency || "usdttrc20").toString().toLowerCase();
-      if (!isSupportedCrypto(selectedPayCurrency)) {
-        return res.status(400).json({ message: "Devise crypto non supportée pour ce paiement." });
+      const { amount, currency: reqCurrency } = req.body;
+      const numAmount = parseFloat(amount || "0");
+      if (!amount || numAmount <= 0) {
+        return res.status(400).json({ message: "Montant invalide" });
       }
 
       const userId = req.userId!;
       const user = await storage.getUser(userId);
       if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
 
-      const cryptoFeeSettings = await storage.getSetting("nowpayments_fee_percent");
+      const fiatCurrency = ((reqCurrency || user.preferredCurrency || "XOF") as string).toUpperCase();
+      const izipayCurrency = toIziPayCurrency(fiatCurrency);
+
+      const cryptoFeeSettings = await storage.getSetting("izichange_fee_percent");
       const cryptoFeePercent = cryptoFeeSettings ? parseFloat(cryptoFeeSettings.value) : 2.5;
 
-      const cryptoMinSetting = await storage.getSetting("nowpayments_min_deposit");
-      // Native crypto input: amountUsd field holds TRX/BTC/… amount (not USDT) for non-stables
-      const isNativeInput = !isStableTicker(selectedPayCurrency);
-      let numAmountForInvoice: number;
-
-      if (isNativeInput) {
-        // Validate against min in native crypto (one consistent NowPayments call)
-        const minInCrypto = await getMinAmount(selectedPayCurrency, "usdttrc20");
-        const effectiveMin = minInCrypto ?? (cryptoMinSetting ? parseFloat(cryptoMinSetting.value) : 1);
-        if (numAmountUSD < effectiveMin) {
-          return res.status(400).json({ message: `Minimum ${effectiveMin.toFixed(6).replace(/\.?0+$/, "")} ${selectedPayCurrency.toUpperCase()} pour ce réseau` });
-        }
-        // Estimate USDT equivalent (single call — no double-estimation drift)
-        const estimated = await getEstimatedPrice(numAmountUSD, selectedPayCurrency, "usdttrc20");
-        if (!estimated || estimated <= 0) return res.status(503).json({ message: "Impossible d'estimer la valeur USDT. Veuillez réessayer." });
-        numAmountForInvoice = numAmountUSD; // will use native amount for invoice
-        // Override numAmountUSD to USDT value for fees + ledger
-        (req as any)._estimatedUSDT = estimated;
-      } else {
-        // Stable coin (USDT): existing USD minimum check
-        const cryptoMinFromApi = await getMinAmountInUSD(selectedPayCurrency);
-        const cryptoMinDeposit = cryptoMinFromApi ?? (cryptoMinSetting ? parseFloat(cryptoMinSetting.value) : 1);
-        if (numAmountUSD < cryptoMinDeposit) {
-          return res.status(400).json({ message: `Le dépôt minimum est de ${parseFloat(cryptoMinDeposit.toFixed(2))} $ pour ce réseau` });
-        }
-        numAmountForInvoice = numAmountUSD;
-      }
-
-      const ledgerAmountUSD = isNativeInput ? ((req as any)._estimatedUSDT as number) : numAmountUSD;
-      const feeAmountUSD = ledgerAmountUSD * (cryptoFeePercent / 100);
-      const netAmountUSD = ledgerAmountUSD - feeAmountUSD;
+      // Convert fiat amount to USDT for ledger
+      const fxRates = await loadFxRates();
+      const amountInXAF = convertToXAF(numAmount, fiatCurrency, fxRates);
+      const usdtPerXaf = fxRates["USDT"] ?? 655;
+      const amountInUSDT = amountInXAF / usdtPerXaf;
+      const feeAmountUSDT = amountInUSDT * (cryptoFeePercent / 100);
+      const netAmountUSDT = amountInUSDT - feeAmountUSDT;
 
       const reference = generateTransactionReference("deposit");
       const appBase = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
 
-      const isStableSelection = isStableTicker(selectedPayCurrency);
-
-      await storage.createTransaction({
+      const tx = await storage.createTransaction({
         userId,
         type: "deposit",
-        amount: netAmountUSD.toFixed(6),
-        totalAmount: ledgerAmountUSD.toFixed(6),
-        feeAmount: feeAmountUSD.toFixed(6),
+        amount: netAmountUSDT.toFixed(6),
+        totalAmount: amountInUSDT.toFixed(6),
+        feeAmount: feeAmountUSDT.toFixed(6),
         currency: "USDT",
         status: "pending",
-        description: `Dépôt crypto via NowPayments — réseau ${selectedPayCurrency.toUpperCase()}`,
+        description: `Dépôt crypto IziChange — ${fiatCurrency} ${numAmount}`,
         paymentMethod: "crypto",
         reference,
       });
 
-      let payment: any;
+      let iziIntent: any;
       try {
-        payment = await createNowPaymentsPayment({
-          // Native input: invoice for exact crypto amount → no conversion drift
-          priceAmount: isNativeInput
-            ? Math.round(numAmountForInvoice * 1000000) / 1000000
-            : Math.round(ledgerAmountUSD * 1000000) / 1000000,
-          priceCurrency: isNativeInput ? selectedPayCurrency : (isStableSelection ? selectedPayCurrency : "usd"),
-          payCurrency: selectedPayCurrency,
-          orderId: reference,
-          orderDescription: `Dépôt Ashtech Pay — ${selectedPayCurrency.toUpperCase()}`,
-          ipnCallbackUrl: `${appBase}/api/nowpayments/ipn`,
+        iziIntent = await izipay.paymentIntents.create({
+          requestedCurrencyType: "fiat",
+          currencyRequested: izipayCurrency,
+          amountRequested: numAmount,
+          merchantReference: reference,
+          returnUrl: `${appBase}/dashboard/deposit?crypto_status=success&ref=${reference}`,
+          metadata: { userId, transactionId: tx?.id ?? "" },
         });
-      } catch (invErr: any) {
-        console.error("[Deposits Crypto] NowPayments payment error:", invErr.message);
-        try {
-          const tx = await storage.getTransactionByReference(reference);
-          if (tx?.id) await storage.updateTransactionStatus(tx.id, "failed");
-        } catch {}
-        let friendlyMsg = "Une erreur est survenue. Veuillez réessayer.";
-        try {
-          const raw = invErr.message || "";
-          const jsonMatch = raw.match(/\{.*\}/s);
-          if (jsonMatch) {
-            const parsed = JSON.parse(jsonMatch[0]);
-            if (parsed.message && parsed.message.includes("less than minimal")) {
-              friendlyMsg = `Le dépôt minimum n'est pas atteint pour ce réseau.`;
-            } else if (parsed.message) {
-              friendlyMsg = parsed.message;
-            }
-          }
-        } catch {}
-        return res.status(400).json({ message: friendlyMsg });
+      } catch (err: any) {
+        console.error("[Deposits Crypto] IziChange error:", err.message);
+        if (tx?.id) await storage.updateTransactionStatus(tx.id, "failed").catch(() => {});
+        return res.status(400).json({ message: "Impossible de créer l'intention de paiement. Veuillez réessayer." });
       }
 
-      // Update transaction with NowPayments payment_id
-      try {
-        const tx = await storage.getTransactionByReference(reference);
-        if (tx?.id) await storage.updateTransaction(tx.id, { paymentIntentId: payment.payment_id });
-      } catch {}
+      if (tx?.id && iziIntent?.id) {
+        await storage.updateTransaction(tx.id, { paymentIntentId: iziIntent.id }).catch(() => {});
+      }
 
-      console.log(`[Deposits Crypto] Payment created: addr=${payment.pay_address} amount=${payment.pay_amount} USDT ref=${reference}`);
+      console.log(`[Deposits Crypto] IziChange intent: ${fiatCurrency}${numAmount} ≈ ${netAmountUSDT.toFixed(4)} USDT ref=${reference}`);
       res.json({
-        payAddress: payment.pay_address,
-        payAmount: payment.pay_amount,
-        payCurrency: payment.pay_currency,
-        paymentId: payment.payment_id,
-        expiresAt: payment.expiration_estimate_date,
+        paymentUrl: iziIntent.paymentUrl,
+        intentId: iziIntent.id,
         reference,
+        currency: fiatCurrency,
+        amountUsdt: netAmountUSDT.toFixed(4),
       });
     } catch (error: any) {
       console.error("[Deposits Crypto] Error:", error);

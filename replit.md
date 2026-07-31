@@ -190,6 +190,8 @@ Set these in Replit Secrets before connecting to live services:
 | `AFRIBAPAY_PUBLIC_KEY` | AfribaPay public key |
 | `AFRIBAPAY_SECRET_KEY` | AfribaPay secret key |
 | `PIXPAY_API_KEY_XAF` | PixPay XAF key |
+| `IZIPAY_API_KEY` | IziChange Pay API key (crypto checkout) |
+| `IZIPAY_WEBHOOK_SECRET` | IziChange Pay webhook signing secret |
 
 Without Supabase secrets, the app falls back to Replit's local PostgreSQL and local file storage — fine for development.
 

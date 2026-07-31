@@ -21,7 +21,7 @@ export default function AdminSettingsPlatform() {
     support_email: "support@ashtechpay.com",
     support_phone: "+237 6XX XXX XXX",
     fx_rate_USDT: "620",
-    nowpayments_fee_percent: "2.5",
+    izichange_fee_percent: "2.5",
   });
 
   const { data: savedSettings, isLoading } = useQuery<PlatformSetting[]>({
@@ -31,7 +31,7 @@ export default function AdminSettingsPlatform() {
   useEffect(() => {
     if (savedSettings) {
       const newSettings = { ...settings };
-      const allowedKeys = ["platform_name", "default_currency", "support_email", "support_phone", "fx_rate_USDT", "nowpayments_fee_percent"];
+      const allowedKeys = ["platform_name", "default_currency", "support_email", "support_phone", "fx_rate_USDT", "izichange_fee_percent"];
       savedSettings.forEach(s => {
         if (allowedKeys.includes(s.key)) {
           newSettings[s.key] = s.value;
