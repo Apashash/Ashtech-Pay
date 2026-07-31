@@ -65,6 +65,7 @@ import { decryptField } from "./fieldEncryption";
 import { requireAdminPin } from "./adminPin";
 import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, fetchPaymentLinkDetails, ASHTECH_MARGIN } from "./swychr";
 import { createPaymentIntent, createDirectCharge, validateWebhook, getIziPayWebhookSecret, toIziPayCurrency, isIziPayConfigured } from "./izichange";
+import { fetchCryptoAssets, filterCryptoAssets, parseDisabledCryptoAssets, getStaticCryptoAssets } from "./cryptoAssets";
 import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, getAfribaPayOtpInfo, confirmAfribaPayOtp, isAfribaPayOtpRequiredMessage } from "./afribapay";
 import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, initiatePixPayPayout, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType, getPixPayServiceId, PIXPAY_OTP_USSD_CODES } from "./pixpay";
 import { addPendingPayment, removePendingPayment } from "./paymentPoller";
@@ -6831,112 +6832,103 @@ export async function registerRoutes(
     }
   });
 
-  // ── IziChange crypto asset catalogue (proxy + 1h cache) ──────────────────────
-  // Public — used by payment-link page (unauthenticated) and deposit page.
-  {
-    let _cache: { coins: Record<string, unknown>; ts: number } | null = null;
-    app.get("/api/crypto/assets", publicInfoLimiter, async (_req, res) => {
-      try {
-        const now = Date.now();
-        if (_cache && now - _cache.ts < 3_600_000) return res.json(_cache.coins);
-
-        if (!isIziPayConfigured()) {
-          // Not configured — return empty; client falls back to static list
-          return res.json({});
-        }
-
-        const apiKey = getIziPayApiKey();
-        const baseUrl = apiKey.startsWith("sk_test_")
-          ? "https://api.sandbox-pay.izichange.com"
-          : "https://api.pay.izichange.com";
-
-        const resp = await fetch(`${baseUrl}/v1/assets`, {
-          headers: { Authorization: `Bearer ${apiKey}` },
-        });
-        if (!resp.ok) throw new Error(`IziChange /v1/assets → ${resp.status}`);
-
-        // IziChange may return a bare array or { data: [...] }
-        const rawList: any = await resp.json();
-        const list: any[] = Array.isArray(rawList)
-          ? rawList
-          : Array.isArray(rawList?.data)
-          ? rawList.data
-          : [];
-
-        // Log one sample asset so we can verify field names in production logs.
-        if (list.length > 0) {
-          console.log("[crypto/assets] sample asset:", JSON.stringify(list[0]));
-        }
-
-        // Group assets by coin.
-        // NOTE: We now use Direct Charge (not WaaS sub-wallets), so ALL networks
-        //       (BEP20, ERC20, Polygon, etc.) can be offered — IziChange handles attribution.
-        //
-        // Field-name defensive strategy: IziChange may use camelCase or snake_case.
-        // Only skip an asset if isActive / is_active is EXPLICITLY false.
-        const coins: Record<string, { name: string; networks: any[] }> = {};
-        for (const a of list) {
-          // Only skip if EXPLICITLY set to false (not absent/null/undefined)
-          const activeFlag = a.isActive ?? a.is_active ?? a.active ?? true;
-          if (activeFlag === false) continue;
-
-          // Coin symbol — try multiple field names
-          const code: string = (
-            a.coinCode || a.coin_code || a.coin || a.symbol ||
-            (a.assetCode || a.asset_code || "")?.split(/[._]/)[0]
-          ) as string;
-          if (!code) continue;
-
-          // Human-readable coin name
-          const coinName: string = a.coinName || a.coin_name || a.name || a.coin || code;
-
-          if (!coins[code]) coins[code] = { name: coinName, networks: [] };
-
-          // Network / blockchain identifier
-          const netId: string =
-            a.blockchainCode || a.blockchain_code ||
-            a.network || a.networkCode || a.network_code ||
-            code;
-
-          // Human-readable network label
-          const netName: string =
-            a.blockchainName || a.blockchain_name ||
-            a.networkName   || a.network_name   ||
-            netId;
-
-          const netLabel = netName !== netId
-            ? `${netName} (${netId})`
-            : netId;
-
-          // Asset code (e.g. "USDT.TRC20", "BTC", "USDT.BEP20")
-          const assetCode: string = a.assetCode || a.asset_code || `${code}.${netId}`;
-
-          const memoRequired: boolean =
-            !!(a.memoRequired ?? a.memo_required ?? false);
-          const memoType: string | null =
-            a.memoType ?? a.memo_type ?? null;
-
-          // Avoid duplicate networks for the same coin
-          if (!coins[code].networks.find((n: any) => n.id === netId)) {
-            coins[code].networks.push({
-              id: netId,
-              label: netLabel,
-              assetCode,
-              memoRequired,
-              memoType,
-            });
-          }
-        }
-
-        _cache = { coins, ts: now };
-        console.log(`[crypto/assets] Loaded ${list.length} raw assets → ${Object.keys(coins).length} coins (networks: ${Object.values(coins).reduce((s: number, c: any) => s + c.networks.length, 0)})`);
-        return res.json(coins);
-      } catch (err: any) {
-        console.error("[crypto/assets]", err.message);
-        return res.json({}); // client falls back to static list
+  // ── IziChange crypto asset catalogue ────────────────────────────────────────
+  // The public response is filtered by the admin's disabled asset list. This
+  // makes the same activation rule apply to both deposits and payment links.
+  app.get("/api/crypto/assets", publicInfoLimiter, async (_req, res) => {
+    try {
+      if (!isIziPayConfigured()) {
+        return res.status(503).json({});
       }
-    });
-  }
+      const allAssets = await fetchCryptoAssets();
+      const disabledSetting = await storage.getSetting("crypto_disabled_assets");
+      const disabled = new Set<string>(
+        (() => {
+          try {
+            const parsed = JSON.parse(disabledSetting?.value || "[]");
+            return Array.isArray(parsed) ? parsed.filter((code): code is string => typeof code === "string") : [];
+          } catch {
+            return [];
+          }
+        })()
+      );
+      return res.json(filterCryptoAssets(allAssets, disabled));
+    } catch (err: any) {
+      console.error("[crypto/assets]", err.message);
+      // A failed/unconfigured provider must allow the client to use its static fallback.
+      return res.status(503).json({});
+    }
+  });
+
+  app.get("/api/crypto/disabled-assets", publicInfoLimiter, async (_req, res) => {
+    try {
+      const setting = await storage.getSetting("crypto_disabled_assets");
+      let disabled: string[] = [];
+      try {
+        const parsed = JSON.parse(setting?.value || "[]");
+        if (Array.isArray(parsed)) disabled = parsed.filter((code): code is string => typeof code === "string");
+      } catch {
+        disabled = [];
+      }
+      return res.json({ disabled });
+    } catch (err: any) {
+      console.error("[crypto/disabled-assets]", err.message);
+      return res.json({ disabled: [] });
+    }
+  });
+
+  // Admin catalogue: returns all provider assets plus the disabled asset codes.
+  app.get("/api/admin/crypto/assets", requireAuth, requireAdmin, async (_req, res) => {
+    try {
+      const allAssets = await fetchCryptoAssets();
+      const disabledSetting = await storage.getSetting("crypto_disabled_assets");
+      let disabled: string[] = [];
+      try {
+        const parsed = JSON.parse(disabledSetting?.value || "[]");
+        if (Array.isArray(parsed)) disabled = parsed.filter((code): code is string => typeof code === "string");
+      } catch {
+        disabled = [];
+      }
+      return res.json({ coins: allAssets, disabled });
+    } catch (err: any) {
+      console.error("[admin/crypto/assets]", err.message);
+      const setting = await storage.getSetting("crypto_disabled_assets").catch(() => undefined);
+      const disabled = parseDisabledCryptoAssets(setting?.value);
+      return res.json({ coins: getStaticCryptoAssets(), disabled: Array.from(disabled).sort(), fallback: true });
+    }
+  });
+
+  app.post("/api/admin/crypto/assets/toggle", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { assetCode, enabled } = req.body as { assetCode?: unknown; enabled?: unknown };
+      if (typeof assetCode !== "string" || !assetCode.trim() || typeof enabled !== "boolean") {
+        return res.status(400).json({ message: "assetCode et enabled sont requis" });
+      }
+
+      const setting = await storage.getSetting("crypto_disabled_assets");
+      let disabled = new Set<string>();
+      try {
+        const parsed = JSON.parse(setting?.value || "[]");
+        if (Array.isArray(parsed)) disabled = new Set(parsed.filter((code): code is string => typeof code === "string"));
+      } catch {
+        disabled = new Set();
+      }
+
+      if (enabled) disabled.delete(assetCode);
+      else disabled.add(assetCode);
+
+      const value = JSON.stringify(Array.from(disabled).sort());
+      await storage.upsertSetting(
+        "crypto_disabled_assets",
+        value,
+        "Réseaux crypto désactivés par l'administrateur pour les dépôts et liens de paiement"
+      );
+      return res.json({ assetCode, enabled, disabled: Array.from(disabled).sort() });
+    } catch (err: any) {
+      console.error("[admin/crypto/assets/toggle]", err.message);
+      return res.status(500).json({ message: "Impossible de modifier le réseau crypto" });
+    }
+  });
 
   // ── Crypto spot price in USDT (Binance public API, 5-min cache) ────────────
   {
@@ -7311,6 +7303,12 @@ export async function registerRoutes(
 
       if (!assetCode) {
         return res.status(400).json({ message: "Veuillez sélectionner un réseau crypto" });
+      }
+      const disabledCryptoAssets = parseDisabledCryptoAssets(
+        (await storage.getSetting("crypto_disabled_assets"))?.value
+      );
+      if (disabledCryptoAssets.has(assetCode)) {
+        return res.status(400).json({ message: "Ce réseau crypto n'est pas disponible actuellement" });
       }
 
       const merchantId = link.userId;
@@ -12790,6 +12788,12 @@ export async function registerRoutes(
 
       if (!assetCode) {
         return res.status(400).json({ message: "Veuillez sélectionner un réseau crypto" });
+      }
+      const disabledCryptoAssets = parseDisabledCryptoAssets(
+        (await storage.getSetting("crypto_disabled_assets"))?.value
+      );
+      if (disabledCryptoAssets.has(assetCode)) {
+        return res.status(400).json({ message: "Ce réseau crypto n'est pas disponible actuellement" });
       }
 
       const numAmount = parseFloat(amount || "0");

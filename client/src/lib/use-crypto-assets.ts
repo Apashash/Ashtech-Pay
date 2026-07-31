@@ -101,15 +101,29 @@ function staticFallback(): DynCoinMap {
  * Falls back to the static list while loading or on error.
  */
 export function useIziAssets(): { coins: DynCoinMap; isLoading: boolean } {
-  const { data, isLoading } = useQuery<DynCoinMap>({
+  const { data, isLoading, isSuccess } = useQuery<DynCoinMap>({
     queryKey: ["/api/crypto/assets"],
     staleTime: 60 * 60 * 1000, // 1 h — matches server cache
     gcTime:    60 * 60 * 1000,
     retry: 1,
   });
+  const { data: disabledData } = useQuery<{ disabled: string[] }>({
+    queryKey: ["/api/crypto/disabled-assets"],
+    staleTime: 60 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
+    retry: 1,
+  });
+  const disabled = new Set(disabledData?.disabled ?? []);
 
-  if (data && Object.keys(data).length > 0) {
+  // An empty successful response means the admin disabled every network.
+  // Only use the static fallback while loading or when the API failed.
+  if (isSuccess && data) {
     return { coins: data, isLoading: false };
   }
-  return { coins: staticFallback(), isLoading };
+  const fallback = staticFallback();
+  for (const coin of Object.keys(fallback)) {
+    fallback[coin].networks = fallback[coin].networks.filter(net => !disabled.has(net.assetCode));
+    if (fallback[coin].networks.length === 0) delete fallback[coin];
+  }
+  return { coins: fallback, isLoading };
 }

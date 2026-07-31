@@ -30,10 +30,28 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Pencil, Trash2, Globe, Smartphone, AlertTriangle, Bitcoin, Save } from "lucide-react";
+import { Plus, Pencil, Trash2, Globe, Smartphone, AlertTriangle, Bitcoin, Save, Search, Loader2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Country, Operator, PlatformSetting } from "@shared/schema";
+
+interface AdminCryptoNetwork {
+  id: string;
+  label: string;
+  assetCode: string;
+  memoRequired?: boolean;
+  memoType?: string | null;
+}
+
+interface AdminCryptoCoin {
+  name: string;
+  networks: AdminCryptoNetwork[];
+}
+
+interface AdminCryptoResponse {
+  coins: Record<string, AdminCryptoCoin>;
+  disabled: string[];
+}
 
 export default function AdminCountries() {
   const { toast } = useToast();
@@ -60,6 +78,27 @@ export default function AdminCountries() {
     mutationFn: ({ key, value }: { key: string; value: string }) => apiRequest("POST", "/api/admin/settings", { key, value }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/settings"] }); toast({ title: "Paramètre enregistré" }); },
     onError: () => toast({ title: "Erreur", variant: "destructive" }),
+  });
+  const [cryptoSearch, setCryptoSearch] = useState("");
+  const { data: adminCryptoAssets, isLoading: loadingCryptoAssets } = useQuery<AdminCryptoResponse>({
+    queryKey: ["/api/admin/crypto/assets"],
+  });
+  const toggleCryptoMutation = useMutation({
+    mutationFn: async ({ assetCode, enabled }: { assetCode: string; enabled: boolean }) => {
+      const response = await apiRequest("POST", "/api/admin/crypto/assets/toggle", { assetCode, enabled });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.message || "Impossible de modifier le réseau");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/crypto/assets"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crypto/assets"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crypto/disabled-assets"] });
+      toast({ title: "Réseau crypto mis à jour" });
+    },
+    onError: (error: Error) => toast({ title: "Erreur", description: error.message, variant: "destructive" }),
   });
   const [showOperatorModal, setShowOperatorModal] = useState(false);
   const [editingCountry, setEditingCountry] = useState<Country | null>(null);
@@ -422,6 +461,91 @@ export default function AdminCountries() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Crypto networks activation */}
+        <Card>
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">Crypto</p>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Bitcoin className="w-4 h-4 text-blue-400" />
+                Réseaux crypto disponibles
+              </CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                Désactivez un réseau pour le retirer des dépôts et des liens de paiement.
+              </p>
+            </div>
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={cryptoSearch}
+                onChange={(event) => setCryptoSearch(event.target.value)}
+                placeholder="Rechercher un coin ou réseau..."
+                className="pl-9"
+                data-testid="input-crypto-network-search"
+              />
+            </div>
+          </CardHeader>
+          <CardContent>
+            {loadingCryptoAssets ? (
+              <div className="flex items-center justify-center gap-2 py-10 text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" /> Chargement des réseaux...
+              </div>
+            ) : !adminCryptoAssets?.coins || Object.keys(adminCryptoAssets.coins).length === 0 ? (
+              <div className="rounded-lg border border-dashed py-10 text-center text-sm text-muted-foreground">
+                Catalogue crypto indisponible pour le moment.
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {Object.entries(adminCryptoAssets.coins)
+                  .filter(([code, coin]) => {
+                    const query = cryptoSearch.trim().toLowerCase();
+                    return !query ||
+                      code.toLowerCase().includes(query) ||
+                      coin.name.toLowerCase().includes(query) ||
+                      coin.networks.some(network =>
+                        `${network.id} ${network.label} ${network.assetCode}`.toLowerCase().includes(query)
+                      );
+                  })
+                  .map(([code, coin]) => (
+                    <div key={code} className="rounded-lg border bg-card/50 p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <p className="font-semibold">{code}</p>
+                          <p className="text-xs text-muted-foreground">{coin.name}</p>
+                        </div>
+                        <Badge variant="outline">{coin.networks.length} réseau{coin.networks.length > 1 ? "x" : ""}</Badge>
+                      </div>
+                      <div className="space-y-2">
+                        {coin.networks.map(network => {
+                          const enabled = !(adminCryptoAssets.disabled || []).includes(network.assetCode);
+                          return (
+                            <div key={network.assetCode} className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+                              <div className="min-w-0">
+                                <p className={`text-sm font-medium ${enabled ? "" : "text-muted-foreground line-through"}`}>
+                                  {network.label}
+                                </p>
+                                <p className="text-[11px] text-muted-foreground font-mono truncate">{network.assetCode}</p>
+                              </div>
+                              <Switch
+                                checked={enabled}
+                                disabled={toggleCryptoMutation.isPending}
+                                onCheckedChange={(checked) =>
+                                  toggleCryptoMutation.mutate({ assetCode: network.assetCode, enabled: checked })
+                                }
+                                aria-label={`${enabled ? "Désactiver" : "Activer"} ${network.assetCode}`}
+                                data-testid={`switch-crypto-${network.assetCode.replace(/[^a-zA-Z0-9]/g, "-")}`}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         <Dialog open={showCountryModal} onOpenChange={() => resetCountryForm()}>
           <DialogContent>
