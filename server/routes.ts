@@ -12669,11 +12669,21 @@ export async function registerRoutes(
         // Try to find existing account first (idempotent)
         let account = await findWaaSAccountByExternalRef(externalRef);
         if (!account) {
-          account = await createWaaSAccount(
-            externalRef,
-            (user as any).fullName || (user as any).username || `User-${userId.slice(0, 8)}`,
-            (user as any).email || undefined,
-          );
+          try {
+            account = await createWaaSAccount(
+              externalRef,
+              (user as any).fullName || (user as any).username || `User-${userId.slice(0, 8)}`,
+              (user as any).email || undefined,
+            );
+          } catch (createErr: any) {
+            // IziChange may reject if account already exists (race condition / previous partial save).
+            // Retry the lookup before giving up.
+            account = await findWaaSAccountByExternalRef(externalRef);
+            if (!account) {
+              console.error("[Crypto/WaaS] createWaaSAccount failed:", createErr.message);
+              return res.status(500).json({ message: `Impossible de créer le compte WaaS: ${createErr.message}` });
+            }
+          }
         }
         iziAccountId = account.id;
         // Persist for future calls (fire-and-forget)
@@ -12681,7 +12691,13 @@ export async function registerRoutes(
       }
 
       // ── 2. Get permanent deposit address ──────────────────────────────────
-      const depositAddr = await getWaaSDepositAddress(iziAccountId, assetCode);
+      let depositAddr: Awaited<ReturnType<typeof getWaaSDepositAddress>>;
+      try {
+        depositAddr = await getWaaSDepositAddress(iziAccountId, assetCode);
+      } catch (addrErr: any) {
+        console.error(`[Crypto/WaaS] getWaaSDepositAddress failed (asset=${assetCode}):`, addrErr.message);
+        return res.status(502).json({ message: `Adresse crypto indisponible pour ${assetCode}: ${addrErr.message}` });
+      }
 
       // ── 3. Create pending transaction for tracking ─────────────────────────
       // Frontend sends amounts in USDT directly; no fiat conversion needed.

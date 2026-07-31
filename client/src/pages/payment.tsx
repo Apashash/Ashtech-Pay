@@ -1247,25 +1247,12 @@ export default function PaymentPage() {
                 </div>
               </div>
             ) : paymentMethod === "crypto" ? (
-              <div className="space-y-3">
-                <div className="space-y-2">
-                  <Label htmlFor="amount">{p.amountToPayCurrency} ({CURRENCY_SYMBOLS[selectedDisplayCurrency]}) *</Label>
-                  <Input
-                    id="amount"
-                    type="number"
-                    inputMode="decimal"
-                    placeholder={p.enterAmount}
-                    value={customAmount}
-                    onChange={(e) => { setCustomAmount(e.target.value); setErrors(p => ({...p, amount: undefined as any})); }}
-                    className={`text-xl h-12 text-center ${errors.amount ? "border-red-500" : ""}`}
-                    data-testid="input-payment-amount"
-                  />
-                  {errors.amount && <p className="text-xs text-red-500">{errors.amount}</p>}
-                  {selectedDisplayCurrency !== linkCurrency && customAmount && (adminExchangeRates[selectedDisplayCurrency] || 0) > 0 && (
-                    <p className="text-xs text-muted-foreground text-center">≈ {formatAmount(amountInLinkCurrency, linkCurrency)}</p>
-                  )}
-                  <p className="text-xs text-muted-foreground text-center">Sélectionnez votre cryptomonnaie ci-dessous</p>
-                </div>
+              <div className="bg-muted/30 border border-border rounded-xl px-4 py-3 text-center space-y-1">
+                <p className="text-xs text-muted-foreground">Montant demandé</p>
+                <p className="text-2xl font-bold text-foreground">
+                  {formatAmount(displayAmount || 0, linkCurrency)}
+                </p>
+                <p className="text-xs text-muted-foreground">Vous réglez en cryptomonnaie — sélectionnez ci-dessous</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -1396,9 +1383,16 @@ export default function PaymentPage() {
             <div className="rounded-lg border bg-primary/5 border-primary/20 p-4 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="font-medium text-foreground">{p.totalAmount}</span>
-                <span className="text-2xl font-bold text-primary" data-testid="text-payment-amount">
-                  {formatAmount(paymentLink.isFixedAmount ? convertedDisplayAmount : displayAmount, selectedDisplayCurrency)}
-                </span>
+                {paymentMethod === "crypto" ? (
+                  <span className="text-sm font-semibold text-primary flex items-center gap-1.5" data-testid="text-payment-amount">
+                    <Bitcoin className="w-4 h-4" />
+                    Paiement crypto
+                  </span>
+                ) : (
+                  <span className="text-2xl font-bold text-primary" data-testid="text-payment-amount">
+                    {formatAmount(paymentLink.isFixedAmount ? convertedDisplayAmount : displayAmount, selectedDisplayCurrency)}
+                  </span>
+                )}
               </div>
             </div>
 
