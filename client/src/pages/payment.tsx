@@ -1341,6 +1341,7 @@ export default function PaymentPage() {
                         src={coinLogoUrl(payCryptoCoin.toLowerCase())}
                         alt={payCryptoCoin}
                         className="w-6 h-6 object-contain"
+                        onLoad={(e) => { (e.target as HTMLImageElement).style.display = ""; }}
                         onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                       />
                     </div>
@@ -1367,6 +1368,7 @@ export default function PaymentPage() {
                         src={networkLogoUrl(payCryptoNetwork)}
                         alt={payCryptoNetwork}
                         className="w-6 h-6 object-contain"
+                        onLoad={(e) => { (e.target as HTMLImageElement).style.display = ""; }}
                         onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                       />
                     </div>

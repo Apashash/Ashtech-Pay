@@ -777,6 +777,7 @@ export default function DepositPage() {
                           src={coinLogoUrl(cryptoCoin.toLowerCase())}
                           alt={cryptoCoin}
                           className="w-6 h-6 object-contain"
+                          onLoad={(e) => { (e.target as HTMLImageElement).style.display = ""; }}
                           onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                         />
                       </div>
@@ -803,6 +804,7 @@ export default function DepositPage() {
                           src={networkLogoUrl(cryptoNetwork)}
                           alt={cryptoNetwork}
                           className="w-6 h-6 object-contain"
+                          onLoad={(e) => { (e.target as HTMLImageElement).style.display = ""; }}
                           onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                         />
                       </div>
