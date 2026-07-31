@@ -6849,30 +6849,81 @@ export async function registerRoutes(
         });
         if (!resp.ok) throw new Error(`IziChange /v1/assets → ${resp.status}`);
 
-        const list: any[] = await resp.json();
+        // IziChange may return a bare array or { data: [...] }
+        const rawList: any = await resp.json();
+        const list: any[] = Array.isArray(rawList)
+          ? rawList
+          : Array.isArray(rawList?.data)
+          ? rawList.data
+          : [];
 
-        // Group active assets by coinCode
+        // Log one sample asset so we can verify field names in production logs.
+        if (list.length > 0) {
+          console.log("[crypto/assets] sample asset:", JSON.stringify(list[0]));
+        }
+
+        // Group assets by coin.
+        // NOTE: We now use Direct Charge (not WaaS sub-wallets), so ALL networks
+        //       (BEP20, ERC20, Polygon, etc.) can be offered — IziChange handles attribution.
+        //
+        // Field-name defensive strategy: IziChange may use camelCase or snake_case.
+        // Only skip an asset if isActive / is_active is EXPLICITLY false.
         const coins: Record<string, { name: string; networks: any[] }> = {};
         for (const a of list) {
-          if (!a.isActive) continue;
-          const code: string = (a.coinCode || a.coin || (a.assetCode?.split(".")[0])) as string;
+          // Only skip if EXPLICITLY set to false (not absent/null/undefined)
+          const activeFlag = a.isActive ?? a.is_active ?? a.active ?? true;
+          if (activeFlag === false) continue;
+
+          // Coin symbol — try multiple field names
+          const code: string = (
+            a.coinCode || a.coin_code || a.coin || a.symbol ||
+            (a.assetCode || a.asset_code || "")?.split(/[._]/)[0]
+          ) as string;
           if (!code) continue;
-          if (!coins[code]) coins[code] = { name: a.coin || code, networks: [] };
-          const netId: string = a.blockchainCode || a.network || code;
-          const netLabel = a.blockchainName
-            ? `${a.blockchainName}${netId !== a.blockchainName ? ` (${netId})` : ""}`
+
+          // Human-readable coin name
+          const coinName: string = a.coinName || a.coin_name || a.name || a.coin || code;
+
+          if (!coins[code]) coins[code] = { name: coinName, networks: [] };
+
+          // Network / blockchain identifier
+          const netId: string =
+            a.blockchainCode || a.blockchain_code ||
+            a.network || a.networkCode || a.network_code ||
+            code;
+
+          // Human-readable network label
+          const netName: string =
+            a.blockchainName || a.blockchain_name ||
+            a.networkName   || a.network_name   ||
+            netId;
+
+          const netLabel = netName !== netId
+            ? `${netName} (${netId})`
             : netId;
-          coins[code].networks.push({
-            id: netId,
-            label: netLabel,
-            assetCode: a.assetCode,
-            memoRequired: !!a.memoRequired,
-            memoType: a.memoType ?? null,
-          });
+
+          // Asset code (e.g. "USDT.TRC20", "BTC", "USDT.BEP20")
+          const assetCode: string = a.assetCode || a.asset_code || `${code}.${netId}`;
+
+          const memoRequired: boolean =
+            !!(a.memoRequired ?? a.memo_required ?? false);
+          const memoType: string | null =
+            a.memoType ?? a.memo_type ?? null;
+
+          // Avoid duplicate networks for the same coin
+          if (!coins[code].networks.find((n: any) => n.id === netId)) {
+            coins[code].networks.push({
+              id: netId,
+              label: netLabel,
+              assetCode,
+              memoRequired,
+              memoType,
+            });
+          }
         }
 
         _cache = { coins, ts: now };
-        console.log(`[crypto/assets] Loaded ${list.length} assets → ${Object.keys(coins).length} coins`);
+        console.log(`[crypto/assets] Loaded ${list.length} raw assets → ${Object.keys(coins).length} coins (networks: ${Object.values(coins).reduce((s: number, c: any) => s + c.networks.length, 0)})`);
         return res.json(coins);
       } catch (err: any) {
         console.error("[crypto/assets]", err.message);
