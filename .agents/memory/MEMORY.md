@@ -10,3 +10,4 @@
 - [IziChange API quirks](izichange-api-quirks.md) — list endpoint returns bare array (not `{ data }`); ESM hoisting means env vars must use lazy getters not module-level constants.
 - [Direct crypto SDK](direct-crypto-sdk.md) — crypto pay-ins use dedicated authenticated endpoints so Mobile Money `/v1/collect` remains backward-compatible.
 - [Crypto memo and QR handling](crypto-memo-qr.md) — keep address and memo/tag separate; use chain-specific QR URIs only when their format is known.
+- [GitHub push authentication](github-push-authentication.md) — when shell HTTPS push rejects credentials, use the managed GitHub push integration instead of handling tokens manually.
