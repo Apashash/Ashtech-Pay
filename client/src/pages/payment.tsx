@@ -22,7 +22,7 @@ import {
 import { getOperatorLogo } from "@/lib/operator-logos";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { SiPaypal } from "react-icons/si";
-import { CRYPTO_COIN_LIST, CRYPTO_NETWORKS, coinLogoUrl } from "@/lib/crypto-assets";
+import { useIziAssets, coinLogoUrl } from "@/lib/use-crypto-assets";
 
 const CURRENCY_FLAGS: Record<SupportedCurrency, string> = {
   "XAF": "🇨🇲", "XOF": "🇸🇳", "CDF": "🇨🇩", "GHS": "🇬🇭",
@@ -104,6 +104,9 @@ export default function PaymentPage() {
   const [showPayRefundField, setShowPayRefundField] = useState(false);
   const [payReadyCountdown, setPayReadyCountdown] = useState(40 * 60);
   const payReadyCountdownRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Dynamic IziChange asset list (falls back to static if API not configured)
+  const { coins: payCoinList } = useIziAssets();
 
   const { data: paymentLink, isLoading, error } = useQuery<PaymentLink & { hasPdf?: boolean }>({
     queryKey: ["/api/payment-links/public", params?.slug],
@@ -386,7 +389,7 @@ export default function PaymentPage() {
   // WaaS mutation for payment-link crypto address
   const generatePayLinkCryptoMutation = useMutation({
     mutationFn: async () => {
-      const net = CRYPTO_COIN_LIST[payCryptoCoin]?.networks.find(n => n.id === payCryptoNetwork);
+      const net = payCoinList[payCryptoCoin]?.networks.find(n => n.id === payCryptoNetwork);
       if (!net) throw new Error("Réseau invalide");
       if (!email.trim()) throw new Error("Email requis");
       // country is optional for crypto (not needed by IziChange Direct Charge)
@@ -440,7 +443,7 @@ export default function PaymentPage() {
 
   // Reset network when coin changes
   useEffect(() => {
-    const nets = CRYPTO_NETWORKS[payCryptoCoin];
+    const nets = payCoinList[payCryptoCoin]?.networks;
     if (nets?.length) setPayCryptoNetwork(nets[0].id);
   }, [payCryptoCoin]);
 
@@ -1329,13 +1332,13 @@ export default function PaymentPage() {
                       onChange={e => setPayCryptoCoin(e.target.value)}
                       className="w-full h-12 pl-11 pr-4 rounded-xl border border-border bg-background text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/40 appearance-none cursor-pointer"
                     >
-                      {Object.entries(CRYPTO_COIN_LIST).map(([sym, def]) => (
+                      {Object.entries(payCoinList).map(([sym, def]) => (
                         <option key={sym} value={sym}>{sym} — {def.name}</option>
                       ))}
                     </select>
                     <div className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full overflow-hidden bg-muted flex items-center justify-center">
                       <img
-                        src={coinLogoUrl(CRYPTO_COIN_LIST[payCryptoCoin]?.logoSlug ?? payCryptoCoin.toLowerCase())}
+                        src={coinLogoUrl(payCryptoCoin.toLowerCase())}
                         alt={payCryptoCoin}
                         className="w-6 h-6 object-contain"
                         onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
@@ -1354,15 +1357,13 @@ export default function PaymentPage() {
                       onChange={e => setPayCryptoNetwork(e.target.value)}
                       className="w-full h-12 px-4 rounded-xl border border-border bg-background text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/40 appearance-none cursor-pointer"
                     >
-                      {(CRYPTO_COIN_LIST[payCryptoCoin]?.networks ?? []).map(net => (
+                      {(payCoinList[payCryptoCoin]?.networks ?? []).map(net => (
                         <option key={net.id} value={net.id}>{net.label}</option>
                       ))}
                     </select>
                     <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">▼</div>
                   </div>
-                  {(payCryptoCoin === "XRP" || payCryptoCoin === "TON" || payCryptoCoin === "XLM" ||
-                    (CRYPTO_COIN_LIST[payCryptoCoin]?.networks.find(n => n.id === payCryptoNetwork)?.assetCode ?? "").includes("TON") ||
-                    (CRYPTO_COIN_LIST[payCryptoCoin]?.networks.find(n => n.id === payCryptoNetwork)?.assetCode ?? "").includes("XRP")) && (
+                  {payCoinList[payCryptoCoin]?.networks.find(n => n.id === payCryptoNetwork)?.memoRequired && (
                     <p className="text-xs text-amber-600 dark:text-amber-400">
                       ⚠️ Ce réseau nécessite un mémo/tag — il sera affiché avec l'adresse.
                     </p>

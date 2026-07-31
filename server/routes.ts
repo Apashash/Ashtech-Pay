@@ -6825,6 +6825,62 @@ export async function registerRoutes(
     }
   });
 
+  // ── IziChange crypto asset catalogue (proxy + 1h cache) ──────────────────────
+  // Public — used by payment-link page (unauthenticated) and deposit page.
+  {
+    let _cache: { coins: Record<string, unknown>; ts: number } | null = null;
+    app.get("/api/crypto/assets", publicInfoLimiter, async (_req, res) => {
+      try {
+        const now = Date.now();
+        if (_cache && now - _cache.ts < 3_600_000) return res.json(_cache.coins);
+
+        if (!isIziPayConfigured()) {
+          // Not configured — return empty; client falls back to static list
+          return res.json({});
+        }
+
+        const apiKey = getIziPayApiKey();
+        const baseUrl = apiKey.startsWith("sk_test_")
+          ? "https://api.sandbox-pay.izichange.com"
+          : "https://api.pay.izichange.com";
+
+        const resp = await fetch(`${baseUrl}/v1/assets`, {
+          headers: { Authorization: `Bearer ${apiKey}` },
+        });
+        if (!resp.ok) throw new Error(`IziChange /v1/assets → ${resp.status}`);
+
+        const list: any[] = await resp.json();
+
+        // Group active assets by coinCode
+        const coins: Record<string, { name: string; networks: any[] }> = {};
+        for (const a of list) {
+          if (!a.isActive) continue;
+          const code: string = (a.coinCode || a.coin || (a.assetCode?.split(".")[0])) as string;
+          if (!code) continue;
+          if (!coins[code]) coins[code] = { name: a.coin || code, networks: [] };
+          const netId: string = a.blockchainCode || a.network || code;
+          const netLabel = a.blockchainName
+            ? `${a.blockchainName}${netId !== a.blockchainName ? ` (${netId})` : ""}`
+            : netId;
+          coins[code].networks.push({
+            id: netId,
+            label: netLabel,
+            assetCode: a.assetCode,
+            memoRequired: !!a.memoRequired,
+            memoType: a.memoType ?? null,
+          });
+        }
+
+        _cache = { coins, ts: now };
+        console.log(`[crypto/assets] Loaded ${list.length} assets → ${Object.keys(coins).length} coins`);
+        return res.json(coins);
+      } catch (err: any) {
+        console.error("[crypto/assets]", err.message);
+        return res.json({}); // client falls back to static list
+      }
+    });
+  }
+
   // Public deposit config for payment links (uses deposit fees)
   app.get("/api/public/deposit-config", publicInfoLimiter, async (_req, res) => {
     try {

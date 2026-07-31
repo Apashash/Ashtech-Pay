@@ -58,9 +58,8 @@ type DepositFormData = z.infer<typeof depositFormSchema>;
 
 const QUICK_AMOUNTS = [5000, 10000, 25000, 50000, 100000];
 
-// ── Shared crypto-asset definitions ───────────────────────────────────────────
-import { CRYPTO_COIN_LIST, CRYPTO_NETWORKS, coinLogoUrl } from "@/lib/crypto-assets";
-import type { CryptoNet } from "@/lib/crypto-assets";
+// ── Dynamic IziChange crypto-asset list ────────────────────────────────────────
+import { useIziAssets, coinLogoUrl } from "@/lib/use-crypto-assets";
 
 export default function DepositPage() {
   const { toast } = useToast();
@@ -87,7 +86,7 @@ export default function DepositPage() {
   // ── Crypto / WaaS state ──────────────────────────────────────────────────
   const [cryptoAmount, setCryptoAmount] = useState("");
   const [cryptoRef, setCryptoRef] = useState("");
-  const [cryptoCoin, setCryptoCoin] = useState<"USDT" | "BTC" | "XRP" | "TON">("USDT");
+  const [cryptoCoin, setCryptoCoin] = useState("USDT");
   const [cryptoNetwork, setCryptoNetwork] = useState("TRC20");
   const [refundAddress, setRefundAddress] = useState("");
   const [showRefundField, setShowRefundField] = useState(false);
@@ -101,6 +100,9 @@ export default function DepositPage() {
   const cryptoCountdownRef = useRef<NodeJS.Timeout | null>(null);
   const [cryptoReadyCountdown, setCryptoReadyCountdown] = useState(40 * 60);
   const cryptoReadyCountdownRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Dynamic IziChange asset list (falls back to static if API not configured)
+  const { coins: cryptoCoinList } = useIziAssets();
 
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const { data: wallets } = useQuery<{ id: string; currency: string; balance: string }[]>({
@@ -314,7 +316,7 @@ export default function DepositPage() {
 
   const generateCryptoAddressMutation = useMutation({
     mutationFn: async () => {
-      const net = CRYPTO_NETWORKS[cryptoCoin]?.find(n => n.id === cryptoNetwork);
+      const net = cryptoCoinList[cryptoCoin]?.networks.find(n => n.id === cryptoNetwork);
       if (!net) throw new Error("Réseau invalide");
       const amt = parseFloat(cryptoAmount);
       if (!amt || amt <= 0) throw new Error("Entrez un montant valide");
@@ -399,7 +401,7 @@ export default function DepositPage() {
 
   // Reset network to first option when coin changes
   useEffect(() => {
-    const nets = CRYPTO_NETWORKS[cryptoCoin];
+    const nets = cryptoCoinList[cryptoCoin]?.networks;
     if (nets?.length) setCryptoNetwork(nets[0].id);
   }, [cryptoCoin]);
 
@@ -765,14 +767,14 @@ export default function DepositPage() {
                         onChange={e => setCryptoCoin(e.target.value as any)}
                         className="w-full h-12 pl-11 pr-4 rounded-xl border border-border bg-background text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/40 appearance-none cursor-pointer"
                       >
-                        {Object.entries(CRYPTO_COIN_LIST).map(([sym, def]) => (
+                        {Object.entries(cryptoCoinList).map(([sym, def]) => (
                           <option key={sym} value={sym}>{sym} — {def.name}</option>
                         ))}
                       </select>
                       {/* coin logo overlay */}
                       <div className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full overflow-hidden bg-muted flex items-center justify-center">
                         <img
-                          src={coinLogoUrl(CRYPTO_COIN_LIST[cryptoCoin]?.logoSlug ?? cryptoCoin.toLowerCase())}
+                          src={coinLogoUrl(cryptoCoin.toLowerCase())}
                           alt={cryptoCoin}
                           className="w-6 h-6 object-contain"
                           onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
@@ -791,16 +793,14 @@ export default function DepositPage() {
                         onChange={e => setCryptoNetwork(e.target.value)}
                         className="w-full h-12 px-4 rounded-xl border border-border bg-background text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/40 appearance-none cursor-pointer"
                       >
-                        {(CRYPTO_COIN_LIST[cryptoCoin]?.networks ?? []).map(net => (
+                        {(cryptoCoinList[cryptoCoin]?.networks ?? []).map(net => (
                           <option key={net.id} value={net.id}>{net.label}</option>
                         ))}
                       </select>
                       <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">▼</div>
                     </div>
                     {/* Warning for memo chains */}
-                    {(cryptoCoin === "XRP" || cryptoCoin === "TON" || cryptoCoin === "XLM" ||
-                      (CRYPTO_COIN_LIST[cryptoCoin]?.networks.find(n => n.id === cryptoNetwork)?.assetCode ?? "").includes("TON") ||
-                      (CRYPTO_COIN_LIST[cryptoCoin]?.networks.find(n => n.id === cryptoNetwork)?.assetCode ?? "").includes("XRP")) && (
+                    {cryptoCoinList[cryptoCoin]?.networks.find(n => n.id === cryptoNetwork)?.memoRequired && (
                       <p className="text-xs text-amber-600 dark:text-amber-400">
                         ⚠️ Ce réseau nécessite un mémo/tag — il sera affiché avec l'adresse.
                       </p>
