@@ -42,6 +42,12 @@ function getImageMimeType(imagePath: string): string {
   return "image/jpeg";
 }
 
+function upsertMeta(html: string, selector: RegExp, tag: string): string {
+  return selector.test(html)
+    ? html.replace(selector, tag)
+    : html.replace(/<\/head>/i, `${tag}\n</head>`);
+}
+
 export async function renderPaymentLinkMeta(
   req: Request,
   html: string,
@@ -70,16 +76,15 @@ export async function renderPaymentLinkMeta(
 
   if (link.imagePath) {
     const imageUrl = escapeHtml(getPublicImageUrl(link.imagePath, baseUrl));
-    result = result
-      .replace(/<meta property="og:image"[^>]*>/i, `<meta property="og:image" content="${imageUrl}" />`)
-      .replace(/<meta property="og:image:secure_url"[^>]*>/i, `<meta property="og:image:secure_url" content="${imageUrl}" />`)
-      .replace(/<meta property="og:image:type"[^>]*>/i, `<meta property="og:image:type" content="${getImageMimeType(link.imagePath)}" />`)
-      .replace(/<meta property="og:image:width"[^>]*>/i, `<meta property="og:image:width" content="1200" />`)
-      .replace(/<meta property="og:image:height"[^>]*>/i, `<meta property="og:image:height" content="630" />`)
-      .replace(/<meta property="og:image:alt"[^>]*>/i, `<meta property="og:image:alt" content="${escapedTitle}" />`)
-      .replace(/<meta name="twitter:image"[^>]*>/i, `<meta name="twitter:image" content="${imageUrl}" />`)
-      .replace(/<meta name="twitter:image:alt"[^>]*>/i, `<meta name="twitter:image:alt" content="${escapedTitle}" />`)
-      .replace(/<meta name="twitter:card"[^>]*>/i, '<meta name="twitter:card" content="summary_large_image" />');
+    result = upsertMeta(result, /<meta property="og:image"[^>]*>/i, `<meta property="og:image" content="${imageUrl}" />`);
+    result = upsertMeta(result, /<meta property="og:image:secure_url"[^>]*>/i, `<meta property="og:image:secure_url" content="${imageUrl}" />`);
+    result = upsertMeta(result, /<meta property="og:image:type"[^>]*>/i, `<meta property="og:image:type" content="${getImageMimeType(link.imagePath)}" />`);
+    result = upsertMeta(result, /<meta property="og:image:width"[^>]*>/i, '<meta property="og:image:width" content="1200" />');
+    result = upsertMeta(result, /<meta property="og:image:height"[^>]*>/i, '<meta property="og:image:height" content="630" />');
+    result = upsertMeta(result, /<meta property="og:image:alt"[^>]*>/i, `<meta property="og:image:alt" content="${escapedTitle}" />`);
+    result = upsertMeta(result, /<meta name="twitter:image"[^>]*>/i, `<meta name="twitter:image" content="${imageUrl}" />`);
+    result = upsertMeta(result, /<meta name="twitter:image:alt"[^>]*>/i, `<meta name="twitter:image:alt" content="${escapedTitle}" />`);
+    result = upsertMeta(result, /<meta name="twitter:card"[^>]*>/i, '<meta name="twitter:card" content="summary_large_image" />');
   }
 
   return result;
