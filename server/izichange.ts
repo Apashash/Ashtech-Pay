@@ -162,14 +162,13 @@ export async function createDirectCharge(
   // Log full raw response so we can see the real field names in production logs.
   console.log("[IziChange/DirectCharge] raw response:", JSON.stringify(raw));
 
-  // IziChange may nest the address or use a different key — normalise defensively.
-  // Priority: address > depositAddress > nested data.address > paymentLink (last resort URL)
+  // IziChange Direct Charge returns 201 with depositAddress (confirmed in API docs).
+  // Fallbacks keep compatibility if the field name ever changes.
   const address: string =
+    raw.depositAddress   ||   // ← confirmed primary field per IziChange docs
     raw.address          ||
-    raw.depositAddress   ||
+    raw.data?.depositAddress ||
     raw.data?.address    ||
-    raw.charge?.address  ||
-    raw.paymentLink      ||  // some versions return hosted URL
     "";
 
   const memo: string | null =
