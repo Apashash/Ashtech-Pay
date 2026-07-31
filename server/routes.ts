@@ -7202,14 +7202,19 @@ export async function registerRoutes(
       const reference = generateTransactionReference("payment_link");
 
       // Call IziChange Direct Charge API — returns unique address immediately
+      // IziChange requires non-empty firstName & lastName — derive from email if absent.
+      const emailPrefix = (email || "").split("@")[0] || "Client";
+      const safeFirst = (firstName as string | undefined)?.trim() || emailPrefix;
+      const safeLast  = (lastName  as string | undefined)?.trim() || "Pay";
+
       let charge: any;
       try {
         charge = await createDirectCharge({
           requestedCoin: assetCode,
           amount: amountUSDT.toFixed(4),
           customer: {
-            firstName: firstName || undefined,
-            lastName: lastName || undefined,
+            firstName: safeFirst,
+            lastName:  safeLast,
             email: email || undefined,
             refundAddress: refundAddress || undefined,
           },
@@ -12608,15 +12613,22 @@ export async function registerRoutes(
       const reference = generateTransactionReference("deposit");
 
       // Call IziChange Direct Charge API — unique address returned in one shot
+      // IziChange requires non-empty firstName & lastName — derive from fullName/email/username.
+      const rawName   = ((user as any).fullName || "").trim();
+      const nameParts = rawName ? rawName.split(" ") : [];
+      const userEmail = ((user as any).email || "").trim();
+      const depFirst  = nameParts[0] || userEmail.split("@")[0] || (user as any).username || "Client";
+      const depLast   = nameParts.slice(1).join(" ") || "Pay";
+
       let charge: any;
       try {
         charge = await createDirectCharge({
           requestedCoin: assetCode,
           amount: numAmount.toFixed(4),
           customer: {
-            firstName: (user as any).fullName?.split(" ")[0] || undefined,
-            lastName:  (user as any).fullName?.split(" ").slice(1).join(" ") || undefined,
-            email:     (user as any).email || undefined,
+            firstName: depFirst,
+            lastName:  depLast,
+            email:     userEmail || undefined,
             refundAddress: refundAddress || undefined,
           },
           merchantReference: reference,
