@@ -642,7 +642,7 @@ export function downloadSDKDocs() {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
   rgb(doc, C.white);
-  doc.text("v1  •  Mobile Money — 16 pays africains", ML + 6, 93);
+   doc.text("v1  •  Mobile Money + Pay-In Crypto — 16 pays africains", ML + 6, 93);
 
   fill(doc, C.gold);
   doc.rect(ML + 6, 99, 50, 0.8, "F");
@@ -697,12 +697,13 @@ export function downloadSDKDocs() {
     "1.  Introduction",
     "2.  Authentification",
     "3.  GET /v1/countries — Pays et operateurs",
-    "4.  POST /v1/collect — Initier un paiement",
-    "5.  Flux de paiement   (USSD Push · OTP SMS · OTP USSD · Wave)",
-    "6.  GET /v1/transaction/:id — Statut d'une transaction",
-    "7.  GET /v1/fees — Grille tarifaire en temps reel",
-    "8.  Webhooks",
-    "9.  Codes d'erreur",
+     "4.  Pay-In Crypto — /v1/crypto/assets + /v1/crypto/collect",
+     "5.  POST /v1/collect — Initier un paiement Mobile Money",
+     "6.  Flux de paiement   (USSD Push · OTP SMS · OTP USSD · Wave)",
+     "7.  GET /v1/transaction/:id — Statut d'une transaction",
+     "8.  GET /v1/fees — Grille tarifaire en temps reel",
+     "9.  Webhooks",
+     "10. Codes d'erreur",
   ];
 
   doc.setFont("helvetica", "normal");
@@ -773,8 +774,33 @@ export function downloadSDKDocs() {
   y = paragraph(doc, "Legende : (OTP USSD) = code a composer pour recevoir l'OTP   •   (OTP SMS) = SMS automatique   •   Wave = lien de paiement Wave", y);
   y += 4;
 
-  // ── §4  Collect ───────────────────────────────────────────────────────────
-  y = sectionTitle(doc, "4. Initier un paiement — POST /v1/collect", y);
+   // ── §4  Crypto Pay-In ─────────────────────────────────────────────────────
+   y = sectionTitle(doc, "4. Pay-In Crypto — /v1/crypto/assets + /v1/crypto/collect", y);
+   y = paragraph(doc, "Le Pay-In Crypto utilise la meme cle API ak_… que Mobile Money, mais des endpoints dedies afin de ne modifier aucun contrat existant. Commencez par recuperer les reseaux autorises, puis creez une adresse de depot unique.", y);
+   y += 3;
+   y = subHeading(doc, "GET /v1/crypto/assets", y);
+   y = codeBlock(doc, `curl https://ashtechpay.top/v1/crypto/assets \\\n  -H "Authorization: Bearer YOUR_API_KEY"`, y, "bash");
+   y = codeBlock(doc, `{\n  "assets": [\n    {\n      "asset_code": "USDT.TRC20",\n      "coin": "USDT",\n      "name": "Tether",\n      "network": "TRC20",\n      "network_label": "TRON (TRC20)",\n      "memo_required": false,\n      "memo_type": null,\n      "currency": "USDT"\n    }\n  ]\n}`, y, "json");
+   y = subHeading(doc, "POST /v1/crypto/collect", y);
+   y = table(doc,
+     ["Parametre", "Type", "Statut", "Description"],
+     [
+       ["amount", "number", "Requis", "Montant brut dans la devise currency"],
+       ["currency", "string", "Requis", "USDT, XAF, XOF, GNF, CDF ou USD"],
+       ["asset_code", "string", "Requis", "Reseau retourne par /v1/crypto/assets"],
+       ["reference", "string", "Optionnel", "Reference de commande, generee si absente"],
+       ["notify_url", "string", "Optionnel", "URL HTTPS du webhook marchand"],
+       ["customer", "object", "Optionnel", "firstName, lastName, email"],
+       ["refund_address", "string", "Optionnel", "Adresse de remboursement"],
+     ],
+     y, [33, 22, 24, 89]
+   );
+   y = codeBlock(doc, `fetch("https://ashtechpay.top/v1/crypto/collect", {\n  method: "POST",\n  headers: {\n    "Authorization": "Bearer YOUR_API_KEY",\n    "Content-Type": "application/json"\n  },\n  body: JSON.stringify({\n    amount: 25,\n    currency: "USDT",\n    asset_code: "USDT.TRC20",\n    reference: "ORDER-CRYPTO-001",\n    notify_url: "https://monsite.com/webhook",\n    customer: { firstName: "Ada", lastName: "Lovelace", email: "ada@example.com" }\n  })\n})`, y, "javascript");
+   y = codeBlock(doc, `{\n  "transaction_id": "8f3e1c2d-...",\n  "reference": "ORDER-CRYPTO-001",\n  "status": "pending",\n  "payment_method": "crypto",\n  "asset_code": "USDT.TRC20",\n  "network": "TRC20",\n  "address": "TX…",\n  "memo": null,\n  "memo_type": null,\n  "amount": 25,\n  "currency": "USDT",\n  "amount_usdt": 25,\n  "credited_amount": 24.375,\n  "fee_amount": 0.625,\n  "credited_amount_usdt": 24.375,\n  "fee_amount_usdt": 0.625,\n  "fee_percent": 2.5,\n  "expires_at": "2026-07-31T19:00:00Z"\n}`, y, "json");
+   y = paragraph(doc, "Pour une devise fiat, amount est converti en USDT avec le taux USDT/XAF configure par l'administrateur. Les frais Ashtech Pay et fournisseur sont inclus dans fee_amount_usdt. Copiez le memo/tag lorsqu'il est present.", y);
+
+   // ── §5  Collect ───────────────────────────────────────────────────────────
+   y = sectionTitle(doc, "5. Initier un paiement — POST /v1/collect", y);
   y = paragraph(doc, "Initie un paiement Mobile Money. Le client recoit une demande de validation sur son telephone. Le routage entre fournisseurs est automatique selon le pays et l'operateur. Les frais sont deduits automatiquement — le champ credited_amount est le montant net credite.", y);
   y += 3;
   y = subHeading(doc, "Corps de la requete (JSON)", y);
@@ -803,8 +829,8 @@ export function downloadSDKDocs() {
   y += 2;
   y = codeBlock(doc, `// Etape 1 — Requete initiale (sans otp) → reponse 400\n{\n  "error": "otp_required",\n  "message": "OTP requis. Un code a ete envoye par SMS.",\n  "reference": "DEP-A1B2C3D4",   // ← a conserver absolument\n  "ussd_code": null               // null=SMS auto | "#144*82#"=USSD a composer\n}\n\n// Etape 2 — Retry avec OTP recu + reference du 400 → reponse 202\n{\n  "amount": 5000, "currency": "XOF", "phone": "07XXXXXXXX",\n  "operator": "Orange Money", "country_code": "CI",\n  "otp": "123456",\n  "reference": "DEP-A1B2C3D4",   // ← meme valeur que la reponse 400\n  "notify_url": "https://monsite.com/webhook"\n}`, y, "json");
 
-  // ── §5  Flux ──────────────────────────────────────────────────────────────
-  y = sectionTitle(doc, "5. Flux de paiement", y);
+   // ── §6  Flux ──────────────────────────────────────────────────────────────
+   y = sectionTitle(doc, "6. Flux de paiement", y);
   y = paragraph(doc, "Selon le pays et l'operateur, l'API utilise automatiquement l'un des 4 flux ci-dessous. Votre code doit gerer chacun differemment car la reponse et les etapes varient.", y);
   y += 3;
   y = table(doc,
@@ -820,8 +846,8 @@ export function downloadSDKDocs() {
   y = subHeading(doc, "Detection du flux dans votre code", y);
   y = codeBlock(doc, `async function collectPayment(params) {\n  const res  = await fetch("https://ashtechpay.top/v1/collect", {\n    method: "POST",\n    headers: { "Authorization": "Bearer YOUR_API_KEY", "Content-Type": "application/json" },\n    body: JSON.stringify(params)\n  });\n  const data = await res.json();\n\n  if (res.status === 202 && data.flow === "wave") {\n    // Flux Wave : afficher data.wave_url\n    return { type: "wave", waveUrl: data.wave_url, transactionId: data.transaction_id };\n  }\n  if (res.status === 202) {\n    // Flux USSD Push : attendre webhook\n    return { type: "ussd_push", transactionId: data.transaction_id };\n  }\n  if (res.status === 400 && data.error === "otp_required") {\n    // Stocker data.reference — obligatoire pour le retry OTP\n    if (data.ussd_code) {\n      // OTP USSD (Orange CI, SN, BF) : afficher le code a composer\n      // CI=#144*82#  SN=#144*391#  BF=*144*4*6*montant#\n      return { type: "otp_ussd", ussdCode: data.ussd_code, reference: data.reference };\n    } else {\n      // OTP SMS (Orange CI, SN, ML, LigdiCash BF…) : SMS envoye automatiquement\n      return { type: "otp_sms", reference: data.reference };\n    }\n  }\n  throw new Error(data.message);\n}`, y, "javascript");
 
-  // ── §6  Transaction ───────────────────────────────────────────────────────
-  y = sectionTitle(doc, "6. Statut d'une transaction — GET /v1/transaction/:id", y);
+   // ── §7  Transaction ───────────────────────────────────────────────────────
+   y = sectionTitle(doc, "7. Statut d'une transaction — GET /v1/transaction/:id", y);
   y = paragraph(doc, "Consultez le statut d'une transaction a tout moment via le transaction_id retourne lors de l'initiation. Vous pouvez utiliser ce endpoint en complement du webhook.", y);
   y += 3;
   y = codeBlock(doc, `fetch("https://ashtechpay.top/v1/transaction/8f3e1c2d-...", {\n  headers: { "Authorization": "Bearer YOUR_API_KEY" }\n})`, y, "javascript");
@@ -837,8 +863,8 @@ export function downloadSDKDocs() {
     y, [30, 115, 25]
   );
 
-  // ── §7  Fees ──────────────────────────────────────────────────────────────
-  y = sectionTitle(doc, "7. Grille tarifaire en temps reel — GET /v1/fees", y);
+   // ── §8  Fees ──────────────────────────────────────────────────────────────
+   y = sectionTitle(doc, "8. Grille tarifaire en temps reel — GET /v1/fees", y);
   y = paragraph(doc, "Retourne la grille tarifaire en vigueur pour chaque pays actif. Les frais sont configures par l'administrateur et peuvent changer a tout moment. Consultez cet endpoint pour calculer le montant net avant d'appeler /v1/collect.", y);
   y += 3;
   y = codeBlock(doc, `fetch("https://ashtechpay.top/v1/fees", {\n  headers: { "Authorization": "Bearer YOUR_API_KEY" }\n})`, y, "javascript");
@@ -848,8 +874,8 @@ export function downloadSDKDocs() {
   y = subHeading(doc, "Exemple — calculer le montant net avant d'appeler /v1/collect", y);
   y = codeBlock(doc, `// Recuperer les frais en cache (une fois au demarrage ou toutes les heures)\nconst fees = await fetch("https://ashtechpay.top/v1/fees", {\n  headers: { "Authorization": "Bearer YOUR_API_KEY" }\n}).then(r => r.json());\n\n// Calculer le montant net credite sur votre compte\nfunction computeNet(grossAmount, countryCode) {\n  const fee = fees.find(f => f.country_code === countryCode);\n  if (!fee) return grossAmount;\n  const feeAmount = Math.round(grossAmount * fee.total_fee_pct / 100);\n  return {\n    gross: grossAmount,\n    fee: feeAmount,\n    net: grossAmount - feeAmount,\n    fee_pct: fee.total_fee_pct,\n  };\n}\n\n// Exemple :\nconsole.log(computeNet(10000, "CM"));\n// -> { gross: 10000, fee: 550, net: 9450, fee_pct: 5.5 }`, y, "javascript");
 
-  // ── §8  Webhooks ──────────────────────────────────────────────────────────
-  y = sectionTitle(doc, "8. Webhooks", y);
+   // ── §9  Webhooks ──────────────────────────────────────────────────────────
+   y = sectionTitle(doc, "9. Webhooks", y);
   y = paragraph(doc, "Quand une transaction atteint un etat final, Ashtech Pay envoie automatiquement une requete POST a la notify_url passee dans votre appel a /v1/collect. Le champ amount correspond au montant net apres frais, et total_amount au montant brut collecte.", y);
   y += 3;
   y = subHeading(doc, "Payload — paiement reussi", y);
@@ -869,8 +895,8 @@ export function downloadSDKDocs() {
   y = codeBlock(doc, `app.post("/webhook", express.json(), async (req, res) => {\n  // Toujours repondre 200 en premier\n  res.status(200).json({ received: true });\n\n  const { event, transaction_id, reference, amount, currency } = req.body;\n\n  if (event === "payment.completed") {\n    // amount = montant net (apres frais)\n    await markOrderAsPaid(reference, { transactionId: transaction_id, amount, currency });\n  }\n  if (event === "payment.failed")   { await cancelOrder(reference); }\n  if (event === "payout.completed") { await markPayoutDone(reference, { transactionId: transaction_id }); }\n  if (event === "payout.failed")    { await markPayoutFailed(reference); }\n});`, y, "javascript");
   y = banner(doc, "info", "Bonnes pratiques : Repondez toujours HTTP 200 immediatement. Traitez la logique metier apres avoir repondu 200 (asynchrone). Verifiez le transaction_id dans votre base pour eviter les doublons. Votre notify_url doit etre une URL HTTPS publique (pas localhost).", y);
 
-  // ── §9  Erreurs ───────────────────────────────────────────────────────────
-  y = sectionTitle(doc, "9. Codes d'erreur", y);
+   // ── §10  Erreurs ──────────────────────────────────────────────────────────
+   y = sectionTitle(doc, "10. Codes d'erreur", y);
   y = paragraph(doc, "En cas d'erreur, l'API retourne un objet JSON avec les champs error et message.", y);
   y += 3;
   y = codeBlock(doc, `{\n  "error":   "bad_request",\n  "message": "Champs requis : amount, currency, phone, operator, country_code"\n}`, y, "json");
@@ -884,7 +910,9 @@ export function downloadSDKDocs() {
       ["401","unauthorized",       "Cle API manquante, invalide ou revoquee"],
       ["403","forbidden",     "Cette transaction n'appartient pas a votre compte"],
       ["404","not_found",     "Transaction introuvable"],
-      ["422","unprocessable", "Pays ou operateur non supporte / devise incorrecte"],
+       ["422","unprocessable", "Pays, operateur ou reseau crypto non supporte / devise incorrecte"],
+       ["422","asset_disabled", "Le reseau crypto a ete desactive par l'administrateur"],
+       ["503","crypto_unavailable", "Le catalogue ou le service de paiement crypto est indisponible"],
       ["429","rate_limited",  "Trop de requetes — ralentissez"],
       ["502","gateway_error", "Le reseau de l'operateur a rejete le paiement"],
       ["500","server_error",  "Erreur interne — reessayez"],

@@ -29,12 +29,17 @@ export function getStaticCryptoAssets(): CryptoAssetMap {
         assetCode: network.assetCode,
         memoRequired:
           network.assetCode === "XRP" ||
+          network.assetCode === "TON" ||
+          network.assetCode === "DOGS.TON" ||
           network.assetCode.endsWith(".TON") ||
           network.assetCode === "XLM",
         memoType:
           network.assetCode === "XRP"
             ? "tag"
-            : network.assetCode.endsWith(".TON") || network.assetCode === "XLM"
+            : network.assetCode === "TON" ||
+              network.assetCode === "DOGS.TON" ||
+              network.assetCode.endsWith(".TON") ||
+              network.assetCode === "XLM"
             ? "memo"
             : null,
       })),

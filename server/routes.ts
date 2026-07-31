@@ -66,6 +66,11 @@ import { requireAdminPin } from "./adminPin";
 import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, fetchPaymentLinkDetails, ASHTECH_MARGIN } from "./swychr";
 import { createPaymentIntent, createDirectCharge, validateWebhook, getIziPayWebhookSecret, toIziPayCurrency, isIziPayConfigured } from "./izichange";
 import { fetchCryptoAssets, filterCryptoAssets, parseDisabledCryptoAssets, getStaticCryptoAssets } from "./cryptoAssets";
+import {
+  computeDirectCryptoAmounts,
+  parseDirectCryptoRequest,
+  type DirectCryptoRequest,
+} from "./directCrypto";
 import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, getAfribaPayOtpInfo, confirmAfribaPayOtp, isAfribaPayOtpRequiredMessage } from "./afribapay";
 import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, initiatePixPayPayout, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType, getPixPayServiceId, PIXPAY_OTP_USSD_CODES } from "./pixpay";
 import { addPendingPayment, removePendingPayment } from "./paymentPoller";
@@ -12530,6 +12535,14 @@ export async function registerRoutes(
       type: transaction.type,
       phone: transaction.recipientPhone ?? null,
       timestamp: new Date().toISOString(),
+      ...(transaction.paymentMethod === "crypto"
+        ? {
+            payment_method: "crypto",
+            asset_code: (transaction as any).metadata?.assetCode ?? null,
+            address: (transaction as any).metadata?.address ?? null,
+            memo: (transaction as any).metadata?.memo ?? null,
+          }
+        : {}),
     };
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 10_000);
@@ -12588,11 +12601,17 @@ export async function registerRoutes(
 
       console.log(`[IziChange Webhook] event=${eventType}`);
 
-      // ── Only process payment-confirmation events ─────────────────────────────
+      // ── Process payment confirmation and failure events ──────────────────────
       // payment_intent.completed = Direct Charge fully confirmed
       // payin.confirmed           = on-chain payin confirmed (alternative event)
       const CREDIT_EVENTS = ["payment_intent.completed", "payin.confirmed"];
-      if (!CREDIT_EVENTS.includes(eventType)) {
+      const FAILURE_EVENTS = [
+        "payment_intent.failed",
+        "payment_intent.expired",
+        "payin.failed",
+        "payin.expired",
+      ];
+      if (!CREDIT_EVENTS.includes(eventType) && !FAILURE_EVENTS.includes(eventType)) {
         return res.json({ received: true });
       }
 
@@ -12632,9 +12651,22 @@ export async function registerRoutes(
         return res.status(200).json({ message: "already processed" });
       }
 
+      if (FAILURE_EVENTS.includes(eventType)) {
+        const failedTransaction = await storage.updateTransactionStatus(transaction.id, "failed");
+        if (failedTransaction) {
+          forwardMerchantWebhook(failedTransaction, "failed").catch(() => {});
+        }
+        console.log(`[IziChange Webhook] ✗ Failed ref=${merchantReference} event=${eventType}`);
+        return res.json({ received: true });
+      }
+
       const creditAmount = parseFloat(transaction.amount);
       await storage.updateTransactionStatus(transaction.id, "completed");
       await creditUserWallet(transaction.userId, creditAmount, "USDT");
+      const completedTransaction = await storage.getTransactionById(transaction.id);
+      if (completedTransaction) {
+        forwardMerchantWebhook(completedTransaction, "completed").catch(() => {});
+      }
 
       await storage.createUserNotification({
         userId: transaction.userId,
@@ -13802,6 +13834,226 @@ export async function registerRoutes(
     }
   });
 
+  /** GET /v1/crypto/assets — list crypto assets enabled for Direct SDK */
+  app.get("/v1/crypto/assets", requireApiKey, async (_req, res) => {
+    try {
+      const disabled = parseDisabledCryptoAssets(
+        (await storage.getSetting("crypto_disabled_assets"))?.value,
+      );
+      // The provider catalogue is preferred, but keep the documented static
+      // catalogue available when the provider API is temporarily unreachable.
+      const liveOrFallback = isIziPayConfigured()
+        ? await fetchCryptoAssets().catch((error: any) => {
+            console.warn("[API v1 /crypto/assets] live catalogue unavailable, using fallback:", error.message);
+            return getStaticCryptoAssets();
+          })
+        : getStaticCryptoAssets();
+      const assets = filterCryptoAssets(
+        liveOrFallback,
+        disabled,
+      );
+      const response = Object.entries(assets).flatMap(([coin, definition]) =>
+        definition.networks.map(network => ({
+          asset_code: network.assetCode,
+          coin,
+          name: definition.name,
+          network: network.id,
+          network_label: network.label,
+          memo_required: network.memoRequired,
+          memo_type: network.memoType,
+          currency: "USDT",
+        })),
+      );
+      return res.json({ assets: response });
+    } catch (e: any) {
+      console.error("[API v1 /crypto/assets]", e);
+      return res.status(503).json({
+        error: "crypto_unavailable",
+        message: "Le catalogue crypto est temporairement indisponible.",
+      });
+    }
+  });
+
+  /**
+   * POST /v1/crypto/collect — initiate a Direct SDK crypto pay-in.
+   *
+   * This is deliberately separate from /v1/collect: the existing Mobile Money
+   * contract and routing are left untouched.
+   */
+  app.post("/v1/crypto/collect", requireApiKey, async (req: any, res) => {
+    try {
+      const merchant = req.apiUser;
+      if (!isIziPayConfigured()) {
+        return res.status(503).json({
+          error: "crypto_unavailable",
+          message: "Le paiement crypto n'est pas configuré.",
+        });
+      }
+
+      const parsed = parseDirectCryptoRequest(req.body);
+      if (!parsed.ok) {
+        return res.status(400).json({ error: parsed.error, message: parsed.message });
+      }
+      const request: DirectCryptoRequest = parsed.value;
+
+      const disabled = parseDisabledCryptoAssets(
+        (await storage.getSetting("crypto_disabled_assets"))?.value,
+      );
+      if (disabled.has(request.assetCode)) {
+        return res.status(422).json({
+          error: "asset_disabled",
+          message: `Le réseau crypto ${request.assetCode} n'est pas disponible actuellement.`,
+        });
+      }
+
+      const availableAssets = filterCryptoAssets(
+        isIziPayConfigured()
+          ? await fetchCryptoAssets().catch((error: any) => {
+              console.warn("[API v1 /crypto/collect] live catalogue unavailable, using fallback:", error.message);
+              return getStaticCryptoAssets();
+            })
+          : getStaticCryptoAssets(),
+        disabled,
+      );
+      const selectedNetwork = Object.values(availableAssets)
+        .flatMap(coin => coin.networks)
+        .find(network => network.assetCode === request.assetCode);
+      if (!selectedNetwork) {
+        return res.status(422).json({
+          error: "unsupported_asset",
+          message: `Réseau crypto non supporté : ${request.assetCode}. Utilisez GET /v1/crypto/assets.`,
+        });
+      }
+
+      const fxRates = await loadFxRates();
+      let grossUsdt: number;
+      let originalAmount: number | null = null;
+      let originalCurrency: string;
+      if (request.currency === "USDT") {
+        grossUsdt = request.amount;
+        originalCurrency = "USDT";
+      } else {
+        originalAmount = request.amount;
+        originalCurrency = request.currency;
+        const amountInXaf = convertToXAF(request.amount, request.currency, fxRates);
+        const adminRateSetting = await storage.getSetting("fx_rate_USDT");
+        const usdtPerXaf = adminRateSetting
+          ? parseFloat(adminRateSetting.value)
+          : (fxRates.USDT ?? 655);
+        if (!Number.isFinite(usdtPerXaf) || usdtPerXaf <= 0) {
+          return res.status(503).json({
+            error: "rate_unavailable",
+            message: "Le taux de conversion USDT est temporairement indisponible.",
+          });
+        }
+        grossUsdt = amountInXaf / usdtPerXaf;
+      }
+
+      if (!Number.isFinite(grossUsdt) || grossUsdt <= 0) {
+        return res.status(400).json({
+          error: "invalid_amount",
+          message: "Le montant converti en USDT doit être positif.",
+        });
+      }
+
+      const [ashtechSetting, providerSetting] = await Promise.all([
+        storage.getSetting("izichange_fee_percent"),
+        storage.getSetting("izichange_provider_fee_percent"),
+      ]);
+      const ashtechFee = ashtechSetting ? parseFloat(ashtechSetting.value) : 2.5;
+      const providerFee = providerSetting ? parseFloat(providerSetting.value) : 0;
+      const totalFeePercent = ashtechFee + providerFee;
+      const amounts = computeDirectCryptoAmounts(grossUsdt, totalFeePercent);
+
+      const reference = request.reference || generateTransactionReference("deposit");
+      const safeEmailPrefix = request.email?.split("@")[0] || "Client";
+      let charge;
+      try {
+        charge = await createDirectCharge({
+          requestedCoin: request.assetCode,
+          amount: amounts.grossUsdt.toFixed(6),
+          customer: {
+            firstName: request.firstName || safeEmailPrefix,
+            lastName: request.lastName || "Pay",
+            email: request.email,
+            refundAddress: request.refundAddress || undefined,
+          },
+          merchantReference: reference,
+          metadata: {
+            merchantId: merchant.id,
+            source: "direct_sdk",
+            assetCode: request.assetCode,
+            currency: originalCurrency,
+            originalAmount,
+          },
+        });
+      } catch (chargeError: any) {
+        console.error("[API v1 /crypto/collect] createDirectCharge:", chargeError.message);
+        return res.status(502).json({
+          error: "gateway_error",
+          message: chargeError.message || "Impossible de générer l'adresse crypto.",
+        });
+      }
+
+      const transaction = await storage.createTransaction({
+        userId: merchant.id,
+        type: "deposit",
+        amount: amounts.creditedUsdt.toFixed(6),
+        totalAmount: amounts.grossUsdt.toFixed(6),
+        feeAmount: amounts.feeUsdt.toFixed(6),
+        currency: "USDT",
+        status: "pending",
+        description: `Paiement API crypto ${request.assetCode} — ${originalAmount ?? amounts.grossUsdt} ${originalCurrency}`,
+        paymentMethod: "crypto",
+        reference,
+        externalReference: charge.id || undefined,
+        notifyUrl: request.notifyUrl || null,
+        source: "api",
+        metadata: {
+          assetCode: request.assetCode,
+          address: charge.address,
+          memo: charge.memo ?? null,
+          memoType: charge.memoType ?? null,
+          izichangeId: charge.id || null,
+          sdk: "direct",
+          originalAmount,
+          originalCurrency,
+          feePercent: amounts.feePercent,
+          expiresAt: charge.expiresAt ?? null,
+        },
+      });
+
+      console.log(
+        `[API v1 /crypto/collect] merchant=${merchant.id} asset=${request.assetCode} ` +
+        `amount=${amounts.grossUsdt} USDT ref=${reference}`,
+      );
+      return res.status(202).json({
+        transaction_id: transaction.id,
+        reference,
+        status: "pending",
+        payment_method: "crypto",
+        asset_code: request.assetCode,
+        network: selectedNetwork.id,
+        address: charge.address,
+        memo: charge.memo ?? null,
+        memo_type: charge.memoType ?? null,
+        amount: request.amount,
+        currency: originalCurrency,
+        amount_usdt: amounts.grossUsdt,
+        credited_amount: amounts.creditedUsdt,
+        fee_amount: amounts.feeUsdt,
+        credited_amount_usdt: amounts.creditedUsdt,
+        fee_amount_usdt: amounts.feeUsdt,
+        fee_percent: amounts.feePercent,
+        expires_at: charge.expiresAt ?? null,
+        created_at: transaction.createdAt,
+      });
+    } catch (e: any) {
+      console.error("[API v1 /crypto/collect]", e);
+      return res.status(500).json({ error: "server_error", message: "Erreur interne." });
+    }
+  });
+
   /** POST /v1/collect — initiate a Mobile Money collection */
   app.post("/v1/collect", requireApiKey, async (req: any, res) => {
     try {
@@ -14271,7 +14523,7 @@ export async function registerRoutes(
 
       const isoStatus = tx.status === "completed" ? "success" : tx.status;
 
-      res.json({
+      const responseBody: Record<string, any> = {
         transaction_id: tx.id,
         reference: tx.reference,
         status: isoStatus,
@@ -14283,7 +14535,21 @@ export async function registerRoutes(
         operator: operatorName,
         created_at: tx.createdAt,
         confirmed_at: (tx as any).confirmedAt || null,
-      });
+      };
+      // Crypto-only fields are added without changing the Mobile Money response.
+      if (tx.paymentMethod === "crypto") {
+        const metadata = (tx as any).metadata || {};
+        responseBody.payment_method = "crypto";
+        responseBody.asset_code = metadata.assetCode || null;
+        responseBody.address = metadata.address || null;
+        responseBody.memo = metadata.memo || null;
+        responseBody.memo_type = metadata.memoType || null;
+        responseBody.expires_at = metadata.expiresAt || null;
+        responseBody.amount_usdt = parseFloat((tx as any).totalAmount || tx.amount);
+        responseBody.credited_amount_usdt = parseFloat(tx.amount);
+        responseBody.fee_amount_usdt = parseFloat((tx as any).feeAmount || "0");
+      }
+      res.json(responseBody);
     } catch (e: any) {
       console.error("[API v1 /transaction/:id]", e);
       res.status(500).json({ error: "server_error", message: "Erreur interne." });

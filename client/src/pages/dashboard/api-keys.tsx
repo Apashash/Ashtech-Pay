@@ -553,7 +553,8 @@ export default function ApiKeysPage() {
                 <span className="ml-auto text-[10px] font-mono bg-gray-100 text-gray-500 px-2 py-0.5 rounded border border-gray-200">JavaScript</span>
               </div>
               <pre className="text-xs font-mono text-zinc-300 bg-[#0d1117] p-5 overflow-x-auto leading-relaxed">
-{`fetch("https://ashtechpay.top/v1/collect", {
+ {`// Mobile Money — le contrat existant reste inchangé
+fetch("https://ashtechpay.top/v1/collect", {
   method: "POST",
   headers: {
     "Authorization": "Bearer ${showKey && apiKey ? apiKey : "<VOTRE_CLÉ_API>"}",
@@ -565,6 +566,21 @@ export default function ApiKeysPage() {
     phone: "670000000",
     operator: "MTN",
     reference: "ORDER-123"
+  })
+ })
+
+// Pay-In Crypto — même clé API ak_…
+fetch("https://ashtechpay.top/v1/crypto/collect", {
+  method: "POST",
+  headers: {
+    "Authorization": "Bearer ${showKey && apiKey ? apiKey : "<VOTRE_CLÉ_API>"}",
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    amount: 25,
+    currency: "USDT",
+    asset_code: "USDT.TRC20",
+    reference: "ORDER-CRYPTO-001"
   })
 })`}
               </pre>

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import {
   ArrowLeft, Copy, CheckCheck, Terminal, Shield, Webhook,
   CheckCircle2, ArrowRight, Code2, Globe, Zap, BookOpen,
-  ChevronRight, Menu, X, List, Download, FlaskConical,
+  ChevronRight, Menu, X, List, Download, FlaskConical, Bitcoin,
 } from "lucide-react";
 import { downloadSDKDocs } from "@/lib/pdf-docs";
 
@@ -14,6 +14,7 @@ const SECTIONS = [
   { id: "introduction",   label: "Introduction",         icon: BookOpen },
   { id: "authentication", label: "Authentification",     icon: Shield },
   { id: "countries",      label: "GET /v1/countries",    icon: List },
+  { id: "crypto",         label: "Pay-In Crypto",        icon: Bitcoin },
   { id: "collect",        label: "POST /v1/collect",     icon: Terminal },
   { id: "flows",          label: "Flux de paiement",     icon: Zap },
   { id: "transaction",    label: "GET /v1/transaction",  icon: CheckCircle2 },
@@ -518,6 +519,141 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
                 <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-amber-200 inline-block" /> ⚡ OTP requis (code USSD à composer)</span>
                 <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-purple-200 inline-block" /> 🔗 Wave — lien de paiement</span>
               </div>
+            </div>
+          </section>
+
+          {/* Crypto Pay-In */}
+          <section id="crypto" ref={el => sectionRefs.current.crypto = el} className="scroll-mt-20 space-y-6">
+            <div className="flex items-center gap-2 border-b border-gray-200 pb-4">
+              <Bitcoin className="w-5 h-5 text-primary shrink-0" />
+              <h2 className="text-xl font-semibold text-gray-900">Pay-In Crypto</h2>
+            </div>
+
+            <p className="text-gray-600 leading-relaxed">
+              Créez une adresse de dépôt unique pour recevoir un paiement crypto avec la même clé API
+              <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs ml-1">ak_…</code>.
+              Ce flux est séparé de <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">/v1/collect</code> :
+              vos intégrations Mobile Money existantes ne changent pas.
+            </p>
+
+            <div className="flex items-center gap-3 flex-wrap">
+              <MethodBadge method="GET" />
+              <code className="text-sm font-mono text-gray-700 bg-gray-100 border border-gray-200 rounded-lg px-3 py-1.5">/v1/crypto/assets</code>
+            </div>
+            <p className="text-gray-600 leading-relaxed">
+              Retourne uniquement les réseaux crypto actifs et autorisés par l'administrateur.
+              Utilisez la valeur <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">asset_code</code> retournée
+              dans l'appel de création.
+            </p>
+            <div className="grid lg:grid-cols-2 gap-5">
+              <div className="space-y-2 min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Requête</p>
+                <CodeBlock language="bash" code={`curl https://ashtechpay.top/v1/crypto/assets \\
+  -H "Authorization: Bearer YOUR_API_KEY"`} />
+              </div>
+              <div className="space-y-2 min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Réponse</p>
+                <CodeBlock language="json" code={`{
+  "assets": [
+    {
+      "asset_code": "USDT.TRC20",
+      "coin": "USDT",
+      "name": "Tether",
+      "network": "TRC20",
+      "network_label": "TRON (TRC20)",
+      "memo_required": false,
+      "memo_type": null,
+      "currency": "USDT"
+    }
+  ]
+}`} />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 flex-wrap">
+              <MethodBadge method="POST" />
+              <code className="text-sm font-mono text-gray-700 bg-gray-100 border border-gray-200 rounded-lg px-3 py-1.5">/v1/crypto/collect</code>
+            </div>
+            <p className="text-gray-600 leading-relaxed">
+              L'API accepte un montant en <strong className="text-gray-900">USDT</strong> ou dans une devise fiat supportée
+              (<code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">XAF</code>,
+              <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">XOF</code>,
+              <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">GNF</code>,
+              <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">CDF</code> ou
+              <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">USD</code>).
+              Les devises fiat sont converties en USDT avec le taux USDT/XAF administré.
+              <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs ml-1">amount</code> est le montant
+              brut ; <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">credited_amount_usdt</code> est le net après frais.
+            </p>
+
+            <TableWrapper>
+              <TableHead cols={["Paramètre", "Type", "Statut", "Description"]} />
+              <tbody>
+                <ParamRow name="amount" type="number" required desc="Montant brut à recevoir, en currency." />
+                <ParamRow name="currency" type="string" required desc="USDT, XAF, XOF, GNF, CDF, USD." />
+                <ParamRow name="asset_code" type="string" required desc="Réseau retourné par GET /v1/crypto/assets, par ex. USDT.TRC20." />
+                <ParamRow name="reference" type="string" required={false} desc="Référence de votre commande ; générée si absente." />
+                <ParamRow name="notify_url" type="string" required={false} desc="URL HTTPS recevant payment.completed ou payment.failed." />
+                <ParamRow name="customer" type="object" required={false} desc="email, firstName et lastName du payeur." />
+                <ParamRow name="refund_address" type="string" required={false} desc="Adresse de remboursement fournie au prestataire." />
+              </tbody>
+            </TableWrapper>
+
+            <div className="grid lg:grid-cols-2 gap-5">
+              <div className="space-y-2 min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Requête</p>
+                <CodeBlock language="javascript" code={`fetch("https://ashtechpay.top/v1/crypto/collect", {
+  method: "POST",
+  headers: {
+    "Authorization": "Bearer YOUR_API_KEY",
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    amount: 25,
+    currency: "USDT",
+    asset_code: "USDT.TRC20",
+    reference: "ORDER-CRYPTO-001",
+    notify_url: "https://monsite.com/webhook",
+    customer: {
+      firstName: "Ada",
+      lastName: "Lovelace",
+      email: "ada@example.com"
+    }
+  })
+})`} />
+              </div>
+              <div className="space-y-2 min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Réponse 202</p>
+                <CodeBlock language="json" code={`{
+  "transaction_id": "8f3e1c2d-...",
+  "reference": "ORDER-CRYPTO-001",
+  "status": "pending",
+  "payment_method": "crypto",
+  "asset_code": "USDT.TRC20",
+  "network": "TRC20",
+  "address": "TX…",
+  "memo": null,
+  "memo_type": null,
+  "amount": 25,
+  "currency": "USDT",
+  "amount_usdt": 25,
+  "credited_amount": 24.375,
+  "fee_amount": 0.625,
+  "credited_amount_usdt": 24.375,
+  "fee_amount_usdt": 0.625,
+  "fee_percent": 2.5,
+  "expires_at": "2026-07-31T19:00:00Z"
+}`} />
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 space-y-2">
+              <p className="text-sm font-semibold text-amber-800">Réseaux avec memo / tag</p>
+              <p className="text-sm text-amber-800/80">
+                Copiez toujours <code className="font-mono">address</code> et
+                <code className="font-mono ml-1">memo</code> tels quels. Un memo/tag manquant peut empêcher l'attribution
+                du paiement. L'adresse est à usage unique pour cette transaction.
+              </p>
             </div>
           </section>
 
