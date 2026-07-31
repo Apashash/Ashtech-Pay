@@ -7260,7 +7260,7 @@ export async function registerRoutes(
         memoType:   depositAddr.memoType,
         assetCode,
         reference,
-        amountUsdt: netUSDT.toFixed(4),
+        amountUsdt: amountUSDT.toFixed(4),
         fiatAmount,
         fiatCurrency,
       });

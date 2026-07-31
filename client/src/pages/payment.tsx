@@ -17,7 +17,7 @@ import { getImageSrc } from "@/lib/image";
 import { 
   Loader2, CheckCircle, XCircle, Shield, 
   Smartphone, CreditCard, ExternalLink, FileText, AlertTriangle, Globe,
-  User, Mail, Phone, Hash, Clock, Copy, Bitcoin, ChevronDown
+  User, Mail, Phone, Hash, Clock, Copy, Bitcoin, ChevronDown, Hourglass
 } from "lucide-react";
 import { getOperatorLogo } from "@/lib/operator-logos";
 import { useState, useMemo, useEffect, useRef } from "react";
@@ -102,6 +102,8 @@ export default function PaymentPage() {
   const [payCryptoMemoType, setPayCryptoMemoType] = useState<"memo" | "tag">("memo");
   const [payCryptoRefundAddress, setPayCryptoRefundAddress] = useState("");
   const [showPayRefundField, setShowPayRefundField] = useState(false);
+  const [payReadyCountdown, setPayReadyCountdown] = useState(40 * 60);
+  const payReadyCountdownRef = useRef<NodeJS.Timeout | null>(null);
 
   const { data: paymentLink, isLoading, error } = useQuery<PaymentLink & { hasPdf?: boolean }>({
     queryKey: ["/api/payment-links/public", params?.slug],
@@ -410,6 +412,15 @@ export default function PaymentPage() {
       setPayCryptoShared(data.shared ?? false);
       setPayCryptoMemoType(data.memoType ?? "memo");
       setPayCryptoStep("ready");
+      // Start "TEMPS RESTANT" countdown (40 min)
+      setPayReadyCountdown(40 * 60);
+      if (payReadyCountdownRef.current) clearInterval(payReadyCountdownRef.current);
+      payReadyCountdownRef.current = setInterval(() => {
+        setPayReadyCountdown(prev => {
+          if (prev <= 1) { clearInterval(payReadyCountdownRef.current!); return 0; }
+          return prev - 1;
+        });
+      }, 1000);
     },
     onError: (error: Error) => {
       toast({ title: "Erreur", description: error.message, variant: "destructive" });
@@ -666,16 +677,51 @@ export default function PaymentPage() {
               </div>
             )}
 
-            {/* Waiting indicator */}
-            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground pt-1">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              <span>En attente du paiement…</span>
+            {/* ── Spinner TEMPS RESTANT ── */}
+            <div className="rounded-2xl border border-border bg-muted/20 p-4 space-y-4">
+              {/* Ligne countdown */}
+              <div className="flex items-center gap-4">
+                {/* Arc spinner */}
+                <div className="relative flex items-center justify-center shrink-0">
+                  <svg width="52" height="52" viewBox="0 0 52 52" className="absolute" style={{ transform: "rotate(-90deg)" }}>
+                    <circle cx="26" cy="26" r="22" fill="none" stroke="currentColor" strokeWidth="3" className="text-border" />
+                    <circle
+                      cx="26" cy="26" r="22" fill="none" stroke="currentColor" strokeWidth="3"
+                      strokeLinecap="round"
+                      strokeDasharray={`${2 * Math.PI * 22}`}
+                      strokeDashoffset={`${2 * Math.PI * 22 * (1 - (payReadyCountdown % 60) / 60)}`}
+                      className="text-teal-500 transition-all duration-1000"
+                    />
+                  </svg>
+                  <div
+                    className="w-[52px] h-[52px] rounded-full border-[3px] border-transparent border-t-teal-500 animate-spin"
+                    style={{ animationDuration: "1.2s" }}
+                  />
+                </div>
+                {/* Temps */}
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Temps restant</p>
+                  <p className="text-2xl font-bold tabular-nums text-teal-500 leading-tight">
+                    {String(Math.floor(payReadyCountdown / 3600)).padStart(2, "0")}:
+                    {String(Math.floor((payReadyCountdown % 3600) / 60)).padStart(2, "0")}:
+                    {String(payReadyCountdown % 60).padStart(2, "0")}
+                  </p>
+                </div>
+              </div>
+              {/* Ligne vérification */}
+              <div className="flex items-center gap-3 border-t border-border pt-3">
+                <Hourglass className="w-5 h-5 text-teal-500 shrink-0" />
+                <p className="text-sm text-foreground">Vérification de la transaction blockchain</p>
+              </div>
             </div>
 
             <button
               type="button"
               className="w-full text-xs text-muted-foreground hover:text-foreground text-center transition-colors"
-              onClick={() => setPayCryptoStep("form")}
+              onClick={() => {
+                if (payReadyCountdownRef.current) clearInterval(payReadyCountdownRef.current);
+                setPayCryptoStep("form");
+              }}
             >
               ← Modifier
             </button>
