@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import {
   CheckCircle, XCircle, Clock, ArrowLeft, Copy, User as UserIcon,
   Mail, Phone, MapPin, CreditCard, FileText, Calendar, Link2,
-  Zap, ArrowDownCircle, ArrowUpCircle, ArrowLeftRight, RefreshCw, AlertTriangle, Globe, Coins
+  Zap, ArrowDownCircle, ArrowUpCircle, ArrowLeftRight, RefreshCw, AlertTriangle, Globe, Coins, Hash
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -46,6 +46,7 @@ interface TransactionDetails {
   paymentLink?: { title: string; slug: string } | null;
   recipient?: { fullName: string; email: string; username: string; country?: string } | null;
   operator?: { id: string; name: string; type: string; paymentProvider: string; depositPaymentProvider?: string | null } | null;
+  metadata?: { assetCode?: string; address?: string; memo?: string; [key: string]: any } | null;
 }
 
 const typeLabels: Record<string, string> = {
@@ -364,6 +365,30 @@ export default function AdminTransactionDetail() {
               <InfoRow icon={<Zap className="w-4 h-4" />} label="Fournisseur" value={
                 <span className="capitalize">{(tx.type === "deposit" && tx.operator.depositPaymentProvider) ? tx.operator.depositPaymentProvider : tx.operator.paymentProvider}</span>
               } />
+            </CardContent>
+          </Card>
+        )}
+
+        {!tx.operator && tx.paymentMethod === "crypto" && tx.metadata?.assetCode && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-muted-foreground uppercase tracking-wide">Fournisseur Crypto</CardTitle>
+            </CardHeader>
+            <CardContent className="divide-y divide-border">
+              <InfoRow icon={<CreditCard className="w-4 h-4" />} label="Passerelle" value="IziChange" />
+              <InfoRow icon={<Coins className="w-4 h-4" />} label="Réseau / Coin" value={
+                <span className="font-mono font-semibold text-amber-500">{tx.metadata.assetCode}</span>
+              } />
+              {tx.metadata.address && (
+                <InfoRow icon={<FileText className="w-4 h-4" />} label="Adresse" value={
+                  <span className="text-xs font-mono break-all">{tx.metadata.address}</span>
+                } />
+              )}
+              {tx.metadata.memo && (
+                <InfoRow icon={<Hash className="w-4 h-4" />} label="Mémo / Tag" value={
+                  <span className="font-mono font-semibold">{tx.metadata.memo}</span>
+                } />
+              )}
             </CardContent>
           </Card>
         )}

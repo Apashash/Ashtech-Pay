@@ -12650,6 +12650,7 @@ export async function registerRoutes(
       }
 
       const txUser = await storage.getUser(transaction.userId).catch(() => null);
+      const txAssetCode = (transaction as any).metadata?.assetCode || "";
       notifyDepositConfirmed({
         userName: (txUser as any)?.fullName || (txUser as any)?.username || "Utilisateur",
         userEmail: (txUser as any)?.email || "",
@@ -12658,6 +12659,8 @@ export async function registerRoutes(
         reference: merchantReference,
         depositType: transaction.type,
         paymentMethod: "crypto",
+        operator: txAssetCode || undefined,        // réseau crypto ex: "USDT.TRC20"
+        provider: "IziChange",
       }).catch(() => {});
 
       console.log(`[IziChange Webhook] ✓ Credited ${creditAmount.toFixed(4)} USDT — ref=${merchantReference}`);
