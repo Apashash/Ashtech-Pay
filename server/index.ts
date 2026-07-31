@@ -477,6 +477,7 @@ app.use((req, res, next) => {
     // Ensure ashtech_fee_amount exists on transactions — Drizzle includes it in
     // every SELECT/RETURNING; without this column ALL transaction queries fail.
     await db.execute(sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS ashtech_fee_amount DECIMAL(15,2)`);
+    await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS izichange_account_id TEXT`);
     console.log("[Migration] Schema columns ready (api_key, notify_url, source, confirmed_at, hosted_page_configs, hosted_payment_sessions, payment_links.notify_url, token_revoked_before, conversion_requests.executed_at/by_id, user_notifications.type, wallets_unique_idx, admin_logs, audit_logs, withdrawal_numbers, withdrawal_number_changes, kyc_submissions.reviewer_id/review_note/reviewed_at/updated_at/country/city/postal_code/latitude/longitude/business_type/business_category/business_description, transactions.ashtech_fee_amount)");
 
     // ── 5.3 Re-encrypt existing plaintext sensitive fields ────────────────────

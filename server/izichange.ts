@@ -93,6 +93,71 @@ export async function createPaymentIntent(
   );
 }
 
+// ── Wallet-as-a-Service (WaaS) ────────────────────────────────────────────────
+
+export interface WaaSAccount {
+  id: string;
+  label: string;
+  externalRef?: string;
+  status: string;
+  createdAt: string;
+}
+
+export interface WaaSDepositAddress {
+  address: string;
+  assetCode: string;
+  memo: string | null;
+  memoType: string | null;
+  shared: boolean;
+}
+
+/** Create a sub-wallet for a user. externalRef = your internal userId (unique). */
+export async function createWaaSAccount(
+  externalRef: string,
+  label: string,
+  email?: string,
+): Promise<WaaSAccount> {
+  return iziRequest("POST", "/v1/accounts", {
+    label,
+    externalRef,
+    ...(email ? { email } : {}),
+  });
+}
+
+/** Retrieve a sub-wallet by its IziChange id. */
+export async function getWaaSAccount(accountId: string): Promise<WaaSAccount> {
+  return iziRequest("GET", `/v1/accounts/${accountId}`);
+}
+
+/**
+ * Find an existing sub-wallet by externalRef (returns null if not found).
+ * Uses the list endpoint with externalRef filter.
+ */
+export async function findWaaSAccountByExternalRef(
+  externalRef: string,
+): Promise<WaaSAccount | null> {
+  try {
+    const result = await iziRequest(
+      "GET",
+      `/v1/accounts?externalRef=${encodeURIComponent(externalRef)}&limit=1`,
+    );
+    return (result?.data as WaaSAccount[])?.[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Get the permanent deposit address for a (sub-wallet, assetCode) pair.
+ * assetCode examples: "USDT.BEP20", "USDT.TRC20", "BTC", "XRP", "TON"
+ */
+export async function getWaaSDepositAddress(
+  accountId: string,
+  assetCode: string,
+): Promise<WaaSDepositAddress> {
+  return iziRequest("GET", `/v1/accounts/${accountId}/addresses/${assetCode}`);
+}
+
 // ── Webhook validation (manual HMAC-SHA256, toleranceSeconds = 5 min) ────────
 export class IziPayWebhookError extends Error {
   constructor(public reason: string) {
