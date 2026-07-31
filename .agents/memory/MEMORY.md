@@ -15,3 +15,4 @@
 - [Mobile crypto tester layout](mobile-crypto-tester-layout.md) — prevent iOS form zoom and flex/grid overflow; keep long crypto responses contained and centered.
 - [Payment link social previews](payment-link-social-previews.md) — upsert OG/Twitter tags in the server HTML shell; the SPA may omit image tags entirely.
 - [Crypto network default stability](crypto-network-defaults.md) — dynamic asset lists must not flash or submit Polygon before explicit network selection; preserve the canonical USDT/TRC20 default.
+- [Crypto pending expiry](crypto-pending-expiry.md) — show 35s in crypto screens but enforce a persisted 15min server timeout only for crypto, never Mobile Money.
