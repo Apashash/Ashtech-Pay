@@ -64,7 +64,7 @@ import { uploadToSupabase, getSignedImageUrl, downloadFromSupabase } from "./sup
 import { decryptField } from "./fieldEncryption";
 import { requireAdminPin } from "./adminPin";
 import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, fetchPaymentLinkDetails, ASHTECH_MARGIN } from "./swychr";
-import { createPaymentIntent, validateWebhook, getIziPayWebhookSecret, toIziPayCurrency, isIziPayConfigured, createWaaSAccount, findWaaSAccountByExternalRef, getWaaSDepositAddress } from "./izichange";
+import { createPaymentIntent, createDirectCharge, validateWebhook, getIziPayWebhookSecret, toIziPayCurrency, isIziPayConfigured } from "./izichange";
 import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, getAfribaPayOtpInfo, confirmAfribaPayOtp, isAfribaPayOtpRequiredMessage } from "./afribapay";
 import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, initiatePixPayPayout, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType, getPixPayServiceId, PIXPAY_OTP_USSD_CODES } from "./pixpay";
 import { addPendingPayment, removePendingPayment } from "./paymentPoller";
@@ -7152,70 +7152,29 @@ export async function registerRoutes(
     }
   });
 
-  // ── WaaS crypto address for a payment link (PUBLIC) ───────────────────────
-  // Customer picks coin/network → we return the merchant's permanent WaaS address.
+  // ── Direct crypto charge for a payment link (PUBLIC) ─────────────────────
+  // Customer picks coin/network → IziChange Direct Charge API returns a unique address.
   app.post("/api/payment-links/:slug/crypto/address", publicPayLimiter, async (req, res) => {
     try {
       const { slug } = req.params;
-      const { assetCode, email, amountUsdt: clientAmountUsdt, refundAddress, country: payerCountry } = req.body;
+      const { assetCode, email, firstName, lastName, amountUsdt: clientAmountUsdt, refundAddress, country: payerCountry } = req.body;
 
       const link = await storage.getPaymentLinkBySlug(slug);
       if (!link || !link.isActive) {
         return res.status(404).json({ message: "Lien de paiement introuvable ou inactif" });
       }
 
-      // Only chains where IziChange WaaS can auto-attribute deposits to a sub-wallet:
-      // - UTXO (BTC, LTC, DOGE, ADA, BCH): unique address per sub-wallet
-      // - Memo chains (XRP, TON, XLM): shared address + unique memo
-      // - TRC20 (Tron): unique address per sub-wallet
-      // EVM/account chains (BEP20, ERC20, Polygon, Solana) are EXCLUDED — shared
-      // merchant-level address, deposit never attributed → webhook never fires.
-      const SUPPORTED = [
-        "USDT.TRC20","USDT.TON",
-        "BTC","LTC","DOGE","ADA","BCH",
-        "XRP","TON","XLM","TRX",
-        "DOGS.TON",
-      ];
-      if (!assetCode || !SUPPORTED.includes(assetCode)) {
-        return res.status(400).json({ message: "Crypto/réseau non supporté" });
+      if (!isIziPayConfigured()) {
+        return res.status(503).json({ message: "Paiement crypto non configuré. Contactez l'administrateur." });
+      }
+
+      if (!assetCode) {
+        return res.status(400).json({ message: "Veuillez sélectionner un réseau crypto" });
       }
 
       const merchantId = link.userId;
-      const merchant = await storage.getUser(merchantId);
-      if (!merchant) return res.status(404).json({ message: "Marchand introuvable" });
 
-      // Get or create WaaS account for the merchant
-      let iziAccountId: string = (merchant as any).izichangeAccountId ?? (merchant as any).izichange_account_id ?? "";
-      if (!iziAccountId) {
-        const externalRef = `ashtech_${merchantId}`;
-        let account = await findWaaSAccountByExternalRef(externalRef);
-        if (!account) {
-          try {
-            account = await createWaaSAccount(
-              externalRef,
-              (merchant as any).fullName || (merchant as any).username || `User-${merchantId.slice(0, 8)}`,
-              (merchant as any).email || undefined,
-            );
-          } catch (createErr: any) {
-            account = await findWaaSAccountByExternalRef(externalRef);
-            if (!account) {
-              console.error("[PayLink/WaaS] createWaaSAccount failed:", createErr.message);
-              return res.status(422).json({ message: `Impossible de créer le compte WaaS: ${createErr.message}` });
-            }
-          }
-        }
-        iziAccountId = account.id;
-        pool.query("UPDATE users SET izichange_account_id = $1 WHERE id = $2", [iziAccountId, merchantId]).catch(() => {});
-      }
-
-      // Get permanent deposit address
-      const depositAddr = await getWaaSDepositAddress(iziAccountId, assetCode);
-
-      // Create pending payment_link transaction for tracking
-      const cryptoFeeStr = await storage.getSetting("izichange_fee_percent");
-      const cryptoFeePercent = cryptoFeeStr ? parseFloat(cryptoFeeStr.value) : 2.5;
-
-      // Determine USDT amount to track:
+      // Determine USDT amount:
       // - Fixed-amount link  → convert fiat amount to USDT via FX rates
       // - Open-amount link   → use the USDT amount the payer entered directly
       let amountUSDT: number;
@@ -7234,10 +7193,34 @@ export async function registerRoutes(
           return res.status(400).json({ message: "Montant USDT invalide ou manquant" });
         }
       }
+
+      const cryptoFeeStr = await storage.getSetting("izichange_fee_percent");
+      const cryptoFeePercent = cryptoFeeStr ? parseFloat(cryptoFeeStr.value) : 2.5;
       const feeUSDT = amountUSDT * (cryptoFeePercent / 100);
       const netUSDT = amountUSDT - feeUSDT;
 
       const reference = generateTransactionReference("payment_link");
+
+      // Call IziChange Direct Charge API — returns unique address immediately
+      let charge: any;
+      try {
+        charge = await createDirectCharge({
+          requestedCoin: assetCode,
+          amount: amountUSDT.toFixed(4),
+          customer: {
+            firstName: firstName || undefined,
+            lastName: lastName || undefined,
+            email: email || undefined,
+            refundAddress: refundAddress || undefined,
+          },
+          merchantReference: reference,
+          metadata: { paymentLinkId: link.id, merchantId, payerCountry: payerCountry || null },
+        });
+      } catch (chargeErr: any) {
+        console.error("[PayLink/Crypto] createDirectCharge failed:", chargeErr.message);
+        return res.status(422).json({ message: chargeErr.message || "Erreur lors de la génération de l'adresse crypto" });
+      }
+
       await storage.createTransaction({
         userId: merchantId,
         type: "payment_link",
@@ -7246,20 +7229,20 @@ export async function registerRoutes(
         feeAmount: feeUSDT.toFixed(6),
         currency: "USDT",
         status: "pending",
-        description: `Paiement crypto ${assetCode} WaaS — Lien: ${link.title}${email ? ` (${email})` : ""}`,
+        description: `Paiement crypto ${assetCode} — Lien: ${link.title}${email ? ` (${email})` : ""}`,
         paymentMethod: "crypto",
         reference,
         paymentLinkId: link.id,
         payerEmail: email || null,
-        payerName: email || null,
-        metadata: { assetCode, address: depositAddr.address, memo: depositAddr.memo, payerEmail: email, payerCountry: payerCountry || null },
+        payerName: firstName && lastName ? `${firstName} ${lastName}` : (email || null),
+        metadata: { assetCode, address: charge.address, memo: charge.memo, payerEmail: email, payerCountry: payerCountry || null },
       });
 
-      console.log(`[PayLink/WaaS] addr=${depositAddr.address} asset=${assetCode} ref=${reference} merchant=${merchantId}`);
+      console.log(`[PayLink/Crypto] Direct charge: addr=${charge.address} asset=${assetCode} ref=${reference} merchant=${merchantId}`);
       return res.json({
-        address:    depositAddr.address,
-        memo:       depositAddr.memo,
-        memoType:   depositAddr.memoType,
+        address:    charge.address,
+        memo:       charge.memo ?? null,
+        memoType:   charge.memoType ?? null,
         assetCode,
         reference,
         amountUsdt: amountUSDT.toFixed(4),
@@ -7267,8 +7250,7 @@ export async function registerRoutes(
         fiatCurrency,
       });
     } catch (error: any) {
-      console.error("[PayLink/WaaS] Error:", error.message, error.stack?.split("\n")[1]);
-      // Return 422 so the real message passes through the production sanitizer (only 500 is redacted)
+      console.error("[PayLink/Crypto] Error:", error.message, error.stack?.split("\n")[1]);
       return res.status(422).json({ message: error.message || "Erreur lors de la génération de l'adresse crypto" });
     }
   });
@@ -12439,63 +12421,6 @@ export async function registerRoutes(
       const { event: eventType, data: eventData } = req.body || {};
       console.log(`[IziChange Webhook] event=${eventType} ref=${eventData?.merchantReference}`);
 
-      // ── WaaS deposit credited ────────────────────────────────────────────────
-      if (eventType === "wallet_account.deposit.completed") {
-        const externalRef: string = eventData?.externalRef ?? "";
-        const amountNet: string   = eventData?.amountNet ?? "0";
-        const assetCode: string   = eventData?.assetCode ?? "USDT";
-        const txid: string        = eventData?.txid ?? "";
-        // externalRef format: "ashtech_{userId}"
-        const userId = externalRef.startsWith("ashtech_") ? externalRef.slice("ashtech_".length) : "";
-        if (!userId) {
-          console.warn("[IziChange Webhook] WaaS deposit: unrecognised externalRef:", externalRef);
-          return res.json({ received: true });
-        }
-        const netAmt = parseFloat(amountNet);
-        if (isNaN(netAmt) || netAmt <= 0) {
-          console.warn("[IziChange Webhook] WaaS deposit: invalid amountNet:", amountNet);
-          return res.json({ received: true });
-        }
-        // Credit the user's wallet (treat as USDT)
-        try {
-          await creditUserWallet(userId, netAmt, "USDT");
-          const reference = generateTransactionReference("deposit");
-          await storage.createTransaction({
-            userId,
-            type: "deposit",
-            amount: netAmt.toFixed(6),
-            totalAmount: netAmt.toFixed(6),
-            feeAmount: "0",
-            currency: "USDT",
-            status: "completed",
-            description: `Dépôt crypto WaaS ${assetCode} txid=${txid.slice(0, 16)}…`,
-            paymentMethod: "crypto",
-            reference,
-          });
-          await storage.createUserNotification({
-            userId,
-            type: "deposit_confirmed",
-            title: "deposit_confirmed",
-            message: JSON.stringify({ amount: netAmt.toFixed(6), currency: "USDT", assetCode }),
-            isRead: false,
-          });
-          const txUser = await storage.getUser(userId).catch(() => null);
-          notifyDepositConfirmed({
-            userName: (txUser as any)?.fullName || (txUser as any)?.username || "Utilisateur",
-            userEmail: (txUser as any)?.email || "",
-            amount: netAmt.toFixed(6),
-            currency: "USDT",
-            reference,
-            depositType: "deposit",
-            paymentMethod: "crypto",
-          }).catch(() => {});
-          console.log(`[IziChange Webhook] ✓ WaaS deposit credited: ${netAmt} USDT → user=${userId} asset=${assetCode}`);
-        } catch (waasErr: any) {
-          console.error("[IziChange Webhook] WaaS credit error:", waasErr.message);
-        }
-        return res.json({ received: true });
-      }
-
       if (eventType !== "payment_intent.completed") {
         return res.json({ received: true });
       }
@@ -12651,27 +12576,18 @@ export async function registerRoutes(
     }
   });
 
-  // ── Crypto deposit address via IziChange WaaS ─────────────────────────────
-  // Generates a permanent deposit address for the authenticated user.
-  // Supported assetCodes: USDT.TRC20, USDT.BEP20, USDT.ERC20, BTC, XRP, TON
+  // ── Crypto deposit address via IziChange Direct Charge ───────────────────
+  // Calls POST /v1/payment-intents/direct → IziChange returns a unique address.
   app.post("/api/deposits/crypto/address", requireAuth, depositLimiter, async (req, res) => {
     try {
       if (!isIziPayConfigured()) {
         return res.status(503).json({ message: "Paiement crypto non configuré. Contactez l'administrateur." });
       }
 
-      // Only chains where IziChange WaaS can auto-attribute deposits to a sub-wallet.
-      // EVM/account chains (BEP20, ERC20, Polygon, Solana) excluded — shared address.
-      const SUPPORTED_ASSETS = [
-        "USDT.TRC20","USDT.TON",
-        "BTC","LTC","DOGE","ADA","BCH",
-        "XRP","TON","XLM","TRX",
-        "DOGS.TON",
-      ];
       const { assetCode, amount, currency: reqCurrency, refundAddress } = req.body;
 
-      if (!assetCode || !SUPPORTED_ASSETS.includes(assetCode)) {
-        return res.status(400).json({ message: `Crypto/réseau non supporté. Supportés: ${SUPPORTED_ASSETS.join(", ")}` });
+      if (!assetCode) {
+        return res.status(400).json({ message: "Veuillez sélectionner un réseau crypto" });
       }
 
       const numAmount = parseFloat(amount || "0");
@@ -12683,87 +12599,66 @@ export async function registerRoutes(
       const user   = await storage.getUser(userId);
       if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
 
-      // ── 1. Get or create WaaS account ─────────────────────────────────────
-      let iziAccountId: string = (user as any).izichangeAccountId ?? (user as any).izichange_account_id ?? "";
-
-      if (!iziAccountId) {
-        const externalRef = `ashtech_${userId}`;
-        // Try to find existing account first (idempotent)
-        let account = await findWaaSAccountByExternalRef(externalRef);
-        if (!account) {
-          try {
-            account = await createWaaSAccount(
-              externalRef,
-              (user as any).fullName || (user as any).username || `User-${userId.slice(0, 8)}`,
-              (user as any).email || undefined,
-            );
-          } catch (createErr: any) {
-            // IziChange may reject if account already exists (race condition / previous partial save).
-            // Retry the lookup before giving up.
-            account = await findWaaSAccountByExternalRef(externalRef);
-            if (!account) {
-              console.error("[Crypto/WaaS] createWaaSAccount failed:", createErr.message);
-              return res.status(500).json({ message: `Impossible de créer le compte WaaS: ${createErr.message}` });
-            }
-          }
-        }
-        iziAccountId = account.id;
-        // Persist for future calls (fire-and-forget)
-        pool.query("UPDATE users SET izichange_account_id = $1 WHERE id = $2", [iziAccountId, userId]).catch(() => {});
-      }
-
-      // ── 2. Get permanent deposit address ──────────────────────────────────
-      let depositAddr: Awaited<ReturnType<typeof getWaaSDepositAddress>>;
-      try {
-        depositAddr = await getWaaSDepositAddress(iziAccountId, assetCode);
-      } catch (addrErr: any) {
-        console.error(`[Crypto/WaaS] getWaaSDepositAddress failed (asset=${assetCode}):`, addrErr.message);
-        return res.status(502).json({ message: `Adresse crypto indisponible pour ${assetCode}: ${addrErr.message}` });
-      }
-
-      // ── 3. Create pending transaction for tracking ─────────────────────────
       // Frontend sends amounts in USDT directly; no fiat conversion needed.
-      const cryptoFeeStr   = await storage.getSetting("izichange_fee_percent");
+      const cryptoFeeStr    = await storage.getSetting("izichange_fee_percent");
       const cryptoFeePercent = cryptoFeeStr ? parseFloat(cryptoFeeStr.value) : 2.5;
-      const amountInUSDT   = numAmount;
-      const feeAmountUSDT  = amountInUSDT * (cryptoFeePercent / 100);
-      const netAmountUSDT  = amountInUSDT - feeAmountUSDT;
+      const feeAmountUSDT   = numAmount * (cryptoFeePercent / 100);
+      const netAmountUSDT   = numAmount - feeAmountUSDT;
 
       const reference = generateTransactionReference("deposit");
+
+      // Call IziChange Direct Charge API — unique address returned in one shot
+      let charge: any;
+      try {
+        charge = await createDirectCharge({
+          requestedCoin: assetCode,
+          amount: numAmount.toFixed(4),
+          customer: {
+            firstName: (user as any).fullName?.split(" ")[0] || undefined,
+            lastName:  (user as any).fullName?.split(" ").slice(1).join(" ") || undefined,
+            email:     (user as any).email || undefined,
+            refundAddress: refundAddress || undefined,
+          },
+          merchantReference: reference,
+          metadata: { userId },
+        });
+      } catch (chargeErr: any) {
+        console.error(`[Deposits/Crypto] createDirectCharge failed (asset=${assetCode}):`, chargeErr.message);
+        return res.status(502).json({ message: `Adresse crypto indisponible pour ${assetCode}: ${chargeErr.message}` });
+      }
 
       await storage.createTransaction({
         userId,
         type: "deposit",
         amount: netAmountUSDT.toFixed(6),
-        totalAmount: amountInUSDT.toFixed(6),
+        totalAmount: numAmount.toFixed(6),
         feeAmount: feeAmountUSDT.toFixed(6),
         currency: "USDT",
         status: "pending",
-        description: `Dépôt crypto ${assetCode} WaaS — ${numAmount} USDT`,
+        description: `Dépôt crypto ${assetCode} — ${numAmount} USDT`,
         paymentMethod: "crypto",
         reference,
         metadata: {
           assetCode,
-          address: depositAddr.address,
-          memo: depositAddr.memo,
+          address: charge.address,
+          memo: charge.memo ?? null,
           ...(refundAddress ? { refundAddress } : {}),
         },
       });
 
-      console.log(`[Crypto/WaaS] addr=${depositAddr.address} memo=${depositAddr.memo} asset=${assetCode} ref=${reference} user=${userId}`);
+      console.log(`[Deposits/Crypto] Direct charge: addr=${charge.address} memo=${charge.memo ?? "-"} asset=${assetCode} ref=${reference} user=${userId}`);
 
       return res.json({
-        address:     depositAddr.address,
-        memo:        depositAddr.memo,
-        memoType:    depositAddr.memoType,
-        shared:      depositAddr.shared,
+        address:    charge.address,
+        memo:       charge.memo ?? null,
+        memoType:   charge.memoType ?? null,
         assetCode,
         reference,
-        amountUsdt:  netAmountUSDT.toFixed(4),
-        fiatAmount:  numAmount,
+        amountUsdt: netAmountUSDT.toFixed(4),
+        fiatAmount: numAmount,
       });
     } catch (error: any) {
-      console.error("[Crypto/WaaS] Error:", error.message, error.stack?.split("\n")[1]);
+      console.error("[Deposits/Crypto] Error:", error.message, error.stack?.split("\n")[1]);
       return res.status(422).json({ message: error.message || "Erreur lors de la génération de l'adresse" });
     }
   });

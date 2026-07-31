@@ -109,74 +109,55 @@ export async function createPaymentIntent(
   );
 }
 
-// ── Wallet-as-a-Service (WaaS) ────────────────────────────────────────────────
+// ── Direct Crypto Charge (`POST /v1/payment-intents/direct`) ─────────────────
+// Returns a one-time deposit address for a specific coin/network.
+// No sub-accounts (WaaS) needed — IziChange attributes the payment via merchantReference.
 
-export interface WaaSAccount {
-  id: string;
-  label: string;
-  externalRef?: string;
-  status: string;
-  createdAt: string;
+export interface DirectChargeParams {
+  /** Coin + network, e.g. "USDT.TRC20", "BTC", "XRP", "TON" */
+  requestedCoin: string;
+  /** Amount in USDT as a decimal string, e.g. "100" */
+  amount: string;
+  customer?: {
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    /** Refund address if the payment is cancelled */
+    refundAddress?: string;
+  };
+  merchantReference?: string;
+  idempotencyKey?: string;
+  metadata?: Record<string, unknown>;
 }
 
-export interface WaaSDepositAddress {
+export interface DirectChargeResult {
+  id: string;
+  status: string;
+  merchantReference?: string;
+  /** Crypto address the payer must send to */
   address: string;
-  assetCode: string;
+  /** Memo / destination tag (XRP, TON, XLM…) — null if not applicable */
   memo: string | null;
   memoType: string | null;
-  shared: boolean;
-}
-
-/** Create a sub-wallet for a user. externalRef = your internal userId (unique). */
-export async function createWaaSAccount(
-  externalRef: string,
-  label: string,
-  email?: string,
-): Promise<WaaSAccount> {
-  return iziRequest("POST", "/v1/accounts", {
-    label,
-    externalRef,
-    ...(email ? { email } : {}),
-  });
-}
-
-/** Retrieve a sub-wallet by its IziChange id. */
-export async function getWaaSAccount(accountId: string): Promise<WaaSAccount> {
-  return iziRequest("GET", `/v1/accounts/${accountId}`);
+  requestedCoin: string;
+  amount: string;
 }
 
 /**
- * Find an existing sub-wallet by externalRef (returns null if not found).
- * Uses the list endpoint with externalRef filter.
+ * Create a direct crypto charge.
+ * IziChange generates a unique deposit address for this payment and fires
+ * `payment_intent.completed` webhook once the payment is confirmed.
  */
-export async function findWaaSAccountByExternalRef(
-  externalRef: string,
-): Promise<WaaSAccount | null> {
-  try {
-    const result = await iziRequest(
-      "GET",
-      `/v1/accounts?externalRef=${encodeURIComponent(externalRef)}&limit=1`,
-    );
-    // IziChange API returns the list as a top-level array (NOT { data: [...] }).
-    // e.g. [{ id, label, externalRef, ... }]
-    const arr: WaaSAccount[] = Array.isArray(result)
-      ? result
-      : Array.isArray(result?.data) ? result.data : [];
-    return arr[0] ?? null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Get the permanent deposit address for a (sub-wallet, assetCode) pair.
- * assetCode examples: "USDT.BEP20", "USDT.TRC20", "BTC", "XRP", "TON"
- */
-export async function getWaaSDepositAddress(
-  accountId: string,
-  assetCode: string,
-): Promise<WaaSDepositAddress> {
-  return iziRequest("GET", `/v1/accounts/${accountId}/addresses/${assetCode}`);
+export async function createDirectCharge(
+  params: DirectChargeParams,
+): Promise<DirectChargeResult> {
+  const { idempotencyKey, ...body } = params;
+  return iziRequest(
+    "POST",
+    "/v1/payment-intents/direct",
+    body as Record<string, unknown>,
+    idempotencyKey ?? params.merchantReference,
+  );
 }
 
 // ── Webhook validation (manual HMAC-SHA256, toleranceSeconds = 5 min) ────────
