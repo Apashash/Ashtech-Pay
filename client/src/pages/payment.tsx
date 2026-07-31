@@ -181,7 +181,7 @@ export default function PaymentPage() {
   // Fixed payment links are converted to gross USDT by the server using the
   // admin USDT/XAF rate. Mirror that calculation here to warn before submit.
   const fixedCryptoAmountUsdt = paymentLink?.isFixedAmount
-    ? amountInXAF / (adminExchangeRates.USDT || 655)
+    ? amountInXAF / (adminExchangeRates.USDT || 585)
     : 0;
 
   const amountInLinkCurrency = useMemo(() => {
@@ -198,6 +198,27 @@ export default function PaymentPage() {
 
   const operators = useMemo(() => selectedCountryData?.operators || [], [selectedCountryData]);
   const selectedOperatorData = useMemo(() => operators.find(o => o.id === operator), [operators, operator]);
+
+  // Keep the requested default crypto selection (USDT on Tron/TRC20) when the
+  // dynamic catalogue loads, while still falling back safely if an asset or
+  // network is unavailable.
+  useEffect(() => {
+    const availableCoins = Object.keys(payCoinList);
+    if (!availableCoins.length) return;
+
+    const activeCoin = payCoinList[payCryptoCoin]
+      ? payCryptoCoin
+      : (payCoinList.USDT ? "USDT" : availableCoins[0]);
+    if (activeCoin !== payCryptoCoin) setPayCryptoCoin(activeCoin);
+
+    const networks = payCoinList[activeCoin]?.networks ?? [];
+    if (networks.length && !networks.some(net => net.id === payCryptoNetwork)) {
+      const preferredNetwork = networks.some(net => net.id === "TRC20")
+        ? "TRC20"
+        : networks[0].id;
+      setPayCryptoNetwork(preferredNetwork);
+    }
+  }, [payCoinList, payCryptoCoin, payCryptoNetwork]);
 
   const parseFailureMessage = (description?: string): string => {
     if (!description) return "";
@@ -672,7 +693,13 @@ export default function PaymentPage() {
               <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-3 text-center">
                 <p className="text-xs text-amber-700 dark:text-amber-400">Montant à envoyer (estimé)</p>
                 <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">
-                  {payCryptoAmount || payCryptoAmountUsdt} {payCryptoCoin}
+                  {payCryptoAmount || (
+                    payCryptoCoin === "USDT"
+                      ? payCryptoAmountUsdt
+                      : (payCryptoCoinPrice > 0 && fixedCryptoAmountUsdt > 0
+                        ? formatCryptoAmount(fixedCryptoAmountUsdt / payCryptoCoinPrice)
+                        : payCryptoAmountUsdt)
+                  )} {payCryptoCoin}
                 </p>
                 {payCryptoAmountUsdt && payCryptoCoin !== "USDT" && (
                   <p className="text-xs text-amber-600 dark:text-amber-500 mt-0.5">≈ {payCryptoAmountUsdt} USDT</p>
@@ -1234,7 +1261,7 @@ export default function PaymentPage() {
               <img
                 src={getImageSrc(paymentLink.imagePath)}
                 alt={paymentLink.title}
-                className="block w-full h-auto max-h-[32rem] object-contain rounded-lg bg-muted"
+                className="block w-auto max-w-full h-auto max-h-72 sm:max-h-80 mx-auto object-contain rounded-lg bg-muted"
                 data-testid="img-payment-link"
               />
             </div>
@@ -1474,11 +1501,11 @@ export default function PaymentPage() {
                   <div className="bg-muted/30 rounded-xl px-4 py-3 text-center space-y-0.5">
                     <p className="text-xs text-muted-foreground">Montant à régler</p>
                     <p className="text-2xl font-bold text-foreground" data-testid="text-payment-amount">
-                      {formatAmount(convertedDisplayAmount, selectedDisplayCurrency)}
+                      {formatCryptoAmount(fixedCryptoAmountUsdt)} USDT
                     </p>
-                    {selectedDisplayCurrency !== linkCurrency && (adminExchangeRates[selectedDisplayCurrency] || 0) > 0 && (
-                      <p className="text-xs text-muted-foreground">= {formatAmount(displayAmount, linkCurrency)}</p>
-                    )}
+                    <p className="text-xs text-muted-foreground">
+                      = {formatAmount(amountInXAF, "XAF")}
+                    </p>
                     {fixedCryptoAmountUsdt > 0 && fixedCryptoAmountUsdt < 1 && (
                       <p className="text-xs text-red-600 dark:text-red-400 mt-2">
                         Ce lien est inférieur au minimum crypto de 1 USDT et ne peut pas être payé en crypto.

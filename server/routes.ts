@@ -7049,7 +7049,12 @@ export async function registerRoutes(
 
       // 2. Hardcoded defaults for currencies not covered by a country (e.g. USDT)
       ALL_FX_CURRENCIES.forEach(c => {
-        if (!exchangeRates[c.code] && c.defaultRate > 0) exchangeRates[c.code] = c.defaultRate;
+        if (!exchangeRates[c.code] && c.defaultRate > 0) {
+          // USDT's ALL_FX default is a USD-pivot value (1), not XAF per USDT.
+          // Keep the public preview aligned with the server crypto conversion:
+          // the admin fx_rate_USDT wins, otherwise use the XAF/USD fallback.
+          exchangeRates[c.code] = c.code === "USDT" ? 585 : c.defaultRate;
+        }
       });
 
       // 3. Country records override everything — direct rate (XAF per unit, no inversion)
@@ -7325,13 +7330,15 @@ export async function registerRoutes(
         const fxRates = await loadFxRates();
         const amountXAF = convertToXAF(fiatAmount, fiatCurrency, fxRates);
         const adminRateSetting = await storage.getSetting("fx_rate_USDT");
-        const usdtPerXaf = adminRateSetting ? parseFloat(adminRateSetting.value) : (fxRates["USDT"] ?? 655);
+        const usdtPerXaf = adminRateSetting ? parseFloat(adminRateSetting.value) : (fxRates["USDT"] ?? 585);
         amountUSDT = amountXAF / usdtPerXaf;
       } else {
         amountUSDT = parseFloat(clientAmountUsdt || "0");
         if (!amountUSDT || amountUSDT <= 0) {
           return res.status(400).json({ message: "Montant USDT invalide ou manquant" });
         }
+      }
+
        if (amountUSDT < MIN_DIRECT_CRYPTO_USDT) {
          return res.status(422).json({
            error: "minimum_amount",
@@ -7339,7 +7346,6 @@ export async function registerRoutes(
            minimumAmountUsdt: MIN_DIRECT_CRYPTO_USDT,
          });
        }
-      }
 
       const [cryptoFeeStr, cryptoProviderFeeStr] = await Promise.all([
         storage.getSetting("izichange_fee_percent"),
@@ -7508,7 +7514,7 @@ export async function registerRoutes(
         const fxRatesCrypto = await loadFxRates();
         const amountInXAF = convertToXAF(numAmount, linkCurrency, fxRatesCrypto);
         const adminRateSetting = await storage.getSetting("fx_rate_USDT");
-        const usdtPerXaf = adminRateSetting ? parseFloat(adminRateSetting.value) : (fxRatesCrypto["USDT"] ?? 655);
+        const usdtPerXaf = adminRateSetting ? parseFloat(adminRateSetting.value) : (fxRatesCrypto["USDT"] ?? 585);
         const amountInUSD = amountInXAF / usdtPerXaf;
         const feeAmountUSD = amountInUSD * (cryptoFeePercentRedir / 100);
         const netAmountUSD = amountInUSD - feeAmountUSD;
@@ -12755,7 +12761,7 @@ export async function registerRoutes(
       const fxRates = await loadFxRates();
       const amountInXAF = convertToXAF(numAmount, fiatCurrency, fxRates);
       const adminRateSetting = await storage.getSetting("fx_rate_USDT");
-      const usdtPerXaf = adminRateSetting ? parseFloat(adminRateSetting.value) : (fxRates["USDT"] ?? 655);
+       const usdtPerXaf = adminRateSetting ? parseFloat(adminRateSetting.value) : (fxRates["USDT"] ?? 585);
       const amountInUSDT = amountInXAF / usdtPerXaf;
       const feeAmountUSDT = amountInUSDT * (cryptoFeePercent2 / 100);
       const netAmountUSDT = amountInUSDT - feeAmountUSDT;
@@ -13948,7 +13954,7 @@ export async function registerRoutes(
         const adminRateSetting = await storage.getSetting("fx_rate_USDT");
         const usdtPerXaf = adminRateSetting
           ? parseFloat(adminRateSetting.value)
-          : (fxRates.USDT ?? 655);
+           : (fxRates.USDT ?? 585);
         if (!Number.isFinite(usdtPerXaf) || usdtPerXaf <= 0) {
           return res.status(503).json({
             error: "rate_unavailable",

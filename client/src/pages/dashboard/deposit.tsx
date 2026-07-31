@@ -429,7 +429,10 @@ export default function DepositPage() {
     if (activeCoin !== cryptoCoin) setCryptoCoin(activeCoin);
     const nets = cryptoCoinList[activeCoin]?.networks ?? [];
     if (nets.length && !nets.some(net => net.id === cryptoNetwork)) {
-      setCryptoNetwork(nets[0].id);
+      const preferredNetwork = nets.some(net => net.id === "TRC20")
+        ? "TRC20"
+        : nets[0].id;
+      setCryptoNetwork(preferredNetwork);
     }
   }, [cryptoCoinList, cryptoCoin, cryptoNetwork]);
 
