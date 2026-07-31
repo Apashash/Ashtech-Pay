@@ -68,6 +68,7 @@ import { createPaymentIntent, createDirectCharge, validateWebhook, getIziPayWebh
 import { fetchCryptoAssets, filterCryptoAssets, parseDisabledCryptoAssets, getStaticCryptoAssets } from "./cryptoAssets";
 import {
   computeDirectCryptoAmounts,
+  MIN_DIRECT_CRYPTO_USDT,
   parseDirectCryptoRequest,
   type DirectCryptoRequest,
 } from "./directCrypto";
@@ -6842,21 +6843,14 @@ export async function registerRoutes(
   // makes the same activation rule apply to both deposits and payment links.
   app.get("/api/crypto/assets", publicInfoLimiter, async (_req, res) => {
     try {
-      if (!isIziPayConfigured()) {
-        return res.status(503).json({});
-      }
-      const allAssets = await fetchCryptoAssets();
       const disabledSetting = await storage.getSetting("crypto_disabled_assets");
-      const disabled = new Set<string>(
-        (() => {
-          try {
-            const parsed = JSON.parse(disabledSetting?.value || "[]");
-            return Array.isArray(parsed) ? parsed.filter((code): code is string => typeof code === "string") : [];
-          } catch {
-            return [];
-          }
-        })()
-      );
+      const disabled = parseDisabledCryptoAssets(disabledSetting?.value);
+      const allAssets = isIziPayConfigured()
+        ? await fetchCryptoAssets().catch((error: any) => {
+            console.warn("[crypto/assets] live catalogue unavailable, using fallback:", error.message);
+            return getStaticCryptoAssets();
+          })
+        : getStaticCryptoAssets();
       return res.json(filterCryptoAssets(allAssets, disabled));
     } catch (err: any) {
       console.error("[crypto/assets]", err.message);
@@ -7337,6 +7331,13 @@ export async function registerRoutes(
         if (!amountUSDT || amountUSDT <= 0) {
           return res.status(400).json({ message: "Montant USDT invalide ou manquant" });
         }
+       if (amountUSDT < MIN_DIRECT_CRYPTO_USDT) {
+         return res.status(422).json({
+           error: "minimum_amount",
+           message: `Le montant minimum est de ${MIN_DIRECT_CRYPTO_USDT} USDT (montant brut, avant frais).`,
+           minimumAmountUsdt: MIN_DIRECT_CRYPTO_USDT,
+         });
+       }
       }
 
       const [cryptoFeeStr, cryptoProviderFeeStr] = await Promise.all([
@@ -12734,7 +12735,6 @@ export async function registerRoutes(
       if (!amount || numAmount <= 0) {
         return res.status(400).json({ message: "Montant invalide" });
       }
-
       const userId = req.userId!;
       const user = await storage.getUser(userId);
       if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
@@ -12831,6 +12831,13 @@ export async function registerRoutes(
       const numAmount = parseFloat(amount || "0");
       if (!amount || numAmount <= 0) {
         return res.status(400).json({ message: "Montant invalide" });
+      }
+      if (numAmount < MIN_DIRECT_CRYPTO_USDT) {
+        return res.status(422).json({
+          error: "minimum_amount",
+          message: `Le montant minimum est de ${MIN_DIRECT_CRYPTO_USDT} USDT (montant brut, avant frais).`,
+          minimumAmountUsdt: MIN_DIRECT_CRYPTO_USDT,
+        });
       }
 
       const userId = req.userId!;
@@ -13994,6 +14001,12 @@ export async function registerRoutes(
           message: chargeError.message || "Impossible de générer l'adresse crypto.",
         });
       }
+       if (selectedNetwork.memoRequired && !charge.memo) {
+         return res.status(502).json({
+           error: "provider_missing_memo",
+           message: `Le réseau ${request.assetCode} exige un ${selectedNetwork.memoType || "memo/tag"}, mais le fournisseur n'en a pas retourné.`,
+         });
+       }
 
       const transaction = await storage.createTransaction({
         userId: merchant.id,

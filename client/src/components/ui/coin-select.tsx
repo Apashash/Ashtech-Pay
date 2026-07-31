@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from "react";
 import { Search } from "lucide-react";
-import type { CryptoCoinDef } from "@/lib/crypto-assets";
+import type { DynCryptoCoin } from "@/lib/use-crypto-assets";
 
 interface CoinSelectProps {
   value: string;
   onChange: (sym: string) => void;
-  coinList: Record<string, CryptoCoinDef>;
+  coinList: Record<string, DynCryptoCoin>;
   coinLogoUrl: (sym: string) => string;
 }
 

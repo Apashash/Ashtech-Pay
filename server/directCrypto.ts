@@ -7,6 +7,9 @@ export const DIRECT_CRYPTO_CURRENCIES = new Set([
   "USD",
 ]);
 
+/** Minimum gross amount accepted by all crypto Pay-In entry points. */
+export const MIN_DIRECT_CRYPTO_USDT = 1;
+
 export interface DirectCryptoRequest {
   amount: number;
   currency: string;

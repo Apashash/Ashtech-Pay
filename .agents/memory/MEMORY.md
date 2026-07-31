@@ -9,3 +9,4 @@
 - [BotGuard blocks payment webhooks](botguard-webhook-ua.md) — every new payment processor webhook must be added to API_UA_EXEMPT_PATHS in botGuard.ts or short/missing User-Agents from processor servers return 403.
 - [IziChange API quirks](izichange-api-quirks.md) — list endpoint returns bare array (not `{ data }`); ESM hoisting means env vars must use lazy getters not module-level constants.
 - [Direct crypto SDK](direct-crypto-sdk.md) — crypto pay-ins use dedicated authenticated endpoints so Mobile Money `/v1/collect` remains backward-compatible.
+- [Crypto memo and QR handling](crypto-memo-qr.md) — keep address and memo/tag separate; use chain-specific QR URIs only when their format is known.

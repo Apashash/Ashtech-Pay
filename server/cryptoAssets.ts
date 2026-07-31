@@ -16,6 +16,21 @@ export interface CryptoAssetCoin {
 
 export type CryptoAssetMap = Record<string, CryptoAssetCoin>;
 
+function inferMemoDetails(assetCode: string, networkId: string): { required: boolean; type: string | null } {
+  const asset = assetCode.toUpperCase();
+  const network = networkId.toUpperCase();
+  if (asset === "XRP" || network === "XRP") return { required: true, type: "tag" };
+  if (
+    asset === "TON" ||
+    asset === "DOGS.TON" ||
+    asset.endsWith(".TON") ||
+    asset === "XLM" ||
+    network === "TON" ||
+    network === "XLM"
+  ) return { required: true, type: "memo" };
+  return { required: false, type: null };
+}
+
 let cache: { coins: CryptoAssetMap; ts: number } | null = null;
 
 export function getStaticCryptoAssets(): CryptoAssetMap {
@@ -110,8 +125,9 @@ export async function fetchCryptoAssets(): Promise<CryptoAssetMap> {
     );
     const netLabel = netName !== netId ? `${netName} (${netId})` : netId;
     const assetCode = String(asset.assetCode || asset.asset_code || `${code}.${netId}`);
-    const memoRequired = !!(asset.memoRequired ?? asset.memo_required ?? false);
-    const memoType = asset.memoType ?? asset.memo_type ?? null;
+    const inferredMemo = inferMemoDetails(assetCode, netId);
+    const memoRequired = Boolean(asset.memoRequired ?? asset.memo_required ?? inferredMemo.required);
+    const memoType = asset.memoType ?? asset.memo_type ?? inferredMemo.type;
 
     if (!coins[code].networks.some(network => network.id === netId)) {
       coins[code].networks.push({ id: netId, label: netLabel, assetCode, memoRequired, memoType });

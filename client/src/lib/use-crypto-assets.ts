@@ -80,13 +80,18 @@ function staticFallback(): DynCoinMap {
   for (const [code, def] of Object.entries(CRYPTO_COIN_LIST)) {
     out[code] = {
       name: def.name,
-      networks: def.networks.map(n => ({
+       networks: def.networks.map(n => ({
         id: n.id,
         label: n.label,
         assetCode: n.assetCode,
-        memoRequired: n.assetCode === "XRP" || n.assetCode.endsWith(".TON") || n.assetCode === "XLM",
+         memoRequired:
+           n.assetCode === "XRP" ||
+           n.assetCode === "TON" ||
+           n.assetCode === "DOGS.TON" ||
+           n.assetCode.endsWith(".TON") ||
+           n.assetCode === "XLM",
         memoType: n.assetCode === "XRP" ? "tag"
-                : (n.assetCode.endsWith(".TON") || n.assetCode === "XLM") ? "memo"
+                 : (n.assetCode === "TON" || n.assetCode === "DOGS.TON" || n.assetCode.endsWith(".TON") || n.assetCode === "XLM") ? "memo"
                 : null,
       })),
     };

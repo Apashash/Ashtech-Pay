@@ -20,6 +20,8 @@ import { formatCurrency } from "@/lib/currency";
 import { getCountryFlagEmoji } from "@/lib/country-flags";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CoinSelect } from "@/components/ui/coin-select";
+import { cryptoQrPayload } from "@/lib/crypto-qr";
+import { formatCryptoAmount, minimumCryptoAmount } from "@/lib/crypto-minimum";
 
 interface OperatorConfig {
   id: string;
@@ -104,7 +106,7 @@ export default function DepositPage() {
   const cryptoReadyCountdownRef = useRef<NodeJS.Timeout | null>(null);
 
   // Dynamic IziChange asset list (falls back to static if API not configured)
-  const { coins: cryptoCoinList } = useIziAssets();
+  const { coins: cryptoCoinList, isLoading: cryptoAssetsLoading } = useIziAssets();
   const { priceUsd: cryptoCoinPrice, isLoading: coinPriceLoading } = useCoinPrice(cryptoCoin);
 
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
@@ -325,6 +327,9 @@ export default function DepositPage() {
       if (!amt || amt <= 0) throw new Error("Entrez un montant valide");
       if (cryptoCoinPrice <= 0) throw new Error("Prix du coin introuvable, veuillez patienter…");
       const usdtEquiv = (amt * cryptoCoinPrice).toFixed(4);
+      if (parseFloat(usdtEquiv) < 1) {
+        throw new Error(`Le montant minimum est de ${formatCryptoAmount(minimumCryptoAmount(cryptoCoinPrice))} ${cryptoCoin} (soit 1 USDT).`);
+      }
       const res = await apiRequest("POST", "/api/deposits/crypto/address", {
         assetCode: net.assetCode,
         amount: usdtEquiv,
@@ -333,6 +338,9 @@ export default function DepositPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Erreur lors de la génération");
+      if (net.memoRequired && !data.memo) {
+        throw new Error(`Le réseau ${net.label} exige un memo/tag, mais le fournisseur n'en a pas retourné.`);
+      }
       return data;
     },
     onSuccess: (data) => {
@@ -413,11 +421,17 @@ export default function DepositPage() {
 
   const amountNum = parseFloat(watchedAmount) || 0;
 
-  // Reset network to first option when coin changes
+  // Keep the selected coin and network valid when admin filtering changes the catalogue.
   useEffect(() => {
-    const nets = cryptoCoinList[cryptoCoin]?.networks;
-    if (nets?.length) setCryptoNetwork(nets[0].id);
-  }, [cryptoCoin]);
+    const availableCoins = Object.keys(cryptoCoinList);
+    if (!availableCoins.length) return;
+    const activeCoin = cryptoCoinList[cryptoCoin] ? cryptoCoin : availableCoins[0];
+    if (activeCoin !== cryptoCoin) setCryptoCoin(activeCoin);
+    const nets = cryptoCoinList[activeCoin]?.networks ?? [];
+    if (nets.length && !nets.some(net => net.id === cryptoNetwork)) {
+      setCryptoNetwork(nets[0].id);
+    }
+  }, [cryptoCoinList, cryptoCoin, cryptoNetwork]);
 
   const usdtWallet = wallets?.find(w => w.currency === "USDT");
 
@@ -428,8 +442,11 @@ export default function DepositPage() {
 
   const cryptoAmtNum = parseFloat(cryptoAmount) || 0; // amount in selected coin
   const cryptoUsdtEquiv = cryptoCoinPrice > 0 ? cryptoAmtNum * cryptoCoinPrice : 0; // USDT value
+  const cryptoMinimumAmount = minimumCryptoAmount(cryptoCoinPrice);
   const cryptoFee = (cryptoUsdtEquiv * cryptoFeePercent) / 100;
   const cryptoNet = cryptoUsdtEquiv - cryptoFee;
+  const hasCryptoAssets = Object.keys(cryptoCoinList).length > 0;
+
   const userCurrency = (user?.preferredCurrency || "XOF") as SupportedCurrency;
 
   return (
@@ -495,19 +512,19 @@ export default function DepositPage() {
             <Smartphone className="w-4 h-4" />
             Mobile Money
           </button>
-          <button
+          {cryptoAssetsLoading || hasCryptoAssets ? <button
             type="button"
-            onClick={() => { setDepositMode("crypto"); setCryptoStatus("idle"); }}
+            onClick={() => setDepositMode("crypto")}
             className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-semibold transition-all ${depositMode === "crypto" ? "bg-card shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
             data-testid="tab-crypto"
           >
             <Bitcoin className="w-4 h-4" />
             Crypto (USDT)
-          </button>
+          </button> : null}
         </div>
 
         {/* ── Crypto deposit section ────────────────────────────────────────── */}
-        {depositMode === "crypto" && (
+        {depositMode === "crypto" && hasCryptoAssets ? (
           <div className="bg-card border border-border rounded-2xl overflow-hidden">
             <div className="px-5 pb-6 pt-4 space-y-5">
 
@@ -639,7 +656,7 @@ export default function DepositPage() {
                   <div className="flex justify-center">
                     <div className="p-3 bg-white rounded-2xl shadow-sm border border-border">
                       <img
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(cryptoAddr)}${cryptoMemo ? `&data=${encodeURIComponent(cryptoAddr + (cryptoMemoType === "tag" ? "?dt=" : "?memo=") + cryptoMemo)}` : ""}&bgcolor=ffffff&color=000000&margin=1`}
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(cryptoQrPayload(cryptoAssetCode, cryptoAddr, cryptoMemo, cryptoMemoType))}&bgcolor=ffffff&color=000000&margin=1`}
                         alt="QR code adresse"
                         width={180}
                         height={180}
@@ -835,9 +852,9 @@ export default function DepositPage() {
                       <input
                         type="number"
                         inputMode="decimal"
-                        min="0"
+                        min={cryptoMinimumAmount || 0}
                         step="any"
-                        placeholder="0.00"
+                        placeholder={cryptoMinimumAmount ? formatCryptoAmount(cryptoMinimumAmount) : "0.00"}
                         value={cryptoAmount}
                         onChange={e => setCryptoAmount(e.target.value)}
                         className="flex-1 min-w-0 px-4 h-12 bg-background text-base font-semibold focus:outline-none"
@@ -851,6 +868,11 @@ export default function DepositPage() {
                         {coinPriceLoading && <span className="ml-1 opacity-60">(chargement…)</span>}
                       </p>
                     )}
+                    <p className="text-xs text-muted-foreground px-1">
+                      Minimum : <span className="font-semibold text-foreground">
+                        {cryptoMinimumAmount ? `${formatCryptoAmount(cryptoMinimumAmount)} ${cryptoCoin}` : "1 USDT"}
+                      </span> (soit 1 USDT, avant frais)
+                    </p>
                     {/* Quick-select presets (expressed as USDT equivalents, click sets coin amount) */}
                     <div className="flex gap-2 flex-wrap">
                       {["10", "50", "100", "250", "500"].map(v => {
@@ -914,7 +936,7 @@ export default function DepositPage() {
                   <Button
                     className="w-full h-12 rounded-xl font-bold"
                     size="lg"
-                    disabled={!cryptoAmtNum || generateCryptoAddressMutation.isPending}
+                    disabled={!cryptoAmtNum || !cryptoMinimumAmount || cryptoUsdtEquiv < 1 || generateCryptoAddressMutation.isPending}
                     onClick={() => generateCryptoAddressMutation.mutate()}
                     data-testid="button-crypto-generate"
                   >
@@ -927,7 +949,14 @@ export default function DepositPage() {
               )}
             </div>
           </div>
-        )}
+        ) : depositMode === "crypto" && !cryptoAssetsLoading ? (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              Aucun réseau crypto n’est actuellement disponible. Demandez à l’administrateur d’activer au moins un réseau.
+            </AlertDescription>
+          </Alert>
+        ) : null}
 
         {depositMode === "mobile_money" && isLoadingConfig ? (
           <div className="flex items-center justify-center py-20">
@@ -1189,7 +1218,7 @@ export default function DepositPage() {
                               </SelectTrigger>
                             </FormControl>
                             <SearchableSelectContent
-                              options={countries.map(c => ({
+                              options={(countries ?? []).map(c => ({
                                 value: c.id,
                                 label: c.name,
                                 flag: getCountryFlagEmoji(c.code),

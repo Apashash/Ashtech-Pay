@@ -545,6 +545,15 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
               Utilisez la valeur <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">asset_code</code> retournée
               dans l'appel de création.
             </p>
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-5 space-y-2">
+              <p className="text-sm font-semibold text-blue-900">Catalogue et activation</p>
+              <p className="text-sm text-blue-900/80">
+                La désactivation d’un réseau dans Admin → Pays &amp; Opérateurs est prise en compte immédiatement :
+                le réseau disparaît de ce catalogue et tout appel direct à <code className="font-mono">/v1/crypto/collect</code>
+                retourne <code className="font-mono">asset_disabled</code>. Un coin sans réseau actif n’est pas retourné.
+                Ne construisez pas vous-même un <code className="font-mono">asset_code</code> : utilisez uniquement une valeur du catalogue.
+              </p>
+            </div>
             <div className="grid lg:grid-cols-2 gap-5">
               <div className="space-y-2 min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Requête</p>
@@ -650,9 +659,12 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 space-y-2">
               <p className="text-sm font-semibold text-amber-800">Réseaux avec memo / tag</p>
               <p className="text-sm text-amber-800/80">
-                Copiez toujours <code className="font-mono">address</code> et
-                <code className="font-mono ml-1">memo</code> tels quels. Un memo/tag manquant peut empêcher l'attribution
-                du paiement. L'adresse est à usage unique pour cette transaction.
+                <code className="font-mono">memo_required</code> indique si le champ est obligatoire et
+                <code className="font-mono ml-1">memo_type</code> précise <code className="font-mono">memo</code> ou
+                <code className="font-mono ml-1">tag</code>. Copiez toujours <code className="font-mono ml-1">address</code>
+                et <code className="font-mono ml-1">memo</code> séparément et tels quels : ne concaténez jamais le memo à
+                l’adresse et ne remplacez jamais l’un par l’autre. Un memo/tag manquant peut empêcher l’attribution du paiement.
+                L’adresse est à usage unique pour cette transaction.
               </p>
             </div>
           </section>

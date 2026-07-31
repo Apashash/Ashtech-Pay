@@ -2,9 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   computeDirectCryptoAmounts,
+  MIN_DIRECT_CRYPTO_USDT,
   parseDirectCryptoRequest,
 } from "../server/directCrypto";
 import { filterCryptoAssets, getStaticCryptoAssets, parseDisabledCryptoAssets } from "../server/cryptoAssets";
+import { cryptoQrPayload } from "../client/src/lib/crypto-qr";
 
 test("sandbox request accepts USDT and asset_code", () => {
   const result = parseDirectCryptoRequest({
@@ -72,6 +74,11 @@ test("sandbox fee calculation returns gross, fee, and credited amounts", () => {
   });
 });
 
+test("sandbox crypto Pay-In minimum is one gross USDT", () => {
+  assert.equal(MIN_DIRECT_CRYPTO_USDT, 1);
+  assert.ok(computeDirectCryptoAmounts(MIN_DIRECT_CRYPTO_USDT, 2.5).creditedUsdt < 1);
+});
+
 test("sandbox asset catalogue filters disabled networks without removing other networks", () => {
   const assets = getStaticCryptoAssets();
   const disabled = parseDisabledCryptoAssets(JSON.stringify(["USDT.TRC20", "BTC"]));
@@ -88,4 +95,15 @@ test("sandbox fallback identifies memo/tag networks", () => {
   assert.equal(assets.XRP.networks[0].memoType, "tag");
   assert.equal(assets.TON.networks[0].memoRequired, true);
   assert.equal(assets.TON.networks[0].memoType, "memo");
+});
+
+test("sandbox QR payload uses one data value and preserves memo separately", () => {
+  assert.equal(
+    cryptoQrPayload("XRP", "rAddress", "12345", "tag"),
+    "xrpl:rAddress?dt=12345",
+  );
+  assert.equal(
+    cryptoQrPayload("USDT.TRC20", "TAddress", "memo-1", "memo"),
+    "TAddress",
+  );
 });

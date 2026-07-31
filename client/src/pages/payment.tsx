@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelectContent } from "@/components/ui/searchable-select-content";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -23,10 +24,12 @@ import { getOperatorLogo } from "@/lib/operator-logos";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { SiPaypal } from "react-icons/si";
 import { useIziAssets, coinLogoUrl, networkLogoUrl } from "@/lib/use-crypto-assets";
+import { cryptoQrPayload } from "@/lib/crypto-qr";
+import { formatCryptoAmount, minimumCryptoAmount } from "@/lib/crypto-minimum";
 import { useCoinPrice } from "@/lib/use-coin-price";
 import { CoinSelect } from "@/components/ui/coin-select";
 
-const CURRENCY_FLAGS: Record<SupportedCurrency, string> = {
+const CURRENCY_FLAGS: Record<string, string> = {
   "XAF": "🇨🇲", "XOF": "🇸🇳", "CDF": "🇨🇩", "GHS": "🇬🇭",
   "NGN": "🇳🇬", "KES": "🇰🇪", "RWF": "🇷🇼", "GNF": "🇬🇳",
   "TZS": "🇹🇿", "UGX": "🇺🇬", "INR": "🇮🇳", "USD": "🇺🇸",
@@ -108,8 +111,13 @@ export default function PaymentPage() {
   const payReadyCountdownRef = useRef<NodeJS.Timeout | null>(null);
 
   // Dynamic IziChange asset list (falls back to static if API not configured)
-  const { coins: payCoinList } = useIziAssets();
+  const { coins: payCoinList, isLoading: cryptoAssetsLoading } = useIziAssets();
   const { priceUsd: payCryptoCoinPrice } = useCoinPrice(payCryptoCoin);
+  const hasCryptoAssets = Object.keys(payCoinList).length > 0;
+  const payCryptoMinimumAmount = minimumCryptoAmount(payCryptoCoinPrice);
+  const payCryptoUsdtEquivalent = parseFloat(payCryptoAmount) > 0 && payCryptoCoinPrice > 0
+    ? parseFloat(payCryptoAmount) * payCryptoCoinPrice
+    : 0;
 
   const { data: paymentLink, isLoading, error } = useQuery<PaymentLink & { hasPdf?: boolean }>({
     queryKey: ["/api/payment-links/public", params?.slug],
@@ -169,6 +177,12 @@ export default function PaymentPage() {
       return displayAmount * inputRate;
     }
   }, [paymentLink, displayAmount, linkCurrency, selectedDisplayCurrency, adminExchangeRates]);
+
+  // Fixed payment links are converted to gross USDT by the server using the
+  // admin USDT/XAF rate. Mirror that calculation here to warn before submit.
+  const fixedCryptoAmountUsdt = paymentLink?.isFixedAmount
+    ? amountInXAF / (adminExchangeRates.USDT || 655)
+    : 0;
 
   const amountInLinkCurrency = useMemo(() => {
     if (paymentLink?.isFixedAmount) return displayAmount;
@@ -402,6 +416,9 @@ export default function PaymentPage() {
         const usdtEquiv = payCryptoCoinPrice > 0
           ? (parseFloat(payCryptoAmount) * payCryptoCoinPrice).toFixed(4)
           : payCryptoAmount;
+        if (parseFloat(usdtEquiv) < 1) {
+          throw new Error(`Le montant minimum est de ${formatCryptoAmount(minimumCryptoAmount(payCryptoCoinPrice))} ${payCryptoCoin} (soit 1 USDT).`);
+        }
         body.amountUsdt = usdtEquiv;
       }
       if (payCryptoRefundAddress.trim())
@@ -413,6 +430,9 @@ export default function PaymentPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Erreur lors de la génération");
+      if (net.memoRequired && !data.memo) {
+        throw new Error(`Le réseau ${net.label} exige un memo/tag, mais le fournisseur n'en a pas retourné.`);
+      }
       return data;
     },
     onSuccess: (data) => {
@@ -457,11 +477,17 @@ export default function PaymentPage() {
     },
   });
 
-  // Reset network when coin changes
+  // Keep the selected coin and network valid when admin filtering changes the catalogue.
   useEffect(() => {
-    const nets = payCoinList[payCryptoCoin]?.networks;
-    if (nets?.length) setPayCryptoNetwork(nets[0].id);
-  }, [payCryptoCoin]);
+    const availableCoins = Object.keys(payCoinList);
+    if (!availableCoins.length) return;
+    const activeCoin = payCoinList[payCryptoCoin] ? payCryptoCoin : availableCoins[0];
+    if (activeCoin !== payCryptoCoin) setPayCryptoCoin(activeCoin);
+    const nets = payCoinList[activeCoin]?.networks ?? [];
+    if (nets.length && !nets.some(net => net.id === payCryptoNetwork)) {
+      setPayCryptoNetwork(nets[0].id);
+    }
+  }, [payCoinList, payCryptoCoin, payCryptoNetwork]);
 
   useEffect(() => {
     return () => {
@@ -658,7 +684,7 @@ export default function PaymentPage() {
             <div className="flex justify-center">
               <div className="p-3 bg-white rounded-2xl shadow-sm border border-border">
                 <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(payCryptoAddr)}${payCryptoMemo ? `&data=${encodeURIComponent(payCryptoAddr + (payCryptoMemoType === "tag" ? "?dt=" : "?memo=") + payCryptoMemo)}` : ""}&bgcolor=ffffff&color=000000&margin=1`}
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(cryptoQrPayload(payCryptoAssetCode, payCryptoAddr, payCryptoMemo, payCryptoMemoType))}&bgcolor=ffffff&color=000000&margin=1`}
                   alt="QR code adresse"
                   width={180}
                   height={180}
@@ -672,14 +698,14 @@ export default function PaymentPage() {
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Adresse de dépôt</p>
               <div className="flex items-center gap-2 bg-muted/40 rounded-xl px-3 py-2.5 border border-border">
                 <p className="font-mono text-xs font-bold text-foreground break-all flex-1">{payCryptoAddr}</p>
-                <button
+                {(cryptoAssetsLoading || hasCryptoAssets) && <button
                   type="button"
                   onClick={() => { navigator.clipboard.writeText(payCryptoAddr); toast({ title: "Adresse copiée !" }); }}
                   className="shrink-0 p-1.5 rounded-lg bg-muted hover:bg-muted/80 transition-colors"
                   title="Copier l'adresse"
                 >
                   <Copy className="w-4 h-4 text-foreground" />
-                </button>
+                </button>}
               </div>
             </div>
 
@@ -1342,7 +1368,7 @@ export default function PaymentPage() {
             )}
 
             {/* ══ CRYPTO FORM — deposit-style ══ */}
-            {paymentMethod === "crypto" ? (
+            {paymentMethod === "crypto" && hasCryptoAssets ? (
               <>
                 {/* ── Coin selector ── */}
                 <div className="space-y-1.5">
@@ -1400,9 +1426,9 @@ export default function PaymentPage() {
                       <input
                         type="number"
                         inputMode="decimal"
-                        min="0"
+                        min={payCryptoMinimumAmount || 0}
                         step="any"
-                        placeholder="0.00"
+                        placeholder={payCryptoMinimumAmount ? formatCryptoAmount(payCryptoMinimumAmount) : "0.00"}
                         value={payCryptoAmount}
                         onChange={e => setPayCryptoAmount(e.target.value)}
                         className="flex-1 min-w-0 px-4 h-12 bg-background text-base font-semibold focus:outline-none"
@@ -1414,6 +1440,11 @@ export default function PaymentPage() {
                         ≈ <span className="font-semibold text-foreground">{(parseFloat(payCryptoAmount) * payCryptoCoinPrice).toFixed(2)} USDT</span>
                       </p>
                     )}
+                    <p className="text-xs text-muted-foreground px-1">
+                      Minimum : <span className="font-semibold text-foreground">
+                        {payCryptoMinimumAmount ? `${formatCryptoAmount(payCryptoMinimumAmount)} ${payCryptoCoin}` : "1 USDT"}
+                      </span> (soit 1 USDT, avant frais)
+                    </p>
                     {/* Quick-select presets (click sets coin equivalent of USDT amount) */}
                     <div className="flex gap-2 flex-wrap">
                       {["10", "50", "100", "250", "500"].map(v => {
@@ -1442,6 +1473,11 @@ export default function PaymentPage() {
                     </p>
                     {selectedDisplayCurrency !== linkCurrency && (adminExchangeRates[selectedDisplayCurrency] || 0) > 0 && (
                       <p className="text-xs text-muted-foreground">= {formatAmount(displayAmount, linkCurrency)}</p>
+                    )}
+                    {fixedCryptoAmountUsdt > 0 && fixedCryptoAmountUsdt < 1 && (
+                      <p className="text-xs text-red-600 dark:text-red-400 mt-2">
+                        Ce lien est inférieur au minimum crypto de 1 USDT et ne peut pas être payé en crypto.
+                      </p>
                     )}
                   </div>
                 )}
@@ -1500,7 +1536,11 @@ export default function PaymentPage() {
                     if (Object.keys(errs).length > 0) { setErrors(prev => ({ ...prev, ...errs })); return; }
                     generatePayLinkCryptoMutation.mutate();
                   }}
-                  disabled={generatePayLinkCryptoMutation.isPending}
+                  disabled={generatePayLinkCryptoMutation.isPending || (
+                    (paymentLink.isFixedAmount && fixedCryptoAmountUsdt < 1) ||
+                    (!paymentLink.isFixedAmount &&
+                      (!payCryptoMinimumAmount || payCryptoUsdtEquivalent < 1))
+                  )}
                   data-testid="button-pay"
                 >
                   {generatePayLinkCryptoMutation.isPending
@@ -1509,6 +1549,13 @@ export default function PaymentPage() {
                   }
                 </Button>
               </>
+            ) : paymentMethod === "crypto" && !cryptoAssetsLoading ? (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  Aucun réseau crypto n’est actuellement disponible pour ce lien de paiement.
+                </AlertDescription>
+              </Alert>
             ) : (
               <>
                 {/* ── Amount (non-crypto) ── */}
