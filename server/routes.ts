@@ -67,6 +67,7 @@ import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, f
 import { createPaymentIntent, createDirectCharge, validateWebhook, getIziPayWebhookSecret, toIziPayCurrency, isIziPayConfigured } from "./izichange";
 import { fetchCryptoAssets, filterCryptoAssets, parseDisabledCryptoAssets, getStaticCryptoAssets } from "./cryptoAssets";
 import {
+  buildDirectCryptoCustomer,
   computeDirectCryptoAmounts,
   MIN_DIRECT_CRYPTO_USDT,
   parseDirectCryptoRequest,
@@ -13974,18 +13975,13 @@ export async function registerRoutes(
       const amounts = computeDirectCryptoAmounts(grossUsdt, totalFeePercent);
 
       const reference = request.reference || generateTransactionReference("deposit");
-      const safeEmailPrefix = request.email?.split("@")[0] || "Client";
+       const customer = buildDirectCryptoCustomer(request);
       let charge;
       try {
         charge = await createDirectCharge({
           requestedCoin: request.assetCode,
           amount: amounts.grossUsdt.toFixed(6),
-          customer: {
-            firstName: request.firstName || safeEmailPrefix,
-            lastName: request.lastName || "Pay",
-            email: request.email,
-            refundAddress: request.refundAddress || undefined,
-          },
+           ...(customer ? { customer } : {}),
           merchantReference: reference,
           metadata: {
             merchantId: merchant.id,
@@ -14077,7 +14073,11 @@ export async function registerRoutes(
       console.error(`[API v1 /crypto/collect] request=${requestId}`, e?.stack || e);
       return res.status(500).json({
         error: "server_error",
-        message: "Erreur interne lors de la création du paiement crypto.",
+        message: "Le serveur n'a pas pu finaliser la création du paiement crypto.",
+        stage: "transaction_creation",
+        ...(typeof e?.code === "string" && /^[a-z0-9_.-]+$/i.test(e.code)
+          ? { detail_code: e.code }
+          : {}),
         request_id: requestId,
       });
     }

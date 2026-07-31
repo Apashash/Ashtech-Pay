@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
+import { QRCodeSVG } from "qrcode.react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cryptoQrPayload } from "@/lib/crypto-qr";
 import {
   AlertCircle,
   ArrowLeft,
@@ -135,6 +137,10 @@ export default function TestCryptoPage() {
   const isSuccess = response?.status === 202;
   const responseAddress = typeof responseData?.address === "string" ? responseData.address : "";
   const responseMemo = typeof responseData?.memo === "string" ? responseData.memo : "";
+  const responseMemoType = typeof responseData?.memo_type === "string" ? responseData.memo_type : null;
+  const responseQrPayload = responseAddress
+    ? cryptoQrPayload(assetCode, responseAddress, responseMemo || null, responseMemoType)
+    : "";
 
   const groupedAssets = useMemo(() => {
     return assets.reduce<Record<string, CryptoAsset[]>>((groups, asset) => {
@@ -448,12 +454,44 @@ export default function TestCryptoPage() {
                     <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-800 space-y-1">
                       <p className="font-semibold">La requête n’a pas été acceptée.</p>
                       <p>
-                        Vérifiez le code HTTP, le message et le champ <code className="font-mono">request_id</code>.
-                        Pour un <code className="font-mono">gateway_error</code>, l’adresse crypto n’a pas pu être générée.
+                        Le code HTTP et le message indiquent la cause. Conservez le champ{" "}
+                        <code className="font-mono">request_id</code> pour le support.
                       </p>
+                      {typeof responseData?.error === "string" && (
+                        <p>Erreur : <code className="font-mono">{String(responseData.error)}</code></p>
+                      )}
+                      {typeof responseData?.message === "string" && <p>Message : {String(responseData.message)}</p>}
+                      {typeof responseData?.stage === "string" && (
+                        <p>Étape : <code className="font-mono">{String(responseData.stage)}</code></p>
+                      )}
+                      {typeof responseData?.request_id === "string" && (
+                        <p>Request ID : <code className="font-mono">{String(responseData.request_id)}</code></p>
+                      )}
+                      {typeof responseData?.provider_status === "number" && (
+                        <p>Réponse du service crypto : HTTP {String(responseData.provider_status)}</p>
+                      )}
                     </div>
                   )}
                   {isSuccess && <CopyValue label="Adresse de dépôt" value={responseAddress} />}
+                  {isSuccess && responseQrPayload && (
+                    <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-500">QR de paiement</p>
+                      <div className="flex justify-center">
+                        <div className="rounded-xl border border-gray-200 bg-white p-3">
+                          <QRCodeSVG
+                            value={responseQrPayload}
+                            size={190}
+                            level="M"
+                            includeMargin
+                            aria-label="QR code de paiement crypto"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-center text-gray-500">
+                        Scannez ce QR avec votre portefeuille. Le memo/tag reste affiché séparément lorsqu'il est requis.
+                      </p>
+                    </div>
+                  )}
                   {isSuccess && responseMemo && <CopyValue label={String(responseData?.memo_type || "Memo / tag")} value={responseMemo} />}
                   {isSuccess && !responseMemo && selectedAsset?.memo_required && (
                     <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">

@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildDirectCryptoCustomer,
   computeDirectCryptoAmounts,
   MIN_DIRECT_CRYPTO_USDT,
   parseDirectCryptoRequest,
@@ -54,10 +55,55 @@ test("sandbox request supports fiat currencies and camelCase aliases", () => {
   }
 });
 
+test("sandbox customer email is optional and omitted from the upstream customer object", () => {
+  const parsed = parseDirectCryptoRequest({
+    amount: 1,
+    currency: "USDT",
+    asset_code: "USDT.TRC20",
+    first_name: "J",
+    last_name: "S",
+  });
+  assert.equal(parsed.ok, true);
+  if (parsed.ok) {
+    assert.equal(parsed.value.email, undefined);
+    assert.deepEqual(buildDirectCryptoCustomer(parsed.value), undefined);
+  }
+
+  const withEmail = parseDirectCryptoRequest({
+    amount: 1,
+    currency: "USDT",
+    asset_code: "USDT.TRC20",
+    first_name: "Ada",
+    last_name: "Lovelace",
+    email: "ada@example.com",
+  });
+  assert.equal(withEmail.ok, true);
+  if (withEmail.ok) {
+    assert.deepEqual(buildDirectCryptoCustomer(withEmail.value), {
+      firstName: "Ada",
+      lastName: "Lovelace",
+      email: "ada@example.com",
+      refundAddress: undefined,
+    });
+  }
+});
+
 test("sandbox validation rejects missing fields, invalid amount, and invalid currency", () => {
   assert.equal(parseDirectCryptoRequest({ currency: "USDT", asset_code: "BTC" }).error, "invalid_amount");
   assert.equal(parseDirectCryptoRequest({ amount: 1, currency: "USDT" }).error, "missing_fields");
   assert.equal(parseDirectCryptoRequest({ amount: 1, currency: "EUR", asset_code: "BTC" }).error, "invalid_currency");
+  assert.equal(parseDirectCryptoRequest({
+    amount: 1,
+    currency: "USDT",
+    asset_code: "BTC",
+    customer: { email: "not-an-email" },
+  }).error, "invalid_email");
+  assert.equal(parseDirectCryptoRequest({
+    amount: 1,
+    currency: "USDT",
+    asset_code: "BTC",
+    notify_url: "http://merchant.example/webhook",
+  }).error, "invalid_notify_url");
 });
 
 test("sandbox fee calculation returns gross, fee, and credited amounts", () => {

@@ -285,10 +285,22 @@ app.use((req, res, next) => {
     // ── 5.5: Sanitize error responses in production ───────────────────────────
     // Prevents internal error messages and stack traces leaking to clients.
     if (isProd && res.statusCode >= 500 && bodyJson && typeof bodyJson === "object") {
-      const sanitized = {
-        message: "Une erreur interne s'est produite.",
-        ...(bodyJson.error ? { error: "server_error" } : {}),
-      };
+      const isCryptoApi = req.path === "/v1/crypto/collect" || req.path === "/v1/crypto/assets";
+      const sanitized = isCryptoApi
+        ? {
+            ...(typeof bodyJson.error === "string" ? { error: bodyJson.error } : { error: "server_error" }),
+            ...(typeof bodyJson.message === "string" ? { message: bodyJson.message } : {}),
+            ...(typeof bodyJson.stage === "string" ? { stage: bodyJson.stage } : {}),
+            ...(typeof bodyJson.detail_code === "string" ? { detail_code: bodyJson.detail_code } : {}),
+            ...(typeof bodyJson.request_id === "string" ? { request_id: bodyJson.request_id } : {}),
+            ...(Number.isFinite(Number(bodyJson.provider_status))
+              ? { provider_status: Number(bodyJson.provider_status) }
+              : {}),
+          }
+        : {
+            message: "Une erreur interne s'est produite.",
+            ...(bodyJson.error ? { error: "server_error" } : {}),
+          };
       capturedJsonResponse = sanitized;
       return originalResJson.apply(res, [sanitized, ...args]);
     }

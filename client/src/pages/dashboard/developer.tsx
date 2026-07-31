@@ -691,7 +691,9 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
                 <code className="font-mono ml-1">provider_invalid_response</code> signifie que le service a répondu sans adresse exploitable.
                 Une réponse <code className="font-mono">500 server_error</code> contient un <code className="font-mono">request_id</code> :
                 conservez-le pour le diagnostic. Si <code className="font-mono">provider_status</code> est présent, il indique le code HTTP
-                renvoyé par le service crypto.
+                renvoyé par le service crypto. Une réponse <code className="font-mono">400 invalid_email</code> indique que
+                <code className="font-mono ml-1">customer.email</code> est mal formé ; <code className="font-mono">400 invalid_notify_url</code>
+                indique que <code className="font-mono">notify_url</code> doit être une URL HTTPS valide. Les deux champs restent optionnels.
               </p>
             </div>
 

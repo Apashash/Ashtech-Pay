@@ -29,11 +29,21 @@ export interface DirectCryptoAmounts {
   feePercent: number;
 }
 
+export interface DirectCryptoCustomer {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  refundAddress?: string;
+}
+
 export function parseDirectCryptoRequest(body: any):
   | { ok: true; value: DirectCryptoRequest }
   | { ok: false; error: string; message: string } {
   const rawAmount = body?.amount;
-  const amount = typeof rawAmount === "number" ? rawAmount : parseFloat(String(rawAmount ?? ""));
+  const amountText = typeof rawAmount === "number" ? String(rawAmount) : String(rawAmount ?? "").trim();
+  const amount = amountText !== "" && /^[+]?(?:\d+\.?\d*|\.\d+)$/.test(amountText)
+    ? Number(amountText)
+    : Number.NaN;
   const currency = String(body?.currency || "").trim().toUpperCase();
   const assetCode = String(body?.asset_code ?? body?.assetCode ?? "").trim();
 
@@ -58,6 +68,22 @@ export function parseDirectCryptoRequest(body: any):
   const email = String(customer.email ?? body?.email ?? "").trim() || undefined;
   const firstName = String(customer.firstName ?? customer.first_name ?? body?.first_name ?? "").trim() || undefined;
   const lastName = String(customer.lastName ?? customer.last_name ?? body?.last_name ?? "").trim() || undefined;
+  const notifyUrl = body?.notify_url ? String(body.notify_url).trim() : "";
+  const refundAddress = body?.refund_address ?? body?.refundAddress
+    ? String(body.refund_address ?? body.refundAddress).trim()
+    : "";
+
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { ok: false, error: "invalid_email", message: "customer.email doit être une adresse email valide." };
+  }
+  if (notifyUrl) {
+    try {
+      const url = new URL(notifyUrl);
+      if (url.protocol !== "https:") throw new Error("protocol");
+    } catch {
+      return { ok: false, error: "invalid_notify_url", message: "notify_url doit être une URL HTTPS valide." };
+    }
+  }
 
   return {
     ok: true,
@@ -66,14 +92,31 @@ export function parseDirectCryptoRequest(body: any):
       currency,
       assetCode,
       reference: body?.reference ? String(body.reference).trim() : undefined,
-      notifyUrl: body?.notify_url ? String(body.notify_url).trim() : null,
-      refundAddress: body?.refund_address ?? body?.refundAddress
-        ? String(body.refund_address ?? body.refundAddress).trim()
-        : null,
+      notifyUrl: notifyUrl || null,
+      refundAddress: refundAddress || null,
       firstName,
       lastName,
       email,
     },
+  };
+}
+
+/**
+ * The public API keeps customer details optional. The upstream crypto charge
+ * endpoint requires an email whenever its `customer` object is sent, so do
+ * not send an empty/name-only customer object when the merchant omitted email.
+ * This preserves the optional-email contract instead of turning it into a
+ * provider validation error.
+ */
+export function buildDirectCryptoCustomer(
+  request: DirectCryptoRequest,
+): DirectCryptoCustomer | undefined {
+  if (!request.email) return undefined;
+  return {
+    firstName: request.firstName,
+    lastName: request.lastName,
+    email: request.email,
+    refundAddress: request.refundAddress || undefined,
   };
 }
 

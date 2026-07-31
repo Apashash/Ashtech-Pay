@@ -801,7 +801,7 @@ export function downloadSDKDocs() {
     y = paragraph(doc, "Pour une devise fiat, amount est converti en USDT avec le taux USDT/XAF configure par l'administrateur. Les frais Ashtech Pay et fournisseur sont inclus dans fee_amount_usdt. Quand memo_required vaut true, memo_type indique memo ou tag : copiez address et memo separement, sans jamais concatener ou remplacer le memo par l'adresse.", y);
     y = paragraph(doc, "Apres confirmation par le prestataire crypto, Ashtech Pay credite automatiquement le wallet USDT du marchand avec credited_amount_usdt, puis envoie le webhook POST a notify_url. Le marchand ne doit pas crediter son wallet lui-meme. Les evenements sont payment.completed ou payment.failed et le payload crypto ajoute payment_method, asset_code, address et memo.", y);
     y = subHeading(doc, "Erreurs et diagnostic", y);
-    y = paragraph(doc, "Une reponse 502 gateway_error signifie que l'adresse n'a pas pu etre generee. Une reponse 502 provider_invalid_response signifie que le service a repondu sans adresse exploitable. Une reponse 500 server_error contient toujours request_id : conservez-le pour le diagnostic. Si provider_status est present, il indique le code HTTP renvoye par le service crypto.", y);
+    y = paragraph(doc, "Une reponse 502 gateway_error signifie que l'adresse n'a pas pu etre generee. Une reponse 502 provider_invalid_response signifie que le service a repondu sans adresse exploitable. Une reponse 500 server_error contient toujours request_id : conservez-le pour le diagnostic. Si provider_status est present, il indique le code HTTP renvoye par le service crypto. Une reponse 400 invalid_email indique que customer.email est mal forme ; invalid_notify_url indique que notify_url doit etre une URL HTTPS valide. Ces deux champs restent optionnels.", y);
 
    // ── §5  Collect ───────────────────────────────────────────────────────────
    y = sectionTitle(doc, "5. Initier un paiement — POST /v1/collect", y);
@@ -918,6 +918,8 @@ export function downloadSDKDocs() {
        ["422","asset_disabled", "Le reseau crypto a ete desactive par l'administrateur"],
        ["503","crypto_unavailable", "Le catalogue ou le service de paiement crypto est indisponible"],
       ["429","rate_limited",  "Trop de requetes — ralentissez"],
+       ["400","invalid_email", "customer.email est mal forme"],
+       ["400","invalid_notify_url", "notify_url doit etre une URL HTTPS valide"],
        ["502","gateway_error", "Adresse crypto impossible a generer ; consultez message et provider_status"],
        ["502","provider_invalid_response", "Le service crypto a repondu sans adresse exploitable"],
        ["500","server_error",  "Erreur interne ; conservez request_id pour le diagnostic"],
