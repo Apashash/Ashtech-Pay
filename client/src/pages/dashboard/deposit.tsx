@@ -58,30 +58,100 @@ type DepositFormData = z.infer<typeof depositFormSchema>;
 
 const QUICK_AMOUNTS = [5000, 10000, 25000, 50000, 100000];
 
-// ── IziChange WaaS — supported crypto assets ──────────────────────────────────
-const CRYPTO_NETWORKS = {
-  USDT: [
-    { id: "TRC20", label: "TRC20 (Tron)",     assetCode: "USDT.TRC20" },
-    { id: "BEP20", label: "BEP20 (BSC)",      assetCode: "USDT.BEP20" },
-    { id: "ERC20", label: "ERC20 (Ethereum)", assetCode: "USDT.ERC20" },
-  ],
-  BTC: [
-    { id: "BTC",   label: "Bitcoin",          assetCode: "BTC" },
-  ],
-  XRP: [
-    { id: "XRP",   label: "XRP Ledger",       assetCode: "XRP" },
-  ],
-  TON: [
-    { id: "TON",   label: "TON Network",      assetCode: "TON" },
-  ],
-} as const;
+// ── IziChange WaaS — all supported crypto assets ──────────────────────────────
+// logoSlug = slug for https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/32/color/{slug}.png
+interface CryptoNet { id: string; label: string; assetCode: string }
+interface CryptoCoinDef { name: string; logoSlug: string; networks: CryptoNet[] }
 
-const CRYPTO_ICONS: Record<keyof typeof CRYPTO_NETWORKS, string> = {
-  USDT: "💵",
-  BTC:  "₿",
-  XRP:  "✕",
-  TON:  "💎",
+const CRYPTO_COIN_LIST: Record<string, CryptoCoinDef> = {
+  USDT:  { name: "Tether USD",         logoSlug: "usdt",  networks: [
+    { id: "TRC20",   label: "TRC20 — Tron",        assetCode: "USDT.TRC20" },
+    { id: "BEP20",   label: "BEP20 — BSC",          assetCode: "USDT.BEP20" },
+    { id: "ERC20",   label: "ERC20 — Ethereum",      assetCode: "USDT.ERC20" },
+    { id: "POLYGON", label: "Polygon",               assetCode: "USDT.POLYGON" },
+    { id: "SOL",     label: "Solana",                assetCode: "USDT.SOL" },
+    { id: "TON",     label: "TON",                   assetCode: "USDT.TON" },
+  ]},
+  USDC:  { name: "USD Coin",           logoSlug: "usdc",  networks: [
+    { id: "ERC20",   label: "ERC20 — Ethereum",      assetCode: "USDC.ERC20" },
+    { id: "BEP20",   label: "BEP20 — BSC",           assetCode: "USDC.BEP20" },
+    { id: "SOL",     label: "Solana",                assetCode: "USDC.SOL" },
+    { id: "POLYGON", label: "Polygon",               assetCode: "USDC.POLYGON" },
+  ]},
+  BTC:   { name: "Bitcoin",            logoSlug: "btc",   networks: [
+    { id: "BTC",     label: "Bitcoin mainnet",       assetCode: "BTC" },
+    { id: "BEP20",   label: "BEP20 — BSC",           assetCode: "BTC.BEP20" },
+  ]},
+  ETH:   { name: "Ethereum",           logoSlug: "eth",   networks: [
+    { id: "ERC20",   label: "ERC20 — Ethereum",      assetCode: "ETH" },
+    { id: "BEP20",   label: "BEP20 — BSC",           assetCode: "ETH.BEP20" },
+  ]},
+  BNB:   { name: "BNB",                logoSlug: "bnb",   networks: [
+    { id: "BEP20",   label: "BEP20 — BSC",           assetCode: "BNB" },
+  ]},
+  SOL:   { name: "Solana",             logoSlug: "sol",   networks: [
+    { id: "SOL",     label: "Solana",                assetCode: "SOL" },
+    { id: "BEP20",   label: "BEP20 — BSC",           assetCode: "SOL.BEP20" },
+  ]},
+  XRP:   { name: "Ripple XRP",         logoSlug: "xrp",   networks: [
+    { id: "XRP",     label: "XRP Ledger",            assetCode: "XRP" },
+    { id: "BEP20",   label: "BEP20 — BSC",           assetCode: "XRP.BEP20" },
+  ]},
+  TON:   { name: "Toncoin",            logoSlug: "ton",   networks: [
+    { id: "TON",     label: "TON Network",           assetCode: "TON" },
+    { id: "BEP20",   label: "BEP20 — BSC",           assetCode: "TON.BEP20" },
+  ]},
+  TRX:   { name: "Tron",               logoSlug: "trx",   networks: [
+    { id: "TRC20",   label: "Tron (TRC20)",          assetCode: "TRX" },
+  ]},
+  ADA:   { name: "Cardano",            logoSlug: "ada",   networks: [
+    { id: "ADA",     label: "Cardano",               assetCode: "ADA" },
+    { id: "BEP20",   label: "BEP20 — BSC",           assetCode: "ADA.BEP20" },
+  ]},
+  DOGE:  { name: "Dogecoin",           logoSlug: "doge",  networks: [
+    { id: "DOGE",    label: "Dogecoin",              assetCode: "DOGE" },
+    { id: "BEP20",   label: "BEP20 — BSC",           assetCode: "DOGE.BEP20" },
+  ]},
+  LTC:   { name: "Litecoin",           logoSlug: "ltc",   networks: [
+    { id: "LTC",     label: "Litecoin",              assetCode: "LTC" },
+  ]},
+  MATIC: { name: "Polygon MATIC",      logoSlug: "matic", networks: [
+    { id: "POLYGON", label: "Polygon",               assetCode: "MATIC" },
+  ]},
+  XLM:   { name: "Stellar",            logoSlug: "xlm",   networks: [
+    { id: "XLM",     label: "Stellar",               assetCode: "XLM" },
+    { id: "BEP20",   label: "BEP20 — BSC",           assetCode: "XLM.BEP20" },
+  ]},
+  SUI:   { name: "Sui",                logoSlug: "sui",   networks: [
+    { id: "SUI",     label: "Sui Network",           assetCode: "SUI" },
+  ]},
+  BCH:   { name: "Bitcoin Cash",       logoSlug: "bch",   networks: [
+    { id: "BCH",     label: "Bitcoin Cash",          assetCode: "BCH" },
+    { id: "BEP20",   label: "BEP20 — BSC",           assetCode: "BCH.BEP20" },
+  ]},
+  DOT:   { name: "Polkadot",           logoSlug: "dot",   networks: [
+    { id: "BEP20",   label: "BEP20 — BSC",           assetCode: "DOT.BEP20" },
+  ]},
+  SHIB:  { name: "Shiba Inu",          logoSlug: "shib",  networks: [
+    { id: "ERC20",   label: "ERC20 — Ethereum",      assetCode: "SHIB.ERC20" },
+    { id: "BEP20",   label: "BEP20 — BSC",           assetCode: "SHIB.BEP20" },
+  ]},
+  CAKE:  { name: "PancakeSwap",        logoSlug: "cake",  networks: [
+    { id: "BEP20",   label: "BEP20 — BSC",           assetCode: "CAKE.BEP20" },
+  ]},
+  DOGS:  { name: "DOGS",               logoSlug: "dogs",  networks: [
+    { id: "TON",     label: "TON Network",           assetCode: "DOGS.TON" },
+  ]},
 };
+
+// Legacy alias kept for the network-reset useEffect
+const CRYPTO_NETWORKS = Object.fromEntries(
+  Object.entries(CRYPTO_COIN_LIST).map(([k, v]) => [k, v.networks]),
+) as Record<string, CryptoNet[]>;
+
+function coinLogoUrl(slug: string): string {
+  return `https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/32/color/${slug}.png`;
+}
 
 export default function DepositPage() {
   const { toast } = useToast();
@@ -338,7 +408,7 @@ export default function DepositPage() {
       const res = await apiRequest("POST", "/api/deposits/crypto/address", {
         assetCode: net.assetCode,
         amount: cryptoAmount,
-        currency: user?.preferredCurrency || "XOF",
+        currency: "USDT", // user enters USDT amounts directly
         ...(refundAddress ? { refundAddress } : {}),
       });
       const data = await res.json();
@@ -650,66 +720,72 @@ export default function DepositPage() {
               /* ── STEP: form ── */
               ) : (
                 <>
-                  {/* Coin selector */}
-                  <div className="space-y-2">
+                  {/* ── Crypto selector dropdown ── */}
+                  <div className="space-y-1.5">
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cryptomonnaie</p>
-                    <div className="grid grid-cols-4 gap-2">
-                      {(Object.keys(CRYPTO_NETWORKS) as Array<keyof typeof CRYPTO_NETWORKS>).map(coin => (
-                        <button
-                          key={coin}
-                          type="button"
-                          onClick={() => setCryptoCoin(coin)}
-                          className={`flex flex-col items-center justify-center gap-1 py-2.5 rounded-xl border text-xs font-bold transition-all ${
-                            cryptoCoin === coin
-                              ? "border-primary bg-primary/10 text-primary"
-                              : "border-border bg-muted/20 text-muted-foreground hover:border-primary/50"
-                          }`}
-                        >
-                          <span className="text-base">{CRYPTO_ICONS[coin]}</span>
-                          {coin}
-                        </button>
-                      ))}
+                    <div className="relative">
+                      <select
+                        value={cryptoCoin}
+                        onChange={e => setCryptoCoin(e.target.value as any)}
+                        className="w-full h-12 pl-11 pr-4 rounded-xl border border-border bg-background text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/40 appearance-none cursor-pointer"
+                      >
+                        {Object.entries(CRYPTO_COIN_LIST).map(([sym, def]) => (
+                          <option key={sym} value={sym}>{sym} — {def.name}</option>
+                        ))}
+                      </select>
+                      {/* coin logo overlay */}
+                      <div className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full overflow-hidden bg-muted flex items-center justify-center">
+                        <img
+                          src={coinLogoUrl(CRYPTO_COIN_LIST[cryptoCoin]?.logoSlug ?? cryptoCoin.toLowerCase())}
+                          alt={cryptoCoin}
+                          className="w-6 h-6 object-contain"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                        />
+                      </div>
+                      <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">▼</div>
                     </div>
                   </div>
 
-                  {/* Network selector (only when multiple options) */}
-                  {CRYPTO_NETWORKS[cryptoCoin].length > 1 && (
-                    <div className="space-y-2">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Réseau</p>
-                      <div className="flex flex-wrap gap-2">
-                        {CRYPTO_NETWORKS[cryptoCoin].map(net => (
-                          <button
-                            key={net.id}
-                            type="button"
-                            onClick={() => setCryptoNetwork(net.id)}
-                            className={`px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
-                              cryptoNetwork === net.id
-                                ? "border-primary bg-primary/10 text-primary"
-                                : "border-border bg-muted/20 text-muted-foreground hover:border-primary/50"
-                            }`}
-                          >
-                            {net.label}
-                          </button>
+                  {/* ── Network selector dropdown ── */}
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Réseau</p>
+                    <div className="relative">
+                      <select
+                        value={cryptoNetwork}
+                        onChange={e => setCryptoNetwork(e.target.value)}
+                        className="w-full h-12 px-4 rounded-xl border border-border bg-background text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/40 appearance-none cursor-pointer"
+                      >
+                        {(CRYPTO_COIN_LIST[cryptoCoin]?.networks ?? []).map(net => (
+                          <option key={net.id} value={net.id}>{net.label}</option>
                         ))}
-                      </div>
+                      </select>
+                      <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">▼</div>
                     </div>
-                  )}
+                    {/* Warning for memo chains */}
+                    {(cryptoCoin === "XRP" || cryptoCoin === "TON" || cryptoCoin === "XLM" ||
+                      (CRYPTO_COIN_LIST[cryptoCoin]?.networks.find(n => n.id === cryptoNetwork)?.assetCode ?? "").includes("TON") ||
+                      (CRYPTO_COIN_LIST[cryptoCoin]?.networks.find(n => n.id === cryptoNetwork)?.assetCode ?? "").includes("XRP")) && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400">
+                        ⚠️ Ce réseau nécessite un mémo/tag — il sera affiché avec l'adresse.
+                      </p>
+                    )}
+                  </div>
 
-                  {/* Amount */}
-                  <div className="space-y-2">
+                  {/* ── Amount in USDT ── */}
+                  <div className="space-y-1.5">
                     <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Montant ({userCurrency})
+                      Montant (USDT)
                     </label>
                     <div className="flex rounded-xl border border-border overflow-hidden focus-within:ring-2 focus-within:ring-primary/40">
                       <span className="flex items-center px-3 bg-muted border-r border-border text-sm font-bold text-muted-foreground shrink-0">
-                        {userCurrency}
+                        USDT
                       </span>
                       <input
                         type="number"
                         inputMode="decimal"
                         min="1"
-                        step="1"
-                        placeholder="0"
+                        step="0.01"
+                        placeholder="0.00"
                         value={cryptoAmount}
                         onChange={e => setCryptoAmount(e.target.value)}
                         className="flex-1 min-w-0 px-4 h-12 bg-background text-base font-semibold focus:outline-none"
@@ -717,29 +793,29 @@ export default function DepositPage() {
                       />
                     </div>
                     <div className="flex gap-2 flex-wrap">
-                      {["1000", "2500", "5000", "10000", "25000"].map(v => (
+                      {["10", "50", "100", "250", "500"].map(v => (
                         <button
                           key={v}
                           type="button"
                           onClick={() => setCryptoAmount(v)}
                           className="text-xs px-3 py-1.5 rounded-lg border border-border bg-muted/30 hover:bg-muted/60 font-semibold transition-all"
                         >
-                          {parseInt(v).toLocaleString()} {userCurrency}
+                          {v} USDT
                         </button>
                       ))}
                     </div>
                   </div>
 
-                  {/* Fee summary */}
+                  {/* ── Fee summary (USDT) ── */}
                   {cryptoAmtNum > 0 && (
                     <div className="bg-muted/30 rounded-xl px-4 py-3 space-y-1.5">
                       <div className="flex justify-between text-xs text-muted-foreground">
                         <span>Frais ({cryptoFeePercent}%)</span>
-                        <span className="font-semibold text-red-500">-{cryptoFee.toFixed(0)} {userCurrency}</span>
+                        <span className="font-semibold text-red-500">-{cryptoFee.toFixed(4)} USDT</span>
                       </div>
                       <div className="flex justify-between text-sm border-t border-border pt-1.5">
                         <span className="text-muted-foreground font-medium">Montant net crédité</span>
-                        <span className="font-bold text-green-500">{cryptoNet.toFixed(0)} {userCurrency}</span>
+                        <span className="font-bold text-green-500">{cryptoNet.toFixed(4)} USDT</span>
                       </div>
                     </div>
                   )}

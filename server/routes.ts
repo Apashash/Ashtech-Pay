@@ -12539,7 +12539,21 @@ export async function registerRoutes(
         return res.status(503).json({ message: "Paiement crypto non configuré. Contactez l'administrateur." });
       }
 
-      const SUPPORTED_ASSETS = ["USDT.TRC20", "USDT.BEP20", "USDT.ERC20", "BTC", "XRP", "TON"];
+      const SUPPORTED_ASSETS = [
+        // USDT
+        "USDT.TRC20","USDT.BEP20","USDT.ERC20","USDT.POLYGON","USDT.SOL","USDT.TON",
+        // USDC
+        "USDC.ERC20","USDC.BEP20","USDC.SOL","USDC.POLYGON",
+        // Major coins
+        "BTC","ETH","BNB","SOL","XRP","TON","TRX","LTC","ADA","DOGE","MATIC","XLM","SUI","XTZ","BCH",
+        // BEP20 tokens
+        "ETH.BEP20","BTC.BEP20","XRP.BEP20","ADA.BEP20","DOGE.BEP20","DOT.BEP20","BCH.BEP20",
+        "SHIB.BEP20","SOL.BEP20","TON.BEP20","XLM.BEP20","TWT.BEP20","CAKE.BEP20",
+        // ERC20 tokens
+        "SHIB.ERC20",
+        // Other
+        "DOGS.TON",
+      ];
       const { assetCode, amount, currency: reqCurrency, refundAddress } = req.body;
 
       if (!assetCode || !SUPPORTED_ASSETS.includes(assetCode)) {
@@ -12578,13 +12592,10 @@ export async function registerRoutes(
       const depositAddr = await getWaaSDepositAddress(iziAccountId, assetCode);
 
       // ── 3. Create pending transaction for tracking ─────────────────────────
-      const fiatCurrency   = ((reqCurrency || (user as any).preferredCurrency || "XOF") as string).toUpperCase();
-      const fxRates        = await loadFxRates();
+      // Frontend sends amounts in USDT directly; no fiat conversion needed.
       const cryptoFeeStr   = await storage.getSetting("izichange_fee_percent");
       const cryptoFeePercent = cryptoFeeStr ? parseFloat(cryptoFeeStr.value) : 2.5;
-      const amountInXAF    = convertToXAF(numAmount, fiatCurrency, fxRates);
-      const usdtPerXaf     = fxRates["USDT"] ?? 655;
-      const amountInUSDT   = amountInXAF / usdtPerXaf;
+      const amountInUSDT   = numAmount;
       const feeAmountUSDT  = amountInUSDT * (cryptoFeePercent / 100);
       const netAmountUSDT  = amountInUSDT - feeAmountUSDT;
 

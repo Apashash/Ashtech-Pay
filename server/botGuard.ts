@@ -366,6 +366,7 @@ const API_UA_EXEMPT_PATHS = [
   "/api/swychr/webhook",
   "/api/afribapay/webhook",
   "/api/pixpay/webhook",
+  "/api/izichange/webhook", // IziChange payment processor — server-to-server calls
   "/api/pay/",
   "/api/v1/hosted-payment",
   "/api/telegram/webhook",
