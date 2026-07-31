@@ -7,7 +7,7 @@ import {
   ArrowLeft, Terminal, Code2, Zap, Eye, EyeOff,
   Copy, CheckCheck, ExternalLink, Loader2,
   CheckCircle2, AlertCircle, BookOpen, FlaskConical,
-  Play, RotateCcw, ChevronRight,
+  Play, RotateCcw, ChevronRight, Bitcoin,
 } from "lucide-react";
 
 const ALL_COUNTRIES = [
@@ -662,6 +662,22 @@ export default function TestPaymentPage() {
             </button>
           ))}
         </div>
+
+        <Link href="/docs/test-crypto">
+          <button
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50/70 text-left transition-all hover:border-amber-300 hover:bg-amber-50"
+            data-testid="button-test-crypto-api-sandbox"
+          >
+            <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+              <Bitcoin className="w-4 h-4 text-amber-600" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium leading-none mb-1 text-gray-900">Tester l’API Crypto</p>
+              <p className="text-[11px] font-mono truncate text-amber-700/80">GET /v1/crypto/assets → POST /v1/crypto/collect</p>
+            </div>
+            <ChevronRight className="w-4 h-4 text-amber-600/60 shrink-0" />
+          </button>
+        </Link>
 
         {/* Panel */}
         <div className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
