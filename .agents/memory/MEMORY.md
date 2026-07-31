@@ -13,3 +13,4 @@
 - [GitHub push authentication](github-push-authentication.md) — when shell HTTPS push rejects credentials, use the managed GitHub push integration instead of handling tokens manually.
 - [Crypto sandbox optional fields](crypto-sandbox-optional-fields.md) — omit the upstream customer object when email is absent; the sandbox renders QR locally and shows diagnostic API errors.
 - [Mobile crypto tester layout](mobile-crypto-tester-layout.md) — prevent iOS form zoom and flex/grid overflow; keep long crypto responses contained and centered.
+- [Payment link social previews](payment-link-social-previews.md) — upsert OG/Twitter tags in the server HTML shell; the SPA may omit image tags entirely.
