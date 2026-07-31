@@ -22,6 +22,7 @@ import {
 import { getOperatorLogo } from "@/lib/operator-logos";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { SiPaypal } from "react-icons/si";
+import { CRYPTO_COIN_LIST, CRYPTO_NETWORKS, coinLogoUrl } from "@/lib/crypto-assets";
 
 const CURRENCY_FLAGS: Record<SupportedCurrency, string> = {
   "XAF": "🇨🇲", "XOF": "🇸🇳", "CDF": "🇨🇩", "GHS": "🇬🇭",
@@ -87,8 +88,15 @@ export default function PaymentPage() {
   const [pixpayOtpCode, setPixpayOtpCode] = useState("");
   const [pixpayOtpStep, setPixpayOtpStep] = useState(false);
 
-  const [cryptoPaymentUrl, setCryptoPaymentUrl] = useState<string | null>(null);
-  const cryptoSucceededRef = useRef(false);
+  // WaaS crypto state for payment-link crypto flow
+  const [payCryptoCoin, setPayCryptoCoin] = useState("USDT");
+  const [payCryptoNetwork, setPayCryptoNetwork] = useState("TRC20");
+  const [payCryptoStep, setPayCryptoStep] = useState<"form" | "ready">("form");
+  const [payCryptoAddr, setPayCryptoAddr] = useState("");
+  const [payCryptoMemo, setPayCryptoMemo] = useState<string | null>(null);
+  const [payCryptoRef, setPayCryptoRef] = useState("");
+  const [payCryptoAssetCode, setPayCryptoAssetCode] = useState("USDT.TRC20");
+  const [payCryptoAmountUsdt, setPayCryptoAmountUsdt] = useState("");
 
   const { data: paymentLink, isLoading, error } = useQuery<PaymentLink & { hasPdf?: boolean }>({
     queryKey: ["/api/payment-links/public", params?.slug],
@@ -310,41 +318,7 @@ export default function PaymentPage() {
     onSuccess: async (data) => {
       const ref = data.reference || "";
 
-      // ── Crypto IziChange flow (inline embed — no redirect, no popup) ─────────
-      if (data.paymentUrl) {
-        setPaymentReference(ref);
-        cryptoSucceededRef.current = false;
-        setCryptoPaymentUrl(data.paymentUrl); // triggers inline container rendering
-        const openInline = () => {
-          if (!window.IziPay) { setTimeout(openInline, 300); return; }
-          window.IziPay.open({
-            url: data.paymentUrl,
-            container: "#izipay-payment-checkout",
-            onSuccess: () => {
-              cryptoSucceededRef.current = true;
-              setCryptoPaymentUrl(null);
-              setPaymentStatus("success");
-              setPaymentComplete(true);
-              redirectAfterPayment("success", ref);
-            },
-            onClose: () => {
-              // keep inline container visible until user explicitly cancels
-            },
-            onError: () => {
-              toast({ title: "Erreur de paiement", description: "Le paiement a échoué. Veuillez réessayer.", variant: "destructive" });
-              setCryptoPaymentUrl(null);
-            },
-            onExpired: () => {
-              toast({ title: "Paiement expiré", description: "Veuillez réessayer.", variant: "destructive" });
-              setCryptoPaymentUrl(null);
-            },
-          });
-        };
-        openInline();
-        return;
-      }
-
-      setPaymentComplete(true);
+          setPaymentComplete(true);
       setPaymentReference(ref);
       setOtpCode("");
       setWaveUrl(null);
@@ -402,14 +376,39 @@ export default function PaymentPage() {
     },
   });
 
-  // Load IziPay embed.js once
+  // WaaS mutation for payment-link crypto address
+  const generatePayLinkCryptoMutation = useMutation({
+    mutationFn: async () => {
+      const net = CRYPTO_NETWORKS[payCryptoCoin]?.find(n => n.id === payCryptoNetwork);
+      if (!net) throw new Error("Réseau invalide");
+      if (!email.trim()) throw new Error("Email requis");
+      const res = await fetch(`/api/payment-links/${params?.slug}/crypto/address`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assetCode: net.assetCode, email: email.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Erreur lors de la génération");
+      return data;
+    },
+    onSuccess: (data) => {
+      setPayCryptoAddr(data.address);
+      setPayCryptoMemo(data.memo ?? null);
+      setPayCryptoRef(data.reference || "");
+      setPayCryptoAssetCode(data.assetCode);
+      setPayCryptoAmountUsdt(data.amountUsdt || "");
+      setPayCryptoStep("ready");
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Reset network when coin changes
   useEffect(() => {
-    if (document.querySelector('script[src*="izichange.com/embed.js"]')) return;
-    const script = document.createElement("script");
-    script.src = "https://checkout.pay.izichange.com/embed.js";
-    script.async = true;
-    document.head.appendChild(script);
-  }, []);
+    const nets = CRYPTO_NETWORKS[payCryptoCoin];
+    if (nets?.length) setPayCryptoNetwork(nets[0].id);
+  }, [payCryptoCoin]);
 
   useEffect(() => {
     return () => {
@@ -435,7 +434,14 @@ export default function PaymentPage() {
     setOtpRequired(false);
     setOtpCode("");
     setWaveUrl(null);
-    cryptoSucceededRef.current = false;
+    setPayCryptoCoin("USDT");
+    setPayCryptoNetwork("TRC20");
+    setPayCryptoStep("form");
+    setPayCryptoAddr("");
+    setPayCryptoMemo(null);
+    setPayCryptoRef("");
+    setPayCryptoAssetCode("USDT.TRC20");
+    setPayCryptoAmountUsdt("");
   };
 
   if (isLoading) {
@@ -564,27 +570,84 @@ export default function PaymentPage() {
     );
   }
 
-  // ── Crypto inline checkout (no redirect, no popup) ───────────────────────
-  if (cryptoPaymentUrl) {
+  // ── WaaS crypto address ready ────────────────────────────────────────────
+  if (paymentMethod === "crypto" && payCryptoStep === "ready" && payCryptoAddr) {
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(payCryptoAddr)}`;
     return (
       <div className="min-h-screen bg-[#f0f4f8] flex flex-col">
         <div className="flex-1 flex items-center justify-center p-4">
-          <div className="w-full max-w-md space-y-3">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="w-4 h-4 animate-spin text-primary shrink-0" />
-              <span>Chargement du checkout IziChange…</span>
+          <div className="w-full max-w-md space-y-4">
+            {/* Header */}
+            <div className="text-center space-y-1">
+              <div className="w-12 h-12 mx-auto rounded-full bg-green-100 flex items-center justify-center">
+                <Bitcoin className="w-6 h-6 text-green-600" />
+              </div>
+              <h2 className="text-lg font-bold">Adresse de paiement crypto</h2>
+              <p className="text-sm text-muted-foreground">
+                Envoyez <span className="font-semibold text-foreground">{payCryptoAssetCode.replace(".", " ")} </span>
+                à l'adresse ci-dessous
+              </p>
             </div>
-            {/* IziChange checkout embedded inline — pas de redirection */}
-            <div
-              id="izipay-payment-checkout"
-              className="w-full rounded-2xl overflow-hidden border border-border bg-white"
-              style={{ minHeight: 480 }}
-            />
+
+            {/* Amount banner */}
+            {payCryptoAmountUsdt && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-center">
+                <p className="text-xs text-amber-700">Montant à envoyer (estimé)</p>
+                <p className="text-2xl font-bold text-amber-700">{payCryptoAmountUsdt} USDT</p>
+              </div>
+            )}
+
+            {/* QR Code */}
+            <div className="bg-white rounded-2xl border border-border p-4 flex flex-col items-center gap-3">
+              <img src={qrUrl} alt="QR code" className="w-48 h-48 rounded-xl" />
+              <div className="w-full space-y-2">
+                <p className="text-xs text-muted-foreground text-center">Adresse</p>
+                <div className="flex items-center gap-2 bg-muted/30 rounded-xl px-3 py-2">
+                  <code className="flex-1 text-xs font-mono break-all text-foreground">{payCryptoAddr}</code>
+                  <button
+                    type="button"
+                    onClick={() => { navigator.clipboard.writeText(payCryptoAddr); toast({ title: "Adresse copiée ✓" }); }}
+                    className="shrink-0 text-primary hover:text-primary/70 transition-colors"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </button>
+                </div>
+                {payCryptoMemo && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                    <p className="text-xs text-amber-700 font-semibold">⚠️ Mémo / Tag requis</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <code className="flex-1 text-xs font-mono text-amber-900">{payCryptoMemo}</code>
+                      <button
+                        type="button"
+                        onClick={() => { navigator.clipboard.writeText(payCryptoMemo!); toast({ title: "Mémo copié ✓" }); }}
+                        className="shrink-0 text-amber-700 hover:text-amber-500 transition-colors"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Network badge */}
+            <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+              <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+              <span>Réseau : <span className="font-semibold text-foreground">{payCryptoAssetCode}</span></span>
+              <span>· Réf : {payCryptoRef}</span>
+            </div>
+
+            {/* Waiting + cancel */}
+            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>En attente du paiement…</span>
+            </div>
             <button
+              type="button"
               className="w-full text-sm text-muted-foreground hover:text-foreground py-2 transition-colors"
-              onClick={() => setCryptoPaymentUrl(null)}
+              onClick={() => setPayCryptoStep("form")}
             >
-              ← Annuler le paiement
+              ← Changer de cryptomonnaie
             </button>
           </div>
         </div>
@@ -1179,7 +1242,7 @@ export default function PaymentPage() {
                     <p className="text-sm text-muted-foreground mt-1">= {formatAmount(displayAmount, linkCurrency)}</p>
                   )}
                   {paymentMethod === "crypto" && (
-                    <p className="mt-2 text-xs text-muted-foreground">Paiement via IziChange · Le crypto est sélectionné dans la fenêtre de paiement</p>
+                    <p className="mt-2 text-xs text-muted-foreground">Sélectionnez votre cryptomonnaie ci-dessous</p>
                   )}
                 </div>
               </div>
@@ -1201,7 +1264,7 @@ export default function PaymentPage() {
                   {selectedDisplayCurrency !== linkCurrency && customAmount && (adminExchangeRates[selectedDisplayCurrency] || 0) > 0 && (
                     <p className="text-xs text-muted-foreground text-center">≈ {formatAmount(amountInLinkCurrency, linkCurrency)}</p>
                   )}
-                  <p className="text-xs text-muted-foreground text-center">Paiement via IziChange · Le crypto est sélectionné dans la fenêtre de paiement</p>
+                  <p className="text-xs text-muted-foreground text-center">Sélectionnez votre cryptomonnaie ci-dessous</p>
                 </div>
               </div>
             ) : (
@@ -1221,6 +1284,52 @@ export default function PaymentPage() {
                 {selectedDisplayCurrency !== linkCurrency && customAmount && (adminExchangeRates[selectedDisplayCurrency] || 0) > 0 && (
                   <p className="text-xs text-muted-foreground text-center">≈ {formatAmount(amountInLinkCurrency, linkCurrency)}</p>
                 )}
+              </div>
+            )}
+
+            {/* ── Crypto coin + network selectors ── */}
+            {paymentMethod === "crypto" && (
+              <div className="space-y-3">
+                {/* Coin dropdown */}
+                <div className="space-y-1.5">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cryptomonnaie</p>
+                  <div className="relative">
+                    <select
+                      value={payCryptoCoin}
+                      onChange={e => setPayCryptoCoin(e.target.value)}
+                      className="w-full h-12 pl-11 pr-4 rounded-xl border border-border bg-background text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/40 appearance-none cursor-pointer"
+                    >
+                      {Object.entries(CRYPTO_COIN_LIST).map(([sym, def]) => (
+                        <option key={sym} value={sym}>{sym} — {def.name}</option>
+                      ))}
+                    </select>
+                    <div className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full overflow-hidden bg-muted flex items-center justify-center">
+                      <img
+                        src={coinLogoUrl(CRYPTO_COIN_LIST[payCryptoCoin]?.logoSlug ?? payCryptoCoin.toLowerCase())}
+                        alt={payCryptoCoin}
+                        className="w-6 h-6 object-contain"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                      />
+                    </div>
+                    <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">▼</div>
+                  </div>
+                </div>
+                {/* Network dropdown */}
+                <div className="space-y-1.5">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Réseau</p>
+                  <div className="relative">
+                    <select
+                      value={payCryptoNetwork}
+                      onChange={e => setPayCryptoNetwork(e.target.value)}
+                      className="w-full h-12 px-4 rounded-xl border border-border bg-background text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/40 appearance-none cursor-pointer"
+                    >
+                      {(CRYPTO_COIN_LIST[payCryptoCoin]?.networks ?? []).map(net => (
+                        <option key={net.id} value={net.id}>{net.label}</option>
+                      ))}
+                    </select>
+                    <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">▼</div>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -1294,19 +1403,41 @@ export default function PaymentPage() {
             </div>
 
             {/* Submit */}
-            <Button
-              className="w-full"
-              size="lg"
-              onClick={handlePayClick}
-              disabled={payMutation.isPending}
-              data-testid="button-pay"
-            >
-              {payMutation.isPending ? (
-                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{p.processing}</>
-              ) : (
-                <><Shield className="w-4 h-4 mr-2" />{p.payNow}</>
-              )}
-            </Button>
+            {paymentMethod === "crypto" ? (
+              <Button
+                className="w-full"
+                size="lg"
+                onClick={() => {
+                  if (!email.trim()) {
+                    setErrors(prev => ({ ...prev, email: "Email requis" }));
+                    return;
+                  }
+                  generatePayLinkCryptoMutation.mutate();
+                }}
+                disabled={generatePayLinkCryptoMutation.isPending}
+                data-testid="button-pay"
+              >
+                {generatePayLinkCryptoMutation.isPending ? (
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Génération…</>
+                ) : (
+                  <><Bitcoin className="w-4 h-4 mr-2" />Générer l'adresse de paiement</>
+                )}
+              </Button>
+            ) : (
+              <Button
+                className="w-full"
+                size="lg"
+                onClick={handlePayClick}
+                disabled={payMutation.isPending}
+                data-testid="button-pay"
+              >
+                {payMutation.isPending ? (
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{p.processing}</>
+                ) : (
+                  <><Shield className="w-4 h-4 mr-2" />{p.payNow}</>
+                )}
+              </Button>
+            )}
             
             <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
               <Shield className="w-4 h-4" />

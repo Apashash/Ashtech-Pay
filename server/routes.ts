@@ -7152,6 +7152,98 @@ export async function registerRoutes(
     }
   });
 
+  // ── WaaS crypto address for a payment link (PUBLIC) ───────────────────────
+  // Customer picks coin/network → we return the merchant's permanent WaaS address.
+  app.post("/api/payment-links/:slug/crypto/address", publicPayLimiter, async (req, res) => {
+    try {
+      const { slug } = req.params;
+      const { assetCode, email } = req.body;
+
+      const link = await storage.getPaymentLinkBySlug(slug);
+      if (!link || !link.isActive) {
+        return res.status(404).json({ message: "Lien de paiement introuvable ou inactif" });
+      }
+
+      const SUPPORTED = [
+        "USDT.TRC20","USDT.BEP20","USDT.ERC20","USDT.POLYGON","USDT.SOL","USDT.TON",
+        "USDC.ERC20","USDC.BEP20","USDC.SOL","USDC.POLYGON",
+        "BTC","ETH","BNB","SOL","XRP","TON","TRX","LTC","ADA","DOGE","MATIC","XLM","SUI","XTZ","BCH",
+        "ETH.BEP20","BTC.BEP20","XRP.BEP20","ADA.BEP20","DOGE.BEP20","DOT.BEP20","BCH.BEP20",
+        "SHIB.BEP20","SOL.BEP20","TON.BEP20","XLM.BEP20","TWT.BEP20","CAKE.BEP20",
+        "SHIB.ERC20","DOGS.TON",
+      ];
+      if (!assetCode || !SUPPORTED.includes(assetCode)) {
+        return res.status(400).json({ message: "Crypto/réseau non supporté" });
+      }
+
+      const merchantId = link.userId;
+      const merchant = await storage.getUser(merchantId);
+      if (!merchant) return res.status(404).json({ message: "Marchand introuvable" });
+
+      // Get or create WaaS account for the merchant
+      let iziAccountId: string = (merchant as any).izichange_account_id ?? "";
+      if (!iziAccountId) {
+        const externalRef = `ashtech_${merchantId}`;
+        let account = await findWaaSAccountByExternalRef(externalRef);
+        if (!account) {
+          account = await createWaaSAccount(
+            externalRef,
+            (merchant as any).fullName || (merchant as any).username || `User-${merchantId.slice(0, 8)}`,
+            (merchant as any).email || undefined,
+          );
+        }
+        iziAccountId = account.id;
+        pool.query("UPDATE users SET izichange_account_id = $1 WHERE id = $2", [iziAccountId, merchantId]).catch(() => {});
+      }
+
+      // Get permanent deposit address
+      const depositAddr = await getWaaSDepositAddress(iziAccountId, assetCode);
+
+      // Create pending payment_link transaction for tracking
+      const cryptoFeeStr = await storage.getSetting("izichange_fee_percent");
+      const cryptoFeePercent = cryptoFeeStr ? parseFloat(cryptoFeeStr.value) : 2.5;
+      const linkAmount = parseFloat(link.amount || "0");
+      // Rough USDT estimate for tracking (actual crediting done by webhook)
+      const fxRates = await loadFxRates();
+      const amountXAF = convertToXAF(linkAmount, link.currency || "XOF", fxRates);
+      const usdtPerXaf = fxRates["USDT"] ?? 655;
+      const amountUSDT = amountXAF / usdtPerXaf;
+      const feeUSDT = amountUSDT * (cryptoFeePercent / 100);
+      const netUSDT = amountUSDT - feeUSDT;
+
+      const reference = generateTransactionReference("payment_link");
+      await storage.createTransaction({
+        userId: merchantId,
+        type: "payment_link",
+        amount: netUSDT.toFixed(6),
+        totalAmount: amountUSDT.toFixed(6),
+        feeAmount: feeUSDT.toFixed(6),
+        currency: "USDT",
+        status: "pending",
+        description: `Paiement crypto ${assetCode} WaaS — Lien: ${link.title}${email ? ` (${email})` : ""}`,
+        paymentMethod: "crypto",
+        reference,
+        paymentLinkId: link.id,
+        metadata: { assetCode, address: depositAddr.address, memo: depositAddr.memo, payerEmail: email },
+      });
+
+      console.log(`[PayLink/WaaS] addr=${depositAddr.address} asset=${assetCode} ref=${reference} merchant=${merchantId}`);
+      return res.json({
+        address:    depositAddr.address,
+        memo:       depositAddr.memo,
+        memoType:   depositAddr.memoType,
+        assetCode,
+        reference,
+        amountUsdt: netUSDT.toFixed(4),
+        fiatAmount: linkAmount,
+        fiatCurrency: link.currency,
+      });
+    } catch (error: any) {
+      console.error("[PayLink/WaaS] Error:", error);
+      return res.status(500).json({ message: error.message || "Erreur lors de la génération de l'adresse" });
+    }
+  });
+
   // Pay via payment link - PUBLIC endpoint, creates pending payment intent
   app.post("/api/payment-links/:slug/pay", publicPayLimiter, async (req, res) => {
     try {
@@ -12609,7 +12701,7 @@ export async function registerRoutes(
         feeAmount: feeAmountUSDT.toFixed(6),
         currency: "USDT",
         status: "pending",
-        description: `Dépôt crypto ${assetCode} WaaS — ${fiatCurrency} ${numAmount}`,
+        description: `Dépôt crypto ${assetCode} WaaS — ${numAmount} USDT`,
         paymentMethod: "crypto",
         reference,
         metadata: {
@@ -12631,7 +12723,6 @@ export async function registerRoutes(
         reference,
         amountUsdt:  netAmountUSDT.toFixed(4),
         fiatAmount:  numAmount,
-        fiatCurrency,
       });
     } catch (error: any) {
       console.error("[Crypto/WaaS] Error:", error);
