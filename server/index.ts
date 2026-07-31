@@ -244,6 +244,7 @@ const CSRF_EXEMPT_PREFIXES = [
   "/api/swychr/webhook",
   "/api/afribapay/webhook",
   "/api/pixpay/webhook",
+  "/api/izichange/webhook",      // IziChange Direct Charge — no browser headers
   "/api/nowpayments/ipn",
   "/api/telegram/webhook",       // Telegram's servers don't send X-Requested-With
   "/api/v1/hosted-payment/",
