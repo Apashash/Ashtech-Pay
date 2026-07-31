@@ -7157,7 +7157,7 @@ export async function registerRoutes(
   app.post("/api/payment-links/:slug/crypto/address", publicPayLimiter, async (req, res) => {
     try {
       const { slug } = req.params;
-      const { assetCode, email } = req.body;
+      const { assetCode, email, amountUsdt: clientAmountUsdt, refundAddress } = req.body;
 
       const link = await storage.getPaymentLinkBySlug(slug);
       if (!link || !link.isActive) {
@@ -7210,12 +7210,23 @@ export async function registerRoutes(
       // Create pending payment_link transaction for tracking
       const cryptoFeeStr = await storage.getSetting("izichange_fee_percent");
       const cryptoFeePercent = cryptoFeeStr ? parseFloat(cryptoFeeStr.value) : 2.5;
-      const linkAmount = parseFloat(link.amount || "0");
-      // Rough USDT estimate for tracking (actual crediting done by webhook)
-      const fxRates = await loadFxRates();
-      const amountXAF = convertToXAF(linkAmount, link.currency || "XOF", fxRates);
-      const usdtPerXaf = fxRates["USDT"] ?? 655;
-      const amountUSDT = amountXAF / usdtPerXaf;
+
+      // Determine USDT amount to track:
+      // - Fixed-amount link  → convert fiat amount to USDT via FX rates
+      // - Open-amount link   → use the USDT amount the payer entered directly
+      let amountUSDT: number;
+      if (link.isFixedAmount) {
+        const linkAmount = parseFloat(link.amount || "0");
+        const fxRates = await loadFxRates();
+        const amountXAF = convertToXAF(linkAmount, link.currency || "XOF", fxRates);
+        const usdtPerXaf = fxRates["USDT"] ?? 655;
+        amountUSDT = amountXAF / usdtPerXaf;
+      } else {
+        amountUSDT = parseFloat(clientAmountUsdt || "0");
+        if (!amountUSDT || amountUSDT <= 0) {
+          return res.status(400).json({ message: "Montant USDT invalide ou manquant" });
+        }
+      }
       const feeUSDT = amountUSDT * (cryptoFeePercent / 100);
       const netUSDT = amountUSDT - feeUSDT;
 
