@@ -9,7 +9,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest, queryClient, getAuthHeaders } from "@/lib/queryClient";
 import type { User, SupportedCurrency } from "@shared/schema";
-import { CreditCard, Loader2, AlertCircle, Phone, CheckCircle, XCircle, Smartphone, ExternalLink, Hash, Clock, Copy, TrendingDown, Bitcoin, DollarSign } from "lucide-react";
+import { CreditCard, Loader2, AlertCircle, Phone, CheckCircle, XCircle, Smartphone, ExternalLink, Hash, Clock, Copy, TrendingDown, Bitcoin, DollarSign, Hourglass } from "lucide-react";
 import { SearchableSelectContent } from "@/components/ui/searchable-select-content";
 import { useLanguage } from "@/lib/language";
 import { BottomSheet, BottomSheetContent, BottomSheetHeader, BottomSheetTitle, BottomSheetFooter } from "@/components/ui/bottom-sheet";
@@ -99,6 +99,8 @@ export default function DepositPage() {
   const [cryptoAssetCode, setCryptoAssetCode] = useState("");
   const [cryptoCountdown, setCryptoCountdown] = useState(30 * 60);
   const cryptoCountdownRef = useRef<NodeJS.Timeout | null>(null);
+  const [cryptoReadyCountdown, setCryptoReadyCountdown] = useState(40 * 60);
+  const cryptoReadyCountdownRef = useRef<NodeJS.Timeout | null>(null);
 
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const { data: wallets } = useQuery<{ id: string; currency: string; balance: string }[]>({
@@ -334,6 +336,15 @@ export default function DepositPage() {
       setCryptoAssetCode(data.assetCode);
       setCryptoRef(data.reference || "");
       setCryptoStep("ready");
+      // Start the "TEMPS RESTANT" spinner countdown (40 min)
+      setCryptoReadyCountdown(40 * 60);
+      if (cryptoReadyCountdownRef.current) clearInterval(cryptoReadyCountdownRef.current);
+      cryptoReadyCountdownRef.current = setInterval(() => {
+        setCryptoReadyCountdown(prev => {
+          if (prev <= 1) { clearInterval(cryptoReadyCountdownRef.current!); return 0; }
+          return prev - 1;
+        });
+      }, 1000);
     },
     onError: (error: Error) => {
       toast({ title: "Erreur", description: error.message, variant: "destructive" });
@@ -344,6 +355,8 @@ export default function DepositPage() {
     return () => {
       if (countdownRef.current) clearInterval(countdownRef.current);
       if (pollingRef.current) clearInterval(pollingRef.current);
+      if (cryptoCountdownRef.current) clearInterval(cryptoCountdownRef.current);
+      if (cryptoReadyCountdownRef.current) clearInterval(cryptoReadyCountdownRef.current);
     };
   }, []);
 
@@ -671,10 +684,49 @@ export default function DepositPage() {
                     </div>
                   )}
 
+                  {/* ── Spinner TEMPS RESTANT ── */}
+                  <div className="rounded-2xl border border-border bg-muted/20 p-4 space-y-4">
+                    {/* Ligne countdown */}
+                    <div className="flex items-center gap-4">
+                      {/* Arc spinner */}
+                      <div className="relative flex items-center justify-center shrink-0">
+                        <svg width="52" height="52" viewBox="0 0 52 52" className="absolute" style={{ transform: "rotate(-90deg)" }}>
+                          <circle cx="26" cy="26" r="22" fill="none" stroke="currentColor" strokeWidth="3" className="text-border" />
+                          <circle
+                            cx="26" cy="26" r="22" fill="none" stroke="currentColor" strokeWidth="3"
+                            strokeLinecap="round"
+                            strokeDasharray={`${2 * Math.PI * 22}`}
+                            strokeDashoffset={`${2 * Math.PI * 22 * (1 - (cryptoReadyCountdown % 60) / 60)}`}
+                            className="text-teal-500 transition-all duration-1000"
+                          />
+                        </svg>
+                        <div
+                          className="w-[52px] h-[52px] rounded-full border-[3px] border-transparent border-t-teal-500 animate-spin"
+                          style={{ animationDuration: "1.2s" }}
+                        />
+                      </div>
+                      {/* Temps */}
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Temps restant</p>
+                        <p className="text-2xl font-bold tabular-nums text-teal-500 leading-tight">
+                          {String(Math.floor(cryptoReadyCountdown / 3600)).padStart(2, "0")}:
+                          {String(Math.floor((cryptoReadyCountdown % 3600) / 60)).padStart(2, "0")}:
+                          {String(cryptoReadyCountdown % 60).padStart(2, "0")}
+                        </p>
+                      </div>
+                    </div>
+                    {/* Ligne vérification */}
+                    <div className="flex items-center gap-3 border-t border-border pt-3">
+                      <Hourglass className="w-5 h-5 text-teal-500 shrink-0" />
+                      <p className="text-sm text-foreground">Vérification de la transaction blockchain</p>
+                    </div>
+                  </div>
+
                   {/* Actions */}
                   <Button
                     className="w-full h-12 rounded-xl font-bold"
                     onClick={() => {
+                      if (cryptoReadyCountdownRef.current) clearInterval(cryptoReadyCountdownRef.current);
                       setCryptoStep("waiting");
                       setCryptoCountdown(30 * 60);
                       if (cryptoCountdownRef.current) clearInterval(cryptoCountdownRef.current);
@@ -692,7 +744,10 @@ export default function DepositPage() {
                   <button
                     type="button"
                     className="w-full text-xs text-muted-foreground hover:text-foreground text-center transition-colors"
-                    onClick={() => setCryptoStep("form")}
+                    onClick={() => {
+                      if (cryptoReadyCountdownRef.current) clearInterval(cryptoReadyCountdownRef.current);
+                      setCryptoStep("form");
+                    }}
                   >
                     ← Modifier
                   </button>
