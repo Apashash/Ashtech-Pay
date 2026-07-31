@@ -11,3 +11,4 @@
 - [Direct crypto SDK](direct-crypto-sdk.md) — crypto pay-ins use dedicated authenticated endpoints so Mobile Money `/v1/collect` remains backward-compatible.
 - [Crypto memo and QR handling](crypto-memo-qr.md) — keep address and memo/tag separate; use chain-specific QR URIs only when their format is known.
 - [GitHub push authentication](github-push-authentication.md) — when shell HTTPS push rejects credentials, use the managed GitHub push integration instead of handling tokens manually.
+- [Crypto sandbox optional fields](crypto-sandbox-optional-fields.md) — omit the upstream customer object when email is absent; the sandbox renders QR locally and shows diagnostic API errors.
