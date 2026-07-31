@@ -1,12 +1,27 @@
 import crypto from "crypto";
 
-export const IZIPAY_API_KEY     = process.env.IZIPAY_API_KEY     || "";
-export const IZIPAY_WEBHOOK_SECRET = process.env.IZIPAY_WEBHOOK_SECRET || "";
+// ── Lazy getters — read process.env at CALL TIME, not at module load ─────────
+// Critical: this file is imported (ESM-hoisted) BEFORE server/index.ts runs its
+// .env loader. Module-level constants would be "" on Plesk/Passenger. Getters
+// always see the value that was injected by the .env IIFE or by the OS env.
+export function getIziPayApiKey(): string {
+  return process.env.IZIPAY_API_KEY || "";
+}
+export function getIziPayWebhookSecret(): string {
+  return process.env.IZIPAY_WEBHOOK_SECRET || "";
+}
+function getIziPayBaseUrl(): string {
+  const key = getIziPayApiKey();
+  return key.startsWith("sk_test_")
+    ? "https://api.sandbox-pay.izichange.com"
+    : "https://api.pay.izichange.com";
+}
 
-// Derive base URL from key prefix (sk_test_ → sandbox, sk_live_ → production)
-const IZIPAY_BASE_URL = IZIPAY_API_KEY.startsWith("sk_test_")
-  ? "https://api.sandbox-pay.izichange.com"
-  : "https://api.pay.izichange.com";
+// Back-compat aliases used in routes.ts (keep so import doesn't break)
+/** @deprecated use getIziPayApiKey() */
+export const IZIPAY_API_KEY = "";          // always "" — do not rely on this
+/** @deprecated use getIziPayWebhookSecret() */
+export const IZIPAY_WEBHOOK_SECRET = "";   // always "" — do not rely on this
 
 // ── Currency mapping ──────────────────────────────────────────────────────────
 // Map internal platform codes → IziChange-supported fiat currencies.
@@ -26,9 +41,10 @@ export function toIziPayCurrency(currency: string): string {
 }
 
 export function isIziPayConfigured(): boolean {
-  return !!IZIPAY_API_KEY &&
-    IZIPAY_API_KEY !== "sk_test_placeholder" &&
-    !IZIPAY_API_KEY.startsWith("sk_test_placeholder");
+  const key = getIziPayApiKey();
+  return !!key &&
+    key !== "sk_test_placeholder" &&
+    !key.startsWith("sk_test_placeholder");
 }
 
 // ── Direct API helper (no SDK) ────────────────────────────────────────────────
@@ -39,12 +55,12 @@ async function iziRequest(
   idempotencyKey?: string,
 ): Promise<any> {
   const headers: Record<string, string> = {
-    Authorization:  `Bearer ${IZIPAY_API_KEY}`,
+    Authorization:  `Bearer ${getIziPayApiKey()}`,
     "Content-Type": "application/json",
   };
   if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
 
-  const res = await fetch(`${IZIPAY_BASE_URL}${path}`, {
+  const res = await fetch(`${getIziPayBaseUrl()}${path}`, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,

@@ -64,7 +64,7 @@ import { uploadToSupabase, getSignedImageUrl, downloadFromSupabase } from "./sup
 import { decryptField } from "./fieldEncryption";
 import { requireAdminPin } from "./adminPin";
 import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, fetchPaymentLinkDetails, ASHTECH_MARGIN } from "./swychr";
-import { createPaymentIntent, validateWebhook, IZIPAY_WEBHOOK_SECRET, IZIPAY_API_KEY, toIziPayCurrency, isIziPayConfigured, createWaaSAccount, findWaaSAccountByExternalRef, getWaaSDepositAddress } from "./izichange";
+import { createPaymentIntent, validateWebhook, getIziPayWebhookSecret, toIziPayCurrency, isIziPayConfigured, createWaaSAccount, findWaaSAccountByExternalRef, getWaaSDepositAddress } from "./izichange";
 import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, getAfribaPayOtpInfo, confirmAfribaPayOtp, isAfribaPayOtpRequiredMessage } from "./afribapay";
 import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, initiatePixPayPayout, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType, getPixPayServiceId, PIXPAY_OTP_USSD_CODES } from "./pixpay";
 import { addPendingPayment, removePendingPayment } from "./paymentPoller";
@@ -12390,7 +12390,7 @@ export async function registerRoutes(
   app.post("/api/izichange/webhook", webhookLimiter, async (req, res) => {
     try {
       // Validate signature
-      if (IZIPAY_WEBHOOK_SECRET) {
+      if (getIziPayWebhookSecret()) {
         const rawBody = (req as any).rawBody as Buffer | undefined;
         const signature = req.headers["x-izipay-signature"] as string | undefined;
         if (!rawBody || !signature) {
@@ -12398,13 +12398,13 @@ export async function registerRoutes(
           return res.status(400).json({ message: "Missing signature" });
         }
         try {
-          validateWebhook(rawBody, signature, IZIPAY_WEBHOOK_SECRET);
+          validateWebhook(rawBody, signature, getIziPayWebhookSecret());
         } catch (sigErr: any) {
           console.error("[IziChange Webhook] Signature validation failed:", sigErr.message);
           return res.status(401).json({ message: "Invalid signature" });
         }
       } else {
-        console.warn("[IziChange Webhook] IZIPAY_WEBHOOK_SECRET not set — accepting without signature check");
+        console.warn("[IziChange Webhook] IZIPAY_WEBHOOK_SECRET not set — accepting without signature check (getIziPayWebhookSecret was empty)");
       }
 
       const { event: eventType, data: eventData } = req.body || {};
