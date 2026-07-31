@@ -22,7 +22,7 @@ import {
 import { getOperatorLogo } from "@/lib/operator-logos";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { SiPaypal } from "react-icons/si";
-import { useIziAssets, coinLogoUrl } from "@/lib/use-crypto-assets";
+import { useIziAssets, coinLogoUrl, networkLogoUrl } from "@/lib/use-crypto-assets";
 
 const CURRENCY_FLAGS: Record<SupportedCurrency, string> = {
   "XAF": "🇨🇲", "XOF": "🇸🇳", "CDF": "🇨🇩", "GHS": "🇬🇭",
@@ -1355,12 +1355,21 @@ export default function PaymentPage() {
                     <select
                       value={payCryptoNetwork}
                       onChange={e => setPayCryptoNetwork(e.target.value)}
-                      className="w-full h-12 px-4 rounded-xl border border-border bg-background text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/40 appearance-none cursor-pointer"
+                      className="w-full h-12 pl-11 pr-4 rounded-xl border border-border bg-background text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/40 appearance-none cursor-pointer"
                     >
                       {(payCoinList[payCryptoCoin]?.networks ?? []).map(net => (
                         <option key={net.id} value={net.id}>{net.label}</option>
                       ))}
                     </select>
+                    {/* network chain logo overlay */}
+                    <div className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full overflow-hidden bg-muted flex items-center justify-center">
+                      <img
+                        src={networkLogoUrl(payCryptoNetwork)}
+                        alt={payCryptoNetwork}
+                        className="w-6 h-6 object-contain"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                      />
+                    </div>
                     <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">▼</div>
                   </div>
                   {payCoinList[payCryptoCoin]?.networks.find(n => n.id === payCryptoNetwork)?.memoRequired && (

@@ -59,7 +59,7 @@ type DepositFormData = z.infer<typeof depositFormSchema>;
 const QUICK_AMOUNTS = [5000, 10000, 25000, 50000, 100000];
 
 // ── Dynamic IziChange crypto-asset list ────────────────────────────────────────
-import { useIziAssets, coinLogoUrl } from "@/lib/use-crypto-assets";
+import { useIziAssets, coinLogoUrl, networkLogoUrl } from "@/lib/use-crypto-assets";
 
 export default function DepositPage() {
   const { toast } = useToast();
@@ -791,12 +791,21 @@ export default function DepositPage() {
                       <select
                         value={cryptoNetwork}
                         onChange={e => setCryptoNetwork(e.target.value)}
-                        className="w-full h-12 px-4 rounded-xl border border-border bg-background text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/40 appearance-none cursor-pointer"
+                        className="w-full h-12 pl-11 pr-4 rounded-xl border border-border bg-background text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/40 appearance-none cursor-pointer"
                       >
                         {(cryptoCoinList[cryptoCoin]?.networks ?? []).map(net => (
                           <option key={net.id} value={net.id}>{net.label}</option>
                         ))}
                       </select>
+                      {/* network chain logo overlay */}
+                      <div className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full overflow-hidden bg-muted flex items-center justify-center">
+                        <img
+                          src={networkLogoUrl(cryptoNetwork)}
+                          alt={cryptoNetwork}
+                          className="w-6 h-6 object-contain"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                        />
+                      </div>
                       <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">▼</div>
                     </div>
                     {/* Warning for memo chains */}
