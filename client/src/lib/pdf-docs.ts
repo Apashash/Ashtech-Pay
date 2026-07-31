@@ -777,7 +777,7 @@ export function downloadSDKDocs() {
    // ── §4  Crypto Pay-In ─────────────────────────────────────────────────────
    y = sectionTitle(doc, "4. Pay-In Crypto — /v1/crypto/assets + /v1/crypto/collect", y);
     y = paragraph(doc, "Le Pay-In Crypto utilise la meme cle API ak_… que Mobile Money, mais des endpoints dedies afin de ne modifier aucun contrat existant. Les cryptos utilisent uniquement GET /v1/crypto/assets et POST /v1/crypto/collect ; /v1/collect reste reserve a Mobile Money. Commencez par recuperer les reseaux autorises, puis creez une adresse de depot unique.", y);
-    y = paragraph(doc, "GET /v1/crypto/assets ne retourne que les reseaux actifs. Une desactivation admin est appliquee immediatement ; un coin sans reseau actif disparait du catalogue et une creation directe sur un reseau desactive retourne asset_disabled. Utilisez toujours asset_code tel qu'il est retourne par ce catalogue.", y);
+    y = paragraph(doc, "GET /v1/crypto/assets retourne uniquement les reseaux crypto actifs et autorises. Utilisez la valeur asset_code retournee dans l'appel de creation.", y);
    y += 3;
    y = subHeading(doc, "GET /v1/crypto/assets", y);
    y = codeBlock(doc, `curl https://ashtechpay.top/v1/crypto/assets \\\n  -H "Authorization: Bearer YOUR_API_KEY"`, y, "bash");
@@ -798,7 +798,7 @@ export function downloadSDKDocs() {
    );
    y = codeBlock(doc, `fetch("https://ashtechpay.top/v1/crypto/collect", {\n  method: "POST",\n  headers: {\n    "Authorization": "Bearer YOUR_API_KEY",\n    "Content-Type": "application/json"\n  },\n  body: JSON.stringify({\n    amount: 25,\n    currency: "USDT",\n    asset_code: "USDT.TRC20",\n    reference: "ORDER-CRYPTO-001",\n    notify_url: "https://monsite.com/webhook",\n    customer: { firstName: "Ada", lastName: "Lovelace", email: "ada@example.com" }\n  })\n})`, y, "javascript");
    y = codeBlock(doc, `{\n  "transaction_id": "8f3e1c2d-...",\n  "reference": "ORDER-CRYPTO-001",\n  "status": "pending",\n  "payment_method": "crypto",\n  "asset_code": "USDT.TRC20",\n  "network": "TRC20",\n  "address": "TX…",\n  "memo": null,\n  "memo_type": null,\n  "amount": 25,\n  "currency": "USDT",\n  "amount_usdt": 25,\n  "credited_amount": 24.375,\n  "fee_amount": 0.625,\n  "credited_amount_usdt": 24.375,\n  "fee_amount_usdt": 0.625,\n  "fee_percent": 2.5,\n  "expires_at": "2026-07-31T19:00:00Z"\n}`, y, "json");
-    y = paragraph(doc, "Pour une devise fiat, amount est converti en USDT avec le taux USDT/XAF configure par l'administrateur. Les frais Ashtech Pay et fournisseur sont inclus dans fee_amount_usdt. Quand memo_required vaut true, memo_type indique memo ou tag : copiez address et memo separement, sans jamais concatener ou remplacer le memo par l'adresse.", y);
+    y = paragraph(doc, "L'API accepte un montant en USDT ou dans une devise fiat supportee (XAF, XOF, GNF, CDF ou USD). Les devises fiat sont converties en USDT avec le taux USDT/XAF. amount est le montant brut ; credited_amount_usdt est le net apres frais. Les frais Ashtech Pay et fournisseur sont inclus dans fee_amount_usdt. Quand memo_required vaut true, memo_type indique memo ou tag : copiez address et memo separement, sans jamais concatener ou remplacer le memo par l'adresse.", y);
     y = paragraph(doc, "Apres confirmation par le prestataire crypto, Ashtech Pay credite automatiquement le wallet USDT du marchand avec credited_amount_usdt, puis envoie le webhook POST a notify_url. Le marchand ne doit pas crediter son wallet lui-meme. Les evenements sont payment.completed ou payment.failed et le payload crypto ajoute payment_method, asset_code, address et memo.", y);
     y = subHeading(doc, "Erreurs et diagnostic", y);
     y = paragraph(doc, "Une reponse 502 gateway_error signifie que l'adresse n'a pas pu etre generee. Une reponse 502 provider_invalid_response signifie que le service a repondu sans adresse exploitable. Une reponse 500 server_error contient toujours request_id : conservez-le pour le diagnostic. Si provider_status est present, il indique le code HTTP renvoye par le service crypto. Une reponse 400 invalid_email indique que customer.email est mal forme ; invalid_notify_url indique que notify_url doit etre une URL HTTPS valide. Ces deux champs restent optionnels.", y);
@@ -915,7 +915,7 @@ export function downloadSDKDocs() {
       ["403","forbidden",     "Cette transaction n'appartient pas a votre compte"],
       ["404","not_found",     "Transaction introuvable"],
        ["422","unprocessable", "Pays, operateur ou reseau crypto non supporte / devise incorrecte"],
-       ["422","asset_disabled", "Le reseau crypto a ete desactive par l'administrateur"],
+       ["422","asset_disabled", "Le reseau crypto selectionne n'est plus actif"],
        ["503","crypto_unavailable", "Le catalogue ou le service de paiement crypto est indisponible"],
       ["429","rate_limited",  "Trop de requetes — ralentissez"],
        ["400","invalid_email", "customer.email est mal forme"],

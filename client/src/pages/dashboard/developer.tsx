@@ -558,19 +558,10 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
               <code className="text-sm font-mono text-gray-700 bg-gray-100 border border-gray-200 rounded-lg px-3 py-1.5">/v1/crypto/assets</code>
             </div>
             <p className="text-gray-600 leading-relaxed">
-              Retourne uniquement les réseaux crypto actifs et autorisés par l'administrateur.
-              Utilisez la valeur <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">asset_code</code> retournée
-              dans l'appel de création.
+              Retourne uniquement les réseaux crypto actifs et autorisés. Utilisez la valeur
+              <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs mx-1">asset_code</code>
+              retournée dans l'appel de création.
             </p>
-            <div className="rounded-xl border border-blue-200 bg-blue-50 p-5 space-y-2">
-              <p className="text-sm font-semibold text-blue-900">Catalogue et activation</p>
-              <p className="text-sm text-blue-900/80">
-                La désactivation d’un réseau dans Admin → Pays &amp; Opérateurs est prise en compte immédiatement :
-                le réseau disparaît de ce catalogue et tout appel direct à <code className="font-mono">/v1/crypto/collect</code>
-                retourne <code className="font-mono">asset_disabled</code>. Un coin sans réseau actif n’est pas retourné.
-                Ne construisez pas vous-même un <code className="font-mono">asset_code</code> : utilisez uniquement une valeur du catalogue.
-              </p>
-            </div>
             <div className="grid lg:grid-cols-2 gap-5">
               <div className="space-y-2 min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Requête</p>
@@ -617,7 +608,7 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
               <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">GNF</code>,
               <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">CDF</code> ou
               <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">USD</code>).
-              Les devises fiat sont converties en USDT avec le taux USDT/XAF administré.
+              Les devises fiat sont converties en USDT avec le taux USDT/XAF.
               <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs ml-1">amount</code> est le montant
               brut ; <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">credited_amount_usdt</code> est le net après frais.
             </p>
