@@ -75,7 +75,7 @@ import {
 } from "./directCrypto";
 import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, getAfribaPayOtpInfo, confirmAfribaPayOtp, isAfribaPayOtpRequiredMessage } from "./afribapay";
 import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, initiatePixPayPayout, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType, getPixPayServiceId, PIXPAY_OTP_USSD_CODES } from "./pixpay";
-import { addPendingPayment, removePendingPayment } from "./paymentPoller";
+import { addPendingPayment, removePendingPayment, expireCryptoPaymentIfNeeded } from "./paymentPoller";
 import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, sameCfaFamily, getConversionPairKey, maybeAutoConvert } from "./walletHelper";
 import { createSwychrPayout, formatInternationalPhone, detectMethodFromPhone, fiatToPusd, pusdToFiatRate, convertFiatToPusd, getPayoutToken, COUNTRY_CURRENCY } from "./swychrPayout";
 import { addPendingPayout, removePendingPayout } from "./payoutPoller";
@@ -3586,7 +3586,21 @@ export async function registerRoutes(
       if (!transaction) {
         return res.status(404).json({ message: "Transaction non trouvée", status: "not_found" });
       }
-      res.json({ status: transaction.status, reference: transaction.reference, description: transaction.status === "failed" ? transaction.description : undefined });
+      // `notify_url` is optional. For crypto transactions, expire on demand so
+      // a client-server polling this endpoint gets `failed` after 15 minutes
+      // even when the background poller has not reached its next cycle.
+      if (transaction.status === "pending" && transaction.paymentMethod === "crypto") {
+        await expireCryptoPaymentIfNeeded(reference);
+      }
+      const latestTransaction = await storage.getTransactionByReference(reference);
+      if (!latestTransaction) {
+        return res.status(404).json({ message: "Transaction non trouvée", status: "not_found" });
+      }
+      res.json({
+        status: latestTransaction.status,
+        reference: latestTransaction.reference,
+        description: latestTransaction.status === "failed" ? latestTransaction.description : undefined,
+      });
     } catch (error) {
       console.error("Get transaction status error:", error);
       res.status(500).json({ message: "Erreur serveur" });
@@ -14547,33 +14561,42 @@ export async function registerRoutes(
       if (!tx) return res.status(404).json({ error: "not_found", message: "Transaction introuvable." });
       if (tx.userId !== merchant.id) return res.status(403).json({ error: "forbidden", message: "Accès refusé." });
 
+      // notify_url is optional: API clients may poll this endpoint directly.
+      // Expire only crypto payments on demand so an overdue transaction
+      // returns "failed" immediately, even between background poller cycles.
+      if (tx.status === "pending" && tx.paymentMethod === "crypto" && tx.reference) {
+        await expireCryptoPaymentIfNeeded(tx.reference);
+      }
+      const latestTx = await storage.getTransactionById(req.params.id);
+      if (!latestTx) return res.status(404).json({ error: "not_found", message: "Transaction introuvable." });
+
       // Resolve operator name from operatorId
       let operatorName: string | null = null;
-      if ((tx as any).operatorId) {
+      if ((latestTx as any).operatorId) {
         try {
-          const op = await storage.getOperator((tx as any).operatorId);
+          const op = await storage.getOperator((latestTx as any).operatorId);
           if (op) operatorName = op.name;
         } catch (_) { /* non-blocking */ }
       }
 
-      const isoStatus = tx.status === "completed" ? "success" : tx.status;
+      const isoStatus = latestTx.status === "completed" ? "success" : latestTx.status;
 
       const responseBody: Record<string, any> = {
-        transaction_id: tx.id,
-        reference: tx.reference,
+        transaction_id: latestTx.id,
+        reference: latestTx.reference,
         status: isoStatus,
-        amount: parseFloat((tx as any).totalAmount || tx.amount),
-        credited_amount: parseFloat(tx.amount),
-        fee_amount: parseFloat((tx as any).feeAmount || "0"),
-        currency: normalizeApiCurrency(tx.currency),
-        phone: tx.recipientPhone,
+        amount: parseFloat((latestTx as any).totalAmount || latestTx.amount),
+        credited_amount: parseFloat(latestTx.amount),
+        fee_amount: parseFloat((latestTx as any).feeAmount || "0"),
+        currency: normalizeApiCurrency(latestTx.currency),
+        phone: latestTx.recipientPhone,
         operator: operatorName,
-        created_at: tx.createdAt,
-        confirmed_at: (tx as any).confirmedAt || null,
+        created_at: latestTx.createdAt,
+        confirmed_at: (latestTx as any).confirmedAt || null,
       };
       // Crypto-only fields are added without changing the Mobile Money response.
-      if (tx.paymentMethod === "crypto") {
-        const metadata = (tx as any).metadata || {};
+      if (latestTx.paymentMethod === "crypto") {
+        const metadata = (latestTx as any).metadata || {};
         responseBody.payment_method = "crypto";
         responseBody.asset_code = metadata.assetCode || null;
         responseBody.address = metadata.address || null;

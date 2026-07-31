@@ -30,6 +30,7 @@ interface PendingPayment {
 }
 
 const pendingPayments = new Map<string, PendingPayment>();
+const cryptoExpiryInFlight = new Set<string>();
 
 export function addPendingPayment(payment: Omit<PendingPayment, "attempts" | "startedAt" | "lastCheckedAt">) {
   console.log(`[PaymentPoller] Adding pending payment: ${payment.reference} (provider: ${payment.provider || "swychr"})`);
@@ -39,6 +40,55 @@ export function addPendingPayment(payment: Omit<PendingPayment, "attempts" | "st
 
 export function removePendingPayment(reference: string) {
   pendingPayments.delete(reference);
+}
+
+/**
+ * Expire one crypto transaction on demand.
+ *
+ * This is also used by the public status endpoint so an API client that polls
+ * without configuring notify_url receives `failed` immediately after 15 min,
+ * even if the background poller has not run its next cycle yet.
+ */
+export async function expireCryptoPaymentIfNeeded(
+  reference: string,
+  now = Date.now(),
+): Promise<boolean> {
+  if (cryptoExpiryInFlight.has(reference)) return false;
+
+  const transaction = await storage.getTransactionByReference(reference);
+  if (
+    !transaction ||
+    transaction.status !== "pending" ||
+    transaction.paymentMethod !== "crypto"
+  ) {
+    return false;
+  }
+
+  const createdAt = transaction.createdAt ? new Date(transaction.createdAt).getTime() : now;
+  if (now - createdAt < CRYPTO_PENDING_TIMEOUT_MS) return false;
+
+  cryptoExpiryInFlight.add(reference);
+  try {
+    const payment: PendingPayment = {
+      transactionId: transaction.id,
+      reference: transaction.reference || reference,
+      externalReference: transaction.externalReference || transaction.reference || reference,
+      attempts: 0,
+      userId: transaction.userId,
+      type: transaction.type,
+      amount: transaction.amount,
+      provider: "izichange",
+      paymentIntentId: transaction.paymentIntentId,
+      payerName: transaction.payerName,
+      startedAt: createdAt,
+      lastCheckedAt: 0,
+    };
+    console.log(`[PaymentPoller] Auto-failing crypto payment after 15 minutes: ${payment.reference}`);
+    await processPaymentResult(payment, "failed");
+    return true;
+  } finally {
+    cryptoExpiryInFlight.delete(reference);
+  }
 }
 
 async function checkPaymentStatus(payment: PendingPayment): Promise<"pending" | "completed" | "failed"> {
@@ -426,25 +476,9 @@ async function expirePendingCryptoPayments(now: number): Promise<void> {
   try {
     const pendingCryptoTransactions = await storage.getPendingCryptoTransactions();
     for (const transaction of pendingCryptoTransactions) {
-      const createdAt = transaction.createdAt ? new Date(transaction.createdAt).getTime() : now;
-      if (now - createdAt < CRYPTO_PENDING_TIMEOUT_MS) continue;
-
-      const payment: PendingPayment = {
-        transactionId: transaction.id,
-        reference: transaction.reference || transaction.id,
-        externalReference: transaction.externalReference || transaction.reference || transaction.id,
-        attempts: 0,
-        userId: transaction.userId,
-        type: transaction.type,
-        amount: transaction.amount,
-        provider: "izichange",
-        paymentIntentId: transaction.paymentIntentId,
-        payerName: transaction.payerName,
-        startedAt: createdAt,
-        lastCheckedAt: 0,
-      };
-      console.log(`[PaymentPoller] Auto-failing crypto payment after 15 minutes: ${payment.reference}`);
-      await processPaymentResult(payment, "failed");
+      if (transaction.reference) {
+        await expireCryptoPaymentIfNeeded(transaction.reference, now);
+      }
     }
   } catch (error: any) {
     console.error("[PaymentPoller] Crypto expiry check failed:", error?.message);
