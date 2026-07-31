@@ -39,7 +39,7 @@ type ApiResponse = {
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-1.5">
+    <div className="min-w-0 space-y-1.5">
       <Label className="text-xs font-medium text-gray-700">{label}</Label>
       {children}
       {hint && <p className="text-[11px] text-gray-400">{hint}</p>}
@@ -52,7 +52,7 @@ function JsonBlock({ data }: { data: unknown }) {
   const text = JSON.stringify(data, null, 2);
 
   return (
-    <div className="rounded-lg overflow-hidden border border-gray-200 bg-[#0d1117]">
+    <div className="min-w-0 max-w-full rounded-lg overflow-hidden border border-gray-200 bg-[#0d1117]">
       <div className="flex items-center justify-between px-4 py-2 border-b border-white/10 bg-[#161b22]">
         <span className="text-[11px] font-mono text-zinc-400 tracking-wide">RESPONSE</span>
         <button
@@ -67,7 +67,7 @@ function JsonBlock({ data }: { data: unknown }) {
           {copied ? "Copié" : "Copier"}
         </button>
       </div>
-      <pre className="p-4 text-xs font-mono text-zinc-300 overflow-x-auto leading-relaxed whitespace-pre max-h-96 overflow-y-auto">
+      <pre className="max-w-full p-4 text-xs font-mono text-zinc-300 overflow-x-hidden leading-relaxed whitespace-pre-wrap break-all max-h-96 overflow-y-auto">
         {text}
       </pre>
     </div>
@@ -258,9 +258,9 @@ export default function TestCryptoPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 flex flex-col overflow-x-hidden">
+    <div className="crypto-tester min-h-screen bg-gray-50 text-gray-900 flex flex-col overflow-x-hidden">
       <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/95 backdrop-blur-md">
-        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
+        <div className="max-w-5xl mx-auto w-full px-4 h-14 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <Link href="/docs/api">
               <Button variant="ghost" size="sm" className="text-gray-500 hover:text-gray-900 -ml-2 gap-1.5">
@@ -273,21 +273,22 @@ export default function TestCryptoPage() {
               <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center shrink-0">
                 <Bitcoin className="w-4 h-4 text-primary-foreground" />
               </div>
-              <span className="font-semibold text-sm text-gray-900">Test API crypto</span>
+              <span className="font-semibold text-sm text-gray-900 truncate">Test API crypto</span>
               <span className="text-[10px] border border-amber-300 text-amber-700 px-1.5 py-0.5 rounded bg-amber-50 hidden sm:inline">
                 Direct SDK
               </span>
             </div>
           </div>
-          <Link href="/docs/api#crypto">
-            <Button variant="ghost" size="sm" className="text-xs text-gray-500 gap-1.5">
-              <Terminal className="w-3.5 h-3.5" /> Voir la documentation
+          <Link href="/docs/api#crypto" className="shrink-0">
+            <Button variant="ghost" size="sm" className="text-xs text-gray-500 gap-1.5 px-2 sm:px-3">
+              <Terminal className="w-3.5 h-3.5 shrink-0" />
+              <span className="hidden sm:inline">Voir la documentation</span>
             </Button>
           </Link>
         </div>
       </header>
 
-      <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-8 space-y-6">
+      <main className="flex-1 max-w-5xl mx-auto w-full min-w-0 px-4 py-6 sm:py-8 space-y-6">
         <div className="space-y-2">
           <h1 className="text-xl font-semibold text-gray-900">Tester le Pay-In Crypto</h1>
           <p className="text-sm text-gray-500 max-w-3xl">
@@ -302,9 +303,9 @@ export default function TestCryptoPage() {
           dans l'URL et n'est pas enregistrée par cette page.
         </div>
 
-        <div className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
-          <div className="grid lg:grid-cols-2 gap-0 divide-y lg:divide-y-0 lg:divide-x divide-gray-200">
-            <div className="p-4 sm:p-6 space-y-5">
+        <div className="min-w-0 rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
+          <div className="grid min-w-0 lg:grid-cols-2 gap-0 divide-y lg:divide-y-0 lg:divide-x divide-gray-200">
+            <div className="min-w-0 p-4 sm:p-6 space-y-5">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Paramètres</p>
                 <button onClick={reset} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600">
@@ -416,7 +417,7 @@ export default function TestCryptoPage() {
               </Button>
             </div>
 
-            <div className="p-4 sm:p-6 space-y-4 bg-gray-50">
+            <div className="min-w-0 p-4 sm:p-6 space-y-4 bg-gray-50">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Réponse API</p>
                 {response && <StatusBadge status={response.status} />}
@@ -445,7 +446,7 @@ export default function TestCryptoPage() {
                       <div className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center shrink-0">
                         <CheckCheck className="w-3.5 h-3.5 text-white" />
                       </div>
-                      <p className="text-xs text-emerald-700">
+                      <p className="min-w-0 break-words text-xs text-emerald-700">
                         Adresse générée. Affichez l'adresse et le memo/tag séparément au payeur, puis attendez le webhook.
                       </p>
                     </div>
