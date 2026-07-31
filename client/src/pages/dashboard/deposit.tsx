@@ -311,11 +311,12 @@ export default function DepositPage() {
       setCryptoRef(data.reference || "");
       cryptoSucceededRef.current = false;
       setCryptoStatus("opening");
-      // Open IziPay checkout modal (retry until embed.js is loaded)
-      const openModal = () => {
-        if (!window.IziPay) { setTimeout(openModal, 300); return; }
+      // Embed IziChange checkout inline — no redirect, no modal popup
+      const openInline = () => {
+        if (!window.IziPay) { setTimeout(openInline, 300); return; }
         window.IziPay.open({
           url: data.paymentUrl,
+          container: "#izipay-deposit-checkout",
           onSuccess: () => {
             cryptoSucceededRef.current = true;
             setCryptoStatus("success");
@@ -330,7 +331,7 @@ export default function DepositPage() {
           onExpired: () => { setCryptoStatus("failed"); },
         });
       };
-      openModal();
+      openInline();
     },
     onError: (error: Error) => {
       toast({ title: "Erreur", description: error.message, variant: "destructive" });
@@ -531,12 +532,25 @@ export default function DepositPage() {
                 </div>
 
               ) : cryptoStatus === "opening" ? (
-                <div className="text-center py-8 space-y-4">
-                  <Loader2 className="w-10 h-10 animate-spin text-primary mx-auto" />
-                  <div>
-                    <h3 className="text-base font-bold text-foreground">Ouverture du checkout…</h3>
-                    <p className="text-xs text-muted-foreground mt-1">La fenêtre de paiement IziChange s'ouvre. Veuillez patienter.</p>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="w-4 h-4 animate-spin text-primary shrink-0" />
+                    <span>Chargement du checkout IziChange…</span>
                   </div>
+                  {/* Inline IziChange checkout — embed.js injecte le widget ici, sans redirection */}
+                  <div
+                    id="izipay-deposit-checkout"
+                    className="w-full rounded-xl overflow-hidden border border-border"
+                    style={{ minHeight: 420 }}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full text-muted-foreground"
+                    onClick={() => setCryptoStatus("idle")}
+                  >
+                    ← Annuler
+                  </Button>
                 </div>
 
               ) : (
@@ -613,7 +627,7 @@ export default function DepositPage() {
                   </Button>
 
                   <p className="text-xs text-center text-muted-foreground">
-                    Vous serez redirigé vers la fenêtre de paiement IziChange.
+                    Le checkout IziChange s'affiche directement sur cette page — sans redirection.
                   </p>
                 </>
               )}

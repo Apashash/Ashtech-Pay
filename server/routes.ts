@@ -7291,7 +7291,6 @@ export async function registerRoutes(
             currencyRequested: izipayCurrency,
             amountRequested: numAmount,
             merchantReference: reference,
-            returnUrl: `${appBase}/payment/${req.params.slug}?crypto_status=success&ref=${reference}`,
             metadata: { paymentLinkId: paymentLink.id, intentId: cryptoIntent.id },
           });
         } catch (err: any) {
@@ -12448,7 +12447,6 @@ export async function registerRoutes(
           currencyRequested: izipayCurrency,
           amountRequested: numAmount,
           merchantReference: reference,
-          returnUrl: `${appBase}/dashboard/deposit?crypto_status=success&ref=${reference}`,
           metadata: { userId, transactionId: tx?.id ?? "" },
         });
       } catch (err: any) {

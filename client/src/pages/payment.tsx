@@ -1,4 +1,4 @@
-declare global { interface Window { IziPay?: { open: (opts: { url: string; onSuccess?: () => void; onClose?: () => void; onError?: () => void; onExpired?: () => void }) => void } } }
+declare global { interface Window { IziPay?: { open: (opts: { url: string; container?: string; onSuccess?: () => void; onClose?: () => void; onError?: () => void; onExpired?: () => void }) => { close(): void; getIframe(): HTMLIFrameElement | null } } } }
 
 import { useRoute, Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -87,6 +87,7 @@ export default function PaymentPage() {
   const [pixpayOtpCode, setPixpayOtpCode] = useState("");
   const [pixpayOtpStep, setPixpayOtpStep] = useState(false);
 
+  const [cryptoPaymentUrl, setCryptoPaymentUrl] = useState<string | null>(null);
   const cryptoSucceededRef = useRef(false);
 
   const { data: paymentLink, isLoading, error } = useQuery<PaymentLink & { hasPdf?: boolean }>({
@@ -309,32 +310,37 @@ export default function PaymentPage() {
     onSuccess: async (data) => {
       const ref = data.reference || "";
 
-      // ── Crypto IziChange flow ─────────────────────────────────────────────────
+      // ── Crypto IziChange flow (inline embed — no redirect, no popup) ─────────
       if (data.paymentUrl) {
         setPaymentReference(ref);
         cryptoSucceededRef.current = false;
-        const openModal = () => {
-          if (!window.IziPay) { setTimeout(openModal, 300); return; }
+        setCryptoPaymentUrl(data.paymentUrl); // triggers inline container rendering
+        const openInline = () => {
+          if (!window.IziPay) { setTimeout(openInline, 300); return; }
           window.IziPay.open({
             url: data.paymentUrl,
+            container: "#izipay-payment-checkout",
             onSuccess: () => {
               cryptoSucceededRef.current = true;
+              setCryptoPaymentUrl(null);
               setPaymentStatus("success");
               setPaymentComplete(true);
               redirectAfterPayment("success", ref);
             },
             onClose: () => {
-              // User closed without completing — stay on form
+              // keep inline container visible until user explicitly cancels
             },
             onError: () => {
               toast({ title: "Erreur de paiement", description: "Le paiement a échoué. Veuillez réessayer.", variant: "destructive" });
+              setCryptoPaymentUrl(null);
             },
             onExpired: () => {
               toast({ title: "Paiement expiré", description: "Veuillez réessayer.", variant: "destructive" });
+              setCryptoPaymentUrl(null);
             },
           });
         };
-        openModal();
+        openInline();
         return;
       }
 
@@ -552,6 +558,35 @@ export default function PaymentPage() {
               </div>
             </CardContent>
           </Card>
+        </div>
+        <Footer p={p} />
+      </div>
+    );
+  }
+
+  // ── Crypto inline checkout (no redirect, no popup) ───────────────────────
+  if (cryptoPaymentUrl) {
+    return (
+      <div className="min-h-screen bg-[#f0f4f8] flex flex-col">
+        <div className="flex-1 flex items-center justify-center p-4">
+          <div className="w-full max-w-md space-y-3">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin text-primary shrink-0" />
+              <span>Chargement du checkout IziChange…</span>
+            </div>
+            {/* IziChange checkout embedded inline — pas de redirection */}
+            <div
+              id="izipay-payment-checkout"
+              className="w-full rounded-2xl overflow-hidden border border-border bg-white"
+              style={{ minHeight: 480 }}
+            />
+            <button
+              className="w-full text-sm text-muted-foreground hover:text-foreground py-2 transition-colors"
+              onClick={() => setCryptoPaymentUrl(null)}
+            >
+              ← Annuler le paiement
+            </button>
+          </div>
         </div>
         <Footer p={p} />
       </div>
