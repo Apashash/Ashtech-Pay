@@ -7200,7 +7200,7 @@ export async function registerRoutes(
             account = await findWaaSAccountByExternalRef(externalRef);
             if (!account) {
               console.error("[PayLink/WaaS] createWaaSAccount failed:", createErr.message);
-              return res.status(500).json({ message: `Impossible de créer le compte WaaS: ${createErr.message}` });
+              return res.status(422).json({ message: `Impossible de créer le compte WaaS: ${createErr.message}` });
             }
           }
         }
@@ -7219,10 +7219,13 @@ export async function registerRoutes(
       // - Fixed-amount link  → convert fiat amount to USDT via FX rates
       // - Open-amount link   → use the USDT amount the payer entered directly
       let amountUSDT: number;
+      let fiatAmount: number | null = null;
+      let fiatCurrency: string | null = null;
       if (link.isFixedAmount) {
-        const linkAmount = parseFloat(link.amount || "0");
+        fiatAmount = parseFloat(link.amount || "0");
+        fiatCurrency = link.currency || "XOF";
         const fxRates = await loadFxRates();
-        const amountXAF = convertToXAF(linkAmount, link.currency || "XOF", fxRates);
+        const amountXAF = convertToXAF(fiatAmount, fiatCurrency, fxRates);
         const usdtPerXaf = fxRates["USDT"] ?? 655;
         amountUSDT = amountXAF / usdtPerXaf;
       } else {
@@ -7258,12 +7261,13 @@ export async function registerRoutes(
         assetCode,
         reference,
         amountUsdt: netUSDT.toFixed(4),
-        fiatAmount: linkAmount,
-        fiatCurrency: link.currency,
+        fiatAmount,
+        fiatCurrency,
       });
     } catch (error: any) {
-      console.error("[PayLink/WaaS] Error:", error);
-      return res.status(500).json({ message: error.message || "Erreur lors de la génération de l'adresse" });
+      console.error("[PayLink/WaaS] Error:", error.message, error.stack?.split("\n")[1]);
+      // Return 422 so the real message passes through the production sanitizer (only 500 is redacted)
+      return res.status(422).json({ message: error.message || "Erreur lors de la génération de l'adresse crypto" });
     }
   });
 
@@ -12640,8 +12644,8 @@ export async function registerRoutes(
         amountUsdt: netAmountUSDT.toFixed(4),
       });
     } catch (error: any) {
-      console.error("[Deposits Crypto] Error:", error);
-      res.status(500).json({ message: error.message || "Erreur lors du dépôt crypto" });
+      console.error("[Deposits Crypto] Error:", error.message, error.stack?.split("\n")[1]);
+      res.status(422).json({ message: error.message || "Erreur lors du dépôt crypto" });
     }
   });
 
@@ -12757,8 +12761,8 @@ export async function registerRoutes(
         fiatAmount:  numAmount,
       });
     } catch (error: any) {
-      console.error("[Crypto/WaaS] Error:", error);
-      return res.status(500).json({ message: error.message || "Erreur lors de la génération de l'adresse" });
+      console.error("[Crypto/WaaS] Error:", error.message, error.stack?.split("\n")[1]);
+      return res.status(422).json({ message: error.message || "Erreur lors de la génération de l'adresse" });
     }
   });
 
