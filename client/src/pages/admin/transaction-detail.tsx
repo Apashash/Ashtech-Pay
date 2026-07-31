@@ -369,29 +369,37 @@ export default function AdminTransactionDetail() {
           </Card>
         )}
 
-        {!tx.operator && tx.paymentMethod === "crypto" && tx.metadata?.assetCode && (
+        {!tx.operator && tx.paymentMethod === "crypto" && (() => {
+          const assetCode = tx.metadata?.assetCode || tx.description?.match(/crypto ([A-Z0-9.]+) —/)?.[1] || "";
+          const address   = tx.metadata?.address || "";
+          const memo      = tx.metadata?.memo || "";
+          if (!assetCode && !address) return null;
+          return (
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm text-muted-foreground uppercase tracking-wide">Fournisseur Crypto</CardTitle>
             </CardHeader>
             <CardContent className="divide-y divide-border">
               <InfoRow icon={<CreditCard className="w-4 h-4" />} label="Passerelle" value="IziChange" />
-              <InfoRow icon={<Coins className="w-4 h-4" />} label="Réseau / Coin" value={
-                <span className="font-mono font-semibold text-amber-500">{tx.metadata.assetCode}</span>
-              } />
-              {tx.metadata.address && (
-                <InfoRow icon={<FileText className="w-4 h-4" />} label="Adresse" value={
-                  <span className="text-xs font-mono break-all">{tx.metadata.address}</span>
+              {assetCode && (
+                <InfoRow icon={<Coins className="w-4 h-4" />} label="Réseau / Coin" value={
+                  <span className="font-mono font-semibold text-amber-500">{assetCode}</span>
                 } />
               )}
-              {tx.metadata.memo && (
+              {address && (
+                <InfoRow icon={<FileText className="w-4 h-4" />} label="Adresse" value={
+                  <span className="text-xs font-mono break-all">{address}</span>
+                } />
+              )}
+              {memo && (
                 <InfoRow icon={<Hash className="w-4 h-4" />} label="Mémo / Tag" value={
-                  <span className="font-mono font-semibold">{tx.metadata.memo}</span>
+                  <span className="font-mono font-semibold">{memo}</span>
                 } />
               )}
             </CardContent>
           </Card>
-        )}
+          );
+        })()}
 
         {tx.paymentLink && (
           <Card>

@@ -7375,7 +7375,8 @@ export async function registerRoutes(
         paymentLinkId: link.id,
         payerEmail: email || null,
         payerName: firstName && lastName ? `${firstName} ${lastName}` : (email || null),
-        metadata: { assetCode, address: charge.address, memo: charge.memo, payerEmail: email, payerCountry: payerCountry || null },
+        externalReference: charge.id || undefined,   // IziChange transaction ID
+        metadata: { assetCode, address: charge.address, memo: charge.memo, payerEmail: email, payerCountry: payerCountry || null, izichangeId: charge.id || null },
       });
 
       console.log(`[PayLink/Crypto] Direct charge: addr=${charge.address} asset=${assetCode} ref=${reference} merchant=${merchantId} expiresAt=${charge.expiresAt ?? "n/a"}`);
@@ -12820,10 +12821,12 @@ export async function registerRoutes(
         description: `Dépôt crypto ${assetCode} — ${numAmount} USDT`,
         paymentMethod: "crypto",
         reference,
+        externalReference: charge.id || undefined,   // IziChange transaction ID
         metadata: {
           assetCode,
           address: charge.address,
           memo: charge.memo ?? null,
+          izichangeId: charge.id || null,
           ...(refundAddress ? { refundAddress } : {}),
         },
       });

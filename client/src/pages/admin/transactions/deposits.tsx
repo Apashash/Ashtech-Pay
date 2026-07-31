@@ -353,15 +353,24 @@ export default function AdminDeposits() {
                             <Smartphone className="w-3.5 h-3.5 flex-shrink-0" />
                             {operatorMap[tx.operatorId]}
                           </div>
-                        ) : tx.paymentMethod === "crypto" && (tx as any).metadata?.assetCode ? (
-                          <div className="flex flex-col gap-0.5">
-                            <div className="flex items-center gap-1.5 text-amber-500 font-medium text-sm">
-                              <Coins className="w-3.5 h-3.5 flex-shrink-0" />
-                              <span className="font-mono">{(tx as any).metadata.assetCode}</span>
+                        ) : tx.paymentMethod === "crypto" ? (() => {
+                          // metadata.assetCode (new) OR parse from description (old transactions)
+                          const assetCode =
+                            (tx as any).metadata?.assetCode ||
+                            tx.description?.match(/crypto ([A-Z0-9.]+) —/)?.[1] ||
+                            "";
+                          return assetCode ? (
+                            <div className="flex flex-col gap-0.5">
+                              <div className="flex items-center gap-1.5 text-amber-500 font-medium text-sm">
+                                <Coins className="w-3.5 h-3.5 flex-shrink-0" />
+                                <span className="font-mono">{assetCode}</span>
+                              </div>
+                              <span className="text-xs text-muted-foreground">IziChange</span>
                             </div>
-                            <span className="text-xs text-muted-foreground">IziChange</span>
-                          </div>
-                        ) : (
+                          ) : (
+                            <span className="text-xs text-amber-500 font-medium">Crypto</span>
+                          );
+                        })() : (
                           <span className="text-muted-foreground text-sm">—</span>
                         )}
                       </TableCell>

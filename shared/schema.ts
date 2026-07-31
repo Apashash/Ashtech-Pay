@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, decimal, boolean, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, decimal, boolean, uniqueIndex, index, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -228,6 +228,7 @@ export const transactions = pgTable("transactions", {
   externalReference: text("external_reference"),
   notifyUrl: text("notify_url"),   // Webhook URL for API-originated transactions
   source: text("source"),          // null | "api" — marks API-originated transactions
+  metadata: jsonb("metadata").$type<Record<string, any>>(),  // JSON: assetCode, address, memo, …
   createdAt: timestamp("created_at").defaultNow(),
   confirmedAt: timestamp("confirmed_at"),
 }, (t) => ({
@@ -492,6 +493,8 @@ export const insertTransactionSchema = createInsertSchema(transactions).pick({
   totalAmount: true,
   notifyUrl: true,
   source: true,
+  externalReference: true,
+  metadata: true,
 });
 
 export const transferSchema = z.object({
