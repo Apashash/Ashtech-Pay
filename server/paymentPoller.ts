@@ -7,8 +7,9 @@ import { sendPayerConfirmationEmail } from "./email";
 import { notifyDepositConfirmed, notifyDepositFailed } from "./telegram";
 
 const POLL_INTERVAL = 3000;
+const CRYPTO_PENDING_TIMEOUT_MS = 15 * 60 * 1000;
+const CRYPTO_EXPIRY_CHECK_INTERVAL_MS = 30 * 1000;
 // After 30 min, slow down polling to every 2 min to avoid hammering the gateway API.
-// Transactions are NEVER auto-cancelled — they stay pending until the gateway responds.
 const SLOW_POLL_THRESHOLD_MS = 30 * 60 * 1000;  // 30 minutes
 const SLOW_POLL_INTERVAL_MS  = 2 * 60 * 1000;   // 2 minutes between checks for old payments
 
@@ -251,6 +252,10 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
 async function pollPendingPayments() {
   try {
     const now = Date.now();
+    if (now - lastCryptoExpiryCheckAt >= CRYPTO_EXPIRY_CHECK_INTERVAL_MS) {
+      lastCryptoExpiryCheckAt = now;
+      await expirePendingCryptoPayments(now);
+    }
     const entries = Array.from(pendingPayments.entries());
     for (const [reference, payment] of entries) {
       try {
@@ -286,8 +291,12 @@ async function pollPendingPayments() {
 export async function recoverPendingDeposits() {
   console.log("[PaymentPoller] Recovering pending deposit transactions from DB...");
   try {
-    const pendingTxs = await storage.getPendingDepositTransactions();
     const now = Date.now();
+    // Expire old crypto transactions before recovery so they cannot be
+    // re-queued after a restart. Recent crypto transactions are completed by
+    // the provider webhook, not by the Mobile Money poller.
+    await expirePendingCryptoPayments(now);
+    const pendingTxs = await storage.getPendingDepositTransactions();
     let autoFailed = 0;
     let recovered = 0;
 
@@ -313,6 +322,10 @@ export async function recoverPendingDeposits() {
       const ageMs = now - createdAt;
 
       if (!tx.reference) continue;
+      if (tx.paymentMethod === "crypto") {
+        console.log(`[PaymentPoller] Leaving crypto transaction on webhook path: ${tx.reference}`);
+        continue;
+      }
 
       // Detect provider early so we can auto-fail broken-provider transactions
       let txProvider = "swychr";
@@ -404,10 +417,45 @@ export async function recoverPendingDeposits() {
 }
 
 let pollerInterval: NodeJS.Timeout | null = null;
+let lastCryptoExpiryCheckAt = 0;
+let cryptoExpiryCheckInProgress = false;
+
+async function expirePendingCryptoPayments(now: number): Promise<void> {
+  if (cryptoExpiryCheckInProgress) return;
+  cryptoExpiryCheckInProgress = true;
+  try {
+    const pendingCryptoTransactions = await storage.getPendingCryptoTransactions();
+    for (const transaction of pendingCryptoTransactions) {
+      const createdAt = transaction.createdAt ? new Date(transaction.createdAt).getTime() : now;
+      if (now - createdAt < CRYPTO_PENDING_TIMEOUT_MS) continue;
+
+      const payment: PendingPayment = {
+        transactionId: transaction.id,
+        reference: transaction.reference || transaction.id,
+        externalReference: transaction.externalReference || transaction.reference || transaction.id,
+        attempts: 0,
+        userId: transaction.userId,
+        type: transaction.type,
+        amount: transaction.amount,
+        provider: "izichange",
+        paymentIntentId: transaction.paymentIntentId,
+        payerName: transaction.payerName,
+        startedAt: createdAt,
+        lastCheckedAt: 0,
+      };
+      console.log(`[PaymentPoller] Auto-failing crypto payment after 15 minutes: ${payment.reference}`);
+      await processPaymentResult(payment, "failed");
+    }
+  } catch (error: any) {
+    console.error("[PaymentPoller] Crypto expiry check failed:", error?.message);
+  } finally {
+    cryptoExpiryCheckInProgress = false;
+  }
+}
 
 export function startPaymentPoller() {
   if (pollerInterval) { console.log("[PaymentPoller] Already running"); return; }
-  console.log(`[PaymentPoller] Starting payment poller (every ${POLL_INTERVAL / 1000}s, no timeout — slow-poll after ${SLOW_POLL_THRESHOLD_MS / 60000}min)`);
+  console.log(`[PaymentPoller] Starting payment poller (every ${POLL_INTERVAL / 1000}s, crypto timeout ${CRYPTO_PENDING_TIMEOUT_MS / 60000}min, slow-poll after ${SLOW_POLL_THRESHOLD_MS / 60000}min)`);
   pollerInterval = setInterval(pollPendingPayments, POLL_INTERVAL);
 }
 

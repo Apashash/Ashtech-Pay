@@ -29,6 +29,8 @@ import { formatCryptoAmount, minimumCryptoAmount } from "@/lib/crypto-minimum";
 import { useCoinPrice } from "@/lib/use-coin-price";
 import { CoinSelect } from "@/components/ui/coin-select";
 
+const CRYPTO_COUNTDOWN_SECONDS = 35;
+
 const CURRENCY_FLAGS: Record<string, string> = {
   "XAF": "🇨🇲", "XOF": "🇸🇳", "CDF": "🇨🇩", "GHS": "🇬🇭",
   "NGN": "🇳🇬", "KES": "🇰🇪", "RWF": "🇷🇼", "GNF": "🇬🇳",
@@ -108,7 +110,7 @@ export default function PaymentPage() {
   const [payCryptoMemoType, setPayCryptoMemoType] = useState<"memo" | "tag">("memo");
   const [payCryptoRefundAddress, setPayCryptoRefundAddress] = useState("");
   const [showPayRefundField, setShowPayRefundField] = useState(false);
-  const [payReadyCountdown, setPayReadyCountdown] = useState(40 * 60);
+  const [payReadyCountdown, setPayReadyCountdown] = useState(CRYPTO_COUNTDOWN_SECONDS);
   const payReadyCountdownRef = useRef<NodeJS.Timeout | null>(null);
 
   // Dynamic IziChange asset list (falls back to static if API not configured)
@@ -461,17 +463,9 @@ export default function PaymentPage() {
       setPayCryptoShared(data.shared ?? false);
       setPayCryptoMemoType(data.memoType ?? "memo");
       setPayCryptoStep("ready");
-      // Compute countdown from IziChange expiresAt; fall back to 40 min if absent.
-      const iziExpiry = data.expiresAt ? (() => {
-        const raw = data.expiresAt;
-        if (typeof raw === "string") return Math.floor((new Date(raw).getTime() - Date.now()) / 1000);
-        if (typeof raw === "number") {
-          const ms = raw < 1e10 ? raw * 1000 : raw;
-          return Math.floor((ms - Date.now()) / 1000);
-        }
-        return 0;
-      })() : 0;
-      setPayReadyCountdown(iziExpiry > 30 ? iziExpiry : 40 * 60);
+      // Keep the crypto UI countdown short and consistent across Pay and Deposit.
+      // The server-side 15-minute pending timeout is independent of this display timer.
+      setPayReadyCountdown(CRYPTO_COUNTDOWN_SECONDS);
       if (payReadyCountdownRef.current) clearInterval(payReadyCountdownRef.current);
       payReadyCountdownRef.current = setInterval(() => {
         setPayReadyCountdown(prev => {
@@ -908,7 +902,7 @@ export default function PaymentPage() {
                     <div className="h-2 bg-muted rounded-full overflow-hidden">
                       <div
                         className="h-full bg-amber-500 rounded-full transition-all duration-1000 ease-linear"
-                        style={{ width: `${(countdown / (8 * 60)) * 100}%` }}
+                       style={{ width: `${(countdown / (8 * 60)) * 100}%` }}
                       />
                     </div>
                   </div>

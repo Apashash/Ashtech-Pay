@@ -111,6 +111,7 @@ export interface IStorage {
   updateTransactionStatus(id: string, status: string): Promise<Transaction | undefined>;
   updateTransactionExternalReference(id: string, externalReference: string): Promise<Transaction | undefined>;
   getPendingDepositTransactions(): Promise<Transaction[]>;
+  getPendingCryptoTransactions(): Promise<Transaction[]>;
   getPendingManualPayouts(): Promise<Transaction[]>;
   
   // Payment link operations
@@ -815,6 +816,16 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(transactions).where(
       and(
         eq(transactions.status, "pending"),
+        inArray(transactions.type, ["deposit", "payment_link"])
+      )
+    ).orderBy(desc(transactions.createdAt));
+  }
+
+  async getPendingCryptoTransactions(): Promise<Transaction[]> {
+    return await db.select().from(transactions).where(
+      and(
+        eq(transactions.status, "pending"),
+        eq(transactions.paymentMethod, "crypto"),
         inArray(transactions.type, ["deposit", "payment_link"])
       )
     ).orderBy(desc(transactions.createdAt));

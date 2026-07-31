@@ -65,6 +65,8 @@ const QUICK_AMOUNTS = [5000, 10000, 25000, 50000, 100000];
 import { useIziAssets, coinLogoUrl, networkLogoUrl } from "@/lib/use-crypto-assets";
 import { useCoinPrice } from "@/lib/use-coin-price";
 
+const CRYPTO_COUNTDOWN_SECONDS = 35;
+
 export default function DepositPage() {
   const { toast } = useToast();
   const { t } = useLanguage();
@@ -101,9 +103,9 @@ export default function DepositPage() {
   const [cryptoMemoType, setCryptoMemoType] = useState<string | null>(null);
   const [cryptoShared, setCryptoShared] = useState(false);
   const [cryptoAssetCode, setCryptoAssetCode] = useState("");
-  const [cryptoCountdown, setCryptoCountdown] = useState(30 * 60);
+  const [cryptoCountdown, setCryptoCountdown] = useState(CRYPTO_COUNTDOWN_SECONDS);
   const cryptoCountdownRef = useRef<NodeJS.Timeout | null>(null);
-  const [cryptoReadyCountdown, setCryptoReadyCountdown] = useState(40 * 60);
+  const [cryptoReadyCountdown, setCryptoReadyCountdown] = useState(CRYPTO_COUNTDOWN_SECONDS);
   const cryptoReadyCountdownRef = useRef<NodeJS.Timeout | null>(null);
 
   // Dynamic IziChange asset list (falls back to static if API not configured)
@@ -359,17 +361,9 @@ export default function DepositPage() {
       setCryptoAssetCode(data.assetCode);
       setCryptoRef(data.reference || "");
       setCryptoStep("ready");
-      // Compute countdown from IziChange expiresAt; fall back to 40 min if absent.
-      const iziExpiry = data.expiresAt ? (() => {
-        const raw = data.expiresAt;
-        if (typeof raw === "string") return Math.floor((new Date(raw).getTime() - Date.now()) / 1000);
-        if (typeof raw === "number") {
-          const ms = raw < 1e10 ? raw * 1000 : raw; // seconds vs milliseconds
-          return Math.floor((ms - Date.now()) / 1000);
-        }
-        return 0;
-      })() : 0;
-      setCryptoReadyCountdown(iziExpiry > 30 ? iziExpiry : 40 * 60);
+      // Keep the crypto UI countdown short and consistent with the payment page.
+      // The server-side 15-minute pending timeout is independent of this timer.
+      setCryptoReadyCountdown(CRYPTO_COUNTDOWN_SECONDS);
       if (cryptoReadyCountdownRef.current) clearInterval(cryptoReadyCountdownRef.current);
       cryptoReadyCountdownRef.current = setInterval(() => {
         setCryptoReadyCountdown(prev => {
@@ -618,7 +612,7 @@ export default function DepositPage() {
                   {/* Barre de progression */}
                   <CountdownBar
                     countdown={cryptoCountdown}
-                    max={30 * 60}
+                    max={CRYPTO_COUNTDOWN_SECONDS}
                     color="amber"
                     label="Temps de surveillance estimé"
                   />
@@ -785,7 +779,7 @@ export default function DepositPage() {
                     onClick={() => {
                       if (cryptoReadyCountdownRef.current) clearInterval(cryptoReadyCountdownRef.current);
                       setCryptoStep("waiting");
-                      setCryptoCountdown(30 * 60);
+                      setCryptoCountdown(CRYPTO_COUNTDOWN_SECONDS);
                       if (cryptoCountdownRef.current) clearInterval(cryptoCountdownRef.current);
                       cryptoCountdownRef.current = setInterval(() => {
                         setCryptoCountdown(prev => {
