@@ -342,8 +342,17 @@ export default function DepositPage() {
       setCryptoAssetCode(data.assetCode);
       setCryptoRef(data.reference || "");
       setCryptoStep("ready");
-      // Start the "TEMPS RESTANT" spinner countdown (40 min)
-      setCryptoReadyCountdown(40 * 60);
+      // Compute countdown from IziChange expiresAt; fall back to 40 min if absent.
+      const iziExpiry = data.expiresAt ? (() => {
+        const raw = data.expiresAt;
+        if (typeof raw === "string") return Math.floor((new Date(raw).getTime() - Date.now()) / 1000);
+        if (typeof raw === "number") {
+          const ms = raw < 1e10 ? raw * 1000 : raw; // seconds vs milliseconds
+          return Math.floor((ms - Date.now()) / 1000);
+        }
+        return 0;
+      })() : 0;
+      setCryptoReadyCountdown(iziExpiry > 30 ? iziExpiry : 40 * 60);
       if (cryptoReadyCountdownRef.current) clearInterval(cryptoReadyCountdownRef.current);
       cryptoReadyCountdownRef.current = setInterval(() => {
         setCryptoReadyCountdown(prev => {

@@ -7327,7 +7327,7 @@ export async function registerRoutes(
         metadata: { assetCode, address: charge.address, memo: charge.memo, payerEmail: email, payerCountry: payerCountry || null },
       });
 
-      console.log(`[PayLink/Crypto] Direct charge: addr=${charge.address} asset=${assetCode} ref=${reference} merchant=${merchantId}`);
+      console.log(`[PayLink/Crypto] Direct charge: addr=${charge.address} asset=${assetCode} ref=${reference} merchant=${merchantId} expiresAt=${charge.expiresAt ?? "n/a"}`);
       return res.json({
         address:    charge.address,
         memo:       charge.memo ?? null,
@@ -7337,6 +7337,7 @@ export async function registerRoutes(
         amountUsdt: amountUSDT.toFixed(4),
         fiatAmount,
         fiatCurrency,
+        expiresAt:  charge.expiresAt ?? null,
       });
     } catch (error: any) {
       console.error("[PayLink/Crypto] Error:", error.message, error.stack?.split("\n")[1]);
@@ -12742,7 +12743,7 @@ export async function registerRoutes(
         },
       });
 
-      console.log(`[Deposits/Crypto] Direct charge: addr=${charge.address} memo=${charge.memo ?? "-"} asset=${assetCode} ref=${reference} user=${userId}`);
+      console.log(`[Deposits/Crypto] Direct charge: addr=${charge.address} memo=${charge.memo ?? "-"} asset=${assetCode} ref=${reference} user=${userId} expiresAt=${charge.expiresAt ?? "n/a"}`);
 
       return res.json({
         address:    charge.address,
@@ -12752,6 +12753,7 @@ export async function registerRoutes(
         reference,
         amountUsdt: netAmountUSDT.toFixed(4),
         fiatAmount: numAmount,
+        expiresAt:  charge.expiresAt ?? null,
       });
     } catch (error: any) {
       console.error("[Deposits/Crypto] Error:", error.message, error.stack?.split("\n")[1]);

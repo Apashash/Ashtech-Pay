@@ -432,8 +432,17 @@ export default function PaymentPage() {
       setPayCryptoShared(data.shared ?? false);
       setPayCryptoMemoType(data.memoType ?? "memo");
       setPayCryptoStep("ready");
-      // Start "TEMPS RESTANT" countdown (40 min)
-      setPayReadyCountdown(40 * 60);
+      // Compute countdown from IziChange expiresAt; fall back to 40 min if absent.
+      const iziExpiry = data.expiresAt ? (() => {
+        const raw = data.expiresAt;
+        if (typeof raw === "string") return Math.floor((new Date(raw).getTime() - Date.now()) / 1000);
+        if (typeof raw === "number") {
+          const ms = raw < 1e10 ? raw * 1000 : raw;
+          return Math.floor((ms - Date.now()) / 1000);
+        }
+        return 0;
+      })() : 0;
+      setPayReadyCountdown(iziExpiry > 30 ? iziExpiry : 40 * 60);
       if (payReadyCountdownRef.current) clearInterval(payReadyCountdownRef.current);
       payReadyCountdownRef.current = setInterval(() => {
         setPayReadyCountdown(prev => {

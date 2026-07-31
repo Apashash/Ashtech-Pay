@@ -141,6 +141,11 @@ export interface DirectChargeResult {
   memoType: string | null;
   requestedCoin: string;
   amount: string;
+  /**
+   * ISO-8601 datetime when this charge expires (from IziChange API).
+   * Null if the API did not return an expiry field.
+   */
+  expiresAt: string | null;
 }
 
 /**
@@ -177,6 +182,23 @@ export async function createDirectCharge(
   const memoType: string | null =
     raw.memoType ?? raw.memo_type ?? (memo !== null ? "memo" : null);
 
+  // Capture expiry time — IziChange may return an ISO string or Unix timestamp (s or ms) or a TTL in seconds.
+  // Normalise to ISO string so the frontend can parse it uniformly.
+  let expiresAt: string | null = null;
+  const rawExpiry = raw.expiresAt ?? raw.expiredAt ?? raw.expiration ?? raw.expire_at ?? raw.expired_at ?? null;
+  if (rawExpiry) {
+    if (typeof rawExpiry === "string") {
+      expiresAt = rawExpiry; // already ISO
+    } else if (typeof rawExpiry === "number") {
+      // Unix seconds if < 1e10, milliseconds otherwise
+      const ms = rawExpiry < 1e10 ? rawExpiry * 1000 : rawExpiry;
+      expiresAt = new Date(ms).toISOString();
+    }
+  } else if (typeof raw.ttl === "number" && raw.ttl > 0) {
+    // ttl in seconds from now
+    expiresAt = new Date(Date.now() + raw.ttl * 1000).toISOString();
+  }
+
   return {
     id:               raw.id       ?? "",
     status:           raw.status   ?? "pending",
@@ -186,6 +208,7 @@ export async function createDirectCharge(
     memoType,
     requestedCoin:    raw.requestedCoin ?? raw.assetCode ?? params.requestedCoin,
     amount:           raw.amount   ?? raw.amountRequested ?? params.amount,
+    expiresAt,
   };
 }
 
