@@ -97,6 +97,9 @@ export default function PaymentPage() {
   const [payCryptoRef, setPayCryptoRef] = useState("");
   const [payCryptoAssetCode, setPayCryptoAssetCode] = useState("USDT.TRC20");
   const [payCryptoAmountUsdt, setPayCryptoAmountUsdt] = useState("");
+  const [payCryptoAmount, setPayCryptoAmount] = useState("");
+  const [payCryptoShared, setPayCryptoShared] = useState(false);
+  const [payCryptoMemoType, setPayCryptoMemoType] = useState<"memo" | "tag">("memo");
 
   const { data: paymentLink, isLoading, error } = useQuery<PaymentLink & { hasPdf?: boolean }>({
     queryKey: ["/api/payment-links/public", params?.slug],
@@ -379,13 +382,16 @@ export default function PaymentPage() {
   // WaaS mutation for payment-link crypto address
   const generatePayLinkCryptoMutation = useMutation({
     mutationFn: async () => {
-      const net = CRYPTO_NETWORKS[payCryptoCoin]?.find(n => n.id === payCryptoNetwork);
+      const net = CRYPTO_COIN_LIST[payCryptoCoin]?.networks.find(n => n.id === payCryptoNetwork);
       if (!net) throw new Error("Réseau invalide");
       if (!email.trim()) throw new Error("Email requis");
+      const body: Record<string, string> = { assetCode: net.assetCode, email: email.trim() };
+      if (!(paymentLink as any)?.isFixedAmount && payCryptoAmount)
+        body.amountUsdt = payCryptoAmount;
       const res = await fetch(`/api/payment-links/${params?.slug}/crypto/address`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ assetCode: net.assetCode, email: email.trim() }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Erreur lors de la génération");
@@ -397,6 +403,8 @@ export default function PaymentPage() {
       setPayCryptoRef(data.reference || "");
       setPayCryptoAssetCode(data.assetCode);
       setPayCryptoAmountUsdt(data.amountUsdt || "");
+      setPayCryptoShared(data.shared ?? false);
+      setPayCryptoMemoType(data.memoType ?? "memo");
       setPayCryptoStep("ready");
     },
     onError: (error: Error) => {
@@ -572,82 +580,100 @@ export default function PaymentPage() {
 
   // ── WaaS crypto address ready ────────────────────────────────────────────
   if (paymentMethod === "crypto" && payCryptoStep === "ready" && payCryptoAddr) {
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(payCryptoAddr)}`;
     return (
       <div className="min-h-screen bg-[#f0f4f8] flex flex-col">
         <div className="flex-1 flex items-center justify-center p-4">
-          <div className="w-full max-w-md space-y-4">
+          <div className="w-full max-w-md space-y-5">
+
             {/* Header */}
-            <div className="text-center space-y-1">
-              <div className="w-12 h-12 mx-auto rounded-full bg-green-100 flex items-center justify-center">
-                <Bitcoin className="w-6 h-6 text-green-600" />
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                <Bitcoin className="w-4 h-4 text-primary" />
               </div>
-              <h2 className="text-lg font-bold">Adresse de paiement crypto</h2>
-              <p className="text-sm text-muted-foreground">
-                Envoyez <span className="font-semibold text-foreground">{payCryptoAssetCode.replace(".", " ")} </span>
-                à l'adresse ci-dessous
-              </p>
+              <div>
+                <p className="text-sm font-bold text-foreground">{payCryptoAssetCode}</p>
+                <p className="text-xs text-muted-foreground">Envoyez exactement le montant en crypto ci-dessous</p>
+              </div>
             </div>
 
             {/* Amount banner */}
             {payCryptoAmountUsdt && (
-              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-center">
-                <p className="text-xs text-amber-700">Montant à envoyer (estimé)</p>
-                <p className="text-2xl font-bold text-amber-700">{payCryptoAmountUsdt} USDT</p>
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-3 text-center">
+                <p className="text-xs text-amber-700 dark:text-amber-400">Montant à envoyer (estimé)</p>
+                <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">{payCryptoAmountUsdt} USDT</p>
               </div>
             )}
 
-            {/* QR Code */}
-            <div className="bg-white rounded-2xl border border-border p-4 flex flex-col items-center gap-3">
-              <img src={qrUrl} alt="QR code" className="w-48 h-48 rounded-xl" />
-              <div className="w-full space-y-2">
-                <p className="text-xs text-muted-foreground text-center">Adresse</p>
-                <div className="flex items-center gap-2 bg-muted/30 rounded-xl px-3 py-2">
-                  <code className="flex-1 text-xs font-mono break-all text-foreground">{payCryptoAddr}</code>
-                  <button
-                    type="button"
-                    onClick={() => { navigator.clipboard.writeText(payCryptoAddr); toast({ title: "Adresse copiée ✓" }); }}
-                    className="shrink-0 text-primary hover:text-primary/70 transition-colors"
-                  >
-                    <Copy className="w-4 h-4" />
-                  </button>
-                </div>
-                {payCryptoMemo && (
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-                    <p className="text-xs text-amber-700 font-semibold">⚠️ Mémo / Tag requis</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <code className="flex-1 text-xs font-mono text-amber-900">{payCryptoMemo}</code>
-                      <button
-                        type="button"
-                        onClick={() => { navigator.clipboard.writeText(payCryptoMemo!); toast({ title: "Mémo copié ✓" }); }}
-                        className="shrink-0 text-amber-700 hover:text-amber-500 transition-colors"
-                      >
-                        <Copy className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                )}
+            {/* QR code */}
+            <div className="flex justify-center">
+              <div className="p-3 bg-white rounded-2xl shadow-sm border border-border">
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(payCryptoAddr)}${payCryptoMemo ? `&data=${encodeURIComponent(payCryptoAddr + (payCryptoMemoType === "tag" ? "?dt=" : "?memo=") + payCryptoMemo)}` : ""}&bgcolor=ffffff&color=000000&margin=1`}
+                  alt="QR code adresse"
+                  width={180}
+                  height={180}
+                  className="rounded-lg"
+                />
               </div>
             </div>
 
-            {/* Network badge */}
-            <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-              <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-              <span>Réseau : <span className="font-semibold text-foreground">{payCryptoAssetCode}</span></span>
-              <span>· Réf : {payCryptoRef}</span>
+            {/* Address */}
+            <div className="space-y-1">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Adresse de dépôt</p>
+              <div className="flex items-center gap-2 bg-muted/40 rounded-xl px-3 py-2.5 border border-border">
+                <p className="font-mono text-xs font-bold text-foreground break-all flex-1">{payCryptoAddr}</p>
+                <button
+                  type="button"
+                  onClick={() => { navigator.clipboard.writeText(payCryptoAddr); toast({ title: "Adresse copiée !" }); }}
+                  className="shrink-0 p-1.5 rounded-lg bg-muted hover:bg-muted/80 transition-colors"
+                  title="Copier l'adresse"
+                >
+                  <Copy className="w-4 h-4 text-foreground" />
+                </button>
+              </div>
             </div>
 
-            {/* Waiting + cancel */}
-            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+            {/* Memo/Tag */}
+            {payCryptoMemo && (
+              <div className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                  ⚠️ {payCryptoMemoType === "tag" ? "Tag de destination" : "Mémo"} obligatoire
+                </p>
+                <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2.5">
+                  <p className="font-mono text-sm font-bold text-amber-700 dark:text-amber-300 flex-1">{payCryptoMemo}</p>
+                  <button
+                    type="button"
+                    onClick={() => { navigator.clipboard.writeText(payCryptoMemo!); toast({ title: "Mémo copié !" }); }}
+                    className="shrink-0 p-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 transition-colors"
+                  >
+                    <Copy className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                  </button>
+                </div>
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  Sans ce mémo, vos fonds seront perdus définitivement.
+                </p>
+              </div>
+            )}
+
+            {/* Info banner (shared address) */}
+            {payCryptoShared && (
+              <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl px-3 py-2.5 text-xs text-blue-600 dark:text-blue-400">
+                ℹ️ Adresse partagée — envoyez depuis votre propre portefeuille, ne pas utiliser en échange direct.
+              </div>
+            )}
+
+            {/* Waiting indicator */}
+            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground pt-1">
               <Loader2 className="w-4 h-4 animate-spin" />
               <span>En attente du paiement…</span>
             </div>
+
             <button
               type="button"
-              className="w-full text-sm text-muted-foreground hover:text-foreground py-2 transition-colors"
+              className="w-full text-xs text-muted-foreground hover:text-foreground text-center transition-colors"
               onClick={() => setPayCryptoStep("form")}
             >
-              ← Changer de cryptomonnaie
+              ← Modifier
             </button>
           </div>
         </div>
@@ -1230,54 +1256,10 @@ export default function PaymentPage() {
               </div>
             )}
 
-            {/* Amount */}
-            {paymentLink.isFixedAmount ? (
-              <div className="space-y-3">
-                <div className="bg-muted/30 border border-border rounded-xl p-4 text-center">
-                  <p className="text-sm text-muted-foreground mb-1">{p.amountToPay}</p>
-                  <p className="text-3xl font-bold text-foreground" data-testid="text-payment-amount">
-                    {formatAmount(convertedDisplayAmount, selectedDisplayCurrency)}
-                  </p>
-                  {selectedDisplayCurrency !== linkCurrency && (adminExchangeRates[selectedDisplayCurrency] || 0) > 0 && (
-                    <p className="text-sm text-muted-foreground mt-1">= {formatAmount(displayAmount, linkCurrency)}</p>
-                  )}
-                  {paymentMethod === "crypto" && (
-                    <p className="mt-2 text-xs text-muted-foreground">Sélectionnez votre cryptomonnaie ci-dessous</p>
-                  )}
-                </div>
-              </div>
-            ) : paymentMethod === "crypto" ? (
-              <div className="bg-muted/30 border border-border rounded-xl px-4 py-3 text-center space-y-1">
-                <p className="text-xs text-muted-foreground">Montant demandé</p>
-                <p className="text-2xl font-bold text-foreground">
-                  {formatAmount(displayAmount || 0, linkCurrency)}
-                </p>
-                <p className="text-xs text-muted-foreground">Vous réglez en cryptomonnaie — sélectionnez ci-dessous</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <Label htmlFor="amount">{p.amountToPayCurrency} ({CURRENCY_SYMBOLS[selectedDisplayCurrency]}) *</Label>
-                <Input
-                  id="amount"
-                  type="text"
-                  inputMode="decimal"
-                  placeholder={p.enterAmount}
-                  value={customAmount}
-                  onChange={(e) => { setCustomAmount(e.target.value); setErrors(p => ({...p, amount: undefined as any})); }}
-                  className={`text-xl h-12 text-center ${errors.amount ? "border-red-500" : ""}`}
-                  data-testid="input-payment-amount"
-                />
-                {errors.amount && <p className="text-xs text-red-500">{errors.amount}</p>}
-                {selectedDisplayCurrency !== linkCurrency && customAmount && (adminExchangeRates[selectedDisplayCurrency] || 0) > 0 && (
-                  <p className="text-xs text-muted-foreground text-center">≈ {formatAmount(amountInLinkCurrency, linkCurrency)}</p>
-                )}
-              </div>
-            )}
-
-            {/* ── Crypto coin + network selectors ── */}
-            {paymentMethod === "crypto" && (
-              <div className="space-y-3">
-                {/* Coin dropdown */}
+            {/* ══ CRYPTO FORM — deposit-style ══ */}
+            {paymentMethod === "crypto" ? (
+              <>
+                {/* ── Coin selector ── */}
                 <div className="space-y-1.5">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cryptomonnaie</p>
                   <div className="relative">
@@ -1301,7 +1283,8 @@ export default function PaymentPage() {
                     <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">▼</div>
                   </div>
                 </div>
-                {/* Network dropdown */}
+
+                {/* ── Network selector ── */}
                 <div className="space-y-1.5">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Réseau</p>
                   <div className="relative">
@@ -1316,121 +1299,214 @@ export default function PaymentPage() {
                     </select>
                     <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">▼</div>
                   </div>
+                  {(payCryptoCoin === "XRP" || payCryptoCoin === "TON" || payCryptoCoin === "XLM" ||
+                    (CRYPTO_COIN_LIST[payCryptoCoin]?.networks.find(n => n.id === payCryptoNetwork)?.assetCode ?? "").includes("TON") ||
+                    (CRYPTO_COIN_LIST[payCryptoCoin]?.networks.find(n => n.id === payCryptoNetwork)?.assetCode ?? "").includes("XRP")) && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      ⚠️ Ce réseau nécessite un mémo/tag — il sera affiché avec l'adresse.
+                    </p>
+                  )}
                 </div>
-              </div>
-            )}
 
-            {/* Name — hidden for crypto */}
-            {paymentMethod !== "crypto" && (
-            <div className="space-y-2">
-              <Label htmlFor="fullName">{p.fullName} *</Label>
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  id="fullName"
-                  type="text"
-                  placeholder={p.fullNamePlaceholder}
-                  value={fullName}
-                  onChange={(e) => { setFullName(e.target.value); setErrors(p => ({...p, fullName: undefined as any})); }}
-                  className={`pl-10 ${errors.fullName ? "border-red-500" : ""}`}
-                  data-testid="input-full-name"
-                />
-              </div>
-              {errors.fullName && <p className="text-xs text-red-500">{errors.fullName}</p>}
-            </div>
-            )}
-
-            {/* Email */}
-            <div className="space-y-2">
-              <Label htmlFor="email">Email *</Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="votre@email.com"
-                  value={email}
-                  onChange={(e) => { setEmail(e.target.value); setErrors(p => ({...p, email: undefined as any})); }}
-                  className={`pl-10 ${errors.email ? "border-red-500" : ""}`}
-                  data-testid="input-email"
-                />
-              </div>
-              {errors.email && <p className="text-xs text-red-500">{errors.email}</p>}
-            </div>
-
-            {/* Phone — hidden for crypto */}
-            {paymentMethod !== "crypto" && (
-            <div className="space-y-2">
-              <Label htmlFor="phone">{p.phone} *</Label>
-              <div className="relative">
-                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  id="phone"
-                  type="text"
-                  inputMode="numeric"
-                  placeholder={p.phonePlaceholder}
-                  value={phone}
-                  onChange={(e) => { setPhone(e.target.value); setErrors(p => ({...p, phone: undefined as any})); }}
-                  className={`pl-10 ${errors.phone ? "border-red-500" : ""}`}
-                  data-testid="input-phone"
-                />
-              </div>
-              {errors.phone && <p className="text-xs text-red-500">{errors.phone}</p>}
-            </div>
-            )}
-
-            {/* Summary */}
-            <div className="rounded-lg border bg-primary/5 border-primary/20 p-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="font-medium text-foreground">{p.totalAmount}</span>
-                {paymentMethod === "crypto" ? (
-                  <span className="text-sm font-semibold text-primary flex items-center gap-1.5" data-testid="text-payment-amount">
-                    <Bitcoin className="w-4 h-4" />
-                    Paiement crypto
-                  </span>
+                {/* ── Amount (USDT) — only for non-fixed links ── */}
+                {!paymentLink.isFixedAmount ? (
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Montant (USDT)
+                    </label>
+                    <div className="flex rounded-xl border border-border overflow-hidden focus-within:ring-2 focus-within:ring-primary/40">
+                      <span className="flex items-center px-3 bg-muted border-r border-border text-sm font-bold text-muted-foreground shrink-0">
+                        USDT
+                      </span>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min="1"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={payCryptoAmount}
+                        onChange={e => setPayCryptoAmount(e.target.value)}
+                        className="flex-1 min-w-0 px-4 h-12 bg-background text-base font-semibold focus:outline-none"
+                      />
+                    </div>
+                    <div className="flex gap-2 flex-wrap">
+                      {["10", "50", "100", "250", "500"].map(v => (
+                        <button
+                          key={v}
+                          type="button"
+                          onClick={() => setPayCryptoAmount(v)}
+                          className="text-xs px-3 py-1.5 rounded-lg border border-border bg-muted/30 hover:bg-muted/60 font-semibold transition-all"
+                        >
+                          {v} USDT
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 ) : (
-                  <span className="text-2xl font-bold text-primary" data-testid="text-payment-amount">
-                    {formatAmount(paymentLink.isFixedAmount ? convertedDisplayAmount : displayAmount, selectedDisplayCurrency)}
-                  </span>
+                  /* Fixed amount — show reference */
+                  <div className="bg-muted/30 rounded-xl px-4 py-3 text-center space-y-0.5">
+                    <p className="text-xs text-muted-foreground">Montant à régler</p>
+                    <p className="text-2xl font-bold text-foreground" data-testid="text-payment-amount">
+                      {formatAmount(convertedDisplayAmount, selectedDisplayCurrency)}
+                    </p>
+                    {selectedDisplayCurrency !== linkCurrency && (adminExchangeRates[selectedDisplayCurrency] || 0) > 0 && (
+                      <p className="text-xs text-muted-foreground">= {formatAmount(displayAmount, linkCurrency)}</p>
+                    )}
+                  </div>
                 )}
-              </div>
-            </div>
 
-            {/* Submit */}
-            {paymentMethod === "crypto" ? (
-              <Button
-                className="w-full"
-                size="lg"
-                onClick={() => {
-                  if (!email.trim()) {
-                    setErrors(prev => ({ ...prev, email: "Email requis" }));
-                    return;
+                {/* ── Email ── */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Email *</label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      type="email"
+                      placeholder="votre@email.com"
+                      value={email}
+                      onChange={(e) => { setEmail(e.target.value); setErrors(p => ({...p, email: undefined as any})); }}
+                      className={`pl-10 ${errors.email ? "border-red-500" : ""}`}
+                      data-testid="input-email"
+                    />
+                  </div>
+                  {errors.email && <p className="text-xs text-red-500">{errors.email}</p>}
+                </div>
+
+                {/* ── Generate button ── */}
+                <Button
+                  className="w-full h-12 rounded-xl font-bold"
+                  size="lg"
+                  onClick={() => {
+                    if (!email.trim()) {
+                      setErrors(prev => ({ ...prev, email: "Email requis" }));
+                      return;
+                    }
+                    generatePayLinkCryptoMutation.mutate();
+                  }}
+                  disabled={generatePayLinkCryptoMutation.isPending}
+                  data-testid="button-pay"
+                >
+                  {generatePayLinkCryptoMutation.isPending
+                    ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Génération…</>
+                    : <><Bitcoin className="w-4 h-4 mr-2" />Générer l'adresse de paiement</>
                   }
-                  generatePayLinkCryptoMutation.mutate();
-                }}
-                disabled={generatePayLinkCryptoMutation.isPending}
-                data-testid="button-pay"
-              >
-                {generatePayLinkCryptoMutation.isPending ? (
-                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Génération…</>
-                ) : (
-                  <><Bitcoin className="w-4 h-4 mr-2" />Générer l'adresse de paiement</>
-                )}
-              </Button>
+                </Button>
+              </>
             ) : (
-              <Button
-                className="w-full"
-                size="lg"
-                onClick={handlePayClick}
-                disabled={payMutation.isPending}
-                data-testid="button-pay"
-              >
-                {payMutation.isPending ? (
-                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{p.processing}</>
+              <>
+                {/* ── Amount (non-crypto) ── */}
+                {paymentLink.isFixedAmount ? (
+                  <div className="space-y-3">
+                    <div className="bg-muted/30 border border-border rounded-xl p-4 text-center">
+                      <p className="text-sm text-muted-foreground mb-1">{p.amountToPay}</p>
+                      <p className="text-3xl font-bold text-foreground" data-testid="text-payment-amount">
+                        {formatAmount(convertedDisplayAmount, selectedDisplayCurrency)}
+                      </p>
+                      {selectedDisplayCurrency !== linkCurrency && (adminExchangeRates[selectedDisplayCurrency] || 0) > 0 && (
+                        <p className="text-sm text-muted-foreground mt-1">= {formatAmount(displayAmount, linkCurrency)}</p>
+                      )}
+                    </div>
+                  </div>
                 ) : (
-                  <><Shield className="w-4 h-4 mr-2" />{p.payNow}</>
+                  <div className="space-y-2">
+                    <Label htmlFor="amount">{p.amountToPayCurrency} ({CURRENCY_SYMBOLS[selectedDisplayCurrency]}) *</Label>
+                    <Input
+                      id="amount"
+                      type="text"
+                      inputMode="decimal"
+                      placeholder={p.enterAmount}
+                      value={customAmount}
+                      onChange={(e) => { setCustomAmount(e.target.value); setErrors(p => ({...p, amount: undefined as any})); }}
+                      className={`text-xl h-12 text-center ${errors.amount ? "border-red-500" : ""}`}
+                      data-testid="input-payment-amount"
+                    />
+                    {errors.amount && <p className="text-xs text-red-500">{errors.amount}</p>}
+                    {selectedDisplayCurrency !== linkCurrency && customAmount && (adminExchangeRates[selectedDisplayCurrency] || 0) > 0 && (
+                      <p className="text-xs text-muted-foreground text-center">≈ {formatAmount(amountInLinkCurrency, linkCurrency)}</p>
+                    )}
+                  </div>
                 )}
-              </Button>
+
+                {/* Name */}
+                <div className="space-y-2">
+                  <Label htmlFor="fullName">{p.fullName} *</Label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="fullName"
+                      type="text"
+                      placeholder={p.fullNamePlaceholder}
+                      value={fullName}
+                      onChange={(e) => { setFullName(e.target.value); setErrors(p => ({...p, fullName: undefined as any})); }}
+                      className={`pl-10 ${errors.fullName ? "border-red-500" : ""}`}
+                      data-testid="input-full-name"
+                    />
+                  </div>
+                  {errors.fullName && <p className="text-xs text-red-500">{errors.fullName}</p>}
+                </div>
+
+                {/* Email */}
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email *</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="votre@email.com"
+                      value={email}
+                      onChange={(e) => { setEmail(e.target.value); setErrors(p => ({...p, email: undefined as any})); }}
+                      className={`pl-10 ${errors.email ? "border-red-500" : ""}`}
+                      data-testid="input-email"
+                    />
+                  </div>
+                  {errors.email && <p className="text-xs text-red-500">{errors.email}</p>}
+                </div>
+
+                {/* Phone */}
+                <div className="space-y-2">
+                  <Label htmlFor="phone">{p.phone} *</Label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="phone"
+                      type="text"
+                      inputMode="numeric"
+                      placeholder={p.phonePlaceholder}
+                      value={phone}
+                      onChange={(e) => { setPhone(e.target.value); setErrors(p => ({...p, phone: undefined as any})); }}
+                      className={`pl-10 ${errors.phone ? "border-red-500" : ""}`}
+                      data-testid="input-phone"
+                    />
+                  </div>
+                  {errors.phone && <p className="text-xs text-red-500">{errors.phone}</p>}
+                </div>
+
+                {/* Summary */}
+                <div className="rounded-lg border bg-primary/5 border-primary/20 p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-foreground">{p.totalAmount}</span>
+                    <span className="text-2xl font-bold text-primary" data-testid="text-payment-amount">
+                      {formatAmount(paymentLink.isFixedAmount ? convertedDisplayAmount : displayAmount, selectedDisplayCurrency)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Submit */}
+                <Button
+                  className="w-full"
+                  size="lg"
+                  onClick={handlePayClick}
+                  disabled={payMutation.isPending}
+                  data-testid="button-pay"
+                >
+                  {payMutation.isPending ? (
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{p.processing}</>
+                  ) : (
+                    <><Shield className="w-4 h-4 mr-2" />{p.payNow}</>
+                  )}
+                </Button>
+              </>
             )}
             
             <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
