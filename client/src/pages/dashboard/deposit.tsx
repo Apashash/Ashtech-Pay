@@ -92,6 +92,7 @@ export default function DepositPage() {
   const [cryptoRef, setCryptoRef] = useState("");
   const [cryptoCoin, setCryptoCoin] = useState("USDT");
   const [cryptoNetwork, setCryptoNetwork] = useState("TRC20");
+  const [cryptoNetworkTouched, setCryptoNetworkTouched] = useState(false);
   const [refundAddress, setRefundAddress] = useState("");
   const [showRefundField, setShowRefundField] = useState(false);
   const [cryptoStep, setCryptoStep] = useState<"form" | "ready" | "waiting">("form");
@@ -108,6 +109,13 @@ export default function DepositPage() {
   // Dynamic IziChange asset list (falls back to static if API not configured)
   const { coins: cryptoCoinList, isLoading: cryptoAssetsLoading } = useIziAssets();
   const { priceUsd: cryptoCoinPrice, isLoading: coinPriceLoading } = useCoinPrice(cryptoCoin);
+  const cryptoNetworks = cryptoCoinList[cryptoCoin]?.networks ?? [];
+  const defaultCryptoNetwork = cryptoCoin === "USDT" && cryptoNetworks.some(net => net.id === "TRC20")
+    ? "TRC20"
+    : (cryptoNetworks[0]?.id ?? "TRC20");
+  const displayedCryptoNetwork = !cryptoNetworkTouched
+    ? defaultCryptoNetwork
+    : (cryptoNetworks.some(net => net.id === cryptoNetwork) ? cryptoNetwork : defaultCryptoNetwork);
 
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const { data: wallets } = useQuery<{ id: string; currency: string; balance: string }[]>({
@@ -321,7 +329,7 @@ export default function DepositPage() {
 
   const generateCryptoAddressMutation = useMutation({
     mutationFn: async () => {
-      const net = cryptoCoinList[cryptoCoin]?.networks.find(n => n.id === cryptoNetwork);
+      const net = cryptoCoinList[cryptoCoin]?.networks.find(n => n.id === displayedCryptoNetwork);
       if (!net) throw new Error("Réseau invalide");
       const amt = parseFloat(cryptoAmount);
       if (!amt || amt <= 0) throw new Error("Entrez un montant valide");
@@ -434,7 +442,7 @@ export default function DepositPage() {
         : nets[0].id;
       setCryptoNetwork(preferredNetwork);
     }
-  }, [cryptoCoinList, cryptoCoin, cryptoNetwork]);
+  }, [cryptoCoinList, cryptoCoin, cryptoNetwork, cryptoNetworkTouched]);
 
   const usdtWallet = wallets?.find(w => w.currency === "USDT");
 
@@ -521,6 +529,7 @@ export default function DepositPage() {
               setDepositMode("crypto");
               setCryptoCoin("USDT");
               setCryptoNetwork("TRC20");
+              setCryptoNetworkTouched(false);
               setCryptoAssetCode("USDT.TRC20");
             }}
             className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-semibold transition-all ${depositMode === "crypto" ? "bg-card shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
@@ -809,7 +818,10 @@ export default function DepositPage() {
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cryptomonnaie</p>
                     <CoinSelect
                       value={cryptoCoin}
-                      onChange={v => setCryptoCoin(v as any)}
+                      onChange={v => {
+                        setCryptoCoin(v as any);
+                        setCryptoNetworkTouched(false);
+                      }}
                       coinList={cryptoCoinList}
                       coinLogoUrl={coinLogoUrl}
                     />
@@ -820,8 +832,11 @@ export default function DepositPage() {
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Réseau</p>
                     <div className="relative">
                       <select
-                        value={cryptoNetwork}
-                        onChange={e => setCryptoNetwork(e.target.value)}
+                        value={displayedCryptoNetwork}
+                        onChange={e => {
+                          setCryptoNetwork(e.target.value);
+                          setCryptoNetworkTouched(true);
+                        }}
                         className="w-full h-12 pl-11 pr-4 rounded-xl border border-border bg-background text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/40 appearance-none cursor-pointer"
                       >
                         {(cryptoCoinList[cryptoCoin]?.networks ?? []).map(net => (
@@ -831,8 +846,8 @@ export default function DepositPage() {
                       {/* network chain logo overlay */}
                       <div className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full overflow-hidden bg-muted flex items-center justify-center">
                         <img
-                          src={networkLogoUrl(cryptoNetwork)}
-                          alt={cryptoNetwork}
+                          src={networkLogoUrl(displayedCryptoNetwork)}
+                          alt={displayedCryptoNetwork}
                           className="w-6 h-6 object-contain"
                           onLoad={(e) => { (e.target as HTMLImageElement).style.display = ""; }}
                           onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
@@ -841,7 +856,7 @@ export default function DepositPage() {
                       <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">▼</div>
                     </div>
                     {/* Warning for memo chains */}
-                    {cryptoCoinList[cryptoCoin]?.networks.find(n => n.id === cryptoNetwork)?.memoRequired && (
+                    {cryptoCoinList[cryptoCoin]?.networks.find(n => n.id === displayedCryptoNetwork)?.memoRequired && (
                       <p className="text-xs text-amber-600 dark:text-amber-400">
                         ⚠️ Ce réseau nécessite un mémo/tag — il sera affiché avec l'adresse.
                       </p>

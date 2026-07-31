@@ -96,6 +96,7 @@ export default function PaymentPage() {
   // WaaS crypto state for payment-link crypto flow
   const [payCryptoCoin, setPayCryptoCoin] = useState("USDT");
   const [payCryptoNetwork, setPayCryptoNetwork] = useState("TRC20");
+  const [payCryptoNetworkTouched, setPayCryptoNetworkTouched] = useState(false);
   const [payCryptoStep, setPayCryptoStep] = useState<"form" | "ready">("form");
   const [payCryptoAddr, setPayCryptoAddr] = useState("");
   const [payCryptoMemo, setPayCryptoMemo] = useState<string | null>(null);
@@ -114,6 +115,13 @@ export default function PaymentPage() {
   const { coins: payCoinList, isLoading: cryptoAssetsLoading } = useIziAssets();
   const { priceUsd: payCryptoCoinPrice } = useCoinPrice(payCryptoCoin);
   const hasCryptoAssets = Object.keys(payCoinList).length > 0;
+  const payCryptoNetworks = payCoinList[payCryptoCoin]?.networks ?? [];
+  const defaultPayCryptoNetwork = payCryptoCoin === "USDT" && payCryptoNetworks.some(net => net.id === "TRC20")
+    ? "TRC20"
+    : (payCryptoNetworks[0]?.id ?? "TRC20");
+  const displayedPayCryptoNetwork = !payCryptoNetworkTouched
+    ? defaultPayCryptoNetwork
+    : (payCryptoNetworks.some(net => net.id === payCryptoNetwork) ? payCryptoNetwork : defaultPayCryptoNetwork);
   const payCryptoMinimumAmount = minimumCryptoAmount(payCryptoCoinPrice);
   const payCryptoUsdtEquivalent = parseFloat(payCryptoAmount) > 0 && payCryptoCoinPrice > 0
     ? parseFloat(payCryptoAmount) * payCryptoCoinPrice
@@ -406,7 +414,7 @@ export default function PaymentPage() {
   // WaaS mutation for payment-link crypto address
   const generatePayLinkCryptoMutation = useMutation({
     mutationFn: async () => {
-      const net = payCoinList[payCryptoCoin]?.networks.find(n => n.id === payCryptoNetwork);
+      const net = payCoinList[payCryptoCoin]?.networks.find(n => n.id === displayedPayCryptoNetwork);
       if (!net) throw new Error("Réseau invalide");
       if (!email.trim()) throw new Error("Email requis");
       // country is optional for crypto (not needed by IziChange Direct Charge)
@@ -494,7 +502,7 @@ export default function PaymentPage() {
           : nets[0].id,
       );
     }
-  }, [payCoinList, payCryptoCoin, payCryptoNetwork]);
+  }, [payCoinList, payCryptoCoin, payCryptoNetwork, payCryptoNetworkTouched]);
 
   useEffect(() => {
     return () => {
@@ -522,6 +530,7 @@ export default function PaymentPage() {
     setWaveUrl(null);
     setPayCryptoCoin("USDT");
     setPayCryptoNetwork("TRC20");
+    setPayCryptoNetworkTouched(false);
     setPayCryptoStep("form");
     setPayCryptoAddr("");
     setPayCryptoMemo(null);
@@ -1313,6 +1322,7 @@ export default function PaymentPage() {
                     setPaymentMethod("crypto");
                     setPayCryptoCoin("USDT");
                     setPayCryptoNetwork("TRC20");
+                    setPayCryptoNetworkTouched(false);
                     setPayCryptoAssetCode("USDT.TRC20");
                     setErrors(prev => ({...prev, paymentMethod: undefined as any}));
                   }}
@@ -1399,7 +1409,10 @@ export default function PaymentPage() {
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{p.cryptoCurrency}</p>
                   <CoinSelect
                     value={payCryptoCoin}
-                    onChange={setPayCryptoCoin}
+                    onChange={coin => {
+                      setPayCryptoCoin(coin);
+                      setPayCryptoNetworkTouched(false);
+                    }}
                     coinList={payCoinList}
                     coinLogoUrl={coinLogoUrl}
                   />
@@ -1410,8 +1423,11 @@ export default function PaymentPage() {
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{p.network}</p>
                   <div className="relative">
                     <select
-                      value={payCryptoNetwork}
-                      onChange={e => setPayCryptoNetwork(e.target.value)}
+                      value={displayedPayCryptoNetwork}
+                      onChange={e => {
+                        setPayCryptoNetwork(e.target.value);
+                        setPayCryptoNetworkTouched(true);
+                      }}
                       className="w-full h-12 pl-11 pr-4 rounded-xl border border-border bg-background text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/40 appearance-none cursor-pointer"
                     >
                       {(payCoinList[payCryptoCoin]?.networks ?? []).map(net => (
@@ -1421,8 +1437,8 @@ export default function PaymentPage() {
                     {/* network chain logo overlay */}
                     <div className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full overflow-hidden bg-muted flex items-center justify-center">
                       <img
-                        src={networkLogoUrl(payCryptoNetwork)}
-                        alt={payCryptoNetwork}
+                        src={networkLogoUrl(displayedPayCryptoNetwork)}
+                        alt={displayedPayCryptoNetwork}
                         className="w-6 h-6 object-contain"
                         onLoad={(e) => { (e.target as HTMLImageElement).style.display = ""; }}
                         onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
@@ -1430,7 +1446,7 @@ export default function PaymentPage() {
                     </div>
                     <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">▼</div>
                   </div>
-                  {payCoinList[payCryptoCoin]?.networks.find(n => n.id === payCryptoNetwork)?.memoRequired && (
+                  {payCoinList[payCryptoCoin]?.networks.find(n => n.id === displayedPayCryptoNetwork)?.memoRequired && (
                     <p className="text-xs text-amber-600 dark:text-amber-400">
                        ⚠️ {p.memoRequired}
                     </p>
