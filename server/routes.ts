@@ -12556,36 +12556,67 @@ export async function registerRoutes(
           return res.status(401).json({ message: "Invalid signature" });
         }
       } else {
-        console.warn("[IziChange Webhook] IZIPAY_WEBHOOK_SECRET not set — accepting without signature check (getIziPayWebhookSecret was empty)");
+        console.warn("[IziChange Webhook] IZIPAY_WEBHOOK_SECRET not set — accepting without signature check");
       }
 
-      const { event: eventType, data: eventData } = req.body || {};
-      console.log(`[IziChange Webhook] event=${eventType} ref=${eventData?.merchantReference}`);
+      // ── Log full payload so we can verify the real field names ──────────────
+      const body = req.body || {};
+      console.log("[IziChange Webhook] FULL PAYLOAD:", JSON.stringify(body));
 
-      if (eventType !== "payment_intent.completed") {
+      // IziChange may use { event } or { type } for the event name
+      const eventType: string = body.event ?? body.type ?? "";
+      // data may live under { data } or { object } or { paymentIntent } or flat at root
+      const eventData: any = body.data ?? body.object ?? body.paymentIntent ?? body;
+
+      console.log(`[IziChange Webhook] event=${eventType}`);
+
+      // ── Only process payment-confirmation events ─────────────────────────────
+      // payment_intent.completed = Direct Charge fully confirmed
+      // payin.confirmed           = on-chain payin confirmed (alternative event)
+      const CREDIT_EVENTS = ["payment_intent.completed", "payin.confirmed"];
+      if (!CREDIT_EVENTS.includes(eventType)) {
         return res.json({ received: true });
       }
 
-      const merchantReference = eventData?.merchantReference;
+      // ── Defensive multi-path lookup for merchantReference ───────────────────
+      // IziChange field may be camelCase, snake_case, or nested inside an object
+      // under eventData. Try every known variant.
+      const merchantReference: string =
+        eventData?.merchantReference      ??
+        eventData?.merchant_reference     ??
+        eventData?.paymentIntent?.merchantReference ??
+        eventData?.paymentIntent?.merchant_reference ??
+        eventData?.payment_intent?.merchantReference ??
+        eventData?.payment_intent?.merchant_reference ??
+        eventData?.object?.merchantReference ??
+        eventData?.object?.merchant_reference ??
+        // Sometimes the reference is top-level in the root body
+        body.merchantReference            ??
+        body.merchant_reference           ??
+        "";
+
       if (!merchantReference) {
-        console.warn("[IziChange Webhook] Missing merchantReference");
-        return res.status(400).json({ message: "Missing merchantReference" });
+        // Log everything we got so we can fix the path; return 200 to stop retries.
+        console.error("[IziChange Webhook] ⚠️  merchantReference not found in payload. Keys at root:", Object.keys(body), "Keys in data:", Object.keys(eventData ?? {}));
+        return res.status(200).json({ received: true, warning: "merchantReference not found — check server logs" });
       }
+
+      console.log(`[IziChange Webhook] ref=${merchantReference}`);
 
       const transaction = await storage.getTransactionByReference(merchantReference);
       if (!transaction) {
-        console.warn(`[IziChange Webhook] Transaction not found: ${merchantReference}`);
+        console.warn(`[IziChange Webhook] Transaction not found for ref=${merchantReference}`);
         return res.status(200).json({ message: "ok" });
       }
 
       if (transaction.status !== "pending") {
+        console.log(`[IziChange Webhook] Already processed ref=${merchantReference} status=${transaction.status}`);
         return res.status(200).json({ message: "already processed" });
       }
 
       const creditAmount = parseFloat(transaction.amount);
       await storage.updateTransactionStatus(transaction.id, "completed");
       await creditUserWallet(transaction.userId, creditAmount, "USDT");
-
 
       await storage.createUserNotification({
         userId: transaction.userId,
