@@ -406,7 +406,16 @@ export default function PaymentPage() {
       return data;
     },
     onSuccess: (data) => {
-      setPayCryptoAddr(data.address);
+      const addr: string = data.address || data.depositAddress || data.data?.address || "";
+      if (!addr) {
+        toast({
+          title: "Erreur adresse crypto",
+          description: "L'adresse de dépôt n'a pas été reçue. Veuillez réessayer.",
+          variant: "destructive",
+        });
+        return;
+      }
+      setPayCryptoAddr(addr);
       setPayCryptoMemo(data.memo ?? null);
       setPayCryptoRef(data.reference || "");
       setPayCryptoAssetCode(data.assetCode);

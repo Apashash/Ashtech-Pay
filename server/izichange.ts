@@ -152,12 +152,42 @@ export async function createDirectCharge(
   params: DirectChargeParams,
 ): Promise<DirectChargeResult> {
   const { idempotencyKey, ...body } = params;
-  return iziRequest(
+  const raw = await iziRequest(
     "POST",
     "/v1/payment-intents/direct",
     body as Record<string, unknown>,
     idempotencyKey ?? params.merchantReference,
   );
+
+  // Log full raw response so we can see the real field names in production logs.
+  console.log("[IziChange/DirectCharge] raw response:", JSON.stringify(raw));
+
+  // IziChange may nest the address or use a different key — normalise defensively.
+  // Priority: address > depositAddress > nested data.address > paymentLink (last resort URL)
+  const address: string =
+    raw.address          ||
+    raw.depositAddress   ||
+    raw.data?.address    ||
+    raw.charge?.address  ||
+    raw.paymentLink      ||  // some versions return hosted URL
+    "";
+
+  const memo: string | null =
+    raw.memo ?? raw.destinationTag ?? raw.tag ?? raw.data?.memo ?? null;
+
+  const memoType: string | null =
+    raw.memoType ?? raw.memo_type ?? (memo !== null ? "memo" : null);
+
+  return {
+    id:               raw.id       ?? "",
+    status:           raw.status   ?? "pending",
+    merchantReference: raw.merchantReference ?? raw.merchant_reference,
+    address,
+    memo,
+    memoType,
+    requestedCoin:    raw.requestedCoin ?? raw.assetCode ?? params.requestedCoin,
+    amount:           raw.amount   ?? raw.amountRequested ?? params.amount,
+  };
 }
 
 // ── Webhook validation (manual HMAC-SHA256, toleranceSeconds = 5 min) ────────
