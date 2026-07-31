@@ -16,6 +16,22 @@ export interface CryptoAssetCoin {
 
 export type CryptoAssetMap = Record<string, CryptoAssetCoin>;
 
+function prioritizeTronNetworks(coins: CryptoAssetMap): CryptoAssetMap {
+  return Object.fromEntries(
+    Object.entries(coins).map(([code, coin]) => [
+      code,
+      {
+        ...coin,
+        networks: [...coin.networks].sort((a, b) => {
+          const aIsTron = a.id === "TRC20" || a.id === "TRX" || /tron/i.test(a.label);
+          const bIsTron = b.id === "TRC20" || b.id === "TRX" || /tron/i.test(b.label);
+          return Number(bIsTron) - Number(aIsTron);
+        }),
+      },
+    ]),
+  );
+}
+
 function inferMemoDetails(assetCode: string, networkId: string): { required: boolean; type: string | null } {
   const asset = assetCode.toUpperCase();
   const network = networkId.toUpperCase();
@@ -134,12 +150,13 @@ export async function fetchCryptoAssets(): Promise<CryptoAssetMap> {
     }
   }
 
-  cache = { coins, ts: now };
+  const orderedCoins = prioritizeTronNetworks(coins);
+  cache = { coins: orderedCoins, ts: now };
   console.log(
-    `[crypto/assets] Loaded ${list.length} raw assets → ${Object.keys(coins).length} coins ` +
-    `(networks: ${Object.values(coins).reduce((sum, coin) => sum + coin.networks.length, 0)})`
+    `[crypto/assets] Loaded ${list.length} raw assets → ${Object.keys(orderedCoins).length} coins ` +
+    `(networks: ${Object.values(orderedCoins).reduce((sum, coin) => sum + coin.networks.length, 0)})`
   );
-  return coins;
+  return orderedCoins;
 }
 
 export function filterCryptoAssets(coins: CryptoAssetMap, disabled: Set<string>): CryptoAssetMap {

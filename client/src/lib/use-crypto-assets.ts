@@ -21,6 +21,29 @@ export interface DynCryptoCoin {
 
 export type DynCoinMap = Record<string, DynCryptoCoin>;
 
+/**
+ * Put the Tron network first whenever it is available.
+ *
+ * The upstream catalogue does not guarantee a stable ordering and may return
+ * Polygon before TRC20. The selectors use the catalogue order for their
+ * options, so normalize it before it reaches the pages.
+ */
+export function prioritizeTronNetworks(coins: DynCoinMap): DynCoinMap {
+  return Object.fromEntries(
+    Object.entries(coins).map(([symbol, coin]) => [
+      symbol,
+      {
+        ...coin,
+        networks: [...coin.networks].sort((a, b) => {
+          const aIsTron = a.id === "TRC20" || a.id === "TRX" || /tron/i.test(a.label);
+          const bIsTron = b.id === "TRC20" || b.id === "TRX" || /tron/i.test(b.label);
+          return Number(bIsTron) - Number(aIsTron);
+        }),
+      },
+    ]),
+  );
+}
+
 // ── Logo helpers ──────────────────────────────────────────────────────────────
 
 const CDN = "https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/32/color";
@@ -123,12 +146,12 @@ export function useIziAssets(): { coins: DynCoinMap; isLoading: boolean } {
   // An empty successful response means the admin disabled every network.
   // Only use the static fallback while loading or when the API failed.
   if (isSuccess && data) {
-    return { coins: data, isLoading: false };
+    return { coins: prioritizeTronNetworks(data), isLoading: false };
   }
   const fallback = staticFallback();
   for (const coin of Object.keys(fallback)) {
     fallback[coin].networks = fallback[coin].networks.filter(net => !disabled.has(net.assetCode));
     if (fallback[coin].networks.length === 0) delete fallback[coin];
   }
-  return { coins: fallback, isLoading };
+  return { coins: prioritizeTronNetworks(fallback), isLoading };
 }
