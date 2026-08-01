@@ -612,6 +612,17 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
               <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs ml-1">amount</code> est le montant
               brut ; <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">credited_amount_usdt</code> est le net après frais.
             </p>
+             <div className="rounded-xl border border-blue-200 bg-blue-50 p-5 space-y-2">
+               <p className="text-sm font-semibold text-blue-900">Comment afficher l'adresse et le QR code ?</p>
+               <p className="text-sm text-blue-900/80 leading-relaxed">
+                 La réponse <strong>202</strong> contient l'adresse unique dans{" "}
+                 <code className="font-mono">address</code> et, pour certains réseaux, le{" "}
+                 <code className="font-mono">memo</code> ou le <code className="font-mono">tag</code>. Ashtech Pay ne renvoie pas
+                 d'image QR : votre interface génère le QR localement à partir de ces valeurs. Affichez toujours l'adresse en texte
+                 copiable, le memo/tag dans un champ séparé lorsqu'il existe, ainsi que le montant et le réseau exacts{" "}
+                 (<code className="font-mono">asset_code</code>).
+               </p>
+             </div>
 
             <TableWrapper>
               <TableHead cols={["Paramètre", "Type", "Statut", "Description"]} />
@@ -623,7 +634,6 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
                 <ParamRow name="notify_url" type="string" required={false} desc="URL HTTPS recevant payment.completed ou payment.failed." />
                 <ParamRow name="customer" type="object" required={false} desc="email, firstName et lastName du payeur." />
                 <ParamRow name="refund_address" type="string" required={false} desc="Adresse de remboursement fournie au prestataire." />
-                <ParamRow name="request_id" type="string" required={false} desc="Présent dans les erreurs 500/502 pour le diagnostic." />
               </tbody>
             </TableWrapper>
 
@@ -675,6 +685,52 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
               </div>
             </div>
 
+             <div className="space-y-3">
+               <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Exemple complet — afficher l'adresse, le memo et le QR</p>
+               <p className="text-sm text-gray-600 leading-relaxed">
+                 Installez une bibliothèque QR dans votre interface, par exemple{" "}
+                 <code className="font-mono text-blue-600">npm install qrcode</code>. Pour USDT/TRC20, le QR peut contenir
+                 directement l'adresse. Pour un réseau avec memo/tag, n'inventez pas un format : utilisez uniquement une URI
+                 officiellement supportée par ce réseau et conservez le memo visible séparément.
+               </p>
+               <CodeBlock language="javascript" code={`import QRCode from "qrcode";
+
+async function showCryptoPayment(data) {
+  // data vient de POST /v1/crypto/collect
+  document.querySelector("#crypto-address").textContent = data.address;
+  document.querySelector("#crypto-network").textContent = data.asset_code;
+  document.querySelector("#crypto-amount").textContent =
+    data.amount_usdt + " USDT";
+
+  const memoBox = document.querySelector("#crypto-memo");
+  if (data.memo) {
+    memoBox.textContent = (data.memo_type || "Memo / tag") + " : " + data.memo;
+    memoBox.hidden = false;
+  } else {
+    memoBox.hidden = true;
+  }
+
+  // USDT.TRC20 : QR avec l'adresse uniquement
+  await QRCode.toCanvas(
+    document.querySelector("#crypto-qr"),
+    data.address,
+    { width: 240, margin: 2, errorCorrectionLevel: "M" }
+  );
+}
+
+// HTML : #crypto-amount, #crypto-network, #crypto-address,
+//         #crypto-qr (canvas) et #crypto-memo`} />
+               <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-1.5">
+                 <p className="text-sm font-semibold text-amber-800">Important pour le memo/tag</p>
+                 <p className="text-sm text-amber-800/80 leading-relaxed">
+                   Ne concaténez jamais le memo à l'adresse et ne remplacez jamais l'adresse par le memo. Le payeur doit envoyer
+                   les fonds sur <code className="font-mono">address</code> avec le{" "}
+                   <code className="font-mono">memo</code>/<code className="font-mono">tag</code> exactement comme affiché.
+                   Un memo obligatoire oublié peut empêcher l'attribution du paiement.
+                 </p>
+               </div>
+             </div>
+
             <div className="rounded-xl border border-red-200 bg-red-50 p-5 space-y-2">
               <p className="text-sm font-semibold text-red-900">Erreurs de création et diagnostic</p>
               <p className="text-sm text-red-900/80">
@@ -686,6 +742,11 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
                 <code className="font-mono ml-1">customer.email</code> est mal formé ; <code className="font-mono">400 invalid_notify_url</code>
                 indique que <code className="font-mono">notify_url</code> doit être une URL HTTPS valide. Les deux champs restent optionnels.
               </p>
+               <p className="text-sm text-red-900/80">
+                 Pour chaque erreur <code className="font-mono">500</code> ou <code className="font-mono">502</code>, conservez{" "}
+                 <code className="font-mono">request_id</code> et transmettez-le au support. Ce champ est renvoyé dans la réponse
+                 d'erreur ; il ne doit pas être envoyé dans la requête.
+               </p>
             </div>
 
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 space-y-2">
@@ -699,6 +760,17 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
                 L’adresse est à usage unique pour cette transaction.
               </p>
             </div>
+             <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 space-y-2">
+               <p className="text-sm font-semibold text-gray-900">Après l'affichage : attendre la confirmation</p>
+               <p className="text-sm text-gray-600 leading-relaxed">
+                 La création de l'adresse ne signifie pas que le paiement est confirmé. Gardez{" "}
+                 <code className="font-mono">transaction_id</code> et <code className="font-mono">reference</code>, attendez le
+                 webhook <code className="font-mono">payment.completed</code> ou{" "}
+                 <code className="font-mono">payment.failed</code>, et utilisez{" "}
+                 <code className="font-mono">GET /v1/transaction/:id</code> comme vérification complémentaire. Ne livrez jamais
+                 un produit avec le seul statut <code className="font-mono">pending</code>.
+               </p>
+             </div>
           </section>
 
           {/* Collect */}

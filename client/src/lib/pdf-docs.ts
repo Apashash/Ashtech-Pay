@@ -798,10 +798,39 @@ export function downloadSDKDocs() {
    );
    y = codeBlock(doc, `fetch("https://ashtechpay.top/v1/crypto/collect", {\n  method: "POST",\n  headers: {\n    "Authorization": "Bearer YOUR_API_KEY",\n    "Content-Type": "application/json"\n  },\n  body: JSON.stringify({\n    amount: 25,\n    currency: "USDT",\n    asset_code: "USDT.TRC20",\n    reference: "ORDER-CRYPTO-001",\n    notify_url: "https://monsite.com/webhook",\n    customer: { firstName: "Ada", lastName: "Lovelace", email: "ada@example.com" }\n  })\n})`, y, "javascript");
    y = codeBlock(doc, `{\n  "transaction_id": "8f3e1c2d-...",\n  "reference": "ORDER-CRYPTO-001",\n  "status": "pending",\n  "payment_method": "crypto",\n  "asset_code": "USDT.TRC20",\n  "network": "TRC20",\n  "address": "TX…",\n  "memo": null,\n  "memo_type": null,\n  "amount": 25,\n  "currency": "USDT",\n  "amount_usdt": 25,\n  "credited_amount": 24.375,\n  "fee_amount": 0.625,\n  "credited_amount_usdt": 24.375,\n  "fee_amount_usdt": 0.625,\n  "fee_percent": 2.5,\n  "expires_at": "2026-07-31T19:00:00Z"\n}`, y, "json");
-    y = paragraph(doc, "L'API accepte un montant en USDT ou dans une devise fiat supportee (XAF, XOF, GNF, CDF ou USD). Les devises fiat sont converties en USDT avec le taux USDT/XAF. amount est le montant brut ; credited_amount_usdt est le net apres frais. Les frais Ashtech Pay et fournisseur sont inclus dans fee_amount_usdt. Quand memo_required vaut true, memo_type indique memo ou tag : copiez address et memo separement, sans jamais concatener ou remplacer le memo par l'adresse.", y);
+    y = paragraph(doc, "L'API accepte un montant en USDT ou dans une devise fiat supportee (XAF, XOF, GNF, CDF ou USD). Les devises fiat sont converties en USDT avec le taux USDT/XAF. amount est le montant brut ; credited_amount_usdt est le net apres frais. Les frais Ashtech Pay et fournisseur sont inclus dans fee_amount_usdt.", y);
+    y = banner(doc, "info", "Affichage du paiement : la reponse 202 renvoie address, memo, memo_type et asset_code, mais pas une image QR. Generez le QR cote marchand avec une bibliotheque QR a partir de address, affichez l'adresse en texte copiable et affichez toujours le memo/tag dans un champ separe lorsqu'il existe. Pour USDT.TRC20, le QR contient l'adresse ; n'inventez pas de format URI pour un memo dont le format n'est pas documente.", y);
+    y = subHeading(doc, "Exemple — afficher adresse, memo et QR (Node.js / navigateur)", y);
+    y = codeBlock(doc, `import QRCode from "qrcode";
+
+async function displayCryptoPayment(data) {
+  // data vient de POST /v1/crypto/collect
+  document.querySelector("#crypto-address").textContent = data.address;
+  document.querySelector("#crypto-network").textContent = data.asset_code;
+  document.querySelector("#crypto-amount").textContent = data.amount_usdt + " USDT";
+
+  const memoBox = document.querySelector("#crypto-memo");
+  if (data.memo) {
+    memoBox.textContent = (data.memo_type || "Memo / tag") + " : " + data.memo;
+    memoBox.hidden = false;
+  } else {
+    memoBox.hidden = true;
+  }
+
+  // USDT.TRC20 : QR avec l'adresse uniquement
+  await QRCode.toCanvas(
+    document.querySelector("#crypto-qr"),
+    data.address,
+    { width: 240, margin: 2, errorCorrectionLevel: "M" }
+  );
+}
+
+// HTML : #crypto-amount, #crypto-network, #crypto-address,
+//         #crypto-qr (canvas) et #crypto-memo`, y, "javascript");
+    y = paragraph(doc, "Ne concatenez jamais address et memo/tag. Le payeur doit envoyer les fonds sur address avec le memo ou tag exactement tel qu'affiche. Un memo obligatoire oublie peut empecher l'attribution du paiement. Gardez transaction_id et reference, puis attendez payment.completed ou payment.failed avant de livrer.", y);
     y = paragraph(doc, "Apres confirmation par le prestataire crypto, Ashtech Pay credite automatiquement le wallet USDT du marchand avec credited_amount_usdt, puis envoie le webhook POST a notify_url. Le marchand ne doit pas crediter son wallet lui-meme. Les evenements sont payment.completed ou payment.failed et le payload crypto ajoute payment_method, asset_code, address et memo.", y);
     y = subHeading(doc, "Erreurs et diagnostic", y);
-    y = paragraph(doc, "Une reponse 502 gateway_error signifie que l'adresse n'a pas pu etre generee. Une reponse 502 provider_invalid_response signifie que le service a repondu sans adresse exploitable. Une reponse 500 server_error contient toujours request_id : conservez-le pour le diagnostic. Si provider_status est present, il indique le code HTTP renvoye par le service crypto. Une reponse 400 invalid_email indique que customer.email est mal forme ; invalid_notify_url indique que notify_url doit etre une URL HTTPS valide. Ces deux champs restent optionnels.", y);
+    y = paragraph(doc, "Une reponse 502 gateway_error signifie que l'adresse n'a pas pu etre generee. Une reponse 502 provider_invalid_response signifie que le service a repondu sans adresse exploitable. Une reponse 500 server_error contient toujours request_id : conservez-le pour le diagnostic ; ce champ est renvoye dans l'erreur et ne doit pas etre envoye dans la requete. Si provider_status est present, il indique le code HTTP renvoye par le service crypto. Une reponse 400 invalid_email indique que customer.email est mal forme ; invalid_notify_url indique que notify_url doit etre une URL HTTPS valide. Ces deux champs restent optionnels.", y);
 
    // ── §5  Collect ───────────────────────────────────────────────────────────
    y = sectionTitle(doc, "5. Initier un paiement — POST /v1/collect", y);
