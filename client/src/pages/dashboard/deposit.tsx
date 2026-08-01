@@ -65,7 +65,7 @@ const QUICK_AMOUNTS = [5000, 10000, 25000, 50000, 100000];
 import { useIziAssets, coinLogoUrl, networkLogoUrl } from "@/lib/use-crypto-assets";
 import { useCoinPrice } from "@/lib/use-coin-price";
 
-const CRYPTO_COUNTDOWN_SECONDS = 35;
+const CRYPTO_COUNTDOWN_SECONDS = 5 * 60;
 
 export default function DepositPage() {
   const { toast } = useToast();

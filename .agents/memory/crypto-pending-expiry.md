@@ -3,7 +3,7 @@ name: Crypto pending expiry
 description: Crypto-only pending payment timeout and UI countdown behavior
 ---
 
-Crypto address screens show a 35-second informational countdown, while the server rejects crypto transactions still pending after 15 minutes. Mobile Money keeps its existing status and timeout behavior.
+Crypto address screens show a five-minute informational countdown, while the server rejects crypto transactions still pending after 15 minutes. Mobile Money keeps its existing status and timeout behavior.
 
 **Why:** The short UI timer is a user-facing instruction, not the payment validity window; relying on it would fail when the page is closed or a process restarts.
 

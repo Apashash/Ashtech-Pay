@@ -29,7 +29,7 @@ import { formatCryptoAmount, minimumCryptoAmount } from "@/lib/crypto-minimum";
 import { useCoinPrice } from "@/lib/use-coin-price";
 import { CoinSelect } from "@/components/ui/coin-select";
 
-const CRYPTO_COUNTDOWN_SECONDS = 35;
+const CRYPTO_COUNTDOWN_SECONDS = 5 * 60;
 
 const CURRENCY_FLAGS: Record<string, string> = {
   "XAF": "🇨🇲", "XOF": "🇸🇳", "CDF": "🇨🇩", "GHS": "🇬🇭",
@@ -712,27 +712,6 @@ export default function PaymentPage() {
                 )}
               </div>
             )}
-            {(payCryptoAmountUsdt || payCryptoAmount) && (
-              <div className="bg-muted/30 rounded-xl px-4 py-3 space-y-1.5">
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>Montant brut</span>
-                  <span className="font-semibold">{Number(payCryptoAmountUsdt || fixedCryptoAmountUsdt || 0).toFixed(4)} USDT</span>
-                </div>
-                {payCryptoFeeBreakdown && (
-                  <>
-                    <div className="flex justify-between text-xs font-semibold text-muted-foreground border-t border-border pt-1.5">
-                      <span>Total des frais ({payCryptoFeeBreakdown.totalFeePercent}%)</span>
-                      <span className="text-red-500">-{payCryptoFeeBreakdown.totalFeeAmountUsdt.toFixed(4)} USDT</span>
-                    </div>
-                    <div className="flex justify-between text-sm border-t border-border pt-1.5">
-                      <span className="font-medium text-muted-foreground">Montant net crédité</span>
-                      <span className="font-bold text-green-500">{payCryptoFeeBreakdown.creditedAmountUsdt.toFixed(4)} USDT</span>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-
             {/* QR code */}
             <div className="flex justify-center">
               <div className="p-3 bg-white rounded-2xl shadow-sm border border-border">
