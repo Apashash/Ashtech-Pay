@@ -290,14 +290,6 @@ export default function TransactionDetailPage({ params }: { params: { id: string
               {cryptoFeeDetails && (
                 <>
                   <Row
-                    label="Frais fournisseur"
-                    value={<span className="text-amber-500">{cryptoFeeDetails.providerAmount.toFixed(4)} USDT ({cryptoFeeDetails.providerPercent}%)</span>}
-                  />
-                  <Row
-                    label="Frais AshTechPay"
-                    value={<span className="text-amber-500">{cryptoFeeDetails.ashtechAmount.toFixed(4)} USDT ({cryptoFeeDetails.ashtechPercent}%)</span>}
-                  />
-                  <Row
                     label="Total des frais"
                     value={<span className="text-amber-500">{cryptoFeeDetails.totalAmount.toFixed(4)} USDT ({cryptoFeeDetails.totalPercent}%)</span>}
                   />
