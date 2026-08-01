@@ -18,3 +18,4 @@
 - [Crypto pending expiry](crypto-pending-expiry.md) — show 35s in crypto screens but enforce a persisted 15min server timeout only for crypto, never Mobile Money.
 - [Crypto fee display](crypto-fee-display.md) — calculate provider and AshTechPay fees separately, but show users only their combined total.
 - [Crypto country required](crypto-country-required.md) — country selection is mandatory in public crypto links and authenticated crypto deposits, with server-side validation.
+- [Transaction metadata typing](transaction-metadata-typing.md) — JSON transaction metadata needs an explicit shared record type for TypeScript inserts.
