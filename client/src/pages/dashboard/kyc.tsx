@@ -406,9 +406,9 @@ export default function KYCPage() {
     submitMutation.mutate({
       documentType,
       documentNumber,
-      documentFrontPath: uploadedPaths.front,
-      documentBackPath: uploadedPaths.back,
-      selfiePath: uploadedPaths.selfie,
+      documentFrontPath: uploadedPaths.front!,
+      documentBackPath: uploadedPaths.back!,
+      selfiePath: uploadedPaths.selfie!,
       country: detectedCountry || user?.country || undefined,
       city,
       postalCode: lieuDit,

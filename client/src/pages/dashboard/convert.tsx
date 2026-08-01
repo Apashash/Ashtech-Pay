@@ -367,7 +367,7 @@ export default function ConvertPage() {
                 <span className="font-medium tabular-nums text-destructive">−{feeAmount.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {fromCurrency}</span>
               </div>
               <div className="px-4 py-3 flex justify-between text-sm bg-primary/5">
-                <span className="font-semibold text-foreground">{t.wallets.youReceive}</span>
+                <span className="font-semibold text-foreground">{t.wallets.youReceiveAbout}</span>
                 <span className="font-bold text-primary tabular-nums">≈ {previewAmount.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {toCurrency}</span>
               </div>
             </div>

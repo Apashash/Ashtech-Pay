@@ -345,7 +345,7 @@ export default function WalletsPage() {
               data-testid="button-confirm-disable-wallet"
             >
               {deleteWalletMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-              {t.wallets.disableConfirm}
+              {t.wallets.disableButtonSimple}
             </Button>
           </BottomSheetFooter>
         </BottomSheetContent>

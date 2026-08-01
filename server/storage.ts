@@ -109,6 +109,7 @@ export interface IStorage {
   getLastIncomingTransactionByCurrency(userId: string, currency: string): Promise<Transaction | undefined>;
   createTransaction(transaction: InsertTransaction): Promise<Transaction>;
   updateTransactionStatus(id: string, status: string): Promise<Transaction | undefined>;
+  updateTransaction(id: string, updates: Partial<InsertTransaction>): Promise<Transaction | undefined>;
   updateTransactionExternalReference(id: string, externalReference: string): Promise<Transaction | undefined>;
   getPendingDepositTransactions(): Promise<Transaction[]>;
   getPendingCryptoTransactions(): Promise<Transaction[]>;
@@ -580,6 +581,19 @@ export class DatabaseStorage implements IStorage {
       .where(eq(transactions.id, id))
       .returning();
     return transaction || undefined;
+  }
+
+  async updateTransaction(id: string, updates: Partial<InsertTransaction>): Promise<Transaction | undefined> {
+    const [transaction] = await db
+      .update(transactions)
+      .set(updates as any)
+      .where(eq(transactions.id, id))
+      .returning();
+    return transaction || undefined;
+  }
+
+  async getOperators(): Promise<Operator[]> {
+    return this.getAllOperators();
   }
 
   async updateTransactionExternalReference(id: string, externalReference: string): Promise<Transaction | undefined> {

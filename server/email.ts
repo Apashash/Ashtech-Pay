@@ -493,6 +493,11 @@ export interface CampaignEmailOptions {
   buttonUrl?: string;
   buttonColor?: string;
   buttonTextColor?: string;
+  preheader?: string;
+  headline?: string;
+  bodyHtml?: string;
+  ctaText?: string;
+  ctaUrl?: string;
 }
 
 export async function sendCampaignEmail(opts: CampaignEmailOptions): Promise<void> {

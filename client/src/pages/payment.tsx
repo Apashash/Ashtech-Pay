@@ -1221,13 +1221,13 @@ export default function PaymentPage() {
     <div className="min-h-screen bg-[#f0f4f8] flex flex-col">
       <div className="absolute inset-0 bg-gradient-to-br from-primary/3 via-transparent to-transparent pointer-events-none" />
       
-      <header className="flex justify-between items-center px-5 py-2 relative z-10 border-b border-border/60 bg-white/80 backdrop-blur-sm">
+      <header className="flex justify-between items-center px-4 py-1 relative z-10 border-b border-border/60 bg-white/80 backdrop-blur-sm">
         <div className="flex items-center gap-2">
-          <img src="/logo.png" alt="AshTech Pay" className="h-16 object-contain" data-testid="img-logo" />
+          <img src="/logo.png" alt="AshTech Pay" className="h-10 object-contain" data-testid="img-logo" />
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-2 border-border bg-muted/50 hover:bg-muted font-medium" data-testid="button-language-selector">
+            <Button variant="outline" size="sm" className="h-8 gap-2 border-border bg-muted/50 hover:bg-muted font-medium" data-testid="button-language-selector">
               <Globe className="w-4 h-4 text-primary" />
               <span className="text-sm font-semibold">{language === "fr" ? "FR" : "EN"}</span>
               <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />

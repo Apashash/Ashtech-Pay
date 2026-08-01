@@ -29,6 +29,7 @@ interface TurnstileWidgetProps {
   onSuccess: (token: string) => void;
   onExpire?: () => void;
   onError?: () => void;
+  onFallback?: () => void;
   theme?: "light" | "dark" | "auto";
 }
 
@@ -61,7 +62,7 @@ function loadTurnstileScript(onLoad: () => void, onLoadError: () => void) {
   document.head.appendChild(script);
 }
 
-export function TurnstileWidget({ siteKey, onSuccess, onExpire, onError, theme = "auto" }: TurnstileWidgetProps) {
+export function TurnstileWidget({ siteKey, onSuccess, onExpire, onError, onFallback, theme = "auto" }: TurnstileWidgetProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
 
@@ -79,6 +80,7 @@ export function TurnstileWidget({ siteKey, onSuccess, onExpire, onError, theme =
 
   const renderWidget = useCallback(() => {
     if (!containerRef.current || !window.turnstile) {
+      onFallback?.();
       onError?.();
       return;
     }
@@ -102,7 +104,10 @@ export function TurnstileWidget({ siteKey, onSuccess, onExpire, onError, theme =
   }, [siteKey, handleSuccess, handleExpire, handleError, theme]);
 
   useEffect(() => {
-    loadTurnstileScript(renderWidget, () => onError?.());
+    loadTurnstileScript(renderWidget, () => {
+      onFallback?.();
+      onError?.();
+    });
     return () => {
       if (widgetIdRef.current) {
         try { window.turnstile.remove(widgetIdRef.current); } catch {}

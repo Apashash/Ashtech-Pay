@@ -252,7 +252,7 @@ export default function LoginPage() {
             </div>
           ) : (
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(loginMutation.mutate)} className="space-y-5">
+              <form onSubmit={form.handleSubmit((data) => loginMutation.mutate(data))} className="space-y-5">
                 {attemptsLeft !== null && attemptsLeft > 0 && (
                   <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
                     <ShieldAlert className="w-4 h-4 text-amber-500 flex-shrink-0" />

@@ -2789,7 +2789,7 @@ export async function registerTelegramWebhook(webhookUrl: string): Promise<void>
 export async function notifyKycSubmitted(opts: {
   userName: string;
   userEmail: string;
-  userId: number;
+  userId: string;
   documentType: string;
   documentNumber: string;
   country?: string;
@@ -2836,7 +2836,7 @@ export async function notifyKycApproved(opts: {
   adminName: string;
   userName: string;
   userEmail: string;
-  userId: number;
+  userId: string;
 }): Promise<void> {
   const msg =
     `✅ <b>KYC APPROUVÉ</b>\n` +
@@ -2853,7 +2853,7 @@ export async function notifyKycRejected(opts: {
   adminName: string;
   userName: string;
   userEmail: string;
-  userId: number;
+  userId: string;
   reason: string;
 }): Promise<void> {
   const msg =

@@ -28,6 +28,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useSSE } from "@/hooks/use-sse";
 import { cn } from "@/lib/utils";
 import type { SupportTicket, TicketMessage } from "@shared/schema";
+import type { SSEEvent } from "@/hooks/use-sse";
 
 interface TicketUser {
   id: string;
@@ -97,7 +98,7 @@ export default function AdminSupport() {
   });
 
   // SSE real-time events
-  const { isOnline } = useSSE(useCallback((event) => {
+  const { isOnline } = useSSE(useCallback((event: SSEEvent) => {
     if (event.type === "new_message") {
       const data = event.data as { ticketId: string; message: TicketMessage; userFullName?: string; subject?: string };
       if (data.ticketId === selectedTicket) {

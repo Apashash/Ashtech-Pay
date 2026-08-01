@@ -63,6 +63,7 @@ import { formatCurrency } from "@/lib/currency";
 import { apiRequest, queryClient, getAuthHeaders } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { ALL_FX_CURRENCIES, COUNTRY_CURRENCIES as SHARED_COUNTRY_CURRENCIES } from "@shared/schema";
+import type { SupportedCurrency } from "@shared/schema";
 
 interface User {
   id: string;
@@ -583,7 +584,7 @@ export default function AdminUsers() {
                           </p>
                           {(user.totalBalanceXAF ?? 0) > 0 && parseFloat(user.balance) > 0 && user.preferredCurrency !== "XAF" && (
                             <p className="text-xs text-muted-foreground">
-                              {formatCurrency(parseFloat(user.balance), user.preferredCurrency)}
+                               {formatCurrency(parseFloat(user.balance), user.preferredCurrency as SupportedCurrency)}
                             </p>
                           )}
                         </div>
@@ -1251,7 +1252,6 @@ export default function AdminUsers() {
                     fromCurrency: convFrom,
                     toCurrency: convTo,
                     amount: convAmount,
-                    provider: convProvider,
                   })}
                   disabled={adminConvertMutation.isPending || !convFrom || !convTo || !convAmount || convFrom === convTo || (convPreview ? !convPreview.sufficient : false)}
                 >

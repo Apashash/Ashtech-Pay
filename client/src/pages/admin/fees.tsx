@@ -46,7 +46,7 @@ export default function AdminFees() {
         </div>
 
         <div className="grid gap-4 md:grid-cols-3">
-          {FEE_SECTIONS.map(({ href, icon: Icon, color, bg, title, description }) => (
+          {getFeesSections().map(({ href, icon: Icon, color, bg, title, description }) => (
             <Link key={href} href={href}>
               <Card className="cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-all group">
                 <CardContent className="pt-6 pb-5">

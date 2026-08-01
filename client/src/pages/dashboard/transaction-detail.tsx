@@ -15,7 +15,7 @@ interface TransactionDetails extends Transaction {
   paymentLink?: { title: string; slug: string } | null;
   paymentIntent?: { payerCountry: string; payerPhone: string } | null;
   recipient?: { fullName: string; username: string } | null;
-  metadata?: Record<string, any> | null;
+  metadata: Record<string, any> | null;
 }
 
 function formatDate(date: string | Date | null | undefined): string {

@@ -55,12 +55,12 @@ import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import { pool, db, sessionPool, poolStats } from "./db";
 import { transactions as transactionsTable, users as usersTable, wallets as walletsTable } from "@shared/schema";
-import { and, desc, eq, sql as drizzleSql } from "drizzle-orm";
+import { and, desc, eq, sql, sql as drizzleSql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { uploadToSupabase, getSignedImageUrl, downloadFromSupabase } from "./supabase";
+import { uploadToSupabase, getSignedImageUrl, downloadFromSupabase, STORAGE_BUCKET } from "./supabase";
 import { decryptField } from "./fieldEncryption";
 import { requireAdminPin } from "./adminPin";
 import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, fetchPaymentLinkDetails, ASHTECH_MARGIN } from "./swychr";
@@ -119,6 +119,7 @@ import {
   sendWelcomeEmail,
   sendPasswordResetEmail,
   sendCampaignEmail,
+  sendPayerConfirmationEmail,
   sendKycApprovedEmail,
   sendWithdrawalApprovedEmail,
   sendWithdrawalNumberApprovedEmail,
@@ -263,6 +264,7 @@ declare module "express-session" {
     userAgent?: string;
     loginAt?: string;
     tokenIssuedAt?: number;
+    _pav?: number;
     impersonatedBy?: string;
   }
 }
@@ -295,7 +297,7 @@ async function isOtpEmailEnabled(): Promise<boolean> {
 // ─── Transaction OTP store (withdrawal / transfer) ────────────────────────────
 const TX_OTP_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const txOtpStore = new Map<string, {
-  userId: number;
+  userId: string;
   otpHash: string;
   type: "withdrawal" | "transfer_external" | "transfer_internal";
   expiresAt: number;
@@ -1587,7 +1589,7 @@ export async function registerRoutes(
   const resilientSessionPool = {
     query: async (...args: Parameters<typeof sessionPool.query>) => {
       try {
-        return await sessionPool.query(...args as [any]);
+        return await sessionPool.query(...(args as unknown as [any, ...any[]]));
       } catch (err: any) {
         if (
           err?.code === "53300" || // too_many_connections
@@ -1597,7 +1599,7 @@ export async function registerRoutes(
         ) {
           console.warn("[SessionStore] sessionPool exhausted — falling back to main pool:", err.message);
           poolStats.session.fallbackToMain++;
-          return await pool.query(...args as [any]);
+          return await pool.query(...(args as unknown as [any, ...any[]]));
         }
         throw err;
       }
@@ -2269,7 +2271,7 @@ export async function registerRoutes(
       }
 
       // Admin panel IP blocklist status
-      const blocklist = await loadAdminPanelBlockedIps().catch(() => [] as string[]);
+      const blocklist = await loadAdminPanelBlockedIps().catch(() => [] as AdminPanelBlock[]);
       const currentIp = getClientIp(req);
       const ipBanned = isIpBannedFromAdmin(currentIp, blocklist);
 
@@ -2392,7 +2394,7 @@ export async function registerRoutes(
         sendWelcomeEmail(user.email, user.fullName || user.username).catch(() => {});
       }
 
-      notifyNewUser({ userName: user.fullName || user.username, email: user.email || "", country: data.country }).catch(() => {});
+      notifyNewUser({ userName: user.fullName || user.username, email: user.email || "", country: data.country || undefined }).catch(() => {});
 
       // Generate auth token for token-based auth (works in iframes where cookies fail)
       const authToken = storeAuthToken(user.id);
@@ -2403,7 +2405,7 @@ export async function registerRoutes(
         req.session.clientIp = ip;
         req.session.userAgent = req.headers["user-agent"] || "";
         req.session.loginAt = new Date().toISOString();
-        req.session.tokenIssuedAt = extractTokenTimestamp(authToken);
+        req.session.tokenIssuedAt = extractTokenTimestamp(authToken) ?? undefined;
         delete req.session._avs;
         req.session.save((err) => {
           if (err) console.error("Session save error (register):", err);
@@ -2556,7 +2558,7 @@ export async function registerRoutes(
         req.session.clientIp = ip;
         req.session.userAgent = req.headers["user-agent"] || "";
         req.session.loginAt = new Date().toISOString();
-        req.session.tokenIssuedAt = extractTokenTimestamp(authToken);
+        req.session.tokenIssuedAt = extractTokenTimestamp(authToken) ?? undefined;
         req.session.role = user.role;
         req.session.lastActivity = Date.now();
         // Belt-and-suspenders: explicitly clear any stale OTP verification state
@@ -2710,7 +2712,7 @@ export async function registerRoutes(
         req.session.clientIp = ip;
         req.session.userAgent = req.headers["user-agent"] || "";
         req.session.loginAt = new Date().toISOString();
-        req.session.tokenIssuedAt = extractTokenTimestamp(authToken);
+        req.session.tokenIssuedAt = extractTokenTimestamp(authToken) ?? undefined;
         // Set _avs immediately — admin OTP was verified at login time
         req.session._avs = avsExpiresAt;
         req.session._avsIp = ip;
@@ -4187,7 +4189,7 @@ export async function registerRoutes(
             feeAmount: feeAmount.toFixed(2),
             currency: txCurrency,
             reference,
-            externalReference: payoutResult?.transaction_id || payoutResult?.order_id || undefined,
+            externalReference: payoutResult?.transaction_id || (payoutResult as any)?.order_id || undefined,
             operator: (operator as any)?.name || undefined,
             provider: transferProvider,
             isInternal: false,
@@ -4600,7 +4602,7 @@ export async function registerRoutes(
                 currency: afribapayCurrency,
                 afribaTransactionId: depositRef,
                 expiresAt: Date.now() + 15 * 60 * 1000, // 15 min
-                otpType: otpInfo.type,
+                otpType: otpInfo.type === "none" ? undefined : otpInfo.type,
               });
 
               // Substitute "montant" placeholder with the actual amount (e.g. BF Orange: *144*4*6*5000#)
@@ -4615,7 +4617,7 @@ export async function registerRoutes(
                 transaction,
                 gateway: "afribapay",
                 otpRequired: true,
-                otpType: otpInfo.type,
+                otpType: otpInfo.type === "none" ? undefined : otpInfo.type,
                 ussdCode: ussdCodeForDeposit,
                 status: "otp_required",
                 message: otpMessage,
@@ -5116,7 +5118,7 @@ export async function registerRoutes(
       const isPrimaryWithdrawal = (withdrawalCurrency === userCurrency);
 
       if (isPrimaryWithdrawal) {
-        const isDecimalCurrency = userCurrency === "USD" || userCurrency === "EUR";
+        const isDecimalCurrency = userCurrency === "USD" || (userCurrency as string) === "EUR";
         const availableBalance = isDecimalCurrency
           ? Math.floor(parseFloat(user.balance) * 100) / 100
           : Math.round(parseFloat(user.balance));
@@ -7830,7 +7832,7 @@ export async function registerRoutes(
                 currency: afribapayCurrency,
                 afribaTransactionId: reference,
                 expiresAt: Date.now() + 15 * 60 * 1000,
-                otpType: otpInfo.type,
+                otpType: otpInfo.type === "none" ? undefined : otpInfo.type,
               });
 
               // Substitute "montant" placeholder with the actual amount (e.g. BF Orange: *144*4*6*5000#)
@@ -9996,16 +9998,16 @@ export async function registerRoutes(
       });
 
       // Batch user lookup — one query for all unique user IDs (no N+1)
-      const userIds = [...new Set(txList.map(tx => tx.userId))];
+      const userIds = [...new Set(txList.map((tx: any) => tx.userId))];
       const userMap = await (storage as any).getUsersByIds(userIds);
 
       // Batch paymentIntent lookup for payment_link transactions to get payer phone
       const intentIds = txList
-        .filter(tx => tx.paymentIntentId)
-        .map(tx => tx.paymentIntentId as string);
+        .filter((tx: any) => tx.paymentIntentId)
+        .map((tx: any) => tx.paymentIntentId as string);
       const intentMap = await (storage as any).getPaymentIntentsByIds(intentIds);
 
-      const enriched = txList.map(tx => {
+      const enriched = txList.map((tx: any) => {
         const u = userMap.get(tx.userId);
         const intent = tx.paymentIntentId ? intentMap.get(tx.paymentIntentId) : null;
         return {
@@ -10308,7 +10310,7 @@ export async function registerRoutes(
                 transaction.amount,
                 transaction.currency || "XAF",
                 transaction.reference || undefined,
-                operatorName || transaction.operator || undefined
+                operatorName || (transaction as any).operator || undefined
               ).catch(() => {});
             }
             await storage.createUserNotification({
@@ -10350,7 +10352,7 @@ export async function registerRoutes(
             transaction.amount,
             transaction.currency || "XAF",
             transaction.reference || undefined,
-            transaction.operator || undefined
+            (transaction as any).operator || undefined
           ).catch(() => {});
         }
         await storage.createUserNotification({
@@ -13863,7 +13865,7 @@ export async function registerRoutes(
   // GET /api/admin/pixpay/operators — list operators that use PixPay
   app.get("/api/admin/pixpay/operators", requireAuth, requireAdmin, async (req, res) => {
     try {
-      const allOperators = await storage.getOperators();
+              const allOperators = await storage.getAllOperators();
       const pixpayOperators = allOperators.filter((op: any) => op.paymentProvider === "pixpay");
       res.json(pixpayOperators);
     } catch (err: any) {
@@ -14439,7 +14441,7 @@ export async function registerRoutes(
             currency: afribapayCurrencyPre,
             afribaTransactionId: depositRef,
             expiresAt: Date.now() + 15 * 60 * 1000, // 15 min
-            otpType: otpInfoPre.type,
+                otpType: otpInfoPre.type === "none" ? undefined : otpInfoPre.type,
           });
 
           // Substitute "montant" placeholder with the actual amount (e.g. BF Orange: *144*4*6*5000#)
@@ -15005,7 +15007,7 @@ export async function registerRoutes(
 
       // Resolve fee
       const fee = await storage.resolveFee("deposit", country.id, operator.id);
-      const feePercent = fee?.percentage ? parseFloat(fee.percentage) : 0;
+      const feePercent = fee?.feeType === "percentage" ? parseFloat(fee.feeValue || "0") : 0;
       const amount = parseFloat(hpSession.amount);
       const feeAmount = (amount * feePercent) / 100;
       const totalAmount = amount + feeAmount;
@@ -15427,7 +15429,7 @@ export async function registerRoutes(
             adminName: adminUser.fullName || adminUser.username,
             userName: kycUser.fullName || kycUser.username,
             userEmail: kycUser.email || "",
-            userId: Number(kycUser.id),
+            userId: kycUser.id,
           }).catch(() => {});
 
           await storage.createAdminLog({
@@ -15465,7 +15467,7 @@ export async function registerRoutes(
             adminName: adminUser.fullName || adminUser.username,
             userName: kycUser.fullName || kycUser.username,
             userEmail: kycUser.email || "",
-            userId: Number(kycUser.id),
+            userId: kycUser.id,
             reason,
           }).catch(() => {});
 
@@ -15603,12 +15605,12 @@ export async function registerRoutes(
             try {
               await sendCampaignEmail({
                 to: u.email!,
+                firstName: u.fullName || u.username || "",
                 subject,
-                preheader: subject,
-                headline: subject,
-                bodyHtml: body.replace(/\{prenom\}/gi, u.fullName || u.username || ""),
-                ctaText: "Accéder à mon compte",
-                ctaUrl: `https://${process.env.REPLIT_DEV_DOMAIN || "ashtechpay.com"}/dashboard`,
+                body: body.replace(/\{prenom\}/gi, u.fullName || u.username || ""),
+                hasButton: true,
+                buttonText: "Accéder à mon compte",
+                buttonUrl: `https://${process.env.REPLIT_DEV_DOMAIN || "ashtechpay.com"}/dashboard`,
               });
               count++;
             } catch { /* skip failed */ }
@@ -15876,7 +15878,7 @@ export async function registerRoutes(
             currency: u.preferredCurrency ?? "XAF",
             kycStatus: u.kycStatus ?? "not_submitted",
             country: u.country ?? undefined,
-            banned: !!u.banned,
+            banned: !!u.isBanned,
           }));
         },
 

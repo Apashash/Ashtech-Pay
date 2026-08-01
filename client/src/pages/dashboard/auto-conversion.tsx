@@ -602,7 +602,6 @@ export default function AutoConversionPage() {
 
     setSelectedSources(new Set());
     setToCurrency("");
-    setSuggestCountry("");
     setShowForm(false);
   }
 
@@ -612,7 +611,6 @@ export default function AutoConversionPage() {
     setShowForm(false);
     setSelectedSources(new Set());
     setToCurrency("");
-    setSuggestCountry("");
   }
 
   return (

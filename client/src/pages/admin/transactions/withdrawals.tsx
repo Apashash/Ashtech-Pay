@@ -57,6 +57,7 @@ interface EnrichedTransaction extends Transaction {
 interface TransactionDetails extends Transaction {
   user?: { fullName: string; email: string; username: string; country?: string; phone?: string } | null;
   operator?: { id: string; name: string; type: string; paymentProvider: string } | null;
+  paymentIntent?: { payerCountry?: string } | null;
 }
 
 export default function AdminWithdrawals() {

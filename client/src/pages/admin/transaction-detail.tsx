@@ -33,6 +33,7 @@ interface TransactionDetails {
   reference?: string | null;
   externalReference?: string | null;
   paymentMethod?: string | null;
+  ashtechFeeAmount?: string | null;
   description?: string | null;
   createdAt?: Date | string | null;
   recipientPhone?: string | null;

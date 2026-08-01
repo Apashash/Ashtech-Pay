@@ -19,6 +19,7 @@ import { apiRequest, queryClient, getAuthHeaders } from "@/lib/queryClient";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { useSSE } from "@/hooks/use-sse";
+import type { SSEEvent } from "@/hooks/use-sse";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/lib/language";
 
@@ -139,7 +140,7 @@ export default function SupportPage() {
     refetchInterval: selectedTicket ? 8000 : false,
   });
 
-  const { isOnline } = useSSE(useCallback((event) => {
+  const { isOnline } = useSSE(useCallback((event: SSEEvent) => {
     if (event.type === "new_message" && event.data.ticketId === selectedTicket?.id) {
       refetchMessages();
       apiRequest("POST", `/api/tickets/${selectedTicket!.id}/read`).catch(() => {});

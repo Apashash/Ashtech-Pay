@@ -154,7 +154,16 @@ export default function AdminDashboard() {
     return { ...d, label };
   });
 
-  const kpiCards = [
+  const kpiCards: Array<{
+    title: string;
+    value: string | number;
+    icon: typeof Users;
+    color: string;
+    bgColor: string;
+    pending?: number;
+    href?: string;
+    subValue?: string;
+  }> = [
     {
       title: "Total Utilisateurs",
       value: stats?.totalUsers || 0,
@@ -650,7 +659,7 @@ export default function AdminDashboard() {
               <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Géographie</p>
               <CardTitle className="flex items-center gap-2 text-base">
                 <TrendingUp className="w-4 h-4 text-muted-foreground" />
-                Top 8 pays — {period === "today" ? "Aujourd'hui" : period === "yesterday" ? "Hier" : period === "this_week" ? "Cette semaine" : period === "last_week" ? "Semaine dernière" : period === "last_month" ? "Mois dernier" : period === "this_year" ? "Cette année" : period === "last_year" ? "L'an dernier" : period === "all" ? "Tout" : "Ce mois"}
+                 Top 8 pays — {period === "today" ? "Aujourd'hui" : period === "yesterday" ? "Hier" : period === "this_week" ? "Cette semaine" : period === "last_week" ? "Semaine dernière" : period === "last_month" ? "Mois dernier" : period === "this_year" ? "Cette année" : period === "last_year" ? "L'an dernier" : "Ce mois"}
               </CardTitle>
             </CardHeader>
             <CardContent>

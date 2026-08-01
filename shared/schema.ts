@@ -44,6 +44,7 @@ export const SUPPORTED_CURRENCIES = [
   "XAFC", // Congo Brazzaville
   "XAFG", // Gabon
   "XOF",  // Niger, Guinée-Bissau
+  "XOFN", // Niger
   "XOFB", // Bénin
   "XOFC", // Côte d'Ivoire
   "XOFF", // Burkina Faso
@@ -128,6 +129,7 @@ export const EXCHANGE_RATES: Record<SupportedCurrency, number> = {
   "XAFC": 1,
   "XAFG": 1,
   "XOF":  1,
+  "XOFN": 1,
   "XOFB": 1,
   "XOFC": 1,
   "XOFF": 1,
@@ -144,6 +146,7 @@ export const EXCHANGE_RATES: Record<SupportedCurrency, number> = {
   "UGX":  0.0019,
   "INR":  0.0083,
   "USD":  0.00165,
+  "USDT": 1,
 };
 
 export interface FxCurrency {
@@ -190,6 +193,7 @@ export const CURRENCY_SYMBOLS: Record<SupportedCurrency, string> = {
   "XOFM": "FCFA",
   "XOFS": "FCFA",
   "XOFT": "FCFA",
+  "XOFN": "FCFA",
   "CDF":  "FC",
   "GHS":  "₵",
   "GNF":  "GNF",
@@ -455,6 +459,7 @@ export const insertUserSchema = createInsertSchema(users).pick({
   phone: true,
   country: true,
   preferredCurrency: true,
+  registrationIp: true,
 });
 
 export const loginSchema = z.object({
@@ -495,6 +500,9 @@ export const insertTransactionSchema = createInsertSchema(transactions).pick({
   source: true,
   externalReference: true,
   metadata: true,
+  confirmedAt: true,
+}).extend({
+  metadata: z.record(z.string(), z.any()).nullable().optional(),
 });
 
 export const transferSchema = z.object({
@@ -538,6 +546,7 @@ export const insertPaymentLinkSchema = createInsertSchema(paymentLinks).pick({
   redirectUrl: true,
   expiresAt: true,
   notifyUrl: true,
+  allowedCountries: true,
 });
 
 export const createPaymentLinkSchema = z.object({

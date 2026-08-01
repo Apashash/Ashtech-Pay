@@ -65,7 +65,7 @@ interface TransactionDetails extends Transaction {
   paymentIntent?: any;
   recipient?: { fullName: string; email: string; username: string; country?: string } | null;
   operator?: { id: string; name: string; type: string; paymentProvider: string; depositPaymentProvider?: string | null } | null;
-  metadata?: { assetCode?: string; payerEmail?: string; payerCountry?: string; address?: string; memo?: string; [key: string]: any } | null;
+  metadata: { assetCode?: string; payerEmail?: string; payerCountry?: string; address?: string; memo?: string; [key: string]: any } | null;
 }
 
 export default function AdminTransactions() {

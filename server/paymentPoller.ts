@@ -32,10 +32,13 @@ interface PendingPayment {
 const pendingPayments = new Map<string, PendingPayment>();
 const cryptoExpiryInFlight = new Set<string>();
 
-export function addPendingPayment(payment: Omit<PendingPayment, "attempts" | "startedAt" | "lastCheckedAt">) {
+export function addPendingPayment(
+  payment: Omit<PendingPayment, "attempts" | "startedAt" | "lastCheckedAt"> &
+    Partial<Pick<PendingPayment, "attempts">>,
+) {
   console.log(`[PaymentPoller] Adding pending payment: ${payment.reference} (provider: ${payment.provider || "swychr"})`);
   const now = Date.now();
-  pendingPayments.set(payment.reference, { ...payment, attempts: 0, startedAt: now, lastCheckedAt: 0 });
+  pendingPayments.set(payment.reference, { ...payment, attempts: payment.attempts ?? 0, startedAt: now, lastCheckedAt: 0 });
 }
 
 export function removePendingPayment(reference: string) {
@@ -214,7 +217,7 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
             paymentLink?.title || "Lien de paiement",
             parseFloat(transaction.amount).toFixed(2),
             transaction.currency || "XAF",
-            transaction.reference,
+            transaction.reference || transaction.id,
             pdfUrl,
           );
         } catch (emailErr: any) {
