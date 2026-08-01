@@ -720,14 +720,6 @@ export default function PaymentPage() {
                 </div>
                 {payCryptoFeeBreakdown && (
                   <>
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>Frais fournisseur ({payCryptoFeeBreakdown.providerFeePercent}%)</span>
-                      <span className="font-semibold text-red-500">-{payCryptoFeeBreakdown.providerFeeAmountUsdt.toFixed(4)} USDT</span>
-                    </div>
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>Frais AshTechPay ({payCryptoFeeBreakdown.ashtechFeePercent}%)</span>
-                      <span className="font-semibold text-red-500">-{payCryptoFeeBreakdown.ashtechFeeAmountUsdt.toFixed(4)} USDT</span>
-                    </div>
                     <div className="flex justify-between text-xs font-semibold text-muted-foreground border-t border-border pt-1.5">
                       <span>Total des frais ({payCryptoFeeBreakdown.totalFeePercent}%)</span>
                       <span className="text-red-500">-{payCryptoFeeBreakdown.totalFeeAmountUsdt.toFixed(4)} USDT</span>

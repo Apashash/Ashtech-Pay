@@ -750,14 +750,6 @@ export default function DepositPage() {
                       {cryptoCoin !== "USDT" && cryptoUsdtEquiv > 0 && (
                         <p className="text-xs text-muted-foreground text-right">≈ {cryptoUsdtEquiv.toFixed(2)} USDT</p>
                       )}
-                      <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>Frais fournisseur ({cryptoFeeBreakdown?.providerFeePercent ?? cryptoProviderFeePercent}%)</span>
-                        <span className="text-red-500 font-semibold">-{(cryptoFeeBreakdown?.providerFeeAmountUsdt ?? (cryptoUsdtEquiv * cryptoProviderFeePercent / 100)).toFixed(4)} USDT</span>
-                      </div>
-                      <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>Frais AshTechPay ({cryptoFeeBreakdown?.ashtechFeePercent ?? cryptoAshtechFeePercent}%)</span>
-                        <span className="text-red-500 font-semibold">-{(cryptoFeeBreakdown?.ashtechFeeAmountUsdt ?? (cryptoUsdtEquiv * cryptoAshtechFeePercent / 100)).toFixed(4)} USDT</span>
-                      </div>
                       <div className="flex justify-between text-xs font-semibold text-muted-foreground border-t border-border pt-1.5">
                         <span>Total des frais ({cryptoFeeBreakdown?.totalFeePercent ?? cryptoFeePercent}%)</span>
                         <span className="text-red-500">-{(cryptoFeeBreakdown?.totalFeeAmountUsdt ?? cryptoFee).toFixed(4)} USDT</span>
@@ -947,14 +939,6 @@ export default function DepositPage() {
                   {/* ── Fee summary (USDT) ── */}
                   {cryptoAmtNum > 0 && (
                     <div className="bg-muted/30 rounded-xl px-4 py-3 space-y-1.5">
-                      <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>Frais fournisseur ({cryptoProviderFeePercent}%)</span>
-                        <span className="font-semibold text-red-500">-{(cryptoUsdtEquiv * cryptoProviderFeePercent / 100).toFixed(4)} USDT</span>
-                      </div>
-                      <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>Frais AshTechPay ({cryptoAshtechFeePercent}%)</span>
-                        <span className="font-semibold text-red-500">-{(cryptoUsdtEquiv * cryptoAshtechFeePercent / 100).toFixed(4)} USDT</span>
-                      </div>
                       <div className="flex justify-between text-xs font-semibold text-muted-foreground border-t border-border pt-1.5">
                         <span>Total des frais ({cryptoFeePercent}%)</span>
                         <span className="font-semibold text-red-500">-{cryptoFee.toFixed(4)} USDT</span>
