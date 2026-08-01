@@ -7345,6 +7345,13 @@ export async function registerRoutes(
       if (!assetCode) {
         return res.status(400).json({ message: "Veuillez sélectionner un réseau crypto" });
       }
+      if (!payerCountry) {
+        return res.status(400).json({ message: "Veuillez sélectionner un pays" });
+      }
+      const payerCountryRecord = await storage.getCountry(String(payerCountry));
+      if (!payerCountryRecord) {
+        return res.status(400).json({ message: "Pays invalide" });
+      }
       const disabledCryptoAssets = parseDisabledCryptoAssets(
         (await storage.getSetting("crypto_disabled_assets"))?.value
       );
@@ -12892,10 +12899,17 @@ export async function registerRoutes(
         return res.status(503).json({ message: "Paiement crypto non configuré. Contactez l'administrateur." });
       }
 
-      const { assetCode, amount, currency: reqCurrency, refundAddress } = req.body;
+      const { assetCode, amount, currency: reqCurrency, refundAddress, countryId } = req.body;
 
       if (!assetCode) {
         return res.status(400).json({ message: "Veuillez sélectionner un réseau crypto" });
+      }
+      if (!countryId) {
+        return res.status(400).json({ message: "Veuillez sélectionner un pays" });
+      }
+      const depositCountry = await storage.getCountry(String(countryId));
+      if (!depositCountry) {
+        return res.status(400).json({ message: "Pays invalide" });
       }
       const disabledCryptoAssets = parseDisabledCryptoAssets(
         (await storage.getSetting("crypto_disabled_assets"))?.value
@@ -12945,7 +12959,7 @@ export async function registerRoutes(
             refundAddress: refundAddress || undefined,
           },
           merchantReference: reference,
-          metadata: { userId },
+          metadata: { userId, countryId: depositCountry.id, country: depositCountry.name },
         });
       } catch (chargeErr: any) {
         console.error(`[Deposits/Crypto] createDirectCharge failed (asset=${assetCode}):`, chargeErr.message);

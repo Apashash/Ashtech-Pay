@@ -298,8 +298,8 @@ export default function PaymentPage() {
     if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = p.errEmailInvalid;
     if (!paymentLink?.isFixedAmount && (!customAmount || parseFloat(customAmount) <= 0)) newErrors.amount = p.errAmount;
     if (!paymentMethod) newErrors.paymentMethod = p.errPaymentMethod;
+    if (!country) newErrors.country = p.errCountry;
     if (paymentMethod !== "crypto") {
-      if (!country) newErrors.country = p.errCountry;
       if (paymentMethod === "mobile_money" && !operator) newErrors.operator = p.errOperator;
       if (!phone.trim()) newErrors.phone = p.errPhone;
       else if (phone.replace(/\s/g, "").length < 8) newErrors.phone = p.errPhoneShort;
@@ -328,8 +328,8 @@ export default function PaymentPage() {
       if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = p.errEmailInvalid;
       if (!paymentLink?.isFixedAmount && (!customAmount || parseFloat(customAmount) <= 0)) newErrors.amount = p.errAmount;
       if (!paymentMethod) newErrors.paymentMethod = p.errPaymentMethod;
+      if (!country) newErrors.country = p.errCountry;
       if (paymentMethod !== "crypto") {
-        if (!country) newErrors.country = p.errCountry;
         if (paymentMethod === "mobile_money" && !operator) newErrors.operator = p.errOperator;
         if (!phone.trim()) newErrors.phone = p.errPhone;
         else if (phone.replace(/\s/g, "").length < 8) newErrors.phone = p.errPhoneShort;
@@ -425,10 +425,10 @@ export default function PaymentPage() {
     mutationFn: async () => {
       const net = payCoinList[payCryptoCoin]?.networks.find(n => n.id === displayedPayCryptoNetwork);
       if (!net) throw new Error("Réseau invalide");
-      // country is optional for crypto (not needed by IziChange Direct Charge)
+      if (!country) throw new Error(p.errCountry);
       const body: Record<string, string> = { assetCode: net.assetCode };
       if (email.trim()) body.email = email.trim();
-      if (country) body.country = country;
+      body.country = country;
       if (!(paymentLink as any)?.isFixedAmount && payCryptoAmount) {
         const usdtEquiv = payCryptoCoinPrice > 0
           ? (parseFloat(payCryptoAmount) * payCryptoCoinPrice).toFixed(4)
@@ -1581,7 +1581,7 @@ export default function PaymentPage() {
                   onClick={() => {
                     const errs: Record<string, string> = {};
                     if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errs.email = p.errEmailInvalid;
-                    // country is optional for crypto — do not block on it
+                    if (!country) errs.country = p.errCountry;
                     if (Object.keys(errs).length > 0) { setErrors(prev => ({ ...prev, ...errs })); return; }
                     generatePayLinkCryptoMutation.mutate();
                   }}

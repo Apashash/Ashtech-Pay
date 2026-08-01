@@ -342,6 +342,7 @@ export default function DepositPage() {
     mutationFn: async () => {
       const net = cryptoCoinList[cryptoCoin]?.networks.find(n => n.id === displayedCryptoNetwork);
       if (!net) throw new Error("Réseau invalide");
+      if (!watchedCountryId) throw new Error(t.deposit.selectCountry);
       const amt = parseFloat(cryptoAmount);
       if (!amt || amt <= 0) throw new Error("Entrez un montant valide");
       if (cryptoCoinPrice <= 0) throw new Error("Prix du coin introuvable, veuillez patienter…");
@@ -353,6 +354,7 @@ export default function DepositPage() {
         assetCode: net.assetCode,
         amount: usdtEquiv,
         currency: "USDT",
+        countryId: watchedCountryId,
         ...(refundAddress ? { refundAddress } : {}),
       });
       const data = await res.json();
@@ -833,6 +835,44 @@ export default function DepositPage() {
               /* ── STEP: form ── */
               ) : (
                 <>
+                  {/* ── Country selector — required for all crypto deposits ── */}
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      {t.deposit.chooseCountry} *
+                    </p>
+                    <Select
+                      value={watchedCountryId}
+                      onValueChange={(value) => {
+                        form.setValue("countryId", value, { shouldValidate: true });
+                      }}
+                    >
+                      <SelectTrigger data-testid="select-crypto-country" className="h-14 rounded-xl">
+                        {selectedCountry ? (
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <span className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-xl shrink-0">
+                              {getCountryFlagEmoji(selectedCountry.code)}
+                            </span>
+                            <span className="font-semibold truncate">{selectedCountry.name}</span>
+                            <span className="text-muted-foreground text-sm shrink-0">({selectedCountry.currency})</span>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">{t.deposit.selectCountry}</span>
+                        )}
+                      </SelectTrigger>
+                      <SearchableSelectContent
+                        options={(countries ?? []).map(c => ({
+                          value: c.id,
+                          label: c.name,
+                          flag: getCountryFlagEmoji(c.code),
+                          sub: c.currency,
+                        }))}
+                      />
+                    </Select>
+                    {!watchedCountryId && (
+                      <p className="text-xs text-red-500">{t.deposit.chooseCountry}</p>
+                    )}
+                  </div>
+
                   {/* ── Crypto selector dropdown ── */}
                   <div className="space-y-1.5">
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cryptomonnaie</p>
@@ -979,7 +1019,7 @@ export default function DepositPage() {
                   <Button
                     className="w-full h-12 rounded-xl font-bold"
                     size="lg"
-                    disabled={!cryptoAmtNum || !cryptoMinimumAmount || cryptoUsdtEquiv < 1 || generateCryptoAddressMutation.isPending}
+                    disabled={!watchedCountryId || !cryptoAmtNum || !cryptoMinimumAmount || cryptoUsdtEquiv < 1 || generateCryptoAddressMutation.isPending}
                     onClick={() => generateCryptoAddressMutation.mutate()}
                     data-testid="button-crypto-generate"
                   >
