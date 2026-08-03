@@ -375,17 +375,33 @@ export default function AdminDeposits() {
                         )}
                       </TableCell>
                       <TableCell className="font-bold text-green-500">
-                        +{formatCurrency(tx.amount, (tx.currency || "XAF") as SupportedCurrency)}
+                        {tx.paymentMethod === "crypto" && (tx as any).metadata ? (() => {
+                          const meta = (tx as any).metadata;
+                          const credited = Number(meta.creditedAmountUsdt ?? meta.grossAmountUsdt ?? tx.amount);
+                          const coin = (meta.assetCode || "USDT").split(".")[0];
+                          return <span>+{credited.toFixed(4)} {coin}</span>;
+                        })() : `+${formatCurrency(tx.amount, (tx.currency || "XAF") as SupportedCurrency)}`}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {tx.feeAmount && parseFloat(tx.feeAmount) > 0 
+                        {tx.paymentMethod === "crypto" && (tx as any).metadata ? (() => {
+                          const meta = (tx as any).metadata;
+                          const fee = Number(meta.totalFeeAmountUsdt ?? tx.feeAmount ?? 0);
+                          const pct = Number(meta.totalFeePercent ?? 0);
+                          const coin = (meta.assetCode || "USDT").split(".")[0];
+                          return fee > 0 ? <span>{fee.toFixed(4)} {coin}{pct > 0 ? ` (${pct}%)` : ""}</span> : <span>-</span>;
+                        })() : (tx.feeAmount && parseFloat(tx.feeAmount) > 0
                           ? formatCurrency(tx.feeAmount, (tx.currency || "XAF") as SupportedCurrency)
-                          : "-"}
+                          : "-")}
                       </TableCell>
                       <TableCell className="font-medium">
-                        {tx.totalAmount 
+                        {tx.paymentMethod === "crypto" && (tx as any).metadata ? (() => {
+                          const meta = (tx as any).metadata;
+                          const gross = Number(meta.grossAmountUsdt ?? tx.totalAmount ?? tx.amount);
+                          const coin = (meta.assetCode || "USDT").split(".")[0];
+                          return <span>{gross.toFixed(4)} {coin}</span>;
+                        })() : (tx.totalAmount
                           ? formatCurrency(tx.totalAmount, (tx.currency || "XAF") as SupportedCurrency)
-                          : formatCurrency(tx.amount, (tx.currency || "XAF") as SupportedCurrency)}
+                          : formatCurrency(tx.amount, (tx.currency || "XAF") as SupportedCurrency))}
                       </TableCell>
                       <TableCell className="text-sm">
                         {tx.createdAt && format(new Date(tx.createdAt), "dd/MM/yyyy HH:mm", { locale: fr })}
@@ -450,19 +466,42 @@ export default function AdminDeposits() {
             {tx && (
               <div className="space-y-4 max-h-[70vh] overflow-y-auto">
                 <div className="text-center p-4 bg-muted/50 rounded-lg">
-                  <p className="text-sm text-muted-foreground mb-1">Montant Net Crédité</p>
-                  <p className="text-3xl font-bold text-green-500">
-                    +{formatCurrency(tx.amount, (tx.currency || "XAF") as SupportedCurrency)}
-                  </p>
-                  {tx.feeAmount && parseFloat(tx.feeAmount) > 0 && (
-                    <div className="mt-2 text-sm space-y-1">
-                      <p className="text-muted-foreground">
-                        Frais: {formatCurrency(tx.feeAmount, (tx.currency || "XAF") as SupportedCurrency)}
+                  {tx.paymentMethod === "crypto" && tx.metadata ? (() => {
+                    const meta = tx.metadata as Record<string, any>;
+                    const credited = Number(meta.creditedAmountUsdt ?? meta.grossAmountUsdt ?? tx.amount);
+                    const gross = Number(meta.grossAmountUsdt ?? tx.totalAmount ?? tx.amount);
+                    const feeAmt = Number(meta.totalFeeAmountUsdt ?? tx.feeAmount ?? 0);
+                    const feePct = Number(meta.totalFeePercent ?? 0);
+                    const assetCode = meta.assetCode || "";
+                    const coin = assetCode ? assetCode.split(".")[0] : "USDT";
+                    return (
+                      <>
+                        <p className="text-sm text-muted-foreground mb-1">Montant Net Crédité</p>
+                        <p className="text-3xl font-bold text-green-500">+{credited.toFixed(4)} {coin}</p>
+                        {assetCode && <p className="text-xs text-amber-500 font-mono mt-0.5">{assetCode}</p>}
+                        <div className="mt-2 text-sm space-y-1">
+                          <p className="text-muted-foreground">Montant débité: <span className="text-foreground font-medium">{gross.toFixed(4)} {coin}</span></p>
+                          {feeAmt > 0 && <p className="text-muted-foreground">Frais{feePct > 0 ? ` (${feePct}%)` : ""}: <span className="text-amber-500 font-medium">{feeAmt.toFixed(4)} {coin}</span></p>}
+                        </div>
+                      </>
+                    );
+                  })() : (
+                    <>
+                      <p className="text-sm text-muted-foreground mb-1">Montant Net Crédité</p>
+                      <p className="text-3xl font-bold text-green-500">
+                        +{formatCurrency(tx.amount, (tx.currency || "XAF") as SupportedCurrency)}
                       </p>
-                      <p className="text-muted-foreground">
-                        Total payé: {formatCurrency(tx.totalAmount || tx.amount, (tx.currency || "XAF") as SupportedCurrency)}
-                      </p>
-                    </div>
+                      {tx.feeAmount && parseFloat(tx.feeAmount) > 0 && (
+                        <div className="mt-2 text-sm space-y-1">
+                          <p className="text-muted-foreground">
+                            Frais: {formatCurrency(tx.feeAmount, (tx.currency || "XAF") as SupportedCurrency)}
+                          </p>
+                          <p className="text-muted-foreground">
+                            Total payé: {formatCurrency(tx.totalAmount || tx.amount, (tx.currency || "XAF") as SupportedCurrency)}
+                          </p>
+                        </div>
+                      )}
+                    </>
                   )}
                   <div className="mt-2">{getStatusBadge(tx.status)}</div>
                 </div>

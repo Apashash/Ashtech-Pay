@@ -924,9 +924,24 @@ export default function DashboardHome() {
                       </p>
                     </div>
                     <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
-                      <span className={`text-sm font-semibold ${isIncoming ? 'text-green-500' : 'text-red-500'}`}>
-                        {isIncoming ? '+' : '-'}{formatWalletBalance(tx.amount, tx.currency || user?.preferredCurrency || "XAF")}
-                      </span>
+                      {tx.paymentMethod === "crypto" && (tx as any).metadata ? (() => {
+                        const meta = (tx as any).metadata;
+                        const credited = Number(meta.creditedAmountUsdt ?? meta.grossAmountUsdt ?? tx.amount);
+                        const assetCode = meta.assetCode || "";
+                        const coin = assetCode ? assetCode.split(".")[0] : "USDT";
+                        return (
+                          <>
+                            <span className={`text-sm font-semibold ${isIncoming ? 'text-green-500' : 'text-red-500'}`}>
+                              {isIncoming ? '+' : '-'}{credited.toFixed(4)} {coin}
+                            </span>
+                            {assetCode && <span className="text-[9px] font-mono text-amber-500 uppercase">{assetCode}</span>}
+                          </>
+                        );
+                      })() : (
+                        <span className={`text-sm font-semibold ${isIncoming ? 'text-green-500' : 'text-red-500'}`}>
+                          {isIncoming ? '+' : '-'}{formatWalletBalance(tx.amount, tx.currency || user?.preferredCurrency || "XAF")}
+                        </span>
+                      )}
                       <span className={`text-[10px] font-medium uppercase tracking-wide ${statusColors[tx.status] || 'text-muted-foreground'}`}>
                         {tx.status === "completed" ? t.dashboard.statusCompleted : tx.status === "pending" ? t.dashboard.statusPending : t.dashboard.statusFailed}
                       </span>
