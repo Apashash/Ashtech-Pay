@@ -6968,26 +6968,45 @@ export async function registerRoutes(
     }
   });
 
+  // ── Shared Binance spot-price helper (5-min cache, reused by all charge handlers) ──
+  const _cryptoPriceCache: Record<string, { p: number; ts: number }> = {};
+  const _STABLE_COINS = new Set(["USDT","USDC","BUSD","TUSD","DAI","USDP","FRAX","USDD"]);
+  async function getCryptoPriceUsd(symbol: string): Promise<number> {
+    const sym = symbol.toUpperCase();
+    if (_STABLE_COINS.has(sym)) return 1;
+    const now = Date.now();
+    if (_cryptoPriceCache[sym] && now - _cryptoPriceCache[sym].ts < 5 * 60_000)
+      return _cryptoPriceCache[sym].p;
+    try {
+      const binResp = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${sym}USDT`);
+      if (!binResp.ok) return _cryptoPriceCache[sym]?.p ?? 0;
+      const { price } = await binResp.json() as { price: string };
+      const priceUsd = parseFloat(price);
+      _cryptoPriceCache[sym] = { p: priceUsd, ts: now };
+      return priceUsd;
+    } catch {
+      return _cryptoPriceCache[sym]?.p ?? 0;
+    }
+  }
+
   // ── Crypto spot price in USDT (Binance public API, 5-min cache) ────────────
   {
-    const _priceCache: Record<string, { p: number; ts: number }> = {};
-    const STABLE_COINS = new Set(["USDT","USDC","BUSD","TUSD","DAI","USDP","FRAX","USDD"]);
     app.get("/api/crypto/price/:symbol", publicInfoLimiter, async (req, res) => {
       try {
         const sym = (req.params.symbol as string).toUpperCase();
-        if (STABLE_COINS.has(sym)) return res.json({ symbol: sym, priceUsd: 1 });
+        if (_STABLE_COINS.has(sym)) return res.json({ symbol: sym, priceUsd: 1 });
         const now = Date.now();
-        if (_priceCache[sym] && now - _priceCache[sym].ts < 5 * 60_000)
-          return res.json({ symbol: sym, priceUsd: _priceCache[sym].p });
+        if (_cryptoPriceCache[sym] && now - _cryptoPriceCache[sym].ts < 5 * 60_000)
+          return res.json({ symbol: sym, priceUsd: _cryptoPriceCache[sym].p });
         const binResp = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${sym}USDT`);
         if (!binResp.ok) {
-          const cached = _priceCache[sym]?.p;
+          const cached = _cryptoPriceCache[sym]?.p;
           if (cached) return res.json({ symbol: sym, priceUsd: cached });
           return res.status(404).json({ message: `Prix introuvable pour ${sym}` });
         }
         const { price } = await binResp.json() as { price: string };
         const priceUsd = parseFloat(price);
-        _priceCache[sym] = { p: priceUsd, ts: now };
+        _cryptoPriceCache[sym] = { p: priceUsd, ts: now };
         return res.json({ symbol: sym, priceUsd });
       } catch (err: any) {
         console.error("[crypto/price]", err.message);
@@ -7437,14 +7456,22 @@ export async function registerRoutes(
         payerEmail: email || null,
         payerName: firstName && lastName ? `${firstName} ${lastName}` : (email || null),
         externalReference: charge.id || undefined,   // IziChange transaction ID
-         metadata: {
-           assetCode, address: charge.address, memo: charge.memo, memoType: charge.memoType ?? null,
-           payerEmail: email, payerCountry: payerCountry || null, izichangeId: charge.id || null,
-           grossAmountUsdt: amounts.grossUsdt, providerFeePercent: amounts.providerFeePercent,
-           providerFeeAmountUsdt: amounts.providerFeeUsdt, ashtechFeePercent: amounts.ashtechFeePercent,
-           ashtechFeeAmountUsdt: amounts.ashtechFeeUsdt, totalFeePercent: amounts.totalFeePercent,
-           totalFeeAmountUsdt: amounts.feeUsdt, creditedAmountUsdt: amounts.creditedUsdt,
-         },
+         metadata: await (async () => {
+           const _coin = assetCode.split('.')[0].toUpperCase();
+           const _price = await getCryptoPriceUsd(_coin).catch(() => 0);
+           const _grossCoin = _price > 0 ? amounts.grossUsdt / _price : null;
+           const _creditedCoin = _price > 0 ? amounts.creditedUsdt / _price : null;
+           return {
+             assetCode, address: charge.address, memo: charge.memo, memoType: charge.memoType ?? null,
+             payerEmail: email, payerCountry: payerCountry || null, izichangeId: charge.id || null,
+             grossAmountUsdt: amounts.grossUsdt, providerFeePercent: amounts.providerFeePercent,
+             providerFeeAmountUsdt: amounts.providerFeeUsdt, ashtechFeePercent: amounts.ashtechFeePercent,
+             ashtechFeeAmountUsdt: amounts.ashtechFeeUsdt, totalFeePercent: amounts.totalFeePercent,
+             totalFeeAmountUsdt: amounts.feeUsdt, creditedAmountUsdt: amounts.creditedUsdt,
+             ...(_grossCoin !== null ? { grossAmountCoin: parseFloat(_grossCoin.toFixed(8)), coinPriceUsdt: _price } : {}),
+             ...(_creditedCoin !== null ? { creditedAmountCoin: parseFloat(_creditedCoin.toFixed(8)) } : {}),
+           };
+         })(),
       });
 
       console.log(`[PayLink/Crypto] Direct charge: addr=${charge.address} asset=${assetCode} ref=${reference} merchant=${merchantId} expiresAt=${charge.expiresAt ?? "n/a"}`);
@@ -12981,21 +13008,29 @@ export async function registerRoutes(
         paymentMethod: "crypto",
         reference,
         externalReference: charge.id || undefined,   // IziChange transaction ID
-        metadata: {
-          assetCode,
-          address: charge.address,
-          memo: charge.memo ?? null,
-          izichangeId: charge.id || null,
-          grossAmountUsdt: amounts.grossUsdt,
-          providerFeePercent: amounts.providerFeePercent,
-          providerFeeAmountUsdt: amounts.providerFeeUsdt,
-          ashtechFeePercent: amounts.ashtechFeePercent,
-          ashtechFeeAmountUsdt: amounts.ashtechFeeUsdt,
-          totalFeePercent: amounts.totalFeePercent,
-          totalFeeAmountUsdt: amounts.feeUsdt,
-          creditedAmountUsdt: amounts.creditedUsdt,
-          ...(refundAddress ? { refundAddress } : {}),
-        },
+        metadata: await (async () => {
+          const _coin = assetCode.split(".")[0].toUpperCase();
+          const _price = await getCryptoPriceUsd(_coin).catch(() => 0);
+          const _grossCoin = _price > 0 ? amounts.grossUsdt / _price : null;
+          const _creditedCoin = _price > 0 ? amounts.creditedUsdt / _price : null;
+          return {
+            assetCode,
+            address: charge.address,
+            memo: charge.memo ?? null,
+            izichangeId: charge.id || null,
+            grossAmountUsdt: amounts.grossUsdt,
+            providerFeePercent: amounts.providerFeePercent,
+            providerFeeAmountUsdt: amounts.providerFeeUsdt,
+            ashtechFeePercent: amounts.ashtechFeePercent,
+            ashtechFeeAmountUsdt: amounts.ashtechFeeUsdt,
+            totalFeePercent: amounts.totalFeePercent,
+            totalFeeAmountUsdt: amounts.feeUsdt,
+            creditedAmountUsdt: amounts.creditedUsdt,
+            ...(refundAddress ? { refundAddress } : {}),
+            ...(_grossCoin !== null ? { grossAmountCoin: parseFloat(_grossCoin.toFixed(8)), coinPriceUsdt: _price } : {}),
+            ...(_creditedCoin !== null ? { creditedAmountCoin: parseFloat(_creditedCoin.toFixed(8)) } : {}),
+          };
+        })(),
       });
 
       console.log(`[Deposits/Crypto] Direct charge: addr=${charge.address} memo=${charge.memo ?? "-"} asset=${assetCode} ref=${reference} user=${userId} expiresAt=${charge.expiresAt ?? "n/a"}`);
@@ -14123,26 +14158,34 @@ export async function registerRoutes(
         externalReference: charge.id || undefined,
         notifyUrl: request.notifyUrl || null,
         source: "api",
-        metadata: {
-          assetCode: request.assetCode,
-          address: charge.address,
-          memo: charge.memo ?? null,
-          memoType: charge.memoType ?? null,
-          izichangeId: charge.id || null,
-          sdk: "direct",
-          originalAmount,
-          originalCurrency,
-          feePercent: amounts.feePercent,
-          grossAmountUsdt: amounts.grossUsdt,
-          providerFeePercent: amounts.providerFeePercent,
-          providerFeeAmountUsdt: amounts.providerFeeUsdt,
-          ashtechFeePercent: amounts.ashtechFeePercent,
-          ashtechFeeAmountUsdt: amounts.ashtechFeeUsdt,
-          totalFeePercent: amounts.totalFeePercent,
-          totalFeeAmountUsdt: amounts.feeUsdt,
-          creditedAmountUsdt: amounts.creditedUsdt,
-          expiresAt: charge.expiresAt ?? null,
-        },
+        metadata: await (async () => {
+          const _coin = request.assetCode.split(".")[0].toUpperCase();
+          const _price = await getCryptoPriceUsd(_coin).catch(() => 0);
+          const _grossCoin = _price > 0 ? amounts.grossUsdt / _price : null;
+          const _creditedCoin = _price > 0 ? amounts.creditedUsdt / _price : null;
+          return {
+            assetCode: request.assetCode,
+            address: charge.address,
+            memo: charge.memo ?? null,
+            memoType: charge.memoType ?? null,
+            izichangeId: charge.id || null,
+            sdk: "direct",
+            originalAmount,
+            originalCurrency,
+            feePercent: amounts.feePercent,
+            grossAmountUsdt: amounts.grossUsdt,
+            providerFeePercent: amounts.providerFeePercent,
+            providerFeeAmountUsdt: amounts.providerFeeUsdt,
+            ashtechFeePercent: amounts.ashtechFeePercent,
+            ashtechFeeAmountUsdt: amounts.ashtechFeeUsdt,
+            totalFeePercent: amounts.totalFeePercent,
+            totalFeeAmountUsdt: amounts.feeUsdt,
+            creditedAmountUsdt: amounts.creditedUsdt,
+            expiresAt: charge.expiresAt ?? null,
+            ...(_grossCoin !== null ? { grossAmountCoin: parseFloat(_grossCoin.toFixed(8)), coinPriceUsdt: _price } : {}),
+            ...(_creditedCoin !== null ? { creditedAmountCoin: parseFloat(_creditedCoin.toFixed(8)) } : {}),
+          };
+        })(),
       });
 
       console.log(

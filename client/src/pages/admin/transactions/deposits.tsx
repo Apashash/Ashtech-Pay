@@ -378,10 +378,15 @@ export default function AdminDeposits() {
                         {tx.paymentMethod === "crypto" && (tx as any).metadata ? (() => {
                           const meta = (tx as any).metadata;
                           const credited = Number(meta.creditedAmountUsdt ?? meta.grossAmountUsdt ?? tx.amount);
+                          const coin = (meta.assetCode || "USDT").split(".")[0];
+                          const creditedCoin = meta.creditedAmountCoin != null ? Number(meta.creditedAmountCoin) : null;
                           return (
                             <div className="flex flex-col gap-0.5">
                               <span>+{credited.toFixed(4)} USDT</span>
-                              {meta.assetCode && <span className="text-[10px] font-mono text-amber-500 font-normal">{meta.assetCode}</span>}
+                              {creditedCoin !== null && coin !== "USDT"
+                                ? <span className="text-[10px] font-mono text-amber-500 font-normal">≈ {creditedCoin.toFixed(4)} {coin}</span>
+                                : meta.assetCode && <span className="text-[10px] font-mono text-amber-500 font-normal">{meta.assetCode}</span>
+                              }
                             </div>
                           );
                         })() : `+${formatCurrency(tx.amount, (tx.currency || "XAF") as SupportedCurrency)}`}

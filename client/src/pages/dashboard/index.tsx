@@ -928,12 +928,19 @@ export default function DashboardHome() {
                         const meta = (tx as any).metadata;
                         const credited = Number(meta.creditedAmountUsdt ?? meta.grossAmountUsdt ?? tx.amount);
                         const assetCode = meta.assetCode || "";
+                        const coin = assetCode ? assetCode.split(".")[0] : "USDT";
+                        const creditedCoin = meta.creditedAmountCoin != null ? Number(meta.creditedAmountCoin) : null;
                         return (
                           <>
                             <span className={`text-sm font-semibold ${isIncoming ? 'text-green-500' : 'text-red-500'}`}>
                               {isIncoming ? '+' : '-'}{credited.toFixed(4)} USDT
                             </span>
-                            {assetCode && <span className="text-[9px] font-mono text-amber-500 uppercase">{assetCode}</span>}
+                            {creditedCoin !== null && coin !== "USDT" && (
+                              <span className="text-[9px] font-mono text-amber-500">≈ {creditedCoin.toFixed(4)} {coin}</span>
+                            )}
+                            {assetCode && (!creditedCoin || coin === "USDT") && (
+                              <span className="text-[9px] font-mono text-amber-500 uppercase">{assetCode}</span>
+                            )}
                           </>
                         );
                       })() : (

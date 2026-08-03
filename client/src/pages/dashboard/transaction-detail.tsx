@@ -190,6 +190,9 @@ export default function TransactionDetailPage({ params }: { params: { id: string
         totalPercent: Number(tx.metadata.totalFeePercent ?? feePercent ?? 0),
         totalAmount: Number(tx.metadata.totalFeeAmountUsdt ?? tx.feeAmount ?? realFee),
         credited: Number(tx.metadata.creditedAmountUsdt ?? tx.amount),
+        grossCoin: tx.metadata.grossAmountCoin != null ? Number(tx.metadata.grossAmountCoin) : null,
+        creditedCoin: tx.metadata.creditedAmountCoin != null ? Number(tx.metadata.creditedAmountCoin) : null,
+        coinPriceUsdt: tx.metadata.coinPriceUsdt != null ? Number(tx.metadata.coinPriceUsdt) : null,
       }
     : null;
 
@@ -256,7 +259,14 @@ export default function TransactionDetailPage({ params }: { params: { id: string
                 <>
                   <Row
                     label="Montant débité"
-                    value={<span>{cryptoFeeDetails.gross.toFixed(4)} USDT</span>}
+                    value={
+                      <span className="flex flex-col items-end">
+                        <span>{cryptoFeeDetails.gross.toFixed(4)} USDT</span>
+                        {cryptoFeeDetails.grossCoin !== null && cryptoAssetCode && cryptoCoinName !== "USDT" && (
+                          <span className="text-xs text-amber-500 font-mono">≈ {cryptoFeeDetails.grossCoin.toFixed(6)} {cryptoCoinName}</span>
+                        )}
+                      </span>
+                    }
                   />
                   <Row
                     label={`Frais${cryptoFeeDetails.totalPercent ? ` (${cryptoFeeDetails.totalPercent}%)` : ""}`}
@@ -264,7 +274,14 @@ export default function TransactionDetailPage({ params }: { params: { id: string
                   />
                   <Row
                     label="Montant reçu"
-                    value={<span className="text-green-500">{cryptoFeeDetails.credited.toFixed(4)} USDT</span>}
+                    value={
+                      <span className="flex flex-col items-end">
+                        <span className="text-green-500">{cryptoFeeDetails.credited.toFixed(4)} USDT</span>
+                        {cryptoFeeDetails.creditedCoin !== null && cryptoAssetCode && cryptoCoinName !== "USDT" && (
+                          <span className="text-xs text-amber-500 font-mono">≈ {cryptoFeeDetails.creditedCoin.toFixed(6)} {cryptoCoinName}</span>
+                        )}
+                      </span>
+                    }
                   />
                   <Row
                     label="Total des frais"
@@ -272,7 +289,14 @@ export default function TransactionDetailPage({ params }: { params: { id: string
                   />
                   <Row
                     label="Montant net crédité"
-                    value={<span className="text-green-500">{cryptoFeeDetails.credited.toFixed(4)} USDT</span>}
+                    value={
+                      <span className="flex flex-col items-end">
+                        <span className="text-green-500">{cryptoFeeDetails.credited.toFixed(4)} USDT</span>
+                        {cryptoFeeDetails.creditedCoin !== null && cryptoAssetCode && cryptoCoinName !== "USDT" && (
+                          <span className="text-xs text-amber-500 font-mono">≈ {cryptoFeeDetails.creditedCoin.toFixed(6)} {cryptoCoinName}</span>
+                        )}
+                      </span>
+                    }
                   />
                   <Row
                     label={td.detailCurrency}
