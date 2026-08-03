@@ -217,7 +217,7 @@ export default function TransactionDetailPage({ params }: { params: { id: string
             {statusBadge()}
             <p className={`text-4xl font-bold mt-2 ${amountColor}`}>
               {cryptoFeeDetails
-                ? `${amountPrefix}${cryptoFeeDetails.credited.toFixed(4)} ${cryptoCoinName}`
+                ? `${amountPrefix}${cryptoFeeDetails.credited.toFixed(4)} USDT`
                 : `${amountPrefix}${formatCurrency(headerAmount, txCurrency)}`}
             </p>
             {cryptoFeeDetails && cryptoAssetCode && (
@@ -256,31 +256,27 @@ export default function TransactionDetailPage({ params }: { params: { id: string
                 <>
                   <Row
                     label="Montant débité"
-                    value={<span>{cryptoFeeDetails.gross.toFixed(4)} {cryptoCoinName}</span>}
+                    value={<span>{cryptoFeeDetails.gross.toFixed(4)} USDT</span>}
                   />
                   <Row
                     label={`Frais${cryptoFeeDetails.totalPercent ? ` (${cryptoFeeDetails.totalPercent}%)` : ""}`}
-                    value={<span className="text-amber-500">{cryptoFeeDetails.totalAmount.toFixed(4)} {cryptoCoinName}</span>}
+                    value={<span className="text-amber-500">{cryptoFeeDetails.totalAmount.toFixed(4)} USDT</span>}
                   />
                   <Row
                     label="Montant reçu"
-                    value={<span className="text-green-500">{cryptoFeeDetails.credited.toFixed(4)} {cryptoCoinName}</span>}
+                    value={<span className="text-green-500">{cryptoFeeDetails.credited.toFixed(4)} USDT</span>}
                   />
-                  {(cryptoFeeDetails.providerAmount > 0 || cryptoFeeDetails.ashtechAmount > 0) && (
-                    <>
-                      <Row
-                        label="Total des frais"
-                        value={<span className="text-amber-500">{cryptoFeeDetails.totalAmount.toFixed(4)} {cryptoCoinName} ({cryptoFeeDetails.totalPercent}%)</span>}
-                      />
-                      <Row
-                        label="Montant net crédité"
-                        value={<span className="text-green-500">{cryptoFeeDetails.credited.toFixed(4)} {cryptoCoinName}</span>}
-                      />
-                    </>
-                  )}
+                  <Row
+                    label="Total des frais"
+                    value={<span className="text-amber-500">{cryptoFeeDetails.totalAmount.toFixed(4)} USDT ({cryptoFeeDetails.totalPercent}%)</span>}
+                  />
+                  <Row
+                    label="Montant net crédité"
+                    value={<span className="text-green-500">{cryptoFeeDetails.credited.toFixed(4)} USDT</span>}
+                  />
                   <Row
                     label={td.detailCurrency}
-                    value={<span className="font-mono text-amber-500">{cryptoAssetCode || cryptoCoinName}</span>}
+                    value={<span className="font-mono text-amber-500">{cryptoAssetCode || "USDT"}</span>}
                   />
                 </>
               ) : isConversion ? (

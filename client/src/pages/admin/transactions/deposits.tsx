@@ -378,8 +378,12 @@ export default function AdminDeposits() {
                         {tx.paymentMethod === "crypto" && (tx as any).metadata ? (() => {
                           const meta = (tx as any).metadata;
                           const credited = Number(meta.creditedAmountUsdt ?? meta.grossAmountUsdt ?? tx.amount);
-                          const coin = (meta.assetCode || "USDT").split(".")[0];
-                          return <span>+{credited.toFixed(4)} {coin}</span>;
+                          return (
+                            <div className="flex flex-col gap-0.5">
+                              <span>+{credited.toFixed(4)} USDT</span>
+                              {meta.assetCode && <span className="text-[10px] font-mono text-amber-500 font-normal">{meta.assetCode}</span>}
+                            </div>
+                          );
                         })() : `+${formatCurrency(tx.amount, (tx.currency || "XAF") as SupportedCurrency)}`}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
@@ -387,8 +391,7 @@ export default function AdminDeposits() {
                           const meta = (tx as any).metadata;
                           const fee = Number(meta.totalFeeAmountUsdt ?? tx.feeAmount ?? 0);
                           const pct = Number(meta.totalFeePercent ?? 0);
-                          const coin = (meta.assetCode || "USDT").split(".")[0];
-                          return fee > 0 ? <span>{fee.toFixed(4)} {coin}{pct > 0 ? ` (${pct}%)` : ""}</span> : <span>-</span>;
+                          return fee > 0 ? <span>{fee.toFixed(4)} USDT{pct > 0 ? ` (${pct}%)` : ""}</span> : <span>-</span>;
                         })() : (tx.feeAmount && parseFloat(tx.feeAmount) > 0
                           ? formatCurrency(tx.feeAmount, (tx.currency || "XAF") as SupportedCurrency)
                           : "-")}
@@ -397,8 +400,7 @@ export default function AdminDeposits() {
                         {tx.paymentMethod === "crypto" && (tx as any).metadata ? (() => {
                           const meta = (tx as any).metadata;
                           const gross = Number(meta.grossAmountUsdt ?? tx.totalAmount ?? tx.amount);
-                          const coin = (meta.assetCode || "USDT").split(".")[0];
-                          return <span>{gross.toFixed(4)} {coin}</span>;
+                          return <span>{gross.toFixed(4)} USDT</span>;
                         })() : (tx.totalAmount
                           ? formatCurrency(tx.totalAmount, (tx.currency || "XAF") as SupportedCurrency)
                           : formatCurrency(tx.amount, (tx.currency || "XAF") as SupportedCurrency))}
@@ -473,15 +475,14 @@ export default function AdminDeposits() {
                     const feeAmt = Number(meta.totalFeeAmountUsdt ?? tx.feeAmount ?? 0);
                     const feePct = Number(meta.totalFeePercent ?? 0);
                     const assetCode = meta.assetCode || "";
-                    const coin = assetCode ? assetCode.split(".")[0] : "USDT";
                     return (
                       <>
                         <p className="text-sm text-muted-foreground mb-1">Montant Net Crédité</p>
-                        <p className="text-3xl font-bold text-green-500">+{credited.toFixed(4)} {coin}</p>
+                        <p className="text-3xl font-bold text-green-500">+{credited.toFixed(4)} USDT</p>
                         {assetCode && <p className="text-xs text-amber-500 font-mono mt-0.5">{assetCode}</p>}
                         <div className="mt-2 text-sm space-y-1">
-                          <p className="text-muted-foreground">Montant débité: <span className="text-foreground font-medium">{gross.toFixed(4)} {coin}</span></p>
-                          {feeAmt > 0 && <p className="text-muted-foreground">Frais{feePct > 0 ? ` (${feePct}%)` : ""}: <span className="text-amber-500 font-medium">{feeAmt.toFixed(4)} {coin}</span></p>}
+                          <p className="text-muted-foreground">Montant débité: <span className="text-foreground font-medium">{gross.toFixed(4)} USDT</span></p>
+                          {feeAmt > 0 && <p className="text-muted-foreground">Frais{feePct > 0 ? ` (${feePct}%)` : ""}: <span className="text-amber-500 font-medium">{feeAmt.toFixed(4)} USDT</span></p>}
                         </div>
                       </>
                     );

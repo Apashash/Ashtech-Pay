@@ -248,17 +248,17 @@ export default function AdminTransactionDetail() {
               {cryptoMeta ? (
                 <>
                   <p className={`text-4xl font-bold ${amountColor}`}>
-                    {isIncoming(tx.type) ? "+" : "-"}{cryptoMeta.credited.toFixed(4)} {cryptoCoinName}
+                    {isIncoming(tx.type) ? "+" : "-"}{cryptoMeta.credited.toFixed(4)} USDT
                   </p>
                   {cryptoMeta.assetCode && (
                     <p className="text-xs text-amber-500 font-mono mt-0.5">{cryptoMeta.assetCode}</p>
                   )}
                   <div className="mt-2 space-y-1 text-sm text-muted-foreground">
-                    <p>Montant débité : <span className="text-foreground font-medium">{cryptoMeta.gross.toFixed(4)} {cryptoCoinName}</span></p>
-                    <p>Frais ({cryptoMeta.totalFeePercent}%) : <span className="text-amber-500 font-medium">{cryptoMeta.totalFeeAmount.toFixed(4)} {cryptoCoinName}</span></p>
-                    <p className="font-semibold text-green-500">Montant net crédité : {cryptoMeta.credited.toFixed(4)} {cryptoCoinName}</p>
-                    <p className="text-xs">Frais fournisseur : {Number(tx.metadata?.providerFeeAmountUsdt || 0).toFixed(4)} {cryptoCoinName} ({Number(tx.metadata?.providerFeePercent || 0)}%)</p>
-                    <p className="text-xs">Frais AshTechPay : {Number(tx.metadata?.ashtechFeeAmountUsdt || tx.ashtechFeeAmount || 0).toFixed(4)} {cryptoCoinName} ({Number(tx.metadata?.ashtechFeePercent || 0)}%)</p>
+                    <p>Montant débité : <span className="text-foreground font-medium">{cryptoMeta.gross.toFixed(4)} USDT</span></p>
+                    <p>Frais ({cryptoMeta.totalFeePercent}%) : <span className="text-amber-500 font-medium">{cryptoMeta.totalFeeAmount.toFixed(4)} USDT</span></p>
+                    <p className="font-semibold text-green-500">Montant net crédité : {cryptoMeta.credited.toFixed(4)} USDT</p>
+                    <p className="text-xs">Frais fournisseur : {Number(tx.metadata?.providerFeeAmountUsdt || 0).toFixed(4)} USDT ({Number(tx.metadata?.providerFeePercent || 0)}%)</p>
+                    <p className="text-xs">Frais AshTechPay : {Number(tx.metadata?.ashtechFeeAmountUsdt || tx.ashtechFeeAmount || 0).toFixed(4)} USDT ({Number(tx.metadata?.ashtechFeePercent || 0)}%)</p>
                   </div>
                 </>
               ) : (

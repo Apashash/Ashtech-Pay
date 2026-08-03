@@ -928,11 +928,10 @@ export default function DashboardHome() {
                         const meta = (tx as any).metadata;
                         const credited = Number(meta.creditedAmountUsdt ?? meta.grossAmountUsdt ?? tx.amount);
                         const assetCode = meta.assetCode || "";
-                        const coin = assetCode ? assetCode.split(".")[0] : "USDT";
                         return (
                           <>
                             <span className={`text-sm font-semibold ${isIncoming ? 'text-green-500' : 'text-red-500'}`}>
-                              {isIncoming ? '+' : '-'}{credited.toFixed(4)} {coin}
+                              {isIncoming ? '+' : '-'}{credited.toFixed(4)} USDT
                             </span>
                             {assetCode && <span className="text-[9px] font-mono text-amber-500 uppercase">{assetCode}</span>}
                           </>
