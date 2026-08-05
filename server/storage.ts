@@ -735,22 +735,36 @@ export class DatabaseStorage implements IStorage {
 
   async banUser(id: string, reason: string): Promise<User | undefined> {
     invalidateUserCache(id);
-    const [user] = await db.update(users)
-      .set({ isBanned: true, banReason: reason })
-      .where(eq(users.id, id))
-      .returning();
-    if (user) setCachedUser(user);
-    return user || undefined;
+    // Use an explicit transaction with SET LOCAL so the guard trigger sees
+    // application_name = 'ashtech_secure_app' even on pgBouncer Transaction mode,
+    // which resets application_name between transactions at the session level.
+    let result: User | undefined;
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`SET LOCAL application_name = 'ashtech_secure_app'`);
+      const [user] = await tx.update(users)
+        .set({ isBanned: true, banReason: reason })
+        .where(eq(users.id, id))
+        .returning();
+      result = user;
+    });
+    if (result) setCachedUser(result);
+    return result;
   }
 
   async unbanUser(id: string): Promise<User | undefined> {
     invalidateUserCache(id);
-    const [user] = await db.update(users)
-      .set({ isBanned: false, banReason: null })
-      .where(eq(users.id, id))
-      .returning();
-    if (user) setCachedUser(user);
-    return user || undefined;
+    // Same pgBouncer application_name fix as banUser above.
+    let result: User | undefined;
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`SET LOCAL application_name = 'ashtech_secure_app'`);
+      const [user] = await tx.update(users)
+        .set({ isBanned: false, banReason: null })
+        .where(eq(users.id, id))
+        .returning();
+      result = user;
+    });
+    if (result) setCachedUser(result);
+    return result;
   }
 
   async deleteUser(id: string): Promise<void> {

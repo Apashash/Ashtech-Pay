@@ -4295,6 +4295,12 @@ export async function registerRoutes(
       }
       // ── End OTP ──
 
+      // Block if admin has restricted withdrawals/transfers on this account
+      if (sender.withdrawalBlocked) {
+        const reason = sender.withdrawalBlockReason || "Votre compte a été restreint. Contactez le support.";
+        return res.status(403).json({ message: reason, code: "WITHDRAWAL_BLOCKED" });
+      }
+
       // Cooldown 5min après rejet d'une opération précédente
       const intCooldown = getFailedCooldown(senderId);
       if (intCooldown.active) {
