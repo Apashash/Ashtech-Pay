@@ -3,7 +3,7 @@ import { storage } from "./storage";
 import { ALL_FX_CURRENCIES } from "@shared/schema";
 import { notifyConversionStarted } from "./telegram";
 
-// CFA franc currencies — XAF and XOF and all Swychr country-specific variants
+// CFA franc currencies — XAF, XOF, and country-specific wallet variants
 // All have the same value (1 XAF = 1 XOF, both pegged to EUR at same rate)
 export const CFA_CURRENCIES = new Set([
   "XAF", "XAFC", "XAFG",                                         // Central African CFA (BEAC)

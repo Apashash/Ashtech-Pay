@@ -1,5 +1,4 @@
 import { storage } from "./storage";
-import { checkSwychrPaymentStatus } from "./swychr";
 import { checkAfribaPayStatus, isAfribaPayCircuitOpen } from "./afribapay";
 import { checkPixPayStatus } from "./pixpay";
 import { creditUserWallet } from "./walletHelper";
@@ -36,7 +35,7 @@ export function addPendingPayment(
   payment: Omit<PendingPayment, "attempts" | "startedAt" | "lastCheckedAt"> &
     Partial<Pick<PendingPayment, "attempts">>,
 ) {
-  console.log(`[PaymentPoller] Adding pending payment: ${payment.reference} (provider: ${payment.provider || "swychr"})`);
+  console.log(`[PaymentPoller] Adding pending payment: ${payment.reference} (provider: ${payment.provider || "unknown"})`);
   const now = Date.now();
   pendingPayments.set(payment.reference, { ...payment, attempts: payment.attempts ?? 0, startedAt: now, lastCheckedAt: 0 });
 }
@@ -113,11 +112,8 @@ async function checkPaymentStatus(payment: PendingPayment): Promise<"pending" | 
       console.log(`[PaymentPoller] PixPay status for ${payment.reference}: ${result.status}`);
       return result.status;
     } else {
-      const result = await checkSwychrPaymentStatus(payment.externalReference || payment.reference);
-      console.log(`[PaymentPoller] Swychr status for ${payment.reference}:`, result.status, result.rawStatus);
-      if (result.success && result.status === "completed") return "completed";
-      if (result.success && result.status === "failed") return "failed";
-      return "pending";
+      console.error(`[PaymentPoller] Unsupported payment provider for ${payment.reference}`);
+      return "failed";
     }
   } catch (error: any) {
     // Log only the message (not the full stack trace) to avoid log flooding
@@ -160,7 +156,7 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
         transactionId: transaction.id,
         isRead: false,
       });
-      console.log(`[PaymentPoller] ✓ Payment COMPLETED for ${payment.reference} (${payment.provider || "swychr"}) → credited ${payment.amount} ${paymentCurrency}`);
+      console.log(`[PaymentPoller] ✓ Payment COMPLETED for ${payment.reference} (${payment.provider || "unknown"}) → credited ${payment.amount} ${paymentCurrency}`);
 
       const isLink = payment.type === "payment_link";
       const feeMetadata = ((transaction as any).metadata || {}) as Record<string, any>;
@@ -237,7 +233,7 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
       if (payment.paymentIntentId) {
         await storage.updatePaymentIntentStatus(payment.paymentIntentId, "failed");
       }
-      console.log(`[PaymentPoller] ✗ Payment FAILED/CANCELLED for ${payment.reference} (${payment.provider || "swychr"})`);
+      console.log(`[PaymentPoller] ✗ Payment FAILED/CANCELLED for ${payment.reference} (${payment.provider || "unknown"})`);
 
       const [txUserFailed, txOperatorFailed] = await Promise.all([
         storage.getUser(payment.userId).catch(() => null),
@@ -394,11 +390,11 @@ export async function recoverPendingDeposits() {
       }
 
       // Detect provider early so we can auto-fail broken-provider transactions
-      let txProvider = "swychr";
+      let txProvider: "afribapay" | "pixpay" | null = null;
       if (tx.operatorId) {
         try {
           const op = await storage.getOperator(tx.operatorId);
-          const prov = (op as any)?.paymentProvider;
+          const prov = (op as any)?.depositPaymentProvider || (op as any)?.paymentProvider;
           if (prov === "afribapay" || prov === "pixpay") txProvider = prov;
         } catch {}
       }
@@ -406,6 +402,13 @@ export async function recoverPendingDeposits() {
       // Only auto-fail if AfribaPay subscription is broken (service down, not a timeout).
       // Age-based auto-cancel has been removed — transactions stay pending until
       // the gateway explicitly returns completed or failed.
+      if (!txProvider) {
+        console.warn(`[PaymentPoller] No supported provider for pending transaction ${tx.reference}; marking failed`);
+        await storage.updateTransactionStatus(tx.id, "failed");
+        autoFailed++;
+        continue;
+      }
+
       const isAfribaPayBroken = txProvider === "afribapay" && afribaPayBroken;
 
       if (isAfribaPayBroken) {

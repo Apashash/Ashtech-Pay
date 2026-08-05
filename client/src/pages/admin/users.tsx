@@ -105,7 +105,7 @@ export default function AdminUsers() {
   const [convFrom, setConvFrom] = useState("");
   const [convTo, setConvTo] = useState("");
   const [convAmount, setConvAmount] = useState("");
-  const [convProvider, setConvProvider] = useState<"swychr" | "pixpay" | "afribapay">("swychr");
+  const [convProvider, setConvProvider] = useState<"pixpay" | "afribapay">("afribapay");
   const [blockWithdrawalModal, setBlockWithdrawalModal] = useState<User | null>(null);
   const [blockWithdrawalReason, setBlockWithdrawalReason] = useState("");
   const [filter, setFilter] = useState("all");
@@ -127,7 +127,7 @@ export default function AdminUsers() {
     enabled: !!balanceModal,
   });
 
-  const { data: depositConfig } = useQuery<{ conversionFeePercentSwychr?: number; conversionFeePercent?: number }>({
+  const { data: depositConfig } = useQuery<{ conversionFeePercent?: number }>({
     queryKey: ["/api/public/deposit-config"],
     enabled: !!balanceModal,
   });
@@ -188,7 +188,6 @@ export default function AdminUsers() {
   ] : [];
 
   const convFeeByProvider = {
-    swychr: depositConfig?.conversionFeePercentSwychr ?? depositConfig?.conversionFeePercent ?? 6,
     pixpay: (depositConfig as any)?.conversionFeePercentPixpay ?? depositConfig?.conversionFeePercent ?? 6,
     afribapay: (depositConfig as any)?.conversionFeePercentAfribapay ?? depositConfig?.conversionFeePercent ?? 6,
   };
@@ -1166,7 +1165,6 @@ export default function AdminUsers() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="swychr">Swychr — {convFeeByProvider.swychr}%</SelectItem>
                       <SelectItem value="pixpay">Pixpay — {convFeeByProvider.pixpay}%</SelectItem>
                       <SelectItem value="afribapay">Afribapay — {convFeeByProvider.afribapay}%</SelectItem>
                     </SelectContent>

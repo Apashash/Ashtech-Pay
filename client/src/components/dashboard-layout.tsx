@@ -528,9 +528,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       <BottomSheet open={showPusdConvert} onOpenChange={setShowPusdConvert}>
         <BottomSheetContent>
           <BottomSheetHeader>
-            <BottomSheetTitle>Conversion Fiat vers pUSD (AccountPE)</BottomSheetTitle>
+            <BottomSheetTitle>Conversion Fiat vers pUSD</BottomSheetTitle>
             <BottomSheetDescription>
-              Prend les fonds en monnaie locale présents sur le compte AccountPE et les transforme en pUSD pour les retraits.
+              Convertit les fonds en monnaie locale du wallet fournisseur en pUSD pour les retraits.
             </BottomSheetDescription>
           </BottomSheetHeader>
           <div className="space-y-4 py-4">

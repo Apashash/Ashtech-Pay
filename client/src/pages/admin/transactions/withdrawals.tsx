@@ -565,21 +565,21 @@ export default function AdminWithdrawals() {
                     <div className="grid grid-cols-1 gap-2 pt-1">
                       <Button
                         className="bg-green-600 hover:bg-green-700"
-                        onClick={() => updateStatusMutation.mutate({ id: tx.id, status: "completed", reason: modalReason || "Approbation admin via Swychr" })}
+                        onClick={() => updateStatusMutation.mutate({ id: tx.id, status: "completed", reason: modalReason || "Approbation admin via le fournisseur configuré" })}
                         disabled={updateStatusMutation.isPending}
-                        data-testid="button-modal-approve-swychr"
+                        data-testid="button-modal-approve-provider"
                       >
                         <CheckCircle className="w-4 h-4 mr-2" />
-                        Approuver via Swychr
+                        Approuver via le fournisseur configuré
                       </Button>
                       <Button
                         className="bg-blue-600 hover:bg-blue-700"
-                        onClick={() => forceCompleteMutation.mutate({ id: tx.id, reason: modalReason || "Confirmation manuelle admin (sans Swychr)" })}
+                        onClick={() => forceCompleteMutation.mutate({ id: tx.id, reason: modalReason || "Confirmation manuelle admin (sans fournisseur)" })}
                         disabled={forceCompleteMutation.isPending}
                         data-testid="button-modal-approve-manual"
                       >
                         <CheckCircle className="w-4 h-4 mr-2" />
-                        Confirmer manuellement (sans Swychr)
+                        Confirmer manuellement (sans fournisseur)
                       </Button>
                       <Button
                         variant="destructive"

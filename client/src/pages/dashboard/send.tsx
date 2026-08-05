@@ -208,8 +208,7 @@ export default function SendMoneyPage() {
       if (feeAmount === 0 && selectedOperator) {
         const pct = selectedOperator.feePercentage || 0;
         const fixed = selectedOperator.feeFixed || 0;
-        const isSwychr = !selectedOperator.paymentProvider || selectedOperator.paymentProvider === "swychr";
-        const minF = isSwychr ? (selectedOperator.minFee || 0) : 0;
+        const minF = selectedOperator.minFee || 0;
         feeAmount = Math.max((amountValue * pct / 100) + fixed, minF);
         feePercentage = pct;
       }

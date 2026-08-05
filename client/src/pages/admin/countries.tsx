@@ -129,7 +129,7 @@ export default function AdminCountries() {
     dailyLimit: "1000000",
     isActive: true,
     isInMaintenance: false,
-    gateway: "swychr",
+    gateway: "soleapay",
   });
 
   const { data: countries, isLoading: loadingCountries } = useQuery<Country[]>({
@@ -797,8 +797,8 @@ export default function AdminCountries() {
               <div className="space-y-2">
                 <Label>Passerelle de paiement</Label>
                 <div className="flex items-center gap-2 px-3 py-2 border rounded-md bg-muted/50">
-                  <Badge className="bg-purple-600">Swychr</Badge>
-                  <span className="text-sm text-muted-foreground">Intégration Swychr (tous les pays)</span>
+                  <Badge className="bg-orange-600">AfribaPay / PixPay</Badge>
+                  <span className="text-sm text-muted-foreground">Fournisseur configuré par opérateur</span>
                 </div>
               </div>
               <div className="flex items-center gap-6">

@@ -313,9 +313,8 @@ export default function WithdrawPage() {
   const minPayoutCharge = selectedOperatorData?.minFee || 0;
 
   const percentageFee = (amountValue * feePercent / 100);
-  const isSwychr = !selectedOperatorData?.paymentProvider || selectedOperatorData.paymentProvider === "swychr";
   const feeAmount = (amountValue > 0 && selectedOperatorData)
-    ? (isSwychr ? Math.max(percentageFee + feeFixed, minPayoutCharge) : percentageFee + feeFixed)
+    ? Math.max(percentageFee + feeFixed, minPayoutCharge)
     : 0;
 
   const isAmountValid = amountValue >= minWithdrawal && amountValue <= maxWithdrawal && amountValue <= balance;

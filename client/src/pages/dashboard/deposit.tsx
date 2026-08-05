@@ -166,7 +166,7 @@ export default function DepositPage() {
     const amount = parseFloat(watchedAmount) || 0;
     if (amount <= 0 || !selectedOperator) return null;
 
-    const provider = selectedOperator.paymentProvider || "swychr";
+    const provider = selectedOperator.paymentProvider;
     const isAfribaPay = provider === "afribapay";
     const isPixPay = provider === "pixpay";
 
@@ -183,16 +183,6 @@ export default function DepositPage() {
       const ashtechMargin = selectedOperator.ashtechMargin || 2;
       feePercentage = pixpayFee + ashtechMargin;
       fee = (amount * feePercentage) / 100;
-    } else {
-      feePercentage = selectedOperator.feePercentage || 0;
-      const fixedFee = selectedOperator.fixedFee || 0;
-      if (feePercentage > 0) {
-        fee = (amount * feePercentage) / 100;
-      } else if (fixedFee > 0) {
-        fee = fixedFee;
-      }
-      if (selectedOperator.minFee !== null && fee < (selectedOperator.minFee ?? 0)) fee = selectedOperator.minFee ?? 0;
-      if (selectedOperator.maxFee !== null && fee > (selectedOperator.maxFee ?? Infinity)) fee = selectedOperator.maxFee ?? fee;
     }
 
     const creditedAmount = amount - fee;

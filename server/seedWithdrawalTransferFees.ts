@@ -1,5 +1,5 @@
 // Seed/update withdrawal and transfer fees per country
-// Swychr base fee (fixed) + Ashtech margin 2.00% = total client fee
+// Provider fee + Ashtech margin = total client fee
 // Run once on startup — fully idempotent (upsert by country + transactionType)
 
 import { db } from "./db";
@@ -9,33 +9,32 @@ import { eq, and, isNull } from "drizzle-orm";
 interface CountryFeeSpec {
   code:          string;
   countryName:   string;
-  swychrFee:     number;
   afribapayFee:  number;
   ashtechMargin: number;
   minFee:        number;
 }
 
 const FEE_SPECS: CountryFeeSpec[] = [
-  { code: "CM", countryName: "Cameroun",           swychrFee: 1.50, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 550 },
-  { code: "BF", countryName: "Burkina Faso",        swychrFee: 1.80, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 550 },
-  { code: "BJ", countryName: "Bénin",               swychrFee: 1.80, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 100 },
-  { code: "CG", countryName: "Congo Brazzaville",   swychrFee: 2.00, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 800 },
-  { code: "CD", countryName: "Congo RDC",           swychrFee: 1.80, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 27 },
-  { code: "CI", countryName: "Côte d'Ivoire",       swychrFee: 1.80, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 550 },
-  { code: "GA", countryName: "Gabon",               swychrFee: 1.80, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 550 },
-  { code: "GH", countryName: "Ghana",               swychrFee: 2.00, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 20.7 },
-  { code: "GN", countryName: "Guinée Conakry",      swychrFee: 2.00, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 6500.76 },
-  { code: "IN", countryName: "Inde",                swychrFee: 1.50, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 10.83 },
-  { code: "KE", countryName: "Kenya",               swychrFee: 1.50, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 105.2 },
-  { code: "ML", countryName: "Mali",                swychrFee: 1.80, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 550 },
-  { code: "NE", countryName: "Niger",               swychrFee: 2.50, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 790 },
-  { code: "NG", countryName: "Nigeria",             swychrFee: 2.00, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 144 },
-  { code: "RW", countryName: "Rwanda",              swychrFee: 1.80, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 2300.07 },
-  { code: "SN", countryName: "Sénégal",             swychrFee: 1.80, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 550 },
-  { code: "TG", countryName: "Togo",                swychrFee: 1.80, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 100 },
-  { code: "TZ", countryName: "Tanzanie",            swychrFee: 4.00, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 2.6 },
-  { code: "UG", countryName: "Ouganda",             swychrFee: 4.00, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 0.19 },
-  { code: "US", countryName: "États-Unis",          swychrFee: 3.00, afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 50.17 },
+  { code: "CM", countryName: "Cameroun",           afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 550 },
+  { code: "BF", countryName: "Burkina Faso",        afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 550 },
+  { code: "BJ", countryName: "Bénin",               afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 100 },
+  { code: "CG", countryName: "Congo Brazzaville",   afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 800 },
+  { code: "CD", countryName: "Congo RDC",           afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 27 },
+  { code: "CI", countryName: "Côte d'Ivoire",       afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 550 },
+  { code: "GA", countryName: "Gabon",               afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 550 },
+  { code: "GH", countryName: "Ghana",               afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 20.7 },
+  { code: "GN", countryName: "Guinée Conakry",      afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 6500.76 },
+  { code: "IN", countryName: "Inde",                afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 10.83 },
+  { code: "KE", countryName: "Kenya",               afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 105.2 },
+  { code: "ML", countryName: "Mali",                afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 550 },
+  { code: "NE", countryName: "Niger",                afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 790 },
+  { code: "NG", countryName: "Nigeria",              afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 144 },
+  { code: "RW", countryName: "Rwanda",               afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 2300.07 },
+  { code: "SN", countryName: "Sénégal",              afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 550 },
+  { code: "TG", countryName: "Togo",                 afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 100 },
+  { code: "TZ", countryName: "Tanzanie",             afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 2.6 },
+  { code: "UG", countryName: "Ouganda",              afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 0.19 },
+  { code: "US", countryName: "États-Unis",           afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 50.17 },
 ];
 
 const TRANSACTION_TYPES = ["withdrawal", "transfer", "deposit"] as const;
@@ -66,9 +65,7 @@ export async function seedWithdrawalTransferFees() {
     for (const txType of TRANSACTION_TYPES) {
       const isDeposit = txType === "deposit";
       // For deposit: feeValue is based on AfribaPay fee (most common deposit provider)
-      const totalPercentage = isDeposit
-        ? spec.afribapayFee + spec.ashtechMargin
-        : spec.swychrFee + spec.ashtechMargin;
+      const totalPercentage = spec.afribapayFee + spec.ashtechMargin;
 
       const existing = await db
         .select()
@@ -84,7 +81,6 @@ export async function seedWithdrawalTransferFees() {
 
       const feeData = {
         feeValue:      totalPercentage.toFixed(4),
-        swychrFee:     spec.swychrFee.toFixed(4),
         afribapayFee:  spec.afribapayFee.toFixed(4),
         ashtechMargin: spec.ashtechMargin.toFixed(4),
         minFee:        spec.minFee.toString(),

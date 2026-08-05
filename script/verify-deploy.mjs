@@ -23,8 +23,6 @@ const REQUIRED = [
   { key: "TURNSTILE_SITE_KEY",    label: "Turnstile clé publique",    critical: false },
   { key: "TURNSTILE_SECRET_KEY",  label: "Turnstile clé secrète",     critical: false },
   { key: "APP_URL",               label: "URL de l'application",      critical: false },
-  { key: "SWYCHR_EMAIL",          label: "Swychr email",              critical: false },
-  { key: "SWYCHR_PASSWORD",       label: "Swychr mot de passe",       critical: false },
   { key: "TELEGRAM_BOT_TOKEN",    label: "Telegram bot token",        critical: false },
   { key: "TELEGRAM_CHAT_ID",      label: "Telegram chat ID",          critical: false },
   { key: "RESEND_API_KEY",        label: "Resend (email)",            critical: false },

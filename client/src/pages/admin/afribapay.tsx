@@ -35,7 +35,7 @@ function OperatorReadRow({
   op: any;
   afribaOperators: AfribaOperator[];
 }) {
-  const provider = op.paymentProvider || "swychr";
+  const provider = op.paymentProvider;
   const code = op.afribapayOperatorCode || "";
   const afribaMatch = afribaOperators.find(a => a.operator_code === code);
 
@@ -53,7 +53,7 @@ function OperatorReadRow({
         ) : provider === "pixpay" ? (
           <Badge className="bg-blue-500 text-white text-xs">PixPay</Badge>
         ) : (
-          <Badge variant="secondary" className="text-xs">Swychr</Badge>
+          <Badge variant="destructive" className="text-xs">Non configuré</Badge>
         )}
       </td>
 
@@ -222,7 +222,7 @@ export default function AdminAfribaPay() {
               <XCircle className="h-5 w-5 text-muted-foreground" />
               <div>
                 <p className="text-2xl font-bold">{(operators?.length || 0) - afribapayOpsCount}</p>
-                <p className="text-sm text-muted-foreground">Opérateurs sur Swychr / PixPay</p>
+                <p className="text-sm text-muted-foreground">Opérateurs sur PixPay ou sans fournisseur valide</p>
               </div>
             </CardContent>
           </Card>

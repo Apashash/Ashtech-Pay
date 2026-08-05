@@ -363,7 +363,6 @@ const SUSPICIOUS_PATH_PATTERNS: RegExp[] = [
 // ─── API publique: exclure du filtrage UA ─────────────────────────────────
 // Webhooks et endpoints appelés par des serveurs (pas des navigateurs)
 const API_UA_EXEMPT_PATHS = [
-  "/api/swychr/webhook",
   "/api/afribapay/webhook",
   "/api/pixpay/webhook",
   "/api/izichange/webhook", // IziChange payment processor — server-to-server calls

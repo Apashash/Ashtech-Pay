@@ -797,9 +797,9 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       <Dialog open={showPusdConvert} onOpenChange={setShowPusdConvert}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Conversion Fiat vers pUSD (AccountPE)</DialogTitle>
+            <DialogTitle>Conversion Fiat vers pUSD</DialogTitle>
             <DialogDescription>
-              Prend les fonds en monnaie locale présents sur le compte AccountPE et les transforme en pUSD pour les retraits.
+              Convertit les fonds en monnaie locale du wallet fournisseur en pUSD pour les retraits.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">

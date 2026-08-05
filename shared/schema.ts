@@ -312,7 +312,7 @@ export const operators = pgTable("operators", {
   type: text("type").notNull(), // 'mobile_money', 'bank', 'crypto'
   countryId: varchar("country_id").notNull().references(() => countries.id),
   gateway: text("gateway").default("soleapay").notNull(), // 'soleapay', 'winipay'
-  paymentProvider: text("payment_provider").default("swychr").notNull(), // 'swychr' | 'afribapay' | 'pixpay' — utilisé pour retrait + envoi
+  paymentProvider: text("payment_provider").default("afribapay").notNull(), // 'afribapay' | 'pixpay' — utilisé pour retrait + envoi
   depositPaymentProvider: text("deposit_payment_provider"), // nullable — fournisseur spécifique pour dépôts (si null, hérite de paymentProvider)
   afribapayOperatorCode: text("afribapay_operator_code"), // operator code used in AfribaPay API (e.g. "mtn", "orange")
   pixpayServiceId: text("pixpay_service_id"), // numeric service_id used in PixPay API
@@ -329,7 +329,7 @@ export const PAYMENT_GATEWAYS = ["soleapay", "winipay"] as const;
 export type PaymentGateway = typeof PAYMENT_GATEWAYS[number];
 
 // Payment providers (per operator)
-export const PAYMENT_PROVIDERS = ["swychr", "afribapay", "pixpay"] as const;
+export const PAYMENT_PROVIDERS = ["afribapay", "pixpay"] as const;
 export type PaymentProvider = typeof PAYMENT_PROVIDERS[number];
 
 // Countries that use SoleaPay by default (Bénin, Cameroun, Côte d'Ivoire, Togo)
@@ -342,7 +342,6 @@ export const fees = pgTable("fees", {
   transactionType: text("transaction_type").notNull(), // 'deposit', 'withdrawal', 'transfer'
   feeType: text("fee_type").notNull(), // 'percentage', 'fixed'
   feeValue: decimal("fee_value", { precision: 10, scale: 4 }).notNull(),
-  swychrFee: decimal("swychr_fee", { precision: 10, scale: 4 }).default("0"),
   afribapayFee: decimal("afribapay_fee", { precision: 10, scale: 4 }).default("0"), // AfribaPay provider fee %
   pixpayFee: decimal("pixpay_fee", { precision: 10, scale: 4 }).default("0"), // PixPay provider fee %
   ashtechMargin: decimal("ashtech_margin", { precision: 10, scale: 4 }).default("0"),

@@ -132,7 +132,7 @@ function OperatorRow({ op, countryCode }: { op: any; countryCode: string }) {
         ) : op.paymentProvider === "afribapay" ? (
           <Badge variant="outline" className="text-xs text-yellow-600 border-yellow-400">AfribaPay</Badge>
         ) : (
-          <Badge variant="secondary" className="text-xs">Swychr</Badge>
+          <Badge variant="destructive" className="text-xs">Non configuré</Badge>
         )}
       </td>
     </tr>

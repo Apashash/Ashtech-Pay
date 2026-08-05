@@ -39,12 +39,11 @@ interface PendingPayout {
 }
 
 const PROVIDER_LABELS: Record<string, { label: string; color: string }> = {
-  swychr:    { label: "Swychr",    color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
   afribapay: { label: "AfribaPay", color: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" },
   pixpay:    { label: "PixPay",    color: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400" },
 };
 
-type Action = { txId: string; type: "execute" | "confirm" | "refund"; provider?: "swychr" | "afribapay" | "pixpay" };
+type Action = { txId: string; type: "execute" | "confirm" | "refund"; provider?: "afribapay" | "pixpay" };
 
 export default function AdminPendingPayoutsPage() {
   const { toast } = useToast();
@@ -186,7 +185,10 @@ export default function AdminPendingPayoutsPage() {
               {payouts.map((payout) => {
                 const isExpanded = expandedId === payout.id;
                 const isBusy = loadingId === payout.id;
-                const providerInfo = PROVIDER_LABELS[payout.originalProvider] || PROVIDER_LABELS.swychr;
+                const providerInfo = PROVIDER_LABELS[payout.originalProvider] || {
+                  label: "Fournisseur invalide",
+                  color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+                };
 
                 return (
                   <Card
@@ -284,8 +286,8 @@ export default function AdminPendingPayoutsPage() {
 
                         <div className="mb-3">
                           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Exécuter via :</p>
-                          <div className="grid grid-cols-3 gap-2">
-                            {(["swychr", "afribapay", "pixpay"] as const).map((p) => (
+                          <div className="grid grid-cols-2 gap-2">
+                            {(["afribapay", "pixpay"] as const).map((p) => (
                               <Button
                                 key={p}
                                 size="sm"

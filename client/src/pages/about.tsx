@@ -58,7 +58,7 @@ const services = [
 ];
 
 const partners = [
-  { name: "Swychr", description: "Partenaire de paiement Mobile Money — gestion des payouts vers 22 pays africains." },
+  { name: "AfribaPay & PixPay", description: "Partenaires de paiement Mobile Money pour les dépôts et les retraits." },
 ];
 
 export default function AboutPage() {

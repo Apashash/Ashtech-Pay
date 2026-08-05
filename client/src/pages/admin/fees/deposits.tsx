@@ -53,12 +53,12 @@ export default function AdminFeesDeposits() {
   const [ashtechMargin, setAshtechMargin] = useState("");
   const [isActive, setIsActive] = useState(true);
   // Form fields — provider
-  const [localProvider, setLocalProvider] = useState("swychr");
+  const [localProvider, setLocalProvider] = useState<"afribapay" | "pixpay">("afribapay");
   const [localAfribapayCode, setLocalAfribapayCode] = useState("");
 
   // Mémoire sticky: retient les dernières valeurs saisies par fournisseur
-  const sticky = useRef<{ afribapayFee: string; pixpayFee: string; swychrMargin: string; afribaMargin: string; pixpayMargin: string }>({
-    afribapayFee: "3.00", pixpayFee: "3.00", swychrMargin: "2.00", afribaMargin: "2.00", pixpayMargin: "2.00",
+  const sticky = useRef<{ afribapayFee: string; pixpayFee: string; afribaMargin: string; pixpayMargin: string }>({
+    afribapayFee: "3.00", pixpayFee: "3.00", afribaMargin: "2.00", pixpayMargin: "2.00",
   });
 
   const { data: fees, isLoading: feesLoading } = useQuery<Fee[]>({ queryKey: ["/api/admin/fees"] });
@@ -101,26 +101,26 @@ export default function AdminFeesDeposits() {
   const openEdit = (op: Operator, country: Country) => {
     const fee = findFee(op, country);
     const needsCreate = !fee || (fee as any).operatorId !== op.id;
-    const provider = (op as any).depositPaymentProvider || (op as any).paymentProvider || "swychr";
+    const provider = ((op as any).depositPaymentProvider || (op as any).paymentProvider || "afribapay") as "afribapay" | "pixpay";
     setEditing({ fee: fee ?? null, operator: op, country, needsCreate });
     // Si frais spécifique en DB → utilise les valeurs DB et met à jour le sticky
     if (!needsCreate && fee) {
       const aFee = (fee as any)?.afribapayFee ?? sticky.current.afribapayFee;
       const pFee = (fee as any)?.pixpayFee ?? sticky.current.pixpayFee;
-      const margin = (fee as any)?.ashtechMargin ?? sticky.current.swychrMargin;
+      const margin = (fee as any)?.ashtechMargin ?? (provider === "pixpay" ? sticky.current.pixpayMargin : sticky.current.afribaMargin);
       setAfribapayFee(aFee); sticky.current.afribapayFee = aFee;
       setPixpayFee(pFee); sticky.current.pixpayFee = pFee;
       setAshtechMargin(margin);
       if (provider === "afribapay") sticky.current.afribaMargin = margin;
       else if (provider === "pixpay") sticky.current.pixpayMargin = margin;
-      else sticky.current.swychrMargin = margin;
+      else sticky.current.afribaMargin = margin;
     } else {
       // Pas de frais spécifique → utilise les valeurs sticky mémorisées
       setAfribapayFee(sticky.current.afribapayFee);
       setPixpayFee(sticky.current.pixpayFee);
       const margin = provider === "afribapay" ? sticky.current.afribaMargin
         : provider === "pixpay" ? sticky.current.pixpayMargin
-        : sticky.current.swychrMargin;
+        : sticky.current.afribaMargin;
       setAshtechMargin(margin);
     }
     setIsActive(fee?.isActive ?? true);
@@ -134,7 +134,7 @@ export default function AdminFeesDeposits() {
     setPixpayFee("");
     setAshtechMargin("");
     setIsActive(true);
-    setLocalProvider("swychr");
+    setLocalProvider("afribapay");
     setLocalAfribapayCode("");
   };
 
@@ -181,26 +181,6 @@ export default function AdminFeesDeposits() {
     onError: (err: any) => toast({ title: "Erreur lors de la mise à jour", description: err?.message || "Erreur serveur", variant: "destructive" }),
   });
 
-  // Swychr: update ashtechMargin only (swychrFee is fixed)
-  const swychrMutation = useMutation({
-    mutationFn: async ({ id, margin, active }: { id: string; margin: string; active: boolean }) => {
-      const swychrFee = parseFloat((editing?.fee as any)?.swychrFee || "0");
-      const total = (swychrFee + parseFloat(margin || "0")).toFixed(4);
-      return apiRequest("PATCH", `/api/admin/fees/${id}`, {
-        ashtechMargin: margin,
-        feeValue: total,
-        isActive: active,
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/fees"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/operators"] });
-      toast({ title: "Frais mis à jour" });
-      closeEdit();
-    },
-    onError: (err: any) => toast({ title: "Erreur lors de la mise à jour", description: err?.message || "Erreur serveur", variant: "destructive" }),
-  });
-
   // AfribaPay: update afribapayFee + ashtechMargin
   const afribaMutation = useMutation({
     mutationFn: async ({ id, afribaFee, margin, active }: { id: string; afribaFee: string; margin: string; active: boolean }) =>
@@ -220,7 +200,7 @@ export default function AdminFeesDeposits() {
 
   const handleSave = async () => {
     if (!editing) return;
-    const originalProvider = (editing.operator as any).depositPaymentProvider || (editing.operator as any).paymentProvider || "swychr";
+    const originalProvider = ((editing.operator as any).depositPaymentProvider || (editing.operator as any).paymentProvider || "afribapay") as "afribapay" | "pixpay";
     const providerChanged = localProvider !== originalProvider ||
       localAfribapayCode !== ((editing.operator as any).afribapayOperatorCode || "");
     if (providerChanged) {
@@ -231,22 +211,18 @@ export default function AdminFeesDeposits() {
       });
     }
     if (editing.needsCreate) {
-      const swychrFeeVal = parseFloat((editing.fee as any)?.swychrFee || "0");
       const afribaFeeVal = parseFloat(afribapayFee || "0");
       const pixpayFeeVal = parseFloat(pixpayFee || "0");
       const marginVal = parseFloat(ashtechMargin || "0");
       const totalFee = localProvider === "afribapay"
         ? afribaFeeVal + marginVal
-        : localProvider === "pixpay"
-          ? pixpayFeeVal + marginVal
-          : swychrFeeVal + marginVal;
+        : pixpayFeeVal + marginVal;
       createFeeMutation.mutate({
         name: `Dépôt - ${editing.operator.name}`,
         transactionType: "deposit",
         feeType: (editing.fee as any)?.feeType || "percentage",
         operatorId: editing.operator.id,
         countryId: editing.country.id,
-        swychrFee: String(swychrFeeVal),
         afribapayFee: String(afribaFeeVal),
         pixpayFee: String(pixpayFeeVal),
         ashtechMargin: String(marginVal),
@@ -257,12 +233,10 @@ export default function AdminFeesDeposits() {
       pixpayMutation.mutate({ id: editing.fee!.id, pxFee: pixpayFee, margin: ashtechMargin, active: isActive });
     } else if (localProvider === "afribapay") {
       afribaMutation.mutate({ id: editing.fee!.id, afribaFee: afribapayFee, margin: ashtechMargin, active: isActive });
-    } else {
-      swychrMutation.mutate({ id: editing.fee!.id, margin: ashtechMargin, active: isActive });
     }
   };
 
-  const isPending = swychrMutation.isPending || afribaMutation.isPending || pixpayMutation.isPending || providerMutation.isPending || createFeeMutation.isPending;
+  const isPending = afribaMutation.isPending || pixpayMutation.isPending || providerMutation.isPending || createFeeMutation.isPending;
 
   const computeTotal = (): string => {
     if (!editing) return "0";
@@ -270,7 +244,7 @@ export default function AdminFeesDeposits() {
       ? parseFloat(afribapayFee || "0")
       : localProvider === "pixpay"
         ? parseFloat(pixpayFee || "0")
-        : parseFloat((editing.fee as any)?.swychrFee || "0");
+      : parseFloat(pixpayFee || "0");
     const margin = parseFloat(ashtechMargin || "0");
     return (provFee + margin).toFixed(2);
   };
@@ -295,7 +269,7 @@ export default function AdminFeesDeposits() {
             <div className="flex items-start gap-2 text-sm text-blue-400">
               <Info className="w-4 h-4 mt-0.5 shrink-0" />
               <div>
-                <span className="font-semibold">Structure des frais :</span> Frais fournisseur (AfribaPay modifiable / Swychr fixe) + Marge Ashtech = Total facturé au client.
+                <span className="font-semibold">Structure des frais :</span> Frais fournisseur (AfribaPay ou PixPay) + Marge Ashtech = Total facturé au client.
                 Seuls les opérateurs <span className="font-semibold">actifs</span> sont affichés.
                 Le frais de dépôt s'applique identiquement aux <span className="font-semibold">liens de paiement</span>.
               </div>
@@ -312,10 +286,9 @@ export default function AdminFeesDeposits() {
           <div className="space-y-2">
             {grouped.map(({ country, ops }) => {
               const isOpen = openCountries.has(country.id);
-              const depProvider = (op: any) => op.depositPaymentProvider || op.paymentProvider || "swychr";
+              const depProvider = (op: any) => op.depositPaymentProvider || op.paymentProvider || "afribapay";
               const afribOps = ops.filter(op => depProvider(op) === "afribapay");
               const pixpayOps = ops.filter(op => depProvider(op) === "pixpay");
-              const swychrOps = ops.filter(op => !["afribapay", "pixpay"].includes(depProvider(op)));
               return (
                 <Collapsible key={country.id} open={isOpen} onOpenChange={() => toggleCountry(country.id)}>
                   <CollapsibleTrigger asChild>
@@ -338,11 +311,6 @@ export default function AdminFeesDeposits() {
                             🔷 {pixpayOps.length} PixPay
                           </Badge>
                         )}
-                        {swychrOps.length > 0 && (
-                          <Badge className="text-xs bg-blue-500/20 text-blue-600 border-blue-500/30">
-                            {swychrOps.length} Swychr
-                          </Badge>
-                        )}
                       </div>
                       <div className="flex-shrink-0 mt-0.5 ml-2">
                         {isOpen ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
@@ -354,14 +322,14 @@ export default function AdminFeesDeposits() {
                       {ops.map(op => {
                         const fee = findFee(op, country);
                         const isShared = fee && (fee as any).operatorId !== op.id;
-                        const provider = (op as any).depositPaymentProvider || (op as any).paymentProvider || "swychr";
+                        const provider = ((op as any).depositPaymentProvider || (op as any).paymentProvider || "afribapay") as "afribapay" | "pixpay";
                         const isAfribaPay = provider === "afribapay";
                         const isPixPay = provider === "pixpay";
                         const provFee = isAfribaPay
                           ? parseFloat((fee as any)?.afribapayFee || "0")
                           : isPixPay
                             ? parseFloat((fee as any)?.pixpayFee || "0")
-                            : parseFloat((fee as any)?.swychrFee || "0");
+                            : parseFloat((fee as any)?.pixpayFee || "0");
                         const margin = parseFloat((fee as any)?.ashtechMargin || "0");
                         const total = provFee + margin;
                         return (
@@ -380,9 +348,7 @@ export default function AdminFeesDeposits() {
                                   </Badge>
                                 ) : isPixPay ? (
                                   <Badge className="bg-indigo-500/20 text-indigo-600 border-indigo-500/30 text-xs shrink-0">🔷 PixPay</Badge>
-                                ) : (
-                                  <Badge className="bg-blue-500/20 text-blue-600 border-blue-500/30 text-xs shrink-0">Swychr</Badge>
-                                )}
+                                ) : null}
                                 {isShared && (
                                   <Badge variant="outline" className="text-xs text-orange-500 border-orange-400/50 shrink-0">Frais pays</Badge>
                                 )}
@@ -438,20 +404,17 @@ export default function AdminFeesDeposits() {
                     // Sauvegarde la marge actuelle dans le sticky avant de switcher
                     if (localProvider === "afribapay") sticky.current.afribaMargin = ashtechMargin;
                     else if (localProvider === "pixpay") sticky.current.pixpayMargin = ashtechMargin;
-                    else sticky.current.swychrMargin = ashtechMargin;
-                    setLocalProvider(v);
+                     else sticky.current.afribaMargin = ashtechMargin;
+                    setLocalProvider(v as "afribapay" | "pixpay");
                     // Restaure la marge mémorisée pour le nouveau fournisseur
                     if (v === "afribapay") { setAshtechMargin(sticky.current.afribaMargin); if (!localAfribapayCode) setLocalAfribapayCode(guessAfribaCode(editing?.operator.name || "")); }
                     else if (v === "pixpay") setAshtechMargin(sticky.current.pixpayMargin);
-                    else setAshtechMargin(sticky.current.swychrMargin);
+                     else setAshtechMargin(sticky.current.afribaMargin);
                   }} data-testid="select-provider">
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="swychr" disabled={!isProviderAvailable("swychr", editing.country.code)}>
-                        Swychr{!isProviderAvailable("swychr", editing.country.code) ? " (non disponible)" : ""}
-                      </SelectItem>
                       <SelectItem value="afribapay" disabled={!isProviderAvailable("afribapay", editing.country.code)}>
                         ⚡ AfribaPay{!isProviderAvailable("afribapay", editing.country.code) ? " (non disponible)" : ""}
                       </SelectItem>
@@ -510,17 +473,7 @@ export default function AdminFeesDeposits() {
                     />
                     <p className="text-xs text-muted-foreground">Frais prélevés par PixPay sur la transaction</p>
                   </div>
-                ) : (
-                  <div className="space-y-2">
-                    <Label className="text-muted-foreground">Frais Swychr (non modifiable)</Label>
-                    <Input
-                      value={`${parseFloat((editing.fee as any)?.swychrFee || "0").toFixed(2)}%`}
-                      disabled
-                      className="bg-muted"
-                    />
-                    <p className="text-xs text-muted-foreground">Fixé par Swychr</p>
-                  </div>
-                )}
+                ) : null}
 
                 <div className="space-y-2">
                   <Label>Marge Ashtech Pay (%)</Label>
@@ -532,7 +485,7 @@ export default function AdminFeesDeposits() {
                       setAshtechMargin(e.target.value);
                       if (localProvider === "afribapay") sticky.current.afribaMargin = e.target.value;
                       else if (localProvider === "pixpay") sticky.current.pixpayMargin = e.target.value;
-                      else sticky.current.swychrMargin = e.target.value;
+                      else sticky.current.afribaMargin = e.target.value;
                     }}
                     placeholder="2.00"
                     data-testid="input-ashtech-margin"

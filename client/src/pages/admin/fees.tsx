@@ -74,7 +74,7 @@ export default function AdminFees() {
             <li>Choisissez le type de frais (Dépôt, Retrait ou Envoi)</li>
             <li>Sélectionnez un pays pour voir ses opérateurs</li>
             <li>Cliquez sur un opérateur pour configurer ses frais</li>
-            <li>Choisissez le fournisseur : <strong>AfribaPay</strong>, <strong>Swychr</strong> ou <strong>PixPay</strong></li>
+            <li>Choisissez le fournisseur : <strong>AfribaPay</strong> ou <strong>PixPay</strong></li>
             <li>Enregistrez — ce fournisseur traitera toutes les transactions de cet opérateur</li>
           </ol>
         </div>

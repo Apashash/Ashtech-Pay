@@ -1,5 +1,4 @@
 import { storage } from "./storage";
-import { checkSwychrPayoutStatus } from "./swychrPayout";
 import { checkAfribaPayStatus, checkAfribaPayoutStatus } from "./afribapay";
 import { checkPixPayStatus } from "./pixpay";
 import { sendWithdrawalApprovedEmail } from "./email";
@@ -16,7 +15,7 @@ interface PendingPayout {
   amount:         string;
   totalDebited:   string;
   attempts:       number;
-  provider:       "swychr" | "afribapay" | "pixpay";
+  provider:       "afribapay" | "pixpay";
   countryCode:    string;
   txType:         string;
   txCurrency:     string;
@@ -49,17 +48,19 @@ export async function recoverPendingPayouts() {
       const internalRef = t.reference ?? "";
       if (!internalRef) continue;
       const operator = t.operatorId ? await storage.getOperator(t.operatorId).catch(() => null) : null;
-      const provider = ((operator as any)?.paymentProvider || "swychr") as "swychr" | "afribapay" | "pixpay";
+      const provider = (operator as any)?.paymentProvider as "afribapay" | "pixpay" | undefined;
+      if (provider !== "afribapay" && provider !== "pixpay") {
+        console.warn(`[PayoutPoller] Skipping pending payout ${internalRef}: no supported provider`);
+        continue;
+      }
       const countryCode = (t as any).recipientCountry || "CM";
 
-      let pollerRef: string;
+      let pollerRef = (t as any).externalReference || internalRef;
       if (provider === "afribapay") {
         // For retries, externalReference holds the submitted order_id (retry ref).
         // For original submissions without an externalReference, fall back to internalRef.
         pollerRef = (t as any).externalReference || internalRef;
       } else if (provider === "pixpay") {
-        pollerRef = (t as any).externalReference || internalRef;
-      } else {
         pollerRef = (t as any).externalReference || internalRef;
       }
 
@@ -193,15 +194,7 @@ async function checkProviderStatus(payout: PendingPayout): Promise<{ status: str
       return { status: result.status };
     }
 
-    const result = await checkSwychrPayoutStatus(payout.reference);
-    if (!result.success) {
-      console.log(`[PayoutPoller] Status check failed for ${payout.reference}: ${result.message}`);
-      if (result.status === "failed") {
-        return { status: "unknown", shouldRemove: true };
-      }
-      return { status: "pending" };
-    }
-    return { status: result.status || "pending" };
+    return { status: "pending" };
   } catch (err: any) {
     console.error(`[PayoutPoller] checkProviderStatus error for ${payout.reference}:`, err?.message);
     return { status: "pending" };

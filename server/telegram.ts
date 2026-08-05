@@ -517,7 +517,6 @@ export async function notifyWithdrawalRequest(opts: {
   const ref = opts.reference;
   await sendMessageWithKeyboard(msg, [
     [
-      { text: "✅ Swychr", callback_data: `wap:${ref}:swychr` },
       { text: "✅ AfribaPay", callback_data: `wap:${ref}:afribapay` },
       { text: "✅ PixPay", callback_data: `wap:${ref}:pixpay` },
     ],
@@ -572,7 +571,6 @@ export async function notifyWithdrawalPendingManual(opts: {
   const ref = opts.reference;
   await sendMessageWithKeyboard(msg, [
     [
-      { text: "✅ Swychr", callback_data: `wap:${ref}:swychr` },
       { text: "✅ AfribaPay", callback_data: `wap:${ref}:afribapay` },
       { text: "✅ PixPay", callback_data: `wap:${ref}:pixpay` },
     ],
@@ -1010,7 +1008,7 @@ export async function notifyTransferSent(opts: {
   const senderPays = countryDisplay(opts.senderCountry || opts.currency);
   const recipientPays = countryDisplay(opts.recipientCountry || opts.currency);
   const typeLabel = opts.isInternal ? "🔄 Transfert interne Ashtech Pay" : "📲 Transfert Mobile Money";
-  // For external transfers (AfribaPay/Swychr), mention awaiting provider confirmation
+  // For external transfers, mention awaiting provider confirmation
   const statusLine = !opts.isInternal && opts.provider
     ? `⏳ Statut : <b>En attente confirmation ${opts.provider}</b>\n`
     : "";
@@ -1774,8 +1772,12 @@ export async function handleTelegramUpdate(
     if (data.startsWith("wap:")) {
       const parts = data.split(":");
       const reference = parts[1];
-      const provider = parts[2] || "swychr";
-      const providerLabel: Record<string, string> = { swychr: "Swychr", afribapay: "AfribaPay", pixpay: "PixPay" };
+      const provider = parts[2];
+      const providerLabel: Record<string, string> = { afribapay: "AfribaPay", pixpay: "PixPay" };
+      if (provider !== "afribapay" && provider !== "pixpay") {
+        await editMessageText(messageId, `⚠️ Fournisseur de paiement invalide.`);
+        return;
+      }
       const result = await handlers.approveWithdrawal(reference, provider);
       if (result) {
         await editMessageText(messageId,
@@ -1789,10 +1791,10 @@ export async function handleTelegramUpdate(
     // ── Approve withdrawal (legacy wa: handler kept for compatibility) ──
     if (data.startsWith("wa:")) {
       const reference = data.slice(3);
-      const result = await handlers.approveWithdrawal(reference, "swychr");
+      const result = await handlers.approveWithdrawal(reference, "afribapay");
       if (result) {
         await editMessageText(messageId,
-          `✅ <b>RETRAIT APPROUVÉ</b>\n\n👤 ${result.userName}\n💰 ${fmt(result.amount, result.currency)}\n🔌 Via : <b>Swychr</b>\n🔖 <code>${reference}</code>\n🕐 ${now()}`);
+          `✅ <b>RETRAIT APPROUVÉ</b>\n\n👤 ${result.userName}\n💰 ${fmt(result.amount, result.currency)}\n🔌 Via : <b>AfribaPay</b>\n🔖 <code>${reference}</code>\n🕐 ${now()}`);
       } else {
         await editMessageText(messageId, `⚠️ Impossible d'approuver — transaction introuvable ou déjà traitée.`);
       }

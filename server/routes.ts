@@ -63,7 +63,6 @@ import fs from "fs";
 import { uploadToSupabase, getSignedImageUrl, downloadFromSupabase, STORAGE_BUCKET } from "./supabase";
 import { decryptField } from "./fieldEncryption";
 import { requireAdminPin } from "./adminPin";
-import { createSwychrPaymentLink, checkSwychrPaymentStatus, computeSwychrFees, fetchPaymentLinkDetails, ASHTECH_MARGIN } from "./swychr";
 import { createPaymentIntent, createDirectCharge, validateWebhook, getIziPayWebhookSecret, toIziPayCurrency, isIziPayConfigured } from "./izichange";
 import { fetchCryptoAssets, filterCryptoAssets, parseDisabledCryptoAssets, getStaticCryptoAssets } from "./cryptoAssets";
 import {
@@ -77,7 +76,6 @@ import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkA
 import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, initiatePixPayPayout, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType, getPixPayServiceId, PIXPAY_OTP_USSD_CODES } from "./pixpay";
 import { addPendingPayment, removePendingPayment, expireCryptoPaymentIfNeeded } from "./paymentPoller";
 import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, sameCfaFamily, getConversionPairKey, maybeAutoConvert } from "./walletHelper";
-import { createSwychrPayout, formatInternationalPhone, detectMethodFromPhone, fiatToPusd, pusdToFiatRate, convertFiatToPusd, getPayoutToken, COUNTRY_CURRENCY } from "./swychrPayout";
 import { addPendingPayout, removePendingPayout } from "./payoutPoller";
 import { addSSEClient, removeSSEClient, setActiveTicket, isUserOnline, getOnlineUserIds, getAdminViewingTicket, getUserViewingTicket, notifyUser, notifyAdmins, broadcastOnlineStatus, notifyUserForceLogout, notifyOtherSessionsForceLogout, notifyAllUsersForceLogout, notifySpecificSessionForceLogout } from "./sse";
 import { sendClean404 } from "./botGuard";
@@ -1031,49 +1029,7 @@ function generateTransactionReference(type: string): string {
 // loadFxRates, convertFromXAF, convertToXAF, creditUserWallet, cleanupEmptyWallets
 // are imported from ./walletHelper
 
-/**
- * Maps an operator name + country code to the exact payment_method ID
- * expected by the AccountPE /create_transaction endpoint.
- * Source: GET /payout_methods per country (verified 2026-03).
- */
-function resolvePaymentMethod(operatorName: string, countryCode: string): string {
-  const op = operatorName.toUpperCase();
-  const cc = countryCode.toUpperCase();
-
-  if (op.includes("MTN"))      return "MTN";
-  if (op.includes("ORANGE"))   return "Orange";
-  if (op.includes("MOOV") || op.includes("FLOOZ")) return "Moov";
-  if (op.includes("WAVE"))     return "Wave";
-  if (op.includes("TMONEY"))   return "Tmoney";
-  if (op.includes("FREE"))     return "Free";
-  if (op.includes("VODAFONE") || op.includes("TELECEL")) return cc === "GH" ? "Vodafone" : "Telecel";
-  if (op.includes("TIGO"))     return "TIGO PESA";
-  if (op.includes("HALO"))     return "HALO PESA";
-  if (op.includes("EZY"))      return "EZY PESA";
-  if (op.includes("TTCL"))     return "TTCL";
-  if (op.includes("AFRIMONEY"))return "AFRIMONEY";
-  if (op.includes("OPAY"))     return "OPay";
-  if (op.includes("PALMPAY"))  return "PalmPay";
-  if (op.includes("PAGA"))     return "Paga";
-
-  // AIRTEL — exact case varies by country per AccountPE payout_methods API
-  if (op.includes("AIRTEL")) {
-    // UG, KE, TZ, CD use uppercase "AIRTEL" (verified via payout_methods API)
-    if (["UG", "KE", "TZ", "CD"].includes(cc)) return "AIRTEL";
-    return "Airtel"; // NE, GA, CG, RW, GH use "Airtel"
-  }
-
-  // MPESA / M-PESA — exact case varies by country
-  if (op.includes("MPESA") || op.includes("M-PESA")) {
-    if (cc === "CD") return "Mpesa"; // DRC uses "Mpesa"
-    return "MPESA"; // KE, TZ use "MPESA"
-  }
-
-  // Nigeria — only bank transfer is supported
-  if (cc === "NG") return "All Banks Transfer";
-
-  return "mobile_money";
-}
+const ASHTECH_MARGIN = 2;
 
 async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, 10);
@@ -1549,7 +1505,7 @@ export async function registerRoutes(
   // mutantes (POST/PATCH/PUT/DELETE) dont l'Origin n'est pas dans la liste autorisée.
   // Endpoints webhook et paiement public exemptés (appelés par des serveurs, pas des navigateurs).
   const CSRF_EXEMPT_PREFIXES = [
-    "/api/swychr/webhook", "/api/afribapay/webhook", "/api/pixpay/webhook",
+    "/api/afribapay/webhook", "/api/pixpay/webhook",
     "/api/izichange/webhook",
     "/api/telegram/webhook", "/api/payment-links/", "/api/public/",
     "/api/v1/hosted-payment", "/api/public/hosted-session",
@@ -2374,7 +2330,7 @@ export async function registerRoutes(
 
       const hashedPassword = await hashPassword(data.password);
       
-      // Fixed: For Togo, the preferred currency must be XOFT per Swychr docs
+      // Togo uses the country-specific XOFT wallet currency.
       let preferredCurrency = COUNTRY_CURRENCIES[data.country || "Cameroon"] || "XAF";
       if (data.country === "Togo") {
         preferredCurrency = "XOFT";
@@ -3706,8 +3662,9 @@ export async function registerRoutes(
             }
             // For deposits, use depositPaymentProvider; for others use paymentProvider
             const provider = transactionType === "deposit"
-              ? ((op as any).depositPaymentProvider || (op as any).paymentProvider || "swychr")
-              : ((op as any).paymentProvider || "swychr");
+              ? ((op as any).depositPaymentProvider || (op as any).paymentProvider)
+              : (op as any).paymentProvider;
+            if (provider !== "afribapay" && provider !== "pixpay") return null;
             const afribaRate = operatorFee ? parseFloat((operatorFee as any).afribapayFee || "0") : 0;
             const pixpayRate = operatorFee ? parseFloat((operatorFee as any).pixpayFee || "0") : 0;
             const marginRate = operatorFee ? parseFloat((operatorFee as any).ashtechMargin || "0") : 0;
@@ -3716,9 +3673,6 @@ export async function registerRoutes(
               feePercentage = afribaRate + marginRate;
             } else if (provider === "pixpay") {
               feePercentage = pixpayRate + marginRate;
-            } else {
-              const swychrRate = operatorFee ? parseFloat((operatorFee as any).swychrFee || "0") : 0;
-              feePercentage = (swychrRate + marginRate) > 0 ? (swychrRate + marginRate) : (operatorFee?.feeType === "percentage" ? parseFloat(operatorFee.feeValue) : 0);
             }
             return {
               id: op.id,
@@ -3771,7 +3725,10 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Opérateur non trouvé" });
       }
 
-      const provider = ((operator as any).paymentProvider || "swychr") as string;
+      const provider = (operator as any).paymentProvider;
+      if (provider !== "afribapay" && provider !== "pixpay") {
+        return res.status(400).json({ message: "Aucun fournisseur de paiement configuré pour cet opérateur." });
+      }
       const fee = await storage.resolveFee("transfer", (operator as any).countryId, operatorId);
       let feeAmount = 0;
       let feePercentage = 0;
@@ -3783,8 +3740,6 @@ export async function registerRoutes(
           providerRate = fee.afribapayFee ? parseFloat((fee as any).afribapayFee.toString()) : 0;
         } else if (provider === "pixpay") {
           providerRate = fee.pixpayFee ? parseFloat((fee as any).pixpayFee.toString()) : 0;
-        } else {
-          providerRate = fee.swychrFee ? parseFloat(fee.swychrFee.toString()) : 0;
         }
         const totalRate = providerRate + marginRate;
 
@@ -3793,11 +3748,6 @@ export async function registerRoutes(
           feeAmount = (parsedAmount * feePercentage) / 100;
         } else {
           feeAmount = parseFloat(fee.feeValue.toString());
-        }
-
-        const minCharge = fee.minFee ? parseFloat(fee.minFee.toString()) : 0;
-        if (provider === "swychr" && feeAmount < minCharge) {
-          feeAmount = minCharge;
         }
 
         if (fee.maxFee && feeAmount > parseFloat(fee.maxFee.toString())) {
@@ -3812,7 +3762,7 @@ export async function registerRoutes(
         feeAmount,
         feePercentage,
         totalAmount,
-        minFee: (provider === "swychr" && fee?.minFee) ? parseFloat(fee.minFee.toString()) : null,
+        minFee: null,
         maxFee: fee?.maxFee ? parseFloat(fee.maxFee.toString()) : null,
       });
     } catch (error) {
@@ -3948,14 +3898,11 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Pays non trouvé" });
       }
 
-      // txCurrency = the Swychr/provider-facing currency for the destination country.
-      // Use COUNTRY_CURRENCY (authoritative Swychr map) — country.currency in DB may be generic (e.g. "XOF" instead of "XOFB").
-      // TG→XOFT, BJ→XOFB, SN→XOFS, CM→XAF, GA→XAFG, etc.
-      const txCurrency = COUNTRY_CURRENCY[country.code] || country.currency || sender.preferredCurrency || "XAF";
+      const txCurrency = country.currency || sender.preferredCurrency || "XAF";
 
       // walletCurrency = the internal wallet code to debit. Uses CURRENCY_ZONE (which holds
       // Ashtech's internal per-country codes, e.g. NE→XOFN, ML→XOFM) so we look up the
-      // correct secondary wallet. This may differ from txCurrency (e.g. NE: XOFN vs Swychr XOF).
+      // correct secondary wallet. This may differ from the external country currency code.
       // No cross-family tolerance: a user sending to Bénin (XOFB) must have XOFB funds.
       const walletCurrency = CURRENCY_ZONE[country.code] || txCurrency;
 
@@ -3967,7 +3914,10 @@ export async function registerRoutes(
         return res.status(400).json({ message: `Le montant minimum de transfert est de ${minTransfer.toLocaleString()} ${txCurrency}` });
       }
 
-      const transferProvider = ((operator as any).paymentProvider || "swychr") as string;
+      const transferProvider = (operator as any).paymentProvider;
+      if (transferProvider !== "afribapay" && transferProvider !== "pixpay") {
+        return res.status(400).json({ message: "Aucun fournisseur de paiement configuré pour cet opérateur." });
+      }
 
       const fee = await storage.resolveFee("transfer", countryId, operatorId);
       let feeAmount = 0;
@@ -3981,11 +3931,8 @@ export async function registerRoutes(
           providerRate = fee.afribapayFee ? parseFloat((fee as any).afribapayFee.toString()) : 0;
         } else if (transferProvider === "pixpay") {
           providerRate = fee.pixpayFee ? parseFloat((fee as any).pixpayFee.toString()) : 0;
-        } else {
-          providerRate = fee.swychrFee ? parseFloat(fee.swychrFee.toString()) : 0;
         }
         const totalRate = providerRate + marginRate;
-        const minCharge = fee.minFee ? parseFloat(fee.minFee.toString()) : 0;
 
         let calculatedFee = 0;
         if (fee.feeType === "percentage" || totalRate > 0) {
@@ -3995,11 +3942,6 @@ export async function registerRoutes(
         } else {
           calculatedFee = parseFloat(fee.feeValue.toString());
           ashtechFeeAmount = calculatedFee;
-        }
-
-        if (transferProvider === "swychr" && calculatedFee < minCharge) {
-          calculatedFee = minCharge;
-          ashtechFeeAmount = 100;
         }
 
         if (fee.maxFee && calculatedFee > parseFloat(fee.maxFee.toString())) {
@@ -4038,7 +3980,7 @@ export async function registerRoutes(
       }
 
       // Debit the correct wallet immediately
-      console.log(`[Transfer] Sender=${senderId}, Amount=${parsedAmount}, Fee=${feeAmount}, Net=${creditedAmount} (${walletCurrency} → Swychr: ${txCurrency})`);
+      console.log(`[Transfer] Sender=${senderId}, Amount=${parsedAmount}, Fee=${feeAmount}, Net=${creditedAmount} (${walletCurrency} → provider currency: ${txCurrency})`);
       if (isPrimaryTransfer) {
         await storage.updateUserBalance(senderId, -totalAmount);
       } else {
@@ -4064,7 +4006,7 @@ export async function registerRoutes(
         reference,
       });
 
-      console.log(`[Transfer] Created transfer ${reference} for ${creditedAmount} net to ${recipientName} — calling AccountPE immediately`);
+      console.log(`[Transfer] Created transfer ${reference} for ${creditedAmount} net to ${recipientName} — calling payment provider immediately`);
 
       let transferCountryCode = "CM";
       if (country?.code) transferCountryCode = country.code;
@@ -4075,7 +4017,10 @@ export async function registerRoutes(
         const operatorName = (operator.name || "").toUpperCase();
         const countryCode = transferCountryCode.toUpperCase();
 
-        let payoutResult: { success: boolean; transaction_id?: string; message?: string };
+        let payoutResult: { success: boolean; transaction_id?: string; message?: string } = {
+          success: false,
+          message: "Aucun fournisseur de paiement configuré",
+        };
 
         if (transferProvider === "afribapay") {
           const afribapayOperatorCode = resolveAfribaPayOperatorCode(operator, operatorName);
@@ -4144,23 +4089,12 @@ export async function registerRoutes(
             message: pixpayResult.message,
           };
 
-        } else {
-          const finalPaymentMethod = resolvePaymentMethod(operatorName, countryCode);
-          payoutResult = await createSwychrPayout({
-            country_code:     transferCountryCode,
-            beneficiary_name: recipientName,
-            mobile_no:        formatInternationalPhone(recipientPhone, transferCountryCode),
-            amount:           creditedAmount,
-            transaction_id:   reference,
-            payment_method:   finalPaymentMethod as any,
-            remarks:          `Ashtech Pay - ${reference}`,
-          });
         }
 
         if (payoutResult.success) {
           console.log(`[Transfer] Payout submitted OK: ${reference} (ext: ${payoutResult.transaction_id})`);
           // AfribaPay: poll by submitted order_id (= reference), NOT by transaction_id.
-          // PixPay/Swychr: poll by provider transaction_id when available.
+          // PixPay: poll by provider transaction_id when available.
           const transferPollerRef = transferProvider === "afribapay"
             ? reference
             : (payoutResult.transaction_id || reference);
@@ -4170,7 +4104,7 @@ export async function registerRoutes(
             userId:        senderId,
             amount:        creditedAmount.toFixed(2),
             totalDebited:  totalAmount.toFixed(2),
-            provider:      transferProvider as "swychr" | "afribapay" | "pixpay",
+            provider:      transferProvider as "afribapay" | "pixpay",
             countryCode:   transferCountryCode.toUpperCase(),
             txType:        "transfer_out",
             txCurrency:    txCurrency,
@@ -4447,7 +4381,10 @@ export async function registerRoutes(
       }
 
       // Determine payment provider BEFORE fee calculation — dépôt utilise depositPaymentProvider si défini
-      const paymentProvider = (operatorRecord as any)?.depositPaymentProvider || (operatorRecord as any)?.paymentProvider || "swychr";
+      const paymentProvider = (operatorRecord as any)?.depositPaymentProvider || (operatorRecord as any)?.paymentProvider;
+      if (paymentProvider !== "afribapay" && paymentProvider !== "pixpay") {
+        return res.status(400).json({ message: "Aucun fournisseur de paiement configuré pour cet opérateur." });
+      }
       console.log(`[Deposit] operatorId=${data.operatorId} | name=${operatorName} | depositProvider=${(operatorRecord as any)?.depositPaymentProvider || "null"} | payoutProvider=${(operatorRecord as any)?.paymentProvider || "null"} | resolved=${paymentProvider} | afribapayCode=${(operatorRecord as any)?.afribapayOperatorCode || "null"}`);
 
       // Resolve fees from DB (includes afribapayFee + ashtechMargin)
@@ -4460,8 +4397,8 @@ export async function registerRoutes(
 
       // Calculate fees using the CORRECT provider's rates
       const totalAmount = amount;
-      let creditedAmount: number;
-      let ashtechFeeAmount: number;
+      let creditedAmount = 0;
+      let ashtechFeeAmount = 0;
       if (paymentProvider === "afribapay") {
         const afribapayFeeRate = (resolvedFeeRecord as any)?.afribapayFee
           ? parseFloat((resolvedFeeRecord as any).afribapayFee)
@@ -4476,10 +4413,6 @@ export async function registerRoutes(
         const pf = computePixPayFees(totalAmount, pixpayFeeRate, ashtechMarginPct);
         creditedAmount = pf.creditedAmount;
         ashtechFeeAmount = pf.ashtechFeeAmount;
-      } else {
-        const sf = computeSwychrFees(amount, countryCode, ashtechMarginPct);
-        creditedAmount = sf.creditedAmount;
-        ashtechFeeAmount = sf.ashtechFeeAmount;
       }
 
       const depositRef = generateTransactionReference("deposit");
@@ -4858,48 +4791,6 @@ export async function registerRoutes(
               res.status(400).json({ message: pixpayResponse.message || "Échec de l'initiation du paiement PixPay" });
             }
 
-          } else {
-            // ─── Swychr Payin (default) ───────────────────────────────────────
-            console.log(`[Deposit] Using Swychr for ${operatorName} in ${countryCode}`);
-            const callbackUrl = buildWebhookUrl("/api/swychr/webhook");
-            const swychrResponse = await createSwychrPaymentLink({
-              country_code: countryCode,
-              name: user.fullName || user.username,
-              email: user.email || `${user.phone}@ashtech.pay`,
-              mobile: data.phoneNumber.replace(/\s/g, ""),
-              grossAmount: totalAmount,
-              currency: countryCurrency,
-              transaction_id: depositRef,
-              description: `Dépôt Ashtech Pay - ${depositRef}`,
-              callback_url: callbackUrl,
-            });
-
-            if (swychrResponse.success && swychrResponse.data?.payment_link) {
-              addPendingPayment({
-                transactionId: transaction.id,
-                reference: depositRef,
-                externalReference: depositRef,
-                attempts: 0,
-                userId: user.id,
-                type: "deposit",
-                amount: creditedAmount.toString(),
-              });
-
-              res.json({
-                transaction,
-                checkoutUrl: swychrResponse.data.payment_link,
-                gateway: "swychr",
-                message: "Veuillez compléter le paiement sur la page sécurisée",
-                feeDetails: {
-                  grossAmount: totalAmount,
-                  feeAmount: (totalAmount - creditedAmount),
-                  creditedAmount
-                }
-              });
-            } else {
-              await storage.updateTransactionStatus(transaction.id, "failed");
-              res.status(400).json({ message: swychrResponse.message || "Échec de l'initiation du paiement" });
-            }
           }
         } catch (gatewayError) {
           console.error("Payment gateway API error:", gatewayError);
@@ -5060,13 +4951,16 @@ export async function registerRoutes(
       const withdrawalCountry = await storage.getCountry(data.countryId);
       const withdrawalCountryCode = withdrawalCountry?.code || "CM";
       // Use CURRENCY_ZONE for the internal wallet code (XOFN for NE, XOFM for ML, XOFT for TG, etc.)
-      // CURRENCY_ZONE holds Ashtech's per-country wallet codes; COUNTRY_CURRENCY holds Swychr-facing codes.
+      // CURRENCY_ZONE holds Ashtech's per-country wallet codes; COUNTRY_CURRENCY holds external country codes.
       // For wallet debit we must use the internal code so we find the right secondary wallet.
-      const withdrawalCurrency = CURRENCY_ZONE[withdrawalCountryCode] || COUNTRY_CURRENCY[withdrawalCountryCode] || withdrawalCountry?.currency || userCurrency;
+      const withdrawalCurrency = CURRENCY_ZONE[withdrawalCountryCode] || withdrawalCountry?.currency || userCurrency;
 
       // Fetch operator early to determine provider before fee calculation
       const withdrawalOperator = await storage.getOperator(data.operatorId);
-      const withdrawalProvider = (withdrawalOperator?.paymentProvider || "swychr") as string;
+      const withdrawalProvider = withdrawalOperator?.paymentProvider;
+      if (withdrawalProvider !== "afribapay" && withdrawalProvider !== "pixpay") {
+        return res.status(400).json({ message: "Aucun fournisseur de paiement configuré pour cet opérateur." });
+      }
 
       // Calculate fee using fee resolution — provider-aware
       const fee = await storage.resolveFee("withdrawal", data.countryId, data.operatorId);
@@ -5080,11 +4974,8 @@ export async function registerRoutes(
           providerRate = fee.afribapayFee ? parseFloat(fee.afribapayFee.toString()) : 0;
         } else if (withdrawalProvider === "pixpay") {
           providerRate = fee.pixpayFee ? parseFloat(fee.pixpayFee.toString()) : 0;
-        } else {
-          providerRate = fee.swychrFee ? parseFloat(fee.swychrFee.toString()) : 0;
         }
         const totalRate = providerRate + marginRate;
-        const minCharge = fee.minFee ? parseFloat(fee.minFee.toString()) : 0;
 
         let calculatedFee = 0;
         if (fee.feeType === "percentage" || totalRate > 0) {
@@ -5099,12 +4990,6 @@ export async function registerRoutes(
         } else {
           calculatedFee = parseFloat(fee.feeValue.toString());
           ashtechFeeAmount = calculatedFee;
-        }
-
-        // Rule: minFee only applies to Swychr — AfribaPay/PixPay use exact configured rate
-        if (withdrawalProvider === "swychr" && calculatedFee < minCharge) {
-          calculatedFee = minCharge;
-          ashtechFeeAmount = 100;
         }
 
         if (fee.maxFee && calculatedFee > parseFloat(fee.maxFee.toString())) {
@@ -5175,7 +5060,10 @@ export async function registerRoutes(
         const countryCode = withdrawalCountryCode.toUpperCase();
         const paymentProvider = withdrawalProvider;
 
-        let payoutResult: { success: boolean; transaction_id?: string; message?: string };
+      let payoutResult: { success: boolean; transaction_id?: string; message?: string } = {
+        success: false,
+        message: "Aucun fournisseur de paiement configuré",
+      };
 
         if (paymentProvider === "afribapay") {
           // ─── AfribaPay Payout ────────────────────────────────────────────────
@@ -5245,20 +5133,6 @@ export async function registerRoutes(
             message: pixpayResult.message,
           };
 
-        } else {
-          // ─── Swychr Payout (default) ─────────────────────────────────────────
-          console.log(`[Withdrawal] Using Swychr for ${operatorName} in ${countryCode}`);
-          const finalPaymentMethod = resolvePaymentMethod(operatorName, countryCode);
-          const swychrResult = await createSwychrPayout({
-            country_code:     withdrawalCountryCode,
-            beneficiary_name: user.fullName || user.username || "Client",
-            mobile_no:        formatInternationalPhone(data.accountDetails, withdrawalCountryCode),
-            amount:           creditedAmount,
-            transaction_id:   withdrawalRef,
-            payment_method:   finalPaymentMethod as any,
-            remarks:          `Ashtech Pay - ${withdrawalRef}`,
-          });
-          payoutResult = swychrResult;
         }
 
         if (payoutResult.success) {
@@ -5274,7 +5148,7 @@ export async function registerRoutes(
             userId,
             amount:        creditedAmount.toFixed(2),
             totalDebited:  totalAmount.toFixed(2),
-            provider:      paymentProvider as "swychr" | "afribapay" | "pixpay",
+            provider:      paymentProvider as "afribapay" | "pixpay",
             countryCode,
             txType:        "withdrawal",
             txCurrency:    withdrawalCurrency,
@@ -5370,10 +5244,13 @@ export async function registerRoutes(
       let feePercentage = 0;
       
       if (fee) {
-        const swychrRate = fee.swychrFee ? parseFloat(fee.swychrFee.toString()) : 0;
+        const providerRecord = operatorId ? await storage.getOperator(operatorId) : null;
+        const provider = (providerRecord as any)?.paymentProvider || (providerRecord as any)?.depositPaymentProvider;
+        const providerRate = provider === "pixpay"
+          ? (fee.pixpayFee ? parseFloat(fee.pixpayFee.toString()) : 0)
+          : (fee.afribapayFee ? parseFloat(fee.afribapayFee.toString()) : 0);
         const marginRate = fee.ashtechMargin ? parseFloat(fee.ashtechMargin.toString()) : 0;
-        const totalRate = swychrRate + marginRate;
-        const minCharge = fee.minFee ? parseFloat(fee.minFee.toString()) : 0;
+        const totalRate = providerRate + marginRate;
 
         if (fee.feeType === "percentage" || totalRate > 0) {
           feePercentage = totalRate > 0 ? totalRate : parseFloat(fee.feeValue.toString());
@@ -5383,10 +5260,6 @@ export async function registerRoutes(
         }
 
         // Apply Min Charge Rule
-        if (feeAmount < minCharge) {
-          feeAmount = minCharge;
-        }
-
         if (fee.maxFee && feeAmount > parseFloat(fee.maxFee.toString())) {
           feeAmount = parseFloat(fee.maxFee.toString());
         }
@@ -6254,7 +6127,7 @@ export async function registerRoutes(
     }
   });
 
-  // POST /api/wallets/convert-preview — preview conversion rate (no actual conversion, no Swychr balance needed)
+  // POST /api/wallets/convert-preview — preview conversion rate without provider balance access
   app.post("/api/wallets/convert-preview", requireAuth, async (req, res) => {
     try {
       const { fromCurrency, toCurrency, amount } = req.body;
@@ -7045,7 +6918,7 @@ export async function registerRoutes(
                 f => !f.operatorId && !f.countryId && f.transactionType === "deposit" && f.isActive
               );
             }
-            const provider = (op as any).depositPaymentProvider || (op as any).paymentProvider || "swychr";
+        const provider = (op as any).depositPaymentProvider || (op as any).paymentProvider;
             const afribaRate = operatorFee ? parseFloat((operatorFee as any).afribapayFee || "0") : 0;
             const pixpayRate = operatorFee ? parseFloat((operatorFee as any).pixpayFee || "0") : 0;
             const marginRate = operatorFee ? parseFloat((operatorFee as any).ashtechMargin || "0") : 0;
@@ -7055,7 +6928,7 @@ export async function registerRoutes(
             } else if (provider === "pixpay") {
               feePercentage = pixpayRate + marginRate;
             } else {
-              feePercentage = operatorFee?.feeType === "percentage" ? parseFloat(operatorFee.feeValue) : 0;
+              feePercentage = 0;
             }
             const pxFlowType = provider === "pixpay"
               ? detectPixPayFlowType((op as any).name || "", country.code)
@@ -7703,7 +7576,10 @@ export async function registerRoutes(
       }
 
       // Determine provider BEFORE fee calculation — dépôt utilise depositPaymentProvider si défini
-      const paymentProvider = (operatorRecord as any)?.depositPaymentProvider || operatorRecord?.paymentProvider || "swychr";
+      const paymentProvider = (operatorRecord as any)?.depositPaymentProvider || operatorRecord?.paymentProvider;
+      if (paymentProvider !== "afribapay" && paymentProvider !== "pixpay") {
+        return res.status(400).json({ message: "Aucun fournisseur de paiement configuré pour cet opérateur." });
+      }
       console.log(`[PaymentLink] operatorId=${resolvedOperatorId} | name=${operatorName} | provider=${paymentProvider}`);
 
       // Resolve fees from DB (includes afribapayFee + ashtechMargin)
@@ -7713,9 +7589,9 @@ export async function registerRoutes(
         : ASHTECH_MARGIN;
 
       // Compute fees using the CORRECT provider's rates
-      let netAmount: string;
-      let totalFeeAmount: string;
-      let ashtechFeeAmountStr: string;
+      let netAmount = "0";
+      let totalFeeAmount = "0";
+      let ashtechFeeAmountStr = "0";
       const totalAmount = numAmount.toFixed(2);
 
       if (paymentProvider === "afribapay") {
@@ -7735,11 +7611,7 @@ export async function registerRoutes(
         ashtechFeeAmountStr = pf.ashtechFeeAmount.toFixed(2);
         console.log(`[PaymentLink] PixPay fees: rate=${pixpayFeeRate}%+margin=${ashtechMarginPct}% → totalFee=${pf.totalFeeAmount}, ashtechFee=${pf.ashtechFeeAmount}, credited=${pf.creditedAmount}`);
       } else {
-        const sf = computeSwychrFees(numAmount, paymentCountryCode, ashtechMarginPct);
-        netAmount = sf.creditedAmount.toFixed(2);
-        totalFeeAmount = sf.totalFeeAmount.toFixed(2);
-        ashtechFeeAmountStr = sf.ashtechFeeAmount.toFixed(2);
-        console.log(`[PaymentLink] Swychr fees: margin=${ashtechMarginPct}% → totalFee=${sf.totalFeeAmount}, ashtechFee=${sf.ashtechFeeAmount}, credited=${sf.creditedAmount}`);
+        return res.status(400).json({ message: "Fournisseur de paiement non supporté." });
       }
 
       // Generate unique ASHPAY reference
@@ -7811,7 +7683,7 @@ export async function registerRoutes(
             const afribaMarginPct = ashtechMarginPct;
             const afribaFees = computeAfribaPayFees(numAmount, afribapayFeeRate, afribaMarginPct);
             const afribapayOperatorCode = resolveAfribaPayOperatorCode(operatorRecord, operatorName);
-            // Always use AfribaPay ISO currency (overrides paymentCurrency which may be a Swychr code)
+            // Always use AfribaPay ISO currency (overrides any legacy country code)
             const afribapayCurrency = AFRIBAPAY_ISO_CURRENCY[paymentCountryCode.toUpperCase()] || paymentCurrency;
             console.log(`[PaymentLink] AfribaPay | country=${paymentCountryCode} | currency=${afribapayCurrency} | operator=${afribapayOperatorCode}`);
             const callbackUrl = buildWebhookUrl("/api/afribapay/webhook");
@@ -8100,55 +7972,6 @@ export async function registerRoutes(
             }
           }
 
-          // ─── Swychr branch ────────────────────────────────────────────────
-          console.log(`[PaymentLink] Using Swychr for ${operatorName} in ${paymentCountryCode}`);
-          const callbackUrl = buildWebhookUrl("/api/swychr/webhook");
-          const swychrResponse = await createSwychrPaymentLink({
-            country_code: paymentCountryCode,
-            name: fullName,
-            email: email || `${phone}@ashtech.pay`,
-            mobile: phone.replace(/\s/g, ""),
-            grossAmount: numAmount,
-            currency: paymentCurrency,
-            transaction_id: reference,
-            description: `Paiement ${paymentLink.title} - ${reference}`,
-            callback_url: callbackUrl,
-          });
-
-          if (swychrResponse.success && swychrResponse.data?.payment_link) {
-            const linkTransaction = await storage.getTransactionByReference(reference);
-            if (linkTransaction) {
-              addPendingPayment({
-                transactionId: linkTransaction.id,
-                reference: reference,
-                externalReference: reference,
-                attempts: 0,
-                userId: paymentLink.userId,
-                type: "payment_link",
-                amount: netAmount,
-                paymentIntentId: intent.id,
-                payerName: fullName,
-              });
-            }
-
-            res.json({ 
-              message: "Veuillez compléter le paiement sur la page sécurisée.",
-              reference: intent.reference,
-              checkoutUrl: swychrResponse.data.payment_link,
-              gateway: "swychr",
-              redirectUrl: paymentLink.redirectUrl || null,
-              amount: numAmount,
-              feeAmount: parseFloat(totalFeeAmount),
-              totalAmount: parseFloat(totalAmount),
-            });
-          } else {
-            await storage.updatePaymentIntentStatus(intent.id, "failed");
-            const failedTransaction = await storage.getTransactionByReference(reference);
-            if (failedTransaction) {
-              await storage.updateTransactionStatus(failedTransaction.id, "failed");
-            }
-            res.status(400).json({ message: swychrResponse.message || "Échec de l'initiation du paiement" });
-          }
         } catch (gatewayError) {
           console.error("Gateway API error:", gatewayError);
           await storage.updatePaymentIntentStatus(intent.id, "failed");
@@ -9426,33 +9249,6 @@ export async function registerRoutes(
     }
   });
 
-  // Admin: Manual Fiat to PUSD conversion
-  app.post("/api/admin/convert-fiat-to-pusd", requireAuth, requireAdmin, async (req, res) => {
-    try {
-      const { countryCode, amount } = req.body;
-      if (!countryCode || !amount) {
-        return res.status(400).json({ message: "Pays et montant requis" });
-      }
-
-      const parsedAmount = parseFloat(amount);
-      if (isNaN(parsedAmount) || parsedAmount <= 0) {
-        return res.status(400).json({ message: "Montant invalide" });
-      }
-
-      const currencyCode = COUNTRY_CURRENCY[countryCode.toUpperCase()] || countryCode.toUpperCase();
-      const token = await getPayoutToken();
-      const success = await convertFiatToPusd(token, currencyCode, parsedAmount);
-
-      if (!success) {
-        return res.status(400).json({ message: "La conversion a échoué. Vérifiez votre solde Fiat sur AccountPE." });
-      }
-
-      res.json({ message: "Conversion Fiat vers pUSD réussie" });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message || "Erreur serveur" });
-    }
-  });
-
   // Admin: Update user balance
   // Security: every mutation is fully audited (before/after), creates a compensating
   // transaction record, and requires a mandatory justification reason.
@@ -10227,7 +10023,7 @@ export async function registerRoutes(
       }
       
       // For withdrawals/transfer_out: trigger payout when admin approves (unless forceComplete=true)
-      // Routes to AfribaPay or Swychr/AccountPE based on operator's paymentProvider
+      // Routes only to an explicitly configured AfribaPay or PixPay provider.
       if (wasNotCompleted && isNowCompleted && (transaction.type === "withdrawal" || transaction.type === "transfer_out") && !forceComplete) {
         try {
           let countryCode = "CM";
@@ -10248,12 +10044,19 @@ export async function registerRoutes(
           const operatorId = transaction.operatorId;
           const operator = operatorId ? await storage.getOperator(operatorId) : null;
           const operatorName = (operator?.name || "").toUpperCase();
-          const adminPaymentProvider = ((operator as any)?.paymentProvider || "swychr") as string;
+          const adminPaymentProvider = ((operator as any)?.paymentProvider || (operator as any)?.depositPaymentProvider) as string | undefined;
+          if (adminPaymentProvider !== "afribapay" && adminPaymentProvider !== "pixpay") {
+            await storage.updateTransactionStatus(id, "pending");
+            return res.status(400).json({ message: "Aucun fournisseur de paiement valide n'est configuré pour cet opérateur." });
+          }
 
           console.log(`[Admin] Payout params: country=${countryCode}, operatorId=${operatorId}, operatorName=${operatorName}, provider=${adminPaymentProvider}, txPaymentMethod=${transaction.paymentMethod}`);
 
-          let payoutResult: { success: boolean; transaction_id?: string; message?: string };
-          let pollerProvider: "swychr" | "afribapay" | "pixpay" = "swychr";
+          let payoutResult: { success: boolean; transaction_id?: string; message?: string } = {
+            success: false,
+            message: "Fournisseur de paiement non supporté",
+          };
+          let pollerProvider: "afribapay" | "pixpay" = adminPaymentProvider;
           let pollerRef = payoutRef;
 
           if (adminPaymentProvider === "afribapay") {
@@ -10294,32 +10097,6 @@ export async function registerRoutes(
             pollerProvider = "afribapay";
             pollerRef      = payoutRef; // AfribaPay is queried by order_id
 
-          } else {
-            // ─── Swychr / AccountPE Payout (default) ─────────────────────────
-            let finalPaymentMethod = resolvePaymentMethod(operatorName, countryCode);
-            if (!operator) {
-              if (transaction.paymentMethod === "bank_transfer") {
-                finalPaymentMethod = countryCode === "NG" ? "All Banks Transfer" : "bank_transfer";
-              } else {
-                const detected = detectMethodFromPhone(transaction.recipientPhone || "", countryCode);
-                if (detected) {
-                  console.log(`[Admin] Operator not found — detected method from phone prefix: ${detected}`);
-                  finalPaymentMethod = detected;
-                }
-              }
-            }
-            const swychrResult = await createSwychrPayout({
-              country_code:     countryCode,
-              beneficiary_name: transaction.recipientName || transaction.userId,
-              mobile_no:        formatInternationalPhone(transaction.recipientPhone || "", countryCode),
-              amount:           txAmount,
-              transaction_id:   payoutRef,
-              payment_method:   finalPaymentMethod as any,
-              remarks:          `Ashtech Pay - ${payoutRef}`,
-            });
-            payoutResult  = swychrResult;
-            pollerProvider = "swychr";
-            pollerRef      = swychrResult.transaction_id || payoutRef;
           }
 
           if (payoutResult.success) {
@@ -10361,11 +10138,11 @@ export async function registerRoutes(
             const isInsufficientBalance = msg.includes("insuffi") || msg.includes("solde") || msg.includes("balance");
             if (isInsufficientBalance) {
               return res.status(400).json({
-                message: `Solde insuffisant sur le wallet ${pollerProvider === "afribapay" ? "AfribaPay" : "Swychr"}. Rechargez puis réessayez.`,
+                message: `Solde insuffisant sur le wallet ${pollerProvider === "afribapay" ? "AfribaPay" : "PixPay"}. Rechargez puis réessayez.`,
               });
             }
             return res.status(400).json({
-              message: `Paiement ${pollerProvider === "afribapay" ? "AfribaPay" : "AccountPE"} échoué: ${payoutResult.message}`,
+              message: `Paiement ${pollerProvider === "afribapay" ? "AfribaPay" : "PixPay"} échoué: ${payoutResult.message}`,
             });
           }
         } catch (payoutErr: any) {
@@ -10375,7 +10152,7 @@ export async function registerRoutes(
         }
       }
       
-      // Manual confirm (forceComplete=true): send notification without Swychr
+      // Manual confirm (forceComplete=true): send notification without a provider
       if (wasNotCompleted && isNowCompleted && (transaction.type === "withdrawal" || transaction.type === "transfer_out") && forceComplete) {
         const txUser = await storage.getUser(transaction.userId).catch(() => null);
         if (txUser?.email) {
@@ -10681,7 +10458,6 @@ export async function registerRoutes(
           ashtechMargin: wFee.ashtechMargin,
           afribapayFee: wFee.afribapayFee,
           pixpayFee: wFee.pixpayFee,
-          swychrFee: wFee.swychrFee,
           minFee: wFee.minFee,
           isActive: wFee.isActive,
         };
@@ -10741,7 +10517,6 @@ export async function registerRoutes(
           ashtechMargin: tFee.ashtechMargin,
           afribapayFee: tFee.afribapayFee,
           pixpayFee: tFee.pixpayFee,
-          swychrFee: tFee.swychrFee,
           minFee: tFee.minFee,
           isActive: tFee.isActive,
         };
@@ -11681,7 +11456,7 @@ export async function registerRoutes(
           userFullName: (user as any)?.fullName || (user as any)?.username || "Inconnu",
           userEmail: (user as any)?.email || "",
           operatorName: (operator as any)?.name || null,
-          originalProvider: (operator as any)?.paymentProvider || "swychr",
+          originalProvider: (operator as any)?.paymentProvider || (operator as any)?.depositPaymentProvider || null,
         };
       }));
       res.json(enriched);
@@ -11710,9 +11485,9 @@ export async function registerRoutes(
     let providerSubmitted = false;
 
     try {
-      const { provider } = req.body as { provider: "swychr" | "afribapay" | "pixpay" };
-      if (!provider || !["swychr","afribapay","pixpay"].includes(provider)) {
-        return res.status(400).json({ message: "provider invalide (swychr|afribapay|pixpay)" });
+      const { provider } = req.body as { provider: "afribapay" | "pixpay" };
+      if (!provider || !["afribapay","pixpay"].includes(provider)) {
+        return res.status(400).json({ message: "Fournisseur invalide (afribapay|pixpay)" });
       }
 
       const tx = await storage.getTransactionById(txId);
@@ -11760,7 +11535,10 @@ export async function registerRoutes(
       const recipientName = tx.recipientName || txUser.fullName || txUser.username || "Client";
       const txRef = tx.reference || "";
 
-      let payoutResult: { success: boolean; transaction_id?: string; transactionId?: string; message?: string };
+      let payoutResult: { success: boolean; transaction_id?: string; transactionId?: string; message?: string } = {
+        success: false,
+        message: "Fournisseur de paiement non supporté",
+      };
       // pollerRef = the reference the poller uses to check status with the provider.
       let pollerRef = txRef;
 
@@ -11829,23 +11607,6 @@ export async function registerRoutes(
         }
         payoutResult = result;
 
-      } else {
-        // Swychr — no retry ref needed (uses the original txRef)
-        const operatorName = (operator?.name || "").toUpperCase();
-        const finalPaymentMethod = resolvePaymentMethod(operatorName, countryCode);
-        const result = await createSwychrPayout({
-          country_code: countryCode,
-          beneficiary_name: recipientName,
-          mobile_no: formatInternationalPhone(phone, countryCode),
-          amount: creditedAmount,
-          transaction_id: txRef,
-          payment_method: finalPaymentMethod as any,
-          remarks: `Ashtech Pay - ${txRef}`,
-        });
-        if (result.success) {
-          pollerRef = result.transaction_id || txRef;
-        }
-        payoutResult = result;
       }
 
       if (payoutResult.success) {
@@ -11901,7 +11662,7 @@ export async function registerRoutes(
           console.log(`[Admin] Execute pending_manual — still insufficient via ${provider} for ${txRef}: ${payoutResult.message}`);
           res.status(409).json({
             pendingManual: true,
-            message: `Solde ${provider === "afribapay" ? "AfribaPay" : provider === "pixpay" ? "PixPay" : "Swychr"} toujours insuffisant. La transaction reste en attente — rechargez le wallet fournisseur puis réessayez (ou essayez un autre fournisseur).`,
+            message: `Solde ${provider === "afribapay" ? "AfribaPay" : "PixPay"} toujours insuffisant. La transaction reste en attente — rechargez le wallet fournisseur puis réessayez (ou essayez l’autre fournisseur).`,
           });
         } else {
           console.error(`[Admin] Execute pending_manual failed (${provider}): ${payoutResult.message}`);
@@ -12568,20 +12329,6 @@ export async function registerRoutes(
     }
   });
 
-  // Swychr Webhook - Payment status callback
-  app.get("/api/checkout/:transactionId", async (req, res) => {
-    try {
-      const { transactionId } = req.params;
-      const details = await fetchPaymentLinkDetails(transactionId);
-      if (!details) {
-        return res.status(404).json({ message: "Payment details not found" });
-      }
-      res.json(details);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
-    }
-  });
-
   // ─── Merchant webhook forwarding ─────────────────────────────────────────────
   // Fire-and-forget: sends a POST to the merchant's notify_url (if set) after
   // a payment status change. Never throws — errors are logged only.
@@ -12663,13 +12410,6 @@ export async function registerRoutes(
       clearTimeout(timer);
     }
   }
-
-  app.get("/api/swychr/webhook", (req, res) => {
-    const proto = (req.headers["x-forwarded-proto"] as string) || (req.secure ? "https" : "http");
-    const host  = req.headers["x-forwarded-host"] as string || req.headers.host || "";
-    const baseUrl = process.env.APP_URL || `${proto}://${host}`;
-    res.redirect(`${baseUrl}/dashboard?payment=processing`);
-  });
 
   // ── IziChange webhook ───────────────────────────────────────────────────────
   app.post("/api/izichange/webhook", webhookLimiter, async (req, res) => {
@@ -13062,133 +12802,6 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("[Deposits/Crypto] Error:", error.message, error.stack?.split("\n")[1]);
       return res.status(422).json({ message: error.message || "Erreur lors de la génération de l'adresse" });
-    }
-  });
-
-  app.post("/api/swychr/webhook", webhookLimiter, async (req, res) => {
-    try {
-      // ── Vérification du secret webhook (obligatoire) ─────────────────────────
-      const webhookSecret = process.env.WEBHOOK_SECRET;
-      if (!webhookSecret) {
-        console.error("[Swychr Webhook] WEBHOOK_SECRET non configuré — requête rejetée");
-        return res.status(503).json({ message: "Webhook endpoint not configured" });
-      }
-      const webhookToken = (req.query.token as string) || (req.headers["x-webhook-token"] as string);
-      if (webhookToken !== webhookSecret) {
-        console.warn("[Swychr Webhook] Token invalide — requête rejetée");
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-      const payload = req.body;
-      console.log("[Swychr Webhook] Received:", JSON.stringify(payload));
-
-      // Extract transaction_id from nested payload
-      const inner = payload?.data?.data || payload?.data || {};
-      const transactionId = inner?.transaction_id || inner?.attributes?.transaction_id || payload?.transaction_id;
-      const rawStatus = inner?.status ?? inner?.attributes?.status ?? null;
-
-      if (!transactionId) {
-        console.error("[Swychr Webhook] Missing transaction_id");
-        return res.status(400).json({ message: "Missing transaction_id" });
-      }
-
-      const transaction = await storage.getTransactionByReference(transactionId);
-      if (!transaction) {
-        console.error("[Swychr Webhook] Transaction not found:", transactionId);
-        return res.status(404).json({ message: "Transaction not found" });
-      }
-
-      if (transaction.status !== "pending") {
-        console.log("[Swychr Webhook] Transaction already processed:", transactionId);
-        return res.json({ success: true });
-      }
-
-      let status: "completed" | "failed" | null = null;
-      if (rawStatus === 1) {
-        status = "completed";
-      } else if (rawStatus === 2 || rawStatus === 3) {
-        // 2 = failed, 3 = refunded (YAML spec v1.0.3)
-        status = "failed";
-      }
-
-      if (status === "completed") {
-        await storage.updateTransactionStatus(transaction.id, "completed");
-        const isPaymentLink = transaction.type === "payment_link";
-        const txCurrency = transaction.currency || "XAF";
-        // Credit the correct wallet (XOFB for Benin, XOFS for Senegal, XAF for Cameroon, etc.)
-        await creditUserWallet(transaction.userId, parseFloat(transaction.amount), txCurrency);
-        await storage.createUserNotification({
-          userId: transaction.userId,
-          type: isPaymentLink ? "payment_link_received" : "deposit_confirmed",
-          title: isPaymentLink ? "Paiement reçu" : "Dépôt confirmé",
-          message: isPaymentLink
-            ? `Vous avez reçu un paiement de ${transaction.amount} ${txCurrency} de ${transaction.payerName || "un client"}.`
-            : `Votre dépôt de ${transaction.amount} ${txCurrency} a été crédité sur votre compte.`,
-          transactionId: transaction.id,
-        });
-        if (isPaymentLink && transaction.paymentIntentId) {
-          await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "completed");
-        }
-        console.log(`[Swychr Webhook] ✓ Payment SUCCESS: ${transaction.id} → credited ${transaction.amount} ${txCurrency}`);
-        forwardMerchantWebhook(transaction, "completed").catch(() => {});
-      } else if (status === "failed") {
-        await storage.updateTransactionStatus(transaction.id, "failed");
-        if (transaction.type === "payment_link" && transaction.paymentIntentId) {
-          await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "failed");
-        }
-        const isPaymentLink = transaction.type === "payment_link";
-        await storage.createUserNotification({
-          userId: transaction.userId,
-          type: isPaymentLink ? "payment_link_failed" : "deposit_failed",
-          title: isPaymentLink ? "Paiement échoué" : "Dépôt échoué",
-          message: isPaymentLink
-            ? `Un paiement de ${transaction.totalAmount || transaction.amount} a échoué.`
-            : `Votre dépôt de ${transaction.totalAmount || transaction.amount} a échoué.`,
-          transactionId: transaction.id,
-        });
-        // Notify admin via Telegram
-        Promise.all([
-          storage.getUser(transaction.userId).catch(() => null),
-          transaction.operatorId ? storage.getOperator(transaction.operatorId).catch(() => null) : Promise.resolve(null),
-        ]).then(([txUser, txOp]) => {
-          notifyDepositFailed({
-            userName: txUser?.fullName || txUser?.username || "Utilisateur",
-            userEmail: txUser?.email || "",
-            userPhone: txUser?.phone || undefined,
-            userCountry: txUser?.country || undefined,
-            amount: transaction.totalAmount || transaction.amount,
-            currency: transaction.currency || "XAF",
-            reference: transaction.reference || transaction.id,
-            reason: isPaymentLink ? "Paiement lien échoué (Swychr)" : "Dépôt échoué (Swychr webhook)",
-            country: undefined,
-            depositType: transaction.type,
-            paymentMethod: transaction.paymentMethod || undefined,
-            phone: transaction.recipientPhone || undefined,
-            operator: (txOp as any)?.name || undefined,
-            source: (transaction as any).source || undefined,
-          }).catch(() => {});
-        }).catch(() => {});
-        console.log("[Swychr Webhook] Payment FAILED for:", transaction.id);
-        forwardMerchantWebhook(transaction, "failed").catch(() => {});
-      } else {
-        console.log("[Swychr Webhook] Unrecognized status:", rawStatus, "for:", transactionId);
-      }
-
-      res.json({ success: true });
-    } catch (error) {
-      console.error("[Swychr Webhook] Error:", error);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  // Swychr manual status check
-  app.get("/api/swychr/verify/:transactionId", requireAuth, async (req, res) => {
-    try {
-      const { transactionId } = req.params;
-      const result = await checkSwychrPaymentStatus(transactionId);
-      res.json(result);
-    } catch (error) {
-      console.error("[Swychr Verify] Error:", error);
-      res.status(500).json({ message: "Erreur de vérification" });
     }
   });
 
@@ -13761,14 +13374,14 @@ export async function registerRoutes(
     }
   });
 
-  // PATCH /api/admin/operators/:id/provider — set provider: swychr | afribapay | pixpay
+  // PATCH /api/admin/operators/:id/provider — set provider: afribapay | pixpay
   app.patch("/api/admin/operators/:id/provider", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
       const { paymentProvider, afribapayOperatorCode, pixpayServiceId } = req.body;
 
-      if (!["swychr", "afribapay", "pixpay"].includes(paymentProvider)) {
-        return res.status(400).json({ message: "Fournisseur invalide. Choisir swychr, afribapay ou pixpay." });
+      if (!["afribapay", "pixpay"].includes(paymentProvider)) {
+        return res.status(400).json({ message: "Fournisseur invalide. Choisir AfribaPay ou PixPay." });
       }
 
       // If switching to PixPay, auto-detect flow type from operator name + country
@@ -13806,8 +13419,8 @@ export async function registerRoutes(
     try {
       const { id } = req.params;
       const { depositPaymentProvider, afribapayOperatorCode } = req.body;
-      if (!["swychr", "afribapay", "pixpay"].includes(depositPaymentProvider)) {
-        return res.status(400).json({ message: "Fournisseur invalide. Choisir swychr, afribapay ou pixpay." });
+      if (!["afribapay", "pixpay"].includes(depositPaymentProvider)) {
+        return res.status(400).json({ message: "Fournisseur invalide. Choisir AfribaPay ou PixPay." });
       }
       const updateData: any = { depositPaymentProvider };
       if (afribapayOperatorCode !== undefined) updateData.afribapayOperatorCode = afribapayOperatorCode || null;
@@ -13970,7 +13583,7 @@ export async function registerRoutes(
             name: c.name,
             currency: normalizeApiCurrency(c.currency),
             operators: ops
-              .filter((o: any) => o.paymentProvider !== "swychr")
+            .filter((o: any) => o.paymentProvider === "afribapay" || o.paymentProvider === "pixpay")
               .map((o: any) => o.name),
           };
         })
@@ -14287,15 +13900,9 @@ export async function registerRoutes(
       // ── Resolve payment provider (use operator tag, fallback to country-based detection) ─
       const PIXPAY_COLLECT_CODES = ["CM","CF","TD","GQ","CG","GA","BF","BJ","CI","GW","ML","NE","SN","TG","GN","CD"];
       const AFRIBAPAY_COLLECT_CODES = ["CM","CI","SN","ML","GN","CF","CG","GA","GW","GQ","CD","TD","NE","BJ","RW","BF","TG"];
-      let paymentProvider = ((operatorRecord as any).depositPaymentProvider || (operatorRecord as any).paymentProvider) as string;
-      if (!paymentProvider || paymentProvider === "swychr") {
-        if (PIXPAY_COLLECT_CODES.includes(country.code)) {
-          paymentProvider = "pixpay";
-        } else if (AFRIBAPAY_COLLECT_CODES.includes(country.code)) {
-          paymentProvider = "afribapay";
-        } else {
-          return res.status(422).json({ error: "unprocessable", message: `Ce pays (${country.code}) n'est pas encore disponible via l'API directe.` });
-        }
+      const paymentProvider = ((operatorRecord as any).depositPaymentProvider || (operatorRecord as any).paymentProvider) as string;
+      if (paymentProvider !== "afribapay" && paymentProvider !== "pixpay") {
+        return res.status(422).json({ error: "unprocessable", message: "Aucun fournisseur de paiement valide n'est configuré pour cet opérateur." });
       }
       console.log(`[API /v1/collect] merchant=${merchant.id} | country=${country.code} | operator=${operatorName} | provider=${paymentProvider} | amount=${amountNum} ${currency}`);
       const resolvedFeeRecord = await storage.resolveFee("deposit", country.id, (operatorRecord as any).id);
@@ -14758,7 +14365,7 @@ export async function registerRoutes(
       const result = await Promise.all(
         countries.map(async (c: any) => {
           const ops = await storage.getOperatorsByCountry(c.id);
-          const activeOps = ops.filter((o: any) => o.paymentProvider !== "swychr");
+          const activeOps = ops.filter((o: any) => o.paymentProvider === "afribapay" || o.paymentProvider === "pixpay");
           if (activeOps.length === 0) return null;
 
           // Per-country fee from DB (admin-configurable)
@@ -15761,7 +15368,7 @@ export async function registerRoutes(
         },
 
         // ── Approve withdrawal ───────────────────────────────────────────────
-        approveWithdrawal: async (reference, provider = "swychr") => {
+        approveWithdrawal: async (reference, provider) => {
           const tx = await storage.getTransactionByReference(reference).catch(() => null);
           if (!tx || !["pending", "pending_manual"].includes(tx.status)) return null;
           const txUser = await storage.getUser(tx.userId).catch(() => null);
@@ -15852,21 +15459,10 @@ export async function registerRoutes(
               payoutResult = { success: pixpayResult.success, transaction_id: pixpayResult.transactionId, message: pixpayResult.message };
 
             } else {
-              // Swychr (default)
-              const finalPaymentMethod = resolvePaymentMethod(operatorName, countryCode);
-              const swychrResult = await createSwychrPayout({
-                country_code: countryCode,
-                beneficiary_name: beneficiaryName,
-                mobile_no: formatInternationalPhone(beneficiaryPhone, countryCode),
-                amount: txAmount,
-                transaction_id: txRef,
-                payment_method: finalPaymentMethod as any,
-                remarks: `Ashtech Pay Telegram - ${txRef}`,
-              });
-              if (swychrResult.success) {
-                telegramPollerRef = swychrResult.transaction_id || txRef;
-              }
-              payoutResult = swychrResult;
+              payoutResult = {
+                success: false,
+                message: "Fournisseur de paiement non supporté",
+              };
             }
 
             if (payoutResult.success) {
@@ -15877,7 +15473,7 @@ export async function registerRoutes(
                 userId: tx.userId,
                 amount: tx.amount,
                 totalDebited: tx.totalAmount || tx.amount,
-                provider: provider as "swychr" | "afribapay" | "pixpay",
+                provider: provider as "afribapay" | "pixpay",
                 countryCode,
                 txType: tx.type,
                 txCurrency,

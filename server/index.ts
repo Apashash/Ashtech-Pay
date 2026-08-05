@@ -241,7 +241,6 @@ app.use("/api", (_req, res, next) => {
 // Paths exempt from CSRF check: external callbacks that don't use browser cookies.
 // Use originalUrl (full path) because req.path inside app.use("/api", ...) is relative.
 const CSRF_EXEMPT_PREFIXES = [
-  "/api/swychr/webhook",
   "/api/afribapay/webhook",
   "/api/pixpay/webhook",
   "/api/izichange/webhook",      // IziChange Direct Charge — no browser headers
@@ -494,6 +493,147 @@ app.use((req, res, next) => {
     // crypto metadata (assetCode, address, memo) + external IziChange ID
     await db.execute(sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS metadata JSONB`);
     console.log("[Migration] Schema columns ready (api_key, notify_url, source, confirmed_at, hosted_page_configs, hosted_payment_sessions, payment_links.notify_url, token_revoked_before, conversion_requests.executed_at/by_id, user_notifications.type, wallets_unique_idx, admin_logs, audit_logs, withdrawal_numbers, withdrawal_number_changes, kyc_submissions.reviewer_id/review_note/reviewed_at/updated_at/country/city/postal_code/latitude/longitude/business_type/business_category/business_description, transactions.ashtech_fee_amount, transactions.metadata)");
+
+    // ── Legacy provider cleanup ───────────────────────────────────────────────
+    // This is deliberately one-shot and idempotent. It never credits, debits,
+    // refunds, or retries a transaction: old provider records are only routed
+    // to the current default provider, and still-pending old transactions are
+    // failed so no poller can submit them to a removed service.
+    const legacyProviderMigration = await db.execute(sql`
+      WITH migration_marker AS (
+        INSERT INTO platform_settings (id, key, value, description)
+        VALUES (
+          gen_random_uuid(),
+          'legacy_provider_cleanup_swychr_v1',
+          'completed',
+          'One-time cleanup of removed payment provider records'
+        )
+        ON CONFLICT (key) DO NOTHING
+        RETURNING key
+      ),
+      legacy_operators AS (
+        SELECT id, payment_provider, deposit_payment_provider
+        FROM operators
+        WHERE EXISTS (SELECT 1 FROM migration_marker)
+          AND (
+            lower(coalesce(payment_provider, '')) = 'swychr'
+            OR lower(coalesce(deposit_payment_provider, '')) = 'swychr'
+          )
+      ),
+      legacy_transactions AS (
+        SELECT t.id, t.user_id
+        FROM transactions t
+        LEFT JOIN operators o ON o.id = t.operator_id
+        WHERE EXISTS (SELECT 1 FROM migration_marker)
+          AND t.status IN ('pending', 'processing', 'pending_manual')
+          AND (
+            lower(coalesce(o.payment_provider, '')) = 'swychr'
+            OR lower(coalesce(o.deposit_payment_provider, '')) = 'swychr'
+            OR lower(coalesce(t.metadata ->> 'provider', '')) = 'swychr'
+          )
+      ),
+      updated_operators AS (
+        UPDATE operators o
+        SET
+          payment_provider = CASE
+            WHEN lower(coalesce(o.payment_provider, '')) = 'swychr' THEN 'afribapay'
+            ELSE o.payment_provider
+          END,
+          deposit_payment_provider = CASE
+            WHEN lower(coalesce(o.deposit_payment_provider, '')) = 'swychr' THEN 'afribapay'
+            ELSE o.deposit_payment_provider
+          END
+        FROM legacy_operators old
+        WHERE o.id = old.id
+        RETURNING o.id
+      ),
+      failed_transactions AS (
+        UPDATE transactions t
+        SET
+          status = 'failed',
+          description = concat_ws(
+            ' — ',
+            nullif(t.description, ''),
+            'Ancien fournisseur de paiement supprimé; aucune nouvelle tentative automatique'
+          ),
+          metadata = coalesce(t.metadata, '{}'::jsonb) || jsonb_build_object(
+            'legacyProviderMigration', 'swychr_removed',
+            'legacyProviderMigrationAt', now()
+          ),
+          confirmed_at = coalesce(t.confirmed_at, now())
+        FROM legacy_transactions old
+        WHERE t.id = old.id
+        RETURNING t.id, t.user_id
+      ),
+      created_notifications AS (
+        INSERT INTO user_notifications (
+          id, user_id, type, title, message, transaction_id, is_read
+        )
+        SELECT
+          gen_random_uuid(),
+          old.user_id,
+          'provider_migration',
+          'Transaction annulée',
+          'Une ancienne transaction utilisant un fournisseur de paiement retiré a été invalidée. Aucun remboursement automatique n’a été effectué; contactez le support pour vérification.',
+          old.id,
+          false
+        FROM failed_transactions old
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM user_notifications n
+          WHERE n.transaction_id = old.id
+            AND n.type = 'provider_migration'
+        )
+        RETURNING id
+      ),
+      audit_entry AS (
+        INSERT INTO audit_logs (
+          id, user_id, actor_type, action, target_type, details, success
+        )
+        SELECT
+          gen_random_uuid(),
+          NULL,
+          'system',
+          'legacy_provider_cleanup',
+          'payment_provider',
+          json_build_object(
+            'operatorsNormalized', (SELECT count(*) FROM updated_operators),
+            'transactionsFailed', (SELECT count(*) FROM failed_transactions),
+            'notificationsCreated', (SELECT count(*) FROM created_notifications),
+            'automaticRefunds', 0
+          )::text,
+          true
+        FROM migration_marker
+        RETURNING id
+      )
+      SELECT
+        (SELECT count(*) FROM updated_operators) AS operators_normalized,
+        (SELECT count(*) FROM failed_transactions) AS transactions_failed,
+        (SELECT count(*) FROM created_notifications) AS notifications_created
+      FROM audit_entry
+    `);
+    const legacyMigrationRow = (legacyProviderMigration as any).rows?.[0];
+    if (legacyMigrationRow) {
+      console.log(
+        `[Migration] Legacy provider cleanup: operators=${legacyMigrationRow.operators_normalized}, ` +
+        `transactions_failed=${legacyMigrationRow.transactions_failed}, ` +
+        `notifications=${legacyMigrationRow.notifications_created}`
+      );
+    } else {
+      console.log("[Migration] Legacy provider cleanup already completed");
+    }
+
+    const legacyFeeColumn = await db.execute(sql`
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'fees'
+        AND column_name = 'swychr_fee'
+      LIMIT 1
+    `);
+    if ((legacyFeeColumn as any).rows?.length) {
+      console.warn("[Migration] Legacy fees.swychr_fee column is still present but unused; remove it through a reviewed schema publish.");
+    }
 
     // ── 5.3 Re-encrypt existing plaintext sensitive fields ────────────────────
     // Only runs when FIELD_ENCRYPTION_KEY is set. Without the key, encryptField()
