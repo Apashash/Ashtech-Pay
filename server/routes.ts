@@ -9841,7 +9841,7 @@ export async function registerRoutes(
         const intent = tx.paymentIntentId ? intentMap.get(tx.paymentIntentId) : null;
         return {
           ...tx,
-          user: u ? { fullName: u.fullName, email: u.email, username: u.username } : null,
+          user: u ? { fullName: u.fullName, email: u.email, username: u.username, phone: u.phone } : null,
           payerPhone: intent?.payerPhone ?? null,
         };
       });

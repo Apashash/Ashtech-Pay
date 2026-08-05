@@ -20,3 +20,4 @@
 - [Crypto country required](crypto-country-required.md) — country selection is mandatory in public crypto links and authenticated crypto deposits, with server-side validation.
 - [Transaction metadata typing](transaction-metadata-typing.md) — JSON transaction metadata needs an explicit shared record type for TypeScript inserts.
 - [Legacy provider removal](legacy-provider-removal.md) — removed provider data must be normalized/fail-closed idempotently; legacy schema columns require reviewed publish-time removal.
+- [Admin transaction history search](admin-history-search.md) — search must run server-side across retained records; phone input accepts +237, 237, or local digits, with a 30-day retention boundary.

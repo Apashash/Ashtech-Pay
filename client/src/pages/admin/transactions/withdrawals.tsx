@@ -51,7 +51,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { Transaction, SupportedCurrency } from "@shared/schema";
 
 interface EnrichedTransaction extends Transaction {
-  user?: { fullName: string; email: string; username: string } | null;
+  user?: { fullName: string; email: string; username: string; phone?: string | null } | null;
 }
 
 interface TransactionDetails extends Transaction {
@@ -70,13 +70,14 @@ export default function AdminWithdrawals() {
   const [modalStatus, setModalStatus] = useState<string>("");
   const [modalReason, setModalReason] = useState<string>("");
 
-  useEffect(() => { setPage(1); }, [statusFilter]);
+  useEffect(() => { setPage(1); }, [statusFilter, search]);
 
   const { data: txData, isLoading } = useQuery<{ data: EnrichedTransaction[]; total: number; pages: number }>({
-    queryKey: ["/api/admin/transactions", "withdrawals", page, statusFilter],
+    queryKey: ["/api/admin/transactions", "withdrawals", page, statusFilter, search],
     queryFn: async () => {
       const p = new URLSearchParams({ page: String(page), limit: "50", type: "withdrawal" });
       if (statusFilter !== "all") p.set("status", statusFilter);
+      if (search.trim()) p.set("search", search.trim());
       const res = await fetch(`/api/admin/transactions?${p}`, { credentials: "include", headers: getAuthHeaders() });
       if (!res.ok) throw new Error("Erreur");
       return res.json();
@@ -122,13 +123,7 @@ export default function AdminWithdrawals() {
   const allTransactions = txData?.data || [];
 
   const filteredTransactions = allTransactions.filter(tx => {
-    const searchLower = search.toLowerCase();
-    const matchesSearch = !search || 
-      (tx.description ?? "").toLowerCase().includes(searchLower) ||
-      (tx.reference ?? "").toLowerCase().includes(searchLower) ||
-      (tx.user?.fullName ?? "").toLowerCase().includes(searchLower) ||
-      (tx.user?.email ?? "").toLowerCase().includes(searchLower);
-    return matchesSearch;
+    return true;
   });
 
   const paymentMethodLabels: Record<string, string> = {
@@ -217,7 +212,7 @@ export default function AdminWithdrawals() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
-              placeholder="Rechercher par référence, utilisateur..."
+              placeholder="Référence, nom ou numéro (+237, 237 ou local)..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-10"

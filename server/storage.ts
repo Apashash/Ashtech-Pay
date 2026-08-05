@@ -145,7 +145,7 @@ export interface IStorage {
   getAllTransactions(): Promise<Transaction[]>;
   getPendingPayoutTransactions(): Promise<Transaction[]>;
   countNewUsersInRange(start: Date, end: Date): Promise<number>;
-  getAdminTransactionsPaginated(params: { limit: number; offset: number; type?: string; status?: string; search?: string }): Promise<{ data: Transaction[]; total: number }>;
+  getAdminTransactionsPaginated(params: { limit: number; offset: number; types?: string[]; type?: string; status?: string; search?: string; userId?: string }): Promise<{ data: Transaction[]; total: number }>;
   getAdminUsersPaginated(params: { limit: number; offset: number; search?: string; filter?: string }): Promise<{ data: User[]; total: number }>;
   getAdminLayoutStats(): Promise<{ pendingDeposits: number; pendingWithdrawals: number; pendingTransfers: number; pendingManualPayouts: number; kycPending: number; ticketUnread: number; conversionCount: number; withdrawalNumberCount: number; notifications: any[] }>;
   
@@ -1538,11 +1538,63 @@ export class DatabaseStorage implements IStorage {
     }
     if (status && status !== "all") conditions.push(eq(transactions.status, status));
     if (search) {
-      conditions.push(or(
+      const textSearch = or(
         ilike(transactions.reference, `%${search}%`),
         ilike(transactions.externalReference, `%${search}%`),
         ilike(transactions.description, `%${search}%`),
-      ));
+        ilike(transactions.recipientName, `%${search}%`),
+        ilike(transactions.recipientPhone, `%${search}%`),
+        ilike(transactions.payerName, `%${search}%`),
+        ilike(transactions.payerEmail, `%${search}%`),
+        sql<boolean>`EXISTS (
+          SELECT 1
+          FROM ${users} AS admin_search_user
+          WHERE admin_search_user.id = ${transactions.userId}
+            AND (
+              admin_search_user.full_name ILIKE ${`%${search}%`}
+              OR admin_search_user.email ILIKE ${`%${search}%`}
+              OR admin_search_user.username ILIKE ${`%${search}%`}
+            )
+        )`,
+        sql<boolean>`EXISTS (
+          SELECT 1
+          FROM ${paymentIntents} AS admin_search_intent
+          WHERE admin_search_intent.id = ${transactions.paymentIntentId}
+            AND (
+              admin_search_intent.payer_name ILIKE ${`%${search}%`}
+              OR admin_search_intent.payer_email ILIKE ${`%${search}%`}
+            )
+        )`,
+      );
+
+      // Phone searches are digit-based so "+237 6xx", "237 6xx",
+      // "2376xx", and the local "6xx" form all find the same transaction.
+      const phoneDigits = search.replace(/\D/g, "");
+      const phoneSearchDigits = phoneDigits.startsWith("237") && phoneDigits.length > 3
+        ? [phoneDigits, phoneDigits.slice(3)]
+        : [phoneDigits];
+      const phoneSearch = phoneDigits.length >= 3
+        ? or(
+            ...phoneSearchDigits.flatMap(digits => [
+              sql<boolean>`regexp_replace(coalesce(${transactions.recipientPhone}, ''), '[^0-9]', '', 'g') LIKE ${`%${digits}%`}`,
+              sql<boolean>`regexp_replace(coalesce(${transactions.description}, ''), '[^0-9]', '', 'g') LIKE ${`%${digits}%`}`,
+              sql<boolean>`EXISTS (
+                SELECT 1
+                FROM ${users} AS admin_phone_user
+                WHERE admin_phone_user.id = ${transactions.userId}
+                  AND regexp_replace(coalesce(admin_phone_user.phone, ''), '[^0-9]', '', 'g') LIKE ${`%${digits}%`}
+              )`,
+              sql<boolean>`EXISTS (
+                SELECT 1
+                FROM ${paymentIntents} AS admin_phone_intent
+                WHERE admin_phone_intent.id = ${transactions.paymentIntentId}
+                  AND regexp_replace(coalesce(admin_phone_intent.payer_phone, ''), '[^0-9]', '', 'g') LIKE ${`%${digits}%`}
+              )`,
+            ]),
+          )
+        : undefined;
+
+      conditions.push(phoneSearch ? or(textSearch, phoneSearch) : textSearch);
     }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;

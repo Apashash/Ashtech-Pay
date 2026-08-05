@@ -1,5 +1,5 @@
 import { getAdminPath } from "@/lib/adminPath";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { AdminLayout } from "./layout";
@@ -51,7 +51,7 @@ import {
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { formatCurrency } from "@/lib/currency";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, getAuthHeaders } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Transaction, SupportedCurrency } from "@shared/schema";
 
@@ -77,10 +77,30 @@ export default function AdminTransactions() {
     const params = new URLSearchParams(window.location.search);
     return params.get("status") || "all";
   });
+  const [page, setPage] = useState(1);
   const [selectedTxId, setSelectedTxId] = useState<string | null>(null);
 
-  const { data: transactions, isLoading } = useQuery<EnrichedTransaction[]>({
-    queryKey: ["/api/admin/transactions"],
+  useEffect(() => {
+    setPage(1);
+  }, [search, typeFilter, statusFilter]);
+
+  const { data: txData, isLoading } = useQuery<{ data: EnrichedTransaction[]; total: number; pages: number }>({
+    queryKey: ["/api/admin/transactions", "all", page, search, typeFilter, statusFilter],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: "50",
+        type: typeFilter,
+      });
+      if (statusFilter !== "all") params.set("status", statusFilter);
+      if (search.trim()) params.set("search", search.trim());
+      const response = await fetch(`/api/admin/transactions?${params}`, {
+        credentials: "include",
+        headers: getAuthHeaders(),
+      });
+      if (!response.ok) throw new Error("Erreur lors du chargement des transactions");
+      return response.json();
+    },
   });
 
   const { data: txDetails, isLoading: txDetailsLoading } = useQuery<TransactionDetails>({
@@ -101,19 +121,8 @@ export default function AdminTransactions() {
     },
   });
 
-  const filteredTransactions = transactions?.filter(tx => {
-    const searchLower = search.toLowerCase();
-    const matchesSearch = !search || 
-      (tx.description ?? "").toLowerCase().includes(searchLower) ||
-      (tx.reference ?? "").toLowerCase().includes(searchLower) ||
-      (tx.user?.fullName ?? "").toLowerCase().includes(searchLower) ||
-      (tx.user?.email ?? "").toLowerCase().includes(searchLower) ||
-      (tx.payerName ?? "").toLowerCase().includes(searchLower) ||
-      (tx.payerEmail ?? "").toLowerCase().includes(searchLower);
-    const matchesType = typeFilter === "all" || tx.type === typeFilter;
-    const matchesStatus = statusFilter === "all" || tx.status === statusFilter;
-    return matchesSearch && matchesType && matchesStatus;
-  }) || [];
+  const transactions = txData?.data || [];
+  const filteredTransactions = transactions;
 
   const typeLabels: Record<string, string> = {
     deposit: "Recharge",
@@ -199,7 +208,7 @@ export default function AdminTransactions() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold">Gestion des Transactions</h1>
-            <p className="text-muted-foreground">{transactions?.length || 0} transactions</p>
+            <p className="text-muted-foreground">{txData?.total || 0} transactions</p>
           </div>
           <Button onClick={exportCSV} variant="outline" className="gap-2" data-testid="button-export-csv">
             <Download className="w-4 h-4" />
@@ -213,7 +222,7 @@ export default function AdminTransactions() {
               <div className="relative flex-1 min-w-[200px]">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
-                  placeholder="Rechercher par référence, utilisateur, payeur..."
+                  placeholder="Référence, nom, email ou numéro (+237, 237 ou local)..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="pl-10"
@@ -357,6 +366,31 @@ export default function AdminTransactions() {
             </Table>
           </CardContent>
         </Card>
+        {(txData?.pages || 1) > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border rounded-lg">
+            <span className="text-sm text-muted-foreground">
+              Page {page} / {txData?.pages} — {txData?.total} transactions
+            </span>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page <= 1}
+                onClick={() => setPage(current => current - 1)}
+              >
+                Précédente
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page >= (txData?.pages || 1)}
+                onClick={() => setPage(current => current + 1)}
+              >
+                Suivante
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       <Dialog open={!!selectedTxId} onOpenChange={(open) => !open && setSelectedTxId(null)}>
