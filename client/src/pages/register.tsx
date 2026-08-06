@@ -25,6 +25,10 @@ interface CountryData {
   exchangeRate: string;
 }
 
+interface GeoData {
+  country?: string;
+}
+
 const fallbackCountries: CountryData[] = [
   { code: "CM", name: "Cameroun", flag: "🇨🇲", dialCode: "+237", currency: "XAF", exchangeRate: "1" },
 ];
@@ -89,6 +93,7 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState<CountryData | null>(null);
+  const [countryManuallySelected, setCountryManuallySelected] = useState(false);
   const [blockedUntil, setBlockedUntil] = useState<number | null>(() => loadRateLimit());
   const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
   const [vpnDetected, setVpnDetected] = useState(false);
@@ -137,7 +142,7 @@ export default function RegisterPage() {
 
   type RegisterFormData = z.infer<typeof extendedRegisterSchema>;
 
-  const { data: rawCountries = fallbackCountries, isLoading: loadingCountries } = useQuery<CountryData[]>({
+  const { data: rawCountries, isLoading: loadingCountries, isError: countriesError } = useQuery<CountryData[]>({
     queryKey: ["/api/public/countries"],
     queryFn: async () => {
       const res = await fetch("/api/public/countries");
@@ -146,11 +151,24 @@ export default function RegisterPage() {
     },
   });
 
-  const countries = rawCountries.filter(c => c.code && c.name);
+  const { data: geoData, isFetched: geoFetched } = useQuery<GeoData>({
+    queryKey: ["/api/public/geo"],
+    queryFn: async () => {
+      const res = await fetch("/api/public/geo");
+      if (!res.ok) throw new Error("Failed to detect country");
+      return res.json();
+    },
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+
+  const countries = (rawCountries ?? (countriesError ? fallbackCountries : [])).filter(c => c.code && c.name);
 
   useEffect(() => {
-    if (countries.length > 0 && !selectedCountry) setSelectedCountry(countries[0]);
-  }, [countries, selectedCountry]);
+    if (selectedCountry || countryManuallySelected || !geoFetched || countries.length === 0) return;
+    const detectedCountry = countries.find(country => country.code === geoData?.country);
+    setSelectedCountry(detectedCountry || countries[0]);
+  }, [countries, geoData?.country, geoFetched, selectedCountry, countryManuallySelected]);
 
   const form = useForm<RegisterFormData>({
     resolver: zodResolver(extendedRegisterSchema),
@@ -222,6 +240,7 @@ export default function RegisterPage() {
   const handleCountryChange = (countryCode: string) => {
     const country = countries.find(c => c.code === countryCode);
     if (country) {
+      setCountryManuallySelected(true);
       setSelectedCountry(country);
       const currentPhone = form.getValues("phone");
       if (!currentPhone || countries.some(c => currentPhone.startsWith(c.dialCode))) {

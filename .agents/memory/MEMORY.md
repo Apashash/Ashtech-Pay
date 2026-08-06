@@ -24,3 +24,4 @@
 - [Removed payment countries](removed-payment-countries.md) — removed countries are deleted with config/wallet dependencies, while historical transactions remain retained and searchable.
 - [Phone authentication format](phone-authentication-format.md) — registration and login use digits-only international phone numbers composed from active country dial codes.
 - [Mobile password autofill](mobile-password-autofill.md) — mark email as the login username and registration pseudo as nickname so mobile managers do not autofill the pseudo.
+- [Auth country detection](auth-country-detection.md) — login and registration select the active country from server-side IP geolocation, while manual selection always wins.

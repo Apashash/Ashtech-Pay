@@ -25,6 +25,10 @@ interface CountryData {
   dialCode: string;
 }
 
+interface GeoData {
+  country?: string;
+}
+
 const RATE_LIMIT_KEY = "ashtech_rate_limit_until";
 
 function saveRateLimit(retryAfter: number) {
@@ -80,6 +84,7 @@ export default function LoginPage() {
   const [loginMode, setLoginMode] = useState<"email" | "phone">("email");
   const [phoneInput, setPhoneInput] = useState("");
   const [selectedCountry, setSelectedCountry] = useState<CountryData | null>(null);
+  const [countryManuallySelected, setCountryManuallySelected] = useState(false);
   const kickedParam = typeof window !== "undefined"
     ? new URLSearchParams(window.location.search).get("kicked")
     : null;
@@ -117,11 +122,22 @@ export default function LoginPage() {
     },
   });
 
+  const { data: geoData, isFetched: geoFetched } = useQuery<GeoData>({
+    queryKey: ["/api/public/geo"],
+    queryFn: async () => {
+      const res = await fetch("/api/public/geo");
+      if (!res.ok) throw new Error("Failed to detect country");
+      return res.json();
+    },
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+
   useEffect(() => {
-    if (!selectedCountry && countries.length > 0) {
-      setSelectedCountry(countries[0]);
-    }
-  }, [countries, selectedCountry]);
+    if (selectedCountry || countryManuallySelected || !geoFetched || countries.length === 0) return;
+    const detectedCountry = countries.find(country => country.code === geoData?.country);
+    setSelectedCountry(detectedCountry || countries[0]);
+  }, [countries, geoData?.country, geoFetched, selectedCountry, countryManuallySelected]);
 
   useEffect(() => {
     fetch("/api/auth/ip-status")
@@ -174,6 +190,7 @@ export default function LoginPage() {
   const handleCountryChange = (countryCode: string) => {
     const country = countries.find(c => c.code === countryCode);
     if (!country) return;
+    setCountryManuallySelected(true);
     setSelectedCountry(country);
     form.setValue("identifier", composePhoneIdentifier(phoneInput, country), { shouldValidate: true });
   };
