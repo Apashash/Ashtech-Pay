@@ -134,9 +134,13 @@ export default function LoginPage() {
   });
 
   useEffect(() => {
-    if (selectedCountry || countryManuallySelected || !geoFetched || countries.length === 0) return;
-    const detectedCountry = countries.find(country => country.code === geoData?.country);
-    setSelectedCountry(detectedCountry || countries[0]);
+    if (countryManuallySelected || countries.length === 0) return;
+    const preferredCountry = geoFetched
+      ? countries.find(country => country.code === geoData?.country) || countries[0]
+      : countries[0];
+    if (!selectedCountry || selectedCountry.code !== preferredCountry.code) {
+      setSelectedCountry(preferredCountry);
+    }
   }, [countries, geoData?.country, geoFetched, selectedCountry, countryManuallySelected]);
 
   useEffect(() => {
