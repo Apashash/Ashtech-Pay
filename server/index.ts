@@ -252,10 +252,28 @@ const CSRF_EXEMPT_PREFIXES = [
   "/api/payment-links/",         // public pay page uses our own JS, but keep flexible
 ];
 app.use("/api", (req: Request, res: Response, next: NextFunction) => {
+  const fullPath = req.originalUrl.split("?")[0];
+  // Preflight requests must not reveal admin API routes either. The admin
+  // frontend uses same-origin requests, so returning a clean 404 here does
+  // not break its normal API calls.
+  if (
+    req.method === "OPTIONS" &&
+    (fullPath === "/api/admin" || fullPath.startsWith("/api/admin/"))
+  ) {
+    return sendClean404(res);
+  }
   if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") {
     return next();
   }
-  const fullPath = req.originalUrl.split("?")[0];
+  // Keep admin mutation routes indistinguishable from unknown paths before
+  // session extraction runs. Legitimate admin SPA requests always include the
+  // X-Requested-With header; a missing header must not expose a CSRF 403.
+  if (fullPath === "/api/admin" || fullPath.startsWith("/api/admin/")) {
+    const xrw = req.headers["x-requested-with"];
+    if (!xrw || String(xrw).toLowerCase() !== "xmlhttprequest") {
+      return sendClean404(res);
+    }
+  }
   if (CSRF_EXEMPT_PREFIXES.some(p => fullPath.startsWith(p))) return next();
   const xrw = req.headers["x-requested-with"];
   if (!xrw || String(xrw).toLowerCase() !== "xmlhttprequest") {

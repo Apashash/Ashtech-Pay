@@ -815,6 +815,38 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
+// ── Admin route cloaking ─────────────────────────────────────────────────────
+// Do not reveal the existence of admin API routes to unauthenticated visitors
+// or regular users. This runs before requireAdminPin and before every admin
+// handler, so all /api/admin/* endpoints have the same external behavior.
+async function cloakAdminRoutes(req: Request, res: Response, next: NextFunction) {
+  if (!req.userId) {
+    console.warn(`[AdminAccess] HIDDEN 404 — no userId — path=${req.path}`);
+    return sendClean404(res);
+  }
+
+  try {
+    const user = await storage.getUser(req.userId);
+    if (!user || user.role !== "admin") {
+      console.warn(
+        `[AdminAccess] HIDDEN 404 — user=${req.userId} role=${user?.role ?? "missing"} — path=${req.path}`,
+      );
+      // Keep the existing forced logout behavior for authenticated non-admins.
+      if (user) {
+        req.session.destroy(() => {});
+        res.clearCookie("connect.sid");
+      }
+      return sendClean404(res);
+    }
+  } catch (error: any) {
+    console.error(`[AdminAccess] DB ERROR cloaking route ${req.path}:`, error?.message);
+    // Fail closed: a database lookup failure must not reveal an admin route.
+    return sendClean404(res);
+  }
+
+  next();
+}
+
 // ── Admin OTP signed token (Tier 4) ─────────────────────────────────────────
 // Signed HMAC-SHA256 token stored in localStorage, sent as X-Admin-OTP-Token header.
 // Survives PM2 multi-worker routing, blocked cookies, and Cloudflare proxy.
@@ -868,7 +900,7 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
   if (!req.userId) {
     console.warn(`[AdminAccess] BLOCKED — no userId — path=${req.path} sid=${req.sessionID?.slice(0,8)}`);
     notifyAdminPanelAccess({ type: "blocked_no_auth", ip: adminIpEarly, path: req.path }).catch(() => {});
-    return res.status(401).json({ message: "Non autorisé" });
+    return sendClean404(res);
   }
 
   // Always re-fetch role from DB — never trust session cache (CWE-287 Vector 3 fix)
@@ -877,13 +909,13 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
     user = await storage.getUser(req.userId);
   } catch (dbErr: any) {
     console.error(`[AdminAccess] DB ERROR fetching user ${req.userId} — path=${req.path}:`, dbErr?.message);
-    return res.status(500).json({ message: "Erreur serveur" });
+    return sendClean404(res);
   }
 
   if (!user) {
     console.warn(`[AdminAccess] BLOCKED — user ${req.userId} not found in DB — path=${req.path}`);
     notifyAdminPanelAccess({ type: "blocked_no_role", ip: adminIpEarly, userId: req.userId, path: req.path }).catch(() => {});
-    return res.status(403).json({ message: "Accès refusé - Droits admin requis" });
+    return sendClean404(res);
   }
   if (!["admin"].includes(user.role)) {
     console.warn(`[AdminAccess] BLOCKED+LOGOUT — user ${req.userId} has role="${user.role}" (not admin) — path=${req.path}`);
@@ -891,7 +923,7 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
     // Force logout — destroy session immediately so the intruder is kicked out
     req.session.destroy(() => {});
     res.clearCookie("connect.sid");
-    return res.status(403).json({ message: "Accès refusé - Droits admin requis", forceLogout: true });
+    return sendClean404(res);
   }
 
   // ── Check admin panel IP blocklist ───────────────────────────────────────────
@@ -1685,7 +1717,7 @@ export async function registerRoutes(
   {
     const ADMIN_FRONTEND_PATH = "/Ashtech76638393947vdkdbdozyzujebfkdbdj";
     const ADMIN_REVEAL_PATHS = ["/admin-panel-verify", "/admin-login-otp"];
-    app.use((req: Request, res: Response, next: NextFunction) => {
+    app.use(async (req: Request, res: Response, next: NextFunction) => {
       const p = req.path;
       if (p.startsWith("/api/")) return next();
       // Reveal paths (verify/OTP pages) are always served — no 404 guard
@@ -1699,6 +1731,18 @@ export async function registerRoutes(
       const sessionAdminPending = (req.session as any)?._apl;
       if (!req.userId && !sessionAdminPending) {
         return sendClean404(res);
+      }
+      if (req.userId) {
+        const user = await storage.getUser(req.userId).catch(() => null);
+        if (!user || user.role !== "admin") {
+          console.warn(`[AdminAccess] HIDDEN 404 — frontend role=${user?.role ?? "missing"} — path=${p}`);
+          if (user) {
+            req.session.destroy(() => {});
+            res.clearCookie("__ash_sid");
+            res.clearCookie("connect.sid");
+          }
+          return sendClean404(res);
+        }
       }
       next();
     });
@@ -2143,6 +2187,11 @@ export async function registerRoutes(
     const ipCheck = checkAuthRateLimit(ip);
     res.json({ ok: true, blocked: ipCheck.blocked, retryAfter: ipCheck.retryAfter });
   });
+
+  // ── Admin route cloaking ─────────────────────────────────────────────────────
+  // Unauthenticated visitors and non-admin users receive the same clean 404 as
+  // an unknown route. Admin users continue to the normal PIN/TOTP protections.
+  app.use("/api/admin", cloakAdminRoutes);
 
   // ── Admin PIN: require 4-digit PIN for all state-changing admin requests ─────
   // Applied globally here so it covers every /api/admin/* POST/PATCH/PUT/DELETE
