@@ -501,23 +501,16 @@ export function downloadHostedPagePDF() {
   y = table(doc,
     ["Code ISO", "Pays", "Wallet credite", "Operateurs"],
     [
-      ["CM","Cameroun",         "XAF",  "MTN, Orange"],
-      ["SN","Senegal",          "XOFS", "Orange, Wave, Free"],
-      ["CI","Cote d'Ivoire",    "XOFC", "Orange, MTN, Wave"],
-      ["BJ","Benin",            "XOFB", "MTN, Moov"],
-      ["BF","Burkina Faso",     "XOFF", "Orange, Moov, Coris"],
+      ["CM","Cameroun",         "XAF",  "MTN Money, Orange"],
+      ["SN","Senegal",          "XOFS", "E-money, Orange, Wave, Free"],
+      ["CI","Cote d'Ivoire",    "XOFC", "Orange, MTN, Moov, Wave"],
+      ["BJ","Benin",            "XOFB", "Celtiis, Coris, MTN, Moov"],
+      ["BF","Burkina Faso",     "XOFF", "Orange, Moov, Wallet LigdiCash"],
       ["ML","Mali",             "XOFM", "Orange, Moov"],
       ["TG","Togo",             "XOFT", "Flooz, Tmoney"],
-      ["NE","Niger",            "XOFN", "Orange, Airtel"],
-      ["GW","Guinee-Bissau",    "XOF",  "MTN"],
-      ["CD","Congo RDC",        "CDF",  "Airtel, Orange"],
+      ["NE","Niger",            "XOFN", "Airtel"],
+      ["CD","Congo RDC",        "CDF",  "Afri Money, Airtel, Mpesa, Orange, Vodacom"],
       ["GA","Gabon",            "XAFG", "Airtel, Moov"],
-      ["CG","Congo",            "XAFC", "Airtel, MTN"],
-      ["CF","Centrafrique",     "XAF",  "Orange"],
-      ["TD","Tchad",            "XAF",  "Airtel, Moov"],
-      ["RW","Rwanda",           "RWF",  "MTN, Airtel"],
-      ["TZ","Tanzanie",         "TZS",  "Vodacom, Airtel, Tigo"],
-      ["UG","Ouganda",          "UGX",  "MTN, Airtel"],
     ],
     y, [18, 36, 28, 88]
   );
@@ -566,10 +559,8 @@ export function downloadHostedPagePDF() {
     [
       ["Benin",          "XOFB"], ["Senegal",       "XOFS"], ["Cote d'Ivoire", "XOFC"],
       ["Burkina Faso",   "XOFF"], ["Mali",          "XOFM"], ["Togo",          "XOFT"],
-      ["Niger",          "XOFN"], ["Guinee-Bissau", "XOF"],  ["Cameroun",      "XAF"],
-      ["Gabon",          "XAFG"], ["Congo",         "XAFC"], ["Centrafrique",  "XAF"],
-      ["Tchad",          "XAF"],  ["Congo RDC",     "CDF"],
-      ["Rwanda",         "RWF"],  ["Tanzanie",      "TZS"],  ["Ouganda",       "UGX"],
+      ["Niger",          "XOFN"], ["Cameroun",      "XAF"],  ["Gabon",          "XAFG"],
+      ["Congo RDC",      "CDF"],
     ],
     y, [100, 70]
   );
@@ -740,25 +731,20 @@ export function downloadSDKDocs() {
   y = codeBlock(doc, `fetch("https://ashtechpay.top/v1/countries", {\n  headers: { "Authorization": "Bearer YOUR_API_KEY" }\n})`, y, "javascript");
   y = codeBlock(doc, `curl https://ashtechpay.top/v1/countries \\\n  -H "Authorization: Bearer YOUR_API_KEY"`, y, "bash");
   y = subHeading(doc, "Reponse", y);
-  y = codeBlock(doc, `[\n  {\n    "code": "CM",\n    "name": "Cameroun",\n    "currency": "XAF",\n    "operators": ["MTN Mobile Money", "Orange Money"]\n  },\n  {\n    "code": "SN",\n    "name": "Senegal",\n    "currency": "XOF",\n    "operators": ["Free Money", "Orange Money", "Wave"]\n  }\n  // ...\n]`, y, "json");
-  y = subHeading(doc, "Pays disponibles (16)", y);
+   y = codeBlock(doc, `[\n  {\n    "code": "CM",\n    "name": "Cameroun",\n    "currency": "XAF",\n    "operators": ["MTN Money", "Orange Money"]\n  },\n  {\n    "code": "SN",\n    "name": "Senegal",\n    "currency": "XOF",\n    "operators": ["E-money", "Free Money", "Orange Money", "Wave Money"]\n  }\n  // ...\n]`, y, "json");
+   y = subHeading(doc, "Pays disponibles (10)", y);
   y = table(doc,
     ["Pays", "Code", "Devise", "Operateurs"],
     [
-      ["Benin",          "BJ","XOFB","Moov Money, MTN Mobile Money"],
-      ["Burkina Faso",   "BF","XOFF","Moov Money, Orange Money (OTP)"],
-      ["Cameroun",       "CM","XAF", "MTN Mobile Money, Orange Money"],
-      ["Centrafrique",   "CF","XAF", "Orange Money (OTP)"],
-      ["Congo",          "CG","XAFC","Airtel Money, MTN Mobile Money"],
-      ["Cote d'Ivoire",  "CI","XOFC","Moov Money, MTN, Orange (OTP), Wave"],
+      ["Benin",          "BJ","XOFB","Celtiis Money, Coris Money, Moov Money, MTN Money"],
+      ["Burkina Faso",   "BF","XOFF","Moov Money, Orange Money (OTP), Wallet LigdiCash (OTP SMS)"],
+      ["Cameroun",       "CM","XAF", "MTN Money, Orange Money"],
+      ["Cote d'Ivoire",  "CI","XOFC","Moov Money, MTN Money, Orange (OTP), Wave Money"],
       ["Gabon",          "GA","XAFG","Airtel Money, Moov Money"],
-      ["Guinee equat.",  "GQ","XAF", "Orange Money (OTP)"],
-      ["Guinee-Bissau",  "GW","XOF", "Orange Money (OTP)"],
       ["Mali",           "ML","XOF", "Moov Money, Orange Money (OTP)"],
       ["Niger",          "NE","XOFN","Airtel Money"],
-      ["RD Congo",       "CD","CDF", "Afrimoney, Airtel, Orange (OTP), Vodacom M-Pesa"],
-      ["Senegal",        "SN","XOFS","Free Money, Orange Money (OTP), Wave"],
-      ["Tchad",          "TD","XAF", "Airtel Money, Moov Money"],
+      ["RD Congo",       "CD","CDF", "Afri Money, Airtel, Mpesa Money, Orange, Vodacom"],
+      ["Senegal",        "SN","XOFS","E-money, Free Money, Orange Money (OTP), Wave Money"],
       ["Togo",           "TG","XOFT","Flooz (Moov), T-Money"],
     ],
     y, [38, 14, 20, 98]
@@ -844,10 +830,10 @@ async function displayCryptoPayment(data) {
     y, [35, 22, 24, 89]
   );
   y = subHeading(doc, "Requete exemple", y);
-  y = codeBlock(doc, `fetch("https://ashtechpay.top/v1/collect", {\n  method: "POST",\n  headers: {\n    "Authorization": "Bearer YOUR_API_KEY",\n    "Content-Type": "application/json"\n  },\n  body: JSON.stringify({\n    amount: 5000,\n    currency: "XAF",\n    phone: "670000000",\n    operator: "MTN Mobile Money",\n    country_code: "CM",\n    reference: "ORDER-001",\n    notify_url: "https://monsite.com/webhook"\n  })\n})`, y, "javascript");
-  y = codeBlock(doc, `curl https://ashtechpay.top/v1/collect \\\n  -X POST \\\n  -H "Authorization: Bearer YOUR_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '{"amount":5000,"currency":"XAF","phone":"670000000",\n       "operator":"MTN Mobile Money","country_code":"CM",\n       "reference":"ORDER-001",\n       "notify_url":"https://monsite.com/webhook"}'`, y, "bash");
+  y = codeBlock(doc, `fetch("https://ashtechpay.top/v1/collect", {\n  method: "POST",\n  headers: {\n    "Authorization": "Bearer YOUR_API_KEY",\n    "Content-Type": "application/json"\n  },\n  body: JSON.stringify({\n    amount: 5000,\n    currency: "XAF",\n    phone: "670000000",\n    operator: "MTN Money",\n    country_code: "CM",\n    reference: "ORDER-001",\n    notify_url: "https://monsite.com/webhook"\n  })\n})`, y, "javascript");
+  y = codeBlock(doc, `curl https://ashtechpay.top/v1/collect \\\n  -X POST \\\n  -H "Authorization: Bearer YOUR_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '{"amount":5000,"currency":"XAF","phone":"670000000",\n       "operator":"MTN Money","country_code":"CM",\n       "reference":"ORDER-001",\n       "notify_url":"https://monsite.com/webhook"}'`, y, "bash");
   y = subHeading(doc, "Reponse 202 (succes USSD Push)", y);
-  y = codeBlock(doc, `{\n  "transaction_id": "8f3e1c2d-...",\n  "reference":      "ORDER-001",\n  "status":         "pending",\n  "amount":         5000,\n  "credited_amount":4750,\n  "fee_amount":     250,\n  "currency":       "XAF",\n  "operator":       "MTN Mobile Money",\n  "phone":          "670000000",\n  "country_code":   "CM",\n  "created_at":     "2026-03-15T14:00:00Z"\n}`, y, "json");
+  y = codeBlock(doc, `{\n  "transaction_id": "8f3e1c2d-...",\n  "reference":      "ORDER-001",\n  "status":         "pending",\n  "amount":         5000,\n  "credited_amount":4750,\n  "fee_amount":     250,\n  "currency":       "XAF",\n  "operator":       "MTN Money",\n  "phone":          "670000000",\n  "country_code":   "CM",\n  "created_at":     "2026-03-15T14:00:00Z"\n}`, y, "json");
 
   y = subHeading(doc, "OTP requis — Orange CI/SN/BF/ML (USSD) et LigdiCash BF (SMS)", y);
   y = paragraph(doc, "Orange CI/SN/BF/ML → OTP USSD : le serveur retourne un ussd_code a afficher au client, qui le compose sur son telephone (l'OTP s'affiche dans le menu, aucun SMS envoye). LigdiCash BF → OTP SMS : le serveur envoie un SMS automatiquement (ussd_code = null). Dans les deux cas, la reponse 400 contient un champ 'reference' obligatoire pour l'etape 2.", y);
@@ -861,7 +847,7 @@ async function displayCryptoPayment(data) {
   y = table(doc,
     ["Flux", "Operateurs concernes", "Reponse initiale", "Action requise"],
     [
-      ["USSD Push", "MTN, Moov, Airtel, Orange CM, Free SN, T-Money, Flooz, M-Pesa, Afrimoney", "202 pending", "Attendre le webhook. Le client valide sur son telephone."],
+      ["USSD Push", "MTN, Moov, Airtel, Orange, Free, E-money, T-Money, Flooz, M-Pesa, Afri Money, Vodacom", "202 pending", "Attendre le webhook. Le client valide sur son telephone."],
       ["OTP USSD",  "Orange CI (#144*82#), SN (#144*391#), BF (*144*4*6*montant#)", "400 otp_required, reference: \"DEP-...\", ussd_code: \"#144*82#\"", "L'API envoie l'OTP par SMS. Relancer avec otp + reference (valeur recue dans le 400)."],
       ["OTP SMS",   "LigdiCash BF (wallet) — SMS envoye automatiquement", "400 otp_required, reference: \"DEP-...\", ussd_code: null", "SMS envoye automatiquement. Relancer avec otp + reference (valeur recue dans le 400)."],
       ["Wave",      "Wave CI, Wave SN", "202 pending, flow: wave, wave_url: ...", "Afficher le wave_url en bouton ou QR code. Le client ouvre Wave."],

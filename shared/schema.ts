@@ -405,21 +405,16 @@ export const withdrawalNumberChanges = pgTable("withdrawal_number_changes", {
 
 // Mobile Money operators by country
 export const MOBILE_OPERATORS: Record<string, string[]> = {
-  "Cameroon": ["MTN Mobile Money", "Orange Money"],
-  "Senegal": ["Orange Money", "Wave", "Free Money"],
-  "Côte d'Ivoire": ["Moov Money", "MTN Mobile Money", "Orange Money", "Wave"],
+  "Cameroon": ["MTN Money", "Orange Money"],
+  "Senegal": ["E-money", "Free Money", "Orange Money", "Wave Money"],
+  "Côte d'Ivoire": ["Moov Money", "MTN Money", "Orange Money", "Wave Money"],
   "Mali": ["Orange Money", "Moov Money"],
-  "Burkina Faso": ["Orange Money", "Moov Money"],
-  "Benin": ["Celtiis Money", "Coris Money", "MTN Mobile Money", "Moov Money"],
+  "Burkina Faso": ["Moov Money", "Orange Money", "Wallet LigdiCash"],
+  "Benin": ["Celtiis Money", "Coris Money", "MTN Money", "Moov Money"],
   "Togo": ["Flooz (Moov)", "T-Money"],
   "Niger": ["Airtel Money"],
-  "Guinea-Bissau": ["Orange Money"],
-  "Chad": ["Airtel Money", "Moov Money"],
-  "Central African Republic": ["Orange Money"],
-  "Republic of the Congo": ["MTN Mobile Money", "Airtel Money"],
   "Gabon": ["Airtel Money", "Moov Money"],
-  "Equatorial Guinea": ["Orange Money"],
-  "Rwanda": ["MTN Mobile Money", "Airtel Money"],
+  "RD Congo": ["Afri Money", "Airtel Money", "Mpesa Money", "Orange Money", "Vodacom"],
 };
 
 // User schemas

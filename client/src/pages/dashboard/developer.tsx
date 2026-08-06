@@ -26,20 +26,15 @@ const SECTIONS = [
 
 // All active countries — currencies are standard ISO codes (XOF/XAF/CDF)
 const ALL_COUNTRIES = [
-  { code: "BJ", name: "Bénin",              currency: "XOFB", operators: ["Celtiis Money", "Coris Money", "Moov Money", "MTN Mobile Money"], otpOps: [] },
-  { code: "BF", name: "Burkina Faso",       currency: "XOFF", operators: ["Moov Money", "Orange Money"],                                   otpOps: ["Orange Money"] },
-  { code: "CM", name: "Cameroun",           currency: "XAF",  operators: ["MTN Mobile Money", "Orange Money"],                             otpOps: [] },
-  { code: "CF", name: "Centrafrique",       currency: "XAF",  operators: ["Orange Money"],                                                  otpOps: ["Orange Money"] },
-  { code: "CG", name: "Congo",              currency: "XAFC", operators: ["Airtel Money", "MTN Mobile Money"],                             otpOps: [] },
-  { code: "CI", name: "Côte d'Ivoire",      currency: "XOFC", operators: ["Moov Money", "MTN Mobile Money", "Orange Money", "Wave"],       otpOps: ["Orange Money"] },
+  { code: "BJ", name: "Bénin",              currency: "XOFB", operators: ["Celtiis Money", "Coris Money", "Moov Money", "MTN Money"], otpOps: [] },
+  { code: "BF", name: "Burkina Faso",       currency: "XOFF", operators: ["Moov Money", "Orange Money", "Wallet LigdiCash"],                  otpOps: ["Orange Money", "Wallet LigdiCash"] },
+  { code: "CM", name: "Cameroun",           currency: "XAF",  operators: ["MTN Money", "Orange Money"],                                  otpOps: [] },
+  { code: "CI", name: "Côte d'Ivoire",      currency: "XOFC", operators: ["Moov Money", "MTN Money", "Orange Money", "Wave Money"],       otpOps: ["Orange Money"] },
   { code: "GA", name: "Gabon",              currency: "XAFG", operators: ["Airtel Money", "Moov Money"],                                   otpOps: [] },
-  { code: "GQ", name: "Guinée équatoriale", currency: "XAF",  operators: ["Orange Money"],                                                  otpOps: ["Orange Money"] },
-  { code: "GW", name: "Guinée-Bissau",      currency: "XOF",  operators: ["Orange Money"],                                                  otpOps: ["Orange Money"] },
   { code: "ML", name: "Mali",               currency: "XOF",  operators: ["Moov Money", "Orange Money"],                                   otpOps: ["Orange Money"] },
   { code: "NE", name: "Niger",              currency: "XOFN", operators: ["Airtel Money"],                                                  otpOps: [] },
-  { code: "CD", name: "RD Congo",           currency: "CDF",  operators: ["Afrimoney", "Airtel Money", "Orange Money", "Vodacom M-Pesa"],  otpOps: ["Orange Money"] },
-  { code: "SN", name: "Sénégal",            currency: "XOFS", operators: ["Free Money", "Orange Money", "Wave"],                           otpOps: ["Orange Money"] },
-  { code: "TD", name: "Tchad",              currency: "XAF",  operators: ["Airtel Money", "Moov Money"],                                   otpOps: [] },
+  { code: "CD", name: "RD Congo",           currency: "CDF",  operators: ["Afri Money", "Airtel Money", "Mpesa Money", "Orange Money", "Vodacom"], otpOps: ["Orange Money"] },
+  { code: "SN", name: "Sénégal",            currency: "XOFS", operators: ["E-money", "Free Money", "Orange Money", "Wave Money"],             otpOps: ["Orange Money"] },
   { code: "TG", name: "Togo",               currency: "XOFT", operators: ["Flooz (Moov)", "T-Money"],                                      otpOps: [] },
 ];
 
@@ -468,13 +463,13 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
     "code": "CM",
     "name": "Cameroun",
     "currency": "XAF",
-    "operators": ["MTN Mobile Money", "Orange Money"]
+    "operators": ["MTN Money", "Orange Money"]
   },
   {
     "code": "SN",
     "name": "Sénégal",
     "currency": "XOF",
-    "operators": ["Free Money", "Orange Money", "Wave"]
+    "operators": ["E-money", "Free Money", "Orange Money", "Wave Money"]
   }
   // ...
 ]`} />
@@ -826,7 +821,7 @@ async function showCryptoPayment(data) {
     amount: 5000,
     currency: "XAF",
     phone: "670000000",
-    operator: "MTN Mobile Money",
+    operator: "MTN Money",
     country_code: "CM",
     reference: "ORDER-001",
     notify_url: "https://monsite.com/webhook"
@@ -840,7 +835,7 @@ async function showCryptoPayment(data) {
     "amount": 5000,
     "currency": "XAF",
     "phone": "670000000",
-    "operator": "MTN Mobile Money",
+    "operator": "MTN Money",
     "country_code": "CM",
     "reference": "ORDER-001",
     "notify_url": "https://monsite.com/webhook"
@@ -856,7 +851,7 @@ async function showCryptoPayment(data) {
   "credited_amount": 4750,
   "fee_amount": 250,
   "currency": "XAF",
-  "operator": "MTN Mobile Money",
+  "operator": "MTN Money",
   "phone": "670000000",
   "country_code": "CM",
   "created_at": "2026-03-15T14:00:00Z"
@@ -947,7 +942,7 @@ curl https://ashtechpay.top/v1/collect \\
               <tbody>
                 <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                   <td className="px-3 py-3 whitespace-nowrap"><span className="text-blue-400 font-semibold text-sm">USSD Push</span></td>
-                  <td className="px-3 py-3 text-gray-700 text-sm">MTN, Moov, Airtel, Orange CM, Free SN, T-Money, Flooz, M-Pesa, Afrimoney…</td>
+                  <td className="px-3 py-3 text-gray-700 text-sm">MTN, Moov, Airtel, Orange, Free, E-money, T-Money, Flooz, M-Pesa, Afri Money…</td>
                   <td className="px-3 py-3 font-mono text-green-400 text-xs whitespace-nowrap">202 pending</td>
                   <td className="px-3 py-3 text-gray-700 text-sm">Attendre le webhook. Le client valide directement sur son téléphone.</td>
                 </tr>
@@ -986,7 +981,7 @@ curl https://ashtechpay.top/v1/collect \\
               <div className="text-xs text-gray-500">
                 <strong className="text-zinc-400">Exemples d'opérateurs :</strong>{" "}
                 MTN (CM, BJ, CG, GN, CD), Moov (BJ, CI, BF, GA, ML, TG), Airtel (CG, GA, NE, CD, TD),
-                Orange (CM), Free Money (SN), T-Money (TG), Flooz (TG), Vodacom M-Pesa (CD), Afrimoney (CD)
+                Orange (CM), Free Money (SN), E-money (SN), T-Money (TG), Flooz (TG), Mpesa Money (CD), Afri Money (CD), Vodacom (CD)
               </div>
               <div className="grid lg:grid-cols-2 gap-4">
                 <div className="space-y-1 min-w-0">
@@ -1369,7 +1364,7 @@ if (data.flow === "wave") {
     "currency": "XAF",
     "total_fee_pct": 5.5,
     "ashtech_margin_pct": 2.0,
-    "operators": ["MTN Mobile Money", "Orange Money"]
+    "operators": ["MTN Money", "Orange Money"]
   },
   {
     "country_code": "SN",
@@ -1377,7 +1372,7 @@ if (data.flow === "wave") {
     "currency": "XOF",
     "total_fee_pct": 5.0,
     "ashtech_margin_pct": 2.0,
-    "operators": ["Free Money", "Orange Money", "Wave"]
+    "operators": ["E-money", "Free Money", "Orange Money", "Wave Money"]
   }
   // ...un objet par pays actif
 ]`} />

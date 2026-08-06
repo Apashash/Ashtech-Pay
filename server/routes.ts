@@ -163,8 +163,9 @@ function warnIfAfribaPayUnsupportedCountry(countryCode: string, context: string)
 // Fallback if afribapayOperatorCode is not set in DB.
 const AFRIBAPAY_OPERATOR_CODE_MAP: Record<string, string> = {
   orange: "orange", mtn: "mtn", moov: "moov", wave: "wave",
-  airtel: "airtel", free: "free", emoney: "emoney",
-  ligdicash: "wligdicash", tmoney: "tmoney", celtiis: "celtiis",
+  airtel: "airtel", free: "free", expresso: "expresso",
+  emoney: "expresso", ligdicash: "wligdicash",
+  walletligdicash: "wligdicash", tmoney: "tmoney", celtiis: "celtiis",
   coris: "coris", corismoney: "coris",
   mpesa: "mpesa", vodacom: "vodacom",
   afrimoney: "afrimoney",
