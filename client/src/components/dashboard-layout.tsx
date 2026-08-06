@@ -606,18 +606,34 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         )}
         <button
           onClick={() => setShowContactMenu(prev => !prev)}
-           className="flex h-16 w-16 items-center justify-center rounded-full transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+           className="relative flex h-16 w-16 items-center justify-center rounded-full transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
           data-testid="button-contact-menu"
-          title="Nous contacter"
-           aria-label="Nous contacter"
+           title={showContactMenu ? "Fermer le menu de contact" : "Nous contacter"}
+           aria-label={showContactMenu ? "Fermer le menu de contact" : "Nous contacter"}
            aria-expanded={showContactMenu}
         >
-           <img
-             src="/support-assistant.png"
-             alt=""
+           <span
+             className={`absolute inset-0 flex items-center justify-center transition-all duration-300 ease-out ${
+               showContactMenu ? "scale-0 rotate-90 opacity-0" : "scale-100 rotate-0 opacity-100"
+             }`}
              aria-hidden="true"
-             className="h-16 w-16 object-contain drop-shadow-lg"
-           />
+           >
+             <img
+               src="/support-assistant.png"
+               alt=""
+               className="h-16 w-16 object-contain drop-shadow-lg"
+             />
+           </span>
+           <span
+             className={`absolute inset-0 flex items-center justify-center transition-all duration-300 ease-out ${
+               showContactMenu ? "scale-100 rotate-0 opacity-100" : "scale-0 -rotate-90 opacity-0"
+             }`}
+             aria-hidden="true"
+           >
+             <span className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-900/90 shadow-lg">
+               <X className="h-7 w-7 text-white" strokeWidth={2.5} />
+             </span>
+           </span>
         </button>
       </div>}
     </SidebarProvider>
