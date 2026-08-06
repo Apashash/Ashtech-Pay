@@ -32,8 +32,8 @@ import { CoinSelect } from "@/components/ui/coin-select";
 const CRYPTO_COUNTDOWN_SECONDS = 5 * 60;
 
 const CURRENCY_FLAGS: Record<string, string> = {
-  "XAF": "🇨🇲", "XOF": "🇸🇳", "CDF": "🇨🇩", "GHS": "🇬🇭",
-  "NGN": "🇳🇬", "KES": "🇰🇪", "RWF": "🇷🇼", "GNF": "🇬🇳",
+  "XAF": "🇨🇲", "XOF": "🇸🇳", "CDF": "🇨🇩",
+  "RWF": "🇷🇼",
   "TZS": "🇹🇿", "UGX": "🇺🇬", "INR": "🇮🇳", "USD": "🇺🇸",
 };
 
@@ -54,12 +54,12 @@ interface DepositConfigResponse {
 
 function formatAmount(amount: number, currency: string): string {
   const symbol = (CURRENCY_SYMBOLS as Record<string, string>)[currency] || currency;
-  const useDecimals = ["USD", "GHS", "KES", "NGN", "INR", "TZS", "UGX", "RWF", "CDF", "GNF"].includes(currency);
+  const useDecimals = ["USD", "INR", "TZS", "UGX", "RWF", "CDF"].includes(currency);
   const formatted = new Intl.NumberFormat("fr-FR", {
     minimumFractionDigits: 0,
     maximumFractionDigits: useDecimals ? 2 : 0,
   }).format(Math.round(amount));
-  if (["USD", "NGN", "GHS", "KES", "INR"].includes(currency)) return `${symbol}${formatted}`;
+  if (["USD", "INR"].includes(currency)) return `${symbol}${formatted}`;
   return `${formatted} ${symbol}`;
 }
 

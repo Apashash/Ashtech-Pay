@@ -24,7 +24,7 @@ const faqs: FAQItem[] = [
   },
   {
     question: "Dans quels pays Ashtech Pay est-il disponible ?",
-    answer: "Ashtech Pay est disponible dans plus de 18 pays africains, incluant le Cameroun, le Sénégal, la Côte d'Ivoire, le Mali, le Burkina Faso, le Niger, le Togo, le Bénin, le Gabon, le Congo, la RD Congo, la Centrafrique, le Tchad, la Guinée, Madagascar, le Maroc, la Tunisie, le Kenya, le Nigeria, le Ghana et l'Algérie."
+    answer: "Ashtech Pay est disponible dans plusieurs pays africains, incluant le Cameroun, le Sénégal, la Côte d'Ivoire, le Mali, le Burkina Faso, le Niger, le Togo, le Bénin, le Gabon, le Congo, la RD Congo, la Centrafrique, le Tchad, Madagascar, le Maroc, la Tunisie et l'Algérie."
   },
   {
     question: "Quels sont les frais de transaction ?",

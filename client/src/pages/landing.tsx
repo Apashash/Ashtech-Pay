@@ -75,14 +75,10 @@ const countryList = [
   { name: "RD Congo", code: "cd" },
   { name: "Centrafrique", code: "cf" },
   { name: "Tchad", code: "td" },
-  { name: "Guinée", code: "gn" },
   { name: "Madagascar", code: "mg" },
   { name: "Maroc", code: "ma" },
   { name: "Tunisie", code: "tn" },
   { name: "Algérie", code: "dz" },
-  { name: "Kenya", code: "ke" },
-  { name: "Nigeria", code: "ng" },
-  { name: "Ghana", code: "gh" },
 ];
 
 function Navbar() {

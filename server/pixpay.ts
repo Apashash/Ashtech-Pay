@@ -73,7 +73,7 @@ export function normalizePixPayPhone(raw: string, countryCode: string): string {
 export const PIXPAY_CURRENCY_MAP: Record<string, string> = {
   CM: "XAF", CF: "XAF", TD: "XAF", GQ: "XAF", CG: "XAF", GA: "XAF",
   BF: "XOF", BJ: "XOF", CI: "XOF", GW: "XOF", ML: "XOF",
-  NE: "XOF", SN: "XOF", TG: "XOF", GN: "GNF",
+  NE: "XOF", SN: "XOF", TG: "XOF",
   CD: "CDF",
 };
 

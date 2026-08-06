@@ -24,8 +24,8 @@ export function convertCurrency(amountXAF: number, toCurrency: string, customRat
 
 // Currencies whose amounts are stored natively (not as XAF equivalents)
 // and must NOT be converted through the XAF pivot before display.
-// CDF and GNF have defaultRate 0 in schema — they are stored in their own unit.
-const NATIVE_CRYPTO_CURRENCIES = new Set(["USDT", "CDF", "GNF"]);
+// CDF has defaultRate 0 in schema — it is stored in its own unit.
+const NATIVE_CRYPTO_CURRENCIES = new Set(["USDT", "CDF"]);
 
 export function formatCurrency(amount: string | number, currency: SupportedCurrency = "XAF", customRates?: Record<string, number>): string {
   const num = typeof amount === "string" ? parseFloat(amount) : amount;
@@ -68,11 +68,7 @@ export const ALL_CURRENCY_META: Record<string, { label: string; flag: string; na
   XOF: { label: "XOF", flag: "🇸🇳", name: "Franc CFA (UEMOA)" },
   CDF: { label: "CDF", flag: "🇨🇩", name: "Franc Congolais" },
   USD: { label: "$",   flag: "🇺🇸", name: "Dollar US" },
-  GHS: { label: "GHS", flag: "🇬🇭", name: "Cédi Ghanéen" },
-  NGN: { label: "NGN", flag: "🇳🇬", name: "Naira Nigérian" },
-  KES: { label: "KES", flag: "🇰🇪", name: "Shilling Kenyan" },
   RWF: { label: "RWF", flag: "🇷🇼", name: "Franc Rwandais" },
   TZS: { label: "TZS", flag: "🇹🇿", name: "Shilling Tanzanien" },
   UGX: { label: "UGX", flag: "🇺🇬", name: "Shilling Ougandais" },
-  GNF: { label: "GNF", flag: "🇬🇳", name: "Franc Guinéen" },
 };

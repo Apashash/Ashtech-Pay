@@ -2,7 +2,6 @@ export const DIRECT_CRYPTO_CURRENCIES = new Set([
   "USDT",
   "XAF",
   "XOF",
-  "GNF",
   "CDF",
   "USD",
 ]);

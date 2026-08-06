@@ -52,10 +52,6 @@ export const SUPPORTED_CURRENCIES = [
   "XOFS", // Sénégal
   "XOFT", // Togo
   "CDF",  // RD Congo
-  "GHS",  // Ghana
-  "GNF",  // Guinée Conakry
-  "KES",  // Kenya
-  "NGN",  // Nigeria
   "RWF",  // Rwanda
   "TZS",  // Tanzanie
   "UGX",  // Ouganda
@@ -103,15 +99,7 @@ export const COUNTRY_CURRENCIES: Record<string, SupportedCurrency> = {
   "Benin": "XOFB",
   "Guinée-Bissau": "XOF",
   "Guinea-Bissau": "XOF",
-  // ── Afrique de l'Ouest hors CFA ──────────────────────────────────────────
-  "Nigeria": "NGN",
-  "Nigéria": "NGN",
-  "Ghana": "GHS",
-  "Guinée Conakry": "GNF",
-  "Guinée": "GNF",
-  "Guinea": "GNF",
   // ── Afrique de l'Est ─────────────────────────────────────────────────────
-  "Kenya": "KES",
   "Rwanda": "RWF",
   "Tanzania": "TZS",
   "Tanzanie": "TZS",
@@ -137,10 +125,6 @@ export const EXCHANGE_RATES: Record<SupportedCurrency, number> = {
   "XOFS": 1,
   "XOFT": 1,
   "CDF":  0.27,
-  "GHS":  0.057,
-  "GNF":  0.0076,
-  "KES":  0.052,
-  "NGN":  0.44,
   "RWF":  0.00066,
   "TZS":  0.026,
   "UGX":  0.0019,
@@ -170,14 +154,10 @@ export const ALL_FX_CURRENCIES: FxCurrency[] = [
   { code: "XOFM", name: "Mali (XOF)", defaultRate: 585.00 },
   { code: "XAFC", name: "Congo Brazzaville (XAF)", defaultRate: 585.00 },
   { code: "XAFG", name: "Gabon (XAF)", defaultRate: 585.00 },
-  { code: "NGN", name: "Nigerian Naira", defaultRate: 1356.00 },
-  { code: "GHS", name: "Ghanaian Cedi", defaultRate: 12.40 },
-  { code: "KES", name: "Kenyan Shilling", defaultRate: 132.00 },
   { code: "RWF", name: "Rwandan Franc", defaultRate: 1480.00 },
   { code: "TZS", name: "Tanzanian Shilling", defaultRate: 2650.00 },
   { code: "UGX", name: "Ugandan Shilling", defaultRate: 3600.00 },
   { code: "CDF", name: "Congolese Franc", defaultRate: 0 }, // No hardcoded default — rate comes from country.exchangeRate (admin-editable in Pays)
-  { code: "GNF", name: "Franc Guinéen", defaultRate: 9095.00 },
   { code: "INR", name: "Roupie Indienne", defaultRate: 84.00 },
   { code: "USDT", name: "USDT TRC20 (Tron)", defaultRate: 1.00 },
 ];
@@ -195,10 +175,6 @@ export const CURRENCY_SYMBOLS: Record<SupportedCurrency, string> = {
   "XOFT": "FCFA",
   "XOFN": "FCFA",
   "CDF":  "FC",
-  "GHS":  "₵",
-  "GNF":  "GNF",
-  "KES":  "KSh",
-  "NGN":  "₦",
   "RWF":  "RWF",
   "TZS":  "TZS",
   "UGX":  "UGX",
@@ -443,9 +419,6 @@ export const MOBILE_OPERATORS: Record<string, string[]> = {
   "Republic of the Congo": ["MTN Mobile Money", "Airtel Money"],
   "Gabon": ["Airtel Money", "Moov Money"],
   "Equatorial Guinea": ["Orange Money"],
-  "Nigeria": ["OPay", "PalmPay", "Paga"],
-  "Ghana": ["MTN Mobile Money", "Vodafone Cash", "AirtelTigo Money"],
-  "Kenya": ["M-Pesa", "Airtel Money"],
   "Rwanda": ["MTN Mobile Money", "Airtel Money"],
 };
 
@@ -1004,7 +977,7 @@ export const updateWithdrawalNumberSchema = z.object({
 export const wallets = pgTable("wallets", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id),
-  currency: text("currency").notNull(), // XOF, GHS, NGN, KES, CDF, etc.
+  currency: text("currency").notNull(), // XOF, XAF, CDF, RWF, TZS, UGX, etc.
   balance: decimal("balance", { precision: 15, scale: 2 }).default("0.00").notNull(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (t) => ({
@@ -1060,8 +1033,8 @@ export const CURRENCY_ZONE: Record<string, SupportedCurrency> = {
   // XOF zone — West Africa
   BJ: "XOFB", BF: "XOFF", CI: "XOFC", GW: "XOF", ML: "XOFM", NE: "XOFN", SN: "XOFS", TG: "XOFT",
   // Other countries
-  GH: "GHS", NG: "NGN", KE: "KES", RW: "RWF", TZ: "TZS", UG: "UGX",
-  CD: "CDF", GN: "GNF",
+  RW: "RWF", TZ: "TZS", UG: "UGX",
+  CD: "CDF",
 };
 
 // Hosted Payment Page

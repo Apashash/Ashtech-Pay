@@ -37,7 +37,7 @@ export default function CountryBlockedPage() {
             <div>
               <p className="text-white font-semibold text-sm mb-1">Pays couverts</p>
               <p className="text-gray-400 text-sm">
-                Cameroun, Sénégal, Côte d'Ivoire, Ghana, Kenya, Nigeria, Bénin, Togo, Burkina Faso, Mali, Guinée, RDC, Gabon, Congo et plus de 10 autres pays africains.
+                Cameroun, Sénégal, Côte d'Ivoire, Bénin, Togo, Burkina Faso, Mali, Gabon, Congo, RDC et plusieurs autres pays africains.
               </p>
             </div>
           </div>

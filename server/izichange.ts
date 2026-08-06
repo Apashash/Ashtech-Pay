@@ -28,9 +28,6 @@ export const IZIPAY_WEBHOOK_SECRET = "";   // always "" — do not rely on this
 const IZIPAY_FIAT_MAP: Record<string, string> = {
   XAF:  "XAF", XAFC: "XAF", XAFG: "XAF",
   XOF:  "XOF", XOFC: "XOF", XOFF: "XOF", XOFB: "XOF", XOFT: "XOF", XOFS: "XOF",
-  NGN:  "NGN",
-  GHS:  "GHS",
-  KES:  "KES",
   CDF:  "XAF", // fallback — IziChange doesn't support CDF yet
 };
 
@@ -87,7 +84,7 @@ async function iziRequest(
 // ── Payment Intents ───────────────────────────────────────────────────────────
 export interface CreatePaymentIntentParams {
   requestedCurrencyType: "fiat" | "crypto";
-  /** ISO currency code, e.g. "XOF", "XAF", "GHS" */
+  /** ISO currency code, e.g. "XOF", "XAF", "CDF" */
   currencyRequested: string;
   /** Amount as a decimal string in major units, e.g. "5000" (never centimes, never a JS number) */
   amountRequested: string;

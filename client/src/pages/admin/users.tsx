@@ -140,8 +140,8 @@ export default function AdminUsers() {
   const CURRENCY_FLAGS: Record<string, string> = {
     XAF: "🇨🇲", XAFC: "🇨🇬", XAFG: "🇬🇦",
     XOF: "🇸🇳", XOFC: "🇨🇮", XOFF: "🇧🇫", XOFN: "🇳🇪", XOFB: "🇧🇯", XOFT: "🇹🇬", XOFS: "🇸🇳", XOFM: "🇲🇱",
-    GHS: "🇬🇭", NGN: "🇳🇬", KES: "🇰🇪", RWF: "🇷🇼", TZS: "🇹🇿",
-    UGX: "🇺🇬", CDF: "🇨🇩", GNF: "🇬🇳", GMD: "🇬🇲",
+    RWF: "🇷🇼", TZS: "🇹🇿",
+    UGX: "🇺🇬", CDF: "🇨🇩",
     USD: "🇺🇸", EUR: "🇪🇺", GBP: "🇬🇧", CHF: "🇨🇭",
     MAD: "🇲🇦", EGP: "🇪🇬", ZAR: "🇿🇦",
   };
@@ -154,10 +154,7 @@ export default function AdminUsers() {
     "Bénin": "🇧🇯", "Benin": "🇧🇯",
     "Burkina Faso": "🇧🇫",
     "Niger": "🇳🇪",
-    "Guinée": "🇬🇳", "Guinée Conakry": "🇬🇳",
-    "Ghana": "🇬🇭",
-    "Nigeria": "🇳🇬", "Nigéria": "🇳🇬",
-    "Kenya": "🇰🇪",
+    "Guinée": "🇬🇳",
     "Rwanda": "🇷🇼",
     "Tanzanie": "🇹🇿", "Tanzania": "🇹🇿",
     "Ouganda": "🇺🇬", "Uganda": "🇺🇬",

@@ -34,8 +34,8 @@ const STATUS_LABELS: Record<string, { label: string; variant: "default" | "secon
 };
 
 const CURRENCY_FLAGS: Record<string, string> = {
-  XAF: "🇨🇲", XOF: "🇸🇳", GHS: "🇬🇭", NGN: "🇳🇬", KES: "🇰🇪",
-  RWF: "🇷🇼", TZS: "🇹🇿", UGX: "🇺🇬", CDF: "🇨🇩", GNF: "🇬🇳",
+  XAF: "🇨🇲", XOF: "🇸🇳",
+  RWF: "🇷🇼", TZS: "🇹🇿", UGX: "🇺🇬", CDF: "🇨🇩",
 };
 
 // ── 4 paires de conversion avec leurs settings keys ────────────────────────────

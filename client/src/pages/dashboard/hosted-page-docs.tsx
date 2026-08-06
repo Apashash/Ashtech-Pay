@@ -370,7 +370,7 @@ export default function HostedPageDocs({ publicMode = false }: { publicMode?: bo
 Content-Type: application/json`} />
 
               <ParamTable rows={[
-                { name: "currency", type: "string", required: true, desc: "XOF · XAF · GNF · CDF" },
+                { name: "currency", type: "string", required: true, desc: "XOF · XAF · CDF" },
                 { name: "amount", type: "number", desc: "Montant fixe. Obligatoire si is_fixed_amount est true" },
                 { name: "description", type: "string?", desc: "Titre affiché sur la page de paiement" },
                 { name: "is_fixed_amount", type: "boolean?", desc: "true (défaut) = prix fixe. false = le client saisit le montant" },
@@ -407,7 +407,7 @@ Content-Type: application/json`} />
   },
   body: JSON.stringify({
     currency: "XAF",
-    amount: 5000,             // montant en unité locale (FCFA, GNF, CDF…)
+    amount: 5000,             // montant en unité locale (FCFA, CDF…)
     description: "Abonnement mensuel",
     is_fixed_amount: true,    // défaut — peut être omis
     // notify_url est définie dans vos paramètres — Ashtech Pay la récupère automatiquement
@@ -473,19 +473,14 @@ Content-Type: application/json`} />
                       { code: "TG", flag: "🇹🇬", pays: "Togo",            wallet: "XOFT", ops: "Flooz, Tmoney" },
                       { code: "NE", flag: "🇳🇪", pays: "Niger",           wallet: "XOFN", ops: "Orange, Airtel" },
                       { code: "GW", flag: "🇬🇼", pays: "Guinée-Bissau",   wallet: "XOF",  ops: "MTN" },
-                      { code: "GN", flag: "🇬🇳", pays: "Guinée",          wallet: "GNF",  ops: "Orange, MTN" },
                       { code: "CD", flag: "🇨🇩", pays: "Congo RDC",       wallet: "CDF",  ops: "Airtel, Orange" },
                       { code: "GA", flag: "🇬🇦", pays: "Gabon",           wallet: "XAFG", ops: "Airtel, Moov" },
                       { code: "CG", flag: "🇨🇬", pays: "Congo",           wallet: "XAFC", ops: "Airtel, MTN" },
                       { code: "CF", flag: "🇨🇫", pays: "Centrafrique",    wallet: "XAF",  ops: "Orange" },
                       { code: "TD", flag: "🇹🇩", pays: "Tchad",           wallet: "XAF",  ops: "Airtel, Moov" },
                       { code: "RW", flag: "🇷🇼", pays: "Rwanda",          wallet: "RWF",  ops: "MTN, Airtel" },
-                      { code: "GH", flag: "🇬🇭", pays: "Ghana",           wallet: "GHS",  ops: "MTN, Vodafone, Airtel" },
-                      { code: "NG", flag: "🇳🇬", pays: "Nigeria",         wallet: "NGN",  ops: "MTN, Airtel" },
-                      { code: "KE", flag: "🇰🇪", pays: "Kenya",           wallet: "KES",  ops: "M-Pesa" },
                       { code: "TZ", flag: "🇹🇿", pays: "Tanzanie",        wallet: "TZS",  ops: "Vodacom, Airtel, Tigo" },
                       { code: "UG", flag: "🇺🇬", pays: "Ouganda",         wallet: "UGX",  ops: "MTN, Airtel" },
-                      { code: "GM", flag: "🇬🇲", pays: "Gambie",          wallet: "GMD",  ops: "Afrimoney, QMoney" },
                     ].map(({ code, flag, pays, wallet, ops }) => (
                       <tr key={code} className="border-t border-gray-100">
                         <td className="px-3 py-2 font-mono text-sky-700">{code}</td>
@@ -578,15 +573,10 @@ Content-Type: application/json`} />
                       { pays: "🇨🇬 Congo",           wallet: "XAFC" },
                       { pays: "🇨🇫 Centrafrique",    wallet: "XAF" },
                       { pays: "🇹🇩 Tchad",           wallet: "XAF" },
-                      { pays: "🇬🇳 Guinée",          wallet: "GNF" },
                       { pays: "🇨🇩 Congo RDC",       wallet: "CDF" },
                       { pays: "🇷🇼 Rwanda",          wallet: "RWF" },
-                      { pays: "🇬🇭 Ghana",           wallet: "GHS" },
-                      { pays: "🇳🇬 Nigeria",         wallet: "NGN" },
-                      { pays: "🇰🇪 Kenya",           wallet: "KES" },
                       { pays: "🇹🇿 Tanzanie",        wallet: "TZS" },
                       { pays: "🇺🇬 Ouganda",         wallet: "UGX" },
-                      { pays: "🇬🇲 Gambie",          wallet: "GMD" },
                     ].map(({ pays, wallet }) => (
                       <tr key={pays} className="border-t border-gray-100">
                         <td className="px-3 py-2.5 text-gray-700">{pays}</td>

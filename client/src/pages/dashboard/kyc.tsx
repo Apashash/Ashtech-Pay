@@ -45,7 +45,6 @@ const africanCountries = [
   { code: "GA", name: "Gabon", flag: "🇬🇦" },
   { code: "CG", name: "Congo", flag: "🇨🇬" },
   { code: "CD", name: "RD Congo", flag: "🇨🇩" },
-  { code: "GN", name: "Guinée", flag: "🇬🇳" },
   { code: "TD", name: "Tchad", flag: "🇹🇩" },
   { code: "CF", name: "Centrafrique", flag: "🇨🇫" },
   { code: "GQ", name: "Guinée équatoriale", flag: "🇬🇶" },

@@ -1,5 +1,5 @@
-// AfribaPay : BJ, BF, CM, CF, CG, CI, GA, GM, GN, GW, ML, NE, CD, SN, TD, TG
-export const AFRIBAPAY_COUNTRY_CODES = ["BJ","BF","CM","CF","CG","CI","GA","GM","GN","GW","ML","NE","CD","SN","TD","TG"];
+// AfribaPay : BJ, BF, CM, CF, CG, CI, GA, GW, ML, NE, CD, SN, TD, TG
+export const AFRIBAPAY_COUNTRY_CODES = ["BJ","BF","CM","CF","CG","CI","GA","GW","ML","NE","CD","SN","TD","TG"];
 
 // PixPay : CM, CD, CI, SN, BF seulement
 export const PIXPAY_COUNTRY_CODES = ["CM","CD","CI","SN","BF"];

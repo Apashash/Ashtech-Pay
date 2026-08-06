@@ -608,7 +608,6 @@ export default function AdminCountries() {
                       <SelectItem value="XAF">XAF (Franc CFA CEMAC)</SelectItem>
                       <SelectItem value="XOF">XOF (Franc CFA UEMOA)</SelectItem>
                       <SelectItem value="CDF">CDF (Franc Congolais)</SelectItem>
-                      <SelectItem value="GNF">GNF (Franc Guinéen)</SelectItem>
                       <SelectItem value="MGA">MGA (Ariary Malgache)</SelectItem>
                       <SelectItem value="MAD">MAD (Dirham Marocain)</SelectItem>
                       <SelectItem value="TND">TND (Dinar Tunisien)</SelectItem>

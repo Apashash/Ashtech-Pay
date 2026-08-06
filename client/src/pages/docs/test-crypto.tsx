@@ -371,7 +371,7 @@ export default function TestCryptoPage() {
                     className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-primary/50"
                     data-testid="select-crypto-currency"
                   >
-                    {["USDT", "XAF", "XOF", "GNF", "CDF", "USD"].map(value => <option key={value} value={value}>{value}</option>)}
+                    {["USDT", "XAF", "XOF", "CDF", "USD"].map(value => <option key={value} value={value}>{value}</option>)}
                   </select>
                 </Field>
                 <Field label="Montant" hint={currency === "USDT" ? "Minimum : 1 USDT brut" : "Le serveur convertit le minimum en USDT"}>

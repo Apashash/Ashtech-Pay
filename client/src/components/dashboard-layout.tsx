@@ -544,9 +544,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                   <SelectItem value="CM">Cameroun (XAF)</SelectItem>
                   <SelectItem value="SN">Sénégal (XOF)</SelectItem>
                   <SelectItem value="CI">Côte d'Ivoire (XOF)</SelectItem>
-                  <SelectItem value="GH">Ghana (GHS)</SelectItem>
-                  <SelectItem value="NG">Nigéria (NGN)</SelectItem>
-                  <SelectItem value="KE">Kenya (KES)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

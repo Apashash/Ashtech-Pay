@@ -73,9 +73,9 @@ type ExternalFormData = z.infer<typeof externalFormSchema>;
 
 const COUNTRY_FLAGS: Record<string, string> = {
   "Bénin": "🇧🇯", "Burkina Faso": "🇧🇫", "Cameroun": "🇨🇲", "Centrafrique": "🇨🇫",
-  "Congo": "🇨🇬", "Côte d'Ivoire": "🇨🇮", "Gabon": "🇬🇦", "Ghana": "🇬🇭",
-  "Guinée Conakry": "🇬🇳", "Guinée équatoriale": "🇬🇶", "Guinée-Bissau": "🇬🇼",
-  "Kenya": "🇰🇪", "Mali": "🇲🇱", "Niger": "🇳🇪", "Nigeria": "🇳🇬", "Nigéria": "🇳🇬",
+  "Congo": "🇨🇬", "Côte d'Ivoire": "🇨🇮", "Gabon": "🇬🇦",
+  "Guinée équatoriale": "🇬🇶", "Guinée-Bissau": "🇬🇼",
+  "Mali": "🇲🇱", "Niger": "🇳🇪",
   "Ouganda": "🇺🇬", "RD Congo": "🇨🇩", "Rwanda": "🇷🇼", "Sénégal": "🇸🇳",
   "Tanzanie": "🇹🇿", "Tchad": "🇹🇩", "Togo": "🇹🇬", "USA": "🇺🇸"
 };

@@ -22,8 +22,8 @@ interface WalletEntry {
 const CURRENCY_FLAGS: Record<string, string> = {
   XAF: "🇨🇲", XAFC: "🇨🇬", XAFG: "🇬🇦",
   XOF: "🇸🇳", XOFC: "🇨🇮", XOFF: "🇧🇫", XOFN: "🇳🇪", XOFB: "🇧🇯", XOFT: "🇹🇬", XOFS: "🇸🇳", XOFM: "🇲🇱",
-  GHS: "🇬🇭", NGN: "🇳🇬", KES: "🇰🇪", RWF: "🇷🇼", TZS: "🇹🇿",
-  UGX: "🇺🇬", CDF: "🇨🇩", GNF: "🇬🇳", GMD: "🇬🇲", SLL: "🇸🇱",
+  RWF: "🇷🇼", TZS: "🇹🇿",
+  UGX: "🇺🇬", CDF: "🇨🇩", SLL: "🇸🇱",
   MWK: "🇲🇼", ZMK: "🇿🇲", ZAR: "🇿🇦", EGP: "🇪🇬", MAD: "🇲🇦",
   ETB: "🇪🇹", MZN: "🇲🇿", ZWE: "🇿🇼", CVE: "🇨🇻",
   USD: "🇺🇸", EUR: "🇪🇺", GBP: "🇬🇧", CHF: "🇨🇭", USDT: "₮",

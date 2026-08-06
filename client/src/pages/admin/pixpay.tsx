@@ -62,7 +62,7 @@ function detectFlowType(operatorName: string, countryCode: string): "ussd" | "ot
 // ─── Currency zones ───────────────────────────────────────────────────────────
 const CURRENCY_ZONE: Record<string, string> = {
   CM:"XAF",CF:"XAF",TD:"XAF",GQ:"XAF",CG:"XAF",GA:"XAF",
-  BF:"XOFF",BJ:"XOFB",CI:"XOFC",GW:"XOF",ML:"XOFM",NE:"XOF",SN:"XOFS",TG:"XOFT",GN:"GNF",
+  BF:"XOFF",BJ:"XOFB",CI:"XOFC",GW:"XOF",ML:"XOFM",NE:"XOF",SN:"XOFS",TG:"XOFT",
   CD:"CDF",
 };
 

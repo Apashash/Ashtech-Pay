@@ -141,17 +141,17 @@ function buildWebhookUrl(path: string): string {
 // Used to always send the correct ISO currency code regardless of DB value.
 const AFRIBAPAY_ISO_CURRENCY: Record<string, string> = {
   BF: "XOF", BJ: "XOF", CD: "CDF", CF: "XAF", CG: "XAF",
-  CI: "XOF", CM: "XAF", GA: "XAF", GM: "GMD", GN: "GNF",
-  GQ: "XAF", GW: "XOF", ML: "XOF", NE: "XOF", NG: "NGN", RW: "RWF",
-  SN: "XOF", TD: "XAF", TG: "XOF", KE: "KES", TZ: "TZS",
-  UG: "UGX", GH: "GHS",
+  CI: "XOF", CM: "XAF", GA: "XAF",
+  GQ: "XAF", GW: "XOF", ML: "XOF", NE: "XOF", RW: "RWF",
+  SN: "XOF", TD: "XAF", TG: "XOF",
+  UG: "UGX",
 };
 
 // Countries confirmed in AfribaPay's /v1/countries API docs (verified 2026-07).
 // CF, CG, GQ, GW, TD, RW are NOT listed — requests for them will fail on AfribaPay's side.
 // Use PixPay or mark operators as unsupported for those countries.
 const AFRIBAPAY_CONFIRMED_COUNTRIES = new Set([
-  "BF", "BJ", "CD", "CI", "CM", "GA", "GN", "ML", "NE", "SN", "TG",
+  "BF", "BJ", "CD", "CI", "CM", "GA", "ML", "NE", "SN", "TG",
 ]);
 function warnIfAfribaPayUnsupportedCountry(countryCode: string, context: string) {
   if (!AFRIBAPAY_CONFIRMED_COUNTRIES.has(countryCode.toUpperCase())) {
@@ -13568,7 +13568,7 @@ export async function registerRoutes(
     const c = (dbCurrency || "").toUpperCase();
     if (c.startsWith("XOF")) return "XOF";
     if (c.startsWith("XAF")) return "XAF";
-    return c; // GNF, CDF stay unchanged
+    return c; // CDF stays unchanged
   }
 
   /** GET /v1/countries — list all active countries with their operators */
@@ -14467,7 +14467,7 @@ export async function registerRoutes(
       if (!currency) {
         return res.status(400).json({ error: "missing_fields", message: "currency is required." });
       }
-      const validCurrencies = ["XOF", "XAF", "GNF", "CDF"];
+      const validCurrencies = ["XOF", "XAF", "CDF"];
       if (!validCurrencies.includes(currency)) {
         return res.status(400).json({ error: "invalid_currency", message: `currency must be one of: ${validCurrencies.join(", ")}` });
       }

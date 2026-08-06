@@ -50,9 +50,6 @@ const countryCodeMap: Record<string, string> = {
   "Republic of the Congo": "cg",
   "Gabon": "ga",
   "Equatorial Guinea": "gq",
-  "Nigeria": "ng",
-  "Ghana": "gh",
-  "Kenya": "ke",
   "Rwanda": "rw",
 };
 

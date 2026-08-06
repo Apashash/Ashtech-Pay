@@ -464,7 +464,7 @@ export function downloadHostedPagePDF() {
   y = table(doc,
     ["Parametre", "Type", "Statut", "Description"],
     [
-      ["currency",          "string",   "Requis",    "Devise : XOF, XAF, GNF, CDF…"],
+      ["currency",          "string",   "Requis",    "Devise : XOF, XAF, CDF…"],
       ["amount",            "number",   "Optionnel", "Montant fixe. Obligatoire si is_fixed_amount est true"],
       ["description",       "string?",  "Optionnel", "Titre affiche sur la page de paiement"],
       ["is_fixed_amount",   "boolean?", "Optionnel", "true (defaut) = prix fixe. false = client saisit le montant"],
@@ -510,19 +510,14 @@ export function downloadHostedPagePDF() {
       ["TG","Togo",             "XOFT", "Flooz, Tmoney"],
       ["NE","Niger",            "XOFN", "Orange, Airtel"],
       ["GW","Guinee-Bissau",    "XOF",  "MTN"],
-      ["GN","Guinee",           "GNF",  "Orange, MTN"],
       ["CD","Congo RDC",        "CDF",  "Airtel, Orange"],
       ["GA","Gabon",            "XAFG", "Airtel, Moov"],
       ["CG","Congo",            "XAFC", "Airtel, MTN"],
       ["CF","Centrafrique",     "XAF",  "Orange"],
       ["TD","Tchad",            "XAF",  "Airtel, Moov"],
       ["RW","Rwanda",           "RWF",  "MTN, Airtel"],
-      ["GH","Ghana",            "GHS",  "MTN, Vodafone, Airtel"],
-      ["NG","Nigeria",          "NGN",  "MTN, Airtel"],
-      ["KE","Kenya",            "KES",  "M-Pesa"],
       ["TZ","Tanzanie",         "TZS",  "Vodacom, Airtel, Tigo"],
       ["UG","Ouganda",          "UGX",  "MTN, Airtel"],
-      ["GM","Gambie",           "GMD",  "Afrimoney, QMoney"],
     ],
     y, [18, 36, 28, 88]
   );
@@ -573,10 +568,8 @@ export function downloadHostedPagePDF() {
       ["Burkina Faso",   "XOFF"], ["Mali",          "XOFM"], ["Togo",          "XOFT"],
       ["Niger",          "XOFN"], ["Guinee-Bissau", "XOF"],  ["Cameroun",      "XAF"],
       ["Gabon",          "XAFG"], ["Congo",         "XAFC"], ["Centrafrique",  "XAF"],
-      ["Tchad",          "XAF"],  ["Guinee",        "GNF"],  ["Congo RDC",     "CDF"],
-      ["Rwanda",         "RWF"],  ["Ghana",         "GHS"],  ["Nigeria",       "NGN"],
-      ["Kenya",          "KES"],  ["Tanzanie",      "TZS"],  ["Ouganda",       "UGX"],
-      ["Gambie",         "GMD"],
+      ["Tchad",          "XAF"],  ["Congo RDC",     "CDF"],
+      ["Rwanda",         "RWF"],  ["Tanzanie",      "TZS"],  ["Ouganda",       "UGX"],
     ],
     y, [100, 70]
   );
@@ -759,7 +752,6 @@ export function downloadSDKDocs() {
       ["Congo",          "CG","XAFC","Airtel Money, MTN Mobile Money"],
       ["Cote d'Ivoire",  "CI","XOFC","Moov Money, MTN, Orange (OTP), Wave"],
       ["Gabon",          "GA","XAFG","Airtel Money, Moov Money"],
-      ["Guinee Conakry", "GN","GNF", "MTN Mobile Money, Orange Money"],
       ["Guinee equat.",  "GQ","XAF", "Orange Money (OTP)"],
       ["Guinee-Bissau",  "GW","XOF", "Orange Money (OTP)"],
       ["Mali",           "ML","XOF", "Moov Money, Orange Money (OTP)"],
@@ -787,7 +779,7 @@ export function downloadSDKDocs() {
      ["Parametre", "Type", "Statut", "Description"],
      [
        ["amount", "number", "Requis", "Montant brut dans la devise currency"],
-       ["currency", "string", "Requis", "USDT, XAF, XOF, GNF, CDF ou USD"],
+       ["currency", "string", "Requis", "USDT, XAF, XOF, CDF ou USD"],
        ["asset_code", "string", "Requis", "Reseau retourne par /v1/crypto/assets"],
        ["reference", "string", "Optionnel", "Reference de commande, generee si absente"],
        ["notify_url", "string", "Optionnel", "URL HTTPS du webhook marchand"],
@@ -798,7 +790,7 @@ export function downloadSDKDocs() {
    );
    y = codeBlock(doc, `fetch("https://ashtechpay.top/v1/crypto/collect", {\n  method: "POST",\n  headers: {\n    "Authorization": "Bearer YOUR_API_KEY",\n    "Content-Type": "application/json"\n  },\n  body: JSON.stringify({\n    amount: 25,\n    currency: "USDT",\n    asset_code: "USDT.TRC20",\n    reference: "ORDER-CRYPTO-001",\n    notify_url: "https://monsite.com/webhook",\n    customer: { firstName: "Ada", lastName: "Lovelace", email: "ada@example.com" }\n  })\n})`, y, "javascript");
    y = codeBlock(doc, `{\n  "transaction_id": "8f3e1c2d-...",\n  "reference": "ORDER-CRYPTO-001",\n  "status": "pending",\n  "payment_method": "crypto",\n  "asset_code": "USDT.TRC20",\n  "network": "TRC20",\n  "address": "TX…",\n  "memo": null,\n  "memo_type": null,\n  "amount": 25,\n  "currency": "USDT",\n  "amount_usdt": 25,\n  "credited_amount": 24.375,\n  "fee_amount": 0.625,\n  "credited_amount_usdt": 24.375,\n  "fee_amount_usdt": 0.625,\n  "fee_percent": 2.5,\n  "expires_at": "2026-07-31T19:00:00Z"\n}`, y, "json");
-    y = paragraph(doc, "L'API accepte un montant en USDT ou dans une devise fiat supportee (XAF, XOF, GNF, CDF ou USD). Les devises fiat sont converties en USDT avec le taux USDT/XAF. amount est le montant brut ; credited_amount_usdt est le net apres frais. Les frais Ashtech Pay et fournisseur sont inclus dans fee_amount_usdt.", y);
+    y = paragraph(doc, "L'API accepte un montant en USDT ou dans une devise fiat supportee (XAF, XOF, CDF ou USD). Les devises fiat sont converties en USDT avec le taux USDT/XAF. amount est le montant brut ; credited_amount_usdt est le net apres frais. Les frais Ashtech Pay et fournisseur sont inclus dans fee_amount_usdt.", y);
     y = banner(doc, "info", "Affichage du paiement : la reponse 202 renvoie address, memo, memo_type et asset_code, mais pas une image QR. Generez le QR cote marchand avec une bibliotheque QR a partir de address, affichez l'adresse en texte copiable et affichez toujours le memo/tag dans un champ separe lorsqu'il existe. Pour USDT.TRC20, le QR contient l'adresse ; n'inventez pas de format URI pour un memo dont le format n'est pas documente.", y);
     y = subHeading(doc, "Exemple — afficher adresse, memo et QR (Node.js / navigateur)", y);
     y = codeBlock(doc, `import QRCode from "qrcode";
@@ -841,7 +833,7 @@ async function displayCryptoPayment(data) {
     ["Parametre", "Type", "Statut", "Description"],
     [
       ["amount",       "number", "Requis",    "Montant brut a collecter"],
-      ["currency",     "string", "Requis",    "Devise du pays (XAF, XOF, GNF, CDF…)"],
+      ["currency",     "string", "Requis",    "Devise du pays (XAF, XOF, CDF…)"],
       ["phone",        "string", "Requis",    "Numero de telephone du payeur"],
       ["operator",     "string", "Requis",    "Nom exact de l'operateur (depuis /v1/countries)"],
       ["country_code", "string", "Requis",    "Code ISO du pays (CM, SN, CI…)"],

@@ -111,8 +111,8 @@ interface TransactionDetail extends Transaction {
 const CURRENCY_FLAGS: Record<string, string> = {
   XAF: "🇨🇲", XAFC: "🇨🇬", XAFG: "🇬🇦",
   XOF: "🇸🇳", XOFC: "🇨🇮", XOFF: "🇧🇫", XOFN: "🇳🇪", XOFB: "🇧🇯", XOFT: "🇹🇬", XOFS: "🇸🇳", XOFM: "🇲🇱",
-  GHS: "🇬🇭", NGN: "🇳🇬", KES: "🇰🇪", RWF: "🇷🇼", TZS: "🇹🇿",
-  UGX: "🇺🇬", CDF: "🇨🇩", GNF: "🇬🇳", GMD: "🇬🇲",
+  RWF: "🇷🇼", TZS: "🇹🇿",
+  UGX: "🇺🇬", CDF: "🇨🇩",
   USD: "🇺🇸", EUR: "🇪🇺", GBP: "🇬🇧", CHF: "🇨🇭",
   MAD: "🇲🇦", EGP: "🇪🇬", ZAR: "🇿🇦",
 };
@@ -121,8 +121,7 @@ const COUNTRY_FLAGS: Record<string, string> = {
   "Cameroun": "🇨🇲", "Cameroon": "🇨🇲", "Togo": "🇹🇬",
   "Sénégal": "🇸🇳", "Senegal": "🇸🇳", "Côte d'Ivoire": "🇨🇮", "Ivory Coast": "🇨🇮",
   "Mali": "🇲🇱", "Bénin": "🇧🇯", "Benin": "🇧🇯", "Burkina Faso": "🇧🇫",
-  "Niger": "🇳🇪", "Guinée": "🇬🇳", "Guinée Conakry": "🇬🇳", "Ghana": "🇬🇭",
-  "Nigeria": "🇳🇬", "Nigéria": "🇳🇬", "Kenya": "🇰🇪", "Rwanda": "🇷🇼",
+  "Niger": "🇳🇪", "Guinée": "🇬🇳", "Rwanda": "🇷🇼",
   "Tanzanie": "🇹🇿", "Tanzania": "🇹🇿", "Ouganda": "🇺🇬", "Uganda": "🇺🇬",
   "Congo RDC": "🇨🇩", "RD Congo": "🇨🇩", "Congo": "🇨🇬", "Congo Brazzaville": "🇨🇬",
   "Gabon": "🇬🇦", "Guinée-Bissau": "🇬🇼", "Guinée Équatoriale": "🇬🇶",

@@ -815,9 +815,6 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                   <SelectItem value="XAFG">XAFG Wallet (Gabon)</SelectItem>
                   <SelectItem value="XOFF">XOFF Wallet (Burkina Faso)</SelectItem>
                   <SelectItem value="XOFT">XOFT Wallet (Togo)</SelectItem>
-                  <SelectItem value="GH">GHS Wallet (Ghana)</SelectItem>
-                  <SelectItem value="NG">NGN Wallet (Nigéria)</SelectItem>
-                  <SelectItem value="KE">KES Wallet (Kenya)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

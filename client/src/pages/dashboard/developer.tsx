@@ -24,7 +24,7 @@ const SECTIONS = [
   { id: "sandbox",        label: "Sandbox & Tests",      icon: FlaskConical },
 ];
 
-// All active countries — currencies are standard ISO codes (XOF/XAF/GNF/CDF)
+// All active countries — currencies are standard ISO codes (XOF/XAF/CDF)
 const ALL_COUNTRIES = [
   { code: "BJ", name: "Bénin",              currency: "XOFB", operators: ["Moov Money", "MTN Mobile Money"],                               otpOps: ["Orange Money"] },
   { code: "BF", name: "Burkina Faso",       currency: "XOFF", operators: ["Moov Money", "Orange Money"],                                   otpOps: ["Orange Money"] },
@@ -33,7 +33,6 @@ const ALL_COUNTRIES = [
   { code: "CG", name: "Congo",              currency: "XAFC", operators: ["Airtel Money", "MTN Mobile Money"],                             otpOps: [] },
   { code: "CI", name: "Côte d'Ivoire",      currency: "XOFC", operators: ["Moov Money", "MTN Mobile Money", "Orange Money", "Wave"],       otpOps: ["Orange Money"] },
   { code: "GA", name: "Gabon",              currency: "XAFG", operators: ["Airtel Money", "Moov Money"],                                   otpOps: [] },
-  { code: "GN", name: "Guinée Conakry",     currency: "GNF",  operators: ["MTN Mobile Money", "Orange Money"],                            otpOps: [] },
   { code: "GQ", name: "Guinée équatoriale", currency: "XAF",  operators: ["Orange Money"],                                                  otpOps: ["Orange Money"] },
   { code: "GW", name: "Guinée-Bissau",      currency: "XOF",  operators: ["Orange Money"],                                                  otpOps: ["Orange Money"] },
   { code: "ML", name: "Mali",               currency: "XOF",  operators: ["Moov Money", "Orange Money"],                                   otpOps: ["Orange Money"] },
@@ -605,7 +604,6 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
               L'API accepte un montant en <strong className="text-gray-900">USDT</strong> ou dans une devise fiat supportée
               (<code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">XAF</code>,
               <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">XOF</code>,
-              <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">GNF</code>,
               <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">CDF</code> ou
               <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">USD</code>).
               Les devises fiat sont converties en USDT avec le taux USDT/XAF.
@@ -628,7 +626,7 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
               <TableHead cols={["Paramètre", "Type", "Statut", "Description"]} />
               <tbody>
                 <ParamRow name="amount" type="number" required desc="Montant brut à recevoir, en currency." />
-                <ParamRow name="currency" type="string" required desc="USDT, XAF, XOF, GNF, CDF, USD." />
+                <ParamRow name="currency" type="string" required desc="USDT, XAF, XOF, CDF, USD." />
                 <ParamRow name="asset_code" type="string" required desc="Réseau retourné par GET /v1/crypto/assets, par ex. USDT.TRC20." />
                 <ParamRow name="reference" type="string" required={false} desc="Référence de votre commande ; générée si absente." />
                 <ParamRow name="notify_url" type="string" required={false} desc="URL HTTPS recevant payment.completed ou payment.failed." />
@@ -804,7 +802,7 @@ async function showCryptoPayment(data) {
                 <TableHead cols={["Paramètre", "Type", "Statut", "Description"]} />
                 <tbody>
                   <ParamRow name="amount"       type="number" required desc="Montant brut à collecter" />
-                  <ParamRow name="currency"     type="string" required desc="Devise du pays (XAF, XOF, GNF, CDF…)" />
+                <ParamRow name="currency"     type="string" required desc="Devise du pays (XAF, XOF, CDF…)" />
                   <ParamRow name="phone"        type="string" required desc="Numéro de téléphone du payeur" />
                   <ParamRow name="operator"     type="string" required desc="Nom exact de l'opérateur (depuis /v1/countries)" />
                   <ParamRow name="country_code" type="string" required desc="Code ISO du pays (CM, SN, CI…)" />
@@ -1394,7 +1392,7 @@ if (data.flow === "wave") {
                   {[
                     { name: "country_code",      type: "string",   desc: "Code ISO du pays (CM, SN, CI…)" },
                     { name: "country_name",      type: "string",   desc: "Nom complet du pays" },
-                    { name: "currency",          type: "string",   desc: "Devise principale (XAF, XOF, GNF, CDF…)" },
+                    { name: "currency",          type: "string",   desc: "Devise principale (XAF, XOF, CDF…)" },
                     { name: "total_fee_pct",     type: "number",   desc: "Frais totaux en % appliqués au montant (ex: 5.5 = 5,5%)" },
                     { name: "ashtech_margin_pct",type: "number",   desc: "Part Ashtech Pay dans les frais totaux" },
                     { name: "operators",         type: "string[]", desc: "Opérateurs disponibles pour ce pays" },
@@ -1650,7 +1648,6 @@ console.log(computeNet(10000, "CM"));
                       { country: "CM", name: "Cameroun",       cur: "XAF", ok: "237660000001",  pend: "237660000002",  fail: "237660000003"  },
                       { country: "SN", name: "Sénégal",        cur: "XOF", ok: "221700000001",  pend: "221700000002",  fail: "221700000003"  },
                       { country: "BF", name: "Burkina Faso",   cur: "XOF", ok: "22660000001",   pend: "22660000002",   fail: "22660000003"   },
-                      { country: "GN", name: "Guinée Conakry", cur: "GNF", ok: "224600000001",  pend: "224600000002",  fail: "224600000003"  },
                       { country: "CD", name: "RD Congo",       cur: "CDF", ok: "243120000011",  pend: "243120000012",  fail: "243120000013"  },
                       { country: "CD", name: "RD Congo",       cur: "USD", ok: "243120000001",  pend: "243120000002",  fail: "243120000003"  },
                     ].map(({ country, name, cur, ok, pend, fail }, i) => (
