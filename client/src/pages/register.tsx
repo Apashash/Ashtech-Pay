@@ -399,8 +399,8 @@ export default function RegisterPage() {
                       <FormControl>
                         <div className="flex gap-2">
                           <Select value={selectedCountry?.code || ""} onValueChange={handleCountryChange}>
-                            <SelectTrigger className="w-[130px] overflow-visible" data-testid="select-country">
-                              <SelectValue className="line-clamp-none whitespace-nowrap">
+                            <SelectTrigger className="w-[130px] shrink-0 overflow-visible [&>span]:!line-clamp-none [&>span]:whitespace-nowrap" data-testid="select-country">
+                              <SelectValue className="!line-clamp-none whitespace-nowrap">
                                 {selectedCountry ? (
                                   <span className="flex items-center gap-1.5 whitespace-nowrap">
                                     <span>{selectedCountry.flag}</span>
