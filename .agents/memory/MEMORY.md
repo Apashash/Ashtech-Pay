@@ -4,7 +4,7 @@
 - [Clean 404 for scanner probe paths](clean-404-scanner-probes.md) — probe/honeypot paths must return a real branded HTML 404 page, not bare status/text, or scanners flag it as an anomaly.
 - [Plesk .htaccess bypasses Node security](plesk-htaccess-bypasses-node-security.md) — production (Plesk/Apache) SPA fallback in client/public/.htaccess can 200 on /.env, /wp-admin etc. before Node ever sees the request; must patch both layers and rebuild to verify.
 - [Admin path injection](admin-path-injection.md) — .htaccess must use passthrough (not static index.html) so Node.js injects window.__ADMIN_PATH__; server/index.ts now loads .env manually at startup because Passenger may not pass Plesk env vars to process.env.
-- [Countries table currency codes](countries-table-currency-codes.md) — `countries.currency` must match Swychr's per-country codes (GA→XAFG, CG→XAFC, etc.), not generic XAF/XOF, or wallet auto-select picks the wrong wallet.
+- [Country wallet currency codes](countries-table-currency-codes.md) — destination country mappings must preserve distinct wallets (GA→XAFG, CG→XAFC, etc.), not collapse them into generic XAF/XOF.
 - [AfribaPay OTP detection](afribapay-otp-detection.md) — OTP-requirement check must union live API data with a static fallback table and never silently swallow fetch errors, or OTP-required operators (Orange/Moov CI) fail opaquely.
 - [BotGuard blocks payment webhooks](botguard-webhook-ua.md) — every new payment processor webhook must be added to API_UA_EXEMPT_PATHS in botGuard.ts or short/missing User-Agents from processor servers return 403.
 - [IziChange API quirks](izichange-api-quirks.md) — list endpoint returns bare array (not `{ data }`); ESM hoisting means env vars must use lazy getters not module-level constants.

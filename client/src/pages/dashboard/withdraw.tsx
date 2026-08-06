@@ -43,6 +43,11 @@ interface CountryConfig {
   operators: OperatorConfig[];
 }
 
+interface WalletBalance {
+  currency: string;
+  balance: string | number;
+}
+
 const withdrawMethods = [
   { id: "mobile_money", name: "Mobile Money", icon: Smartphone, description: "Orange, MTN, Wave, Airtel..." },
   { id: "bank_transfer", name: "Virement bancaire", icon: Building2, description: "Vers votre compte bancaire" },
@@ -95,20 +100,11 @@ export default function WithdrawPage() {
   const { data: limits } = useQuery<{ minWithdrawal: number; maxWithdrawal: number; minTransfer: number; maxTransfer: number }>({
     queryKey: ["/api/public/limits"],
   });
+  const { data: wallets = [] } = useQuery<WalletBalance[]>({
+    queryKey: ["/api/wallets"],
+  });
   const { rates: fxRates } = useExchangeRates();
   const userCurrency = user?.preferredCurrency || "XAF";
-  // fxRates are XAF-direct: fxRates[currency] = how many XAF = 1 unit of that currency
-  const userRate = fxRates[userCurrency] || 1; // XAF per 1 unit of userCurrency
-  const convertFromXAF = (xaf: number) => Math.ceil(xaf / userRate);
-  const limitsLoaded = limits !== undefined && fxRates && Object.keys(fxRates).length > 0;
-  const minWithdrawal = convertFromXAF(limits?.minWithdrawal ?? 150);
-  const maxWithdrawal = Math.floor((limits?.maxWithdrawal ?? 5000000) / userRate);
-
-  const rawBalance = parseFloat(user?.balance || "0");
-  const isDecimalCurrency = userCurrency === "USD" || userCurrency === "EUR";
-  const balance = isDecimalCurrency
-    ? Math.floor(rawBalance * 100) / 100
-    : Math.round(rawBalance);
 
   const { t } = useLanguage();
   const { data: withdrawalNumbers = [] } = useQuery<WithdrawalNumber[]>({
@@ -127,6 +123,23 @@ export default function WithdrawPage() {
   const selectedCountryData = countriesConfig.find(c => c.id === selectedCountry);
   const operators = selectedCountryData?.operators || [];
   const selectedOperatorData = operators.find(o => o.id === selectedOperator);
+  // Withdrawals debit the wallet matching the destination country.
+  // For example, Gabon uses the distinct XAFG wallet rather than XAF.
+  const withdrawalCurrency = selectedCountryData?.currency || userCurrency;
+  const withdrawalWallet = wallets.find(w => w.currency === withdrawalCurrency);
+  const rawBalance = withdrawalCurrency === userCurrency
+    ? parseFloat(user?.balance || "0")
+    : parseFloat(String(withdrawalWallet?.balance || "0"));
+  const isDecimalCurrency = withdrawalCurrency === "USD" || withdrawalCurrency === "EUR";
+  const balance = isDecimalCurrency
+    ? Math.floor(rawBalance * 100) / 100
+    : Math.round(rawBalance);
+  // fxRates are XAF-direct: fxRates[currency] = how many XAF = 1 unit.
+  const withdrawalRate = fxRates[withdrawalCurrency] || 1;
+  const convertFromXAF = (xaf: number) => Math.ceil(xaf / withdrawalRate);
+  const limitsLoaded = limits !== undefined && fxRates && Object.keys(fxRates).length > 0;
+  const minWithdrawal = convertFromXAF(limits?.minWithdrawal ?? 150);
+  const maxWithdrawal = Math.floor((limits?.maxWithdrawal ?? 5000000) / withdrawalRate);
 
   useEffect(() => {
     if (countriesConfig.length > 0 && !selectedCountry) {
@@ -210,7 +223,7 @@ export default function WithdrawPage() {
         amount: amountValue.toLocaleString("fr-FR"),
         fee: feeAmount > 0 ? `-${feeAmount.toLocaleString("fr-FR")}` : "0",
         net: (amountValue - feeAmount).toLocaleString("fr-FR"),
-        currency: userCurrency,
+        currency: withdrawalCurrency,
       });
       const data = await res.json();
       if (data.code === "COOLDOWN_ACTIVE") {
@@ -361,22 +374,22 @@ export default function WithdrawPage() {
                 Solde compte principal
               </p>
               <p className="text-4xl font-bold tracking-tight">
-                {formatCurrency(balance, userCurrency as SupportedCurrency)}
+                {formatCurrency(balance, withdrawalCurrency as SupportedCurrency)}
               </p>
               <p className="text-sm text-white/70 mt-1">
-                {selectedCountryData?.name || user?.country || "Votre pays"} · {userCurrency}
+                {selectedCountryData?.name || user?.country || "Votre pays"} · {withdrawalCurrency}
               </p>
 
               {limitsLoaded && (
                 <div className="flex items-center gap-6 mt-4 pt-4 border-t border-white/20">
                   <div>
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-white/60">Min retrait</p>
-                    <p className="text-sm font-bold">{minWithdrawal.toLocaleString()} {userCurrency}</p>
+                    <p className="text-sm font-bold">{minWithdrawal.toLocaleString()} {withdrawalCurrency}</p>
                   </div>
                   <div className="w-px h-8 bg-white/20" />
                   <div>
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-white/60">Max retrait</p>
-                    <p className="text-sm font-bold">{maxWithdrawal.toLocaleString()} {userCurrency}</p>
+                    <p className="text-sm font-bold">{maxWithdrawal.toLocaleString()} {withdrawalCurrency}</p>
                   </div>
                 </div>
               )}
@@ -386,7 +399,7 @@ export default function WithdrawPage() {
               <div className="flex items-center gap-3 rounded-xl border border-yellow-500/40 bg-yellow-500/8 px-4 py-3">
                 <AlertCircle className="w-4 h-4 text-yellow-500 shrink-0" />
                 <p className="text-sm text-foreground">
-                  Solde insuffisant. Minimum : {minWithdrawal.toLocaleString()} {userCurrency}.
+                  Solde insuffisant. Minimum : {minWithdrawal.toLocaleString()} {withdrawalCurrency}.
                 </p>
               </div>
             )}
@@ -460,7 +473,7 @@ export default function WithdrawPage() {
                           data-testid="input-withdraw-amount"
                         />
                         <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-sm font-semibold text-muted-foreground">{userCurrency}</span>
+                          <span className="text-sm font-semibold text-muted-foreground">{withdrawalCurrency}</span>
                           <button
                             type="button"
                             data-testid="button-max-amount"
@@ -480,19 +493,19 @@ export default function WithdrawPage() {
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Solde disponible</span>
                 <span className="text-sm font-semibold text-foreground">
-                  {formatCurrency(balance, userCurrency as SupportedCurrency)}
+                  {formatCurrency(balance, withdrawalCurrency as SupportedCurrency)}
                 </span>
               </div>
               {amountValue > 0 && amountValue < minWithdrawal && (
                 <div className="flex items-center gap-1.5 text-destructive text-xs">
                   <AlertCircle className="w-3.5 h-3.5" />
-                  {t.withdraw.minAmount} {minWithdrawal.toLocaleString()} {userCurrency}
+                  {t.withdraw.minAmount} {minWithdrawal.toLocaleString()} {withdrawalCurrency}
                 </div>
               )}
               {amountValue > 0 && amountValue > balance && (
                 <div className="flex items-center gap-1.5 text-destructive text-xs">
                   <AlertCircle className="w-3.5 h-3.5" />
-                  Solde insuffisant ({amountValue.toLocaleString()} {userCurrency} requis)
+                  Solde insuffisant ({amountValue.toLocaleString()} {withdrawalCurrency} requis)
                 </div>
               )}
 
@@ -504,14 +517,14 @@ export default function WithdrawPage() {
                       {t.withdraw.withdrawalFee} {feePercent > 0 ? `(${feePercent}%)` : `(${t.withdraw.free})`}
                     </span>
                     <span className={`font-medium ${feeAmount > 0 ? "text-destructive" : "text-green-500"}`}>
-                      {feeAmount > 0 ? `-${formatCurrency(feeAmount, userCurrency as SupportedCurrency)}` : t.withdraw.free}
+                      {feeAmount > 0 ? `-${formatCurrency(feeAmount, withdrawalCurrency as SupportedCurrency)}` : t.withdraw.free}
                     </span>
                   </div>
                   <div className="h-px bg-border" />
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold text-foreground">{t.withdraw.netReceive}</span>
                     <span className="text-base font-bold text-green-500" data-testid="net-withdrawal-amount">
-                      {formatCurrency(amountValue - feeAmount, userCurrency as SupportedCurrency)}
+                      {formatCurrency(amountValue - feeAmount, withdrawalCurrency as SupportedCurrency)}
                     </span>
                   </div>
                 </div>
@@ -538,7 +551,7 @@ export default function WithdrawPage() {
                     <span className="font-semibold flex-1">
                       {selectedCountryData?.name || (countriesConfig.length === 0 ? "Chargement..." : "Non défini")}
                     </span>
-                    <span className="text-xs text-muted-foreground font-medium">{userCurrency}</span>
+                    <span className="text-xs text-muted-foreground font-medium">{withdrawalCurrency}</span>
                   </div>
                 </div>
 
@@ -709,17 +722,17 @@ export default function WithdrawPage() {
             )}
             <div className="flex items-center justify-between px-4 py-3.5">
               <span className="text-sm text-muted-foreground">{t.withdraw.confirmAmount}</span>
-              <span className="text-sm font-medium">{formatCurrency(amountValue, userCurrency as SupportedCurrency)}</span>
+              <span className="text-sm font-medium">{formatCurrency(amountValue, withdrawalCurrency as SupportedCurrency)}</span>
             </div>
             {feeAmount > 0 && (
               <div className="flex items-center justify-between px-4 py-3.5">
                 <span className="text-sm text-muted-foreground">{t.withdraw.confirmFee} {feePercent > 0 ? `(${feePercent}%)` : ""}</span>
-                <span className="text-sm font-medium text-red-500">-{formatCurrency(feeAmount, userCurrency as SupportedCurrency)}</span>
+                <span className="text-sm font-medium text-red-500">-{formatCurrency(feeAmount, withdrawalCurrency as SupportedCurrency)}</span>
               </div>
             )}
             <div className="flex items-center justify-between px-4 py-3.5 bg-muted/30">
               <span className="text-sm font-semibold text-foreground">{t.withdraw.confirmNet}</span>
-              <span className="text-base font-bold text-green-500">{formatCurrency(amountValue - feeAmount, userCurrency as SupportedCurrency)}</span>
+              <span className="text-base font-bold text-green-500">{formatCurrency(amountValue - feeAmount, withdrawalCurrency as SupportedCurrency)}</span>
             </div>
           </div>
           <BottomSheetFooter>
