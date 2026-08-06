@@ -26,16 +26,16 @@ const SECTIONS = [
 
 // All active countries — currencies are standard ISO codes (XOF/XAF/CDF)
 const ALL_COUNTRIES = [
-  { code: "BJ", name: "Bénin",              currency: "XOFB", operators: ["Celtiis Money", "Coris Money", "Moov Money", "MTN Money"], otpOps: [] },
-  { code: "BF", name: "Burkina Faso",       currency: "XOFF", operators: ["Moov Money", "Orange Money", "Wallet LigdiCash"],                  otpOps: ["Orange Money", "Wallet LigdiCash"] },
+  { code: "BJ", name: "Bénin",              currency: "XOF", operators: ["Celtiis Money", "Coris Money", "Moov Money", "MTN Money"], otpOps: [] },
+  { code: "BF", name: "Burkina Faso",       currency: "XOF", operators: ["Moov Money", "Orange Money", "Wallet LigdiCash"],                  otpOps: ["Orange Money"] },
   { code: "CM", name: "Cameroun",           currency: "XAF",  operators: ["MTN Money", "Orange Money"],                                  otpOps: [] },
-  { code: "CI", name: "Côte d'Ivoire",      currency: "XOFC", operators: ["Moov Money", "MTN Money", "Orange Money", "Wave Money"],       otpOps: ["Orange Money"] },
-  { code: "GA", name: "Gabon",              currency: "XAFG", operators: ["Airtel Money", "Moov Money"],                                   otpOps: [] },
-  { code: "ML", name: "Mali",               currency: "XOF",  operators: ["Moov Money", "Orange Money"],                                   otpOps: ["Orange Money"] },
-  { code: "NE", name: "Niger",              currency: "XOFN", operators: ["Airtel Money"],                                                  otpOps: [] },
-  { code: "CD", name: "RD Congo",           currency: "CDF",  operators: ["Afri Money", "Airtel Money", "Mpesa Money", "Orange Money", "Vodacom"], otpOps: ["Orange Money"] },
-  { code: "SN", name: "Sénégal",            currency: "XOFS", operators: ["E-money", "Free Money", "Orange Money", "Wave Money"],             otpOps: ["Orange Money"] },
-  { code: "TG", name: "Togo",               currency: "XOFT", operators: ["Flooz (Moov)", "T-Money"],                                      otpOps: [] },
+  { code: "CI", name: "Côte d'Ivoire",      currency: "XOF", operators: ["Moov Money", "MTN Money", "Orange Money", "Wave Money"],       otpOps: ["Orange Money"] },
+  { code: "GA", name: "Gabon",              currency: "XAF", operators: ["Airtel Money", "Moov Money"],                                   otpOps: [] },
+  { code: "ML", name: "Mali",               currency: "XOF", operators: ["Moov Money", "Orange Money"],                                   otpOps: ["Orange Money"] },
+  { code: "NE", name: "Niger",              currency: "XOF", operators: ["Airtel Money"],                                                  otpOps: [] },
+  { code: "CD", name: "RD Congo",           currency: "CDF", operators: ["Afri Money", "Airtel Money", "Mpesa Money", "Orange Money", "Vodacom"], otpOps: [] },
+  { code: "SN", name: "Sénégal",            currency: "XOF", operators: ["E-money", "Free Money", "Orange Money", "Wave Money"],             otpOps: ["Orange Money"] },
+  { code: "TG", name: "Togo",               currency: "XOF", operators: ["Flooz (Moov)", "T-Money"],                                      otpOps: [] },
 ];
 
 // ── Syntax highlighting ─────────────────────────────────────────────────────
@@ -490,7 +490,7 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
                     <div className="flex flex-wrap gap-1">
                       {operators.map(op => {
                         const needsOtp = otpOps.includes(op);
-                        const isWave = op === "Wave";
+                        const isWave = op.toLowerCase().includes("wave");
                         return (
                           <span
                             key={op}
@@ -871,7 +871,7 @@ async function showCryptoPayment(data) {
                 (Orange CI, SN, BF — le client compose le code USSD affiché, l'OTP s'affiche dans le menu téléphonique,{" "}
                 <em>aucun SMS n'est envoyé</em>) et{" "}
                 <strong className="text-yellow-300">OTP SMS</strong>{" "}
-                (LigdiCash BF uniquement — SMS déclenché automatiquement,{" "}
+                (certains opérateurs AfribaPay — SMS déclenché automatiquement,{" "}
                 <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">ussd_code</code>{" "}
                 est <code className="text-red-400">null</code>).
                 Dans les deux cas, relancez la requête avec{" "}
@@ -885,7 +885,7 @@ async function showCryptoPayment(data) {
   "error": "otp_required",
   "reference": "DEP-A1B2C3D4",    // ← à conserver absolument !
   "ussd_code": "#144*391#",        // OTP USSD → CI: "#144*82#", SN: "#144*391#", BF: "*144*4*6*5000#"
-  // "ussd_code": null             // OTP SMS  → LigdiCash BF uniquement (SMS envoyé automatiquement)
+  // "ussd_code": null             // OTP SMS → le fournisseur envoie automatiquement le SMS
   "message": "OTP requis. Composez #144*391# sur votre téléphone pour obtenir votre code…"
 }
 
@@ -893,7 +893,7 @@ async function showCryptoPayment(data) {
 {
   "amount": 5000, "currency": "XOF", "phone": "77XXXXXXX",
   "operator": "Orange Money", "country_code": "SN",
-  "otp": "123456",                 // ← code du menu USSD (ou SMS pour LigdiCash)
+  "otp": "123456",                 // ← code du menu USSD ou SMS du fournisseur
   "reference": "DEP-A1B2C3D4",    // ← obligatoire, même valeur que la réponse 400
   "notify_url": "https://monsite.com/webhook"
 }
@@ -954,9 +954,9 @@ curl https://ashtechpay.top/v1/collect \\
                 </tr>
                 <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                   <td className="px-3 py-3 whitespace-nowrap"><span className="text-yellow-400 font-semibold text-sm">OTP SMS</span></td>
-                  <td className="px-3 py-3 text-gray-700 text-sm">LigdiCash BF (wallet) — SMS envoyé automatiquement</td>
+                  <td className="px-3 py-3 text-gray-700 text-sm">Opérateurs AfribaPay configurés en OTP API — SMS envoyé par le fournisseur</td>
                   <td className="px-3 py-3 font-mono text-orange-400 text-xs whitespace-nowrap">400 otp_required<br/><span className="text-zinc-500">ussd_code: null</span></td>
-                  <td className="px-3 py-3 text-gray-700 text-sm">SMS OTP envoyé automatiquement par le serveur (LigdiCash BF uniquement). Relancer avec <code className="text-blue-600 bg-blue-50 px-1 py-0.5 rounded">otp</code> + <code className="text-blue-600 bg-blue-50 px-1 py-0.5 rounded">reference</code>.</td>
+                  <td className="px-3 py-3 text-gray-700 text-sm">Le fournisseur envoie le SMS OTP. Relancer avec <code className="text-blue-600 bg-blue-50 px-1 py-0.5 rounded">otp</code> + <code className="text-blue-600 bg-blue-50 px-1 py-0.5 rounded">reference</code>.</td>
                 </tr>
                 <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                   <td className="px-3 py-3 whitespace-nowrap"><span className="text-purple-400 font-semibold text-sm">Wave</span></td>
@@ -1090,21 +1090,21 @@ body: JSON.stringify({
               </div>
             </div>
 
-            {/* Flow 3: OTP SMS (wallet) */}
+            {/* Flow 3: OTP SMS (provider-dependent) */}
             <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-5 space-y-4">
               <div className="flex items-center gap-2">
                 <span className="w-6 h-6 rounded-full bg-yellow-500 flex items-center justify-center text-xs font-bold text-white shrink-0">3</span>
-                <h3 className="font-semibold text-yellow-300">Flux OTP SMS — LigdiCash BF (Wallet)</h3>
+                <h3 className="font-semibold text-yellow-300">Flux OTP SMS — selon la configuration fournisseur</h3>
               </div>
               <p className="text-sm text-gray-600">
-                Pour LigdiCash (Burkina Faso). L'API déclenche automatiquement l'envoi d'un SMS OTP
+                Pour les opérateurs AfribaPay configurés en OTP API, le fournisseur déclenche automatiquement l'envoi d'un SMS OTP
                 au numéro du client — <strong className="text-zinc-200">aucun code USSD à composer.</strong>{" "}
                 Le champ <code className="text-blue-600 bg-blue-50 px-1 py-0.5 rounded">ussd_code</code> est <code className="text-red-400">null</code>.
               </p>
               <div className="grid lg:grid-cols-2 gap-4">
                 <div className="space-y-1 min-w-0">
                   <p className="text-xs text-gray-500 font-medium">Étape 1 — Requête initiale (sans OTP)</p>
-                  <CodeBlock language="javascript" code={`// LigdiCash Burkina Faso — étape 1
+                  <CodeBlock language="javascript" code={`// Opérateur AfribaPay configuré en OTP API — étape 1
 const res = await fetch("https://ashtechpay.top/v1/collect", {
   method: "POST",
   headers: {
@@ -1115,13 +1115,13 @@ const res = await fetch("https://ashtechpay.top/v1/collect", {
     amount: 5000,
     currency: "XOF",
     phone: "04000000",
-    operator: "LigdiCash",
+     operator: "Orange Money",
     country_code: "BF",
     notify_url: "https://monsite.com/webhook"
   })
 });
 // → 400 otp_required
-// ussd_code est null — SMS envoyé automatiquement`} />
+// ussd_code est null — SMS envoyé automatiquement par le fournisseur`} />
                 </div>
                 <div className="space-y-1 min-w-0">
                   <p className="text-xs text-gray-500 font-medium">Réponse 400 + Étape 2</p>
@@ -1133,13 +1133,13 @@ const res = await fetch("https://ashtechpay.top/v1/collect", {
   "ussd_code": null
 }
 
-// Le client reçoit son OTP par SMS
+// Le client reçoit son OTP par SMS du fournisseur
 // Étape 2 : relancer avec otp + reference`} />
                   <CodeBlock language="javascript" code={`// Étape 2 : même requête + otp + reference
 body: JSON.stringify({
   amount: 5000, currency: "XOF",
   phone: "04000000",
-  operator: "LigdiCash",
+   operator: "Orange Money",
   country_code: "BF",
   otp: "456789",              // ← OTP reçu par SMS
   reference: "DEP-X9Y8Z7W6", // ← référence du 400 (obligatoire)
@@ -1176,7 +1176,7 @@ const res = await fetch("https://ashtechpay.top/v1/collect", {
     amount: 2000,
     currency: "XOF",
     phone: "0700000000",  // facultatif pour Wave
-    operator: "Wave",
+    operator: "Wave Money",
     country_code: "CI",
     notify_url: "https://monsite.com/webhook"
   })
@@ -1197,7 +1197,7 @@ if (data.flow === "wave") {
   "credited_amount": 1910,
   "fee_amount": 90,
   "currency": "XOF",
-  "operator": "Wave",
+  "operator": "Wave Money",
   "country_code": "CI",
   "flow": "wave",
   "wave_url": "https://pay.wave.com/m/..."
@@ -1244,7 +1244,7 @@ if (data.flow === "wave") {
       return { type: "otp_ussd", ussdCode: data.ussd_code, reference: data.reference };
     } else {
       // ─── Flux OTP SMS : SMS envoyé automatiquement, pas de USSD à composer ────
-      // LigdiCash BF — ussd_code est null
+      // Le fournisseur AfribaPay concerné renvoie ussd_code = null
       return { type: "otp_sms", reference: data.reference };
     }
   }

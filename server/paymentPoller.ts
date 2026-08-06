@@ -5,7 +5,11 @@ import { creditUserWallet } from "./walletHelper";
 import { sendPayerConfirmationEmail } from "./email";
 import { notifyDepositConfirmed, notifyDepositFailed } from "./telegram";
 
-const POLL_INTERVAL = 3000;
+// Status endpoints are rate-limited by providers. A 10s base loop plus a
+// provider-specific AfribaPay cadence avoids repeatedly asking for the same
+// transaction while keeping webhook-less payments reasonably responsive.
+const POLL_INTERVAL = 10 * 1000;
+const AFRIBAPAY_STATUS_INTERVAL_MS = 30 * 1000;
 const CRYPTO_PENDING_TIMEOUT_MS = 15 * 60 * 1000;
 const CRYPTO_EXPIRY_CHECK_INTERVAL_MS = 30 * 1000;
 // After 30 min, slow down polling to every 2 min to avoid hammering the gateway API.
@@ -326,6 +330,13 @@ async function pollPendingPayments() {
 
         // Slow-poll throttle: once a payment is older than 30 min, only check
         // every 2 minutes instead of every 3 seconds to avoid spamming the gateway.
+        const minimumInterval = payment.provider === "afribapay"
+          ? AFRIBAPAY_STATUS_INTERVAL_MS
+          : 0;
+        if (minimumInterval > 0 && payment.lastCheckedAt > 0 &&
+            now - payment.lastCheckedAt < minimumInterval) {
+          continue;
+        }
         if (isOld) {
           const timeSinceLastCheck = now - payment.lastCheckedAt;
           if (payment.lastCheckedAt > 0 && timeSinceLastCheck < SLOW_POLL_INTERVAL_MS) {
@@ -508,7 +519,7 @@ async function expirePendingCryptoPayments(now: number): Promise<void> {
 
 export function startPaymentPoller() {
   if (pollerInterval) { console.log("[PaymentPoller] Already running"); return; }
-  console.log(`[PaymentPoller] Starting payment poller (every ${POLL_INTERVAL / 1000}s, crypto timeout ${CRYPTO_PENDING_TIMEOUT_MS / 60000}min, slow-poll after ${SLOW_POLL_THRESHOLD_MS / 60000}min)`);
+  console.log(`[PaymentPoller] Starting payment poller (every ${POLL_INTERVAL / 1000}s, AfribaPay status every ${AFRIBAPAY_STATUS_INTERVAL_MS / 1000}s, crypto timeout ${CRYPTO_PENDING_TIMEOUT_MS / 60000}min, slow-poll after ${SLOW_POLL_THRESHOLD_MS / 60000}min)`);
   pollerInterval = setInterval(pollPendingPayments, POLL_INTERVAL);
 }
 

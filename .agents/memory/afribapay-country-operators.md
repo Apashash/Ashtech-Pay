@@ -35,3 +35,9 @@ The API response reported provider currencies `CDF` for CD, `GNF` for GN, `GMD` 
 **Why:** The live account catalogue is now verifiable and is broader than the static catalogue previously used while the subscription was inactive. The supported customer flows were synchronized only after reconciling existing Supabase operator rows, wallets, and fees.
 
 **How to apply:** For future support replies, report the live 200 response as the authoritative current provider result. Current active flows include CF/orange, CG/airtel+mtn, GW/orange, NE/airtel+wligdicash+moov+amanata+nita+zamani, TD/airtel+moov, and CI/djamo; GQ has no live operator and must remain hidden from payment selectors. Keep exact provider codes (`emoney`, `djamo`, `amanata`, `nita`, `zamani`) and preserve distinct internal wallet currencies.
+
+Public payment-country catalogs must return only countries with at least one active, non-maintenance operator whose configured provider is AfribaPay or PixPay. Provider collect allowlists must be explicit and must not re-enable removed countries or countries with no live operator, especially GQ.
+
+**Why:** An active country row with zero usable operators was still exposed publicly, allowing GQ to appear in selectors despite having no supported payment flow.
+
+**How to apply:** Filter public country responses after loading operators, then re-check the provider-specific country allowlist during collection; keep historical transactions unaffected.

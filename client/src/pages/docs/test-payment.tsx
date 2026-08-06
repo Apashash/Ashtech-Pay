@@ -11,16 +11,16 @@ import {
 } from "lucide-react";
 
 const ALL_COUNTRIES = [
-  { code: "BJ", name: "Bénin",              currency: "XOFB", operators: ["Celtiis Money", "Coris Money", "Moov Money", "MTN Money"], otpOps: [] },
-  { code: "BF", name: "Burkina Faso",       currency: "XOFF", operators: ["Moov Money", "Orange Money", "Wallet LigdiCash"],             otpOps: ["Orange Money", "Wallet LigdiCash"] },
+  { code: "BJ", name: "Bénin",              currency: "XOF", operators: ["Celtiis Money", "Coris Money", "Moov Money", "MTN Money"], otpOps: [] },
+  { code: "BF", name: "Burkina Faso",       currency: "XOF", operators: ["Moov Money", "Orange Money", "Wallet LigdiCash"],             otpOps: ["Orange Money"] },
   { code: "CM", name: "Cameroun",           currency: "XAF",  operators: ["MTN Money", "Orange Money"],                                  otpOps: [] },
-  { code: "CI", name: "Côte d'Ivoire",      currency: "XOFC", operators: ["Moov Money", "MTN Money", "Orange Money", "Wave Money"],     otpOps: ["Orange Money"] },
-  { code: "GA", name: "Gabon",              currency: "XAFG", operators: ["Airtel Money", "Moov Money"],                                otpOps: [] },
-  { code: "ML", name: "Mali",               currency: "XOF",  operators: ["Moov Money", "Orange Money"],                                otpOps: ["Orange Money"] },
-  { code: "NE", name: "Niger",              currency: "XOFN", operators: ["Airtel Money"],                                              otpOps: [] },
-  { code: "CD", name: "RD Congo",           currency: "CDF",  operators: ["Afri Money", "Airtel Money", "Mpesa Money", "Orange Money", "Vodacom"], otpOps: ["Orange Money"] },
-  { code: "SN", name: "Sénégal",            currency: "XOFS", operators: ["E-money", "Free Money", "Orange Money", "Wave Money"],        otpOps: ["Orange Money"] },
-  { code: "TG", name: "Togo",               currency: "XOFT", operators: ["Moov Money", "T-Money"],                                     otpOps: [] },
+  { code: "CI", name: "Côte d'Ivoire",      currency: "XOF", operators: ["Moov Money", "MTN Money", "Orange Money", "Wave Money"],     otpOps: ["Orange Money"] },
+  { code: "GA", name: "Gabon",              currency: "XAF", operators: ["Airtel Money", "Moov Money"],                                otpOps: [] },
+  { code: "ML", name: "Mali",               currency: "XOF", operators: ["Moov Money", "Orange Money"],                                otpOps: ["Orange Money"] },
+  { code: "NE", name: "Niger",              currency: "XOF", operators: ["Airtel Money"],                                              otpOps: [] },
+  { code: "CD", name: "RD Congo",           currency: "CDF", operators: ["Afri Money", "Airtel Money", "Mpesa Money", "Orange Money", "Vodacom"], otpOps: [] },
+  { code: "SN", name: "Sénégal",            currency: "XOF", operators: ["E-money", "Free Money", "Orange Money", "Wave Money"],        otpOps: ["Orange Money"] },
+  { code: "TG", name: "Togo",               currency: "XOF", operators: ["Flooz (Moov)", "T-Money"],                                     otpOps: [] },
 ];
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {

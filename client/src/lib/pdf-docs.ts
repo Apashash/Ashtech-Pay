@@ -373,7 +373,7 @@ export function downloadHostedPagePDF() {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   rgb(doc, [148, 163, 184]);
-  const desc = "Créez des liens de paiement hébergés et acceptez des paiements Mobile Money dans 22+ pays africains, sans gérer vous-même la page de paiement.";
+  const desc = "Créez des liens de paiement hébergés et acceptez des paiements Mobile Money dans le catalogue actif exposé par l'API, sans gérer vous-même la page de paiement.";
   doc.text(doc.splitTextToSize(desc, CW - 6), ML + 6, 108);
 
   const meta = [
@@ -501,16 +501,16 @@ export function downloadHostedPagePDF() {
   y = table(doc,
     ["Code ISO", "Pays", "Wallet credite", "Operateurs"],
     [
-      ["CM","Cameroun",         "XAF",  "MTN Money, Orange"],
-      ["SN","Senegal",          "XOFS", "E-money, Orange, Wave, Free"],
-      ["CI","Cote d'Ivoire",    "XOFC", "Orange, MTN, Moov, Wave"],
-      ["BJ","Benin",            "XOFB", "Celtiis, Coris, MTN, Moov"],
-      ["BF","Burkina Faso",     "XOFF", "Orange, Moov, Wallet LigdiCash"],
+      ["CM","Cameroun",         "XAF",  "MTN Money, Orange Money"],
+      ["SN","Senegal",          "XOFS", "E-money, Free Money, Orange Money, Wave Money"],
+      ["CI","Cote d'Ivoire",    "XOFC", "Moov Money, MTN Money, Orange Money, Wave Money"],
+      ["BJ","Benin",            "XOFB", "Celtiis Money, Coris Money, Moov Money, MTN Money"],
+      ["BF","Burkina Faso",     "XOFF", "Moov Money, Orange Money, Wallet LigdiCash"],
       ["ML","Mali",             "XOFM", "Orange, Moov"],
-      ["TG","Togo",             "XOFT", "Flooz, Tmoney"],
-      ["NE","Niger",            "XOFN", "Airtel"],
-      ["CD","Congo RDC",        "CDF",  "Afri Money, Airtel, Mpesa, Orange, Vodacom"],
-      ["GA","Gabon",            "XAFG", "Airtel, Moov"],
+      ["TG","Togo",             "XOFT", "Flooz (Moov), T-Money"],
+      ["NE","Niger",            "XOFN", "Airtel Money"],
+      ["CD","Congo RDC",        "CDF",  "Afri Money, Airtel Money, Mpesa Money, Orange Money, Vodacom"],
+      ["GA","Gabon",            "XAFG", "Airtel Money, Moov Money"],
     ],
     y, [18, 36, 28, 88]
   );
@@ -626,7 +626,7 @@ export function downloadSDKDocs() {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
   rgb(doc, C.white);
-   doc.text("v1  •  Mobile Money + Pay-In Crypto — 16 pays africains", ML + 6, 93);
+   doc.text("v1  •  Mobile Money + Pay-In Crypto — catalogue actif", ML + 6, 93);
 
   fill(doc, C.gold);
   doc.rect(ML + 6, 99, 50, 0.8, "F");
@@ -634,7 +634,7 @@ export function downloadSDKDocs() {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   rgb(doc, [148, 163, 184]);
-  const desc2 = "Initiez des paiements Mobile Money directement depuis votre serveur, sans redirection. Gerez les flux USSD Push, OTP SMS, OTP USSD et Wave en 16 pays africains.";
+  const desc2 = "Initiez des paiements Mobile Money directement depuis votre serveur, sans redirection. Gerez les flux USSD Push, OTP USSD, OTP API fournisseur et Wave dans le catalogue actif.";
   doc.text(doc.splitTextToSize(desc2, CW - 6), ML + 6, 108);
 
   const meta2 = [
@@ -683,7 +683,7 @@ export function downloadSDKDocs() {
     "3.  GET /v1/countries — Pays et operateurs",
      "4.  Pay-In Crypto — /v1/crypto/assets + /v1/crypto/collect",
      "5.  POST /v1/collect — Initier un paiement Mobile Money",
-     "6.  Flux de paiement   (USSD Push · OTP SMS · OTP USSD · Wave)",
+     "6.  Flux de paiement   (USSD Push · OTP USSD · OTP API · Wave)",
      "7.  GET /v1/transaction/:id — Statut d'une transaction",
      "8.  GET /v1/fees — Grille tarifaire en temps reel",
      "9.  Webhooks",
@@ -701,7 +701,7 @@ export function downloadSDKDocs() {
 
   // ── §1  Introduction ──────────────────────────────────────────────────────
   y = sectionTitle(doc, "1. Introduction", y);
-  y = paragraph(doc, "L'Ashtech Pay API unifie plusieurs passerelles de paiement africaines en une seule interface REST. Initiez des paiements Mobile Money dans 22+ pays africains sans redirection. Le routage entre les operateurs est automatique — vous n'avez pas a choisir le fournisseur.", y);
+  y = paragraph(doc, "L'Ashtech Pay API unifie plusieurs passerelles de paiement africaines en une seule interface REST. Initiez des paiements Mobile Money dans le catalogue actif sans redirection. Le routage entre les operateurs est automatique — vous n'avez pas a choisir le fournisseur.", y);
   y += 3;
   y = table(doc,
     ["Caracteristique", "Detail"],
@@ -737,7 +737,7 @@ export function downloadSDKDocs() {
     ["Pays", "Code", "Devise", "Operateurs"],
     [
       ["Benin",          "BJ","XOFB","Celtiis Money, Coris Money, Moov Money, MTN Money"],
-      ["Burkina Faso",   "BF","XOFF","Moov Money, Orange Money (OTP), Wallet LigdiCash (OTP SMS)"],
+      ["Burkina Faso",   "BF","XOFF","Moov Money, Orange Money (OTP), Wallet LigdiCash"],
       ["Cameroun",       "CM","XAF", "MTN Money, Orange Money"],
       ["Cote d'Ivoire",  "CI","XOFC","Moov Money, MTN Money, Orange (OTP), Wave Money"],
       ["Gabon",          "GA","XAFG","Airtel Money, Moov Money"],
@@ -749,7 +749,7 @@ export function downloadSDKDocs() {
     ],
     y, [38, 14, 20, 98]
   );
-  y = paragraph(doc, "Legende : (OTP USSD) = code a composer pour recevoir l'OTP   •   (OTP SMS) = SMS automatique   •   Wave = lien de paiement Wave", y);
+  y = paragraph(doc, "Legende : (OTP USSD) = code a composer pour recevoir l'OTP   •   (OTP API fournisseur) = SMS automatique gere par le fournisseur   •   Wave = lien de paiement Wave", y);
   y += 4;
 
    // ── §4  Crypto Pay-In ─────────────────────────────────────────────────────
@@ -835,8 +835,8 @@ async function displayCryptoPayment(data) {
   y = subHeading(doc, "Reponse 202 (succes USSD Push)", y);
   y = codeBlock(doc, `{\n  "transaction_id": "8f3e1c2d-...",\n  "reference":      "ORDER-001",\n  "status":         "pending",\n  "amount":         5000,\n  "credited_amount":4750,\n  "fee_amount":     250,\n  "currency":       "XAF",\n  "operator":       "MTN Money",\n  "phone":          "670000000",\n  "country_code":   "CM",\n  "created_at":     "2026-03-15T14:00:00Z"\n}`, y, "json");
 
-  y = subHeading(doc, "OTP requis — Orange CI/SN/BF/ML (USSD) et LigdiCash BF (SMS)", y);
-  y = paragraph(doc, "Orange CI/SN/BF/ML → OTP USSD : le serveur retourne un ussd_code a afficher au client, qui le compose sur son telephone (l'OTP s'affiche dans le menu, aucun SMS envoye). LigdiCash BF → OTP SMS : le serveur envoie un SMS automatiquement (ussd_code = null). Dans les deux cas, la reponse 400 contient un champ 'reference' obligatoire pour l'etape 2.", y);
+  y = subHeading(doc, "OTP requis — Orange CI/SN/BF/ML (USSD) ou OTP API fournisseur", y);
+  y = paragraph(doc, "Orange CI/SN/BF/ML → OTP USSD : le serveur retourne un ussd_code a afficher au client, qui le compose sur son telephone (l'OTP s'affiche dans le menu, aucun SMS envoye). Pour un operateur configure en OTP API, le fournisseur envoie automatiquement le SMS et ussd_code = null. Dans les deux cas, la reponse 400 contient un champ 'reference' obligatoire pour l'etape 2.", y);
   y += 2;
   y = codeBlock(doc, `// Etape 1 — Requete initiale (sans otp) → reponse 400\n{\n  "error": "otp_required",\n  "message": "OTP requis. Un code a ete envoye par SMS.",\n  "reference": "DEP-A1B2C3D4",   // ← a conserver absolument\n  "ussd_code": null               // null=SMS auto | "#144*82#"=USSD a composer\n}\n\n// Etape 2 — Retry avec OTP recu + reference du 400 → reponse 202\n{\n  "amount": 5000, "currency": "XOF", "phone": "07XXXXXXXX",\n  "operator": "Orange Money", "country_code": "CI",\n  "otp": "123456",\n  "reference": "DEP-A1B2C3D4",   // ← meme valeur que la reponse 400\n  "notify_url": "https://monsite.com/webhook"\n}`, y, "json");
 
@@ -848,8 +848,8 @@ async function displayCryptoPayment(data) {
     ["Flux", "Operateurs concernes", "Reponse initiale", "Action requise"],
     [
       ["USSD Push", "MTN, Moov, Airtel, Orange, Free, E-money, T-Money, Flooz, M-Pesa, Afri Money, Vodacom", "202 pending", "Attendre le webhook. Le client valide sur son telephone."],
-      ["OTP USSD",  "Orange CI (#144*82#), SN (#144*391#), BF (*144*4*6*montant#)", "400 otp_required, reference: \"DEP-...\", ussd_code: \"#144*82#\"", "L'API envoie l'OTP par SMS. Relancer avec otp + reference (valeur recue dans le 400)."],
-      ["OTP SMS",   "LigdiCash BF (wallet) — SMS envoye automatiquement", "400 otp_required, reference: \"DEP-...\", ussd_code: null", "SMS envoye automatiquement. Relancer avec otp + reference (valeur recue dans le 400)."],
+      ["OTP USSD",  "Orange CI (#144*82#), SN (#144*391#), BF (*144*4*6*montant#)", "400 otp_required, reference: \"DEP-...\", ussd_code: \"#144*82#\"", "Afficher le code USSD, puis relancer avec otp + reference (valeur recue dans le 400)."],
+      ["OTP API",   "Operateur AfribaPay configure en OTP API — SMS fournisseur", "400 otp_required, reference: \"DEP-...\", ussd_code: null", "Le fournisseur envoie le SMS. Relancer avec otp + reference (valeur recue dans le 400)."],
       ["Wave",      "Wave CI, Wave SN", "202 pending, flow: wave, wave_url: ...", "Afficher le wave_url en bouton ou QR code. Le client ouvre Wave."],
     ],
     y, [25, 52, 42, 51]

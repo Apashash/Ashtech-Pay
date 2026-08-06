@@ -6704,6 +6704,15 @@ export async function registerRoutes(
           .filter(c => c.isActive && c.name && c.code)
           .map(async c => {
             const ops = await storage.getOperatorsByCountry(c.id);
+            const activeOperators = ops
+              .filter(o =>
+                o.isActive &&
+                !o.isInMaintenance &&
+                ((o.depositPaymentProvider || o.paymentProvider) === "afribapay" ||
+                 (o.depositPaymentProvider || o.paymentProvider) === "pixpay")
+              )
+              .map(o => ({ id: o.id, name: o.name }));
+            if (activeOperators.length === 0) return null;
             return {
               id: c.id,
               name: c.name,
@@ -6711,11 +6720,11 @@ export async function registerRoutes(
               flag: c.flag,
               dialCode: c.dialCode,
               currency: c.currency,
-              operators: ops.filter(o => o.isActive).map(o => ({ id: o.id, name: o.name })),
+              operators: activeOperators,
             };
           })
       );
-      res.json(activeCountries);
+      res.json(activeCountries.filter(Boolean));
     } catch (error) {
       console.error("Public get countries error:", error);
       res.status(500).json({ message: "Erreur serveur" });
@@ -7655,10 +7664,23 @@ export async function registerRoutes(
       }
 
       // Get country and operator IDs for fee calculation
-      const allCountries = await storage.getAllCountries();
-      const countryData = allCountries.find((c: { id: string; code: string; name: string }) => c.id === country || c.code === country || c.name === country);
-      const countryId = countryData?.id || undefined;
-      const paymentCountryCode = countryData?.code || "CM";
+       const allCountries = await storage.getAllCountries();
+       const countryData = allCountries.find((c: { id: string; code: string; name: string }) =>
+         c.id === country ||
+         c.code.toUpperCase() === String(country).toUpperCase() ||
+         c.name.toLowerCase() === String(country).toLowerCase()
+       );
+       if (!countryData || !countryData.isActive) {
+         return res.status(400).json({ message: "Pays non supporté ou inactif." });
+       }
+       const allowedCodes = paymentLink.allowedCountries || [];
+       if (allowedCodes.length > 0 && !allowedCodes.some((allowed: string) =>
+         allowed.toUpperCase() === countryData.code.toUpperCase() || allowed === countryData.id
+       )) {
+         return res.status(400).json({ message: "Ce pays n'est pas autorisé pour ce lien de paiement." });
+       }
+       const countryId = countryData.id;
+       const paymentCountryCode = countryData.code;
       const paymentCurrency = countryData?.currency || providedCurrency || paymentLink.currency || "XAF";
 
       // The amount provided by the frontend is in providedCurrency (or paymentCurrency)
@@ -7677,16 +7699,31 @@ export async function registerRoutes(
       let operatorRecord: any = null;
       if (operator && countryId) {
         const operatorsList = await storage.getOperatorsByCountry(countryId);
-        operatorRecord = operatorsList.find((o: any) => o.name === operator || o.id === operator);
+         operatorRecord = operatorsList.find((o: any) =>
+           (o.name === operator || o.id === operator) &&
+           o.isActive &&
+           !o.isInMaintenance
+         );
         resolvedOperatorId = operatorRecord?.id || undefined;
         operatorName = operatorRecord?.name || operator;
       }
+       if (paymentMethod === "mobile_money" && !operatorRecord) {
+         return res.status(400).json({ message: "Opérateur non disponible pour ce pays." });
+       }
 
       // Determine provider BEFORE fee calculation — dépôt utilise depositPaymentProvider si défini
       const paymentProvider = (operatorRecord as any)?.depositPaymentProvider || operatorRecord?.paymentProvider;
       if (paymentProvider !== "afribapay" && paymentProvider !== "pixpay") {
         return res.status(400).json({ message: "Aucun fournisseur de paiement configuré pour cet opérateur." });
       }
+       if (paymentProvider === "pixpay" &&
+           !PIXPAY_SUPPORTED_COUNTRIES.some((supported: any) => supported.code === paymentCountryCode.toUpperCase())) {
+         return res.status(400).json({ message: "PixPay ne prend pas en charge ce pays." });
+       }
+       if (paymentProvider === "afribapay" &&
+           !AFRIBAPAY_CONFIRMED_COUNTRIES.has(paymentCountryCode.toUpperCase())) {
+         return res.status(400).json({ message: "AfribaPay ne prend pas en charge ce pays." });
+       }
       console.log(`[PaymentLink] operatorId=${resolvedOperatorId} | name=${operatorName} | provider=${paymentProvider}`);
 
       // Resolve fees from DB (includes afribapayFee + ashtechMargin)
@@ -13690,11 +13727,12 @@ export async function registerRoutes(
             name: c.name,
             currency: normalizeApiCurrency(c.currency),
             operators: ops
-            .filter((o: any) =>
-              o.isActive &&
-              !o.isInMaintenance &&
-              (o.paymentProvider === "afribapay" || o.paymentProvider === "pixpay")
-            )
+            .filter((o: any) => {
+              const provider = o.depositPaymentProvider || o.paymentProvider;
+              return o.isActive &&
+                !o.isInMaintenance &&
+                (provider === "afribapay" || provider === "pixpay");
+            })
               .map((o: any) => o.name),
           };
         })
@@ -13988,11 +14026,17 @@ export async function registerRoutes(
 
       // ── Find operator ──────────────────────────────────────────────────────
       const countryOps = await storage.getOperatorsByCountry(country.id);
-      const operatorRecord = countryOps.find(
-        (o: any) => o.name.toLowerCase() === operatorName.toLowerCase()
-      );
+       const operatorRecord = countryOps.find(
+         (o: any) =>
+           o.name.toLowerCase() === operatorName.toLowerCase() &&
+           o.isActive &&
+           !o.isInMaintenance
+       );
       if (!operatorRecord) {
-        const available = countryOps.map((o: any) => o.name).join(", ");
+         const available = countryOps
+           .filter((o: any) => o.isActive && !o.isInMaintenance)
+           .map((o: any) => o.name)
+           .join(", ");
         return res.status(422).json({
           error: "unprocessable",
           message: `Opérateur non supporté pour ce pays. Disponibles : ${available}`,
@@ -14009,12 +14053,31 @@ export async function registerRoutes(
       }
 
       // ── Resolve payment provider (use operator tag, fallback to country-based detection) ─
-      const PIXPAY_COLLECT_CODES = ["CM","CF","TD","GQ","CG","GA","BF","BJ","CI","GW","ML","NE","SN","TG","GN","CD"];
-      const AFRIBAPAY_COLLECT_CODES = ["CM","CI","SN","ML","GN","CF","CG","GA","GW","GQ","CD","TD","NE","BJ","RW","BF","TG"];
+        const PIXPAY_COLLECT_CODES = new Set(["CM","CD","CI","SN","BF"]);
+        const AFRIBAPAY_COLLECT_CODES = new Set(["BF","BJ","CD","CF","CG","CI","CM","GA","GW","ML","NE","SN","TD","TG"]);
       const paymentProvider = ((operatorRecord as any).depositPaymentProvider || (operatorRecord as any).paymentProvider) as string;
       if (paymentProvider !== "afribapay" && paymentProvider !== "pixpay") {
         return res.status(422).json({ error: "unprocessable", message: "Aucun fournisseur de paiement valide n'est configuré pour cet opérateur." });
       }
+       const countryCode = country.code.toUpperCase();
+       const providerCountries = paymentProvider === "pixpay"
+         ? PIXPAY_COLLECT_CODES
+         : AFRIBAPAY_COLLECT_CODES;
+       if (!providerCountries.has(countryCode)) {
+         return res.status(422).json({
+           error: "unprocessable",
+           message: `${paymentProvider} ne prend pas en charge le pays ${country.code}.`,
+         });
+       }
+       if (paymentProvider === "pixpay") {
+         const serviceId = getPixPayServiceId(operatorRecord.name, country.code, "cash_out");
+         if (!serviceId) {
+           return res.status(422).json({
+             error: "unprocessable",
+             message: "Cet opérateur n'est pas configuré pour la collecte PixPay.",
+           });
+         }
+       }
       console.log(`[API /v1/collect] merchant=${merchant.id} | country=${country.code} | operator=${operatorName} | provider=${paymentProvider} | amount=${amountNum} ${currency}`);
       const resolvedFeeRecord = await storage.resolveFee("deposit", country.id, (operatorRecord as any).id);
       const ashtechMarginPct = (resolvedFeeRecord as any)?.ashtechMargin != null
@@ -14476,26 +14539,43 @@ export async function registerRoutes(
       const result = await Promise.all(
         countries.map(async (c: any) => {
           const ops = await storage.getOperatorsByCountry(c.id);
-          const activeOps = ops.filter((o: any) => o.paymentProvider === "afribapay" || o.paymentProvider === "pixpay");
+         const activeOps = ops.filter((o: any) => {
+           const provider = o.depositPaymentProvider || o.paymentProvider;
+           return o.isActive && !o.isInMaintenance && (provider === "afribapay" || provider === "pixpay");
+         });
           if (activeOps.length === 0) return null;
 
-          // Per-country fee from DB (admin-configurable)
-          const feeRecord = await storage.resolveFee("deposit", c.id, activeOps[0].id);
-          const providerFee = feeRecord
-            ? parseFloat((feeRecord as any).pixpayFee ?? (feeRecord as any).afribapayFee ?? "3.0")
-            : 3.0;
-          const ashtechMargin = feeRecord
-            ? parseFloat((feeRecord as any).ashtechMargin ?? "2.0")
-            : 2.0;
-          const totalFee = parseFloat((providerFee + ashtechMargin).toFixed(2));
+           // Resolve each operator with its own provider fee. Mixed-provider
+           // countries must not expose a PixPay fee for an AfribaPay operator.
+           const operatorFees = await Promise.all(activeOps.map(async (o: any) => {
+             const provider = o.depositPaymentProvider || o.paymentProvider;
+             const feeRecord = await storage.resolveFee("deposit", c.id, o.id);
+             const providerFee = feeRecord
+               ? parseFloat((provider === "pixpay"
+                 ? feeRecord.pixpayFee
+                 : feeRecord.afribapayFee) ?? "3.0")
+               : 3.0;
+             const ashtechMargin = feeRecord
+               ? parseFloat(feeRecord.ashtechMargin ?? "2.0")
+               : 2.0;
+             return {
+               name: o.name,
+               provider,
+               total_fee_pct: parseFloat((providerFee + ashtechMargin).toFixed(2)),
+               provider_fee_pct: parseFloat(providerFee.toFixed(2)),
+               ashtech_margin_pct: parseFloat(ashtechMargin.toFixed(2)),
+             };
+           }));
+           const primaryFee = operatorFees[0];
 
           return {
             country_code: c.code,
             country_name: c.name,
             currency: normalizeApiCurrency(c.currency),
-            total_fee_pct: totalFee,
-            ashtech_margin_pct: parseFloat(ashtechMargin.toFixed(2)),
+             total_fee_pct: primaryFee.total_fee_pct,
+             ashtech_margin_pct: primaryFee.ashtech_margin_pct,
             operators: activeOps.map((o: any) => o.name),
+             operator_fees: operatorFees,
           };
         })
       );
@@ -14594,11 +14674,48 @@ export async function registerRoutes(
         }
       }
 
-      // Validate allowed_countries if provided
-      const countriesFilter: string[] | null =
-        Array.isArray(allowed_countries) && allowed_countries.length > 0
-          ? allowed_countries.map((c: string) => c.toUpperCase())
-          : null;
+       // Validate allowed_countries against the live catalogue and persist
+       // canonical ISO country codes. This prevents links from targeting
+       // removed countries or countries without a usable provider.
+       const activeCountries = await storage.getActiveCountries();
+       const countriesWithOperators = await Promise.all(activeCountries.map(async (country) => {
+         const operators = await storage.getOperatorsByCountry(country.id);
+         return {
+           country,
+           hasUsableOperator: operators.some((operator: any) => {
+             const provider = operator.depositPaymentProvider || operator.paymentProvider;
+             return operator.isActive &&
+               !operator.isInMaintenance &&
+               (provider === "afribapay" || provider === "pixpay");
+           }),
+         };
+       }));
+       let countriesFilter: string[] | null = null;
+       if (Array.isArray(allowed_countries) && allowed_countries.length > 0) {
+         const resolvedCodes: string[] = [];
+         for (const rawCountry of allowed_countries) {
+           if (typeof rawCountry !== "string" || !rawCountry.trim()) {
+             return res.status(400).json({
+               error: "invalid_allowed_countries",
+               message: "allowed_countries doit contenir des codes ou identifiants de pays valides.",
+             });
+           }
+           const value = rawCountry.trim().toUpperCase();
+           const match = countriesWithOperators.find(({ country, hasUsableOperator }) =>
+             hasUsableOperator &&
+             (country.code.toUpperCase() === value || country.id.toUpperCase() === value)
+           );
+           if (!match) {
+             return res.status(400).json({
+               error: "invalid_allowed_countries",
+               message: `Pays inactif ou sans opérateur disponible : ${rawCountry}`,
+             });
+           }
+           const code = match.country.code.toUpperCase();
+           if (!resolvedCodes.includes(code)) resolvedCodes.push(code);
+         }
+         countriesFilter = resolvedCodes;
+       }
 
       // Generate a unique slug for this payment link
       let slug = "hp-" + generateSlug();
@@ -14701,31 +14818,6 @@ export async function registerRoutes(
     }
   });
 
-  // GET /api/public/countries — list active countries with operators (no auth)
-  app.get("/api/public/countries", publicInfoLimiter, async (_req: Request, res: Response) => {
-    try {
-      const countries = await storage.getActiveCountries();
-      const result = await Promise.all(
-        countries.map(async (c) => {
-          const ops = await storage.getOperatorsByCountry(c.id);
-          return {
-            id: c.id,
-            name: c.name,
-            code: c.code,
-            currency: normalizeApiCurrency(c.currency),
-            flag: c.flag,
-            operators: ops
-              .filter((o) => o.isActive && !o.isInMaintenance)
-              .map((o) => ({ id: o.id, name: o.name })),
-          };
-        })
-      );
-      res.json(result);
-    } catch (e: any) {
-      res.status(500).json({ error: "server_error" });
-    }
-  });
-
   // GET /api/public/hosted-session/:id — get session for public checkout
   app.get("/api/public/hosted-session/:id", async (req: Request, res: Response) => {
     try {
@@ -14770,24 +14862,47 @@ export async function registerRoutes(
       if (!country) return res.status(400).json({ error: "invalid_country" });
       const operator = await storage.getOperator(operatorId);
       if (!operator) return res.status(400).json({ error: "invalid_operator" });
+       if (!country.isActive) return res.status(400).json({ error: "inactive_country" });
+       if (operator.countryId !== country.id || !operator.isActive || operator.isInMaintenance) {
+         return res.status(400).json({ error: "invalid_operator", message: "Opérateur indisponible pour ce pays." });
+       }
 
       const merchant = await storage.getUser(hpSession.merchantId);
       if (!merchant) return res.status(500).json({ error: "merchant_not_found" });
 
+       const expectedCurrency = normalizeApiCurrency(country.currency);
+       if (normalizeApiCurrency(hpSession.currency) !== expectedCurrency) {
+         return res.status(400).json({
+           error: "currency_country_mismatch",
+           message: `La devise ${hpSession.currency} ne correspond pas au pays ${country.code}.`,
+         });
+       }
+
       // Resolve fee
       const fee = await storage.resolveFee("deposit", country.id, operator.id);
-      const feePercent = fee?.feeType === "percentage" ? parseFloat(fee.feeValue || "0") : 0;
       const amount = parseFloat(hpSession.amount);
-      const feeAmount = (amount * feePercent) / 100;
-      const totalAmount = amount + feeAmount;
+       const provider = (operator as any).depositPaymentProvider || (operator as any).paymentProvider;
+       if (provider !== "afribapay" && provider !== "pixpay") {
+         return res.status(400).json({ error: "provider_unavailable" });
+       }
+       const providerFeeRate = parseFloat(
+         (provider === "pixpay" ? (fee as any)?.pixpayFee : (fee as any)?.afribapayFee) || "3"
+       );
+       const marginRate = parseFloat((fee as any)?.ashtechMargin || String(ASHTECH_MARGIN));
+       const feeBreakdown = provider === "pixpay"
+         ? computePixPayFees(amount, providerFeeRate, marginRate)
+         : computeAfribaPayFees(amount, providerFeeRate, marginRate);
+       const feeAmount = feeBreakdown.totalFeeAmount;
+       const creditedAmount = feeBreakdown.creditedAmount;
+       const totalAmount = amount;
 
       // Create transaction
       const txRef = "HP-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8).toUpperCase();
       const tx = await storage.createTransaction({
         userId: merchant.id,
         type: "deposit",
-        amount: String(amount),
-        currency: country.currency,
+         amount: String(creditedAmount),
+         currency: country.currency,
         status: "pending",
         reference: txRef,
         recipientPhone: phone,
@@ -14795,7 +14910,7 @@ export async function registerRoutes(
         description: hpSession.description || `Paiement ${hpSession.id}`,
         countryId: country.id,
         operatorId: operator.id,
-        feeAmount: String(feeAmount),
+         feeAmount: String(feeAmount),
         totalAmount: String(totalAmount),
         notifyUrl: null,
         source: "hosted_page",
@@ -14808,22 +14923,21 @@ export async function registerRoutes(
         transactionId: tx.id,
       });
 
-      // Initiate payment (AfribaPay or PixPay)
+       // Initiate payment (AfribaPay or PixPay)
       let payResult: any = null;
-      const countryCode = country.code;
-      const afribaPayCodes = ["CM", "CI", "SN", "ML", "GN", "CF", "CG", "GA", "GW", "GQ", "CD", "TD", "NE", "BJ", "RW", "BF", "TG", "GQ"];
-
-      const isPixPayCountry = (code: string) => PIXPAY_SUPPORTED_COUNTRIES.some((c: any) => c.code === code);
+       const countryCode = country.code.toUpperCase();
 
       try {
-        if (isPixPayCountry(countryCode)) {
-          const pixpayServiceId = getPixPayServiceId(operator.name, countryCode, "cash_out");
-          const pixBaseParams = {
-            serviceId: String(pixpayServiceId || "1"),
-            amount: totalAmount,
+         if (provider === "pixpay") {
+           const pixpayServiceId = getPixPayServiceId(operator.name, countryCode, "cash_out");
+           if (!pixpayServiceId) throw new Error("Opérateur non configuré pour la collecte PixPay.");
+           const pixBaseParams = {
+             serviceId: String(pixpayServiceId),
+             amount: amount,
             phone,
             countryCode,
             orderId: txRef,
+             ipnUrl: buildWebhookUrl("/api/pixpay/webhook"),
             customData: txRef,
           };
           const flowType = detectPixPayFlowType(operator.name, countryCode);
@@ -14848,7 +14962,7 @@ export async function registerRoutes(
             await storage.updateTransactionExternalReference(tx.id, extRef);
             payResult = { flow: "ussd_push", ussd_code: null, extRef };
           }
-        } else if (afribaPayCodes.includes(countryCode)) {
+         } else if (provider === "afribapay") {
           const afribapayOperatorCode = resolveAfribaPayOperatorCode(operator, operator.name);
           const afribapayCurrency = AFRIBAPAY_ISO_CURRENCY[countryCode.toUpperCase()] || country.currency;
           let localPhone = phone.replace(/\s/g, "");
@@ -14857,7 +14971,7 @@ export async function registerRoutes(
             operator: afribapayOperatorCode,
             country: countryCode,
             phone_number: localPhone,
-            amount: totalAmount,
+             amount: amount,
             currency: afribapayCurrency,
             order_id: txRef,
             reference_id: txRef,
@@ -14876,14 +14990,13 @@ export async function registerRoutes(
       }
 
       // Register in poller
-      const provider = isPixPayCountry(countryCode) ? "pixpay" : "afribapay";
       addPendingPayment({
         transactionId: tx.id,
         reference: txRef,
         externalReference: payResult.extRef || txRef,
         userId: merchant.id,
         type: "deposit",
-        amount: String(amount),
+         amount: String(creditedAmount),
         provider,
         countryCode,
       });

@@ -69,9 +69,10 @@ export default function HPayPage() {
   const session = sessionQuery.data;
   const countries = countriesQuery.data || [];
 
-  // Filter countries matching session currency
+  // Only show countries whose wallet currency matches the hosted session.
+  // The server validates this again before creating the transaction.
   const matchingCountries = session
-    ? countries.filter((c) => c.currency === session.currency || c.operators.length > 0)
+    ? countries.filter((c) => c.currency === session.currency)
     : countries;
 
   const selectedCountry = matchingCountries.find((c) => c.id === countryId);
