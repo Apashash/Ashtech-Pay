@@ -172,8 +172,14 @@ export default function RegisterPage() {
   const registerMutation = useMutation({
     mutationFn: async (data: RegisterFormData) => {
       const { confirmPassword, ...submitData } = data;
+      const dialDigits = selectedCountry?.dialCode.replace(/\D/g, "") || "";
+      const phoneDigits = submitData.phone?.replace(/\D/g, "") || "";
+      const normalizedPhone = phoneDigits
+        ? (dialDigits && !phoneDigits.startsWith(dialDigits) ? `${dialDigits}${phoneDigits}` : phoneDigits)
+        : submitData.phone;
       const res = await apiRequest("POST", "/api/auth/register", {
         ...submitData,
+        phone: normalizedPhone,
         country: selectedCountry?.name || "",
         turnstileToken: turnstileToken || undefined,
       });

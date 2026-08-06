@@ -22,3 +22,4 @@
 - [Legacy provider removal](legacy-provider-removal.md) — removed provider data must be normalized/fail-closed idempotently; legacy schema columns require reviewed publish-time removal.
 - [Admin transaction history search](admin-history-search.md) — search must run server-side across retained records; phone input accepts +237, 237, or local digits, with a 30-day retention boundary.
 - [Removed payment countries](removed-payment-countries.md) — removed countries are deleted with config/wallet dependencies, while historical transactions remain retained and searchable.
+- [Phone authentication format](phone-authentication-format.md) — registration and login use digits-only international phone numbers composed from active country dial codes.

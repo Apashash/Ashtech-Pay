@@ -9,12 +9,21 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from "@/hooks/use-toast";
 import { loginSchema } from "@shared/schema";
 import { apiRequest, queryClient, setAuthToken } from "@/lib/queryClient";
-import { Mail, Lock, Loader2, Eye, EyeOff, Home, Clock, ShieldAlert, WifiOff, MonitorSmartphone } from "lucide-react";
+import { Mail, Lock, Loader2, Eye, EyeOff, Home, Clock, ShieldAlert, WifiOff, MonitorSmartphone, Phone } from "lucide-react";
 import { useLanguage } from "@/lib/language";
 import { TurnstileWidget } from "@/components/ui/turnstile";
+import { Select, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelectContent } from "@/components/ui/searchable-select-content";
 import { z } from "zod";
 
 type LoginFormData = z.infer<typeof loginSchema>;
+
+interface CountryData {
+  code: string;
+  name: string;
+  flag: string;
+  dialCode: string;
+}
 
 const RATE_LIMIT_KEY = "ashtech_rate_limit_until";
 
@@ -68,6 +77,9 @@ export default function LoginPage() {
   const { toast } = useToast();
   const { t } = useLanguage();
   const [showPassword, setShowPassword] = useState(false);
+  const [loginMode, setLoginMode] = useState<"email" | "phone">("email");
+  const [phoneInput, setPhoneInput] = useState("");
+  const [selectedCountry, setSelectedCountry] = useState<CountryData | null>(null);
   const kickedParam = typeof window !== "undefined"
     ? new URLSearchParams(window.location.search).get("kicked")
     : null;
@@ -96,6 +108,21 @@ export default function LoginPage() {
   });
   const siteKey = turnstileConfig?.siteKey || import.meta.env.VITE_TURNSTILE_SITE_KEY || "";
 
+  const { data: countries = [] } = useQuery<CountryData[]>({
+    queryKey: ["/api/public/countries"],
+    queryFn: async () => {
+      const res = await fetch("/api/public/countries");
+      if (!res.ok) throw new Error("Failed to fetch countries");
+      return res.json();
+    },
+  });
+
+  useEffect(() => {
+    if (!selectedCountry && countries.length > 0) {
+      setSelectedCountry(countries[0]);
+    }
+  }, [countries, selectedCountry]);
+
   useEffect(() => {
     fetch("/api/auth/ip-status")
       .then(r => r.json())
@@ -123,6 +150,34 @@ export default function LoginPage() {
     defaultValues: { identifier: "", password: "" },
   });
 
+  const composePhoneIdentifier = (localPhone: string, country = selectedCountry) => {
+    const digits = localPhone.replace(/\D/g, "");
+    return country && digits ? `${country.dialCode.replace(/\D/g, "")}${digits}` : "";
+  };
+
+  const switchLoginMode = (mode: "email" | "phone") => {
+    setLoginMode(mode);
+    form.clearErrors("identifier");
+    if (mode === "phone") {
+      form.setValue("identifier", composePhoneIdentifier(phoneInput), { shouldValidate: true });
+    } else {
+      form.setValue("identifier", "", { shouldValidate: false });
+    }
+  };
+
+  const handlePhoneChange = (value: string) => {
+    const localPhone = value.replace(/[^\d\s-]/g, "");
+    setPhoneInput(localPhone);
+    form.setValue("identifier", composePhoneIdentifier(localPhone), { shouldValidate: true });
+  };
+
+  const handleCountryChange = (countryCode: string) => {
+    const country = countries.find(c => c.code === countryCode);
+    if (!country) return;
+    setSelectedCountry(country);
+    form.setValue("identifier", composePhoneIdentifier(phoneInput, country), { shouldValidate: true });
+  };
+
   const handleTurnstileSuccess = useCallback((token: string) => {
     setTurnstileToken(token);
   }, []);
@@ -134,6 +189,14 @@ export default function LoginPage() {
   const handleTurnstileError = useCallback(() => {
     setTurnstileError(true);
   }, []);
+
+  const handleSubmit = (data: LoginFormData) => {
+    if (loginMode === "phone" && phoneInput.replace(/\D/g, "").length < 6) {
+      form.setError("identifier", { message: t.login.phoneValidation });
+      return;
+    }
+    loginMutation.mutate(data);
+  };
 
   const loginMutation = useMutation({
     mutationFn: async (data: LoginFormData) => {
@@ -252,7 +315,7 @@ export default function LoginPage() {
             </div>
           ) : (
             <Form {...form}>
-              <form onSubmit={form.handleSubmit((data) => loginMutation.mutate(data))} className="space-y-5">
+              <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-5">
                 {attemptsLeft !== null && attemptsLeft > 0 && (
                   <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
                     <ShieldAlert className="w-4 h-4 text-amber-500 flex-shrink-0" />
@@ -262,22 +325,89 @@ export default function LoginPage() {
                   </div>
                 )}
 
+                <div className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1" role="tablist" aria-label={t.login.methodLabel}>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={loginMode === "email"}
+                    onClick={() => switchLoginMode("email")}
+                    className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${loginMode === "email" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                    data-testid="tab-login-email"
+                  >
+                    <Mail className="mr-2 inline-block h-4 w-4" />
+                    {t.login.emailTab}
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={loginMode === "phone"}
+                    onClick={() => switchLoginMode("phone")}
+                    className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${loginMode === "phone" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                    data-testid="tab-login-phone"
+                  >
+                    <Phone className="mr-2 inline-block h-4 w-4" />
+                    {t.login.phoneTab}
+                  </button>
+                </div>
+
                 <FormField
                   control={form.control}
                   name="identifier"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="font-semibold text-sm">{t.login.emailLabel}</FormLabel>
+                      <FormLabel className="font-semibold text-sm">
+                        {loginMode === "email" ? t.login.emailLabel : t.login.phoneLabel}
+                      </FormLabel>
                       <FormControl>
-                        <div className="relative">
-                          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                          <Input
-                            placeholder={t.login.emailPlaceholder}
-                            className="pl-10"
-                            data-testid="input-identifier"
-                            {...field}
-                          />
-                        </div>
+                        {loginMode === "email" ? (
+                          <div className="relative">
+                            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                            <Input
+                              type="email"
+                              autoComplete="email"
+                              placeholder={t.login.emailPlaceholder}
+                              className="pl-10"
+                              data-testid="input-login-email"
+                              {...field}
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex gap-2">
+                            <Select value={selectedCountry?.code || ""} onValueChange={handleCountryChange}>
+                              <SelectTrigger className="w-[128px] shrink-0" data-testid="select-login-country">
+                                <SelectValue>
+                                  {selectedCountry ? (
+                                    <span className="flex items-center gap-1.5">
+                                      <span>{selectedCountry.flag}</span>
+                                      <span className="text-sm">{selectedCountry.dialCode}</span>
+                                    </span>
+                                  ) : t.login.selectCountry}
+                                </SelectValue>
+                              </SelectTrigger>
+                              <SearchableSelectContent
+                                options={countries.map(country => ({
+                                  value: country.code,
+                                  label: country.name,
+                                  flag: country.flag,
+                                  sub: country.dialCode,
+                                }))}
+                              />
+                            </Select>
+                            <div className="relative flex-1">
+                              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                              <Input
+                                type="tel"
+                                inputMode="numeric"
+                                autoComplete="tel-national"
+                                placeholder={t.login.phonePlaceholder}
+                                className="pl-10"
+                                value={phoneInput}
+                                onChange={(event) => handlePhoneChange(event.target.value)}
+                                data-testid="input-login-phone"
+                              />
+                            </div>
+                          </div>
+                        )}
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -297,6 +427,7 @@ export default function LoginPage() {
                             type={showPassword ? "text" : "password"}
                             placeholder="••••••••"
                             className="pl-10 pr-10"
+                            autoComplete="current-password"
                             data-testid="input-password"
                             {...field}
                           />
