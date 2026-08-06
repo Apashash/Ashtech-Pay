@@ -165,7 +165,8 @@ const AFRIBAPAY_OPERATOR_CODE_MAP: Record<string, string> = {
   orange: "orange", mtn: "mtn", moov: "moov", wave: "wave",
   airtel: "airtel", free: "free", emoney: "emoney",
   ligdicash: "wligdicash", tmoney: "tmoney", celtiis: "celtiis",
-  coris: "coris", mpesa: "mpesa", vodacom: "vodacom",
+  coris: "coris", corismoney: "coris", djamo: "djamo",
+  mpesa: "mpesa", vodacom: "vodacom",
   afrimoney: "afrimoney", amanata: "amanata", nita: "nita",
   zamani: "zamani",
 };
