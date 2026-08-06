@@ -871,7 +871,7 @@ async function showCryptoPayment(data) {
                 (Orange CI, SN, BF — le client compose le code USSD affiché, l'OTP s'affiche dans le menu téléphonique,{" "}
                 <em>aucun SMS n'est envoyé</em>) et{" "}
                 <strong className="text-yellow-300">OTP SMS</strong>{" "}
-                (certains opérateurs AfribaPay — SMS déclenché automatiquement,{" "}
+                (certains opérateurs — SMS déclenché automatiquement par le réseau,{" "}
                 <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">ussd_code</code>{" "}
                 est <code className="text-red-400">null</code>).
                 Dans les deux cas, relancez la requête avec{" "}
@@ -954,7 +954,7 @@ curl https://ashtechpay.top/v1/collect \\
                 </tr>
                 <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                   <td className="px-3 py-3 whitespace-nowrap"><span className="text-yellow-400 font-semibold text-sm">OTP SMS</span></td>
-                  <td className="px-3 py-3 text-gray-700 text-sm">Opérateurs AfribaPay configurés en OTP API — SMS envoyé par le fournisseur</td>
+                  <td className="px-3 py-3 text-gray-700 text-sm">Certains opérateurs — SMS envoyé automatiquement par le réseau de l'opérateur</td>
                   <td className="px-3 py-3 font-mono text-orange-400 text-xs whitespace-nowrap">400 otp_required<br/><span className="text-zinc-500">ussd_code: null</span></td>
                   <td className="px-3 py-3 text-gray-700 text-sm">Le fournisseur envoie le SMS OTP. Relancer avec <code className="text-blue-600 bg-blue-50 px-1 py-0.5 rounded">otp</code> + <code className="text-blue-600 bg-blue-50 px-1 py-0.5 rounded">reference</code>.</td>
                 </tr>
@@ -1097,14 +1097,14 @@ body: JSON.stringify({
                 <h3 className="font-semibold text-yellow-300">Flux OTP SMS — selon la configuration fournisseur</h3>
               </div>
               <p className="text-sm text-gray-600">
-                Pour les opérateurs AfribaPay configurés en OTP API, le fournisseur déclenche automatiquement l'envoi d'un SMS OTP
+                Pour certains opérateurs, l'API déclenche automatiquement l'envoi d'un SMS OTP
                 au numéro du client — <strong className="text-zinc-200">aucun code USSD à composer.</strong>{" "}
                 Le champ <code className="text-blue-600 bg-blue-50 px-1 py-0.5 rounded">ussd_code</code> est <code className="text-red-400">null</code>.
               </p>
               <div className="grid lg:grid-cols-2 gap-4">
                 <div className="space-y-1 min-w-0">
                   <p className="text-xs text-gray-500 font-medium">Étape 1 — Requête initiale (sans OTP)</p>
-                  <CodeBlock language="javascript" code={`// Opérateur AfribaPay configuré en OTP API — étape 1
+                  <CodeBlock language="javascript" code={`// Opérateur OTP SMS — étape 1
 const res = await fetch("https://ashtechpay.top/v1/collect", {
   method: "POST",
   headers: {
@@ -1121,7 +1121,7 @@ const res = await fetch("https://ashtechpay.top/v1/collect", {
   })
 });
 // → 400 otp_required
-// ussd_code est null — SMS envoyé automatiquement par le fournisseur`} />
+// ussd_code est null — SMS envoyé automatiquement par le réseau de l'opérateur`} />
                 </div>
                 <div className="space-y-1 min-w-0">
                   <p className="text-xs text-gray-500 font-medium">Réponse 400 + Étape 2</p>
@@ -1133,7 +1133,7 @@ const res = await fetch("https://ashtechpay.top/v1/collect", {
   "ussd_code": null
 }
 
-// Le client reçoit son OTP par SMS du fournisseur
+// Le client reçoit son OTP par SMS du réseau de l'opérateur
 // Étape 2 : relancer avec otp + reference`} />
                   <CodeBlock language="javascript" code={`// Étape 2 : même requête + otp + reference
 body: JSON.stringify({

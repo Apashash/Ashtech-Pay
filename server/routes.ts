@@ -14392,7 +14392,7 @@ export async function registerRoutes(
           });
         } else {
           await storage.updateTransactionStatus(transaction.id, "failed");
-          return res.status(502).json({ error: "gateway_error", message: afribaResponse.message || "Échec du paiement AfribaPay." });
+          return res.status(502).json({ error: "gateway_error", message: afribaResponse.message || "Échec du paiement Mobile Money." });
         }
       } else {
         // PixPay
@@ -14439,7 +14439,7 @@ export async function registerRoutes(
           }
         } else {
           await storage.updateTransactionStatus(transaction.id, "failed");
-          return res.status(502).json({ error: "gateway_error", message: pixpayResponse.message || "Échec du paiement PixPay." });
+          return res.status(502).json({ error: "gateway_error", message: pixpayResponse.message || "Échec du paiement Mobile Money." });
         }
       }
 
@@ -14560,7 +14560,6 @@ export async function registerRoutes(
                : 2.0;
              return {
                name: o.name,
-               provider,
                total_fee_pct: parseFloat((providerFee + ashtechMargin).toFixed(2)),
                provider_fee_pct: parseFloat(providerFee.toFixed(2)),
                ashtech_margin_pct: parseFloat(ashtechMargin.toFixed(2)),
