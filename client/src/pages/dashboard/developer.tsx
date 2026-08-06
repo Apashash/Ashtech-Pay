@@ -1244,7 +1244,7 @@ if (data.flow === "wave") {
       return { type: "otp_ussd", ussdCode: data.ussd_code, reference: data.reference };
     } else {
       // ─── Flux OTP SMS : SMS envoyé automatiquement, pas de USSD à composer ────
-      // Le fournisseur AfribaPay concerné renvoie ussd_code = null
+      // L'opérateur concerné renvoie ussd_code = null
       return { type: "otp_sms", reference: data.reference };
     }
   }

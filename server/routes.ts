@@ -1364,6 +1364,20 @@ async function resolveFileUrl(filePath: string): Promise<string | null> {
   return appUrl ? `${appUrl}/uploads/${filePath}` : null;
 }
 
+/**
+ * Sanitize upstream gateway messages before returning them to merchants/customers.
+ * If the upstream message mentions an internal provider name (AfribaPay/PixPay),
+ * the raw message is logged server-side and a neutral fallback is returned instead.
+ */
+function sanitizeGatewayMessage(msg: string | null | undefined, fallback: string): string {
+  if (!msg || !msg.trim()) return fallback;
+  if (/afribapay|pixpay/i.test(msg)) {
+    console.warn(`[GatewaySanitize] provider name stripped from upstream message: ${msg}`);
+    return fallback;
+  }
+  return msg.trim();
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -4173,7 +4187,7 @@ export async function registerRoutes(
               await storage.upsertWallet(senderId, walletCurrency, totalAmount);
             }
             return res.status(400).json({
-              message: `Envoi PixPay non supporté pour cet opérateur (${operator?.name}) dans ce pays`,
+              message: `Envoi non supporté pour cet opérateur (${operator?.name}) dans ce pays`,
             });
           }
           console.log(`[Transfer] PixPay | country=${countryCode} | service_id=${cashInServiceId} | operator=${operator?.name}`);
@@ -4263,7 +4277,7 @@ export async function registerRoutes(
               await storage.upsertWallet(senderId, walletCurrency, totalAmount);
             }
             return res.status(400).json({
-              message: `Le transfert a échoué: ${payoutResult.message}`,
+              message: `Le transfert a échoué: ${sanitizeGatewayMessage(payoutResult.message, "erreur du réseau de l'opérateur.")}`,
             });
           }
         }
@@ -4780,7 +4794,7 @@ export async function registerRoutes(
               const _phoneMasked = process.env.NODE_ENV !== "production" ? localPhone : `***${localPhone.slice(-3)}`;
               console.error(`[AfribaPay Payin FAILED] country=${countryCode} phone=${_phoneMasked} operator=${afribapayOperatorCode} response=`, JSON.stringify(afribaResponse));
               await storage.updateTransactionStatus(transaction.id, "failed");
-              res.status(400).json({ message: afribaResponse.message || "Échec de l'initiation du paiement AfribaPay" });
+              res.status(400).json({ message: sanitizeGatewayMessage(afribaResponse.message, "Échec de l'initiation du paiement Mobile Money.") });
             }
 
           } else if (paymentProvider === "pixpay") {
@@ -4788,7 +4802,7 @@ export async function registerRoutes(
             const pixpayAutoServiceId = getPixPayServiceId((operatorRecord as any)?.name || "", countryCode, "cash_out");
             if (!pixpayAutoServiceId) {
               await storage.updateTransactionStatus(transaction.id, "failed");
-              return res.status(400).json({ message: "Opérateur non supporté par PixPay pour ce pays. Contactez l'administrateur." });
+              return res.status(400).json({ message: "Opérateur non supporté pour ce pays. Contactez l'administrateur." });
             }
 
             const pixpayOpType: string = detectPixPayFlowType((operatorRecord as any)?.name || "", countryCode);
@@ -4895,7 +4909,7 @@ export async function registerRoutes(
               });
             } else {
               await storage.updateTransactionStatus(transaction.id, "failed");
-              res.status(400).json({ message: pixpayResponse.message || "Échec de l'initiation du paiement PixPay" });
+              res.status(400).json({ message: sanitizeGatewayMessage(pixpayResponse.message, "Échec de l'initiation du paiement Mobile Money.") });
             }
 
           }
@@ -5217,7 +5231,7 @@ export async function registerRoutes(
             await storage.updateTransactionStatus(transaction.id, "failed");
             await storage.refundToOriginalWallet(userId, "withdrawal", withdrawalCurrency, totalAmount);
             return res.status(400).json({
-              message: `Retrait PixPay non supporté pour cet opérateur (${operator?.name}) dans ce pays`,
+              message: `Retrait non supporté pour cet opérateur (${operator?.name}) dans ce pays`,
             });
           }
           console.log(`[Withdrawal] PixPay | country=${countryCode} | service_id=${cashOutServiceId} | operator=${operator?.name}`);
@@ -5298,7 +5312,7 @@ export async function registerRoutes(
             await storage.updateTransactionStatus(transaction.id, "failed");
             await storage.refundToOriginalWallet(userId, "withdrawal", withdrawalCurrency, totalAmount);
             return res.status(400).json({
-              message: `Le retrait a échoué: ${payoutResult.message}`,
+              message: `Le retrait a échoué: ${sanitizeGatewayMessage(payoutResult.message, "erreur du réseau de l'opérateur.")}`,
             });
           }
         }
@@ -7718,11 +7732,11 @@ export async function registerRoutes(
       }
        if (paymentProvider === "pixpay" &&
            !PIXPAY_SUPPORTED_COUNTRIES.some((supported: any) => supported.code === paymentCountryCode.toUpperCase())) {
-         return res.status(400).json({ message: "PixPay ne prend pas en charge ce pays." });
+         return res.status(400).json({ message: "Ce pays n'est pas pris en charge pour cet opérateur." });
        }
        if (paymentProvider === "afribapay" &&
            !AFRIBAPAY_CONFIRMED_COUNTRIES.has(paymentCountryCode.toUpperCase())) {
-         return res.status(400).json({ message: "AfribaPay ne prend pas en charge ce pays." });
+         return res.status(400).json({ message: "Ce pays n'est pas encore pris en charge pour cet opérateur." });
        }
       console.log(`[PaymentLink] operatorId=${resolvedOperatorId} | name=${operatorName} | provider=${paymentProvider}`);
 
@@ -7998,7 +8012,7 @@ export async function registerRoutes(
               await storage.updatePaymentIntentStatus(intent.id, "failed");
               const failedTx = await storage.getTransactionByReference(reference);
               if (failedTx) await storage.updateTransactionStatus(failedTx.id, "failed");
-              return res.status(400).json({ message: afribaResponse.message || "Échec AfribaPay" });
+              return res.status(400).json({ message: sanitizeGatewayMessage(afribaResponse.message, "Échec du paiement Mobile Money.") });
             }
           }
 
@@ -8009,7 +8023,7 @@ export async function registerRoutes(
               await storage.updatePaymentIntentStatus(intent.id, "failed");
               const failedTxPx = await storage.getTransactionByReference(reference);
               if (failedTxPx) await storage.updateTransactionStatus(failedTxPx.id, "failed");
-              return res.status(400).json({ message: "Opérateur non supporté par PixPay pour ce pays." });
+              return res.status(400).json({ message: "Opérateur non supporté pour ce pays." });
             }
 
             const pxOpType: string = detectPixPayFlowType((operatorRecord as any)?.name || "", paymentCountryCode);
@@ -8112,7 +8126,7 @@ export async function registerRoutes(
               await storage.updatePaymentIntentStatus(intent.id, "failed");
               const failedTxPx2 = await storage.getTransactionByReference(reference);
               if (failedTxPx2) await storage.updateTransactionStatus(failedTxPx2.id, "failed");
-              return res.status(400).json({ message: pxResponse.message || "Échec PixPay" });
+              return res.status(400).json({ message: sanitizeGatewayMessage(pxResponse.message, "Échec du paiement Mobile Money.") });
             }
           }
 
@@ -14066,7 +14080,7 @@ export async function registerRoutes(
        if (!providerCountries.has(countryCode)) {
          return res.status(422).json({
            error: "unprocessable",
-           message: `${paymentProvider} ne prend pas en charge le pays ${country.code}.`,
+           message: `Le pays ${country.code} n'est pas pris en charge pour cet opérateur.`,
          });
        }
        if (paymentProvider === "pixpay") {
@@ -14074,7 +14088,7 @@ export async function registerRoutes(
          if (!serviceId) {
            return res.status(422).json({
              error: "unprocessable",
-             message: "Cet opérateur n'est pas configuré pour la collecte PixPay.",
+             message: "Cet opérateur n'est pas configuré pour la collecte Mobile Money.",
            });
          }
        }
@@ -14159,7 +14173,7 @@ export async function registerRoutes(
         const existingTxOtp = await storage.getTransactionByReference(req.body.reference as string);
         if (!confirmedResponse.success) {
           if (existingTxOtp) await storage.updateTransactionStatus(existingTxOtp.id, "failed");
-          return res.status(502).json({ error: "gateway_error", message: confirmedResponse.message || "Code OTP invalide ou expiré." });
+          return res.status(502).json({ error: "gateway_error", message: sanitizeGatewayMessage(confirmedResponse.message, "Code OTP invalide ou expiré.") });
         }
         const extRefOtp = confirmedResponse.transaction_id || (req.body.reference as string);
         if (existingTxOtp) {
@@ -14257,7 +14271,7 @@ export async function registerRoutes(
             });
             if (!otpInitResultPre.success) {
               await storage.updateTransactionStatus(txPre.id, "failed");
-              return res.status(502).json({ error: "gateway_error", message: otpInitResultPre.message || "Impossible d'envoyer le code OTP." });
+              return res.status(502).json({ error: "gateway_error", message: sanitizeGatewayMessage(otpInitResultPre.message, "Impossible d'envoyer le code OTP.") });
             }
           }
           // USSD-type OTP: user dials the USSD code shown in ussd_code — no SMS
@@ -14392,7 +14406,7 @@ export async function registerRoutes(
           });
         } else {
           await storage.updateTransactionStatus(transaction.id, "failed");
-          return res.status(502).json({ error: "gateway_error", message: afribaResponse.message || "Échec du paiement Mobile Money." });
+          return res.status(502).json({ error: "gateway_error", message: sanitizeGatewayMessage(afribaResponse.message, "Échec du paiement Mobile Money.") });
         }
       } else {
         // PixPay
@@ -14439,7 +14453,7 @@ export async function registerRoutes(
           }
         } else {
           await storage.updateTransactionStatus(transaction.id, "failed");
-          return res.status(502).json({ error: "gateway_error", message: pixpayResponse.message || "Échec du paiement Mobile Money." });
+          return res.status(502).json({ error: "gateway_error", message: sanitizeGatewayMessage(pixpayResponse.message, "Échec du paiement Mobile Money.") });
         }
       }
 
