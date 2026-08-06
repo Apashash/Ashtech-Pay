@@ -14,6 +14,7 @@ import { useLanguage } from "@/lib/language";
 import { TurnstileWidget } from "@/components/ui/turnstile";
 import { Select, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelectContent } from "@/components/ui/searchable-select-content";
+import { getBrowserCountryCode, getCloudflareCountryCode } from "@/lib/country-detection";
 import { z } from "zod";
 
 type LoginFormData = z.infer<typeof loginSchema>;
@@ -123,21 +124,35 @@ export default function LoginPage() {
   });
 
   const { data: geoData, isFetched: geoFetched } = useQuery<GeoData>({
-    queryKey: ["/api/public/geo"],
+    queryKey: ["/api/public/geo", "auth-country"],
     queryFn: async () => {
-      const res = await fetch("/api/public/geo");
+      const res = await fetch("/api/public/geo", { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to detect country");
-      return res.json();
+      const serverGeo: GeoData = await res.json();
+      if (serverGeo.country && serverGeo.country.toUpperCase() !== "XX") {
+        return serverGeo;
+      }
+      const cloudflareCountry = await getCloudflareCountryCode();
+      return cloudflareCountry ? { ...serverGeo, country: cloudflareCountry } : serverGeo;
     },
-    staleTime: 5 * 60 * 1000,
-    retry: 1,
+    staleTime: 0,
+    retry: 2,
+    retryDelay: 500,
+    refetchOnMount: "always",
   });
 
   useEffect(() => {
     if (countryManuallySelected || countries.length === 0) return;
-    const preferredCountry = geoFetched
-      ? countries.find(country => country.code === geoData?.country) || countries[0]
-      : countries[0];
+    if (!geoFetched) {
+      if (!selectedCountry) setSelectedCountry(countries[0]);
+      return;
+    }
+    const serverCountryCode = geoData?.country?.trim().toUpperCase();
+    const preferredCountry = (serverCountryCode && serverCountryCode !== "XX"
+      ? countries.find(country => country.code.toUpperCase() === serverCountryCode)
+      : undefined)
+      || countries.find(country => country.code.toUpperCase() === getBrowserCountryCode())
+      || countries[0];
     if (!selectedCountry || selectedCountry.code !== preferredCountry.code) {
       setSelectedCountry(preferredCountry);
     }

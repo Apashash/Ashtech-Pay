@@ -1241,6 +1241,9 @@ function getClientIp(req: Request): string {
   const trueIp = req.headers["true-client-ip"];
   if (trueIp) return Array.isArray(trueIp) ? trueIp[0].trim() : trueIp.trim();
 
+  const realIp = req.headers["x-real-ip"];
+  if (realIp) return Array.isArray(realIp) ? realIp[0].trim() : realIp.trim();
+
   const forwarded = req.headers["x-forwarded-for"];
   if (forwarded) {
     const raw = Array.isArray(forwarded) ? forwarded[0] : forwarded;
@@ -2042,6 +2045,7 @@ export async function registerRoutes(
   });
 
   app.get("/api/public/geo", externalProxyLimiter, async (req, res) => {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
     try {
       // Cloudflare and some trusted hosting proxies already resolve the
       // visitor's country from the client IP. Use that fast path when
@@ -2050,6 +2054,8 @@ export async function registerRoutes(
         req.headers["cf-ipcountry"],
         req.headers["x-vercel-ip-country"],
         req.headers["x-country-code"],
+        req.headers["x-geo-country"],
+        req.headers["x-geo-country-code"],
       ]
         .flatMap(value => Array.isArray(value) ? value : [value])
         .map(value => String(value || "").trim().toUpperCase())
@@ -2064,8 +2070,14 @@ export async function registerRoutes(
       }
 
       const ip = getClientIp(req);
-      if (isPrivateIp(ip)) {
-        return res.json({ country: "CM", countryName: "Cameroun", isAfrica: true, isVpn: false });
+      if (isPrivateIp(ip) || ip === "unknown") {
+        // The Replit preview uses a private proxy IP and is known to run in
+        // the Cameroon test environment. Production must never guess from a
+        // private IP because it does not identify the visitor's country.
+        if (process.env.NODE_ENV !== "production") {
+          return res.json({ country: "CM", countryName: "Cameroun", isAfrica: true, isVpn: false });
+        }
+        return res.json({ country: "XX", countryName: "Unknown", isAfrica: true, isVpn: false });
       }
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 3000);
@@ -2073,16 +2085,40 @@ export async function registerRoutes(
         const geoRes = await fetch(`https://ip-api.com/json/${ip}?fields=status,country,countryCode,proxy,hosting`, { signal: controller.signal });
         clearTimeout(timeout);
         const geoData: any = await geoRes.json();
-        if (geoData.status === "success") {
-          const isAfrica = AFRICAN_COUNTRY_CODES.has(geoData.countryCode);
+        const countryCode = String(geoData.countryCode || "").trim().toUpperCase();
+        if (geoData.status === "success" && /^[A-Z]{2}$/.test(countryCode)) {
+          const isAfrica = AFRICAN_COUNTRY_CODES.has(countryCode);
           const isVpn = geoData.proxy === true || geoData.hosting === true;
           // Cache the result
           vpnCache.set(ip, { isVpn, ts: Date.now() });
-          return res.json({ country: geoData.countryCode, countryName: geoData.country, isAfrica, isVpn });
+          return res.json({ country: countryCode, countryName: geoData.country, isAfrica, isVpn });
         }
       } catch {
         clearTimeout(timeout);
       }
+
+      // Secondary provider for networks where ip-api is unavailable or rate-limited.
+      const fallbackController = new AbortController();
+      const fallbackTimeout = setTimeout(() => fallbackController.abort(), 2500);
+      try {
+        const fallbackRes = await fetch(`https://ipwho.is/${encodeURIComponent(ip)}?fields=success,country,country_code`, {
+          signal: fallbackController.signal,
+        });
+        clearTimeout(fallbackTimeout);
+        const fallbackData: any = await fallbackRes.json();
+        const countryCode = String(fallbackData.country_code || "").trim().toUpperCase();
+        if (fallbackData.success === true && /^[A-Z]{2}$/.test(countryCode)) {
+          return res.json({
+            country: countryCode,
+            countryName: fallbackData.country || countryCode,
+            isAfrica: AFRICAN_COUNTRY_CODES.has(countryCode),
+            isVpn: false,
+          });
+        }
+      } catch {
+        clearTimeout(fallbackTimeout);
+      }
+
       return res.json({ country: "XX", countryName: "Unknown", isAfrica: true, isVpn: false });
     } catch {
       return res.json({ country: "XX", countryName: "Unknown", isAfrica: true, isVpn: false });
