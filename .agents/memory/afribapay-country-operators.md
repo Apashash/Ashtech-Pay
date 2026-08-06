@@ -32,6 +32,6 @@ The official published AfribaPay `/v1/countries` example confirms these active c
 
 The API response reported provider currencies `CDF` for CD, `GNF` for GN, `GMD` for GM, `XOF` for West African CFA countries, and `XAF` for Central African CFA countries. This is provider data; internal country-specific wallet codes remain separate.
 
-**Why:** The live account catalogue is now verifiable and is broader than the static catalogue previously used while the subscription was inactive. The application should not be changed to activate these additional countries/operators until the product decision and fee/wallet configuration are confirmed.
+**Why:** The live account catalogue is now verifiable and is broader than the static catalogue previously used while the subscription was inactive. The supported customer flows were synchronized only after reconciling existing Supabase operator rows, wallets, and fees.
 
-**How to apply:** For future support replies, report the live 200 response as the authoritative current provider result. Before enabling a newly returned country/operator in customer flows, reconcile it with supported-country policy, internal wallets, fees, OTP behavior, and historical-data rules.
+**How to apply:** For future support replies, report the live 200 response as the authoritative current provider result. Current active flows include CF/orange, CG/airtel+mtn, GW/orange, NE/airtel+wligdicash+moov+amanata+nita+zamani, TD/airtel+moov, and CI/djamo; GQ has no live operator and must remain hidden from payment selectors. Keep exact provider codes (`emoney`, `djamo`, `amanata`, `nita`, `zamani`) and preserve distinct internal wallet currencies.

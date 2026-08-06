@@ -147,11 +147,11 @@ const AFRIBAPAY_ISO_CURRENCY: Record<string, string> = {
   UG: "UGX",
 };
 
-// Countries confirmed in AfribaPay's /v1/countries API docs (verified 2026-07).
-// CF, CG, GQ, GW, TD, RW are NOT listed — requests for them will fail on AfribaPay's side.
-// Use PixPay or mark operators as unsupported for those countries.
+// Countries currently returned by AfribaPay's live /v1/countries endpoint.
+// Keep this list aligned with the live catalogue; this is only a warning guard,
+// while the operator/provider configuration remains controlled in the database.
 const AFRIBAPAY_CONFIRMED_COUNTRIES = new Set([
-  "BF", "BJ", "CD", "CI", "CM", "GA", "ML", "NE", "SN", "TG",
+  "BF", "BJ", "CD", "CF", "CG", "CI", "CM", "GA", "GW", "ML", "NE", "SN", "TD", "TG",
 ]);
 function warnIfAfribaPayUnsupportedCountry(countryCode: string, context: string) {
   if (!AFRIBAPAY_CONFIRMED_COUNTRIES.has(countryCode.toUpperCase())) {
@@ -164,11 +164,12 @@ function warnIfAfribaPayUnsupportedCountry(countryCode: string, context: string)
 const AFRIBAPAY_OPERATOR_CODE_MAP: Record<string, string> = {
   orange: "orange", mtn: "mtn", moov: "moov", wave: "wave",
   airtel: "airtel", free: "free", expresso: "expresso",
-  emoney: "expresso", ligdicash: "wligdicash",
+  emoney: "emoney", ligdicash: "wligdicash",
   walletligdicash: "wligdicash", tmoney: "tmoney", celtiis: "celtiis",
   coris: "coris", corismoney: "coris",
   mpesa: "mpesa", vodacom: "vodacom",
-  afrimoney: "afrimoney",
+  afrimoney: "afrimoney", djamo: "djamo", amanata: "amanata",
+  nita: "nita", zamani: "zamani",
 };
 
 /** Resolve the AfribaPay operator code from the DB record or operator name. */
@@ -3803,7 +3804,7 @@ export async function registerRoutes(
           currency: country.currency,
           operators: countryOperators,
         };
-      });
+      }).filter(country => country.operators.length > 0);
       
       res.json(config);
     } catch (error) {
@@ -7065,7 +7066,7 @@ export async function registerRoutes(
           exchangeRate: parseFloat(country.exchangeRate as string) || 1,
           operators: countryOperators,
         };
-      });
+      }).filter(country => country.operators.length > 0);
       
       // Build fx rates for the payment page.
       // Semantic: exchangeRates[currency] = "how many XAF = 1 unit of that currency"
@@ -7231,7 +7232,7 @@ export async function registerRoutes(
           currency: country.currency,
           operators: countryOperators,
         };
-      });
+      }).filter(country => country.operators.length > 0);
       
       res.json(config);
     } catch (error) {

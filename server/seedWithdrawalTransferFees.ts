@@ -22,6 +22,7 @@ const FEE_SPECS: CountryFeeSpec[] = [
   { code: "CD", countryName: "Congo RDC",           afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 27 },
   { code: "CI", countryName: "Côte d'Ivoire",       afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 550 },
   { code: "GA", countryName: "Gabon",               afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 550 },
+  { code: "GW", countryName: "Guinée-Bissau",        afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 550 },
   { code: "IN", countryName: "Inde",                afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 10.83 },
   { code: "ML", countryName: "Mali",                afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 550 },
   { code: "NE", countryName: "Niger",                afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 790 },
