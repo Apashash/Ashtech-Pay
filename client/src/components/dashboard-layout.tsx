@@ -51,7 +51,6 @@ import {
   RefreshCw,
   Receipt,
   Megaphone,
-  MessageCircle,
   Phone,
   Wrench,
 } from "lucide-react";
@@ -607,11 +606,18 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         )}
         <button
           onClick={() => setShowContactMenu(prev => !prev)}
-          className={`w-14 h-14 rounded-full shadow-xl flex items-center justify-center transition-all ${showContactMenu ? "bg-muted text-muted-foreground rotate-45" : "bg-primary text-primary-foreground"}`}
+           className="flex h-16 w-16 items-center justify-center rounded-full transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
           data-testid="button-contact-menu"
           title="Nous contacter"
+           aria-label="Nous contacter"
+           aria-expanded={showContactMenu}
         >
-          <MessageCircle className="w-6 h-6" />
+           <img
+             src="/support-assistant.png"
+             alt=""
+             aria-hidden="true"
+             className="h-16 w-16 object-contain drop-shadow-lg"
+           />
         </button>
       </div>}
     </SidebarProvider>
