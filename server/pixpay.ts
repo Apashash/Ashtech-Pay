@@ -323,7 +323,7 @@ export async function initiatePixPayUssd(params: PixPayBaseParams): Promise<PixP
     return await callPixPay(body, "USSD");
   } catch (err: any) {
     console.error("[PixPay USSD] Error:", err);
-    return { success: false, message: err.message || "Erreur réseau PixPay" };
+    return { success: false, message: err.message || "Erreur réseau du fournisseur de paiement" };
   }
 }
 
@@ -339,7 +339,7 @@ export async function initiatePixPayOtp(params: PixPayOtpParams): Promise<PixPay
     return await callPixPay(body, "OTP");
   } catch (err: any) {
     console.error("[PixPay OTP] Error:", err);
-    return { success: false, message: err.message || "Erreur réseau PixPay OTP" };
+    return { success: false, message: err.message || "Erreur réseau lors de l'envoi de l'OTP" };
   }
 }
 
@@ -360,7 +360,7 @@ export async function initiatePixPayWave(params: PixPayWaveParams): Promise<PixP
     return await callPixPay(body, "Wave");
   } catch (err: any) {
     console.error("[PixPay Wave] Error:", err);
-    return { success: false, message: err.message || "Erreur réseau PixPay Wave" };
+    return { success: false, message: err.message || "Erreur réseau lors du paiement Wave" };
   }
 }
 
@@ -457,7 +457,7 @@ export async function initiatePixPayPayout(params: PixPayoutParams): Promise<Pix
     console.log(`[PixPay Payout] Response:`, JSON.stringify(maskPiiInObject(data)));
 
     if (data.statut_code !== 200 || !data.data) {
-      return { success: false, message: data.message || "Échec payout PixPay", raw: data };
+      return { success: false, message: data.message || "Échec de l'envoi Mobile Money", raw: data };
     }
 
     const d = data.data;
@@ -475,7 +475,7 @@ export async function initiatePixPayPayout(params: PixPayoutParams): Promise<Pix
     };
   } catch (err: any) {
     console.error("[PixPay Payout] Error:", err);
-    return { success: false, message: err.message || "Erreur réseau PixPay payout" };
+    return { success: false, message: err.message || "Erreur réseau lors de l'envoi Mobile Money" };
   }
 }
 

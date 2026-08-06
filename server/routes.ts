@@ -1385,6 +1385,32 @@ export async function registerRoutes(
   // Restaurer les révocations de tokens depuis la DB (persistance après redémarrage)
   await loadTokenRevocationsFromDb();
 
+  // ── Filet de sécurité global : aucune réponse non-admin ne doit contenir
+  //    un nom de fournisseur interne (AfribaPay/PixPay), même en cas d'erreur
+  //    imprévue. Purge les champs texte "message" / "error" juste avant l'envoi.
+  const PROVIDER_NAME_RE = /afriba\s*pay|pix\s*pay/gi;
+  app.use((req, res, next) => {
+    if (req.path.startsWith("/api/admin") || req.path.startsWith("/api/pixpay/webhook") || req.path.startsWith("/api/afribapay/webhook")) return next();
+    const originalJson = res.json.bind(res);
+    res.json = ((body: any) => {
+      try {
+        if (body && typeof body === "object" && !Array.isArray(body)) {
+          for (const key of ["message", "error", "detail"]) {
+            const v = (body as any)[key];
+            if (typeof v === "string" && PROVIDER_NAME_RE.test(v)) {
+              PROVIDER_NAME_RE.lastIndex = 0;
+              console.warn(`[ResponseSanitize] ${req.method} ${req.path} — provider name stripped from "${key}": ${v}`);
+              (body as any)[key] = v.replace(PROVIDER_NAME_RE, "notre partenaire de paiement");
+            }
+            PROVIDER_NAME_RE.lastIndex = 0;
+          }
+        }
+      } catch { /* never block the response */ }
+      return originalJson(body);
+    }) as any;
+    next();
+  });
+
   /**
    * Resolve the crypto Pay-In split from the Crypto settings in the
    * Pays et opérateurs administration page.

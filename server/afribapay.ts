@@ -329,7 +329,7 @@ export async function initiateAfribaPayout(params: AfribaPayoutParams): Promise<
     };
   } catch (err: any) {
     console.error("[AfribaPay Payout] Error:", err);
-    return { success: false, message: err.message || "Erreur réseau AfribaPay payout" };
+    return { success: false, message: err.message || "Erreur réseau lors de l'envoi Mobile Money" };
   }
 }
 
