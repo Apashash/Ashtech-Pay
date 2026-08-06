@@ -2043,6 +2043,26 @@ export async function registerRoutes(
 
   app.get("/api/public/geo", externalProxyLimiter, async (req, res) => {
     try {
+      // Cloudflare and some trusted hosting proxies already resolve the
+      // visitor's country from the client IP. Use that fast path when
+      // available, then fall back to the IP lookup below.
+      const proxyCountry = [
+        req.headers["cf-ipcountry"],
+        req.headers["x-vercel-ip-country"],
+        req.headers["x-country-code"],
+      ]
+        .flatMap(value => Array.isArray(value) ? value : [value])
+        .map(value => String(value || "").trim().toUpperCase())
+        .find(value => /^[A-Z]{2}$/.test(value) && value !== "XX");
+      if (proxyCountry) {
+        return res.json({
+          country: proxyCountry,
+          countryName: proxyCountry,
+          isAfrica: AFRICAN_COUNTRY_CODES.has(proxyCountry),
+          isVpn: false,
+        });
+      }
+
       const ip = getClientIp(req);
       if (isPrivateIp(ip)) {
         return res.json({ country: "CM", countryName: "Cameroun", isAfrica: true, isVpn: false });

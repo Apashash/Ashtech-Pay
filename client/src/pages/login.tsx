@@ -179,7 +179,7 @@ export default function LoginPage() {
     setLoginMode(mode);
     form.clearErrors("identifier");
     if (mode === "phone") {
-      form.setValue("identifier", composePhoneIdentifier(phoneInput), { shouldValidate: true });
+      form.setValue("identifier", composePhoneIdentifier(phoneInput), { shouldValidate: false });
     } else {
       form.setValue("identifier", "", { shouldValidate: false });
     }
@@ -188,7 +188,8 @@ export default function LoginPage() {
   const handlePhoneChange = (value: string) => {
     const localPhone = value.replace(/[^\d\s-]/g, "");
     setPhoneInput(localPhone);
-    form.setValue("identifier", composePhoneIdentifier(localPhone), { shouldValidate: true });
+    form.clearErrors("identifier");
+    form.setValue("identifier", composePhoneIdentifier(localPhone), { shouldValidate: false });
   };
 
   const handleCountryChange = (countryCode: string) => {
@@ -196,7 +197,8 @@ export default function LoginPage() {
     if (!country) return;
     setCountryManuallySelected(true);
     setSelectedCountry(country);
-    form.setValue("identifier", composePhoneIdentifier(phoneInput, country), { shouldValidate: true });
+    form.clearErrors("identifier");
+    form.setValue("identifier", composePhoneIdentifier(phoneInput, country), { shouldValidate: false });
   };
 
   const handleTurnstileSuccess = useCallback((token: string) => {
@@ -374,7 +376,7 @@ export default function LoginPage() {
                 <FormField
                   control={form.control}
                   name="identifier"
-                  render={({ field }) => (
+                    render={({ field, fieldState }) => (
                     <FormItem>
                       <FormLabel className="font-semibold text-sm">
                         {loginMode === "email" ? t.login.emailLabel : t.login.phoneLabel}
@@ -396,10 +398,10 @@ export default function LoginPage() {
                         ) : (
                           <div className="flex gap-2">
                             <Select value={selectedCountry?.code || ""} onValueChange={handleCountryChange}>
-                              <SelectTrigger className="w-[128px] shrink-0" data-testid="select-login-country">
-                                <SelectValue>
+                              <SelectTrigger className="w-[128px] shrink-0 overflow-visible [&>span]:!line-clamp-none [&>span]:whitespace-nowrap" data-testid="select-login-country">
+                                <SelectValue className="!line-clamp-none whitespace-nowrap">
                                   {selectedCountry ? (
-                                    <span className="flex items-center gap-1.5">
+                                    <span className="flex items-center gap-1.5 whitespace-nowrap">
                                       <span>{selectedCountry.flag}</span>
                                       <span className="text-sm">{selectedCountry.dialCode}</span>
                                     </span>
@@ -432,7 +434,13 @@ export default function LoginPage() {
                           </div>
                         )}
                       </FormControl>
-                      <FormMessage />
+                      {fieldState.error && (
+                        <p className="text-sm font-medium text-destructive">
+                          {fieldState.error.type === "too_small"
+                            ? (loginMode === "email" ? t.login.emailRequired : t.login.phoneRequired)
+                            : fieldState.error.message}
+                        </p>
+                      )}
                     </FormItem>
                   )}
                 />

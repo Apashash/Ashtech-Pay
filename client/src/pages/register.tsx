@@ -399,10 +399,10 @@ export default function RegisterPage() {
                       <FormControl>
                         <div className="flex gap-2">
                           <Select value={selectedCountry?.code || ""} onValueChange={handleCountryChange}>
-                            <SelectTrigger className="w-[130px]" data-testid="select-country">
-                              <SelectValue>
+                            <SelectTrigger className="w-[130px] overflow-visible" data-testid="select-country">
+                              <SelectValue className="line-clamp-none whitespace-nowrap">
                                 {selectedCountry ? (
-                                  <span className="flex items-center gap-1.5">
+                                  <span className="flex items-center gap-1.5 whitespace-nowrap">
                                     <span>{selectedCountry.flag}</span>
                                     <span className="text-sm">{selectedCountry.dialCode}</span>
                                   </span>
