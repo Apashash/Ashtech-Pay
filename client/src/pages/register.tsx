@@ -292,7 +292,7 @@ export default function RegisterPage() {
             </div>
           ) : (
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4" autoComplete="on">
                 {attemptsLeft !== null && attemptsLeft > 0 && (
                   <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
                     <ShieldAlert className="w-4 h-4 text-amber-500 flex-shrink-0" />
@@ -328,7 +328,13 @@ export default function RegisterPage() {
                       <FormControl>
                         <div className="relative">
                           <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                          <Input placeholder="jeandupont" className="pl-10" data-testid="input-username" {...field} />
+                          <Input
+                            placeholder="jeandupont"
+                            className="pl-10"
+                            autoComplete="nickname"
+                            data-testid="input-username"
+                            {...field}
+                          />
                         </div>
                       </FormControl>
                       <FormMessage />
@@ -345,7 +351,15 @@ export default function RegisterPage() {
                       <FormControl>
                         <div className="relative">
                           <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                          <Input placeholder="votreemail@exemple.com" className="pl-10" data-testid="input-email" {...field} />
+                          <Input
+                            type="email"
+                            placeholder="votreemail@exemple.com"
+                            className="pl-10"
+                            autoComplete="username"
+                            data-testid="input-email"
+                            {...field}
+                            name="email"
+                          />
                         </div>
                       </FormControl>
                       <FormMessage />
@@ -383,7 +397,16 @@ export default function RegisterPage() {
                           </Select>
                           <div className="relative flex-1">
                             <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                            <Input placeholder="6XX XXX XXX" className="pl-10" inputMode="numeric" data-testid="input-phone" {...field} value={field.value || ""} />
+                            <Input
+                              type="tel"
+                              className="pl-10"
+                              inputMode="numeric"
+                              autoComplete="tel"
+                              data-testid="input-phone"
+                              {...field}
+                              value={field.value || ""}
+                              name="phone"
+                            />
                           </div>
                         </div>
                       </FormControl>
@@ -401,7 +424,14 @@ export default function RegisterPage() {
                       <FormControl>
                         <div className="relative">
                           <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                          <Input type={showPassword ? "text" : "password"} placeholder="••••••••" className="pl-10 pr-10" data-testid="input-password" {...field} />
+                          <Input
+                            type={showPassword ? "text" : "password"}
+                            placeholder="••••••••"
+                            className="pl-10 pr-10"
+                            autoComplete="new-password"
+                            data-testid="input-password"
+                            {...field}
+                          />
                           <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" data-testid="button-toggle-password">
                             {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                           </button>
@@ -421,7 +451,14 @@ export default function RegisterPage() {
                       <FormControl>
                         <div className="relative">
                           <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                          <Input type={showConfirmPassword ? "text" : "password"} placeholder="••••••••" className="pl-10 pr-10" data-testid="input-confirm-password" {...field} />
+                          <Input
+                            type={showConfirmPassword ? "text" : "password"}
+                            placeholder="••••••••"
+                            className="pl-10 pr-10"
+                            autoComplete="new-password"
+                            data-testid="input-confirm-password"
+                            {...field}
+                          />
                           <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" data-testid="button-toggle-confirm-password">
                             {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                           </button>

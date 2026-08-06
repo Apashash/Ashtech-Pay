@@ -315,7 +315,7 @@ export default function LoginPage() {
             </div>
           ) : (
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-5">
+              <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-5" autoComplete="on">
                 {attemptsLeft !== null && attemptsLeft > 0 && (
                   <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
                     <ShieldAlert className="w-4 h-4 text-amber-500 flex-shrink-0" />
@@ -364,11 +364,12 @@ export default function LoginPage() {
                             <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                             <Input
                               type="email"
-                              autoComplete="email"
+                              autoComplete="username"
                               placeholder={t.login.emailPlaceholder}
                               className="pl-10"
                               data-testid="input-login-email"
                               {...field}
+                              name="email"
                             />
                           </div>
                         ) : (
@@ -397,8 +398,9 @@ export default function LoginPage() {
                               <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                               <Input
                                 type="tel"
+                                name="phone"
                                 inputMode="numeric"
-                                autoComplete="tel-national"
+                                autoComplete="tel"
                                 placeholder={t.login.phonePlaceholder}
                                 className="pl-10"
                                 value={phoneInput}
