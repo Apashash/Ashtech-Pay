@@ -165,10 +165,9 @@ const AFRIBAPAY_OPERATOR_CODE_MAP: Record<string, string> = {
   orange: "orange", mtn: "mtn", moov: "moov", wave: "wave",
   airtel: "airtel", free: "free", emoney: "emoney",
   ligdicash: "wligdicash", tmoney: "tmoney", celtiis: "celtiis",
-  coris: "coris", corismoney: "coris", djamo: "djamo",
+  coris: "coris", corismoney: "coris",
   mpesa: "mpesa", vodacom: "vodacom",
-  afrimoney: "afrimoney", amanata: "amanata", nita: "nita",
-  zamani: "zamani",
+  afrimoney: "afrimoney",
 };
 
 /** Resolve the AfribaPay operator code from the DB record or operator name. */
@@ -13640,7 +13639,11 @@ export async function registerRoutes(
             name: c.name,
             currency: normalizeApiCurrency(c.currency),
             operators: ops
-            .filter((o: any) => o.paymentProvider === "afribapay" || o.paymentProvider === "pixpay")
+            .filter((o: any) =>
+              o.isActive &&
+              !o.isInMaintenance &&
+              (o.paymentProvider === "afribapay" || o.paymentProvider === "pixpay")
+            )
               .map((o: any) => o.name),
           };
         })
@@ -14660,7 +14663,9 @@ export async function registerRoutes(
             code: c.code,
             currency: normalizeApiCurrency(c.currency),
             flag: c.flag,
-            operators: ops.map((o) => ({ id: o.id, name: o.name })),
+            operators: ops
+              .filter((o) => o.isActive && !o.isInMaintenance)
+              .map((o) => ({ id: o.id, name: o.name })),
           };
         })
       );

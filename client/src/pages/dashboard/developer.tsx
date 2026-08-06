@@ -26,17 +26,17 @@ const SECTIONS = [
 
 // All active countries — currencies are standard ISO codes (XOF/XAF/CDF)
 const ALL_COUNTRIES = [
-  { code: "BJ", name: "Bénin",              currency: "XOFB", operators: ["Celtiis", "Coris Money", "Moov Money", "MTN Mobile Money"],      otpOps: [] },
+  { code: "BJ", name: "Bénin",              currency: "XOFB", operators: ["Celtiis Money", "Coris Money", "Moov Money", "MTN Mobile Money"], otpOps: [] },
   { code: "BF", name: "Burkina Faso",       currency: "XOFF", operators: ["Moov Money", "Orange Money"],                                   otpOps: ["Orange Money"] },
   { code: "CM", name: "Cameroun",           currency: "XAF",  operators: ["MTN Mobile Money", "Orange Money"],                             otpOps: [] },
   { code: "CF", name: "Centrafrique",       currency: "XAF",  operators: ["Orange Money"],                                                  otpOps: ["Orange Money"] },
   { code: "CG", name: "Congo",              currency: "XAFC", operators: ["Airtel Money", "MTN Mobile Money"],                             otpOps: [] },
-  { code: "CI", name: "Côte d'Ivoire",      currency: "XOFC", operators: ["Djamo", "Moov Money", "MTN Mobile Money", "Orange Money", "Wave"], otpOps: ["Orange Money"] },
+  { code: "CI", name: "Côte d'Ivoire",      currency: "XOFC", operators: ["Moov Money", "MTN Mobile Money", "Orange Money", "Wave"],       otpOps: ["Orange Money"] },
   { code: "GA", name: "Gabon",              currency: "XAFG", operators: ["Airtel Money", "Moov Money"],                                   otpOps: [] },
   { code: "GQ", name: "Guinée équatoriale", currency: "XAF",  operators: ["Orange Money"],                                                  otpOps: ["Orange Money"] },
   { code: "GW", name: "Guinée-Bissau",      currency: "XOF",  operators: ["Orange Money"],                                                  otpOps: ["Orange Money"] },
   { code: "ML", name: "Mali",               currency: "XOF",  operators: ["Moov Money", "Orange Money"],                                   otpOps: ["Orange Money"] },
-  { code: "NE", name: "Niger",              currency: "XOFN", operators: ["Airtel Money", "Amanata", "Moov Money", "Nita", "Zamani"],        otpOps: [] },
+  { code: "NE", name: "Niger",              currency: "XOFN", operators: ["Airtel Money"],                                                  otpOps: [] },
   { code: "CD", name: "RD Congo",           currency: "CDF",  operators: ["Afrimoney", "Airtel Money", "Orange Money", "Vodacom M-Pesa"],  otpOps: ["Orange Money"] },
   { code: "SN", name: "Sénégal",            currency: "XOFS", operators: ["Free Money", "Orange Money", "Wave"],                           otpOps: ["Orange Money"] },
   { code: "TD", name: "Tchad",              currency: "XAF",  operators: ["Airtel Money", "Moov Money"],                                   otpOps: [] },
