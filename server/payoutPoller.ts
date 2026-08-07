@@ -6,7 +6,11 @@ import { notifyWithdrawalAutoValidated, notifyWithdrawalFailed } from "./telegra
 import { setFailedCooldown } from "./failedCooldown";
 
 const POLL_INTERVAL  = 6_000; // 6 seconds
-const MAX_ATTEMPTS   = 600;    // 600 × 6s = 60 minutes max
+// Pas de limite de tentatives : un payout reste suivi indéfiniment jusqu'à ce que
+// le fournisseur réponde succès ou échec. Après 30 min, on ralentit simplement la
+// cadence (toutes les 2 min) pour ménager les quotas API du fournisseur.
+const SLOW_AFTER_ATTEMPTS = 300;  // 300 × 6s = 30 minutes
+const SLOW_POLL_EVERY     = 20;   // 20 × 6s = vérification toutes les 2 min
 
 interface PendingPayout {
   transactionId:  string;
@@ -208,22 +212,9 @@ async function pollPendingPayouts() {
       try {
         payout.attempts++;
 
-        if (payout.attempts > MAX_ATTEMPTS) {
-          // Ne jamais auto-annuler/rembourser sur simple timeout : le fournisseur
-          // dit toujours PENDING. On passe en revue manuelle (sans remboursement)
-          // et on arrête le polling rapide — seul un statut explicite du
-          // fournisseur (via admin/retry) ou une décision manuelle tranchera.
-          console.log(`[PayoutPoller] ${reference} toujours PENDING après ${MAX_ATTEMPTS} tentatives — passage en pending_manual (aucun remboursement)`);
-          await storage.updateTransactionStatus(payout.transactionId, "pending_manual");
-          await storage.createUserNotification({
-            userId:        payout.userId,
-            type:          payout.txType === "withdrawal" ? "withdrawal_pending" : "transfer_pending",
-            title:         payout.txType === "withdrawal" ? "Retrait en attente" : "Transfert en attente",
-            message:       JSON.stringify({ amount: payout.amount, currency: payout.txCurrency }),
-            transactionId: payout.transactionId,
-            isRead:        false,
-          }).catch(() => {});
-          removePendingPayout(reference);
+        // Suivi infini : aucune limite de tentatives. Après 30 min, on ralentit
+        // simplement la cadence à une vérification toutes les 2 min.
+        if (payout.attempts > SLOW_AFTER_ATTEMPTS && payout.attempts % SLOW_POLL_EVERY !== 0) {
           continue;
         }
 
@@ -235,7 +226,7 @@ async function pollPendingPayouts() {
           continue;
         }
 
-        console.log(`[PayoutPoller] ${reference}: status=${status} provider=${payout.provider} (attempt ${payout.attempts}/${MAX_ATTEMPTS})`);
+        console.log(`[PayoutPoller] ${reference}: status=${status} provider=${payout.provider} (attempt ${payout.attempts}${payout.attempts > SLOW_AFTER_ATTEMPTS ? ", slow-poll 2min" : ""})`);
 
         if (status === "completed" || status === "success") {
           await processPayout(payout, "success");

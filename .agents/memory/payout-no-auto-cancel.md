@@ -11,8 +11,13 @@ rejection (invalid phone/number, unsupported operator, blacklist) or an
 explicit provider status `failed/refunded/cancelled`.
 
 Everything else — network errors, timeouts, 5xx, rate limits, ambiguous
-messages, poll-attempt limits, provider auth outage — must go to
-`pending_manual` (no refund) or simply stay `pending`.
+messages, provider auth outage — must go to `pending_manual` (no refund) or
+simply stay `pending`.
+
+User requirement (2026-08-07): payout polling is **infinite** — no attempt
+cap at all. While the provider says PENDING, keep the transaction pending and
+keep checking forever; after 30 min the poll cadence slows to every 2 min to
+protect provider API quotas. Never reintroduce a max-attempts bailout.
 
 **Why:** transient initiation errors and a 60-min poll timeout were
 auto-failing + refunding payouts while the provider still said PENDING —
