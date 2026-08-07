@@ -209,8 +209,21 @@ async function pollPendingPayouts() {
         payout.attempts++;
 
         if (payout.attempts > MAX_ATTEMPTS) {
-          console.log(`[PayoutPoller] Timeout for ${reference} — marking failed`);
-          await processPayout(payout, "failed");
+          // Ne jamais auto-annuler/rembourser sur simple timeout : le fournisseur
+          // dit toujours PENDING. On passe en revue manuelle (sans remboursement)
+          // et on arrête le polling rapide — seul un statut explicite du
+          // fournisseur (via admin/retry) ou une décision manuelle tranchera.
+          console.log(`[PayoutPoller] ${reference} toujours PENDING après ${MAX_ATTEMPTS} tentatives — passage en pending_manual (aucun remboursement)`);
+          await storage.updateTransactionStatus(payout.transactionId, "pending_manual");
+          await storage.createUserNotification({
+            userId:        payout.userId,
+            type:          payout.txType === "withdrawal" ? "withdrawal_pending" : "transfer_pending",
+            title:         payout.txType === "withdrawal" ? "Retrait en attente" : "Transfert en attente",
+            message:       JSON.stringify({ amount: payout.amount, currency: payout.txCurrency }),
+            transactionId: payout.transactionId,
+            isRead:        false,
+          }).catch(() => {});
+          removePendingPayout(reference);
           continue;
         }
 

@@ -4277,13 +4277,23 @@ export async function registerRoutes(
           }).catch(() => {});
         } else {
           const errMsg = (payoutResult.message || "").toLowerCase();
-          const requiresManualReview =
-            errMsg.includes("forbidden") ||
-            errMsg.includes("whitelist") ||
-            errMsg.includes("insuffi") ||
-            errMsg.includes("solde") ||
-            errMsg.includes("balance");
-          if (requiresManualReview) {
+          // Rejets définitifs et explicites du fournisseur → échec immédiat + remboursement.
+          // Tout le reste (erreur réseau, timeout, 5xx, rate limit, message ambigu) reste
+          // en attente de revue manuelle : on ne rembourse jamais sans certitude que
+          // l'argent n'est pas parti côté fournisseur.
+          const isDefinitiveRejection =
+            errMsg.includes("invalid phone") ||
+            errMsg.includes("invalid number") ||
+            errMsg.includes("numéro invalide") ||
+            errMsg.includes("numero invalide") ||
+            errMsg.includes("not supported") ||
+            errMsg.includes("unsupported") ||
+            errMsg.includes("non supporté") ||
+            errMsg.includes("non supporte") ||
+            errMsg.includes("invalid operator") ||
+            errMsg.includes("opérateur invalide") ||
+            errMsg.includes("blacklist");
+          if (!isDefinitiveRejection) {
             console.log(`[Transfer] Pending manual review for ${reference} (${transferProvider}): ${payoutResult.message}`);
             await storage.updateTransactionStatus(transaction.id, "pending_manual");
             await storage.createUserNotification({
@@ -5302,13 +5312,23 @@ export async function registerRoutes(
           });
         } else {
           const errMsg = (payoutResult.message || "").toLowerCase();
-          const requiresManualReview =
-            errMsg.includes("forbidden") ||
-            errMsg.includes("whitelist") ||
-            errMsg.includes("insuffi") ||
-            errMsg.includes("solde") ||
-            errMsg.includes("balance");
-          if (requiresManualReview) {
+          // Rejets définitifs et explicites du fournisseur → échec immédiat + remboursement.
+          // Tout le reste (erreur réseau, timeout, 5xx, rate limit, message ambigu) reste
+          // en attente de revue manuelle : on ne rembourse jamais sans certitude que
+          // l'argent n'est pas parti côté fournisseur.
+          const isDefinitiveRejection =
+            errMsg.includes("invalid phone") ||
+            errMsg.includes("invalid number") ||
+            errMsg.includes("numéro invalide") ||
+            errMsg.includes("numero invalide") ||
+            errMsg.includes("not supported") ||
+            errMsg.includes("unsupported") ||
+            errMsg.includes("non supporté") ||
+            errMsg.includes("non supporte") ||
+            errMsg.includes("invalid operator") ||
+            errMsg.includes("opérateur invalide") ||
+            errMsg.includes("blacklist");
+          if (!isDefinitiveRejection) {
             console.log(`[Withdrawal] Pending manual review for ${withdrawalRef} (${paymentProvider}): ${payoutResult.message}`);
             await storage.updateTransactionStatus(transaction.id, "pending_manual");
             await storage.createUserNotification({

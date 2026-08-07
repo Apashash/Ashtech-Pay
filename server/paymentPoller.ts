@@ -413,52 +413,32 @@ export async function recoverPendingDeposits() {
       // Only auto-fail if AfribaPay subscription is broken (service down, not a timeout).
       // Age-based auto-cancel has been removed — transactions stay pending until
       // the gateway explicitly returns completed or failed.
+      const isPayoutTx = tx.type === "withdrawal" || tx.type === "transfer_out";
+
       if (!txProvider) {
-        console.warn(`[PaymentPoller] No supported provider for pending transaction ${tx.reference}; marking failed`);
-        await storage.updateTransactionStatus(tx.id, "failed");
-        autoFailed++;
+        if (isPayoutTx) {
+          // Payout déjà débité : ne jamais auto-annuler — passer en revue manuelle.
+          console.warn(`[PaymentPoller] No supported provider for pending payout ${tx.reference}; marking pending_manual`);
+          await storage.updateTransactionStatus(tx.id, "pending_manual");
+        } else {
+          console.warn(`[PaymentPoller] No supported provider for pending transaction ${tx.reference}; marking failed`);
+          await storage.updateTransactionStatus(tx.id, "failed");
+          autoFailed++;
+        }
         continue;
       }
 
       const isAfribaPayBroken = txProvider === "afribapay" && afribaPayBroken;
 
       if (isAfribaPayBroken) {
-        const reason = `AfribaPay indisponible (subscription invalid)`;
-        console.log(`[PaymentPoller] Auto-failing [AfribaPay broken] transaction: ${tx.reference}`);
-        await storage.updateTransactionStatus(tx.id, "failed");
-        if (tx.userId) {
-          const isPaymentLink = tx.type === "payment_link";
-          await storage.createUserNotification({
-            userId: tx.userId,
-            type: isPaymentLink ? "payment_link_failed" : "deposit_failed",
-            title: isPaymentLink ? "payment_link_failed" : "deposit_failed",
-            message: "{}",
-            transactionId: tx.id,
-            isRead: false,
-          });
-          Promise.all([
-            storage.getUser(tx.userId).catch(() => null),
-            tx.operatorId ? storage.getOperator(tx.operatorId).catch(() => null) : Promise.resolve(null),
-          ]).then(([txUser, txOp]) => {
-            notifyDepositFailed({
-              userName: txUser?.fullName || (txUser as any)?.username || "Utilisateur",
-              userEmail: txUser?.email || "",
-              userPhone: (txUser as any)?.phone || undefined,
-              userCountry: (txUser as any)?.country || undefined,
-              amount: tx.totalAmount || tx.amount,
-              currency: tx.currency || "XAF",
-              reference: tx.reference || tx.id,
-              reason,
-              country: (txUser as any)?.country || "",
-              depositType: tx.type,
-              paymentMethod: tx.paymentMethod || undefined,
-              phone: tx.recipientPhone || undefined,
-              operator: (txOp as any)?.name || undefined,
-            }).catch(() => {});
-          }).catch(() => {});
-        }
-        autoFailed++;
-      } else {
+        // Indisponibilité du fournisseur ≠ échec du paiement : on laisse la
+        // transaction en attente (sans la mettre en file, pour éviter le flood
+        // de logs) — elle sera reprise au prochain démarrage/cycle de recovery.
+        console.warn(`[PaymentPoller] AfribaPay indisponible — ${tx.reference} laissé en attente (non requeué)`);
+        continue;
+      }
+
+      {
         // Re-queue all pending transactions regardless of age — no timeout.
         // Old transactions use slow-poll (every 2 min) automatically.
         let recoveredCountryCode: string | undefined;
