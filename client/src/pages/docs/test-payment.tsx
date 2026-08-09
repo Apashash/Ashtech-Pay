@@ -16,7 +16,7 @@ const ALL_COUNTRIES = [
   { code: "CM", name: "Cameroun",           currency: "XAF",  operators: ["MTN Money", "Orange Money"],                                  otpOps: [] },
   { code: "CI", name: "Côte d'Ivoire",      currency: "XOF", operators: ["Moov Money", "MTN Money", "Orange Money", "Wave Money"],     otpOps: ["Orange Money"] },
   { code: "GA", name: "Gabon",              currency: "XAF", operators: ["Airtel Money", "Moov Money"],                                otpOps: [] },
-  { code: "ML", name: "Mali",               currency: "XOF", operators: ["Moov Money", "Orange Money"],                                otpOps: ["Orange Money"] },
+  { code: "ML", name: "Mali",               currency: "XOF", operators: ["Moov Money", "Orange Money"],                                otpOps: [] },
   { code: "NE", name: "Niger",              currency: "XOF", operators: ["Airtel Money"],                                              otpOps: [] },
   { code: "CD", name: "RD Congo",           currency: "CDF", operators: ["Afri Money", "Airtel Money", "Mpesa Money", "Orange Money", "Vodacom"], otpOps: [] },
   { code: "SN", name: "Sénégal",            currency: "XOF", operators: ["E-money", "Free Money", "Orange Money", "Wave Money"],        otpOps: ["Orange Money"] },

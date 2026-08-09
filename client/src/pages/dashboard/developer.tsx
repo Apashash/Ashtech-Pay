@@ -31,7 +31,7 @@ const ALL_COUNTRIES = [
   { code: "CM", name: "Cameroun",           currency: "XAF",  operators: ["MTN Money", "Orange Money"],                                  otpOps: [] },
   { code: "CI", name: "Côte d'Ivoire",      currency: "XOF", operators: ["Moov Money", "MTN Money", "Orange Money", "Wave Money"],       otpOps: ["Orange Money"] },
   { code: "GA", name: "Gabon",              currency: "XAF", operators: ["Airtel Money", "Moov Money"],                                   otpOps: [] },
-  { code: "ML", name: "Mali",               currency: "XOF", operators: ["Moov Money", "Orange Money"],                                   otpOps: ["Orange Money"] },
+  { code: "ML", name: "Mali",               currency: "XOF", operators: ["Moov Money", "Orange Money"],                                   otpOps: [] },
   { code: "NE", name: "Niger",              currency: "XOF", operators: ["Airtel Money"],                                                  otpOps: [] },
   { code: "CD", name: "RD Congo",           currency: "CDF", operators: ["Afri Money", "Airtel Money", "Mpesa Money", "Orange Money", "Vodacom"], otpOps: [] },
   { code: "SN", name: "Sénégal",            currency: "XOF", operators: ["E-money", "Free Money", "Orange Money", "Wave Money"],             otpOps: ["Orange Money"] },
@@ -1029,10 +1029,10 @@ const data = await res.json();
             <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 p-5 space-y-4">
               <div className="flex items-center gap-2">
                 <span className="w-6 h-6 rounded-full bg-orange-500 flex items-center justify-center text-xs font-bold text-white shrink-0">2</span>
-                <h3 className="font-semibold text-orange-300">Flux OTP USSD — Orange Money CI, SN, BF, ML</h3>
+                <h3 className="font-semibold text-orange-300">Flux OTP USSD — Orange Money CI, SN, BF</h3>
               </div>
               <p className="text-sm text-gray-600">
-                Pour Orange Money en Côte d'Ivoire, Sénégal, Burkina Faso et Mali. L'API retourne un{" "}
+                Pour Orange Money en Côte d'Ivoire, Sénégal et Burkina Faso. Le Mali (Orange Money) ne nécessite pas d'OTP — le paiement y suit le flux standard. L'API retourne un{" "}
                 <code className="text-blue-600 bg-blue-50 px-1 py-0.5 rounded">ussd_code</code>{" "}
                 que le client compose depuis son téléphone — l'OTP s'affiche directement dans le menu USSD (pas de SMS envoyé).{" "}
                 <strong className="text-zinc-300">Important :</strong> le serveur ne déclenche aucun SMS — il retourne simplement le code à composer.
@@ -1065,7 +1065,7 @@ const res = await fetch("https://ashtechpay.top/v1/collect", {
                 </div>
                 <div className="space-y-1 min-w-0">
                   <p className="text-xs text-gray-500 font-medium">Réponse 400 + Étape 2 — Avec OTP</p>
-                  <CodeBlock language="json" code={`// Réponse 400 — CI (même structure pour SN, BF, ML) :
+                  <CodeBlock language="json" code={`// Réponse 400 — CI (même structure pour SN, BF) :
 {
   "error": "otp_required",
   "message": "OTP requis. Composez #144*82# sur votre téléphone pour obtenir votre code...",
@@ -1240,7 +1240,7 @@ if (data.flow === "wave") {
     // Toujours stocker data.reference — OBLIGATOIRE pour le retry OTP
     if (data.ussd_code) {
       // ─── Flux OTP USSD : code USSD à composer (ex: #144*82# CI, #144*391# SN, *144*4*6*montant# BF)
-      // Orange Money CI, SN, BF, ML — le client compose le USSD, l'OTP s'affiche dans le menu (pas de SMS)
+      // Orange Money CI, SN, BF — le client compose le USSD, l'OTP s'affiche dans le menu (pas de SMS)
       return { type: "otp_ussd", ussdCode: data.ussd_code, reference: data.reference };
     } else {
       // ─── Flux OTP SMS : SMS envoyé automatiquement, pas de USSD à composer ────
