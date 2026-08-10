@@ -19,8 +19,6 @@ import {
   Users,
   TrendingUp,
   ShoppingBag,
-  Share2,
-  Clock,
   FileText,
   Sun,
   Moon,
@@ -41,7 +39,6 @@ import {
 } from "lucide-react";
 import heroImage from "@assets/IMG_0059_1775398520619.png";
 import operatorsImage from "@assets/IMG_0057_1775398589784.png";
-import globalReachImage from "@assets/IMG_0060_1775398589785.jpeg";
 import { useState, useEffect, useRef } from "react";
 import { useTheme } from "@/components/theme-provider";
 import { useScrollAnimation } from "@/hooks/use-scroll-animation";
@@ -285,189 +282,59 @@ function HeroSection() {
   );
 }
 
-function OnlineSalesSection() {
-  const { t } = useLanguage();
-  return (
-    <section className="py-20 lg:py-32 bg-card/50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-16 animate-on-scroll">
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20 mb-4">
-            <Link2 className="w-4 h-4 text-primary" />
-            <span className="text-sm text-primary font-medium">{t.landing.onlineSalesTag}</span>
-          </div>
-          <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
-            <span className="text-primary">{t.landing.onlineSalesTitle1}</span> {t.landing.onlineSalesTitle2}
-          </h2>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">{t.landing.onlineSalesDesc}</p>
-        </div>
-        
-        <div className="grid lg:grid-cols-2 gap-6">
-          <div className="bg-card border border-border rounded-2xl p-7 shadow-sm hover:shadow-md transition-shadow animate-on-scroll-left">
-            <div className="w-14 h-14 bg-background border-2 border-border rounded-full flex items-center justify-center mb-5">
-              <FileText className="w-7 h-7 text-primary" />
-            </div>
-            <h3 className="text-xl font-bold text-foreground mb-3">{t.landing.digitalProducts}</h3>
-            <ul className="space-y-3 mb-6">
-              {[t.landing.files, t.landing.courses, t.landing.privateAccess, t.landing.services].map((item) => (
-                <li key={item} className="flex items-center gap-3 text-muted-foreground text-sm">
-                  <svg className="w-4 h-4 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  {item}
-                </li>
-              ))}
-            </ul>
-            <Link href="/register">
-              <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary border-b-2 border-primary pb-0.5 hover:opacity-80 transition-opacity">
-                {t.landing.autoDelivery} <ChevronRight className="w-4 h-4" />
-              </span>
-            </Link>
-          </div>
-          
-          <div className="bg-card border border-border rounded-2xl p-7 shadow-sm hover:shadow-md transition-shadow animate-on-scroll-right">
-            <div className="w-14 h-14 bg-background border-2 border-border rounded-full flex items-center justify-center mb-5">
-              <ShoppingBag className="w-7 h-7 text-primary" />
-            </div>
-            <h3 className="text-xl font-bold text-foreground mb-3">{t.landing.physicalProducts}</h3>
-            <ul className="space-y-3 mb-6">
-              {[t.landing.clientInfo, t.landing.orderTracking, t.landing.salesManagement].map((item) => (
-                <li key={item} className="flex items-center gap-3 text-muted-foreground text-sm">
-                  <svg className="w-4 h-4 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  {item}
-                </li>
-              ))}
-            </ul>
-            <Link href="/register">
-              <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary border-b-2 border-primary pb-0.5 hover:opacity-80 transition-opacity">
-                {t.landing.txHistory} <ChevronRight className="w-4 h-4" />
-              </span>
-            </Link>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
+function SolutionsSection() {
+  const solutions = [
+    {
+      icon: LogIn,
+      badge: { label: "TOP", color: "bg-primary text-primary-foreground" },
+      title: "Ashtech Pay-IN",
+      description:
+        "Ashtech Pay-IN ou Paiement Marchand : une plateforme de paiement sécurisée et simple, spécialement conçue pour répondre aux besoins des particuliers et des entreprises en matière de paiements en ligne.",
+      link: "/register",
+    },
+    {
+      icon: ArrowDownUp,
+      badge: null,
+      title: "Ashtech Pay-OUT",
+      description:
+        "Ashtech Pay-OUT ou Décaissements Mobile Money vous permet d'effectuer des paiements de masse ou des décaissements en ligne en toute sécurité et simplicité, à destination de vos clients, fournisseurs, salariés et autres bénéficiaires.",
+      link: "/register",
+    },
+    {
+      icon: Link2,
+      badge: { label: "EXCLUSIF", color: "bg-slate-800 text-white" },
+      title: "Ashtech Pay-Link",
+      description:
+        "Ashtech Pay-Link vous permet de créer des liens de paiement en ligne de manière sécurisée et simple. Partagez-les sur WhatsApp, Facebook, Instagram ou par SMS et encaissez instantanément.",
+      link: "/register",
+    },
+  ];
 
-function PaymentLinksSection() {
-  const { t } = useLanguage();
   return (
-    <section className="py-20 lg:py-32">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="animate-on-scroll">
-          <div className="space-y-6">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20">
-              <Link2 className="w-4 h-4 text-primary" />
-              <span className="text-sm text-primary font-medium">{t.landing.paymentLinksTag}</span>
-            </div>
-            <h2 className="text-3xl sm:text-4xl font-bold text-foreground">{t.landing.paymentLinksTitle}</h2>
-            <p className="text-lg text-muted-foreground">{t.landing.paymentLinksDesc}</p>
-            <div className="grid sm:grid-cols-2 gap-4">
-              {[
-                { icon: CreditCard, title: t.landing.fixedOrFree, desc: t.landing.fixedOrFreeDesc },
-                { icon: FileText, title: t.landing.pdfFile, desc: t.landing.pdfFileDesc },
-                { icon: Clock, title: t.landing.expiry, desc: t.landing.expiryDesc },
-                { icon: Globe, title: t.landing.redirect, desc: t.landing.redirectDesc },
-              ].map(({ icon: Icon, title, desc }) => (
-                <div key={title} className="flex items-start gap-3 p-4 bg-card rounded-xl border border-border hover:border-primary/40 transition-colors">
-                  <div className="w-8 h-8 bg-background border border-border rounded-full flex items-center justify-center flex-shrink-0">
-                    <Icon className="w-4 h-4 text-primary" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-foreground text-sm">{title}</h4>
-                    <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function ShareSection() {
-  const { t } = useLanguage();
-  return (
-    <section className="py-20 lg:py-32 bg-card/50">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="animate-on-scroll">
-          <div className="space-y-6">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20">
-              <Share2 className="w-4 h-4 text-primary" />
-              <span className="text-sm text-primary font-medium">{t.landing.shareTag}</span>
-            </div>
-            <h2 className="text-3xl sm:text-4xl font-bold text-foreground">
-              <span className="text-primary">{t.landing.shareTitle1}</span> {t.landing.shareTitle2}
-            </h2>
-            <p className="text-lg text-muted-foreground">{t.landing.shareDesc}</p>
-            <div className="flex flex-wrap gap-3">
-              <div className="flex items-center gap-2 px-4 py-2 bg-green-500/10 rounded-full"><span className="text-green-500 font-medium">WhatsApp</span></div>
-              <div className="flex items-center gap-2 px-4 py-2 bg-blue-500/10 rounded-full"><span className="text-blue-500 font-medium">Facebook</span></div>
-              <div className="flex items-center gap-2 px-4 py-2 bg-pink-500/10 rounded-full"><span className="text-pink-500 font-medium">Instagram</span></div>
-              <div className="flex items-center gap-2 px-4 py-2 bg-red-500/10 rounded-full"><span className="text-red-500 font-medium">Email</span></div>
-              <div className="flex items-center gap-2 px-4 py-2 bg-yellow-500/10 rounded-full"><span className="text-yellow-500 font-medium">SMS</span></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function WithdrawalSection() {
-  const { t } = useLanguage();
-  const bullets = [t.landing.withdrawalBullet1, t.landing.withdrawalBullet2, t.landing.withdrawalBullet3, t.landing.withdrawalBullet4];
-  return (
-    <section className="py-20 lg:py-32">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="animate-on-scroll">
-          <div className="space-y-6">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20">
-              <ArrowDownUp className="w-4 h-4 text-primary" />
-              <span className="text-sm text-primary font-medium">{t.landing.withdrawalTag}</span>
-            </div>
-            <h2 className="text-3xl sm:text-4xl font-bold text-foreground">
-              <span className="text-primary">{t.landing.withdrawalTitle1}</span> {t.landing.withdrawalTitle2}
-            </h2>
-            <p className="text-lg text-muted-foreground">{t.landing.withdrawalDesc}</p>
-            <ul className="space-y-4">
-              {bullets.map((bullet) => (
-                <li key={bullet} className="flex items-start gap-3">
-                  <div className="w-6 h-6 rounded-full bg-green-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                  <span className="text-muted-foreground">{bullet}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function GlobalReachSection() {
-  const { t } = useLanguage();
-  return (
-    <section className="py-20 lg:py-32 bg-card/50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <section className="py-16 lg:py-24 bg-background">
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-12">
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20 mb-4">
-            <Globe className="w-4 h-4 text-primary" />
-            <span className="text-sm text-primary font-medium">{t.landing.coverageTag2}</span>
-          </div>
-          <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">{t.landing.coverageTitle2}</h2>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">{t.landing.coverageDesc2}</p>
+          <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-3">Nos solutions</h2>
+          <p className="text-muted-foreground text-base">Tout ce dont vous avez besoin pour vendre et encaisser en ligne en Afrique.</p>
         </div>
-        <div className="flex justify-center">
-          <img src={globalReachImage} alt="Femme utilisant AshTech Pay avec logos des opérateurs" className="w-full max-w-lg" />
+        <div className="flex flex-col gap-6">
+          {solutions.map(({ icon: Icon, badge, title, description, link }) => (
+            <div key={title} className="relative bg-card border border-border rounded-2xl p-7 shadow-sm hover:shadow-md transition-shadow">
+              {badge && (
+                <span className={`absolute top-4 right-4 text-xs font-bold px-3 py-1 rounded-full ${badge.color}`}>
+                  {badge.label}
+                </span>
+              )}
+              <Icon className="w-10 h-10 text-foreground mb-5" strokeWidth={1.5} />
+              <h3 className="text-xl font-bold text-foreground mb-3">{title}</h3>
+              <p className="text-muted-foreground text-sm leading-relaxed mb-5">{description}</p>
+              <Link href={link}>
+                <span className="inline-flex items-center gap-1 text-sm font-semibold text-primary border-b-2 border-primary pb-0.5 hover:opacity-75 transition-opacity">
+                  En savoir plus <ChevronRight className="w-4 h-4" />
+                </span>
+              </Link>
+            </div>
+          ))}
         </div>
       </div>
     </section>
@@ -1030,17 +897,12 @@ export default function LandingPage() {
       <ReadyToStartSection />
       <VideoPaymentSection />
       <OperatorLogosSection />
-      <OnlineSalesSection />
-      <PaymentLinksSection />
-      <ShareSection />
-      <WithdrawalSection />
-      <GlobalReachSection />
+      <SolutionsSection />
       <FeaturesSection />
       <WhyAshtechSection />
       <HowItWorksSection />
       <SecuritySection />
       <ApiDeveloperSection />
-      <TestimonialsSection />
       <Footer />
     </div>
   );
