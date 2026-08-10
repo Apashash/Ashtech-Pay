@@ -129,7 +129,7 @@ function CodeBlock({ code, language = "json" }: { code: string; language?: strin
     : language === 'bash' ? _hlBash(code.trim())
     : [{ t: code.trim(), c: '#cdd9e5' }];
   return (
-    <div className="rounded-lg overflow-hidden border border-[#3a3a3a] w-full min-w-0">
+    <div className="rounded-lg overflow-hidden border border-[#3a3a3a] w-full min-w-0 max-w-full">
       {/* header bar */}
       <div className="flex items-center justify-between px-3 py-2 bg-[#2b2b2b] border-b border-[#3a3a3a]">
         <span className="text-[11px] font-mono font-medium text-[#d0d0d0] bg-[#3d3d3d] px-2.5 py-0.5 rounded">
@@ -156,8 +156,8 @@ function CodeBlock({ code, language = "json" }: { code: string; language?: strin
         </div>
       </div>
       {/* code area */}
-      <div className={`overflow-x-auto w-full ${wrap ? "" : ""}`}>
-        <pre className={`bg-[#1a1a1a] px-4 py-3.5 leading-relaxed ${wrap ? "whitespace-pre-wrap break-all" : "w-max min-w-full"}`}>
+      <div className="overflow-x-auto w-full max-w-full">
+        <pre className={`bg-[#1a1a1a] px-4 py-3.5 leading-relaxed max-w-full ${wrap ? "whitespace-pre-wrap break-all" : "whitespace-pre"}`}>
           <code className="font-mono text-[13px]">{_renderToks(tokens)}</code>
         </pre>
       </div>
@@ -931,7 +931,7 @@ async function showCryptoPayment(data) {
                 MTN (CM, BJ, CG, GN, CD), Moov (BJ, CI, BF, GA, ML, TG), Airtel (CG, GA, NE, CD, TD),
                 Orange (CM), Free Money (SN), E-money (SN), T-Money (TG), Flooz (TG), Mpesa Money (CD), Afri Money (CD), Vodacom (CD)
               </div>
-              <div className="grid lg:grid-cols-2 gap-4">
+              <div className="grid lg:grid-cols-2 gap-4 min-w-0 [&>div]:min-w-0">
                 <div>
                   <p className="text-xs text-gray-500 font-semibold mb-1">Requête</p>
                   <CodeBlock language="javascript" code={`// Orange Money Cameroun — flux USSD push
@@ -987,7 +987,7 @@ const data = await res.json();
                 <strong>Codes USSD par pays :</strong>{" "}
                 CI — <IC>#144*82#</IC> &nbsp;|&nbsp; SN — <IC>#144*391#</IC> &nbsp;|&nbsp; BF — <IC>*144*4*6*montant#</IC>
               </div>
-              <div className="grid lg:grid-cols-2 gap-4">
+              <div className="grid lg:grid-cols-2 gap-4 min-w-0 [&>div]:min-w-0">
                 <div>
                   <p className="text-xs text-gray-500 font-semibold mb-1">Étape 1 — Requête initiale (sans OTP)</p>
                   <CodeBlock language="javascript" code={`// Orange Money CI — étape 1 : sans OTP
@@ -1047,7 +1047,7 @@ body: JSON.stringify({
                 au numéro du client — <strong>aucun code USSD à composer.</strong>{" "}
                 Le champ <IC>ussd_code</IC> est <code className="font-mono text-red-600">null</code>.
               </p>
-              <div className="grid lg:grid-cols-2 gap-4">
+              <div className="grid lg:grid-cols-2 gap-4 min-w-0 [&>div]:min-w-0">
                 <div>
                   <p className="text-xs text-gray-500 font-semibold mb-1">Étape 1 — Requête initiale (sans OTP)</p>
                   <CodeBlock language="javascript" code={`// Opérateur OTP SMS — étape 1
@@ -1107,7 +1107,7 @@ body: JSON.stringify({
                 Votre interface doit afficher ce lien (bouton ou QR code) pour que le client l'ouvre dans son application Wave.
                 <strong> Pas d'OTP.</strong> Le numéro de téléphone n'est pas requis pour Wave.
               </p>
-              <div className="grid lg:grid-cols-2 gap-4">
+              <div className="grid lg:grid-cols-2 gap-4 min-w-0 [&>div]:min-w-0">
                 <div>
                   <p className="text-xs text-gray-500 font-semibold mb-1">Requête</p>
                   <CodeBlock language="javascript" code={`// Wave Côte d'Ivoire
