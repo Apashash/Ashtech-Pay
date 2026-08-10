@@ -4,6 +4,7 @@ import { checkPixPayStatus } from "./pixpay";
 import { creditUserWallet } from "./walletHelper";
 import { sendPayerConfirmationEmail } from "./email";
 import { notifyDepositConfirmed, notifyDepositFailed } from "./telegram";
+import { enqueueMerchantWebhook } from "./merchantWebhook";
 
 // Status endpoints are rate-limited by providers. A 10s base loop plus a
 // provider-specific AfribaPay cadence avoids repeatedly asking for the same
@@ -145,7 +146,12 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
       return;
     }
 
-    await storage.updateTransactionStatus(transaction.id, status);
+    const claimedTransaction = await storage.claimTransactionStatus(transaction.id, status);
+    if (!claimedTransaction) {
+      console.log(`[PaymentPoller] Transaction already claimed: ${payment.reference}`);
+      removePendingPayment(payment.reference);
+      return;
+    }
 
     if (status === "completed") {
       const paymentCurrency = transaction.currency || "XAF";
@@ -274,39 +280,9 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
     }
 
     if (notifyUrl && (txSource === "api" || txSource === "hosted_page" || transaction.paymentLinkId)) {
-      try {
-        const isPayout = transaction.type === "withdrawal" || transaction.type === "transfer_out";
-        const eventPrefix = isPayout ? "payout" : "payment";
-        const payload = {
-          event: status === "completed" ? `${eventPrefix}.completed` : `${eventPrefix}.failed`,
-          transaction_id: transaction.id,
-          reference: transaction.reference,
-          status,
-          amount: parseFloat(transaction.amount),
-          total_amount: parseFloat(transaction.totalAmount || transaction.amount),
-          fee_amount: parseFloat(transaction.feeAmount || "0"),
-          provider_fee_amount: (transaction as any).metadata?.providerFeeAmountUsdt ?? 0,
-          provider_fee_percent: (transaction as any).metadata?.providerFeePercent ?? 0,
-          ashtech_fee_amount: (transaction as any).ashtechFeeAmount || ((transaction as any).metadata?.ashtechFeeAmountUsdt ?? 0),
-          ashtech_fee_percent: (transaction as any).metadata?.ashtechFeePercent ?? 0,
-          total_fee_amount: parseFloat(transaction.feeAmount || "0"),
-          total_fee_percent: (transaction as any).metadata?.totalFeePercent ?? 0,
-          currency: transaction.currency,
-          type: transaction.type || "deposit",
-          phone: transaction.recipientPhone,
-          payment_link_id: transaction.paymentLinkId || null,
-          timestamp: new Date().toISOString(),
-        };
-        const wRes = await fetch(notifyUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-          signal: AbortSignal.timeout(10000),
-        });
-        console.log(`[PaymentPoller] Webhook [${txSource}] → ${notifyUrl} : HTTP ${wRes.status}`);
-      } catch (whErr: any) {
-        console.error(`[PaymentPoller] Webhook failed for ${payment.reference}:`, whErr.message);
-      }
+      await enqueueMerchantWebhook(transaction, status, notifyUrl).catch((webhookError: any) => {
+        console.error(`[PaymentPoller] Webhook enqueue failed for ${payment.reference}:`, webhookError?.message || webhookError);
+      });
     }
 
     removePendingPayment(payment.reference);

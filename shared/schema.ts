@@ -27,6 +27,7 @@ export const users = pgTable("users", {
   apiKey: text("api_key").unique(),
   apiKeyHash: text("api_key_hash").unique(),
   apiEnabled: boolean("api_enabled").default(false),
+  apiWebhookSecret: text("api_webhook_secret"),
   registrationIp: text("registration_ip"),
   totpSecret: text("totp_secret"),
   totpEnabled: boolean("totp_enabled").default(false),
@@ -213,6 +214,9 @@ export const transactions = pgTable("transactions", {
   confirmedAt: timestamp("confirmed_at"),
 }, (t) => ({
   txUserIdIdx: index("tx_user_id_idx").on(t.userId),
+  txApiReferenceUniq: uniqueIndex("transactions_api_user_reference_unique")
+    .on(t.userId, t.reference)
+    .where(sql`${t.source} = 'api' AND ${t.reference} IS NOT NULL`),
   txStatusIdx: index("tx_status_idx").on(t.status),
   txCreatedAtIdx: index("tx_created_at_idx").on(t.createdAt),
   txStatusTypeIdx: index("tx_status_type_idx").on(t.status, t.type),

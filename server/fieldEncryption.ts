@@ -15,6 +15,11 @@ import crypto from "crypto";
 const ENCRYPTION_PREFIX = "enc:";
 const ALGO = "aes-256-gcm";
 
+export function isFieldEncryptionConfigured(): boolean {
+  const raw = process.env.FIELD_ENCRYPTION_KEY;
+  return Boolean(raw && raw.trim().length >= 8);
+}
+
 function getDerivedKey(): Buffer | null {
   const raw = process.env.FIELD_ENCRYPTION_KEY;
   if (!raw || raw.trim().length < 8) return null;

@@ -1,5 +1,6 @@
 import rateLimit from "express-rate-limit";
 import type { Request, Response } from "express";
+import crypto from "crypto";
 
 // ─── Helper: extract real client IP ──────────────────────────────────────────
 // FIX-6: maintenant que app.set("trust proxy", 1) est configuré dans index.ts,
@@ -33,6 +34,26 @@ export const globalLimiter = rateLimit({
   },
   handler: (_req, res) =>
     reject(res, "Trop de requêtes. Réessayez dans une minute.", 60),
+});
+
+// External merchant API: rate-limit by API key when present, with IP as a
+// secondary partition. The raw key is never retained by the limiter.
+export const apiV1Limiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: Request) => {
+    const auth = String(req.headers.authorization || "");
+    const key = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+    const identity = key
+      ? `key:${crypto.createHash("sha256").update(key).digest("hex").slice(0, 24)}`
+      : `ip:${getIp(req)}`;
+    return identity;
+  },
+  validate: sharedValidate,
+  handler: (_req, res) =>
+    reject(res, "Trop de requêtes API. Réessayez dans une minute.", 60),
 });
 
 // ─── 2. Register : 5 créations de compte / minute / IP ──────────────────────

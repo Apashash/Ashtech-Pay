@@ -105,9 +105,11 @@ export interface IStorage {
   getTransactionByPaymentIntentId(paymentIntentId: string): Promise<Transaction | undefined>;
   getTransactionById(id: string): Promise<Transaction | undefined>;
   getTransactionByReference(reference: string): Promise<Transaction | undefined>;
+  getTransactionByUserReference(userId: string, reference: string): Promise<Transaction | undefined>;
   getLastIncomingTransactionByCurrency(userId: string, currency: string): Promise<Transaction | undefined>;
   createTransaction(transaction: InsertTransaction): Promise<Transaction>;
   updateTransactionStatus(id: string, status: string): Promise<Transaction | undefined>;
+  claimTransactionStatus(id: string, status: string): Promise<Transaction | undefined>;
   updateTransaction(id: string, updates: Partial<InsertTransaction>): Promise<Transaction | undefined>;
   updateTransactionExternalReference(id: string, externalReference: string): Promise<Transaction | undefined>;
   getPendingDepositTransactions(): Promise<Transaction[]>;
@@ -540,6 +542,15 @@ export class DatabaseStorage implements IStorage {
     return transaction || undefined;
   }
 
+  async getTransactionByUserReference(userId: string, reference: string): Promise<Transaction | undefined> {
+    const [transaction] = await db
+      .select()
+      .from(transactions)
+      .where(and(eq(transactions.userId, userId), eq(transactions.reference, reference)))
+      .limit(1);
+    return transaction || undefined;
+  }
+
   async getLastIncomingTransactionByCurrency(userId: string, currency: string): Promise<Transaction | undefined> {
     const [transaction] = await db
       .select()
@@ -581,6 +592,17 @@ export class DatabaseStorage implements IStorage {
       .update(transactions)
       .set(updateData)
       .where(eq(transactions.id, id))
+      .returning();
+    return transaction || undefined;
+  }
+
+  async claimTransactionStatus(id: string, status: string): Promise<Transaction | undefined> {
+    const updateData: Record<string, any> = { status };
+    if (status === "completed") updateData.confirmedAt = new Date();
+    const [transaction] = await db
+      .update(transactions)
+      .set(updateData)
+      .where(and(eq(transactions.id, id), eq(transactions.status, "pending")))
       .returning();
     return transaction || undefined;
   }

@@ -264,7 +264,10 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
     setTimeout(() => { downloadSDKDocs(); setDownloading(false); }, 50);
   }
 
-  const { data } = useQuery<{ apiKey: string }>({ queryKey: ["/api/user/api-key"] });
+  const { data } = useQuery<{ apiKey: string }>({
+    queryKey: ["/api/user/api-key"],
+    enabled: !publicMode,
+  });
   const apiKey = data?.apiKey ?? "<VOTRE_CLÉ_API>";
   const displayCountries = ALL_COUNTRIES;
 
@@ -387,7 +390,7 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
           <section id="introduction" ref={el => sectionRefs.current.introduction = el} className="scroll-mt-20">
             <p className="text-[15px] text-gray-700 leading-relaxed mb-6">
               L'<strong>Ashtech Pay API</strong> unifie plusieurs passerelles de paiement africaines en une seule interface REST.
-              Elle propose un endpoint de production pour les transactions réelles et un endpoint sandbox pour les tests,
+              Elle propose un endpoint de production pour les transactions réelles,
               permettant d'initialiser des paiements Mobile Money dans{" "}
               <strong>{displayCountries.length}+ pays africains</strong> sans redirection.
               Le routage entre opérateurs est automatique.
@@ -405,7 +408,7 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
             <div className="flex items-center justify-between gap-4 rounded border border-primary/20 bg-primary/5 px-5 py-4 mb-6">
               <div className="space-y-0.5">
                 <p className="text-sm font-semibold text-gray-900">Prêt à tester ?</p>
-                <p className="text-xs text-gray-600">Envoyez un vrai paiement en quelques secondes depuis notre sandbox interactif.</p>
+                <p className="text-xs text-gray-600">Initialisez un paiement réel et suivez son statut depuis l'API.</p>
               </div>
               <Link href="/docs/test-pay">
                 <Button size="sm" className="gap-2 shrink-0 whitespace-nowrap" data-testid="cta-test-api">
@@ -886,7 +889,7 @@ async function showCryptoPayment(data) {
 {
   "amount": 5000, "currency": "XOF", "phone": "77XXXXXXX",
   "operator": "Orange Money", "country_code": "SN",
-  "otp": "123456",                 // ← code du menu USSD ou SMS
+  "otp": "VOTRE_CODE_OTP",         // ← code réellement reçu après USSD ou SMS
   "reference": "DEP-A1B2C3D4",    // ← obligatoire, même valeur que la réponse 400
   "notify_url": "https://monsite.com/webhook"
 }
@@ -1053,7 +1056,7 @@ body: JSON.stringify({
   phone: "0700000000",
   operator: "Orange Money",
   country_code: "CI",
-  otp: "123456",
+   otp: "VOTRE_CODE_OTP",
   reference: "DEP-A1B2C3D4", // ← obligatoire
   notify_url: "https://monsite.com/webhook"
 })
@@ -1538,81 +1541,25 @@ console.log(computeNet(10000, "CM"));
             <SectionH>Sandbox &amp; Tests</SectionH>
 
             <p className="text-[15px] text-gray-700 leading-relaxed mb-5">
-              En sandbox, les paiements ne sont pas réels. Utilisez les numéros et codes OTP ci-dessous pour simuler chaque scénario.
-              La logique de gestion des flux (OTP USSD, OTP SMS, Wave, USSD Push) est identique en production.
+              Le testeur interactif appelle l'API Ashtech Pay avec votre propre clé et déclenche de vraies transactions auprès des opérateurs.
+              Aucun environnement sandbox public, numéro de test ou code OTP universel n'est actuellement disponible.
             </p>
 
-            <SubH>Numéros de test — sandbox uniquement</SubH>
-            <p className="text-sm text-gray-600 mb-3">
-              Envoyez ces numéros <strong>avec le préfixe pays</strong> dans le champ <IC>phone</IC> de <IC>/v1/collect</IC>.
-              Le résultat dépend du numéro choisi (SUCCESS / PENDING / FAILED).
-            </p>
-
-            <DocTable>
-              <DocThead cols={["Pays", "Devise", "Numéro → SUCCESS", "Numéro → PENDING", "Numéro → FAILED"]} />
-              <tbody>
+            <div className="rounded border border-orange-200 bg-orange-50 p-5 space-y-2">
+              <p className="text-sm font-semibold text-orange-800">Avant de tester</p>
+              <ul className="space-y-1.5 text-sm text-orange-800">
                 {[
-                  { country: "CI — Côte d'Ivoire", cur: "XOF", ok: "2252100000001", pend: "2252100000002", fail: "2252100000003" },
-                  { country: "CM — Cameroun",       cur: "XAF", ok: "237660000001",  pend: "237660000002",  fail: "237660000003"  },
-                  { country: "SN — Sénégal",        cur: "XOF", ok: "221700000001",  pend: "221700000002",  fail: "221700000003"  },
-                  { country: "BF — Burkina Faso",   cur: "XOF", ok: "22660000001",   pend: "22660000002",   fail: "22660000003"   },
-                  { country: "CD — RD Congo",       cur: "CDF", ok: "243120000011",  pend: "243120000012",  fail: "243120000013"  },
-                  { country: "CD — RD Congo",       cur: "USD", ok: "243120000001",  pend: "243120000002",  fail: "243120000003"  },
-                ].map(({ country, cur, ok, pend, fail }, i) => (
-                  <DocTr key={i} cells={[
-                    country,
-                    <IC>{cur}</IC>,
-                    <span className="font-mono text-green-700 text-xs">{ok}</span>,
-                    <span className="font-mono text-yellow-700 text-xs">{pend}</span>,
-                    <span className="font-mono text-red-600 text-xs">{fail}</span>,
-                  ]} />
+                  "Utilisez uniquement une clé API activée sur un compte vérifié.",
+                  "Saisissez un numéro réel appartenant au portefeuille Mobile Money choisi.",
+                  "Pour un flux OTP, composez le code USSD indiqué par l'API ou attendez le SMS, puis saisissez le code réellement reçu.",
+                  "Les frais opérateur et les changements d'état sont réels ; testez avec un petit montant.",
+                ].map(item => (
+                  <li key={item} className="flex items-start gap-2">
+                    <ChevronRight className="w-3.5 h-3.5 mt-0.5 text-orange-600 shrink-0" />
+                    {item}
+                  </li>
                 ))}
-              </tbody>
-            </DocTable>
-            <p className="text-xs text-gray-500 mt-2">
-              ⚠️ BJ, GA, ML, NE, TG — utilisez des numéros fictifs commençant par le préfixe pays (ex : <IC>22960000001</IC> pour BJ).
-            </p>
-
-            <div className="rounded border border-orange-200 bg-orange-50 p-5 space-y-3 mt-6">
-              <p className="text-sm font-semibold text-orange-800">Codes OTP de test (sandbox)</p>
-              <p className="text-sm text-orange-800">
-                En sandbox, utilisez le code OTP <strong>123456</strong> pour simuler un paiement réussi.
-                Tout autre code simule un OTP invalide/refusé.
-              </p>
-              <div className="grid sm:grid-cols-2 gap-3">
-                <CodeBlock language="json" code={`// ✅ OTP valide sandbox → succès garanti
-{ "otp": "123456" }
-
-// ❌ OTP invalide sandbox → échec simulé
-{ "otp": "000000" }
-{ "otp": "111111" }`} />
-                <CodeBlock language="javascript" code={`// Exemple complet — OTP USSD Orange CI (sandbox)
-// Numéro test CI XOF : 2252100000001 → SUCCESS
-const step1 = await fetch("https://ashtechpay.top/v1/collect", {
-  method: "POST",
-  headers: { "Authorization": "Bearer YOUR_API_KEY", "Content-Type": "application/json" },
-  body: JSON.stringify({
-    amount: 5000, currency: "XOF",
-    phone: "2252100000001",
-    operator: "Orange Money", country_code: "CI",
-    notify_url: "https://monsite.com/webhook"
-  })
-});
-// step1 → 400 { error: "otp_required", ussd_code: "#144*82#", reference: "DEP-..." }
-
-const step2 = await fetch("https://ashtechpay.top/v1/collect", {
-  method: "POST",
-  headers: { "Authorization": "Bearer YOUR_API_KEY", "Content-Type": "application/json" },
-  body: JSON.stringify({
-    amount: 5000, currency: "XOF",
-    phone: "2252100000001", operator: "Orange Money", country_code: "CI",
-    otp: "123456",
-    reference: "DEP-...", // ← obligatoire
-    notify_url: "https://monsite.com/webhook"
-  })
-});
-// step2 → 202 pending → webhook payment.completed`} />
-              </div>
+              </ul>
             </div>
 
             <div className="rounded border border-yellow-200 bg-yellow-50 p-5 space-y-2 mt-4">
@@ -1634,12 +1581,10 @@ const step2 = await fetch("https://ashtechpay.top/v1/collect", {
             </div>
 
             <div className="rounded border border-purple-200 bg-purple-50 p-5 space-y-2 mt-4">
-              <p className="text-sm font-semibold text-purple-800">Test Wave en sandbox</p>
+              <p className="text-sm font-semibold text-purple-800">Flux Wave</p>
               <p className="text-sm text-purple-800">
-                En sandbox, le <IC>wave_url</IC> retourné est une URL Wave de test.
-                Ouvrez-la dans un navigateur pour simuler l'approbation ou le refus du paiement.
-                Le webhook <IC>payment.completed</IC> ou <IC>payment.failed</IC>{" "}
-                est envoyé automatiquement après la simulation.
+                Si l'opérateur retourne un <IC>wave_url</IC>, ouvrez-le pour valider ou refuser la transaction réelle.
+                Le webhook <IC>payment.completed</IC> ou <IC>payment.failed</IC> est envoyé après la décision du client.
               </p>
             </div>
 
@@ -1647,7 +1592,7 @@ const step2 = await fetch("https://ashtechpay.top/v1/collect", {
               <Link href="/docs/test-pay">
                 <Button className="gap-2" data-testid="link-test-payment-sandbox">
                   <FlaskConical className="w-4 h-4" />
-                  Ouvrir le Sandbox interactif
+                  Ouvrir le testeur API
                 </Button>
               </Link>
             </div>

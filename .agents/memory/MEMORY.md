@@ -28,3 +28,4 @@
 - [AfribaPay country operators](afribapay-country-operators.md) — BJ/CI/NE require country-specific operator catalogs and exact AfribaPay codes across deposit, withdrawal, and transfer.
 - [Payout no auto-cancel](payout-no-auto-cancel.md) — debited payouts never auto-fail+refund on timeouts/transient errors; only explicit provider rejection or failed status triggers refund; else pending_manual.
 - [Admin route cloaking](admin-route-cloaking.md) — unauthenticated and non-admin requests to admin API/panel paths must look like branded 404s before auth/CSRF/PIN layers.
+- [Merchant webhook delivery](merchant-webhook-delivery.md) — all merchant events must use one persisted, HMAC-signed, idempotent queue with retry and cross-worker claims.

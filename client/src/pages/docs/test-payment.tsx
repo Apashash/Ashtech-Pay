@@ -600,7 +600,7 @@ export default function TestPaymentPage() {
                 <FlaskConical className="w-4 h-4 text-primary-foreground" />
               </div>
               <span className="font-semibold text-sm text-gray-900">Ashtech Pay</span>
-              <span className="text-[10px] border border-primary/30 text-primary/80 hidden sm:inline px-1.5 py-0.5 rounded bg-primary/5">Sandbox</span>
+              <span className="text-[10px] border border-primary/30 text-primary/80 hidden sm:inline px-1.5 py-0.5 rounded bg-primary/5">Testeur API</span>
             </div>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
@@ -626,8 +626,8 @@ export default function TestPaymentPage() {
 
         {/* Page heading */}
         <div className="space-y-1">
-          <h1 className="text-xl font-semibold text-gray-900">API Sandbox</h1>
-          <p className="text-sm text-gray-500">Testez les deux modes d'intégration Ashtech Pay avec de vraies transactions.</p>
+          <h1 className="text-xl font-semibold text-gray-900">Testeur API</h1>
+          <p className="text-sm text-gray-500">Testez les deux modes d'intégration Ashtech Pay avec vos identifiants et de vraies transactions.</p>
         </div>
 
         {/* Mode selector */}

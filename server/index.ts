@@ -40,6 +40,7 @@ import { createServer } from "http";
 import { startPaymentPoller, recoverPendingDeposits } from "./paymentPoller";
 import { startPayoutPoller, recoverPendingPayouts } from "./payoutPoller";
 import { startConversionPoller } from "./conversionPoller";
+import { startMerchantWebhookWorker } from "./merchantWebhook";
 import { seedWithdrawalTransferFees } from "./seedWithdrawalTransferFees";
 import { startCleanupScheduler } from "./cleanup";
 import { startDailyReportScheduler } from "./dailyReport";
@@ -378,6 +379,38 @@ app.use((req, res, next) => {
     await db.execute(sql`ALTER TABLE hosted_page_configs ADD COLUMN IF NOT EXISTS hp_live_hash TEXT UNIQUE`);
     await db.execute(sql`ALTER TABLE hosted_page_configs ADD COLUMN IF NOT EXISTS notify_url TEXT`);
     await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS api_key_hash TEXT UNIQUE`);
+    await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS api_webhook_secret TEXT`);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS api_otp_sessions (
+        reference TEXT PRIMARY KEY,
+        user_id VARCHAR REFERENCES users(id) ON DELETE CASCADE,
+        context JSONB NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS api_otp_sessions_expires_idx ON api_otp_sessions(expires_at)`);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS merchant_webhook_deliveries (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        merchant_id VARCHAR,
+        transaction_id VARCHAR NOT NULL,
+        event TEXT NOT NULL,
+        notify_url TEXT NOT NULL,
+        payload JSONB NOT NULL,
+        attempts INT NOT NULL DEFAULT 0,
+        next_attempt_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        status TEXT NOT NULL DEFAULT 'pending',
+        delivered_at TIMESTAMP,
+        last_error TEXT,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        UNIQUE (transaction_id, event)
+      )
+    `);
+    await db.execute(sql`ALTER TABLE merchant_webhook_deliveries ADD COLUMN IF NOT EXISTS merchant_id VARCHAR`);
+    await db.execute(sql`ALTER TABLE merchant_webhook_deliveries ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'pending'`);
+    await db.execute(sql`UPDATE merchant_webhook_deliveries SET status = 'delivered' WHERE status = 'pending' AND delivered_at IS NOT NULL`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS merchant_webhook_status_due_idx ON merchant_webhook_deliveries(status, next_attempt_at) WHERE delivered_at IS NULL`);
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS "session" (
         "sid" varchar NOT NULL COLLATE "default",
@@ -510,6 +543,28 @@ app.use((req, res, next) => {
     await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS izichange_account_id TEXT`);
     // crypto metadata (assetCode, address, memo) + external IziChange ID
     await db.execute(sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS metadata JSONB`);
+    // Preserve all historical transactions while excluding pre-existing duplicate
+    // API references from the new idempotency index. New API writes remain strict.
+    await db.execute(sql`
+      WITH ranked AS (
+        SELECT id,
+               ROW_NUMBER() OVER (
+                 PARTITION BY user_id, reference
+                 ORDER BY created_at ASC NULLS FIRST, id ASC
+               ) AS rn
+        FROM transactions
+        WHERE source = 'api' AND reference IS NOT NULL
+      )
+      UPDATE transactions t
+      SET source = 'api_legacy'
+      FROM ranked r
+      WHERE t.id = r.id AND r.rn > 1
+    `);
+    await db.execute(sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS transactions_api_user_reference_unique
+      ON transactions (user_id, reference)
+      WHERE source = 'api' AND reference IS NOT NULL
+    `);
     console.log("[Migration] Schema columns ready (api_key, notify_url, source, confirmed_at, hosted_page_configs, hosted_payment_sessions, payment_links.notify_url, token_revoked_before, conversion_requests.executed_at/by_id, user_notifications.type, wallets_unique_idx, admin_logs, audit_logs, withdrawal_numbers, withdrawal_number_changes, kyc_submissions.reviewer_id/review_note/reviewed_at/updated_at/country/city/postal_code/latitude/longitude/business_type/business_category/business_description, transactions.ashtech_fee_amount, transactions.metadata)");
 
     // ── Legacy provider cleanup ───────────────────────────────────────────────
@@ -820,6 +875,7 @@ app.use((req, res, next) => {
         console.error("[PayoutPoller] Recovery error:", err)
       );
       startConversionPoller();
+      startMerchantWebhookWorker();
       seedWithdrawalTransferFees().catch(err =>
         console.error("[FeesSeed] Error during fee seeding:", err)
       );

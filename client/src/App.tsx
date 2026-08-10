@@ -464,6 +464,25 @@ function ImpersonationBanner() {
   );
 }
 
+function AuthenticatedWatchers() {
+  const [location] = useLocation();
+  const adminPath = getAdminPath();
+  const isAuthenticatedRoute =
+    location === "/dashboard" ||
+    location.startsWith("/dashboard/") ||
+    location === adminPath ||
+    location.startsWith(`${adminPath}/`);
+
+  if (!isAuthenticatedRoute) return null;
+
+  return (
+    <>
+      <GlobalSSEWatcher />
+      <ImpersonationBanner />
+    </>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -473,8 +492,7 @@ function App() {
             <Toaster />
             <VpnDisconnectGuard />
             <ForceLogoutGuard />
-            <GlobalSSEWatcher />
-            <ImpersonationBanner />
+            <AuthenticatedWatchers />
             <GeoGuard>
               <Router />
             </GeoGuard>

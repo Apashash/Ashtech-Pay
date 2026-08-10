@@ -29,6 +29,7 @@ import {
   adminOtpRequestLimiter,
   publicInfoLimiter,
   externalProxyLimiter,
+  apiV1Limiter,
 } from "./rateLimiter";
 import { 
   loginSchema, 
@@ -61,7 +62,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { uploadToSupabase, getSignedImageUrl, downloadFromSupabase, STORAGE_BUCKET } from "./supabase";
-import { decryptField } from "./fieldEncryption";
+import { decryptField, encryptField, isFieldEncryptionConfigured } from "./fieldEncryption";
 import { requireAdminPin } from "./adminPin";
 import { createPaymentIntent, createDirectCharge, validateWebhook, getIziPayWebhookSecret, toIziPayCurrency, isIziPayConfigured } from "./izichange";
 import { fetchCryptoAssets, filterCryptoAssets, parseDisabledCryptoAssets, getStaticCryptoAssets } from "./cryptoAssets";
@@ -77,6 +78,7 @@ import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, initiatePixP
 import { addPendingPayment, removePendingPayment, expireCryptoPaymentIfNeeded } from "./paymentPoller";
 import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, sameCfaFamily, getConversionPairKey, maybeAutoConvert } from "./walletHelper";
 import { addPendingPayout, removePendingPayout } from "./payoutPoller";
+import { enqueueMerchantWebhook } from "./merchantWebhook";
 import { addSSEClient, removeSSEClient, setActiveTicket, isUserOnline, getOnlineUserIds, getAdminViewingTicket, getUserViewingTicket, notifyUser, notifyAdmins, broadcastOnlineStatus, notifyUserForceLogout, notifyOtherSessionsForceLogout, notifyAllUsersForceLogout, notifySpecificSessionForceLogout } from "./sse";
 import { sendClean404 } from "./botGuard";
 import {
@@ -1080,7 +1082,8 @@ async function verifyPassword(password: string, hash: string): Promise<boolean> 
 const DUMMY_BCRYPT_HASH = "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy";
 
 // ─── OTP context cache (keyed by transaction ref, expires after 15 min) ───────
-const otpContextCache = new Map<string, {
+type OtpContext = {
+  userId?: string;
   operator: string;
   country: string;
   phone: string;
@@ -1089,13 +1092,43 @@ const otpContextCache = new Map<string, {
   afribaTransactionId: string;
   expiresAt: number;
   otpType?: "api" | "ussd";
-}>();
+};
+const otpContextCache = new Map<string, OtpContext>();
+
+async function persistOtpContext(reference: string, context: OtpContext): Promise<void> {
+  await db.execute(sql`
+    INSERT INTO api_otp_sessions (reference, user_id, context, expires_at)
+    VALUES (${reference}, ${context.userId || null}, ${JSON.stringify(context)}::jsonb, to_timestamp(${context.expiresAt / 1000}))
+    ON CONFLICT (reference) DO UPDATE
+      SET user_id = EXCLUDED.user_id, context = EXCLUDED.context, expires_at = EXCLUDED.expires_at
+  `);
+  otpContextCache.set(reference, context);
+}
+
+async function loadOtpContext(reference: string): Promise<OtpContext | undefined> {
+  const cached = otpContextCache.get(reference);
+  if (cached) return cached;
+  const result = await db.execute(sql`
+    SELECT context FROM api_otp_sessions
+    WHERE reference = ${reference} AND expires_at > NOW()
+    LIMIT 1
+  `);
+  const context = (result.rows[0] as any)?.context as OtpContext | undefined;
+  if (context) otpContextCache.set(reference, context);
+  return context;
+}
+
+async function deleteOtpContext(reference: string): Promise<void> {
+  otpContextCache.delete(reference);
+  await db.execute(sql`DELETE FROM api_otp_sessions WHERE reference = ${reference}`);
+}
 
 setInterval(() => {
   const now = Date.now();
   for (const [key, ctx] of otpContextCache.entries()) {
     if (ctx.expiresAt < now) otpContextCache.delete(key);
   }
+  db.execute(sql`DELETE FROM api_otp_sessions WHERE expires_at < NOW()`).catch(() => {});
 }, 5 * 60 * 1000); // Clean expired entries every 5 min
 
 // ─── Forced-logout map : userId → blockedUntil timestamp ─────────────────────
@@ -3628,6 +3661,44 @@ export async function registerRoutes(
     }
   });
 
+  // Merchant webhook signing secret. It is encrypted at rest and only shown
+  // after an authenticated request; webhook deliveries never expose it.
+  app.get("/api/user/webhook-secret", requireAuth, async (req, res) => {
+    try {
+      if (!isFieldEncryptionConfigured()) {
+        return res.status(503).json({ message: "Le chiffrement des secrets webhook n'est pas configuré." });
+      }
+      const user = await storage.getUser(req.userId!);
+      if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
+      let secret = decryptField((user as any).apiWebhookSecret);
+      if (!secret) {
+        secret = `whsec_${crypto.randomBytes(32).toString("hex")}`;
+        await storage.updateUser(user.id, { apiWebhookSecret: encryptField(secret) } as any);
+      } else if (!(user as any).apiWebhookSecret?.startsWith("enc:")) {
+        await storage.updateUser(user.id, { apiWebhookSecret: encryptField(secret) } as any);
+      }
+      res.json({ webhookSecret: secret });
+    } catch (error) {
+      console.error("Get webhook secret error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
+  app.post("/api/user/webhook-secret/regenerate", requireAuth, async (req, res) => {
+    try {
+      if (!isFieldEncryptionConfigured()) {
+        return res.status(503).json({ message: "Le chiffrement des secrets webhook n'est pas configuré." });
+      }
+      const secret = `whsec_${crypto.randomBytes(32).toString("hex")}`;
+      const user = await storage.updateUser(req.userId!, { apiWebhookSecret: encryptField(secret) } as any);
+      if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
+      res.json({ webhookSecret: secret });
+    } catch (error) {
+      console.error("Regenerate webhook secret error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   // Transaction routes
   app.get("/api/transactions", requireAuth, async (req, res) => {
     try {
@@ -4690,7 +4761,8 @@ export async function registerRoutes(
               // Just store context so confirm-otp can process it later
 
               // Store OTP context for the confirm-otp endpoint
-              otpContextCache.set(depositRef, {
+              await persistOtpContext(depositRef, {
+                userId: (req as any).userId || undefined,
                 operator: afribapayOperatorCode,
                 country: countryCode,
                 phone: localPhone,
@@ -4799,7 +4871,8 @@ export async function registerRoutes(
               // above already triggered the OTP SMS on AfribaPay's side. A second
               // initiation call with the same order_id causes a 5xx on their end.
               console.warn(`[AfribaPay Payin] OTP required but not pre-detected for operator=${afribapayOperatorCode} country=${countryCode} — SMS already sent by payin, switching to OTP confirmation flow`);
-              otpContextCache.set(depositRef, {
+              await persistOtpContext(depositRef, {
+                userId: (req as any).userId || undefined,
                 operator: afribapayOperatorCode,
                 country: countryCode,
                 phone: localPhone,
@@ -7933,7 +8006,8 @@ export async function registerRoutes(
               // ── USSD OTP: user dials the code themselves — no initiation call needed ──
 
               // Store OTP context for confirm-otp endpoint
-              otpContextCache.set(reference, {
+              await persistOtpContext(reference, {
+                userId: intent.merchantId,
                 operator: afribapayOperatorCode,
                 country: paymentCountryCode,
                 phone: localPhone,
@@ -8032,7 +8106,8 @@ export async function registerRoutes(
               // above already triggered the OTP SMS on AfribaPay's side. A second
               // initiation call with the same order_id causes a 5xx on their end.
               console.warn(`[AfribaPay PaymentLink] OTP required but not pre-detected for operator=${afribapayOperatorCode} country=${paymentCountryCode} — SMS already sent by payin, switching to OTP confirmation flow`);
-              otpContextCache.set(reference, {
+              await persistOtpContext(reference, {
+                userId: intent.merchantId,
                 operator: afribapayOperatorCode,
                 country: paymentCountryCode,
                 phone: localPhone,
@@ -12533,86 +12608,11 @@ export async function registerRoutes(
     }
   });
 
-  // ─── Merchant webhook forwarding ─────────────────────────────────────────────
-  // Fire-and-forget: sends a POST to the merchant's notify_url (if set) after
-  // a payment status change. Never throws — errors are logged only.
-  // SSRF protection: only HTTPS URLs to non-private hosts are allowed.
-  function isSafeWebhookUrl(rawUrl: string): boolean {
-    let parsed: URL;
-    try { parsed = new URL(rawUrl); } catch { return false; }
-    if (parsed.protocol !== "https:") return false;
-    const host = parsed.hostname.toLowerCase();
-    // Block loopback, link-local, private ranges, and metadata services
-    if (
-      host === "localhost" ||
-      host.endsWith(".localhost") ||
-      host === "169.254.169.254" ||             // AWS/GCP/Azure metadata
-      /^127\./.test(host) ||                    // 127.x.x.x
-      /^10\./.test(host) ||                     // 10.x.x.x
-      /^192\.168\./.test(host) ||               // 192.168.x.x
-      /^172\.(1[6-9]|2\d|3[01])\./.test(host) || // 172.16-31.x.x
-      /^::1$/.test(host) ||                     // IPv6 loopback
-      /^fd/.test(host) ||                       // IPv6 ULA
-      /^fe80/.test(host)                        // IPv6 link-local
-    ) return false;
-    return true;
-  }
-
   async function forwardMerchantWebhook(
     transaction: Transaction,
     finalStatus: "completed" | "failed"
   ): Promise<void> {
-    const notifyUrl = transaction.notifyUrl;
-    if (!notifyUrl) return;
-    if (!isSafeWebhookUrl(notifyUrl)) {
-      console.warn(`[MerchantWebhook] Blocked unsafe notify_url: ${notifyUrl}`);
-      return;
-    }
-    const isPayout = transaction.type === "withdrawal" || transaction.type === "transfer_out";
-    const eventPrefix = isPayout ? "payout" : "payment";
-    const payload = {
-      event: finalStatus === "completed" ? `${eventPrefix}.completed` : `${eventPrefix}.failed`,
-      transaction_id: transaction.id,
-      reference: transaction.reference,
-      status: finalStatus,
-      amount: transaction.amount,
-      total_amount: transaction.totalAmount || transaction.amount,
-      currency: transaction.currency,
-      type: transaction.type,
-      phone: transaction.recipientPhone ?? null,
-      timestamp: new Date().toISOString(),
-      fee_amount: transaction.feeAmount || "0",
-      provider_fee_amount: (transaction as any).metadata?.providerFeeAmountUsdt ?? "0",
-      provider_fee_percent: (transaction as any).metadata?.providerFeePercent ?? 0,
-      ashtech_fee_amount: transaction.ashtechFeeAmount || ((transaction as any).metadata?.ashtechFeeAmountUsdt ?? "0"),
-      ashtech_fee_percent: (transaction as any).metadata?.ashtechFeePercent ?? 0,
-      total_fee_amount: transaction.feeAmount || "0",
-      total_fee_percent: (transaction as any).metadata?.totalFeePercent ?? 0,
-      ...(transaction.paymentMethod === "crypto"
-        ? {
-            payment_method: "crypto",
-            asset_code: (transaction as any).metadata?.assetCode ?? null,
-            address: (transaction as any).metadata?.address ?? null,
-            memo: (transaction as any).metadata?.memo ?? null,
-          }
-        : {}),
-    };
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 10_000);
-    try {
-      const resp = await fetch(notifyUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
-      console.log(`[MerchantWebhook] → ${notifyUrl} | status=${resp.status}`);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.warn(`[MerchantWebhook] Failed to reach ${notifyUrl}:`, msg);
-    } finally {
-      clearTimeout(timer);
-    }
+    await enqueueMerchantWebhook(transaction, finalStatus);
   }
 
   // ── IziChange webhook ───────────────────────────────────────────────────────
@@ -12633,7 +12633,8 @@ export async function registerRoutes(
           return res.status(401).json({ message: "Invalid signature" });
         }
       } else {
-        console.warn("[IziChange Webhook] IZIPAY_WEBHOOK_SECRET not set — accepting without signature check");
+        console.error("[IziChange Webhook] IZIPAY_WEBHOOK_SECRET non configuré — requête rejetée");
+        return res.status(503).json({ message: "Webhook endpoint not configured" });
       }
 
       // ── Log full payload so we can verify the real field names ──────────────
@@ -12698,7 +12699,7 @@ export async function registerRoutes(
       }
 
       if (FAILURE_EVENTS.includes(eventType)) {
-        const failedTransaction = await storage.updateTransactionStatus(transaction.id, "failed");
+        const failedTransaction = await storage.claimTransactionStatus(transaction.id, "failed");
         if (failedTransaction) {
           forwardMerchantWebhook(failedTransaction, "failed").catch(() => {});
         }
@@ -12707,7 +12708,10 @@ export async function registerRoutes(
       }
 
       const creditAmount = parseFloat(transaction.amount);
-      await storage.updateTransactionStatus(transaction.id, "completed");
+      const claimedTransaction = await storage.claimTransactionStatus(transaction.id, "completed");
+      if (!claimedTransaction) {
+        return res.status(200).json({ received: true, message: "already processed" });
+      }
       await creditUserWallet(transaction.userId, creditAmount, "USDT");
       const completedTransaction = await storage.getTransactionById(transaction.id);
       if (completedTransaction) {
@@ -13050,7 +13054,8 @@ export async function registerRoutes(
       const txCurrency = transaction.currency || "XAF";
 
       if (status === "completed") {
-        await storage.updateTransactionStatus(transaction.id, "completed");
+        const claimedTransaction = await storage.claimTransactionStatus(transaction.id, "completed");
+        if (!claimedTransaction) return res.json({ success: true, message: "already processed" });
 
         if (isPayout) {
           // Payout success: money already left user's account, just notify
@@ -13136,7 +13141,8 @@ export async function registerRoutes(
         }
 
       } else if (status === "failed") {
-        await storage.updateTransactionStatus(transaction.id, "failed");
+        const claimedTransaction = await storage.claimTransactionStatus(transaction.id, "failed");
+        if (!claimedTransaction) return res.json({ success: true, message: "already processed" });
 
         if (isPayout) {
           // Payout failed: refund the full debited amount to the wallet that was originally debited
@@ -13261,7 +13267,8 @@ export async function registerRoutes(
       const txCurrency = transaction.currency || "XAF";
 
       if (status === "completed") {
-        await storage.updateTransactionStatus(transaction.id, "completed");
+        const claimedTransaction = await storage.claimTransactionStatus(transaction.id, "completed");
+        if (!claimedTransaction) return res.json({ success: true, message: "already processed" });
 
         if (isPayout) {
           // Payout success: money already left user's account, just notify
@@ -13347,7 +13354,8 @@ export async function registerRoutes(
         }
 
       } else if (status === "failed") {
-        await storage.updateTransactionStatus(transaction.id, "failed");
+        const claimedTransaction = await storage.claimTransactionStatus(transaction.id, "failed");
+        if (!claimedTransaction) return res.json({ success: true, message: "already processed" });
 
         if (isPayout) {
           // Payout failed: refund the full debited amount to the wallet that was originally debited
@@ -13444,12 +13452,15 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Référence et code OTP requis" });
       }
 
-      const ctx = otpContextCache.get(ref);
+      const ctx = await loadOtpContext(ref);
       if (!ctx) {
         return res.status(400).json({ message: "Session OTP expirée ou introuvable. Veuillez recommencer." });
       }
+      if (ctx.userId && ctx.userId !== user.id) {
+        return res.status(403).json({ message: "Cette session OTP n'appartient pas à votre compte." });
+      }
       if (ctx.expiresAt < Date.now()) {
-        otpContextCache.delete(ref);
+        await deleteOtpContext(ref);
         return res.status(400).json({ message: "Le code OTP a expiré. Veuillez recommencer." });
       }
 
@@ -13473,7 +13484,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: result.message || "Code OTP invalide ou expiré" });
       }
 
-      otpContextCache.delete(ref);
+      await deleteOtpContext(ref);
       console.log(`[OTP Confirm] ✓ Deposit OTP confirmed for ref=${ref}, afriba_tx=${result.transaction_id}`);
 
       // Update transaction external reference with AfribaPay's transaction_id and start polling
@@ -13509,13 +13520,21 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Référence et code OTP requis" });
       }
 
-      const ctx = otpContextCache.get(ref);
+      const ctx = await loadOtpContext(ref);
       if (!ctx) {
         return res.status(400).json({ message: "Session OTP expirée ou introuvable. Veuillez recommencer." });
       }
       if (ctx.expiresAt < Date.now()) {
-        otpContextCache.delete(ref);
+        await deleteOtpContext(ref);
         return res.status(400).json({ message: "Le code OTP a expiré. Veuillez recommencer." });
+      }
+      const paymentLink = await storage.getPaymentLinkBySlug(req.params.slug);
+      if (!paymentLink) {
+        return res.status(404).json({ message: "Lien de paiement introuvable." });
+      }
+      const linkTransaction = await storage.getTransactionByReference(ref);
+      if (!linkTransaction || linkTransaction.paymentLinkId !== paymentLink.id) {
+        return res.status(403).json({ message: "Cette session OTP ne correspond pas à ce lien de paiement." });
       }
 
       const callbackUrl = buildWebhookUrl("/api/afribapay/webhook");
@@ -13538,7 +13557,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: result.message || "Code OTP invalide ou expiré" });
       }
 
-      otpContextCache.delete(ref);
+      await deleteOtpContext(ref);
       console.log(`[OTP Confirm] ✓ PaymentLink OTP confirmed for ref=${ref}, afriba_tx=${result.transaction_id}`);
 
       // Update transaction external reference and start polling
@@ -13756,6 +13775,9 @@ export async function registerRoutes(
     if (!user.isVerified) {
       return res.status(403).json({ error: "account_not_verified", message: "Votre compte n'est pas vérifié. Complétez la vérification KYC pour accéder à l'API." });
     }
+    if ((user as any).isBanned) {
+      return res.status(403).json({ error: "account_banned", message: "Votre compte n'est pas autorisé à utiliser l'API." });
+    }
     if (!(user as any).apiEnabled) {
       return res.status(403).json({ error: "api_not_enabled", message: "L'accès API n'est pas activé sur votre compte. Contactez l'administrateur pour l'activer." });
     }
@@ -13776,9 +13798,9 @@ export async function registerRoutes(
   }
 
   /** GET /v1/countries — list all active countries with their operators */
-  app.get("/v1/countries", requireApiKey, async (_req, res) => {
+  app.get("/v1/countries", apiV1Limiter, requireApiKey, async (_req, res) => {
     try {
-      const countries = await storage.getActiveCountries();
+       const countries = (await storage.getActiveCountries()).filter((c: any) => c.isActiveForDeposit !== false);
       const result = await Promise.all(
         countries.map(async (c: any) => {
           const ops = await storage.getOperatorsByCountry(c.id);
@@ -13805,7 +13827,7 @@ export async function registerRoutes(
   });
 
   /** GET /v1/crypto/assets — list crypto assets enabled for Direct SDK */
-  app.get("/v1/crypto/assets", requireApiKey, async (_req, res) => {
+  app.get("/v1/crypto/assets", apiV1Limiter, requireApiKey, async (_req, res) => {
     try {
       const disabled = parseDisabledCryptoAssets(
         (await storage.getSetting("crypto_disabled_assets"))?.value,
@@ -13850,7 +13872,7 @@ export async function registerRoutes(
    * This is deliberately separate from /v1/collect: the existing Mobile Money
    * contract and routing are left untouched.
    */
-  app.post("/v1/crypto/collect", requireApiKey, async (req: any, res) => {
+  app.post("/v1/crypto/collect", apiV1Limiter, requireApiKey, async (req: any, res) => {
     const requestId = crypto.randomUUID();
     try {
       const merchant = req.apiUser;
@@ -13930,7 +13952,87 @@ export async function registerRoutes(
       const amounts = await resolveCryptoFeeBreakdown(grossUsdt);
 
       const reference = request.reference || generateTransactionReference("deposit");
-       const customer = buildDirectCryptoCustomer(request);
+      if (request.reference) {
+        const existing = await storage.getTransactionByUserReference(merchant.id, reference);
+        if (existing) {
+          const existingMetadata = (existing as any).metadata || {};
+          const sameRequest =
+            Number(existing.totalAmount || existing.amount) === Number(amounts.grossUsdt) &&
+            String(existingMetadata.assetCode || "").toUpperCase() === request.assetCode.toUpperCase() &&
+            String(existingMetadata.originalCurrency || existing.currency).toUpperCase() === originalCurrency.toUpperCase();
+          if (!sameRequest) {
+            return res.status(409).json({
+              error: "idempotency_conflict",
+              message: "Cette reference existe déjà avec des paramètres différents.",
+            });
+          }
+          return res.status(200).json({
+            transaction_id: existing.id,
+            reference: existing.reference,
+            status: existing.status === "completed" ? "success" : existing.status,
+            payment_method: "crypto",
+            asset_code: existingMetadata.assetCode || request.assetCode,
+            network: selectedNetwork.id,
+            address: existingMetadata.address || null,
+            memo: existingMetadata.memo || null,
+            memo_type: existingMetadata.memoType || null,
+            amount: request.amount,
+            currency: originalCurrency,
+            amount_usdt: Number(existing.totalAmount || amounts.grossUsdt),
+            credited_amount: Number(existing.amount),
+            fee_amount: Number(existing.feeAmount || 0),
+            created_at: existing.createdAt,
+            idempotent_replay: true,
+          });
+        }
+      }
+
+      let transaction: Transaction;
+      try {
+        transaction = await storage.createTransaction({
+          userId: merchant.id,
+          type: "deposit",
+          amount: amounts.creditedUsdt.toFixed(6),
+          totalAmount: amounts.grossUsdt.toFixed(6),
+          feeAmount: amounts.feeUsdt.toFixed(6),
+          ashtechFeeAmount: amounts.ashtechFeeUsdt.toFixed(6),
+          currency: "USDT",
+          status: "pending",
+          description: `Paiement API crypto ${request.assetCode} — ${originalAmount ?? amounts.grossUsdt} ${originalCurrency}`,
+          paymentMethod: "crypto",
+          reference,
+          notifyUrl: request.notifyUrl || null,
+          source: "api",
+          metadata: {
+            assetCode: request.assetCode,
+            sdk: "direct",
+            originalAmount,
+            originalCurrency,
+          },
+        });
+      } catch (reservationError: any) {
+        const raced = await storage.getTransactionByUserReference(merchant.id, reference);
+        if (raced) {
+          return res.status(200).json({
+            transaction_id: raced.id,
+            reference: raced.reference,
+            status: raced.status === "completed" ? "success" : raced.status,
+            payment_method: "crypto",
+            asset_code: request.assetCode,
+            network: selectedNetwork.id,
+            amount: request.amount,
+            currency: originalCurrency,
+            amount_usdt: Number(raced.totalAmount || amounts.grossUsdt),
+            credited_amount: Number(raced.amount),
+            fee_amount: Number(raced.feeAmount || 0),
+            created_at: raced.createdAt,
+            idempotent_replay: true,
+          });
+        }
+        throw reservationError;
+      }
+
+      const customer = buildDirectCryptoCustomer(request);
       let charge;
       try {
         charge = await createDirectCharge({
@@ -13947,6 +14049,7 @@ export async function registerRoutes(
           },
         });
       } catch (chargeError: any) {
+        await storage.updateTransactionStatus(transaction.id, "failed");
         const providerStatus = Number(chargeError?.status);
         const providerCode = chargeError?.code;
         console.error(
@@ -13964,6 +14067,7 @@ export async function registerRoutes(
         });
       }
        if (selectedNetwork.memoRequired && !charge.memo) {
+         await storage.updateTransactionStatus(transaction.id, "failed");
          return res.status(502).json({
            error: "provider_missing_memo",
            message: `Le réseau ${request.assetCode} exige un ${selectedNetwork.memoType || "memo/tag"}, mais le fournisseur n'en a pas retourné.`,
@@ -13971,22 +14075,7 @@ export async function registerRoutes(
          });
        }
 
-      const transaction = await storage.createTransaction({
-        userId: merchant.id,
-        type: "deposit",
-        amount: amounts.creditedUsdt.toFixed(6),
-        totalAmount: amounts.grossUsdt.toFixed(6),
-        feeAmount: amounts.feeUsdt.toFixed(6),
-        ashtechFeeAmount: amounts.ashtechFeeUsdt.toFixed(6),
-        currency: "USDT",
-        status: "pending",
-        description: `Paiement API crypto ${request.assetCode} — ${originalAmount ?? amounts.grossUsdt} ${originalCurrency}`,
-        paymentMethod: "crypto",
-        reference,
-        externalReference: charge.id || undefined,
-        notifyUrl: request.notifyUrl || null,
-        source: "api",
-        metadata: await (async () => {
+      const cryptoMetadata = await (async () => {
           const _coin = request.assetCode.split(".")[0].toUpperCase();
           const _price = await getCryptoPriceUsd(_coin).catch(() => 0);
           const _grossCoin = _price > 0 ? amounts.grossUsdt / _price : null;
@@ -14013,8 +14102,16 @@ export async function registerRoutes(
             ...(_grossCoin !== null ? { grossAmountCoin: parseFloat(_grossCoin.toFixed(8)), coinPriceUsdt: _price } : {}),
             ...(_creditedCoin !== null ? { creditedAmountCoin: parseFloat(_creditedCoin.toFixed(8)) } : {}),
           };
-        })(),
+        })();
+      await storage.updateTransaction(transaction.id, {
+        externalReference: charge.id || undefined,
+        metadata: cryptoMetadata,
       });
+      transaction = {
+        ...transaction,
+        externalReference: charge.id || transaction.externalReference,
+        metadata: cryptoMetadata,
+      } as Transaction;
 
       console.log(
         `[API v1 /crypto/collect] merchant=${merchant.id} asset=${request.assetCode} ` +
@@ -14063,7 +14160,7 @@ export async function registerRoutes(
   });
 
   /** POST /v1/collect — initiate a Mobile Money collection */
-  app.post("/v1/collect", requireApiKey, async (req: any, res) => {
+  app.post("/v1/collect", apiV1Limiter, requireApiKey, async (req: any, res) => {
     try {
       const merchant = req.apiUser;
       const { amount, currency, phone, operator: operatorName, country_code, reference, notify_url } = req.body;
@@ -14078,7 +14175,7 @@ export async function registerRoutes(
       }
 
       // ── Find country ──────────────────────────────────────────────────────
-      const allCountries = await storage.getActiveCountries();
+       const allCountries = (await storage.getActiveCountries()).filter((c: any) => c.isActiveForDeposit !== false);
       const country = allCountries.find(
         (c: any) => c.code.toUpperCase() === country_code.toUpperCase()
       );
@@ -14158,7 +14255,38 @@ export async function registerRoutes(
         ashtechFeeAmount = pf.ashtechFeeAmount;
       }
 
-      const depositRef = reference || generateTransactionReference("deposit");
+       const depositRef = reference || generateTransactionReference("deposit");
+
+       if (reference) {
+         const existing = await storage.getTransactionByUserReference(merchant.id, String(reference));
+         if (existing) {
+           const sameRequest =
+             parseFloat(String(existing.totalAmount || existing.amount)) === amountNum &&
+             String(existing.currency).toUpperCase() === String(country.currency).toUpperCase() &&
+             String(existing.recipientPhone || "") === String(phone) &&
+             String(existing.operatorId || "") === String((operatorRecord as any).id || "");
+           if (!sameRequest) {
+             return res.status(409).json({
+               error: "idempotency_conflict",
+               message: "Cette reference existe déjà avec des paramètres différents.",
+             });
+           }
+           return res.status(200).json({
+             transaction_id: existing.id,
+             reference: existing.reference,
+             status: existing.status === "completed" ? "success" : existing.status,
+             amount: parseFloat(String(existing.totalAmount || existing.amount)),
+             credited_amount: parseFloat(String(existing.amount)),
+             fee_amount: parseFloat(String(existing.feeAmount || "0")),
+             currency: normalizeApiCurrency(existing.currency),
+             operator: operatorName,
+             phone,
+             country_code: country.code,
+             created_at: existing.createdAt,
+             idempotent_replay: true,
+           });
+         }
+       }
 
       // ── PixPay OTP pre-check ──────────────────────────────────────────────
       if (paymentProvider === "pixpay") {
@@ -14192,12 +14320,15 @@ export async function registerRoutes(
         });
       }
       if (paymentProvider === "afribapay" && req.body.otp && req.body.reference) {
-        const ctx = otpContextCache.get(req.body.reference as string);
+        const ctx = await loadOtpContext(req.body.reference as string);
         if (!ctx) {
           return res.status(400).json({
             error: "otp_expired",
             message: "Session OTP expirée ou introuvable. Relancez la requête sans le champ 'otp' pour initier une nouvelle session.",
           });
+        }
+        if (ctx.userId && ctx.userId !== merchant.id) {
+          return res.status(403).json({ error: "forbidden", message: "Cette session OTP n'appartient pas à votre compte." });
         }
         const callbackUrlOtp = buildWebhookUrl("/api/afribapay/webhook");
         const afribapayCurrencyOtp = AFRIBAPAY_ISO_CURRENCY[country.code.toUpperCase()] || country.currency;
@@ -14215,7 +14346,7 @@ export async function registerRoutes(
           cancel_url: `${process.env.APP_URL}/dashboard/deposit?status=cancelled`,
           lang: "fr",
         });
-        otpContextCache.delete(req.body.reference as string);
+        await deleteOtpContext(req.body.reference as string);
         const existingTxOtp = await storage.getTransactionByReference(req.body.reference as string);
         if (!confirmedResponse.success) {
           if (existingTxOtp) await storage.updateTransactionStatus(existingTxOtp.id, "failed");
@@ -14323,7 +14454,8 @@ export async function registerRoutes(
           // USSD-type OTP: user dials the USSD code shown in ussd_code — no SMS
           // endpoint to call. Cache immediately so the confirm call can find the session.
 
-          otpContextCache.set(depositRef, {
+          await persistOtpContext(depositRef, {
+            userId: merchant.id,
             operator: afribaOpCodePre,
             country: country.code,
             phone: localPhonePre,
@@ -14435,7 +14567,8 @@ export async function registerRoutes(
           // client can confirm with otp + reference — do NOT call initiateAfribaPayOtp
           // again (that would invalidate the already-sent SMS).
           console.warn(`[API v1/collect] OTP required but not pre-detected for operator=${afribaOpCode} country=${country.code} — caching session for client confirmation`);
-          otpContextCache.set(depositRef, {
+          await persistOtpContext(depositRef, {
+            userId: merchant.id,
             operator: afribaOpCode,
             country: country.code,
             phone: localPhone,
@@ -14532,7 +14665,7 @@ export async function registerRoutes(
   });
 
   /** GET /v1/transaction/:id — get status of an API transaction */
-  app.get("/v1/transaction/:id", requireApiKey, async (req: any, res) => {
+  app.get("/v1/transaction/:id", apiV1Limiter, requireApiKey, async (req: any, res) => {
     try {
       const merchant = req.apiUser;
       const tx = await storage.getTransactionById(req.params.id);
@@ -14593,9 +14726,9 @@ export async function registerRoutes(
   });
 
   /** GET /v1/fees — live fee schedule (admin-controlled, auto-propagated) */
-  app.get("/v1/fees", requireApiKey, async (_req, res) => {
+  app.get("/v1/fees", apiV1Limiter, requireApiKey, async (_req, res) => {
     try {
-      const countries = await storage.getActiveCountries();
+       const countries = (await storage.getActiveCountries()).filter((c: any) => c.isActiveForDeposit !== false);
       const result = await Promise.all(
         countries.map(async (c: any) => {
           const ops = await storage.getOperatorsByCountry(c.id);
