@@ -35,7 +35,10 @@ import {
   Scale,
   HelpCircle,
   Mail,
-  MessageCircleQuestion
+  MessageCircleQuestion,
+  LogOut,
+  Download,
+  ExternalLink
 } from "lucide-react";
 import heroImage from "@assets/IMG_0059_1775398520619.png";
 import operatorsImage from "@assets/IMG_0057_1775398589784.png";
@@ -293,7 +296,7 @@ function SolutionsSection() {
       link: "/register",
     },
     {
-      icon: ArrowDownUp,
+      icon: LogOut,
       badge: null,
       title: "Ashtech Pay-OUT",
       description:
@@ -301,7 +304,7 @@ function SolutionsSection() {
       link: "/register",
     },
     {
-      icon: Link2,
+      icon: Download,
       badge: { label: "EXCLUSIF", color: "bg-slate-800 text-white" },
       title: "Ashtech Pay-Link",
       description:
@@ -329,8 +332,8 @@ function SolutionsSection() {
               <h3 className="text-xl font-bold text-foreground mb-3">{title}</h3>
               <p className="text-muted-foreground text-sm leading-relaxed mb-5">{description}</p>
               <Link href={link}>
-                <span className="inline-flex items-center gap-1 text-sm font-semibold text-primary border-b-2 border-primary pb-0.5 hover:opacity-75 transition-opacity">
-                  En savoir plus <ChevronRight className="w-4 h-4" />
+                <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary border-b-2 border-primary pb-0.5 hover:opacity-75 transition-opacity">
+                  En savoir plus <ExternalLink className="w-3.5 h-3.5" />
                 </span>
               </Link>
             </div>
