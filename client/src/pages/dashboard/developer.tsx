@@ -847,6 +847,32 @@ async function showCryptoPayment(data) {
                 (certains opérateurs — SMS déclenché automatiquement, <IC>ussd_code</IC> est null).
                 Dans les deux cas, relancez la requête avec <IC>otp</IC> <strong>et</strong> <IC>reference</IC>.
               </p>
+              <SubH>Opérateur Orange — disponibilité et OTP</SubH>
+              <DocTable>
+                <DocThead cols={["Operator", "otp_code", "Phone Code", "Payment Method", "Payin", "Payout", "Available", "Currency"]} />
+                <tbody>
+                  {[
+                    { phone: "+225", otp: "Required", currency: "XOF" },
+                    { phone: "+226", otp: "Required", currency: "XOF" },
+                    { phone: "+223", otp: "No",       currency: "XOF" },
+                    { phone: "+221", otp: "Required", currency: "XOF" },
+                    { phone: "+224", otp: "Required", currency: "GNF" },
+                    { phone: "+237", otp: "No",       currency: "XAF" },
+                    { phone: "+243", otp: "No",       currency: "CDF" },
+                  ].map(({ phone, otp, currency }) => (
+                    <DocTr key={phone} cells={[
+                      <span className="font-medium">Orange</span>,
+                      <span className={otp === "Required" ? "text-green-700 font-semibold" : "text-gray-700"}>{otp}</span>,
+                      <IC>{phone}</IC>,
+                      <span className="font-mono text-xs">orange</span>,
+                      <span className="text-green-700 font-semibold">Yes</span>,
+                      <span className="text-green-700 font-semibold">Yes</span>,
+                      <span className="text-green-700 font-semibold">Yes</span>,
+                      <IC>{currency}</IC>,
+                    ]} />
+                  ))}
+                </tbody>
+              </DocTable>
               <CodeBlock language="json" code={`// Étape 1 — Requête initiale (sans otp) → réponse 400
 {
   "error": "otp_required",
