@@ -14,7 +14,7 @@ export default function CareersPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-background border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <Link href="/">
@@ -50,17 +50,13 @@ export default function CareersPage() {
             <h2 className="text-2xl font-bold text-foreground mb-8 text-center">Pourquoi nous rejoindre ?</h2>
             <div className="grid sm:grid-cols-2 gap-6">
               {benefits.map((benefit, index) => (
-                <Card key={index} className="p-6 bg-card border-border">
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0">
-                      <benefit.icon className="w-6 h-6 text-primary" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-semibold text-foreground mb-2">{benefit.title}</h3>
-                      <p className="text-muted-foreground text-sm">{benefit.description}</p>
-                    </div>
+                <div key={index} className="p-6 bg-card border border-border rounded-2xl hover:border-primary/40 hover:shadow-md transition-all duration-300">
+                  <div className="w-14 h-14 bg-background border-2 border-border rounded-full flex items-center justify-center mb-4">
+                    <benefit.icon className="w-7 h-7 text-primary" />
                   </div>
-                </Card>
+                  <h3 className="text-base font-bold text-foreground mb-2">{benefit.title}</h3>
+                  <p className="text-muted-foreground text-sm leading-relaxed">{benefit.description}</p>
+                </div>
               ))}
             </div>
           </section>

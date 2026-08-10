@@ -46,7 +46,7 @@ export default function HelpPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-background border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <Link href="/">
@@ -79,20 +79,20 @@ export default function HelpPage() {
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
             {categories.map((category, index) => (
-              <Card key={index} className="p-6 bg-card border-border hover:border-primary/50 transition-colors cursor-pointer">
-                <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center mb-4">
-                  <category.icon className="w-6 h-6 text-primary" />
+              <div key={index} className="p-6 bg-card border border-border rounded-2xl hover:border-primary/50 hover:shadow-md transition-all duration-300 cursor-pointer">
+                <div className="w-14 h-14 bg-background border-2 border-border rounded-full flex items-center justify-center mb-4">
+                  <category.icon className="w-7 h-7 text-primary" />
                 </div>
-                <h3 className="text-lg font-semibold text-foreground mb-2">{category.title}</h3>
-                <p className="text-muted-foreground text-sm mb-4">{category.description}</p>
+                <h3 className="text-base font-bold text-foreground mb-2">{category.title}</h3>
+                <p className="text-muted-foreground text-sm mb-4 leading-relaxed">{category.description}</p>
                 <ul className="space-y-2">
                   {category.articles.map((article, i) => (
-                    <li key={i} className="text-sm text-primary hover:underline cursor-pointer">
+                    <li key={i} className="text-sm text-primary hover:underline cursor-pointer font-medium">
                       {article}
                     </li>
                   ))}
                 </ul>
-              </Card>
+              </div>
             ))}
           </div>
 

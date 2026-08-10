@@ -88,13 +88,6 @@ function Navbar() {
 
   const menuGroups = [
     {
-      title: t.nav.account,
-      items: [
-        { label: t.nav.login, href: "/login", icon: LogIn },
-        { label: t.nav.register, href: "/register", icon: UserPlus },
-      ],
-    },
-    {
       title: t.nav.resources,
       items: [
         { label: t.nav.help, href: "/help", icon: HelpCircle },
@@ -122,23 +115,37 @@ function Navbar() {
   
   return (
     <>
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-background border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16 gap-4">
+          {/* Logo row */}
+          <div className="flex items-center justify-between h-14">
             <Link href="/">
-              <div className="flex items-center gap-2 cursor-pointer">
-                <img src="/logo.png" alt="AshTech Pay" className="h-24 w-auto" />
-              </div>
+              <img src="/logo.png" alt="AshTech Pay" className="h-20 w-auto" />
             </Link>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
               <LanguageSwitcher />
               <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-accent transition-colors" aria-label="Changer de thème" data-testid="button-theme-toggle">
-                {theme === "dark" ? <Sun className="w-5 h-5 text-yellow-500" /> : <Moon className="w-5 h-5 text-blue-500" />}
+                {theme === "dark" ? <Sun className="w-4 h-4 text-yellow-500" /> : <Moon className="w-4 h-4 text-muted-foreground" />}
               </button>
               <button onClick={() => setMenuOpen(!menuOpen)} className="p-2 rounded-lg hover:bg-accent transition-all duration-300" aria-label="Menu" data-testid="button-hamburger-menu">
                 <Menu className={`w-6 h-6 text-foreground transition-transform duration-300 ${menuOpen ? 'rotate-90' : ''}`} />
               </button>
             </div>
+          </div>
+          {/* CTA buttons row */}
+          <div className="flex gap-2 pb-2.5">
+            <Link href="/login" className="flex-1">
+              <Button variant="outline" size="sm" className="w-full rounded-full gap-1.5 border-border text-foreground hover:border-primary hover:text-primary" data-testid="button-nav-login">
+                <LogIn className="w-3.5 h-3.5" />
+                {t.nav.login}
+              </Button>
+            </Link>
+            <Link href="/contact" className="flex-1">
+              <Button size="sm" className="w-full rounded-full gap-1.5" data-testid="button-nav-contact">
+                <Mail className="w-3.5 h-3.5" />
+                {t.nav.contact}
+              </Button>
+            </Link>
           </div>
         </div>
       </nav>
@@ -152,6 +159,21 @@ function Navbar() {
               <button onClick={() => setMenuOpen(false)} className="p-1.5 rounded-lg hover:bg-accent transition-colors" aria-label={t.nav.close}>
                 <X className="w-4 h-4 text-foreground" />
               </button>
+            </div>
+            {/* Account shortcuts */}
+            <div className="p-3 pb-2 flex gap-2 border-b border-border">
+              <Link href="/login" className="flex-1">
+                <button onClick={() => setMenuOpen(false)} className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-border hover:bg-accent transition-colors text-sm text-foreground">
+                  <LogIn className="w-4 h-4 text-primary" />
+                  {t.nav.login}
+                </button>
+              </Link>
+              <Link href="/register" className="flex-1">
+                <button onClick={() => setMenuOpen(false)} className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-sm font-medium">
+                  <UserPlus className="w-4 h-4" />
+                  {t.nav.register}
+                </button>
+              </Link>
             </div>
             <div className="p-3 space-y-3">
               {menuGroups.map((group) => (
@@ -180,104 +202,83 @@ function Navbar() {
 function HeroSection() {
   const { t } = useLanguage();
   return (
-    <section className="relative flex flex-col justify-start pt-20 md:pt-24 lg:min-h-screen lg:pt-0 lg:justify-center overflow-x-hidden bg-white">
-      <div className="absolute top-1/4 right-0 w-72 h-72 md:w-96 md:h-96 bg-primary/5 rounded-full blur-3xl" style={{ zIndex: 1 }} />
-      <div className="absolute bottom-1/4 left-0 w-48 h-48 md:w-64 md:h-64 bg-primary/5 rounded-full blur-3xl" style={{ zIndex: 1 }} />
-      
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-32 relative z-10">
-        <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-start lg:items-center">
-          <div className="space-y-6 text-center lg:text-left">
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-slate-900 leading-tight">
-              {t.hero.title1}{" "}
-              <span className="text-primary">{t.hero.title2}</span>
-            </h1>
+    <section className="pt-32 pb-16 overflow-x-hidden bg-background">
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 text-center">
+        <h1 className="text-4xl sm:text-5xl font-extrabold text-foreground leading-tight mb-6">
+          {t.hero.title1}{" "}
+          <span className="text-primary">{t.hero.title2}</span>
+        </h1>
 
-            <p className="text-base sm:text-lg md:text-xl text-slate-600 w-full">
-              <span className="text-cyan-600 font-bold">ASHTECH PAY</span>{t.hero.desc}
-            </p>
+        <p className="text-base sm:text-lg text-muted-foreground mb-6 leading-relaxed">
+          <span className="font-bold text-foreground">ASHTECH PAY</span>{t.hero.desc}
+        </p>
 
-            <div className="space-y-3 text-left inline-block w-full">
-              {[t.hero.bullet1, t.hero.bullet2, t.hero.bullet3].map((item) => (
-                <div key={item} className="flex items-center gap-2 text-slate-700">
-                  <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  <span>{item}</span>
-                </div>
-              ))}
+        <div className="space-y-2.5 text-left max-w-sm mx-auto mb-8">
+          {[t.hero.bullet1, t.hero.bullet2, t.hero.bullet3].map((item) => (
+            <div key={item} className="flex items-center gap-2.5 text-muted-foreground">
+              <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              <span className="text-sm">{item}</span>
             </div>
+          ))}
+        </div>
 
-            <div className="flex flex-col gap-3 pt-2">
-              <Link href="/register" className="w-full">
-                <Button size="lg" className="w-full rounded-full text-base sm:text-lg px-8 py-6 font-semibold" data-testid="button-hero-register">
-                  {t.hero.cta}
-                </Button>
-              </Link>
-              <Link href="/login" className="w-full">
-                <Button size="lg" variant="outline" className="w-full rounded-full text-base sm:text-lg px-8 py-6 font-semibold border-2" data-testid="button-hero-login">
-                  {t.hero.ctaLogin}
-                </Button>
-              </Link>
-            </div>
+        <div className="flex flex-col gap-3 max-w-xs mx-auto">
+          <Link href="/register" className="w-full">
+            <Button size="lg" className="w-full rounded-full text-base font-semibold py-5" data-testid="button-hero-register">
+              {t.hero.cta}
+            </Button>
+          </Link>
+          <Link href="/login" className="w-full">
+            <Button size="lg" variant="outline" className="w-full rounded-full text-base font-semibold py-5" data-testid="button-hero-login">
+              {t.hero.ctaLogin}
+            </Button>
+          </Link>
+        </div>
 
-            <div className="flex justify-center pt-4"></div>
-          </div>
-          
-          <div className="relative lg:pl-8">
-            <div className="relative bg-card rounded-2xl border border-border p-6 shadow-2xl">
-              <div className="absolute -top-4 -right-4 w-20 h-20 bg-primary/20 rounded-full blur-2xl" />
-              <div className="absolute -bottom-4 -left-4 w-16 h-16 bg-primary/10 rounded-full blur-xl" />
-              
-              <div className="relative space-y-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
-                      <Wallet className="w-6 h-6 text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">{t.hero.totalBalance}</p>
-                      <p className="text-2xl font-bold text-foreground">1,250,000 XAF</p>
-                    </div>
-                  </div>
-                  <TrendingUp className="w-8 h-8 text-green-500" />
-                </div>
-                
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="bg-secondary/50 rounded-xl p-4 text-center hover-elevate cursor-pointer">
-                    <Send className="w-6 h-6 text-primary mx-auto mb-2" />
-                    <p className="text-xs text-muted-foreground">{t.hero.send}</p>
-                  </div>
-                  <div className="bg-secondary/50 rounded-xl p-4 text-center hover-elevate cursor-pointer">
-                    <ArrowDownUp className="w-6 h-6 text-primary mx-auto mb-2" />
-                    <p className="text-xs text-muted-foreground">{t.hero.receive}</p>
-                  </div>
-                  <div className="bg-secondary/50 rounded-xl p-4 text-center hover-elevate cursor-pointer">
-                    <CreditCard className="w-6 h-6 text-primary mx-auto mb-2" />
-                    <p className="text-xs text-muted-foreground">{t.hero.topup}</p>
-                  </div>
-                </div>
-                
-                <div className="space-y-3">
-                  <p className="text-sm font-medium text-muted-foreground">{t.hero.recentTx}</p>
-                  {[
-                    { name: "Jean Dupont", amount: "+50,000 XAF", type: "in" },
-                    { name: "Marie Claire", amount: "-25,000 XAF", type: "out" },
-                    { name: "Recharge MTN", amount: "+100,000 XAF", type: "in" },
-                  ].map((tx, i) => (
-                    <div key={i} className="flex items-center justify-between py-2 border-b border-border last:border-0">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${tx.type === 'in' ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
-                          <Users className={`w-4 h-4 ${tx.type === 'in' ? 'text-green-500' : 'text-red-500'}`} />
-                        </div>
-                        <span className="text-sm text-foreground">{tx.name}</span>
-                      </div>
-                      <span className={`text-sm font-medium ${tx.type === 'in' ? 'text-green-500' : 'text-red-500'}`}>{tx.amount}</span>
-                    </div>
-                  ))}
-                </div>
+        {/* Mini app preview */}
+        <div className="mt-12 bg-card rounded-2xl border border-border p-5 shadow-lg text-left max-w-sm mx-auto">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
+                <Wallet className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">{t.hero.totalBalance}</p>
+                <p className="text-xl font-bold text-foreground">1,250,000 XAF</p>
               </div>
             </div>
+            <TrendingUp className="w-6 h-6 text-green-500" />
           </div>
+          <div className="grid grid-cols-3 gap-2 mb-4">
+            {[
+              { icon: Send, label: t.hero.send },
+              { icon: ArrowDownUp, label: t.hero.receive },
+              { icon: CreditCard, label: t.hero.topup },
+            ].map(({ icon: Icon, label }) => (
+              <div key={label} className="bg-secondary/60 rounded-xl p-3 text-center">
+                <Icon className="w-5 h-5 text-primary mx-auto mb-1" />
+                <p className="text-xs text-muted-foreground">{label}</p>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs font-medium text-muted-foreground mb-2">{t.hero.recentTx}</p>
+          {[
+            { name: "Jean Dupont", amount: "+50,000 XAF", type: "in" },
+            { name: "Marie Claire", amount: "-25,000 XAF", type: "out" },
+            { name: "Recharge MTN", amount: "+100,000 XAF", type: "in" },
+          ].map((tx, i) => (
+            <div key={i} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+              <div className="flex items-center gap-2">
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center ${tx.type === 'in' ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
+                  <Users className={`w-3.5 h-3.5 ${tx.type === 'in' ? 'text-green-500' : 'text-red-500'}`} />
+                </div>
+                <span className="text-sm text-foreground">{tx.name}</span>
+              </div>
+              <span className={`text-sm font-semibold ${tx.type === 'in' ? 'text-green-500' : 'text-red-500'}`}>{tx.amount}</span>
+            </div>
+          ))}
         </div>
       </div>
     </section>
@@ -295,57 +296,55 @@ function OnlineSalesSection() {
             <span className="text-sm text-primary font-medium">{t.landing.onlineSalesTag}</span>
           </div>
           <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
-            <span className="text-cyan-600">{t.landing.onlineSalesTitle1}</span> {t.landing.onlineSalesTitle2}
+            <span className="text-primary">{t.landing.onlineSalesTitle1}</span> {t.landing.onlineSalesTitle2}
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">{t.landing.onlineSalesDesc}</p>
         </div>
         
-        <div className="grid lg:grid-cols-2 gap-12 lg:gap-20">
-          <Card className="p-8 bg-card border-border animate-on-scroll-left">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
-                <FileText className="w-6 h-6 text-primary" />
-              </div>
-              <h3 className="text-2xl font-bold text-foreground">{t.landing.digitalProducts}</h3>
+        <div className="grid lg:grid-cols-2 gap-6">
+          <div className="bg-card border border-border rounded-2xl p-7 shadow-sm hover:shadow-md transition-shadow animate-on-scroll-left">
+            <div className="w-14 h-14 bg-background border-2 border-border rounded-full flex items-center justify-center mb-5">
+              <FileText className="w-7 h-7 text-primary" />
             </div>
-            <ul className="space-y-4 mb-6">
+            <h3 className="text-xl font-bold text-foreground mb-3">{t.landing.digitalProducts}</h3>
+            <ul className="space-y-3 mb-6">
               {[t.landing.files, t.landing.courses, t.landing.privateAccess, t.landing.services].map((item) => (
-                <li key={item} className="flex items-center gap-3 text-muted-foreground">
-                  <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <li key={item} className="flex items-center gap-3 text-muted-foreground text-sm">
+                  <svg className="w-4 h-4 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
-                  <span>{item}</span>
+                  {item}
                 </li>
               ))}
             </ul>
-            <div className="flex items-center gap-2 text-primary">
-              <Send className="w-4 h-4" />
-              <span className="text-sm font-medium">{t.landing.autoDelivery}</span>
-            </div>
-          </Card>
+            <Link href="/register">
+              <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary border-b-2 border-primary pb-0.5 hover:opacity-80 transition-opacity">
+                {t.landing.autoDelivery} <ChevronRight className="w-4 h-4" />
+              </span>
+            </Link>
+          </div>
           
-          <Card className="p-8 bg-card border-border animate-on-scroll-right">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
-                <ShoppingBag className="w-6 h-6 text-primary" />
-              </div>
-              <h3 className="text-2xl font-bold text-foreground">{t.landing.physicalProducts}</h3>
+          <div className="bg-card border border-border rounded-2xl p-7 shadow-sm hover:shadow-md transition-shadow animate-on-scroll-right">
+            <div className="w-14 h-14 bg-background border-2 border-border rounded-full flex items-center justify-center mb-5">
+              <ShoppingBag className="w-7 h-7 text-primary" />
             </div>
-            <ul className="space-y-4 mb-6">
+            <h3 className="text-xl font-bold text-foreground mb-3">{t.landing.physicalProducts}</h3>
+            <ul className="space-y-3 mb-6">
               {[t.landing.clientInfo, t.landing.orderTracking, t.landing.salesManagement].map((item) => (
-                <li key={item} className="flex items-center gap-3 text-muted-foreground">
-                  <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <li key={item} className="flex items-center gap-3 text-muted-foreground text-sm">
+                  <svg className="w-4 h-4 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
-                  <span>{item}</span>
+                  {item}
                 </li>
               ))}
             </ul>
-            <div className="flex items-center gap-2 text-primary">
-              <History className="w-4 h-4" />
-              <span className="text-sm font-medium">{t.landing.txHistory}</span>
-            </div>
-          </Card>
+            <Link href="/register">
+              <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary border-b-2 border-primary pb-0.5 hover:opacity-80 transition-opacity">
+                {t.landing.txHistory} <ChevronRight className="w-4 h-4" />
+              </span>
+            </Link>
+          </div>
         </div>
       </div>
     </section>
@@ -372,11 +371,13 @@ function PaymentLinksSection() {
                 { icon: Clock, title: t.landing.expiry, desc: t.landing.expiryDesc },
                 { icon: Globe, title: t.landing.redirect, desc: t.landing.redirectDesc },
               ].map(({ icon: Icon, title, desc }) => (
-                <div key={title} className="flex items-start gap-3 p-4 bg-card rounded-xl border border-border">
-                  <Icon className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+                <div key={title} className="flex items-start gap-3 p-4 bg-card rounded-xl border border-border hover:border-primary/40 transition-colors">
+                  <div className="w-8 h-8 bg-background border border-border rounded-full flex items-center justify-center flex-shrink-0">
+                    <Icon className="w-4 h-4 text-primary" />
+                  </div>
                   <div>
-                    <h4 className="font-medium text-foreground text-sm">{title}</h4>
-                    <p className="text-xs text-muted-foreground">{desc}</p>
+                    <h4 className="font-bold text-foreground text-sm">{title}</h4>
+                    <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
                   </div>
                 </div>
               ))}
@@ -400,7 +401,7 @@ function ShareSection() {
               <span className="text-sm text-primary font-medium">{t.landing.shareTag}</span>
             </div>
             <h2 className="text-3xl sm:text-4xl font-bold text-foreground">
-              <span className="text-cyan-600">{t.landing.shareTitle1}</span> {t.landing.shareTitle2}
+              <span className="text-primary">{t.landing.shareTitle1}</span> {t.landing.shareTitle2}
             </h2>
             <p className="text-lg text-muted-foreground">{t.landing.shareDesc}</p>
             <div className="flex flex-wrap gap-3">
@@ -430,7 +431,7 @@ function WithdrawalSection() {
               <span className="text-sm text-primary font-medium">{t.landing.withdrawalTag}</span>
             </div>
             <h2 className="text-3xl sm:text-4xl font-bold text-foreground">
-              <span className="text-cyan-600">{t.landing.withdrawalTitle1}</span> {t.landing.withdrawalTitle2}
+              <span className="text-primary">{t.landing.withdrawalTitle1}</span> {t.landing.withdrawalTitle2}
             </h2>
             <p className="text-lg text-muted-foreground">{t.landing.withdrawalDesc}</p>
             <ul className="space-y-4">
@@ -496,13 +497,13 @@ function FeaturesSection() {
         </div>
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {features.map((feature, index) => (
-            <Card key={index} className="p-6 bg-card border-border hover-elevate transition-all duration-300 group" data-testid={`card-feature-${index}`}>
-              <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-primary/20 transition-colors">
-                <feature.icon className="w-6 h-6 text-primary" />
+            <div key={index} className="p-6 bg-card border border-border rounded-2xl hover:border-primary/40 hover:shadow-md transition-all duration-300 group" data-testid={`card-feature-${index}`}>
+              <div className="w-14 h-14 bg-background border-2 border-border rounded-full flex items-center justify-center mb-5 group-hover:border-primary/50 transition-colors">
+                <feature.icon className="w-7 h-7 text-primary" />
               </div>
-              <h3 className="text-xl font-semibold text-foreground mb-2">{feature.title}</h3>
-              <p className="text-muted-foreground">{feature.description}</p>
-            </Card>
+              <h3 className="text-lg font-bold text-foreground mb-2">{feature.title}</h3>
+              <p className="text-muted-foreground text-sm leading-relaxed">{feature.description}</p>
+            </div>
           ))}
         </div>
       </div>
@@ -540,11 +541,11 @@ function WhyAshtechSection() {
           <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">{t.landing.whyTitle}</h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">{t.landing.whyDesc}</p>
         </div>
-        <div className="flex flex-wrap justify-center gap-4 mb-16">
+        <div className="flex flex-wrap justify-center gap-3 mb-16">
           {targetAudience.map((item, index) => (
-            <div key={index} className="flex items-center gap-3 px-6 py-3 bg-card rounded-xl border border-border hover:border-primary/50 transition-colors">
-              <item.icon className="w-5 h-5 text-primary" />
-              <span className="text-foreground font-medium">{item.title}</span>
+            <div key={index} className="flex items-center gap-2.5 px-5 py-2.5 bg-card rounded-full border border-border hover:border-primary/50 hover:shadow-sm transition-all">
+              <item.icon className="w-4 h-4 text-primary" />
+              <span className="text-foreground text-sm font-semibold">{item.title}</span>
             </div>
           ))}
         </div>
@@ -554,12 +555,12 @@ function WhyAshtechSection() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
           {benefits.map((benefit, index) => (
             <div key={index} className="flex gap-4 items-start" data-testid={`benefit-${index}`}>
-              <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0">
+              <div className="w-12 h-12 bg-background border-2 border-border rounded-full flex items-center justify-center flex-shrink-0 shrink-0">
                 <benefit.icon className="w-6 h-6 text-primary" />
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-foreground mb-1">{benefit.title}</h3>
-                <p className="text-muted-foreground text-sm">{benefit.description}</p>
+                <h3 className="text-base font-bold text-foreground mb-1">{benefit.title}</h3>
+                <p className="text-muted-foreground text-sm leading-relaxed">{benefit.description}</p>
               </div>
             </div>
           ))}
@@ -583,7 +584,7 @@ function HowItWorksSection() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16 animate-on-scroll">
           <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
-            <span className="text-cyan-600">{t.landing.howTitle1}</span> {t.landing.howTitle2}
+            <span className="text-primary">{t.landing.howTitle1}</span> {t.landing.howTitle2}
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
             {t.landing.howDescPre}<span className="font-bold text-foreground">ASHTECH PAY</span>{t.landing.howDescPost}
@@ -594,10 +595,10 @@ function HowItWorksSection() {
             <div key={index} className="relative animate-on-scroll-scale" style={{ transitionDelay: `${index * 100}ms` }} data-testid={`step-${index}`}>
               {index < steps.length - 1 && <div className="hidden lg:block absolute top-8 left-full w-full h-px bg-gradient-to-r from-primary/50 to-transparent -translate-x-8" />}
               <div className="text-center">
-                <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border-2 border-primary/20">
-                  <span className="text-2xl font-bold text-primary">{step.number}</span>
+                <div className="w-16 h-16 bg-background border-2 border-primary rounded-full flex items-center justify-center mx-auto mb-4">
+                  <span className="text-2xl font-extrabold text-primary">{step.number}</span>
                 </div>
-                <h3 className="text-lg font-semibold text-foreground mb-2">{step.title}</h3>
+                <h3 className="text-base font-bold text-foreground mb-2">{step.title}</h3>
                 <p className="text-muted-foreground text-sm">{step.description}</p>
               </div>
             </div>
@@ -620,33 +621,33 @@ function SecuritySection() {
   ];
 
   return (
-    <section id="security" className="py-20 lg:py-32 bg-card/50">
+    <section id="security" className="py-20 lg:py-32 bg-slate-900 dark:bg-slate-950">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16 animate-on-scroll">
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20 mb-4">
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/20 rounded-full border border-primary/30 mb-4">
             <Shield className="w-4 h-4 text-primary" />
             <span className="text-sm text-primary font-medium">{t.landing.secTag}</span>
           </div>
-          <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
-            <span className="text-cyan-600">{t.landing.secTitle1}</span> & <span className="text-cyan-600">{t.landing.secTitle2}</span>
+          <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
+            <span className="text-primary">{t.landing.secTitle1}</span> & <span className="text-primary">{t.landing.secTitle2}</span>
           </h2>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            <span className="font-bold text-foreground">ASHTECH PAY</span> {t.landing.secDesc}
+          <p className="text-lg text-slate-300 max-w-2xl mx-auto">
+            <span className="font-bold text-white">ASHTECH PAY</span> {t.landing.secDesc}
           </p>
         </div>
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {securityFeatures.map((feature, index) => (
-            <Card key={index} className="p-6 bg-card border-border hover-elevate transition-all duration-300 group" data-testid={`security-${index}`}>
-              <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center mb-5 group-hover:bg-primary/20 transition-colors">
+            <div key={index} className="p-6 bg-slate-800/60 border border-slate-700 rounded-2xl hover:border-primary/50 transition-all duration-300 group" data-testid={`security-${index}`}>
+              <div className="w-14 h-14 bg-primary/15 border border-primary/30 rounded-full flex items-center justify-center mb-5 group-hover:bg-primary/25 transition-colors">
                 <feature.icon className="w-7 h-7 text-primary" />
               </div>
-              <h3 className="text-lg font-semibold text-foreground mb-3">{feature.title}</h3>
-              <p className="text-muted-foreground text-sm leading-relaxed">{feature.description}</p>
-            </Card>
+              <h3 className="text-lg font-semibold text-white mb-3">{feature.title}</h3>
+              <p className="text-slate-400 text-sm leading-relaxed">{feature.description}</p>
+            </div>
           ))}
         </div>
-        <div className="mt-12 p-6 bg-primary/5 border border-primary/20 rounded-2xl text-center animate-on-scroll">
-          <p className="text-muted-foreground text-sm max-w-2xl mx-auto">
+        <div className="mt-12 p-6 bg-primary/10 border border-primary/30 rounded-2xl text-center animate-on-scroll">
+          <p className="text-slate-300 text-sm max-w-2xl mx-auto">
             {t.landing.secNote}{" "}
             <Link href="/legal" className="text-primary hover:underline font-medium">{t.landing.secLink}</Link>
           </p>
@@ -666,7 +667,7 @@ function TestimonialsSection() {
             <span className="text-sm text-primary font-medium">{t.landing.testimonialsTag}</span>
           </div>
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-foreground mb-4">
-            <span className="text-cyan-600">{t.landing.testimonialsTitle1}</span> {t.landing.testimonialsTitle2}
+            <span className="text-primary">{t.landing.testimonialsTitle1}</span> {t.landing.testimonialsTitle2}
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">{t.landing.testimonialsDesc}</p>
         </div>
@@ -736,7 +737,7 @@ function ApiDeveloperSection() {
               <span className="text-sm text-primary font-medium">{t.landing.apiTag}</span>
             </div>
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-foreground mb-6 leading-tight">
-              <span className="text-cyan-600">{t.landing.apiTitle1}</span> {t.landing.apiTitle2}
+              <span className="text-primary">{t.landing.apiTitle1}</span> {t.landing.apiTitle2}
             </h2>
             <p className="text-lg text-muted-foreground mb-8 leading-relaxed">{t.landing.apiDesc}</p>
             <ul className="space-y-3 mb-8">
@@ -906,7 +907,7 @@ function CTASection() {
           <span className="text-sm text-primary font-medium">{t.landing.ctaTag2}</span>
         </div>
         <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-foreground mb-6">
-          <span className="text-cyan-600">{t.landing.ctaTitle1}</span> {t.landing.ctaTitle2}
+          <span className="text-primary">{t.landing.ctaTitle1}</span> {t.landing.ctaTitle2}
         </h2>
         <p className="text-lg text-muted-foreground mb-8 max-w-2xl mx-auto">{t.landing.ctaDesc}</p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center">

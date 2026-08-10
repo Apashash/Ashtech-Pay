@@ -64,7 +64,7 @@ const partners = [
 export default function AboutPage() {
   return (
     <div className="min-h-screen bg-background">
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-background border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <Link href="/">
@@ -116,17 +116,13 @@ export default function AboutPage() {
             <h2 className="text-2xl font-bold text-foreground mb-6">Nos services</h2>
             <div className="grid sm:grid-cols-2 gap-6">
               {services.map((service, index) => (
-                <Card key={index} className="p-6 bg-card border-border">
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0">
-                      <service.icon className="w-6 h-6 text-primary" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-semibold text-foreground mb-2">{service.title}</h3>
-                      <p className="text-muted-foreground text-sm">{service.description}</p>
-                    </div>
+                <div key={index} className="p-6 bg-card border border-border rounded-2xl hover:border-primary/40 hover:shadow-md transition-all duration-300">
+                  <div className="w-14 h-14 bg-background border-2 border-border rounded-full flex items-center justify-center mb-4">
+                    <service.icon className="w-7 h-7 text-primary" />
                   </div>
-                </Card>
+                  <h3 className="text-base font-bold text-foreground mb-2">{service.title}</h3>
+                  <p className="text-muted-foreground text-sm leading-relaxed">{service.description}</p>
+                </div>
               ))}
             </div>
           </section>
@@ -157,17 +153,13 @@ export default function AboutPage() {
             <h2 className="text-2xl font-bold text-foreground mb-6">Nos valeurs</h2>
             <div className="grid sm:grid-cols-2 gap-6">
               {values.map((value, index) => (
-                <Card key={index} className="p-6 bg-card border-border">
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0">
-                      <value.icon className="w-6 h-6 text-primary" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-semibold text-foreground mb-2">{value.title}</h3>
-                      <p className="text-muted-foreground text-sm">{value.description}</p>
-                    </div>
+                <div key={index} className="p-6 bg-card border border-border rounded-2xl hover:border-primary/40 hover:shadow-md transition-all duration-300">
+                  <div className="w-14 h-14 bg-background border-2 border-border rounded-full flex items-center justify-center mb-4">
+                    <value.icon className="w-7 h-7 text-primary" />
                   </div>
-                </Card>
+                  <h3 className="text-base font-bold text-foreground mb-2">{value.title}</h3>
+                  <p className="text-muted-foreground text-sm leading-relaxed">{value.description}</p>
+                </div>
               ))}
             </div>
           </section>
@@ -180,17 +172,15 @@ export default function AboutPage() {
             </p>
             <div className="space-y-4">
               {partners.map((partner) => (
-                <Card key={partner.name} className="p-5 bg-card border-border">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <Building2 className="w-5 h-5 text-primary" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-foreground">{partner.name}</p>
-                      <p className="text-sm text-muted-foreground">{partner.description}</p>
-                    </div>
+                <div key={partner.name} className="p-5 bg-card border border-border rounded-2xl flex items-center gap-4 hover:border-primary/40 transition-colors">
+                  <div className="w-12 h-12 bg-background border-2 border-border rounded-full flex items-center justify-center flex-shrink-0">
+                    <Building2 className="w-6 h-6 text-primary" />
                   </div>
-                </Card>
+                  <div>
+                    <p className="font-bold text-foreground">{partner.name}</p>
+                    <p className="text-sm text-muted-foreground">{partner.description}</p>
+                  </div>
+                </div>
               ))}
             </div>
           </section>
