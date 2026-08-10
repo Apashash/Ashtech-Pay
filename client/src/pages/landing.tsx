@@ -1041,7 +1041,6 @@ export default function LandingPage() {
       <SecuritySection />
       <ApiDeveloperSection />
       <TestimonialsSection />
-      <CTASection />
       <Footer />
     </div>
   );
