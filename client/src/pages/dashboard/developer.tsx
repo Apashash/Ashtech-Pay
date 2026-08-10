@@ -157,8 +157,8 @@ function CodeBlock({ code, language = "json" }: { code: string; language?: strin
       </div>
       {/* code area */}
       <div className="overflow-x-auto w-full max-w-full">
-        <pre className={`bg-[#1a1a1a] px-4 py-3.5 leading-relaxed max-w-full ${wrap ? "whitespace-pre-wrap break-all" : "whitespace-pre"}`}>
-          <code className="font-mono text-[13px]">{_renderToks(tokens)}</code>
+        <pre className={`bg-[#1a1a1a] px-4 py-3.5 leading-relaxed w-full min-w-full max-w-full ${wrap ? "whitespace-pre-wrap break-all" : "whitespace-pre"}`}>
+          <code className={`font-mono text-[13px] ${wrap ? "" : "inline-block min-w-max"}`}>{_renderToks(tokens)}</code>
         </pre>
       </div>
     </div>
