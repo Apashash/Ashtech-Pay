@@ -112,7 +112,7 @@ function _renderToks(tokens: _ST[]): React.ReactNode {
 }
 // ────────────────────────────────────────────────────────────────────────────
 
-/* ── CodeBlock matching AfribaPAY docs style ── */
+/* ── Code block ── */
 function CodeBlock({ code, language = "json" }: { code: string; language?: string }) {
   const [copied, setCopied] = useState(false);
   const [wrap, setWrap]   = useState(false);
@@ -165,7 +165,7 @@ function CodeBlock({ code, language = "json" }: { code: string; language?: strin
   );
 }
 
-/* ── Table components matching AfribaPAY style ── */
+/* ── Table components ── */
 function DocTable({ children }: { children: React.ReactNode }) {
   return (
     <div className="overflow-x-auto w-full border border-gray-300 rounded">
@@ -201,7 +201,7 @@ function IC({ children }: { children: React.ReactNode }) {
   return <code className="font-mono text-[12px] bg-gray-100 border border-gray-300 rounded px-1.5 py-0.5 text-gray-800">{children}</code>;
 }
 
-/* ── Method label (AfribaPAY plain-text style) ── */
+/* ── Method label ── */
 function Method({ m }: { m: string }) {
   const colors: Record<string, string> = {
     POST:   "text-[#e07a10] font-bold",
@@ -510,7 +510,7 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
             <SubH>Pays disponibles ({displayCountries.length}) — mis à jour en temps réel</SubH>
 
             <DocTable>
-              <DocThead cols={["Pays", "Code", "Devise", "Opérateurs"]} />
+              <DocThead cols={["Pays", "Code", "Devise", "Opérateurs", "OTP Required"]} />
               <tbody>
                 {displayCountries.map(({ code, name, currency, operators, otpOps }) => (
                   <DocTr key={code} cells={[
@@ -530,6 +530,9 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
                         </span>
                       ))}
                     </span>,
+                    otpOps.length > 0
+                      ? <span className="text-amber-700 font-semibold text-xs">Yes — {otpOps.join(", ")}</span>
+                      : <span className="text-gray-500 text-xs">No</span>,
                   ]} />
                 ))}
               </tbody>
@@ -751,75 +754,30 @@ async function showCryptoPayment(data) {
 
           {/* ──── PAYMENTS (collect) ──── */}
           <section id="collect" ref={el => sectionRefs.current.collect = el}>
-            <SectionH>PAYMENTS</SectionH>
-
-            <p className="text-[15px] text-gray-700 leading-relaxed mb-4">
-              Le corps de la requête doit être en format JSON et doit inclure les propriétés suivantes.
-              Ces propriétés sont applicables pour AfribaPAY-IN (PAYIN), AfribaPAY-OUT (PAYOUT), et AfribaPAY-BANK (Bank Transfer).
-            </p>
+            <SectionH>Initier un paiement</SectionH>
 
             <p className="text-[15px] text-gray-700 leading-relaxed mb-4">
               Initie un paiement Mobile Money via l'Ashtech Pay API. Le routage entre fournisseurs est automatique
-              selon le pays et l'opérateur. Le client reçoit une demande de validation sur son téléphone (USSD, OTP ou Wave).
-              Les frais sont configurés par l'administrateur et déduits automatiquement — le{" "}
-              <IC>credited_amount</IC> correspond au montant net crédité sur votre compte.
+              selon le pays et l'opérateur. Le client reçoit une demande de validation sur son téléphone
+              (USSD, OTP ou Wave selon l'opérateur). Les frais sont configurés par l'administrateur
+              et déduits automatiquement — le <IC>credited_amount</IC> correspond au montant net crédité
+              sur votre compte. Consultez <IC>GET /v1/fees</IC> pour les frais actuels.
             </p>
 
             <EndpointRow method="POST" path="/v1/collect" />
 
             <SubH>Corps de la requête (JSON)</SubH>
             <DocTable>
-              <DocThead cols={["Type", "Required", "Description"]} />
+              <DocThead cols={["Paramètre", "Type", "Statut", "Description"]} />
               <tbody>
-                {[
-                  { name: "operator",     req: true,  desc: "Mobile money operator like Wave, Orange, MTN, Moov, etc." },
-                  { name: "phone_number", req: true,  desc: "Customer's phone number." },
-                  { name: "otp_code",     req: false, desc: "OTP code for payment validation. Minimum 4 characters, maximum 6 characters (depending on the payment operator)." },
-                  { name: "amount",       req: true,  desc: "Montant brut à collecter." },
-                  { name: "currency",     req: true,  desc: "Devise du pays (XAF, XOF, CDF…)." },
-                  { name: "country_code", req: true,  desc: "Code ISO du pays (CM, SN, CI…)." },
-                  { name: "reference",    req: false, desc: "Référence unique de votre commande. Obligatoire lors du retry OTP." },
-                  { name: "notify_url",   req: false, desc: "URL webhook pour recevoir le résultat du paiement." },
-                ].map(r => (
-                  <DocTr key={r.name} cells={[
-                    <IC>{r.name}</IC>,
-                    r.req
-                      ? <span className="text-green-700 font-semibold text-xs">Yes</span>
-                      : <span className="text-gray-400 text-xs">No</span>,
-                    r.desc,
-                  ]} />
-                ))}
-              </tbody>
-            </DocTable>
-
-            <SubH>AfribaPAY-IN (PAYIN)</SubH>
-            <p className="text-[15px] text-gray-700 leading-relaxed mb-4">
-              AfribaPAY-IN ou PAYIN utilise la méthode POST pour initier le processus de réception de paiements ou dépôts.
-              Dans ce processus, une requête est envoyée à l'API Ashtech Pay avec les informations nécessaires
-              (telles que les informations du wallet mobile du payeur, <IC>otp_code</IC> si requis, montant et devise),
-              qui traite ensuite la transaction, permettant à l'utilisateur d'alimenter un compte ou compléter un paiement
-              via des plateformes de mobile money.
-            </p>
-
-            <p className="text-[15px] text-gray-700 leading-relaxed mb-4">
-              Orange dans certains pays nécessite le code OTP avant de traiter toute transaction.
-              Veuillez consulter la liste ci-dessous pour les détails.
-            </p>
-
-            <DocTable>
-              <DocThead cols={["Country", "Country Code", "Operator"]} />
-              <tbody>
-                {[
-                  { country: "Côte d'Ivoire", code: "CI", op: "Orange" },
-                  { country: "Burkina Faso",  code: "BF", op: "Orange" },
-                  { country: "Mali",          code: "ML", op: "Orange" },
-                  { country: "Sénégal",       code: "SN", op: "Orange" },
-                  { country: "Guinea",        code: "GN", op: "Orange" },
-                  { country: "Cameroon",      code: "CM", op: "Orange" },
-                  { country: "DR Congo",      code: "CD", op: "Orange" },
-                ].map(r => (
-                  <DocTr key={r.code + r.op} cells={[r.country, <IC>{r.code}</IC>, r.op]} />
-                ))}
+                <DocTr cells={[<IC>amount</IC>, "number", <span className="text-green-700 font-semibold text-xs">Requis</span>, "Montant brut à collecter"]} />
+                <DocTr cells={[<IC>currency</IC>, "string", <span className="text-green-700 font-semibold text-xs">Requis</span>, "Devise du pays (XAF, XOF, CDF…)"]} />
+                <DocTr cells={[<IC>phone</IC>, "string", <span className="text-green-700 font-semibold text-xs">Requis</span>, "Numéro de téléphone du payeur"]} />
+                <DocTr cells={[<IC>operator</IC>, "string", <span className="text-green-700 font-semibold text-xs">Requis</span>, "Nom exact de l'opérateur (depuis /v1/countries)"]} />
+                <DocTr cells={[<IC>country_code</IC>, "string", <span className="text-green-700 font-semibold text-xs">Requis</span>, "Code ISO du pays (CM, SN, CI…)"]} />
+                <DocTr cells={[<IC>reference</IC>, "string", <span className="text-gray-400 text-xs">Optionnel</span>, "Référence unique de votre commande. Obligatoire lors du retry OTP : renvoyer la valeur reçue dans la réponse 400."]} />
+                <DocTr cells={[<IC>otp</IC>, "string", <span className="text-gray-400 text-xs">Optionnel</span>, "Code OTP reçu par SMS. Doit toujours être accompagné du champ reference (valeur reçue dans le 400 otp_required)."]} />
+                <DocTr cells={[<IC>notify_url</IC>, "string", <span className="text-gray-400 text-xs">Optionnel</span>, "URL webhook pour recevoir le résultat du paiement"]} />
               </tbody>
             </DocTable>
 
@@ -827,39 +785,40 @@ async function showCryptoPayment(data) {
 
             <div className="grid lg:grid-cols-2 gap-5 mt-5">
               <div className="space-y-2 min-w-0">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1">Requête (JSON)</p>
-                <CodeBlock language="json" code={`{
-  "operator":"orange",
-  "otp_code":"123456",
-  "country":"SN",
-  "phone_number":"7723400000",
-  "amount":100,
-  "currency":"XOF",
-  "order_id":"order-1786328602",
-  "merchant_key": "KS9n3tAgKeBpd50csSozsUXLK",
-  "reference_id":"ref-...",
-  "lang":"fr"
-}`} />
-              </div>
-              <div className="space-y-2 min-w-0">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1">Requête (curl)</p>
-                <CodeBlock language="bash" code={`curl --location 'https://ashtechpay.top/v1/collect' \\
-  --header 'Content-Type: application/json' \\
-  --header 'Authorization: Bearer YOUR_API_KEY' \\
-  --data '{
-    "operator":"orange",
-    "otp_code":"123456",
-    "country":"SN",
-    "phone_number":"773400000",
-    "amount":100,
-    "currency":"XOF",
-    "notify_url":"https://monsite.com/webhook"
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1">Requête</p>
+                <CodeBlock language="javascript" code={`fetch("https://ashtechpay.top/v1/collect", {
+  method: "POST",
+  headers: {
+    "Authorization": "Bearer YOUR_API_KEY",
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    amount: 5000,
+    currency: "XAF",
+    phone: "670000000",
+    operator: "MTN Money",
+    country_code: "CM",
+    reference: "ORDER-001",
+    notify_url: "https://monsite.com/webhook"
+  })
+})`} />
+                <CodeBlock language="bash" code={`curl https://ashtechpay.top/v1/collect \\
+  -X POST \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "amount": 5000,
+    "currency": "XAF",
+    "phone": "670000000",
+    "operator": "MTN Money",
+    "country_code": "CM",
+    "reference": "ORDER-001",
+    "notify_url": "https://monsite.com/webhook"
   }'`} />
               </div>
-            </div>
-
-            <SubH>Réponse (202)</SubH>
-            <CodeBlock language="json" code={`{
+              <div className="space-y-2 min-w-0">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1">Réponse (202)</p>
+                <CodeBlock language="json" code={`{
   "transaction_id": "8f3e1c2d-...",
   "reference": "ORDER-001",
   "status": "pending",
@@ -872,6 +831,8 @@ async function showCryptoPayment(data) {
   "country_code": "CM",
   "created_at": "2026-03-15T14:00:00Z"
 }`} />
+              </div>
+            </div>
 
             <div className="rounded border border-yellow-300 bg-yellow-50 p-4 mt-5 space-y-3">
               <p className="text-sm font-semibold text-yellow-800">OTP requis — deux variantes selon l'opérateur</p>
