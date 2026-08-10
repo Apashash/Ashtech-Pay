@@ -641,7 +641,7 @@ export function downloadSDKDocs() {
     ["Endpoint collect",  "POST /v1/collect"],
     ["Authentification",  "Bearer YOUR_API_KEY"],
     ["Base URL",          "https://ashtechpay.top"],
-    ["Version",           "v1 — Mai 2026"],
+      ["Version",           "v1 — Août 2026"],
   ];
 
   let my2 = 140;
@@ -741,7 +741,7 @@ export function downloadSDKDocs() {
       ["Cameroun",       "CM","XAF", "MTN Money, Orange Money"],
       ["Cote d'Ivoire",  "CI","XOFC","Moov Money, MTN Money, Orange (OTP), Wave Money"],
       ["Gabon",          "GA","XAFG","Airtel Money, Moov Money"],
-      ["Mali",           "ML","XOF", "Moov Money, Orange Money"],
+      ["Mali",           "ML","XOFM","Moov Money, Orange Money"],
       ["Niger",          "NE","XOFN","Airtel Money"],
       ["RD Congo",       "CD","CDF", "Afri Money, Airtel, Mpesa Money, Orange, Vodacom"],
       ["Senegal",        "SN","XOFS","E-money, Free Money, Orange Money (OTP), Wave Money"],
@@ -838,7 +838,7 @@ async function displayCryptoPayment(data) {
   y = subHeading(doc, "OTP requis — Orange CI/SN/BF (USSD) ou OTP API", y);
   y = paragraph(doc, "Orange CI/SN/BF → OTP USSD : le serveur retourne un ussd_code a afficher au client, qui le compose sur son telephone (l'OTP s'affiche dans le menu, aucun SMS envoye). Le Mali (Orange Money) ne necessite pas d'OTP — flux standard. Pour un operateur configure en OTP API, le fournisseur envoie automatiquement le SMS et ussd_code = null. Dans les deux cas, la reponse 400 contient un champ 'reference' obligatoire pour l'etape 2.", y);
   y += 2;
-  y = codeBlock(doc, `// Etape 1 — Requete initiale (sans otp) → reponse 400\n{\n  "error": "otp_required",\n  "message": "OTP requis. Un code a ete envoye par SMS.",\n  "reference": "DEP-A1B2C3D4",   // ← a conserver absolument\n  "ussd_code": null               // null=SMS auto | "#144*82#"=USSD a composer\n}\n\n// Etape 2 — Retry avec OTP recu + reference du 400 → reponse 202\n{\n  "amount": 5000, "currency": "XOF", "phone": "07XXXXXXXX",\n  "operator": "Orange Money", "country_code": "CI",\n  "otp": "123456",\n  "reference": "DEP-A1B2C3D4",   // ← meme valeur que la reponse 400\n  "notify_url": "https://monsite.com/webhook"\n}`, y, "json");
+   y = codeBlock(doc, `// Etape 1 — Requete initiale (sans otp) → reponse 400\n{\n  "error": "otp_required",\n  "message": "OTP requis. Suivez les instructions de l'operateur.",\n  "reference": "DEP-A1B2C3D4",   // ← a conserver absolument\n  "ussd_code": null               // null=SMS auto | "#144*82#"=USSD a composer\n}\n\n// Etape 2 — Retry avec le code reel + reference du 400 → reponse 202\n{\n  "amount": 5000, "currency": "XOF", "phone": "07XXXXXXXX",\n  "operator": "Orange Money", "country_code": "CI",\n  "otp": "VOTRE_CODE_OTP",         // code recu ou affiche par l'operateur\n  "reference": "DEP-A1B2C3D4",   // ← meme valeur que la reponse 400\n  "notify_url": "https://monsite.com/webhook"\n}`, y, "json");
 
    // ── §6  Flux ──────────────────────────────────────────────────────────────
    y = sectionTitle(doc, "6. Flux de paiement", y);
@@ -887,10 +887,10 @@ async function displayCryptoPayment(data) {
 
    // ── §9  Webhooks ──────────────────────────────────────────────────────────
    y = sectionTitle(doc, "9. Webhooks", y);
-  y = paragraph(doc, "Quand une transaction atteint un etat final, Ashtech Pay envoie automatiquement une requete POST a la notify_url passee dans votre appel a /v1/collect. Le champ amount correspond au montant net apres frais, et total_amount au montant brut collecte.", y);
+   y = paragraph(doc, "Quand une transaction atteint un etat final, Ashtech Pay envoie automatiquement une requete POST a la notify_url passee dans votre appel a /v1/collect. Le champ amount correspond au montant net apres frais, et total_amount au montant brut collecte. Chaque livraison est dedupliquee, signee en HMAC-SHA256 et retentee automatiquement en cas d'echec temporaire.", y);
   y += 3;
   y = subHeading(doc, "Payload — paiement reussi", y);
-  y = codeBlock(doc, `{\n  "event":          "payment.completed",\n  "transaction_id": "8f3e1c2d-...",\n  "reference":      "ORDER-001",\n  "status":         "completed",\n  "amount":         4750,       // net apres frais\n  "total_amount":   5000,       // brut collecte\n  "currency":       "XAF",\n  "type":           "deposit",\n  "phone":          "670000000",\n  "timestamp":      "2026-03-15T14:02:17.000Z"\n}`, y, "json");
+   y = codeBlock(doc, `{\n  "event":              "payment.completed",\n  "transaction_id":     "8f3e1c2d-...",\n  "reference":          "ORDER-001",\n  "status":             "completed",\n  "amount":             4750,       // net apres frais\n  "total_amount":       5000,       // brut collecte\n  "fee_amount":         250,\n  "total_fee_amount":   250,\n  "currency":            "XAF",\n  "type":                "deposit",\n  "phone":               "670000000",\n  "timestamp":           "2026-03-15T14:02:17.000Z"\n}`, y, "json");
   y = subHeading(doc, "Evenements disponibles", y);
   y = table(doc,
     ["Evenement", "Declencheur"],
@@ -902,9 +902,12 @@ async function displayCryptoPayment(data) {
     ],
     y, [55, 115]
   );
-  y = subHeading(doc, "Handler — Node.js / Express", y);
+   y = subHeading(doc, "Verifier la signature HMAC", y);
+   y = paragraph(doc, "Le corps signe doit etre conserve exactement comme recu. Calculez HMAC-SHA256 sur timestamp + '.' + corps brut avec votre secret webhook, puis comparez l'en-tete X-Ashtech-Signature. Utilisez X-Ashtech-Event-Id pour dedupliquer les livraisons.", y);
+   y = codeBlock(doc, `import crypto from "node:crypto";\n\napp.post("/webhook", express.raw({ type: "application/json" }), (req, res) => {\n  const rawBody = req.body.toString("utf8");\n  const timestamp = req.header("X-Ashtech-Timestamp") || "";\n  const received = req.header("X-Ashtech-Signature") || "";\n  const expected = "sha256=" + crypto\n    .createHmac("sha256", process.env.ASHTECH_WEBHOOK_SECRET)\n    .update(timestamp + "." + rawBody)\n    .digest("hex");\n\n  const valid = received.length === expected.length &&\n    crypto.timingSafeEqual(Buffer.from(received), Buffer.from(expected));\n  if (!timestamp || !valid) return res.sendStatus(401);\n\n  const eventId = req.header("X-Ashtech-Event-Id");\n  // Ignorez eventId deja traite, puis parsez rawBody et repondez 200.\n  const payload = JSON.parse(rawBody);\n  return res.status(200).json({ received: true, event: payload.event });\n});`, y, "javascript");
+   y = subHeading(doc, "Handler — Node.js / Express", y);
   y = codeBlock(doc, `app.post("/webhook", express.json(), async (req, res) => {\n  // Toujours repondre 200 en premier\n  res.status(200).json({ received: true });\n\n  const { event, transaction_id, reference, amount, currency } = req.body;\n\n  if (event === "payment.completed") {\n    // amount = montant net (apres frais)\n    await markOrderAsPaid(reference, { transactionId: transaction_id, amount, currency });\n  }\n  if (event === "payment.failed")   { await cancelOrder(reference); }\n  if (event === "payout.completed") { await markPayoutDone(reference, { transactionId: transaction_id }); }\n  if (event === "payout.failed")    { await markPayoutFailed(reference); }\n});`, y, "javascript");
-  y = banner(doc, "info", "Bonnes pratiques : Repondez toujours HTTP 200 immediatement. Traitez la logique metier apres avoir repondu 200 (asynchrone). Verifiez le transaction_id dans votre base pour eviter les doublons. Votre notify_url doit etre une URL HTTPS publique (pas localhost).", y);
+   y = banner(doc, "info", "Bonnes pratiques : Verifiez la signature avant tout traitement. Repondez HTTP 200 immediatement, traitez la logique metier de facon asynchrone et dedupliquez avec X-Ashtech-Event-Id ou transaction_id. Votre notify_url doit etre une URL HTTPS publique (pas localhost).", y);
 
    // ── §10  Erreurs ──────────────────────────────────────────────────────────
    y = sectionTitle(doc, "10. Codes d'erreur", y);
