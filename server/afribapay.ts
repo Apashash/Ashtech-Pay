@@ -198,6 +198,8 @@ export interface AfribaPayinResult {
   status?: string;
   message?: string;
   provider_link?: string; // Wave/wallet redirect URL (e.g. https://pay.wave.com/c/...)
+  providerCode?: string;
+  providerStatus?: number;
   raw?: any;
 }
 
@@ -233,12 +235,24 @@ export async function initiateAfribaPayin(params: AfribaPayinParams): Promise<Af
     if (!res.ok || data.error) {
       // AfribaPay error shape: { "error": "server_error", "message": "..." }
       // data.error is a string code, not an object — read data.message for the human text.
-      return { success: false, message: data.error?.message || data.message || data.data?.message || "Erreur AfribaPay", raw: data };
+      return {
+        success: false,
+        message: data.error?.message || data.message || data.data?.message || "Erreur AfribaPay",
+        providerCode: typeof data.error === "string" ? data.error : (typeof data.code === "string" ? data.code : undefined),
+        providerStatus: res.status,
+        raw: data,
+      };
     }
 
     const d = data.data;
     if (d?.status === "FAILED" || d?.status === "ERROR") {
-      return { success: false, message: d.message || "Échec AfribaPay", raw: data };
+      return {
+        success: false,
+        message: d.message || "Échec AfribaPay",
+        providerCode: typeof d.code === "string" ? d.code : undefined,
+        providerStatus: res.status,
+        raw: data,
+      };
     }
 
     return {
@@ -274,6 +288,8 @@ export interface AfribaPayoutResult {
   order_id?: string;
   status?: string;
   message?: string;
+  providerCode?: string;
+  providerStatus?: number;
   raw?: any;
 }
 
@@ -312,12 +328,24 @@ export async function initiateAfribaPayout(params: AfribaPayoutParams): Promise<
     console.log(`[AfribaPay Payout] Response:`, JSON.stringify(maskPiiInObject(data)));
 
     if (!res.ok || data.error) {
-      return { success: false, message: data.error?.message || data.data?.message || "Erreur payout AfribaPay", raw: data };
+      return {
+        success: false,
+        message: data.error?.message || data.message || data.data?.message || "Erreur payout AfribaPay",
+        providerCode: typeof data.error === "string" ? data.error : (typeof data.code === "string" ? data.code : undefined),
+        providerStatus: res.status,
+        raw: data,
+      };
     }
 
     const d = data.data;
     if (d?.status === "FAILED" || d?.status === "ERROR") {
-      return { success: false, message: d.message || "Échec payout AfribaPay", raw: data };
+      return {
+        success: false,
+        message: d.message || "Échec payout AfribaPay",
+        providerCode: typeof d.code === "string" ? d.code : undefined,
+        providerStatus: res.status,
+        raw: data,
+      };
     }
 
     return {
@@ -544,7 +572,13 @@ export async function getAfribaPayOtpInfo(country: string, operatorCode: string)
 // ─── OTP initiation (POST /v1/pay/otp with empty otp_code — sends SMS) ──────
 // AfribaPay requires otp_code to be present in the body (even empty "") to
 // distinguish initiation from confirmation. Without it the endpoint returns 500.
-export async function initiateAfribaPayOtp(params: Omit<AfribaPayinParams, "return_url" | "cancel_url">): Promise<{ success: boolean; message?: string; raw?: any }> {
+export async function initiateAfribaPayOtp(params: Omit<AfribaPayinParams, "return_url" | "cancel_url">): Promise<{
+  success: boolean;
+  message?: string;
+  providerCode?: string;
+  providerStatus?: number;
+  raw?: any;
+}> {
   try {
     const headers = await authHeaders();
     const body = {
@@ -585,7 +619,13 @@ export async function initiateAfribaPayOtp(params: Omit<AfribaPayinParams, "retu
         || (typeof data === "string" && data.length < 200 ? data : null)
         || `Échec d'envoi du code OTP (HTTP ${res.status})`;
       console.error(`[AfribaPay OTP Init] FAILED status=${res.status} msg="${msg}"`);
-      return { success: false, message: msg, raw: data };
+      return {
+        success: false,
+        message: msg,
+        providerCode: typeof errObj?.error === "string" ? errObj.error : (typeof errObj?.code === "string" ? errObj.code : undefined),
+        providerStatus: res.status,
+        raw: data,
+      };
     }
 
     return { success: true, raw: data };
@@ -653,12 +693,24 @@ export async function confirmAfribaPayOtp(params: AfribaPayOtpParams): Promise<A
       const msg = errObj?.error?.message || errObj?.message || errObj?.data?.message
         || (typeof data === "string" && data.length < 200 ? data : null)
         || "Code OTP invalide ou expiré";
-      return { success: false, message: msg, raw: data };
+      return {
+        success: false,
+        message: msg,
+        providerCode: typeof errObj?.error === "string" ? errObj.error : (typeof errObj?.code === "string" ? errObj.code : undefined),
+        providerStatus: res.status,
+        raw: data,
+      };
     }
 
     const d = data?.data;
     if (d?.status === "FAILED" || d?.status === "ERROR") {
-      return { success: false, message: d?.message || "OTP rejeté par l'opérateur", raw: data };
+      return {
+        success: false,
+        message: d?.message || "OTP rejeté par l'opérateur",
+        providerCode: typeof d?.code === "string" ? d.code : undefined,
+        providerStatus: res.status,
+        raw: data,
+      };
     }
 
     return {

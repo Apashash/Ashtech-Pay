@@ -79,6 +79,7 @@ import { addPendingPayment, removePendingPayment, expireCryptoPaymentIfNeeded } 
 import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, sameCfaFamily, getConversionPairKey, maybeAutoConvert } from "./walletHelper";
 import { addPendingPayout, removePendingPayout } from "./payoutPoller";
 import { enqueueMerchantWebhook } from "./merchantWebhook";
+import { buildProviderErrorPayload } from "./providerErrors";
 import { addSSEClient, removeSSEClient, setActiveTicket, isUserOnline, getOnlineUserIds, getAdminViewingTicket, getUserViewingTicket, notifyUser, notifyAdmins, broadcastOnlineStatus, notifyUserForceLogout, notifyOtherSessionsForceLogout, notifyAllUsersForceLogout, notifySpecificSessionForceLogout } from "./sse";
 import { sendClean404 } from "./botGuard";
 import {
@@ -1409,6 +1410,15 @@ function sanitizeGatewayMessage(msg: string | null | undefined, fallback: string
     return fallback;
   }
   return msg.trim();
+}
+
+function createProviderFailure(
+  message: string,
+  details: { provider: string; raw?: unknown; providerCode?: unknown; providerStatus?: unknown },
+): Error & typeof details {
+  const error = new Error(message) as Error & typeof details;
+  Object.assign(error, details);
+  return error;
 }
 
 export async function registerRoutes(
@@ -14058,12 +14068,17 @@ export async function registerRoutes(
           providerCode ? `code=${providerCode}` : "",
         );
         return res.status(502).json({
-          error: providerCode === "provider_invalid_response"
-            ? "provider_invalid_response"
-            : "gateway_error",
-          message: chargeError?.message || "Impossible de générer l'adresse crypto.",
+          ...buildProviderErrorPayload({
+            error: providerCode === "provider_invalid_response"
+              ? "provider_invalid_response"
+              : "gateway_error",
+            message: chargeError?.message,
+            fallback: "Impossible de générer l'adresse crypto.",
+            provider: "izichange",
+            providerCode,
+            providerStatus: Number.isFinite(providerStatus) ? providerStatus : undefined,
+          }),
           request_id: requestId,
-          ...(Number.isFinite(providerStatus) ? { provider_status: providerStatus } : {}),
         });
       }
        if (selectedNetwork.memoRequired && !charge.memo) {
@@ -14350,7 +14365,16 @@ export async function registerRoutes(
         const existingTxOtp = await storage.getTransactionByReference(req.body.reference as string);
         if (!confirmedResponse.success) {
           if (existingTxOtp) await storage.updateTransactionStatus(existingTxOtp.id, "failed");
-          return res.status(502).json({ error: "gateway_error", message: sanitizeGatewayMessage(confirmedResponse.message, "Code OTP invalide ou expiré.") });
+          return res.status(502).json(buildProviderErrorPayload({
+            error: "gateway_error",
+            message: confirmedResponse.message,
+            fallback: "Code OTP invalide ou expiré.",
+            provider: "afribapay",
+            raw: confirmedResponse.raw,
+            providerCode: confirmedResponse.providerCode,
+            providerStatus: confirmedResponse.providerStatus,
+            sensitiveValues: [phone],
+          }));
         }
         const extRefOtp = confirmedResponse.transaction_id || (req.body.reference as string);
         if (existingTxOtp) {
@@ -14448,7 +14472,16 @@ export async function registerRoutes(
             });
             if (!otpInitResultPre.success) {
               await storage.updateTransactionStatus(txPre.id, "failed");
-              return res.status(502).json({ error: "gateway_error", message: sanitizeGatewayMessage(otpInitResultPre.message, "Impossible d'envoyer le code OTP.") });
+              return res.status(502).json(buildProviderErrorPayload({
+                error: "gateway_error",
+                message: otpInitResultPre.message,
+                fallback: "Impossible d'envoyer le code OTP.",
+                provider: "afribapay",
+                raw: otpInitResultPre.raw,
+                providerCode: otpInitResultPre.providerCode,
+                providerStatus: otpInitResultPre.providerStatus,
+                sensitiveValues: [phone],
+              }));
             }
           }
           // USSD-type OTP: user dials the USSD code shown in ussd_code — no SMS
@@ -14585,7 +14618,16 @@ export async function registerRoutes(
           });
         } else {
           await storage.updateTransactionStatus(transaction.id, "failed");
-          return res.status(502).json({ error: "gateway_error", message: sanitizeGatewayMessage(afribaResponse.message, "Échec du paiement Mobile Money.") });
+          return res.status(502).json(buildProviderErrorPayload({
+            error: "gateway_error",
+            message: afribaResponse.message,
+            fallback: "Échec du paiement Mobile Money.",
+            provider: "afribapay",
+            raw: afribaResponse.raw,
+            providerCode: afribaResponse.providerCode,
+            providerStatus: afribaResponse.providerStatus,
+            sensitiveValues: [phone],
+          }));
         }
       } else {
         // PixPay
@@ -14632,7 +14674,16 @@ export async function registerRoutes(
           }
         } else {
           await storage.updateTransactionStatus(transaction.id, "failed");
-          return res.status(502).json({ error: "gateway_error", message: sanitizeGatewayMessage(pixpayResponse.message, "Échec du paiement Mobile Money.") });
+          return res.status(502).json(buildProviderErrorPayload({
+            error: "gateway_error",
+            message: pixpayResponse.providerMessage || pixpayResponse.message,
+            fallback: "Échec du paiement Mobile Money.",
+            provider: "pixpay",
+            raw: pixpayResponse.raw,
+            providerCode: pixpayResponse.providerCode,
+            providerStatus: pixpayResponse.providerStatus,
+            sensitiveValues: [phone],
+          }));
         }
       }
 
@@ -15140,7 +15191,17 @@ export async function registerRoutes(
               redirectUrl: `${appBase}/hpay/${hpSession.id}?status=success`,
               redirectErrorUrl: `${appBase}/hpay/${hpSession.id}?status=cancelled`,
             });
-            if (!waveRes.success) throw new Error(waveRes.message || "Erreur PixPay Wave");
+            if (!waveRes.success) {
+              throw createProviderFailure(
+                waveRes.providerMessage || waveRes.message || "Erreur PixPay Wave",
+                {
+                  provider: "pixpay",
+                  raw: waveRes.raw,
+                  providerCode: waveRes.providerCode,
+                  providerStatus: waveRes.providerStatus,
+                },
+              );
+            }
             const extRef = waveRes.transactionId || txRef;
             await storage.updateTransactionExternalReference(tx.id, extRef);
             payResult = { flow: "wave", wave_url: waveRes.waveUrl || null, ussd_code: null, extRef };
@@ -15149,7 +15210,17 @@ export async function registerRoutes(
             payResult = { flow: "otp_ussd", ussd_code: ussdCode, extRef: txRef };
           } else {
             const ussdRes = await initiatePixPayUssd(pixBaseParams);
-            if (!ussdRes.success) throw new Error(ussdRes.message || "Erreur PixPay USSD");
+            if (!ussdRes.success) {
+              throw createProviderFailure(
+                ussdRes.providerMessage || ussdRes.message || "Erreur PixPay USSD",
+                {
+                  provider: "pixpay",
+                  raw: ussdRes.raw,
+                  providerCode: ussdRes.providerCode,
+                  providerStatus: ussdRes.providerStatus,
+                },
+              );
+            }
             const extRef = ussdRes.transactionId || txRef;
             await storage.updateTransactionExternalReference(tx.id, extRef);
             payResult = { flow: "ussd_push", ussd_code: null, extRef };
@@ -15168,7 +15239,17 @@ export async function registerRoutes(
             order_id: txRef,
             reference_id: txRef,
           });
-          if (!afribaResponse.success) throw new Error(afribaResponse.message || "Erreur AfribaPay");
+          if (!afribaResponse.success) {
+            throw createProviderFailure(
+              afribaResponse.message || "Erreur AfribaPay",
+              {
+                provider: "afribapay",
+                raw: afribaResponse.raw,
+                providerCode: afribaResponse.providerCode,
+                providerStatus: afribaResponse.providerStatus,
+              },
+            );
+          }
           const extRef = afribaResponse.transaction_id || txRef;
           await storage.updateTransactionExternalReference(tx.id, extRef);
           payResult = { flow: "ussd_push", ussd_code: null, extRef };
@@ -15178,7 +15259,16 @@ export async function registerRoutes(
       } catch (payErr: any) {
         await storage.updateHostedPaymentSession(hpSession.id, { status: "failed" });
         await storage.updateTransactionStatus(tx.id, "failed");
-        return res.status(502).json({ error: "payment_initiation_failed", message: payErr?.message || "Échec de l'initiation du paiement." });
+        return res.status(502).json(buildProviderErrorPayload({
+          error: "payment_initiation_failed",
+          message: payErr?.message,
+          fallback: "Échec de l'initiation du paiement.",
+          provider: payErr?.provider || provider,
+          raw: payErr?.raw,
+          providerCode: payErr?.providerCode,
+          providerStatus: payErr?.providerStatus,
+          sensitiveValues: [phone],
+        }));
       }
 
       // Register in poller

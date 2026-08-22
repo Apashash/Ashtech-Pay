@@ -229,6 +229,10 @@ export interface PixPayinResult {
   waveUrl?: string;       // Wave payment URL (for wave operators only)
   status?: string;
   message?: string;
+  /** Exact message returned by PixPay, preserved for merchant API diagnostics. */
+  providerMessage?: string;
+  providerCode?: string;
+  providerStatus?: number | string;
   raw?: any;
 }
 
@@ -289,7 +293,15 @@ async function callPixPay(body: Record<string, any>, logLabel: string): Promise<
     const state = (d?.state || "").toUpperCase();
     console.error(`[PixPay ${logLabel}] FAILED — statut_code=${data.statut_code} | state=${state} | pix_tx=${txId} | response="${d?.response}" | msg="${data.message}"`);
     const humanMsg = humanizePixPayError(errMessage);
-    return { success: false, message: humanMsg, transactionId: txId, raw: data };
+    return {
+      success: false,
+      message: humanMsg,
+      providerMessage: typeof errMessage === "string" ? errMessage : undefined,
+      providerCode: typeof d?.code === "string" ? d.code : (typeof data.code === "string" ? data.code : undefined),
+      providerStatus: data.statut_code,
+      transactionId: txId,
+      raw: data,
+    };
   }
 
   if (!d) {
@@ -300,7 +312,15 @@ async function callPixPay(body: Record<string, any>, logLabel: string): Promise<
   if (state === "FAILED" || state === "CANCELLED") {
     const errMessage = d.response || data.message;
     console.error(`[PixPay ${logLabel}] Transaction FAILED — pix_tx=${d.transaction_id} | response="${d.response}" | state=${state}`);
-    return { success: false, message: humanizePixPayError(errMessage) || "Transaction rejetée par l'opérateur", transactionId: d.transaction_id, raw: data };
+    return {
+      success: false,
+      message: humanizePixPayError(errMessage) || "Transaction rejetée par l'opérateur",
+      providerMessage: typeof errMessage === "string" ? errMessage : undefined,
+      providerCode: typeof d?.code === "string" ? d.code : (typeof data.code === "string" ? data.code : undefined),
+      providerStatus: data.statut_code,
+      transactionId: d.transaction_id,
+      raw: data,
+    };
   }
 
   // Wave operators return sms_link (payment URL)
