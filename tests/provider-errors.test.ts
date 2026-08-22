@@ -21,7 +21,6 @@ test("provider errors retain the upstream message and safe diagnostics", () => {
   assert.deepEqual(payload, {
     error: "gateway_error",
     message: "Le solde du portefeuille mobile est insuffisant.",
-    provider: "pixpay",
     provider_code: "insufficient_balance",
     provider_status: 422,
   });
@@ -58,6 +57,21 @@ test("provider errors redact echoed phone numbers and sensitive request values",
   );
 });
 
+test("provider error messages do not expose the upstream provider name", () => {
+  const payload = buildProviderErrorPayload({
+    error: "gateway_error",
+    message: "PixPay et AfribaPay ont refusé la transaction via IziChange.",
+    fallback: "Paiement impossible.",
+    provider: "pixpay",
+  });
+
+  assert.equal(
+    payload.message,
+    "le fournisseur de paiement et le fournisseur de paiement ont refusé la transaction via le fournisseur de paiement.",
+  );
+  assert.equal("provider" in payload, false);
+});
+
 test("provider errors use the documented fallback when the provider sends no message", () => {
   const payload = buildProviderErrorPayload({
     error: "gateway_error",
@@ -69,6 +83,5 @@ test("provider errors use the documented fallback when the provider sends no mes
   assert.deepEqual(payload, {
     error: "gateway_error",
     message: "Le fournisseur de paiement n'a fourni aucun détail.",
-    provider: "afribapay",
   });
 });

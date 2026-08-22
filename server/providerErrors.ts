@@ -48,6 +48,9 @@ function redactSensitiveText(message: string, sensitiveValues: unknown[] = []): 
     }
   }
 
+  // Do not expose the upstream provider's brand in merchant-facing messages.
+  safeMessage = safeMessage.replace(/\b(?:AfribaPay|PixPay|IziChange)\b/gi, "le fournisseur de paiement");
+
   // Provider messages occasionally echo a destination phone number or an
   // identifier. Never forward long digit sequences from an upstream message.
   return safeMessage.replace(
@@ -108,7 +111,6 @@ export function buildProviderErrorPayload(
   return {
     error: options.error,
     message,
-    ...(options.provider ? { provider: options.provider } : {}),
     ...(providerCode ? { provider_code: providerCode } : {}),
     ...(providerStatus !== undefined ? { provider_status: providerStatus } : {}),
   };
