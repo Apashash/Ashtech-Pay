@@ -304,10 +304,19 @@ app.use((req, res, next) => {
     // Prevents internal error messages and stack traces leaking to clients.
     if (isProd && res.statusCode >= 500 && bodyJson && typeof bodyJson === "object") {
       const isCryptoApi = req.path === "/v1/crypto/collect" || req.path === "/v1/crypto/assets";
-      const sanitized = isCryptoApi
+      const isMerchantProviderError =
+        req.path === "/v1/collect" ||
+        /^\/api\/public\/hosted-session\/[^/]+\/pay$/.test(req.path);
+      const isSafeProviderFailure =
+        isMerchantProviderError &&
+        (bodyJson.error === "gateway_error" ||
+          bodyJson.error === "payment_initiation_failed" ||
+          bodyJson.error === "provider_invalid_response");
+      const sanitized = isCryptoApi || isSafeProviderFailure
         ? {
             ...(typeof bodyJson.error === "string" ? { error: bodyJson.error } : { error: "server_error" }),
             ...(typeof bodyJson.message === "string" ? { message: bodyJson.message } : {}),
+            ...(typeof bodyJson.provider_code === "string" ? { provider_code: bodyJson.provider_code } : {}),
             ...(typeof bodyJson.stage === "string" ? { stage: bodyJson.stage } : {}),
             ...(typeof bodyJson.detail_code === "string" ? { detail_code: bodyJson.detail_code } : {}),
             ...(typeof bodyJson.request_id === "string" ? { request_id: bodyJson.request_id } : {}),
