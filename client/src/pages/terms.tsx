@@ -20,14 +20,27 @@ const content = {
     s1_3p: "Pour utiliser nos services, vous devez créer un compte en fournissant des informations exactes et complètes. Vous êtes responsable de la confidentialité de vos identifiants de connexion et de toutes les activités effectuées sous votre compte.",
     s1_4h: "4. Utilisation autorisée",
     s1_4p: "Vous vous engagez à utiliser Ashtech Pay uniquement à des fins légales et conformément aux lois applicables. Toute utilisation frauduleuse, illégale ou abusive est strictement interdite et peut entraîner la suspension de votre compte.",
-    s1_5h: "5. Frais et commissions",
-    s1_5p: "Les frais applicables aux transactions sont clairement indiqués avant chaque opération. Ashtech Pay se réserve le droit de modifier ses tarifs avec un préavis raisonnable.",
-    s1_6h: "6. Limitation de responsabilité",
-    s1_6p: "Ashtech Pay ne peut être tenu responsable des dommages indirects, pertes de données ou interruptions de service résultant de l'utilisation de la plateforme, sauf en cas de faute grave de notre part.",
-    s1_7h: "7. Modification des conditions",
-    s1_7p: "Nous nous réservons le droit de modifier ces conditions à tout moment. Les utilisateurs seront informés des changements significatifs par email ou notification sur la plateforme.",
-    s1_8h: "8. Contact",
-    s1_8p: "Pour toute question concernant ces conditions, veuillez nous contacter via notre page de contact ou à",
+     s1_5h: "5. Activités interdites et non conformes",
+     s1_5p: "Ashtech Pay n'accepte pas les marchands, projets ou transactions liés à des activités illégales, dangereuses, trompeuses, non déclarées ou incompatibles avec nos obligations réglementaires. Sont notamment interdits :",
+     s1_5list: [
+       "Les systèmes de type Ponzi, pyramides, chaînes de parrainage frauduleuses et autres mécanismes promettant des rendements irréalistes.",
+       "Les prêts d'argent en ligne, services de crédit, collecte d'épargne, investissement, financement participatif ou autres services financiers non agréés.",
+       "La vente de produits physiques ou de services dont la nature, l'origine, la conformité, la livraison ou le bénéficiaire ne peuvent pas être clairement établis.",
+       "Le blanchiment de capitaux, le financement du terrorisme, la fraude, l'escroquerie, l'usurpation d'identité, le phishing et les fausses collectes.",
+       "Le trafic ou la vente de drogues, d'armes, de biens volés, de contrefaçons, de produits interdits ou d'espèces protégées.",
+       "Les jeux d'argent, paris, loteries, casinos ou activités assimilées non autorisés par les autorités compétentes.",
+       "Les contenus ou services liés à l'exploitation sexuelle, aux abus, à la violence, à la haine, au terrorisme ou à l'extrémisme violent.",
+       "Le piratage informatique, la vente de données obtenues illégalement, les logiciels malveillants et toute activité mettant en danger des personnes ou des systèmes.",
+     ],
+     s1_5footer: "Cette liste n'est pas exhaustive. Ashtech Pay peut refuser, suspendre ou signaler toute autre activité illégale, dangereuse, trompeuse, non conforme ou dont la nature demeure insuffisamment claire, conformément à la réglementation applicable.",
+     s1_6h: "6. Frais et commissions",
+     s1_6p: "Les frais applicables aux transactions sont clairement indiqués avant chaque opération. Ashtech Pay se réserve le droit de modifier ses tarifs avec un préavis raisonnable.",
+     s1_7h: "7. Limitation de responsabilité",
+     s1_7p: "Ashtech Pay ne peut être tenu responsable des dommages indirects, pertes de données ou interruptions de service résultant de l'utilisation de la plateforme, sauf en cas de faute grave de notre part.",
+     s1_8h: "8. Modification des conditions",
+     s1_8p: "Nous nous réservons le droit de modifier ces conditions à tout moment. Les utilisateurs seront informés des changements significatifs par email ou notification sur la plateforme.",
+     s1_9h: "9. Contact",
+     s1_9p: "Pour toute question concernant ces conditions, veuillez nous contacter via notre page de contact ou à",
 
     s2title: "Politique de confidentialité",
     s2_1h: "1. Collecte des données",
@@ -109,14 +122,27 @@ const content = {
     s1_3p: "To use our services, you must create an account by providing accurate and complete information. You are responsible for the confidentiality of your login credentials and all activities carried out under your account.",
     s1_4h: "4. Permitted Use",
     s1_4p: "You agree to use Ashtech Pay only for lawful purposes and in accordance with applicable laws. Any fraudulent, illegal or abusive use is strictly prohibited and may result in the suspension of your account.",
-    s1_5h: "5. Fees and Commissions",
-    s1_5p: "Applicable transaction fees are clearly indicated before each operation. Ashtech Pay reserves the right to modify its rates with reasonable prior notice.",
-    s1_6h: "6. Limitation of Liability",
-    s1_6p: "Ashtech Pay cannot be held liable for indirect damages, data loss or service interruptions resulting from the use of the platform, except in cases of gross negligence on our part.",
-    s1_7h: "7. Modification of Terms",
-    s1_7p: "We reserve the right to modify these terms at any time. Users will be informed of significant changes by email or notification on the platform.",
-    s1_8h: "8. Contact",
-    s1_8p: "For any questions regarding these terms, please contact us via our contact page or at",
+     s1_5h: "5. Prohibited and Non-Compliant Activities",
+     s1_5p: "Ashtech Pay does not accept merchants, projects or transactions connected to illegal, dangerous, deceptive, undeclared activities or activities incompatible with our regulatory obligations. This includes, in particular:",
+     s1_5list: [
+       "Ponzi schemes, pyramid schemes, fraudulent referral chains and other mechanisms promising unrealistic returns.",
+       "Online lending, credit services, deposit-taking, investment, crowdfunding or other unlicensed financial services.",
+       "The sale of physical goods or services whose nature, origin, compliance, delivery or beneficiary cannot be clearly established.",
+       "Money laundering, terrorist financing, fraud, scams, identity theft, phishing and false fundraising campaigns.",
+       "The trafficking or sale of drugs, weapons, stolen goods, counterfeit goods, prohibited products or protected species.",
+       "Unauthorized gambling, betting, lotteries, casinos or similar activities.",
+       "Content or services involving sexual exploitation, abuse, violence, hate, terrorism or violent extremism.",
+       "Hacking, the sale of unlawfully obtained data, malware and any activity that endangers people or systems.",
+     ],
+     s1_5footer: "This list is not exhaustive. Ashtech Pay may refuse, suspend or report any other illegal, dangerous, deceptive, non-compliant activity or activity whose nature remains insufficiently clear, in accordance with applicable regulations.",
+     s1_6h: "6. Fees and Commissions",
+     s1_6p: "Applicable transaction fees are clearly indicated before each operation. Ashtech Pay reserves the right to modify its rates with reasonable prior notice.",
+     s1_7h: "7. Limitation of Liability",
+     s1_7p: "Ashtech Pay cannot be held liable for indirect damages, data loss or service interruptions resulting from the use of the platform, except in cases of gross negligence on our part.",
+     s1_8h: "8. Modification of Terms",
+     s1_8p: "We reserve the right to modify these terms at any time. Users will be informed of significant changes by email or notification on the platform.",
+     s1_9h: "9. Contact",
+     s1_9p: "For any questions regarding these terms, please contact us via our contact page or at",
 
     s2title: "Privacy Policy",
     s2_1h: "1. Data Collection",
@@ -222,19 +248,30 @@ export default function TermsPage() {
           <section>
             <h2 className="text-2xl font-bold text-foreground mb-6 pb-2 border-b border-border">{c.s1title}</h2>
             <div className="space-y-6">
-              {[
-                [c.s1_1h, c.s1_1p], [c.s1_2h, c.s1_2p], [c.s1_3h, c.s1_3p],
-                [c.s1_4h, c.s1_4p], [c.s1_5h, c.s1_5p], [c.s1_6h, c.s1_6p], [c.s1_7h, c.s1_7p],
-              ].map(([h, p]) => (
+               {[
+                 [c.s1_1h, c.s1_1p], [c.s1_2h, c.s1_2p], [c.s1_3h, c.s1_3p],
+                 [c.s1_4h, c.s1_4p], [c.s1_6h, c.s1_6p], [c.s1_7h, c.s1_7p], [c.s1_8h, c.s1_8p],
+               ].map(([h, p]) => (
                 <div key={h}>
                   <h3 className="text-lg font-semibold text-foreground mb-2">{h}</h3>
                   <p className="text-muted-foreground leading-relaxed">{p}</p>
                 </div>
               ))}
+               <div className="p-5 bg-amber-500/5 border border-amber-500/20 rounded-xl">
+                 <h3 className="text-lg font-semibold text-foreground mb-2 flex items-center gap-2">
+                   <AlertTriangle className="w-5 h-5 text-amber-500" />
+                   {c.s1_5h}
+                 </h3>
+                 <p className="text-muted-foreground leading-relaxed">{c.s1_5p}</p>
+                 <ul className="mt-4 list-disc pl-6 text-muted-foreground space-y-2">
+                   {c.s1_5list.map(item => <li key={item}>{item}</li>)}
+                 </ul>
+                 <p className="text-muted-foreground leading-relaxed mt-4">{c.s1_5footer}</p>
+               </div>
               <div>
-                <h3 className="text-lg font-semibold text-foreground mb-2">{c.s1_8h}</h3>
+                 <h3 className="text-lg font-semibold text-foreground mb-2">{c.s1_9h}</h3>
                 <p className="text-muted-foreground leading-relaxed">
-                  {c.s1_8p}{" "}
+                   {c.s1_9p}{" "}
                   <a href="mailto:support@ashtechpay.top" className="text-primary hover:underline">support@ashtechpay.top</a>.
                 </p>
               </div>
