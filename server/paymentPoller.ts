@@ -1,6 +1,7 @@
 import { storage } from "./storage";
 import { checkAfribaPayStatus, isAfribaPayCircuitOpen } from "./afribapay";
 import { checkPixPayStatus } from "./pixpay";
+import { getPawaPayDeposit, isPawaPayUuidV4 } from "./pawapay";
 import { creditUserWallet } from "./walletHelper";
 import { sendPayerConfirmationEmail } from "./email";
 import { notifyDepositConfirmed, notifyDepositFailed } from "./telegram";
@@ -116,6 +117,12 @@ async function checkPaymentStatus(payment: PendingPayment): Promise<"pending" | 
       );
       console.log(`[PaymentPoller] PixPay status for ${payment.reference}: ${result.status}`);
       return result.status;
+    } else if (payment.provider === "pawapay") {
+      // PawaPay's UUID is persisted as externalReference; never query using
+      // our merchant-facing reference.
+      const result = await getPawaPayDeposit(payment.externalReference);
+      console.log(`[PaymentPoller] PawaPay status for ${payment.reference}: ${result.status}`);
+      return result.status;
     } else {
       console.error(`[PaymentPoller] Unsupported payment provider for ${payment.reference}`);
       return "failed";
@@ -131,7 +138,7 @@ async function checkPaymentStatus(payment: PendingPayment): Promise<"pending" | 
   }
 }
 
-async function processPaymentResult(payment: PendingPayment, status: "completed" | "failed") {
+export async function processPaymentResult(payment: PendingPayment, status: "completed" | "failed") {
   try {
     const transaction = await storage.getTransactionByReference(payment.reference);
     if (!transaction) {
@@ -146,7 +153,9 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
       return;
     }
 
-    const claimedTransaction = await storage.claimTransactionStatus(transaction.id, status);
+    const claimedTransaction = status === "completed" && payment.provider === "pawapay"
+      ? await storage.claimPawaIncomingAndCredit(transaction.id, ["pending"])
+      : await storage.claimTransactionStatus(transaction.id, status);
     if (!claimedTransaction) {
       console.log(`[PaymentPoller] Transaction already claimed: ${payment.reference}`);
       removePendingPayment(payment.reference);
@@ -155,7 +164,9 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
 
     if (status === "completed") {
       const paymentCurrency = transaction.currency || "XAF";
-      await creditUserWallet(payment.userId, parseFloat(payment.amount), paymentCurrency);
+      if (payment.provider !== "pawapay") {
+        await creditUserWallet(payment.userId, parseFloat(payment.amount), paymentCurrency);
+      }
 
       const isPaymentLink = payment.type === "payment_link";
       await storage.createUserNotification({
@@ -291,6 +302,28 @@ async function processPaymentResult(payment: PendingPayment, status: "completed"
   }
 }
 
+/** Complete a PawaPay callback through the exact same idempotent wallet path as polling. */
+export async function processPawaPayDepositCallback(
+  transaction: { id: string; reference: string | null; externalReference: string | null; userId: string; type: string; amount: string; paymentIntentId?: string | null; payerName?: string | null },
+  status: "completed" | "failed",
+): Promise<void> {
+  if (!transaction.reference || !transaction.externalReference) return;
+  await processPaymentResult({
+    transactionId: transaction.id,
+    reference: transaction.reference,
+    externalReference: transaction.externalReference,
+    attempts: 0,
+    userId: transaction.userId,
+    type: transaction.type,
+    amount: transaction.amount,
+    provider: "pawapay",
+    paymentIntentId: transaction.paymentIntentId,
+    payerName: transaction.payerName,
+    startedAt: Date.now(),
+    lastCheckedAt: 0,
+  }, status);
+}
+
 async function pollPendingPayments() {
   try {
     const now = Date.now();
@@ -377,12 +410,13 @@ export async function recoverPendingDeposits() {
       }
 
       // Detect provider early so we can auto-fail broken-provider transactions
-      let txProvider: "afribapay" | "pixpay" | null = null;
-      if (tx.operatorId) {
+      let txProvider: "afribapay" | "pixpay" | "pawapay" | null =
+        tx.externalReference && isPawaPayUuidV4(tx.externalReference) ? "pawapay" : null;
+      if (!txProvider && tx.operatorId) {
         try {
           const op = await storage.getOperator(tx.operatorId);
           const prov = (op as any)?.depositPaymentProvider || (op as any)?.paymentProvider;
-          if (prov === "afribapay" || prov === "pixpay") txProvider = prov;
+          if (prov === "afribapay" || prov === "pixpay" || prov === "pawapay") txProvider = prov;
         } catch {}
       }
 

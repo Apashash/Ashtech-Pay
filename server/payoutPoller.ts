@@ -1,6 +1,7 @@
 import { storage } from "./storage";
 import { checkAfribaPayStatus, checkAfribaPayoutStatus } from "./afribapay";
 import { checkPixPayStatus } from "./pixpay";
+import { getPawaPayPayout, isPawaPayUuidV4 } from "./pawapay";
 import { sendWithdrawalApprovedEmail } from "./email";
 import { notifyWithdrawalAutoValidated, notifyWithdrawalFailed } from "./telegram";
 import { setFailedCooldown } from "./failedCooldown";
@@ -19,7 +20,9 @@ interface PendingPayout {
   amount:         string;
   totalDebited:   string;
   attempts:       number;
-  provider:       "afribapay" | "pixpay";
+  provider:       "afribapay" | "pixpay" | "pawapay";
+  /** PawaPay UUID; distinct from the internal transaction reference. */
+  externalReference?: string;
   countryCode:    string;
   txType:         string;
   txCurrency:     string;
@@ -52,8 +55,9 @@ export async function recoverPendingPayouts() {
       const internalRef = t.reference ?? "";
       if (!internalRef) continue;
       const operator = t.operatorId ? await storage.getOperator(t.operatorId).catch(() => null) : null;
-      const provider = (operator as any)?.paymentProvider as "afribapay" | "pixpay" | undefined;
-      if (provider !== "afribapay" && provider !== "pixpay") {
+      const configuredProvider = (operator as any)?.paymentProvider as "afribapay" | "pixpay" | "pawapay" | undefined;
+      const provider = t.externalReference && isPawaPayUuidV4(t.externalReference) ? "pawapay" : configuredProvider;
+      if (provider !== "afribapay" && provider !== "pixpay" && provider !== "pawapay") {
         console.warn(`[PayoutPoller] Skipping pending payout ${internalRef}: no supported provider`);
         continue;
       }
@@ -78,6 +82,7 @@ export async function recoverPendingPayouts() {
         totalDebited:  t.totalAmount ?? t.amount ?? "0",
         attempts:      0,
         provider,
+        externalReference: (t as any).externalReference || undefined,
         countryCode,
         txType:        t.type,
         txCurrency:    t.currency || "XAF",
@@ -89,10 +94,14 @@ export async function recoverPendingPayouts() {
   }
 }
 
-async function processPayout(payout: PendingPayout, apiStatus: string) {
+export async function processPayout(payout: PendingPayout, apiStatus: string) {
   try {
     const transaction = await storage.getTransactionById(payout.transactionId);
-    if (!transaction || (transaction.status !== "pending" && transaction.status !== "processing")) {
+    const pawaManual = payout.provider === "pawapay" &&
+      !!transaction?.externalReference &&
+      isPawaPayUuidV4(transaction.externalReference) &&
+      transaction.status === "pending_manual";
+    if (!transaction || (transaction.status !== "pending" && transaction.status !== "processing" && !pawaManual)) {
       removePendingPayout(payout.reference);
       return;
     }
@@ -100,7 +109,11 @@ async function processPayout(payout: PendingPayout, apiStatus: string) {
     const currency = transaction.currency || "XAF";
 
     if (apiStatus === "success") {
-      await storage.updateTransactionStatus(payout.transactionId, "completed");
+      const claimed = await storage.claimTransactionStatus(payout.transactionId, "completed", ["pending", "processing", "pending_manual"]);
+      if (!claimed) {
+        removePendingPayout(payout.reference);
+        return;
+      }
 
       const txUser = await storage.getUser(payout.userId).catch(() => null);
       if (txUser?.email) {
@@ -142,14 +155,22 @@ async function processPayout(payout: PendingPayout, apiStatus: string) {
       }).catch(() => {});
 
     } else {
-      await storage.updateTransactionStatus(payout.transactionId, "failed");
+      const claimed = payout.provider === "pawapay"
+        ? await storage.claimPawaPayoutFailedAndRefund(payout.transactionId, ["pending", "processing", "pending_manual"])
+        : await storage.claimTransactionStatus(payout.transactionId, "failed", ["pending", "processing", "pending_manual"]);
+      if (!claimed) {
+        removePendingPayout(payout.reference);
+        return;
+      }
       // Déclenche le cooldown 5min — l'utilisateur doit attendre avant de relancer
       setFailedCooldown(payout.userId);
       const refundAmount = parseFloat(payout.totalDebited || payout.amount);
       // Use walletCurrency (the key actually debited) when available; fall back to txCurrency.
       // walletCurrency may differ from txCurrency when the wallet was stored under a generic code
       // (e.g. "XOF") while the provider needed a country-specific variant (e.g. "XOFB").
-      await storage.refundToOriginalWallet(payout.userId, payout.txType, payout.walletCurrency || payout.txCurrency, refundAmount);
+      if (payout.provider !== "pawapay") {
+        await storage.refundToOriginalWallet(payout.userId, payout.txType, payout.walletCurrency || payout.txCurrency, refundAmount);
+      }
       await storage.createUserNotification({
         userId:        payout.userId,
         type:          "withdrawal_failed",
@@ -186,6 +207,27 @@ async function processPayout(payout: PendingPayout, apiStatus: string) {
   }
 }
 
+/** Complete a PawaPay callback using the idempotent payout settlement path. */
+export async function processPawaPayPayoutCallback(
+  transaction: { id: string; reference: string | null; externalReference: string | null; userId: string; amount: string; totalAmount?: string | null; type: string; currency?: string | null },
+  status: "success" | "failed",
+): Promise<void> {
+  if (!transaction.reference || !transaction.externalReference) return;
+  await processPayout({
+    transactionId: transaction.id,
+    reference: transaction.externalReference,
+    externalReference: transaction.externalReference,
+    userId: transaction.userId,
+    amount: transaction.amount,
+    totalDebited: transaction.totalAmount || transaction.amount,
+    attempts: 0,
+    provider: "pawapay",
+    countryCode: (transaction as any).recipientCountry || "CM",
+    txType: transaction.type,
+    txCurrency: transaction.currency || "XAF",
+  }, status);
+}
+
 async function checkProviderStatus(payout: PendingPayout): Promise<{ status: string; shouldRemove?: boolean }> {
   try {
     if (payout.provider === "afribapay") {
@@ -195,6 +237,12 @@ async function checkProviderStatus(payout: PendingPayout): Promise<{ status: str
 
     if (payout.provider === "pixpay") {
       const result = await checkPixPayStatus(payout.reference, payout.countryCode);
+      return { status: result.status };
+    }
+    if (payout.provider === "pawapay") {
+      // A timeout or not-found is intentionally pending/manual, never refunded.
+      const id = payout.externalReference || payout.reference;
+      const result = await getPawaPayPayout(id);
       return { status: result.status };
     }
 

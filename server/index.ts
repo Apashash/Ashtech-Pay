@@ -244,6 +244,8 @@ app.use("/api", (_req, res, next) => {
 const CSRF_EXEMPT_PREFIXES = [
   "/api/afribapay/webhook",
   "/api/pixpay/webhook",
+  "/api/pawapay/deposit-callback",
+  "/api/pawapay/payout-callback",
   "/api/izichange/webhook",      // IziChange Direct Charge — no browser headers
   "/api/nowpayments/ipn",
   "/api/telegram/webhook",       // Telegram's servers don't send X-Requested-With
@@ -357,6 +359,11 @@ app.use((req, res, next) => {
     await db.execute(sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS source TEXT`);
     await db.execute(sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMP`);
     await db.execute(sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS transactions_pawapay_external_reference_unique
+      ON transactions (external_reference)
+      WHERE external_reference ~* '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+    `);
+    await db.execute(sql`
       CREATE TABLE IF NOT EXISTS hosted_page_configs (
         id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id VARCHAR NOT NULL UNIQUE,
@@ -440,6 +447,8 @@ app.use((req, res, next) => {
       )
     `);
     await db.execute(sql`ALTER TABLE operators ADD COLUMN IF NOT EXISTS deposit_payment_provider TEXT`);
+    await db.execute(sql`ALTER TABLE operators ADD COLUMN IF NOT EXISTS pawapay_provider_code TEXT`);
+    await db.execute(sql`ALTER TABLE fees ADD COLUMN IF NOT EXISTS pawapay_fee DECIMAL(10,4) DEFAULT '0'`);
     await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS token_revoked_before BIGINT DEFAULT 0`);
     await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS withdrawal_blocked BOOLEAN DEFAULT FALSE`);
     await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS withdrawal_block_reason TEXT`);

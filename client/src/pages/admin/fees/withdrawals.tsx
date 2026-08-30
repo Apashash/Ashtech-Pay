@@ -49,14 +49,16 @@ export default function AdminFeesWithdrawals() {
 
   const [afribapayFee, setAfribapayFee] = useState("");
   const [pixpayFee, setPixpayFee] = useState("");
+  const [pawapayFee, setPawapayFee] = useState("");
   const [ashtechMargin, setAshtechMargin] = useState("");
   const [minFee, setMinFee] = useState("");
   const [isActive, setIsActive] = useState(true);
-  const [localProvider, setLocalProvider] = useState<"afribapay" | "pixpay">("afribapay");
+  const [localProvider, setLocalProvider] = useState<"afribapay" | "pixpay" | "pawapay">("afribapay");
   const [localAfribapayCode, setLocalAfribapayCode] = useState("");
+  const [localPawapayCode, setLocalPawapayCode] = useState("");
 
-  const sticky = useRef<{ afribapayFee: string; pixpayFee: string; afribaMargin: string; pixpayMargin: string }>({
-    afribapayFee: "3.00", pixpayFee: "3.00", afribaMargin: "2.00", pixpayMargin: "2.00",
+  const sticky = useRef<{ afribapayFee: string; pixpayFee: string; pawapayFee: string; afribaMargin: string; pixpayMargin: string; pawapayMargin: string }>({
+    afribapayFee: "3.00", pixpayFee: "3.00", pawapayFee: "3.00", afribaMargin: "2.00", pixpayMargin: "2.00", pawapayMargin: "2.00",
   });
 
   const { data: fees, isLoading: feesLoading } = useQuery<Fee[]>({ queryKey: ["/api/admin/fees"] });
@@ -102,23 +104,26 @@ export default function AdminFeesWithdrawals() {
   const openEdit = (op: Operator, country: Country) => {
     const fee = findFee(op, country);
     const needsCreate = !fee || (fee as any).operatorId !== op.id;
-    const provider = ((op as any).paymentProvider || "afribapay") as "afribapay" | "pixpay";
+    const provider = ((op as any).paymentProvider || "afribapay") as "afribapay" | "pixpay" | "pawapay";
     setEditing({ fee: fee ?? null, operator: op, country, needsCreate });
     if (!needsCreate && fee) {
       const aFee = (fee as any)?.afribapayFee ?? sticky.current.afribapayFee;
       const pFee = (fee as any)?.pixpayFee ?? sticky.current.pixpayFee;
-      const margin = (fee as any)?.ashtechMargin ?? (provider === "pixpay" ? sticky.current.pixpayMargin : sticky.current.afribaMargin);
+      const pawaFee = (fee as any)?.pawapayFee ?? sticky.current.pawapayFee;
+      const margin = (fee as any)?.ashtechMargin ?? (provider === "pixpay" ? sticky.current.pixpayMargin : provider === "pawapay" ? sticky.current.pawapayMargin : sticky.current.afribaMargin);
       setAfribapayFee(aFee); sticky.current.afribapayFee = aFee;
       setPixpayFee(pFee); sticky.current.pixpayFee = pFee;
+      setPawapayFee(pawaFee); sticky.current.pawapayFee = pawaFee;
       setAshtechMargin(margin);
       if (provider === "afribapay") sticky.current.afribaMargin = margin;
       else if (provider === "pixpay") sticky.current.pixpayMargin = margin;
-      else sticky.current.afribaMargin = margin;
+      else if (provider === "pawapay") sticky.current.pawapayMargin = margin;
     } else {
       setAfribapayFee(sticky.current.afribapayFee);
       setPixpayFee(sticky.current.pixpayFee);
+      setPawapayFee(sticky.current.pawapayFee);
       const margin = provider === "afribapay" ? sticky.current.afribaMargin
-        : provider === "pixpay" ? sticky.current.pixpayMargin
+        : provider === "pixpay" ? sticky.current.pixpayMargin : provider === "pawapay" ? sticky.current.pawapayMargin
         : sticky.current.afribaMargin;
       setAshtechMargin(margin);
     }
@@ -126,17 +131,20 @@ export default function AdminFeesWithdrawals() {
     setIsActive(fee?.isActive ?? true);
     setLocalProvider(provider);
     setLocalAfribapayCode((op as any).afribapayOperatorCode || guessAfribaCode(op.name));
+    setLocalPawapayCode((op as any).pawapayProviderCode || "");
   };
 
   const closeEdit = () => {
     setEditing(null);
     setAfribapayFee("");
     setPixpayFee("");
+    setPawapayFee("");
     setAshtechMargin("");
     setMinFee("");
     setIsActive(true);
     setLocalProvider("afribapay");
     setLocalAfribapayCode("");
+    setLocalPawapayCode("");
   };
 
   const createFeeMutation = useMutation({
@@ -151,15 +159,23 @@ export default function AdminFeesWithdrawals() {
   });
 
   const providerMutation = useMutation({
-    mutationFn: async ({ opId, provider, code }: { opId: string; provider: string; code: string }) =>
+    mutationFn: async ({ opId, provider, afribaCode, pawapayCode }: { opId: string; provider: string; afribaCode: string; pawapayCode: string }) =>
       apiRequest("PATCH", `/api/admin/operators/${opId}/provider`, {
         paymentProvider: provider,
-        afribapayOperatorCode: code || null,
+        afribapayOperatorCode: afribaCode || null,
+        pawapayProviderCode: pawapayCode || null,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/operators"] });
     },
     onError: (err: any) => toast({ title: "Erreur fournisseur", description: err?.message || "Erreur serveur", variant: "destructive" }),
+  });
+
+  const pawapayMutation = useMutation({
+    mutationFn: async ({ id, pawaFee, margin, active, min }: { id: string; pawaFee: string; margin: string; active: boolean; min: string }) =>
+      apiRequest("PATCH", `/api/admin/fees/${id}`, { pawapayFee: pawaFee, ashtechMargin: margin, feeValue: String(parseFloat(pawaFee || "0") + parseFloat(margin || "0")), isActive: active, minFee: min }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/fees"] }); closeEdit(); },
+    onError: (err: any) => toast({ title: "Erreur PawaPay", description: err?.message || "Erreur serveur", variant: "destructive" }),
   });
 
   const pixpayMutation = useMutation({
@@ -202,23 +218,26 @@ export default function AdminFeesWithdrawals() {
 
   const handleSave = async () => {
     if (!editing) return;
-    const originalProvider = ((editing.operator as any).paymentProvider || "afribapay") as "afribapay" | "pixpay";
+    const originalProvider = ((editing.operator as any).paymentProvider || "afribapay") as "afribapay" | "pixpay" | "pawapay";
     const providerChanged = localProvider !== originalProvider ||
-      localAfribapayCode !== ((editing.operator as any).afribapayOperatorCode || "");
+      localAfribapayCode !== ((editing.operator as any).afribapayOperatorCode || "") ||
+      localPawapayCode !== ((editing.operator as any).pawapayProviderCode || "");
     if (providerChanged) {
       await providerMutation.mutateAsync({
         opId: editing.operator.id,
         provider: localProvider,
-        code: localAfribapayCode,
+        afribaCode: localAfribapayCode,
+        pawapayCode: localPawapayCode,
       });
     }
     if (editing.needsCreate) {
       const afribaFeeVal = parseFloat(afribapayFee || "0");
       const pixpayFeeVal = parseFloat(pixpayFee || "0");
+      const pawapayFeeVal = parseFloat(pawapayFee || "0");
       const marginVal = parseFloat(ashtechMargin || "0");
       const totalFee = localProvider === "afribapay"
         ? afribaFeeVal + marginVal
-        : pixpayFeeVal + marginVal;
+        : localProvider === "pixpay" ? pixpayFeeVal + marginVal : pawapayFeeVal + marginVal;
       await createFeeMutation.mutateAsync({
         name: `Retrait - ${editing.operator.name}`,
         transactionType: "withdrawal",
@@ -227,6 +246,7 @@ export default function AdminFeesWithdrawals() {
         countryId: editing.country.id,
         afribapayFee: String(afribaFeeVal),
         pixpayFee: String(pixpayFeeVal),
+        pawapayFee: String(pawapayFeeVal),
         ashtechMargin: String(marginVal),
         feeValue: String(totalFee),
         minFee: minFee ? Number(minFee) : null,
@@ -236,11 +256,13 @@ export default function AdminFeesWithdrawals() {
       await pixpayMutation.mutateAsync({ id: editing.fee!.id, pxFee: pixpayFee, margin: ashtechMargin, active: isActive, min: minFee });
     } else if (localProvider === "afribapay") {
       await afribaMutation.mutateAsync({ id: editing.fee!.id, afribaFee: afribapayFee, margin: ashtechMargin, active: isActive, min: minFee });
+    } else {
+      await pawapayMutation.mutateAsync({ id: editing.fee!.id, pawaFee: pawapayFee, margin: ashtechMargin, active: isActive, min: minFee });
     }
     syncToTransferMutation.mutate(editing.operator.id);
   };
 
-  const isPending = afribaMutation.isPending || pixpayMutation.isPending || providerMutation.isPending || createFeeMutation.isPending;
+  const isPending = afribaMutation.isPending || pixpayMutation.isPending || pawapayMutation.isPending || providerMutation.isPending || createFeeMutation.isPending;
 
   const syncMutation = useMutation({
     mutationFn: async () => {
@@ -263,7 +285,7 @@ export default function AdminFeesWithdrawals() {
       ? parseFloat(afribapayFee || "0")
       : localProvider === "pixpay"
         ? parseFloat(pixpayFee || "0")
-        : parseFloat(pixpayFee || "0");
+        : parseFloat(pawapayFee || "0");
     return (provFee + parseFloat(ashtechMargin || "0")).toFixed(2);
   };
 
@@ -300,7 +322,7 @@ export default function AdminFeesWithdrawals() {
               <Info className="w-4 h-4 mt-0.5 shrink-0" />
               <div>
                 <span className="font-semibold">Note :</span> Seuls les opérateurs <span className="font-semibold">actifs</span> sont affichés.
-                Les frais fournisseur et la marge Ashtech sont configurables séparément pour AfribaPay et PixPay.
+                Les frais fournisseur et la marge Ashtech sont configurables séparément par fournisseur.
                 Le minimum de charge est le montant minimum prélevé si le % est inférieur.
               </div>
             </div>
@@ -317,6 +339,7 @@ export default function AdminFeesWithdrawals() {
               const isOpen = openCountries.has(country.id);
               const afribOps = ops.filter(op => (op as any).paymentProvider === "afribapay");
               const pixpayOps = ops.filter(op => (op as any).paymentProvider === "pixpay");
+              const pawapayOps = ops.filter(op => (op as any).paymentProvider === "pawapay");
               const currency = getCurrency(country.id);
               return (
                 <Collapsible key={country.id} open={isOpen} onOpenChange={() => toggleCountry(country.id)}>
@@ -340,6 +363,7 @@ export default function AdminFeesWithdrawals() {
                             🔷 {pixpayOps.length} PixPay
                           </Badge>
                         )}
+                        {pawapayOps.length > 0 && <Badge className="text-xs bg-teal-500/20 text-teal-600 border-teal-500/30">● {pawapayOps.length} PawaPay</Badge>}
                       </div>
                       <div className="flex-shrink-0 mt-0.5 ml-2">
                         {isOpen ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
@@ -351,14 +375,15 @@ export default function AdminFeesWithdrawals() {
                       {ops.map(op => {
                         const fee = findFee(op, country);
                         const isShared = fee && (fee as any).operatorId !== op.id;
-                        const provider = ((op as any).paymentProvider || "afribapay") as "afribapay" | "pixpay";
+                        const provider = ((op as any).paymentProvider || "afribapay") as "afribapay" | "pixpay" | "pawapay";
                         const isAfribaPay = provider === "afribapay";
                         const isPixPay = provider === "pixpay";
+                        const isPawaPay = provider === "pawapay";
                         const provFee = isAfribaPay
                           ? parseFloat((fee as any)?.afribapayFee || "0")
                           : isPixPay
                             ? parseFloat((fee as any)?.pixpayFee || "0")
-                            : parseFloat((fee as any)?.pixpayFee || "0");
+                            : isPawaPay ? parseFloat((fee as any)?.pawapayFee || "0") : parseFloat((fee as any)?.pixpayFee || "0");
                         const margin = parseFloat((fee as any)?.ashtechMargin || "0");
                         const total = provFee + margin;
                         return (
@@ -377,6 +402,8 @@ export default function AdminFeesWithdrawals() {
                                   </Badge>
                                 ) : isPixPay ? (
                                   <Badge className="bg-indigo-500/20 text-indigo-600 border-indigo-500/30 text-xs shrink-0">🔷 PixPay</Badge>
+                                ) : isPawaPay ? (
+                                  <Badge className="bg-teal-500/20 text-teal-600 border-teal-500/30 text-xs shrink-0">● PawaPay</Badge>
                                 ) : null}
                                 {isShared && (
                                   <Badge variant="outline" className="text-xs text-orange-500 border-orange-400/50 shrink-0">Frais pays</Badge>
@@ -432,11 +459,11 @@ export default function AdminFeesWithdrawals() {
                     <Select value={localProvider} onValueChange={(v) => {
                       if (localProvider === "afribapay") sticky.current.afribaMargin = ashtechMargin;
                       else if (localProvider === "pixpay") sticky.current.pixpayMargin = ashtechMargin;
-                       else sticky.current.afribaMargin = ashtechMargin;
-                      setLocalProvider(v as "afribapay" | "pixpay");
+                       else if (localProvider === "pawapay") sticky.current.pawapayMargin = ashtechMargin;
+                       setLocalProvider(v as "afribapay" | "pixpay" | "pawapay");
                       if (v === "afribapay") { setAshtechMargin(sticky.current.afribaMargin); if (!localAfribapayCode) setLocalAfribapayCode(guessAfribaCode(editing?.operator.name || "")); }
                       else if (v === "pixpay") setAshtechMargin(sticky.current.pixpayMargin);
-                       else setAshtechMargin(sticky.current.afribaMargin);
+                       else if (v === "pawapay") setAshtechMargin(sticky.current.pawapayMargin);
                     }} data-testid="select-provider">
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -445,6 +472,9 @@ export default function AdminFeesWithdrawals() {
                         </SelectItem>
                         <SelectItem value="pixpay" disabled={!isProviderAvailable("pixpay", editing.country.code)}>
                           🔷 PixPay{!isProviderAvailable("pixpay", editing.country.code) ? " (non disponible)" : ""}
+                        </SelectItem>
+                        <SelectItem value="pawapay" disabled={!isProviderAvailable("pawapay", editing.country.code)}>
+                          ● PawaPay{!isProviderAvailable("pawapay", editing.country.code) ? " (non disponible)" : ""}
                         </SelectItem>
                       </SelectContent>
                     </Select>
@@ -459,6 +489,12 @@ export default function AdminFeesWithdrawals() {
                         onChange={(e) => setLocalAfribapayCode(e.target.value)}
                         data-testid="input-afribapay-code"
                       />
+                    </div>
+                  )}
+                  {localProvider === "pawapay" && (
+                    <div className="space-y-2">
+                      <Label>Code fournisseur PawaPay</Label>
+                      <Input placeholder="ex: MTN_MOMO_BEN" value={localPawapayCode} onChange={(e) => setLocalPawapayCode(e.target.value)} data-testid="input-pawapay-code" />
                     </div>
                   )}
 
@@ -490,6 +526,11 @@ export default function AdminFeesWithdrawals() {
                         data-testid="input-pixpay-fee"
                       />
                     </div>
+                  ) : localProvider === "pawapay" ? (
+                    <div className="space-y-2">
+                      <Label>Frais PawaPay (%)</Label>
+                      <Input type="text" inputMode="decimal" value={pawapayFee} onChange={(e) => { setPawapayFee(e.target.value); sticky.current.pawapayFee = e.target.value; }} placeholder="3.00" data-testid="input-pawapay-fee" />
+                    </div>
                    ) : null}
 
                   <div className="space-y-2">
@@ -501,7 +542,7 @@ export default function AdminFeesWithdrawals() {
                         setAshtechMargin(e.target.value);
                         if (localProvider === "afribapay") sticky.current.afribaMargin = e.target.value;
                         else if (localProvider === "pixpay") sticky.current.pixpayMargin = e.target.value;
-                         else sticky.current.afribaMargin = e.target.value;
+                       else if (localProvider === "pawapay") sticky.current.pawapayMargin = e.target.value;
                       }}
                       placeholder="2.00"
                       data-testid="input-ashtech-margin"

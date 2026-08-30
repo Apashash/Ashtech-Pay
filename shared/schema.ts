@@ -220,6 +220,9 @@ export const transactions = pgTable("transactions", {
   txStatusIdx: index("tx_status_idx").on(t.status),
   txCreatedAtIdx: index("tx_created_at_idx").on(t.createdAt),
   txStatusTypeIdx: index("tx_status_type_idx").on(t.status, t.type),
+  txPawaExternalReferenceUniq: uniqueIndex("transactions_pawapay_external_reference_unique")
+    .on(t.externalReference)
+    .where(sql`${t.externalReference} ~* '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'`),
 }));
 
 export const paymentLinks = pgTable("payment_links", {
@@ -292,11 +295,12 @@ export const operators = pgTable("operators", {
   type: text("type").notNull(), // 'mobile_money', 'bank', 'crypto'
   countryId: varchar("country_id").notNull().references(() => countries.id),
   gateway: text("gateway").default("soleapay").notNull(), // 'soleapay', 'winipay'
-  paymentProvider: text("payment_provider").default("afribapay").notNull(), // 'afribapay' | 'pixpay' — utilisé pour retrait + envoi
+  paymentProvider: text("payment_provider").default("afribapay").notNull(), // 'afribapay' | 'pixpay' | 'pawapay' — utilisé pour retrait + envoi
   depositPaymentProvider: text("deposit_payment_provider"), // nullable — fournisseur spécifique pour dépôts (si null, hérite de paymentProvider)
   afribapayOperatorCode: text("afribapay_operator_code"), // operator code used in AfribaPay API (e.g. "mtn", "orange")
   pixpayServiceId: text("pixpay_service_id"), // numeric service_id used in PixPay API
   pixpayOperatorType: text("pixpay_operator_type").default("ussd"), // 'ussd' | 'otp' | 'wave'
+  pawapayProviderCode: text("pawapay_provider_code"), // provider code used in PawaPay API
   isActive: boolean("is_active").default(true),
   isInMaintenance: boolean("is_in_maintenance").default(false),
   dailyLimit: decimal("daily_limit", { precision: 15, scale: 2 }).default("1000000").notNull(),
@@ -309,7 +313,7 @@ export const PAYMENT_GATEWAYS = ["soleapay", "winipay"] as const;
 export type PaymentGateway = typeof PAYMENT_GATEWAYS[number];
 
 // Payment providers (per operator)
-export const PAYMENT_PROVIDERS = ["afribapay", "pixpay"] as const;
+export const PAYMENT_PROVIDERS = ["afribapay", "pixpay", "pawapay"] as const;
 export type PaymentProvider = typeof PAYMENT_PROVIDERS[number];
 
 // Countries that use SoleaPay by default (Bénin, Cameroun, Côte d'Ivoire, Togo)
@@ -324,6 +328,7 @@ export const fees = pgTable("fees", {
   feeValue: decimal("fee_value", { precision: 10, scale: 4 }).notNull(),
   afribapayFee: decimal("afribapay_fee", { precision: 10, scale: 4 }).default("0"), // AfribaPay provider fee %
   pixpayFee: decimal("pixpay_fee", { precision: 10, scale: 4 }).default("0"), // PixPay provider fee %
+  pawapayFee: decimal("pawapay_fee", { precision: 10, scale: 4 }).default("0"), // PawaPay provider fee %
   ashtechMargin: decimal("ashtech_margin", { precision: 10, scale: 4 }).default("0"),
   minFee: decimal("min_fee", { precision: 15, scale: 2 }),
   maxFee: decimal("max_fee", { precision: 15, scale: 2 }),

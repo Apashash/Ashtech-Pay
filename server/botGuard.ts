@@ -365,6 +365,8 @@ const SUSPICIOUS_PATH_PATTERNS: RegExp[] = [
 const API_UA_EXEMPT_PATHS = [
   "/api/afribapay/webhook",
   "/api/pixpay/webhook",
+  "/api/pawapay/deposit-callback",
+  "/api/pawapay/payout-callback",
   "/api/izichange/webhook", // IziChange payment processor — server-to-server calls
   "/api/pay/",
   "/api/v1/hosted-payment",

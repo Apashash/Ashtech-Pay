@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -34,6 +34,7 @@ interface PayResult {
   flow: string;
   ussd_code: string | null;
   wave_url: string | null;
+  redirect_url?: string | null;
   otp_info: string | null;
 }
 
@@ -54,6 +55,7 @@ export default function HPayPage() {
   const [operatorId, setOperatorId] = useState("");
   const [phone, setPhone] = useState("");
   const [pollInterval, setPollInterval] = useState<NodeJS.Timeout | null>(null);
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
   const sessionQuery = useQuery<HostedSession>({
     queryKey: [`/api/public/hosted-session/${id}`],
@@ -91,8 +93,8 @@ export default function HPayPage() {
     },
     onSuccess: (result) => {
       setPayResult(result);
-      if (result.flow === "wave" && result.wave_url) {
-        window.location.href = result.wave_url;
+      if ((result.flow === "wave" && result.wave_url) || (result.flow === "provider_page" && result.redirect_url)) {
+        window.location.href = result.wave_url || result.redirect_url!;
         return;
       }
       setStep("initiated");
@@ -104,18 +106,21 @@ export default function HPayPage() {
   });
 
   const startPolling = useCallback(() => {
+    if (pollingRef.current) return pollingRef.current;
     const interval = setInterval(async () => {
       try {
         const res = await fetch(`/api/public/hosted-session/${id}/status`);
         const data = await res.json();
         if (data.status === "success") {
           clearInterval(interval);
+          pollingRef.current = null;
           setStep("success");
           setTimeout(() => {
             if (data.success_url) window.location.href = data.success_url;
           }, 3000);
         } else if (data.status === "failed") {
           clearInterval(interval);
+          pollingRef.current = null;
           setStep("failed");
           setTimeout(() => {
             if (data.cancel_url) window.location.href = data.cancel_url;
@@ -124,12 +129,24 @@ export default function HPayPage() {
       } catch (_) {}
     }, 3000);
     setPollInterval(interval);
+    pollingRef.current = interval;
     return interval;
   }, [id]);
 
   useEffect(() => {
+    if (!session) return;
+    if (session.status === "processing") {
+      setStep("initiated");
+      startPolling();
+    } else if (session.status === "success") setStep("success");
+    else if (session.status === "failed") setStep("failed");
+    else if (session.status === "expired") setStep("expired");
+  }, [session, startPolling]);
+
+  useEffect(() => {
     return () => {
       if (pollInterval) clearInterval(pollInterval);
+      pollingRef.current = null;
     };
   }, [pollInterval]);
 
@@ -231,7 +248,7 @@ export default function HPayPage() {
           )}
 
           {/* Initiated — USSD/OTP instructions */}
-          {step === "initiated" && payResult && (
+          {step === "initiated" && (
             <div className="space-y-5">
               {/* Amount summary */}
               <div className="rounded-2xl border bg-card p-5 text-center space-y-1">
@@ -243,7 +260,7 @@ export default function HPayPage() {
               </div>
 
               {/* Flow-specific instructions */}
-              {payResult.flow === "otp_ussd" && payResult.ussd_code && (
+              {payResult?.flow === "otp_ussd" && payResult.ussd_code && (
                 <div className="rounded-2xl border border-violet-500/30 bg-violet-500/5 p-5 space-y-3">
                   <p className="text-sm font-semibold text-violet-300">Composez ce code USSD sur votre téléphone :</p>
                   <div className="bg-slate-100 border border-border rounded-xl p-3 text-center">
@@ -253,7 +270,7 @@ export default function HPayPage() {
                 </div>
               )}
 
-              {payResult.flow === "otp_sms" && (
+              {payResult?.flow === "otp_sms" && (
                 <div className="rounded-2xl border border-blue-500/30 bg-blue-500/5 p-5 space-y-2">
                   <p className="text-sm font-semibold text-blue-300">Vérifiez votre SMS</p>
                   <p className="text-sm text-muted-foreground">
@@ -262,7 +279,7 @@ export default function HPayPage() {
                 </div>
               )}
 
-              {payResult.flow === "ussd_push" && (
+              {payResult?.flow === "ussd_push" && (
                 <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5 space-y-2">
                   <p className="text-sm font-semibold text-amber-300">Vérifiez votre téléphone</p>
                   <p className="text-sm text-muted-foreground">

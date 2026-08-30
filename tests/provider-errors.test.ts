@@ -72,6 +72,15 @@ test("provider error messages do not expose the upstream provider name", () => {
   assert.equal("provider" in payload, false);
 });
 
+test("provider errors redact the PawaPay brand", () => {
+  const payload = buildProviderErrorPayload({
+    error: "gateway_error",
+    message: "PawaPay rejected this payment.",
+    fallback: "Paiement impossible.",
+  });
+  assert.equal(payload.message, "le fournisseur de paiement rejected this payment.");
+});
+
 test("provider errors use the documented fallback when the provider sends no message", () => {
   const payload = buildProviderErrorPayload({
     error: "gateway_error",

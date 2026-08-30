@@ -109,7 +109,10 @@ export interface IStorage {
   getLastIncomingTransactionByCurrency(userId: string, currency: string): Promise<Transaction | undefined>;
   createTransaction(transaction: InsertTransaction): Promise<Transaction>;
   updateTransactionStatus(id: string, status: string): Promise<Transaction | undefined>;
-  claimTransactionStatus(id: string, status: string): Promise<Transaction | undefined>;
+  claimTransactionStatus(id: string, status: string, allowedFrom?: string[]): Promise<Transaction | undefined>;
+  claimPawaIncomingAndCredit(id: string, allowedFrom?: string[]): Promise<Transaction | undefined>;
+  claimPawaPayoutFailedAndRefund(id: string, allowedFrom?: string[]): Promise<Transaction | undefined>;
+  updateTransactionMetadata(id: string, metadata: Record<string, unknown>): Promise<void>;
   updateTransaction(id: string, updates: Partial<InsertTransaction>): Promise<Transaction | undefined>;
   updateTransactionExternalReference(id: string, externalReference: string): Promise<Transaction | undefined>;
   getPendingDepositTransactions(): Promise<Transaction[]>;
@@ -596,15 +599,75 @@ export class DatabaseStorage implements IStorage {
     return transaction || undefined;
   }
 
-  async claimTransactionStatus(id: string, status: string): Promise<Transaction | undefined> {
+  async claimTransactionStatus(id: string, status: string, allowedFrom: string[] = ["pending"]): Promise<Transaction | undefined> {
     const updateData: Record<string, any> = { status };
     if (status === "completed") updateData.confirmedAt = new Date();
     const [transaction] = await db
       .update(transactions)
       .set(updateData)
-      .where(and(eq(transactions.id, id), eq(transactions.status, "pending")))
+      .where(and(eq(transactions.id, id), inArray(transactions.status, allowedFrom)))
       .returning();
     return transaction || undefined;
+  }
+
+  async claimPawaIncomingAndCredit(id: string, allowedFrom: string[] = ["pending"]): Promise<Transaction | undefined> {
+    const claimed = await db.transaction(async (trx) => {
+      const [transaction] = await trx.update(transactions)
+        .set({ status: "completed", confirmedAt: new Date() })
+        .where(and(eq(transactions.id, id), inArray(transactions.status, allowedFrom)))
+        .returning();
+      if (!transaction) return undefined;
+      const [user] = await trx.select({ preferredCurrency: users.preferredCurrency })
+        .from(users).where(eq(users.id, transaction.userId)).limit(1);
+      if (!user) throw new Error("Transaction user not found");
+      const amount = transaction.amount;
+      const currency = transaction.currency || "XAF";
+      if ((user.preferredCurrency || "XAF") === currency) {
+        await trx.update(users).set({ balance: sql`${users.balance} + ${amount}` }).where(eq(users.id, transaction.userId));
+      } else {
+        await trx.insert(wallets).values({ userId: transaction.userId, currency, balance: amount })
+          .onConflictDoUpdate({
+            target: [wallets.userId, wallets.currency],
+            set: { balance: sql`${wallets.balance} + ${amount}`, updatedAt: new Date() },
+          });
+      }
+      return transaction;
+    });
+    if (claimed) invalidateUserCache(claimed.userId);
+    return claimed;
+  }
+
+  async claimPawaPayoutFailedAndRefund(
+    id: string,
+    allowedFrom: string[] = ["pending", "processing", "pending_manual"],
+  ): Promise<Transaction | undefined> {
+    const claimed = await db.transaction(async (trx) => {
+      const [transaction] = await trx.update(transactions).set({ status: "failed" })
+        .where(and(eq(transactions.id, id), inArray(transactions.status, allowedFrom))).returning();
+      if (!transaction) return undefined;
+      const [user] = await trx.select({ preferredCurrency: users.preferredCurrency })
+        .from(users).where(eq(users.id, transaction.userId)).limit(1);
+      if (!user) throw new Error("Transaction user not found");
+      const metadata = (transaction.metadata || {}) as Record<string, unknown>;
+      const currency = typeof metadata.walletCurrency === "string" ? metadata.walletCurrency : (transaction.currency || "XAF");
+      const amount = transaction.totalAmount || transaction.amount;
+      if ((user.preferredCurrency || "XAF") === currency) {
+        await trx.update(users).set({ balance: sql`${users.balance} + ${amount}` }).where(eq(users.id, transaction.userId));
+      } else {
+        await trx.insert(wallets).values({ userId: transaction.userId, currency, balance: amount })
+          .onConflictDoUpdate({
+            target: [wallets.userId, wallets.currency],
+            set: { balance: sql`${wallets.balance} + ${amount}`, updatedAt: new Date() },
+          });
+      }
+      return transaction;
+    });
+    if (claimed) invalidateUserCache(claimed.userId);
+    return claimed;
+  }
+
+  async updateTransactionMetadata(id: string, metadata: Record<string, unknown>): Promise<void> {
+    await db.update(transactions).set({ metadata }).where(eq(transactions.id, id));
   }
 
   async updateTransaction(id: string, updates: Partial<InsertTransaction>): Promise<Transaction | undefined> {
@@ -905,7 +968,14 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           or(eq(transactions.type, "withdrawal"), eq(transactions.type, "transfer_out")),
-          or(eq(transactions.status, "pending"), eq(transactions.status, "processing"))
+          or(
+            eq(transactions.status, "pending"),
+            eq(transactions.status, "processing"),
+            and(
+              eq(transactions.status, "pending_manual"),
+              sql`${transactions.externalReference} ~* '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'`,
+            ),
+          )
         )
       )
       .orderBy(desc(transactions.createdAt));
