@@ -4854,9 +4854,19 @@ export async function registerRoutes(
       }
 
       const depositRef = generateTransactionReference("deposit");
-      if (paymentProvider === "pawapay") {
-        await assertPawaPayProviderActive(resolvePawaPayProviderCode(operatorRecord, operatorName, countryCode), "DEPOSIT", pawaPayCountry(countryCode));
-      }
+        if (paymentProvider === "pawapay") {
+          try {
+            await assertPawaPayProviderActive(resolvePawaPayProviderCode(operatorRecord, operatorName, countryCode), "DEPOSIT", pawaPayCountry(countryCode));
+          } catch (error: any) {
+            console.error("[Deposit] PawaPay provider validation failed:", error);
+            return res.status(503).json(buildProviderErrorPayload({
+              error: "provider_unavailable",
+              message: error?.message,
+              fallback: "Le fournisseur de paiement n'est pas disponible pour cette opération.",
+              provider: "pawapay",
+            }));
+          }
+        }
       const pawaPayDepositId = paymentProvider === "pawapay" ? createPawaPayId() : undefined;
 
       // ─── PixPay OTP pre-check — must happen BEFORE creating the transaction ──
@@ -5282,6 +5292,15 @@ export async function registerRoutes(
           }
         } catch (gatewayError) {
           console.error("Payment gateway API error:", gatewayError);
+          if (paymentProvider === "pawapay") {
+            return res.status(502).json(buildProviderErrorPayload({
+              error: "gateway_error",
+              message: gatewayError instanceof Error ? gatewayError.message : undefined,
+              fallback: "Impossible de contacter le fournisseur de paiement.",
+              provider: "pawapay",
+              sensitiveValues: [data.phoneNumber],
+            }));
+          }
           res.json({ 
             transaction, 
             message: "Dépôt en attente de confirmation",
@@ -7559,12 +7578,15 @@ export async function registerRoutes(
         const provider = (op as any).depositPaymentProvider || (op as any).paymentProvider;
             const afribaRate = operatorFee ? parseFloat((operatorFee as any).afribapayFee || "0") : 0;
             const pixpayRate = operatorFee ? parseFloat((operatorFee as any).pixpayFee || "0") : 0;
+            const pawapayRate = operatorFee ? parseFloat((operatorFee as any).pawapayFee || "0") : 0;
             const marginRate = operatorFee ? parseFloat((operatorFee as any).ashtechMargin || "0") : 0;
             let feePercentage = 0;
             if (provider === "afribapay") {
               feePercentage = afribaRate + marginRate;
             } else if (provider === "pixpay") {
               feePercentage = pixpayRate + marginRate;
+            } else if (provider === "pawapay") {
+              feePercentage = pawapayRate + marginRate;
             } else {
               feePercentage = 0;
             }
@@ -7585,6 +7607,7 @@ export async function registerRoutes(
               feeFixed: operatorFee?.feeType === "fixed" ? parseFloat(operatorFee.feeValue) : 0,
               afribapayFee: afribaRate,
               pixpayFee: pixpayRate,
+              pawapayFee: pawapayRate,
               ashtechMargin: marginRate,
             };
           });
@@ -8291,8 +8314,14 @@ export async function registerRoutes(
       if (paymentProvider === "pawapay") {
         try {
           await assertPawaPayProviderActive(resolvePawaPayProviderCode(operatorRecord, operatorName, paymentCountryCode), "DEPOSIT", pawaPayCountry(paymentCountryCode));
-        } catch {
-          return res.status(503).json({ message: "Le service de paiement est temporairement indisponible." });
+         } catch (error: any) {
+           console.error("[PaymentLink] PawaPay provider validation failed:", error);
+           return res.status(503).json(buildProviderErrorPayload({
+             error: "provider_unavailable",
+             message: error?.message,
+             fallback: "Le fournisseur de paiement n'est pas disponible pour cette opération.",
+             provider: "pawapay",
+           }));
         }
       }
       const pawaPayDepositId = paymentProvider === "pawapay" ? createPawaPayId() : undefined;
@@ -8701,6 +8730,15 @@ export async function registerRoutes(
           const failedTransaction = await storage.getTransactionByReference(reference);
           if (failedTransaction) {
             await storage.updateTransactionStatus(failedTransaction.id, "failed");
+          }
+          if (paymentProvider === "pawapay") {
+            return res.status(502).json(buildProviderErrorPayload({
+              error: "gateway_error",
+              message: gatewayError instanceof Error ? gatewayError.message : undefined,
+              fallback: "Impossible de contacter le fournisseur de paiement.",
+              provider: "pawapay",
+              sensitiveValues: [phone],
+            }));
           }
           res.status(500).json({ message: "Erreur lors de l'initiation du paiement. Veuillez réessayer." });
         }
@@ -15227,7 +15265,17 @@ export async function registerRoutes(
 
       // ── Create transaction ────────────────────────────────────────────────
        if (paymentProvider === "pawapay") {
-         await assertPawaPayProviderActive(resolvePawaPayProviderCode(operatorRecord, operatorName, country.code), "DEPOSIT", pawaPayCountry(country.code));
+         try {
+           await assertPawaPayProviderActive(resolvePawaPayProviderCode(operatorRecord, operatorName, country.code), "DEPOSIT", pawaPayCountry(country.code));
+         } catch (error: any) {
+           console.error("[API v1/collect] PawaPay provider validation failed:", error);
+           return res.status(503).json(buildProviderErrorPayload({
+             error: "provider_unavailable",
+             message: error?.message,
+             fallback: "Le fournisseur de paiement n'est pas disponible pour cette opération.",
+             provider: "pawapay",
+           }));
+         }
        }
        const pawaPayDepositId = paymentProvider === "pawapay" ? createPawaPayId() : undefined;
        const transaction = await storage.createTransaction({
@@ -15536,6 +15584,8 @@ export async function registerRoutes(
              const providerFee = feeRecord
                ? parseFloat((provider === "pixpay"
                  ? feeRecord.pixpayFee
+                  : provider === "pawapay"
+                  ? feeRecord.pawapayFee
                  : feeRecord.afribapayFee) ?? "3.0")
                : 3.0;
              const ashtechMargin = feeRecord

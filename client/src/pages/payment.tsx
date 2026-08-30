@@ -44,7 +44,7 @@ interface CountryConfig {
   flag: string;
   currency: string;
   exchangeRate: number;
-  operators: { id: string; name: string; gateway: string; paymentProvider: string; feePercentage: number; feeFixed: number; afribapayFee?: number; pixpayFee?: number; ashtechMargin?: number; pixpayOperatorType?: string; otpUssdCode?: string | null; }[];
+  operators: { id: string; name: string; gateway: string; paymentProvider: string; feePercentage: number; feeFixed: number; afribapayFee?: number; pixpayFee?: number; pawapayFee?: number; ashtechMargin?: number; pixpayOperatorType?: string; otpUssdCode?: string | null; }[];
 }
 
 interface DepositConfigResponse {

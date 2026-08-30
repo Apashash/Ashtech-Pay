@@ -34,6 +34,7 @@ interface OperatorConfig {
   fixedFee: number;
   afribapayFee?: number;
   pixpayFee?: number;
+  pawapayFee?: number;
   ashtechMargin?: number;
   pixpayOperatorType?: string;
   otpUssdCode?: string | null;
@@ -169,24 +170,30 @@ export default function DepositPage() {
     const provider = selectedOperator.paymentProvider;
     const isAfribaPay = provider === "afribapay";
     const isPixPay = provider === "pixpay";
+    const isPawaPay = provider === "pawapay";
 
     let feePercentage = 0;
     let fee = 0;
 
     if (isAfribaPay) {
-      const afribapayFee = selectedOperator.afribapayFee || 3;
-      const ashtechMargin = selectedOperator.ashtechMargin || 2;
+      const afribapayFee = selectedOperator.afribapayFee ?? 3;
+      const ashtechMargin = selectedOperator.ashtechMargin ?? 2;
       feePercentage = afribapayFee + ashtechMargin;
       fee = (amount * feePercentage) / 100;
     } else if (isPixPay) {
-      const pixpayFee = selectedOperator.pixpayFee || 3;
-      const ashtechMargin = selectedOperator.ashtechMargin || 2;
+      const pixpayFee = selectedOperator.pixpayFee ?? 3;
+      const ashtechMargin = selectedOperator.ashtechMargin ?? 2;
       feePercentage = pixpayFee + ashtechMargin;
+      fee = (amount * feePercentage) / 100;
+    } else if (isPawaPay) {
+      const pawapayFee = selectedOperator.pawapayFee ?? 3;
+      const ashtechMargin = selectedOperator.ashtechMargin ?? 2;
+      feePercentage = pawapayFee + ashtechMargin;
       fee = (amount * feePercentage) / 100;
     }
 
     const creditedAmount = amount - fee;
-    return { amount, fee, creditedAmount: creditedAmount > 0 ? creditedAmount : 0, feePercentage, fixedFee: selectedOperator.fixedFee || 0, isAfribaPay, isPixPay };
+    return { amount, fee, creditedAmount: creditedAmount > 0 ? creditedAmount : 0, feePercentage, fixedFee: selectedOperator.fixedFee || 0, isAfribaPay, isPixPay, isPawaPay };
   }, [watchedAmount, selectedOperator]);
 
   useEffect(() => {
