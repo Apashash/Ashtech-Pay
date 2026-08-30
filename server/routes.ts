@@ -50,6 +50,7 @@ import {
   type Transaction,
   insertAutoConversionRuleSchema,
 } from "@shared/schema";
+import { seedPawaPayCountries, syncPawaPayCatalog } from "./pawapayCatalog";
 import crypto from "crypto";
 import { z } from "zod";
 import session from "express-session";
@@ -204,6 +205,9 @@ function toPawaPayCurrency(currency: string): string {
 }
 function pawaPayCountry(countryCode: string): string {
   return PAWAPAY_ALPHA3_COUNTRIES[countryCode.toUpperCase()] || countryCode.toUpperCase();
+}
+function countryWalletCurrency(country: { code?: string | null; currency?: string | null }): string {
+  return CURRENCY_ZONE[String(country.code || "").toUpperCase()] || country.currency || "XAF";
 }
 /** DB configuration wins; conservative documented-code fallback covers seeded operators. */
 function resolvePawaPayProviderCode(operator: any, name: string, countryCode: string): string {
@@ -2607,6 +2611,23 @@ export async function registerRoutes(
         phone: normalizePhone(rawData.phone) ?? rawData.phone,
       };
 
+      // Resolve the selected country from the database so registration uses
+      // the canonical country name and wallet key. The public catalog is the
+      // source of truth for newly seeded PawaPay countries.
+      const registrationCountryValue = String(data.country || "").trim();
+      const registrationCountry = (await storage.getAllCountries()).find(country =>
+        country.isActive &&
+        country.isActiveForRegistration !== false &&
+        (
+          country.name.toLowerCase() === registrationCountryValue.toLowerCase() ||
+          country.code.toLowerCase() === registrationCountryValue.toLowerCase()
+        )
+      );
+      if (!registrationCountry) {
+        return res.status(400).json({ message: "Ce pays n'est pas disponible pour l'inscription." });
+      }
+      (data as any).country = registrationCountry.name;
+
       const existingEmail = await storage.getUserByEmail(data.email);
       if (existingEmail) {
         await recordAuthFailure(ip);
@@ -2629,11 +2650,10 @@ export async function registerRoutes(
 
       const hashedPassword = await hashPassword(data.password);
       
-      // Togo uses the country-specific XOFT wallet currency.
-      let preferredCurrency = COUNTRY_CURRENCIES[data.country || "Cameroon"] || "XAF";
-      if (data.country === "Togo") {
-        preferredCurrency = "XOFT";
-      }
+      const preferredCurrency =
+        CURRENCY_ZONE[registrationCountry.code.toUpperCase()] ||
+        COUNTRY_CURRENCIES[registrationCountry.name] ||
+        "XAF";
 
       const user = await storage.createUser({
         ...data,
@@ -3972,7 +3992,11 @@ export async function registerRoutes(
   app.get("/api/transfers/config", requireAuth, async (req, res) => {
     try {
       const transactionType = (req.query.type as string) || "transfer";
-      const countries = await storage.getActiveCountries();
+      const countries = (await storage.getActiveCountries()).filter(country => {
+        if (transactionType === "deposit") return country.isActiveForDeposit !== false;
+        if (transactionType === "withdrawal") return country.isActiveForWithdrawal !== false;
+        return country.isActiveForTransfer !== false;
+      });
       const allOperators = await storage.getAllOperators();
       const allFees = await storage.getAllFees();
       
@@ -4035,7 +4059,9 @@ export async function registerRoutes(
           id: country.id,
           name: country.name,
           code: country.code,
-          currency: country.currency,
+          // `currency` is the accounting wallet key. PawaPay receives the
+          // ISO code through toPawaPayCurrency(), never this country key.
+          currency: CURRENCY_ZONE[country.code.toUpperCase()] || country.currency,
           operators: countryOperators,
         };
       }).filter(country => country.operators.length > 0);
@@ -4240,8 +4266,14 @@ export async function registerRoutes(
       if (!country) {
         return res.status(404).json({ message: "Pays non trouvé" });
       }
+      if (country.isActiveForTransfer === false) {
+        return res.status(400).json({ message: "Ce pays n'est pas disponible pour les transferts." });
+      }
+      if (operator.countryId !== country.id || !operator.isActive || operator.isInMaintenance) {
+        return res.status(400).json({ message: "Opérateur invalide pour le pays sélectionné." });
+      }
 
-      const txCurrency = country.currency || sender.preferredCurrency || "XAF";
+      const txCurrency = CURRENCY_ZONE[country.code.toUpperCase()] || country.currency || sender.preferredCurrency || "XAF";
 
       // walletCurrency = the internal wallet code to debit. Uses CURRENCY_ZONE (which holds
       // Ashtech's internal per-country codes, e.g. NE→XOFN, ML→XOFM) so we look up the
@@ -4760,11 +4792,22 @@ export async function registerRoutes(
         operatorRecord = await storage.getOperator(data.operatorId);
         if (operatorRecord) operatorName = operatorRecord.name;
       }
+      let depositCountry: Awaited<ReturnType<typeof storage.getCountry>> | undefined;
       if (data.countryId) {
-        const country = await storage.getCountry(data.countryId);
-        if (country) {
-          countryCode = country.code;
-          countryCurrency = country.currency || "XAF";
+        depositCountry = await storage.getCountry(data.countryId);
+        if (depositCountry) {
+          countryCode = depositCountry.code.toUpperCase();
+          countryCurrency = CURRENCY_ZONE[countryCode] || depositCountry.currency || "XAF";
+        }
+      }
+
+      if (data.paymentMethod === "mobile_money") {
+        if (!depositCountry || depositCountry.isActiveForDeposit === false) {
+          return res.status(400).json({ message: "Ce pays n'est pas disponible pour les dépôts." });
+        }
+        if (!operatorRecord || operatorRecord.countryId !== depositCountry.id ||
+            !operatorRecord.isActive || operatorRecord.isInMaintenance) {
+          return res.status(400).json({ message: "Opérateur invalide pour le pays sélectionné." });
         }
       }
 
@@ -5386,7 +5429,10 @@ export async function registerRoutes(
 
       // Resolve country info for currency and country code
       const withdrawalCountry = await storage.getCountry(data.countryId);
-      const withdrawalCountryCode = withdrawalCountry?.code || "CM";
+      if (!withdrawalCountry || withdrawalCountry.isActiveForWithdrawal === false) {
+        return res.status(400).json({ message: "Ce pays n'est pas disponible pour les retraits." });
+      }
+      const withdrawalCountryCode = withdrawalCountry.code.toUpperCase();
       // Use CURRENCY_ZONE for the internal wallet code (XOFN for NE, XOFM for ML, XOFT for TG, etc.)
       // CURRENCY_ZONE holds Ashtech's per-country wallet codes; COUNTRY_CURRENCY holds external country codes.
       // For wallet debit we must use the internal code so we find the right secondary wallet.
@@ -5394,6 +5440,12 @@ export async function registerRoutes(
 
       // Fetch operator early to determine provider before fee calculation
       const withdrawalOperator = await storage.getOperator(data.operatorId);
+      if (!withdrawalOperator ||
+          withdrawalOperator.countryId !== withdrawalCountry.id ||
+          !withdrawalOperator.isActive ||
+          withdrawalOperator.isInMaintenance) {
+        return res.status(400).json({ message: "Opérateur invalide pour le pays sélectionné." });
+      }
       const withdrawalProvider = withdrawalOperator?.paymentProvider;
       if (withdrawalProvider !== "afribapay" && withdrawalProvider !== "pixpay" && withdrawalProvider !== "pawapay") {
         return res.status(400).json({ message: "Aucun fournisseur de paiement configuré pour cet opérateur." });
@@ -7123,7 +7175,7 @@ export async function registerRoutes(
       const allCountries = await storage.getAllCountries();
       const activeCountries = await Promise.all(
         allCountries
-          .filter(c => c.isActive && c.name && c.code)
+          .filter(c => c.isActive && c.isActiveForRegistration !== false && c.name && c.code)
           .map(async c => {
             const ops = await storage.getOperatorsByCountry(c.id);
             const activeOperators = ops
@@ -7131,7 +7183,8 @@ export async function registerRoutes(
                 o.isActive &&
                 !o.isInMaintenance &&
                 ((o.depositPaymentProvider || o.paymentProvider) === "afribapay" ||
-                 (o.depositPaymentProvider || o.paymentProvider) === "pixpay")
+                 (o.depositPaymentProvider || o.paymentProvider) === "pixpay" ||
+                 (o.depositPaymentProvider || o.paymentProvider) === "pawapay")
               )
               .map(o => ({ id: o.id, name: o.name }));
             if (activeOperators.length === 0) return null;
@@ -7141,7 +7194,7 @@ export async function registerRoutes(
               code: c.code,
               flag: c.flag,
               dialCode: c.dialCode,
-              currency: c.currency,
+              currency: CURRENCY_ZONE[c.code.toUpperCase()] || c.currency,
               operators: activeOperators,
             };
           })
@@ -7435,7 +7488,7 @@ export async function registerRoutes(
   // Public deposit config for payment links (uses deposit fees)
   app.get("/api/public/deposit-config", publicInfoLimiter, async (_req, res) => {
     try {
-      const countries = await storage.getActiveCountries();
+      const countries = (await storage.getActiveCountries()).filter(c => c.isActiveForDeposit !== false);
       const allOperators = await storage.getAllOperators();
       const allFees = await storage.getAllFees();
       
@@ -7493,7 +7546,7 @@ export async function registerRoutes(
           name: country.name,
           code: country.code,
           flag: country.flag,
-          currency: country.currency,
+          currency: countryWalletCurrency(country),
           exchangeRate: parseFloat(country.exchangeRate as string) || 1,
           operators: countryOperators,
         };
@@ -7562,7 +7615,7 @@ export async function registerRoutes(
       const user = await storage.getUser(req.userId!);
       if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
 
-      const allCountries = await storage.getActiveCountries();
+       const allCountries = (await storage.getActiveCountries()).filter(c => c.isActiveForWithdrawal !== false);
       const allOperators = await storage.getAllOperators();
       const allFees = await storage.getAllFees();
 
@@ -7598,7 +7651,7 @@ export async function registerRoutes(
       const countryParam = (req.params.country || "").toLowerCase().trim();
       if (!countryParam) return res.json([]);
 
-      const allCountries = await storage.getActiveCountries();
+       const allCountries = (await storage.getActiveCountries()).filter(c => c.isActiveForWithdrawal !== false);
       const allOperators = await storage.getAllOperators();
       const allFees = await storage.getAllFees();
 
@@ -7629,7 +7682,7 @@ export async function registerRoutes(
 
   app.get("/api/public/withdrawal-operators", publicInfoLimiter, async (_req, res) => {
     try {
-      const countries = await storage.getActiveCountries();
+       const countries = (await storage.getActiveCountries()).filter(c => c.isActiveForWithdrawal !== false);
       const allOperators = await storage.getAllOperators();
       const allFees = await storage.getAllFees();
       
@@ -7660,7 +7713,7 @@ export async function registerRoutes(
           name: country.name,
           code: country.code,
           flag: country.flag,
-          currency: country.currency,
+          currency: countryWalletCurrency(country),
           operators: countryOperators,
         };
       }).filter(country => country.operators.length > 0);
@@ -10952,6 +11005,29 @@ export async function registerRoutes(
   });
 
   // Admin: Countries CRUD
+  app.post("/api/admin/pawapay/sync-catalog", requireAuth, requireAdmin, adminActionLimiter, async (req, res) => {
+    try {
+      // The local seed guarantees the UI remains usable; this explicit action
+      // reconciles operator codes with the connected account's live config.
+      await seedPawaPayCountries();
+      const result = await syncPawaPayCatalog();
+      await storage.createAdminLog({
+        adminId: req.userId!,
+        action: "sync_pawapay_catalog",
+        targetType: "provider",
+        targetId: "pawapay",
+        details: JSON.stringify(result),
+        ipAddress: req.ip || null,
+      });
+      res.json({ success: true, ...result });
+    } catch (error: any) {
+      // Do not expose provider response bodies or credentials. The admin gets
+      // a safe actionable message while the server keeps the precise error.
+      console.error("[PawaPayCatalog] Sync failed:", error?.message || "unknown error");
+      res.status(503).json({ message: "La synchronisation PawaPay est indisponible. Vérifiez les identifiants configurés." });
+    }
+  });
+
   app.get("/api/admin/countries", requireAuth, requireAdmin, async (req, res) => {
     try {
       const countries = await storage.getAllCountries();
@@ -14397,7 +14473,7 @@ export async function registerRoutes(
           return {
             code: c.code,
             name: c.name,
-            currency: normalizeApiCurrency(c.currency),
+             currency: normalizeApiCurrency(countryWalletCurrency(c)),
             operators: ops
             .filter((o: any) => {
               const provider = o.depositPaymentProvider || o.paymentProvider;
@@ -14795,7 +14871,8 @@ export async function registerRoutes(
         });
       }
       // ── Validate currency matches country (accept both normalized and internal codes) ────
-      const expectedIso = normalizeApiCurrency(country.currency);
+       const walletCurrency = countryWalletCurrency(country);
+       const expectedIso = normalizeApiCurrency(walletCurrency);
       const receivedIso = normalizeApiCurrency(currency);
       if (receivedIso !== expectedIso) {
         return res.status(422).json({
@@ -14861,7 +14938,7 @@ export async function registerRoutes(
          if (existing) {
            const sameRequest =
              parseFloat(String(existing.totalAmount || existing.amount)) === amountNum &&
-             String(existing.currency).toUpperCase() === String(country.currency).toUpperCase() &&
+             String(existing.currency).toUpperCase() === walletCurrency.toUpperCase() &&
              String(existing.recipientPhone || "") === String(phone) &&
              String(existing.operatorId || "") === String((operatorRecord as any).id || "");
            if (!sameRequest) {
@@ -14982,7 +15059,7 @@ export async function registerRoutes(
           amount: amountNum,
           credited_amount: creditedAmount,
           fee_amount: ashtechFeeAmount,
-          currency: normalizeApiCurrency(country.currency),
+          currency: normalizeApiCurrency(walletCurrency),
           operator: operatorName,
           phone,
           country_code: country.code,
@@ -15021,7 +15098,7 @@ export async function registerRoutes(
           if (countryPrefixPre && localPhonePre.startsWith(countryPrefixPre)) {
             localPhonePre = localPhonePre.slice(countryPrefixPre.length);
           }
-          const afribapayCurrencyPre = AFRIBAPAY_ISO_CURRENCY[country.code.toUpperCase()] || country.currency;
+          const afribapayCurrencyPre = AFRIBAPAY_ISO_CURRENCY[country.code.toUpperCase()] || normalizeApiCurrency(walletCurrency);
           const callbackUrlPre = buildWebhookUrl("/api/afribapay/webhook");
 
           // Create the transaction NOW so it exists when the client confirms the OTP
@@ -15029,7 +15106,7 @@ export async function registerRoutes(
             userId: merchant.id,
             type: "deposit",
             amount: creditedAmount.toString(),
-            currency: country.currency,
+            currency: walletCurrency,
             status: "pending",
             description: `Paiement API — ${operatorName} — ${phone}`,
             paymentMethod: "mobile_money",
@@ -15109,7 +15186,7 @@ export async function registerRoutes(
         userId: merchant.id,
         type: "deposit",
         amount: creditedAmount.toString(),
-        currency: country.currency,
+        currency: walletCurrency,
         status: "pending",
         description: `Paiement API — ${operatorName} — ${phone}`,
         paymentMethod: "mobile_money",
@@ -15132,7 +15209,7 @@ export async function registerRoutes(
          const result = await createPawaPayDeposit({
            depositId: pawaPayDepositId, amount: amountNum.toFixed(2),
            country: pawaPayCountry(country.code),
-           currency: toPawaPayCurrency(country.currency),
+           currency: toPawaPayCurrency(walletCurrency),
            payer: { provider: resolvePawaPayProviderCode(operatorRecord, operatorName, country.code), phoneNumber: normalizePhone(phone) || "" },
            clientReferenceId: depositRef,
          });
@@ -15304,7 +15381,7 @@ export async function registerRoutes(
         amount: amountNum,
         credited_amount: creditedAmount,
         fee_amount: ashtechFeeAmount,
-        currency: normalizeApiCurrency(country.currency),
+        currency: normalizeApiCurrency(walletCurrency),
         operator: operatorName,
         phone,
         country_code: country.code,
@@ -15421,7 +15498,7 @@ export async function registerRoutes(
           return {
             country_code: c.code,
             country_name: c.name,
-            currency: normalizeApiCurrency(c.currency),
+             currency: normalizeApiCurrency(countryWalletCurrency(c)),
              total_fee_pct: primaryFee.total_fee_pct,
              ashtech_margin_pct: primaryFee.ashtech_margin_pct,
             operators: activeOps.map((o: any) => o.name),
@@ -15712,7 +15789,9 @@ export async function registerRoutes(
       if (!country) return res.status(400).json({ error: "invalid_country" });
       const operator = await storage.getOperator(operatorId);
       if (!operator) return res.status(400).json({ error: "invalid_operator" });
-       if (!country.isActive) return res.status(400).json({ error: "inactive_country" });
+        if (!country.isActive || country.isActiveForDeposit === false) {
+          return res.status(400).json({ error: "inactive_country" });
+        }
        if (operator.countryId !== country.id || !operator.isActive || operator.isInMaintenance) {
          return res.status(400).json({ error: "invalid_operator", message: "Opérateur indisponible pour ce pays." });
        }
@@ -15720,7 +15799,8 @@ export async function registerRoutes(
       const merchant = await storage.getUser(hpSession.merchantId);
       if (!merchant) return res.status(500).json({ error: "merchant_not_found" });
 
-       const expectedCurrency = normalizeApiCurrency(country.currency);
+       const walletCurrency = countryWalletCurrency(country);
+       const expectedCurrency = normalizeApiCurrency(walletCurrency);
        if (normalizeApiCurrency(hpSession.currency) !== expectedCurrency) {
          return res.status(400).json({
            error: "currency_country_mismatch",
@@ -15756,7 +15836,7 @@ export async function registerRoutes(
         userId: merchant.id,
         type: "deposit",
          amount: String(creditedAmount),
-         currency: country.currency,
+         currency: walletCurrency,
         status: "pending",
         reference: txRef,
         recipientPhone: phone,
@@ -15841,7 +15921,7 @@ export async function registerRoutes(
           } else if (provider === "pawapay") {
            const appBase = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
            const result = await createPawaPayPaymentPage({
-             depositId: pawaPayDepositId, amount: amount.toFixed(2), currency: toPawaPayCurrency(country.currency),
+             depositId: pawaPayDepositId, amount: amount.toFixed(2), currency: toPawaPayCurrency(walletCurrency),
              phoneNumber: normalizePhone(phone) || "", country: pawaPayCountry(countryCode),
              provider: resolvePawaPayProviderCode(operator, operator.name, countryCode),
              clientReferenceId: txRef, returnUrl: `${appBase}/hpay/${hpSession.id}`,

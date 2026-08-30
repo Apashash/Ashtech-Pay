@@ -76,6 +76,9 @@ const COUNTRY_FLAGS: Record<string, string> = {
   "Congo": "🇨🇬", "Côte d'Ivoire": "🇨🇮", "Gabon": "🇬🇦",
   "Guinée équatoriale": "🇬🇶", "Guinée-Bissau": "🇬🇼",
   "Mali": "🇲🇱", "Niger": "🇳🇪",
+  "Ghana": "🇬🇭", "Kenya": "🇰🇪", "Malawi": "🇲🇼", "Mozambique": "🇲🇿",
+  "Nigeria": "🇳🇬", "Éthiopie": "🇪🇹", "Ethiopie": "🇪🇹", "Lesotho": "🇱🇸",
+  "Sierra Leone": "🇸🇱", "Zambie": "🇿🇲",
   "Ouganda": "🇺🇬", "RD Congo": "🇨🇩", "Rwanda": "🇷🇼", "Sénégal": "🇸🇳",
   "Tanzanie": "🇹🇿", "Tchad": "🇹🇩", "Togo": "🇹🇬", "USA": "🇺🇸"
 };

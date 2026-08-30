@@ -41,10 +41,13 @@ export const users = pgTable("users", {
 }));
 
 export const SUPPORTED_CURRENCIES = [
-  "XAF",  // Cameroun, Centrafrique, Guinée Équatoriale, Tchad
+  "XAF",  // Cameroun
+  "XAFCF", // Centrafrique
   "XAFC", // Congo Brazzaville
   "XAFG", // Gabon
+  "XAFTD", // Tchad
   "XOF",  // Niger, Guinée-Bissau
+  "XOFGW", // Guinée-Bissau
   "XOFN", // Niger
   "XOFB", // Bénin
   "XOFC", // Côte d'Ivoire
@@ -56,6 +59,15 @@ export const SUPPORTED_CURRENCIES = [
   "RWF",  // Rwanda
   "TZS",  // Tanzanie
   "UGX",  // Ouganda
+  "GHS",  // Ghana
+  "KES",  // Kenya
+  "MWK",  // Malawi
+  "MZN",  // Mozambique
+  "NGN",  // Nigeria
+  "ETB",  // Éthiopie
+  "LSL",  // Lesotho
+  "SLE",  // Sierra Leone
+  "ZMW",  // Zambie
   "INR",  // Inde
   "USD",  // USA
   "USDT", // USDT TRC20 (Tron)
@@ -67,13 +79,13 @@ export const COUNTRY_CURRENCIES: Record<string, SupportedCurrency> = {
   "Cameroun": "XAF",
   "Cameroon": "XAF",
   "Centrafrique": "XAF",
-  "République Centrafricaine": "XAF",
-  "Central African Republic": "XAF",
+  "République Centrafricaine": "XAFCF",
+  "Central African Republic": "XAFCF",
   "Guinée équatoriale": "XAF",
   "Guinée Équatoriale": "XAF",
   "Equatorial Guinea": "XAF",
-  "Tchad": "XAF",
-  "Chad": "XAF",
+  "Tchad": "XAFTD",
+  "Chad": "XAFTD",
   // ── Gabon (XAFG) ─────────────────────────────────────────────────────────
   "Gabon": "XAFG",
   // ── Congo Brazzaville (XAFC) ─────────────────────────────────────────────
@@ -98,14 +110,26 @@ export const COUNTRY_CURRENCIES: Record<string, SupportedCurrency> = {
   "Togo": "XOFT",
   "Bénin": "XOFB",
   "Benin": "XOFB",
-  "Guinée-Bissau": "XOF",
-  "Guinea-Bissau": "XOF",
+  "Guinée-Bissau": "XOFGW",
+  "Guinea-Bissau": "XOFGW",
   // ── Afrique de l'Est ─────────────────────────────────────────────────────
   "Rwanda": "RWF",
   "Tanzania": "TZS",
   "Tanzanie": "TZS",
   "Uganda": "UGX",
   "Ouganda": "UGX",
+  "Ghana": "GHS",
+  "Kenya": "KES",
+  "Malawi": "MWK",
+  "Mozambique": "MZN",
+  "Nigeria": "NGN",
+  "Éthiopie": "ETB",
+  "Ethiopie": "ETB",
+  "Ethiopia": "ETB",
+  "Lesotho": "LSL",
+  "Sierra Leone": "SLE",
+  "Zambie": "ZMW",
+  "Zambia": "ZMW",
   // ── Asie / Autres ────────────────────────────────────────────────────────
   "India": "INR",
   "Inde": "INR",
@@ -115,9 +139,12 @@ export const COUNTRY_CURRENCIES: Record<string, SupportedCurrency> = {
 
 export const EXCHANGE_RATES: Record<SupportedCurrency, number> = {
   "XAF":  1,
+  "XAFCF": 1,
   "XAFC": 1,
   "XAFG": 1,
+  "XAFTD": 1,
   "XOF":  1,
+  "XOFGW": 1,
   "XOFN": 1,
   "XOFB": 1,
   "XOFC": 1,
@@ -129,6 +156,15 @@ export const EXCHANGE_RATES: Record<SupportedCurrency, number> = {
   "RWF":  0.00066,
   "TZS":  0.026,
   "UGX":  0.0019,
+  "GHS":  0.035,
+  "KES":  0.0072,
+  "MWK":  0.00055,
+  "MZN":  0.0092,
+  "NGN":  0.00055,
+  "ETB":  0.007,
+  "LSL":  0.035,
+  "SLE":  0.00035,
+  "ZMW":  0.012,
   "INR":  0.0083,
   "USD":  0.00165,
   "USDT": 1,
@@ -158,6 +194,18 @@ export const ALL_FX_CURRENCIES: FxCurrency[] = [
   { code: "RWF", name: "Rwandan Franc", defaultRate: 1480.00 },
   { code: "TZS", name: "Tanzanian Shilling", defaultRate: 2650.00 },
   { code: "UGX", name: "Ugandan Shilling", defaultRate: 3600.00 },
+  { code: "GHS", name: "Ghanaian Cedi", defaultRate: 14.00 },
+  { code: "KES", name: "Kenyan Shilling", defaultRate: 139.00 },
+  { code: "MWK", name: "Malawian Kwacha", defaultRate: 1800.00 },
+  { code: "MZN", name: "Mozambican Metical", defaultRate: 65.00 },
+  { code: "NGN", name: "Nigerian Naira", defaultRate: 1800.00 },
+  { code: "ETB", name: "Ethiopian Birr", defaultRate: 140.00 },
+  { code: "LSL", name: "Lesotho Loti", defaultRate: 14.00 },
+  { code: "SLE", name: "Sierra Leonean Leone", defaultRate: 2850.00 },
+  { code: "ZMW", name: "Zambian Kwacha", defaultRate: 49.00 },
+  { code: "XAFCF", name: "Centrafrique (XAF)", defaultRate: 585.00 },
+  { code: "XAFTD", name: "Tchad (XAF)", defaultRate: 585.00 },
+  { code: "XOFGW", name: "Guinée-Bissau (XOF)", defaultRate: 655.96 },
   { code: "CDF", name: "Congolese Franc", defaultRate: 0 }, // No hardcoded default — rate comes from country.exchangeRate (admin-editable in Pays)
   { code: "INR", name: "Roupie Indienne", defaultRate: 84.00 },
   { code: "USDT", name: "USDT TRC20 (Tron)", defaultRate: 1.00 },
@@ -165,9 +213,12 @@ export const ALL_FX_CURRENCIES: FxCurrency[] = [
 
 export const CURRENCY_SYMBOLS: Record<SupportedCurrency, string> = {
   "XAF":  "FCFA",
+  "XAFCF": "FCFA",
   "XAFC": "FCFA",
   "XAFG": "FCFA",
+  "XAFTD": "FCFA",
   "XOF":  "FCFA",
+  "XOFGW": "FCFA",
   "XOFB": "FCFA",
   "XOFC": "FCFA",
   "XOFF": "FCFA",
@@ -179,6 +230,15 @@ export const CURRENCY_SYMBOLS: Record<SupportedCurrency, string> = {
   "RWF":  "RWF",
   "TZS":  "TZS",
   "UGX":  "UGX",
+  "GHS":  "GHS",
+  "KES":  "KES",
+  "MWK":  "MWK",
+  "MZN":  "MZN",
+  "NGN":  "₦",
+  "ETB":  "ETB",
+  "LSL":  "LSL",
+  "SLE":  "SLE",
+  "ZMW":  "ZMW",
   "INR":  "₹",
   "USD":  "$",
   "USDT": "USDT",
@@ -424,6 +484,15 @@ export const MOBILE_OPERATORS: Record<string, string[]> = {
   "Niger": ["Airtel Money"],
   "Gabon": ["Airtel Money", "Moov Money"],
   "RD Congo": ["Afri Money", "Airtel Money", "Mpesa Money", "Orange Money", "Vodacom"],
+  "Ghana": ["MTN Mobile Money", "Vodafone Cash", "AirtelTigo Money"],
+  "Kenya": ["M-Pesa", "Airtel Money"],
+  "Malawi": ["Airtel Money", "TNM Mpamba"],
+  "Mozambique": ["M-Pesa", "e-Mola"],
+  "Nigeria": ["MTN Mobile Money", "Airtel Money", "9Mobile", "Glo Mobile"],
+  "Éthiopie": ["Telebirr", "M-Pesa"],
+  "Lesotho": ["Vodacom Mpesa", "EcoCash"],
+  "Sierra Leone": ["Orange Money", "Afrimoney"],
+  "Zambie": ["MTN Mobile Money", "Airtel Money", "Zamtel Money"],
 };
 
 // User schemas
@@ -448,6 +517,7 @@ export const registerSchema = insertUserSchema.extend({
   password: z.string().min(8, "Le mot de passe doit contenir au moins 8 caractères"),
   fullName: z.string().min(2, "Le nom complet est requis"),
   username: z.string().min(3, "Le nom d'utilisateur doit contenir au moins 3 caractères"),
+  country: z.string().min(2, "Le pays est requis"),
 });
 
 // Transaction schemas
@@ -1033,11 +1103,12 @@ export type InsertAutoConversionRule = z.infer<typeof insertAutoConversionRuleSc
 // Which wallet (currency) to use for each destination country
 export const CURRENCY_ZONE: Record<string, SupportedCurrency> = {
   // XAF zone — preserve each country's wallet code
-  CM: "XAF", CF: "XAF", CG: "XAFC", GA: "XAFG", GQ: "XAF", TD: "XAF",
+  CM: "XAF", CF: "XAFCF", CG: "XAFC", GA: "XAFG", GQ: "XAF", TD: "XAFTD",
   // XOF zone — West Africa
-  BJ: "XOFB", BF: "XOFF", CI: "XOFC", GW: "XOF", ML: "XOFM", NE: "XOFN", SN: "XOFS", TG: "XOFT",
+  BJ: "XOFB", BF: "XOFF", CI: "XOFC", GW: "XOFGW", ML: "XOFM", NE: "XOFN", SN: "XOFS", TG: "XOFT",
   // Other countries
-  RW: "RWF", TZ: "TZS", UG: "UGX",
+  RW: "RWF", TZ: "TZS", UG: "UGX", GH: "GHS", KE: "KES", MW: "MWK",
+  MZ: "MZN", NG: "NGN", ET: "ETB", LS: "LSL", SL: "SLE", ZM: "ZMW",
   CD: "CDF",
 };
 

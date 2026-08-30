@@ -42,6 +42,7 @@ import { startPayoutPoller, recoverPendingPayouts } from "./payoutPoller";
 import { startConversionPoller } from "./conversionPoller";
 import { startMerchantWebhookWorker } from "./merchantWebhook";
 import { seedWithdrawalTransferFees } from "./seedWithdrawalTransferFees";
+import { seedPawaPayCountries } from "./pawapayCatalog";
 import { startCleanupScheduler } from "./cleanup";
 import { startDailyReportScheduler } from "./dailyReport";
 import { hydrateIpBlocker } from "./ipBlocker";
@@ -824,6 +825,25 @@ app.use((req, res, next) => {
       `);
       const fixedTogo = (fixTogo as any).rowCount ?? (fixTogo as any).rows?.length ?? 0;
       if (fixedTogo > 0) console.log(`[Migration] Normalized ${fixedTogo} Togo user(s) preferred_currency XOF → XOFT`);
+        const fixCountryWallets = await db.execute(sql`
+          UPDATE users
+          SET preferred_currency = CASE country
+            WHEN 'Centrafrique' THEN 'XAFCF'
+            WHEN 'République Centrafricaine' THEN 'XAFCF'
+            WHEN 'Central African Republic' THEN 'XAFCF'
+            WHEN 'Tchad' THEN 'XAFTD'
+            WHEN 'Chad' THEN 'XAFTD'
+            WHEN 'Guinée-Bissau' THEN 'XOFGW'
+            WHEN 'Guinea-Bissau' THEN 'XOFGW'
+            ELSE preferred_currency
+          END
+          WHERE (country IN ('Centrafrique', 'République Centrafricaine', 'Central African Republic') AND preferred_currency = 'XAF')
+             OR (country IN ('Tchad', 'Chad') AND preferred_currency = 'XAF')
+             OR (country IN ('Guinée-Bissau', 'Guinea-Bissau') AND preferred_currency = 'XOF')
+          RETURNING id
+        `);
+        const fixedCountryWallets = (fixCountryWallets as any).rowCount ?? (fixCountryWallets as any).rows?.length ?? 0;
+        if (fixedCountryWallets > 0) console.log(`[Migration] Normalized ${fixedCountryWallets} country wallet(s)`);
     } catch (mErr: any) {
       console.warn("[Migration] Togo normalization warning:", mErr?.message);
     }
@@ -894,9 +914,14 @@ app.use((req, res, next) => {
       );
       startConversionPoller();
       startMerchantWebhookWorker();
-      seedWithdrawalTransferFees().catch(err =>
-        console.error("[FeesSeed] Error during fee seeding:", err)
-      );
+      seedPawaPayCountries()
+        .then(result => {
+          if (result.countries || result.operators) {
+            console.log(`[PawaPayCatalog] Seeded ${result.countries} country(ies) and ${result.operators} operator(s)`);
+          }
+          return seedWithdrawalTransferFees();
+        })
+        .catch(err => console.error("[PawaPayCatalog/FeesSeed] Error during seeding:", err));
       startCleanupScheduler();
       startDailyReportScheduler();
       hydrateIpBlocker().catch(err =>
