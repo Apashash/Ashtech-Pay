@@ -18,6 +18,7 @@ import { Pencil, ArrowUpCircle, Info, ChevronDown, ChevronRight, Zap, Globe, Cop
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { isProviderAvailable } from "@/lib/providerCountries";
+import { guessPawaPayProviderCode } from "@/lib/pawapayProviderCode";
 import type { Fee, Country, Operator } from "@shared/schema";
 
 interface EditState {
@@ -131,7 +132,7 @@ export default function AdminFeesWithdrawals() {
     setIsActive(fee?.isActive ?? true);
     setLocalProvider(provider);
     setLocalAfribapayCode((op as any).afribapayOperatorCode || guessAfribaCode(op.name));
-    setLocalPawapayCode((op as any).pawapayProviderCode || "");
+    setLocalPawapayCode((op as any).pawapayProviderCode || guessPawaPayProviderCode(op.name, country.code));
   };
 
   const closeEdit = () => {
@@ -463,7 +464,10 @@ export default function AdminFeesWithdrawals() {
                        setLocalProvider(v as "afribapay" | "pixpay" | "pawapay");
                       if (v === "afribapay") { setAshtechMargin(sticky.current.afribaMargin); if (!localAfribapayCode) setLocalAfribapayCode(guessAfribaCode(editing?.operator.name || "")); }
                       else if (v === "pixpay") setAshtechMargin(sticky.current.pixpayMargin);
-                       else if (v === "pawapay") setAshtechMargin(sticky.current.pawapayMargin);
+                       else if (v === "pawapay") {
+                         setAshtechMargin(sticky.current.pawapayMargin);
+                         if (!localPawapayCode) setLocalPawapayCode(guessPawaPayProviderCode(editing.operator.name, editing.country.code));
+                       }
                     }} data-testid="select-provider">
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -494,7 +498,8 @@ export default function AdminFeesWithdrawals() {
                   {localProvider === "pawapay" && (
                     <div className="space-y-2">
                       <Label>Code fournisseur PawaPay</Label>
-                      <Input placeholder="ex: MTN_MOMO_BEN" value={localPawapayCode} onChange={(e) => setLocalPawapayCode(e.target.value)} data-testid="input-pawapay-code" />
+                       <Input placeholder="Ex. MTN_MOMO_CMR" value={localPawapayCode} onChange={(e) => setLocalPawapayCode(e.target.value)} data-testid="input-pawapay-code" />
+                       <p className="text-xs text-muted-foreground">Rempli automatiquement selon le pays et l’opérateur PawaPay. Modifiable si votre compte utilise un code personnalisé.</p>
                     </div>
                   )}
 
