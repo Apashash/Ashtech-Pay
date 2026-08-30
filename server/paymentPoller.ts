@@ -181,6 +181,8 @@ export async function processPaymentResult(payment: PendingPayment, status: "com
 
       const isLink = payment.type === "payment_link";
       const feeMetadata = ((transaction as any).metadata || {}) as Record<string, any>;
+      const walletCurrency = feeMetadata.walletCurrency || paymentCurrency;
+      const depositCountry = feeMetadata.countryCode || feeMetadata.pawaCountry || (transaction as any).recipientCountry || undefined;
       const [txUser, txOperator, txIntent, txPaymentLink] = await Promise.all([
         storage.getUser(payment.userId).catch(() => null),
         transaction.operatorId ? storage.getOperator(transaction.operatorId).catch(() => null) : Promise.resolve(null),
@@ -197,7 +199,7 @@ export async function processPaymentResult(payment: PendingPayment, status: "com
         currency: paymentCurrency,
         reference: payment.reference,
         provider: payment.provider,
-        country: undefined,
+        country: depositCountry,
         depositType: payment.type,
         paymentMethod: transaction.paymentMethod || undefined,
         phone: transaction.recipientPhone || undefined,
@@ -215,7 +217,8 @@ export async function processPaymentResult(payment: PendingPayment, status: "com
           payerPhone: (txIntent as any)?.payerPhone || undefined,
           beneficiaryUsername: (txUser as any)?.username || undefined,
           beneficiaryPhone: (txUser as any)?.phone || undefined,
-          creditedCurrency: paymentCurrency,
+          creditedCurrency: walletCurrency,
+          walletCurrency,
           linkTitle: (txPaymentLink as any)?.title || undefined,
         }),
       }).catch(() => {});
@@ -260,6 +263,7 @@ export async function processPaymentResult(payment: PendingPayment, status: "com
         storage.getUser(payment.userId).catch(() => null),
         transaction.operatorId ? storage.getOperator(transaction.operatorId).catch(() => null) : Promise.resolve(null),
       ]);
+      const failedMetadata = ((transaction as any).metadata || {}) as Record<string, any>;
       notifyDepositFailed({
         userName: (txUserFailed as any)?.fullName || (txUserFailed as any)?.username || "Utilisateur",
         userEmail: (txUserFailed as any)?.email || "",
@@ -269,7 +273,8 @@ export async function processPaymentResult(payment: PendingPayment, status: "com
         currency: transaction.currency || "XAF",
         reference: payment.reference,
         provider: payment.provider,
-        country: (transaction as any).recipientCountry || undefined,
+        country: failedMetadata.countryCode || failedMetadata.pawaCountry || (transaction as any).recipientCountry || undefined,
+        walletCurrency: failedMetadata.walletCurrency || transaction.currency || "XAF",
         depositType: payment.type,
         paymentMethod: transaction.paymentMethod || undefined,
         phone: transaction.recipientPhone || undefined,

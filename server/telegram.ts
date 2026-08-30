@@ -185,12 +185,22 @@ const COUNTRY_INFO: Record<string, { flag: string; name: string }> = {
   JP: { flag: "🇯🇵", name: "Japon" },
   EU: { flag: "🇪🇺", name: "Europe" },
   GQ: { flag: "🇬🇶", name: "Guinée Équatoriale" },
+  ET: { flag: "🇪🇹", name: "Éthiopie" },
+  GH: { flag: "🇬🇭", name: "Ghana" },
+  GW: { flag: "🇬🇼", name: "Guinée-Bissau" },
+  KE: { flag: "🇰🇪", name: "Kenya" },
+  LS: { flag: "🇱🇸", name: "Lesotho" },
+  MW: { flag: "🇲🇼", name: "Malawi" },
+  NG: { flag: "🇳🇬", name: "Nigeria" },
+  SL: { flag: "🇸🇱", name: "Sierra Leone" },
 };
 
 const CURRENCY_TO_COUNTRY: Record<string, string> = {
-  XAF: "CM", XAFC: "CM", XAFG: "GA",
-  XOF: "SN", XOFB: "BJ", XOFC: "CI", XOFF: "BF", XOFT: "TG", XOFS: "SN",
-  TZS: "TZ", UGX: "UG", RWF: "RW",
+  XAF: "CM", XAFCF: "CF", XAFC: "CG", XAFTD: "TD", XAFG: "GA",
+  XOF: "SN", XOFGW: "GW", XOFB: "BJ", XOFC: "CI", XOFF: "BF",
+  XOFM: "ML", XOFN: "NE", XOFT: "TG", XOFS: "SN",
+  TZS: "TZ", UGX: "UG", RWF: "RW", GHS: "GH", KES: "KE", MWK: "MW",
+  MZN: "MZ", NGN: "NG", ETB: "ET", LSL: "LS", SLE: "SL", ZMW: "ZM",
   USD: "US", EUR: "EU", GBP: "GB", CNY: "CN", CDF: "CD",
 };
 
@@ -202,7 +212,18 @@ const COUNTRY_NAME_TO_CODE: Record<string, string> = {
   "rd congo": "CD", "rdc": "CD", tanzanie: "TZ", tanzania: "TZ", ouganda: "UG", uganda: "UG",
   rwanda: "RW", madagascar: "MG", "états-unis": "US", france: "FR",
   "royaume-uni": "GB", europe: "EU", tchad: "TD", centrafrique: "CF",
-  "guinée équatoriale": "GQ",
+  "guinée équatoriale": "GQ", éthiopie: "ET", ethiopie: "ET", ethiopia: "ET",
+  ghana: "GH", "guinée-bissau": "GW", "guinea-bissau": "GW", kenya: "KE",
+  lesotho: "LS", malawi: "MW", nigeria: "NG", "sierra leone": "SL",
+  zambie: "ZM", zambia: "ZM",
+};
+
+const PAWAPAY_ALPHA3_TO_CODE: Record<string, string> = {
+  CMR: "CM", SEN: "SN", CIV: "CI", BFA: "BF", MLI: "ML", BEN: "BJ",
+  TGO: "TG", NER: "NE", GAB: "GA", COG: "CG", CAF: "CF", TCD: "TD",
+  COD: "CD", TZA: "TZ", UGA: "UG", RWA: "RW", MDG: "MG", MOZ: "MZ",
+  ZMB: "ZM", ZWE: "ZW", GNQ: "GQ", GNB: "GW", ETH: "ET", GHA: "GH",
+  KEN: "KE", LSO: "LS", MWI: "MW", NGA: "NG", SLE: "SL",
 };
 
 /** Retourne "🇨🇲 Cameroun" à partir d'un code pays, d'un nom ou d'un code devise */
@@ -211,6 +232,10 @@ function countryDisplay(input: string | null | undefined): string {
   const trimmed = input.trim();
   const upper = trimmed.toUpperCase();
   if (COUNTRY_INFO[upper]) return `${COUNTRY_INFO[upper].flag} ${COUNTRY_INFO[upper].name}`;
+  const fromPawaCountry = PAWAPAY_ALPHA3_TO_CODE[upper];
+  if (fromPawaCountry && COUNTRY_INFO[fromPawaCountry]) {
+    return `${COUNTRY_INFO[fromPawaCountry].flag} ${COUNTRY_INFO[fromPawaCountry].name}`;
+  }
   const fromCurrency = CURRENCY_TO_COUNTRY[upper];
   if (fromCurrency && COUNTRY_INFO[fromCurrency]) return `${COUNTRY_INFO[fromCurrency].flag} ${COUNTRY_INFO[fromCurrency].name}`;
   const fromName = COUNTRY_NAME_TO_CODE[trimmed.toLowerCase()];
@@ -220,6 +245,22 @@ function countryDisplay(input: string | null | undefined): string {
     return `${flag} ${trimmed}`;
   }
   return trimmed;
+}
+
+function walletLine(label: string, walletCurrency: string | undefined, fallbackCurrency: string): string {
+  const wallet = walletCurrency || fallbackCurrency;
+  return wallet ? `${label} : <b>${wallet}</b>\n` : "";
+}
+
+function providerDisplay(provider: string | undefined): string {
+  if (provider === "pawapay") return "PawaPay";
+  if (provider === "afribapay") return "AfribaPay";
+  if (provider === "pixpay") return "PixPay";
+  return provider || "";
+}
+
+function isPawaPay(provider: string | undefined): boolean {
+  return (provider || "").toLowerCase() === "pawapay";
 }
 
 // ─── DÉPÔTS ──────────────────
@@ -238,6 +279,7 @@ export async function notifyNewDeposit(opts: {
   externalReference?: string;
   provider?: string;
   country?: string;
+  walletCurrency?: string;
   grossAmount?: string | number;
   source?: string;
 }): Promise<void> {
@@ -246,12 +288,13 @@ export async function notifyNewDeposit(opts: {
   const hasGross = opts.grossAmount != null && String(opts.grossAmount) !== String(opts.amount);
   const sourceLabel = opts.source === "api" ? "🔌 <b>Paiement via API</b>\n" : opts.source === "hosted_page" ? "🖥️ <b>Page de paiement hébergée (API)</b>\n" : "";
   const msg =
-    `🟡 <b>NOUVEAU DÉPÔT EN ATTENTE</b>\n` +
+    `${isPawaPay(opts.provider) ? "⏳ <b>PAWAPAY — DÉPÔT EN ATTENTE</b>" : "🟡 <b>NOUVEAU DÉPÔT EN ATTENTE</b>"}\n` +
     `──────────────────\n` +
     (sourceLabel ? sourceLabel : "") +
     (hasGross ? `💰 Montant brut : <b>${fmt(opts.grossAmount!, opts.currency)}</b>\n` : "") +
     `💳 Montant crédité : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
-    (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +
+    walletLine("💼 Wallet cible", opts.walletCurrency, opts.currency) +
+    (opts.provider ? `🔌 Passerelle : ${providerDisplay(opts.provider)}\n` : "") +
     `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
     (opts.externalReference ? `🔗 Réf. Fournisseur : <code>${opts.externalReference}</code>\n` : "") +
     `🕐 Heure : ${now()}\n` +
@@ -279,6 +322,7 @@ export async function notifyDepositConfirmed(opts: {
   externalReference?: string;
   provider?: string;
   country?: string;
+  walletCurrency?: string;
   grossAmount?: string | number;
   depositType?: string;
   paymentMethod?: string;
@@ -317,7 +361,7 @@ export async function notifyDepositConfirmed(opts: {
   );
 
   const msg =
-    `✅ <b>PAIEMENT REÇU / DÉPÔT CONFIRMÉ</b>\n` +
+    `${isPawaPay(opts.provider) ? "✅ <b>PAWAPAY — DÉPÔT CONFIRMÉ</b>" : "✅ <b>PAIEMENT REÇU / DÉPÔT CONFIRMÉ</b>"}\n` +
     `──────────────────\n` +
     (sourceLabel ? sourceLabel : "") +
     `📋 Type : <b>${typeLabel}</b>\n` +
@@ -327,8 +371,8 @@ export async function notifyDepositConfirmed(opts: {
     (hasFeeBreakdown ? `🧾 Frais AshTechPay${opts.ashtechFeePercent != null ? ` (${opts.ashtechFeePercent}%)` : ""} : <b>${fmt(opts.ashtechFeeAmount ?? 0, opts.currency)}</b>\n` : "") +
     (hasFeeBreakdown ? `📊 Total des frais${opts.totalFeePercent != null ? ` (${opts.totalFeePercent}%)` : ""} : <b>${fmt(opts.totalFeeAmount ?? 0, opts.currency)}</b>\n` : "") +
     `💳 Montant crédité : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
-    (opts.creditedCurrency ? `💱 Compte crédité : <b>${opts.creditedCurrency}</b>\n` : "") +
-    (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +
+    walletLine("💼 Wallet crédité", opts.creditedCurrency || opts.walletCurrency, opts.currency) +
+    (opts.provider ? `🔌 Passerelle : ${providerDisplay(opts.provider)}\n` : "") +
     `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
     (opts.externalReference ? `🔗 Réf. Fournisseur : <code>${opts.externalReference}</code>\n` : "") +
     `🕐 Heure : ${now()}\n` +
@@ -361,6 +405,7 @@ export async function notifyDepositFailed(opts: {
   reason?: string;
   provider?: string;
   country?: string;
+  walletCurrency?: string;
   depositType?: string;
   paymentMethod?: string;
   phone?: string;
@@ -482,6 +527,7 @@ export async function notifyWithdrawalRequest(opts: {
   reference: string;
   externalReference?: string;
   provider?: string;
+  walletCurrency?: string;
   senderCountry?: string;
   recipientCountry?: string;
   grossAmount?: string | number;
@@ -495,7 +541,8 @@ export async function notifyWithdrawalRequest(opts: {
     `──────────────────\n` +
     (hasGross ? `💰 Montant brut : <b>${fmt(opts.grossAmount!, opts.currency)}</b>\n` : "") +
     `💳 Montant net : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
-    (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +
+    walletLine("💼 Wallet débité", opts.walletCurrency, opts.currency) +
+    (opts.provider ? `🔌 Passerelle : ${providerDisplay(opts.provider)}\n` : "") +
     `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
     (opts.externalReference ? `🔗 Réf. Fournisseur : <code>${opts.externalReference}</code>\n` : "") +
     `🕐 Heure : ${now()}\n` +
@@ -510,11 +557,14 @@ export async function notifyWithdrawalRequest(opts: {
     (opts.operator ? `📡 Opérateur : <b>${opts.operator}</b>\n` : "") +
     (recipientPays ? `🌍 Pays : <b>${recipientPays}</b>\n` : "");
   const ref = opts.reference;
+  const approvalButtons = opts.provider === "pawapay"
+    ? [{ text: "✅ PawaPay", callback_data: `wap:${ref}:pawapay` }]
+    : [
+        { text: "✅ AfribaPay", callback_data: `wap:${ref}:afribapay` },
+        { text: "✅ PixPay", callback_data: `wap:${ref}:pixpay` },
+      ];
   await sendMessageWithKeyboard(msg, [
-    [
-      { text: "✅ AfribaPay", callback_data: `wap:${ref}:afribapay` },
-      { text: "✅ PixPay", callback_data: `wap:${ref}:pixpay` },
-    ],
+    approvalButtons,
     [
       { text: "❌ Rejeter", callback_data: `wrd:${ref}:can` },
       { text: "💸 Solde insuffisant", callback_data: `wrd:${ref}:ins` },
@@ -536,6 +586,8 @@ export async function notifyWithdrawalPendingManual(opts: {
   operator?: string;
   reference: string;
   externalReference?: string;
+  provider?: string;
+  walletCurrency?: string;
   senderCountry?: string;
   recipientCountry?: string;
   grossAmount?: string | number;
@@ -545,10 +597,12 @@ export async function notifyWithdrawalPendingManual(opts: {
   const recipientPays = countryDisplay(opts.recipientCountry || opts.currency);
   const hasGross = opts.grossAmount != null && String(opts.grossAmount) !== String(opts.amount);
   const msg =
-    `⏸ <b>RETRAIT EN ATTENTE MANUELLE</b>\n` +
+    `${isPawaPay(opts.provider) ? "⏸ <b>PAWAPAY — RETRAIT EN ATTENTE MANUELLE</b>" : "⏸ <b>RETRAIT EN ATTENTE MANUELLE</b>"}\n` +
     `──────────────────\n` +
     (hasGross ? `💰 Montant brut : <b>${fmt(opts.grossAmount!, opts.currency)}</b>\n` : "") +
     `💳 Montant net : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
+    walletLine("💼 Wallet débité", opts.walletCurrency, opts.currency) +
+    (opts.provider ? `🔌 Passerelle : ${providerDisplay(opts.provider)}\n` : "") +
     `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
     (opts.externalReference ? `🔗 Réf. Fournisseur : <code>${opts.externalReference}</code>\n` : "") +
     `⚠️ <b>Validation manuelle requise !</b>\n` +
@@ -564,11 +618,14 @@ export async function notifyWithdrawalPendingManual(opts: {
     (opts.operator ? `📡 Opérateur : <b>${opts.operator}</b>\n` : "") +
     (recipientPays ? `🌍 Pays : <b>${recipientPays}</b>\n` : "");
   const ref = opts.reference;
+  const approvalButtons = opts.provider === "pawapay"
+    ? [{ text: "✅ PawaPay", callback_data: `wap:${ref}:pawapay` }]
+    : [
+        { text: "✅ AfribaPay", callback_data: `wap:${ref}:afribapay` },
+        { text: "✅ PixPay", callback_data: `wap:${ref}:pixpay` },
+      ];
   await sendMessageWithKeyboard(msg, [
-    [
-      { text: "✅ AfribaPay", callback_data: `wap:${ref}:afribapay` },
-      { text: "✅ PixPay", callback_data: `wap:${ref}:pixpay` },
-    ],
+    approvalButtons,
     [
       { text: "❌ Annuler & Rembourser", callback_data: `wrd:${ref}:can` },
       { text: "✍️ Raison personnalisée", callback_data: `wrc:${ref}` },
@@ -585,6 +642,7 @@ export async function notifyWithdrawalAutoValidated(opts: {
   reference: string;
   externalReference?: string;
   provider?: string;
+  walletCurrency?: string;
   grossAmount?: string | number;
   recipientName?: string;
   recipientPhone?: string;
@@ -598,14 +656,17 @@ export async function notifyWithdrawalAutoValidated(opts: {
   const recipientPays = countryDisplay(opts.recipientCountry || opts.currency);
   const isTransfer = opts.txType === "transfer_out";
   const header = isTransfer
-    ? `✅ <b>TRANSFERT CONFIRMÉ PAR ${(opts.provider || "FOURNISSEUR").toUpperCase()}</b>\n`
-    : `✅ <b>RETRAIT VALIDÉ AUTOMATIQUEMENT</b>\n`;
+    ? `✅ <b>TRANSFERT CONFIRMÉ PAR ${providerDisplay(opts.provider || "FOURNISSEUR").toUpperCase()}</b>\n`
+    : isPawaPay(opts.provider)
+      ? `✅ <b>PAWAPAY — RETRAIT CONFIRMÉ</b>\n`
+      : `✅ <b>RETRAIT VALIDÉ AUTOMATIQUEMENT</b>\n`;
   const msg =
     header +
     `──────────────────\n` +
     (hasGross ? `💰 Montant brut : <b>${fmt(opts.grossAmount!, opts.currency)}</b>\n` : "") +
     `💳 Montant net : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
-    (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +
+    walletLine("💼 Wallet débité", opts.walletCurrency, opts.currency) +
+    (opts.provider ? `🔌 Passerelle : ${providerDisplay(opts.provider)}\n` : "") +
     `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
     (opts.externalReference ? `🔗 Réf. Fournisseur : <code>${opts.externalReference}</code>\n` : "") +
     `🕐 Heure : ${now()}\n` +
@@ -631,6 +692,7 @@ export async function notifyWithdrawalManuallyValidated(opts: {
   currency: string;
   reference: string;
   externalReference?: string;
+  walletCurrency?: string;
   grossAmount?: string | number;
   recipientName?: string;
   recipientPhone?: string;
@@ -647,6 +709,7 @@ export async function notifyWithdrawalManuallyValidated(opts: {
     `🛡️ Admin : <b>${opts.adminName}</b>\n` +
     (hasGross ? `💰 Montant brut : <b>${fmt(opts.grossAmount!, opts.currency)}</b>\n` : "") +
     `💳 Montant net : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
+    walletLine("💼 Wallet débité", opts.walletCurrency, opts.currency) +
     `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
     (opts.externalReference ? `🔗 Réf. Fournisseur : <code>${opts.externalReference}</code>\n` : "") +
     `🕐 Heure : ${now()}\n` +
@@ -673,6 +736,7 @@ export async function notifyWithdrawalFailed(opts: {
   externalReference?: string;
   reason?: string;
   provider?: string;
+  walletCurrency?: string;
   grossAmount?: string | number;
   recipientName?: string;
   recipientPhone?: string;
@@ -685,13 +749,18 @@ export async function notifyWithdrawalFailed(opts: {
   const senderPays = countryDisplay(opts.senderCountry || opts.currency);
   const recipientPays = countryDisplay(opts.recipientCountry || opts.currency);
   const isTransfer = opts.txType === "transfer_out";
-  const header = isTransfer ? `❌ <b>TRANSFERT ÉCHOUÉ</b>\n` : `❌ <b>ÉCHEC DE RETRAIT</b>\n`;
+  const header = isPawaPay(opts.provider)
+    ? `❌ <b>PAWAPAY — RETRAIT ÉCHOUÉ / REMBOURSÉ</b>\n`
+    : isTransfer
+      ? `❌ <b>TRANSFERT ÉCHOUÉ</b>\n`
+      : `❌ <b>ÉCHEC DE RETRAIT</b>\n`;
   const msg =
     header +
     `──────────────────\n` +
     (hasGross ? `💰 Montant brut : <b>${fmt(opts.grossAmount!, opts.currency)}</b>\n` : "") +
     `💳 Montant net : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
-    (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +
+    walletLine("💼 Wallet remboursé", opts.walletCurrency, opts.currency) +
+    (opts.provider ? `🔌 Passerelle : ${providerDisplay(opts.provider)}\n` : "") +
     (opts.reason ? `⚠️ Raison : ${opts.reason}\n` : "") +
     `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
     (opts.externalReference ? `🔗 Réf. Fournisseur : <code>${opts.externalReference}</code>\n` : "") +
@@ -1475,7 +1544,7 @@ export async function handleTelegramUpdate(
       wallets: { currency: string; balance: number }[];
     } | null>;
     setFxRate: (currency: string, rate: number) => Promise<boolean>;
-    getCountries: () => Promise<{ id: string; code: string; name: string; isActive: boolean }[]>;
+    getCountries: () => Promise<{ id: string; code: string; name: string; currency: string; isActive: boolean }[]>;
     toggleCountry: (id: string) => Promise<{ name: string; isActive: boolean } | null>;
     getTopUsers: () => Promise<{ userName: string; email: string; balance: number; currency: string }[]>;
     broadcastEmail: (subject: string, body: string) => Promise<{ count: number }>;
@@ -1491,7 +1560,13 @@ export async function handleTelegramUpdate(
       revenue: { deposits: number; withdrawals: number; transfers: number; paymentLinks: number; conversions: number; total: number };
     }>;
     resetUserPassword: (email: string) => Promise<{ userName: string; found: boolean } | null>;
-    approveWithdrawal: (reference: string, provider?: string) => Promise<{ userName: string; amount: string; currency: string } | null>;
+    approveWithdrawal: (reference: string, provider?: string) => Promise<{
+      userName: string;
+      amount: string;
+      currency: string;
+      provider?: string;
+      status?: "processing" | "completed" | "failed" | "pending_manual";
+    } | null>;
     rejectWithdrawal: (reference: string, reason: string) => Promise<{ userName: string } | null>;
     searchUsers: (query: string) => Promise<{ userName: string; email: string; balance: number; currency: string; kycStatus: string; country?: string; banned: boolean }[]>;
     approveWithdrawalNumberChange: (changeId: string) => Promise<{ userName: string; userEmail: string; newPhone: string; action: string } | null>;
@@ -1768,15 +1843,24 @@ export async function handleTelegramUpdate(
       const parts = data.split(":");
       const reference = parts[1];
       const provider = parts[2];
-      const providerLabel: Record<string, string> = { afribapay: "AfribaPay", pixpay: "PixPay" };
-      if (provider !== "afribapay" && provider !== "pixpay") {
+      if (provider !== "afribapay" && provider !== "pixpay" && provider !== "pawapay") {
         await editMessageText(messageId, `⚠️ Fournisseur de paiement invalide.`);
         return;
       }
       const result = await handlers.approveWithdrawal(reference, provider);
       if (result) {
+        const statusLabel: Record<string, string> = {
+          processing: "⏳ EN ATTENTE DE CONFIRMATION FOURNISSEUR",
+          pending_manual: "⏸ EN ATTENTE DE RAPPROCHEMENT MANUEL",
+          completed: "✅ CONFIRMÉ",
+          failed: "❌ ÉCHOUÉ / REMBOURSÉ",
+        };
+        const status = result.status || "processing";
+        const header = provider === "pawapay" && status === "processing"
+          ? "⏳ <b>PAWAPAY — RETRAIT SOUMIS</b>"
+          : `${statusLabel[status] || "✅ RETRAIT TRAITÉ"}`;
         await editMessageText(messageId,
-          `✅ <b>RETRAIT APPROUVÉ</b>\n\n👤 ${result.userName}\n💰 ${fmt(result.amount, result.currency)}\n🔌 Via : <b>${providerLabel[provider] || provider}</b>\n🔖 <code>${reference}</code>\n🕐 ${now()}`);
+          `${header}\n\n👤 ${result.userName}\n💰 ${fmt(result.amount, result.currency)}\n🔌 Via : <b>${providerDisplay(provider)}</b>\n🔖 <code>${reference}</code>\n🕐 ${now()}`);
       } else {
         await editMessageText(messageId, `⚠️ Impossible d'approuver — transaction introuvable ou déjà traitée.`);
       }
@@ -1789,7 +1873,7 @@ export async function handleTelegramUpdate(
       const result = await handlers.approveWithdrawal(reference, "afribapay");
       if (result) {
         await editMessageText(messageId,
-          `✅ <b>RETRAIT APPROUVÉ</b>\n\n👤 ${result.userName}\n💰 ${fmt(result.amount, result.currency)}\n🔌 Via : <b>AfribaPay</b>\n🔖 <code>${reference}</code>\n🕐 ${now()}`);
+          `⏳ <b>RETRAIT SOUMIS — EN ATTENTE DE CONFIRMATION</b>\n\n👤 ${result.userName}\n💰 ${fmt(result.amount, result.currency)}\n🔌 Via : <b>AfribaPay</b>\n🔖 <code>${reference}</code>\n🕐 ${now()}`);
       } else {
         await editMessageText(messageId, `⚠️ Impossible d'approuver — transaction introuvable ou déjà traitée.`);
       }
@@ -2145,7 +2229,7 @@ export async function handleTelegramUpdate(
       }
       if (remappedText === "/pays") {
         const countries = await handlers.getCountries();
-        const inline_keyboard = countries.slice(0, 20).map(c => ([{
+          const inline_keyboard = countries.map(c => ([{
           text: `${c.isActive ? "✅" : "🔴"} ${c.name} (${c.code})`,
           callback_data: `ct:${c.id}`,
         }]));
@@ -2349,7 +2433,7 @@ export async function handleTelegramUpdate(
     // ── /pays — list countries with toggle buttons ──
     if (text === "/pays") {
       const countries = await handlers.getCountries();
-      const inline_keyboard = countries.slice(0, 20).map(c => ([{
+      const inline_keyboard = countries.map(c => ([{
         text: `${c.isActive ? "✅" : "🔴"} ${c.name} (${c.code})`,
         callback_data: `ct:${c.id}`,
       }]));

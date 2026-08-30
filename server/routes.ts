@@ -4891,7 +4891,14 @@ export async function registerRoutes(
         totalAmount: totalAmount.toFixed(2),
         recipientPhone: data.phoneNumber || null,
         ...(pawaPayDepositId ? { externalReference: pawaPayDepositId } : {}),
-        ...(pawaPayDepositId ? { metadata: { paymentProvider: "pawapay", pawaCountry: pawaPayCountry(countryCode) } } : {}),
+         ...(pawaPayDepositId ? {
+           metadata: {
+             paymentProvider: "pawapay",
+             pawaCountry: pawaPayCountry(countryCode),
+             countryCode,
+             walletCurrency: countryCurrency,
+           },
+         } : {}),
       });
 
       notifyNewDeposit({
@@ -4899,7 +4906,8 @@ export async function registerRoutes(
         userEmail: user.email || "",
         userPhone: user.phone || undefined,
         userCountry: user.country || undefined,
-        amount: totalAmount,
+        amount: creditedAmount,
+        grossAmount: totalAmount,
         currency: countryCurrency,
         method: data.paymentMethod === "mobile_money" ? `Mobile Money (${operatorName})` : data.paymentMethod,
         phone: data.phoneNumber || undefined,
@@ -5532,6 +5540,7 @@ export async function registerRoutes(
 
       const withdrawalRef = generateTransactionReference("withdrawal");
       const pawaPayPayoutId = withdrawalProvider === "pawapay" ? createPawaPayId() : undefined;
+      let pawaPayInitiationAmbiguous = false;
       const transaction = await storage.createTransaction({
         userId,
         type: "withdrawal",
@@ -5707,6 +5716,8 @@ export async function registerRoutes(
               phone: data.accountDetails,
               operator: (withdrawalOperator as any)?.name || undefined,
               reference: withdrawalRef,
+              provider: paymentProvider,
+              walletCurrency: withdrawalCurrency,
               senderCountry: user.country || "",
               recipientCountry: withdrawalCountryCode || "",
               recipientName: user.fullName || user.username,
@@ -5722,6 +5733,40 @@ export async function registerRoutes(
         }
       } catch (payoutErr: any) {
         console.error(`[Withdrawal] Payout error for ${withdrawalRef}:`, payoutErr.message);
+        if (withdrawalProvider === "pawapay" && pawaPayPayoutId) {
+          pawaPayInitiationAmbiguous = true;
+          await storage.updateTransactionStatus(transaction.id, "pending_manual");
+          addPendingPayout({
+            transactionId: transaction.id,
+            reference: pawaPayPayoutId,
+            externalReference: pawaPayPayoutId,
+            userId,
+            amount: creditedAmount.toFixed(2),
+            totalDebited: totalAmount.toFixed(2),
+            provider: "pawapay",
+            countryCode: withdrawalCountryCode,
+            txType: "withdrawal",
+            txCurrency: withdrawalCurrency,
+            walletCurrency: withdrawalCurrency,
+          });
+          notifyWithdrawalPendingManual({
+            userName: user.fullName || user.username,
+            userEmail: user.email || "",
+            userPhone: user.phone || undefined,
+            amount: creditedAmount,
+            grossAmount: totalAmount,
+            currency: withdrawalCurrency,
+            phone: data.accountDetails,
+            operator: (withdrawalOperator as any)?.name || undefined,
+            reference: withdrawalRef,
+            externalReference: pawaPayPayoutId,
+            provider: "pawapay",
+            walletCurrency: withdrawalCurrency,
+            senderCountry: user.country || "",
+            recipientCountry: withdrawalCountryCode || "",
+            recipientName: user.fullName || user.username,
+          }).catch(() => {});
+        }
       }
 
       audit(req, AUDIT.WITHDRAWAL_CREATED, {
@@ -5735,7 +5780,9 @@ export async function registerRoutes(
         },
       });
       res.json({ 
-        transaction,
+        transaction: withdrawalProvider === "pawapay" && pawaPayPayoutId
+          ? { ...transaction, status: pawaPayInitiationAmbiguous ? "pending_manual" : "processing" }
+          : transaction,
         feeDetails: {
           requestedAmount: amount,
           feeAmount,
@@ -12563,6 +12610,7 @@ export async function registerRoutes(
         amount: tx.amount,
         grossAmount: (tx as any).totalAmount || tx.amount,
         currency: tx.currency || "XAF",
+        walletCurrency: (tx.metadata as any)?.walletCurrency || tx.currency || "XAF",
         reference: tx.reference || tx.id,
         externalReference: (tx as any).externalReference || undefined,
         recipientName: tx.recipientName || undefined,
@@ -15198,7 +15246,14 @@ export async function registerRoutes(
         notifyUrl: notify_url || null,
         source: "api",
          ...(pawaPayDepositId ? { externalReference: pawaPayDepositId } : {}),
-         ...(pawaPayDepositId ? { metadata: { paymentProvider: "pawapay", pawaCountry: pawaPayCountry(country.code) } } : {}),
+          ...(pawaPayDepositId ? {
+            metadata: {
+              paymentProvider: "pawapay",
+              pawaCountry: pawaPayCountry(country.code),
+              countryCode: country.code,
+              walletCurrency,
+            },
+          } : {}),
       });
 
       // ── Call payment provider ──────────────────────────────────────────────
@@ -15850,7 +15905,14 @@ export async function registerRoutes(
         source: "hosted_page",
         confirmedAt: null,
          ...(pawaPayDepositId ? { externalReference: pawaPayDepositId } : {}),
-         ...(pawaPayDepositId ? { metadata: { paymentProvider: "pawapay", pawaCountry: pawaPayCountry(country.code) } } : {}),
+          ...(pawaPayDepositId ? {
+            metadata: {
+              paymentProvider: "pawapay",
+              pawaCountry: pawaPayCountry(country.code),
+              countryCode: country.code,
+              walletCurrency,
+            },
+          } : {}),
       } as any);
 
       // Update hosted session to processing
@@ -16423,6 +16485,7 @@ export async function registerRoutes(
             id: String(c.id),
             code: c.code || "",
             name: c.name || c.code || "",
+            currency: CURRENCY_ZONE[String(c.code || "").toUpperCase()] || c.currency || "XAF",
             isActive: c.isActive !== false,
           }));
         },
@@ -16616,8 +16679,14 @@ export async function registerRoutes(
           const beneficiaryPhone = tx.recipientPhone || "";
           const beneficiaryName = tx.recipientName || txUser.fullName || txUser.username;
           if (tx.externalReference && isPawaPayUuidV4(tx.externalReference)) {
-            await reconcilePawaPayPayoutAttempt(tx);
-            return { userName: txUser.fullName || txUser.username, amount: tx.amount, currency: txCurrency };
+            const reconciled = await reconcilePawaPayPayoutAttempt(tx);
+            return {
+              userName: txUser.fullName || txUser.username,
+              amount: tx.amount,
+              currency: txCurrency,
+              provider: "pawapay",
+              status: reconciled === "completed" ? "completed" : reconciled === "failed" ? "failed" : "processing",
+            };
           }
 
           try {
@@ -16698,7 +16767,13 @@ export async function registerRoutes(
                   amount: tx.amount, totalDebited: tx.totalAmount || tx.amount, provider: "pawapay",
                   countryCode, txType: tx.type, txCurrency,
                 });
-                return { userName: txUser.fullName || txUser.username, amount: tx.amount, currency: txCurrency };
+                return {
+                  userName: txUser.fullName || txUser.username,
+                  amount: tx.amount,
+                  currency: txCurrency,
+                  provider: "pawapay",
+                  status: "processing",
+                };
               }
               await assertPawaPayProviderActive(resolvePawaPayProviderCode(operator, operator?.name || "", countryCode), "PAYOUT", pawaPayCountry(countryCode));
               const payoutId = createPawaPayId();
@@ -16744,6 +16819,7 @@ export async function registerRoutes(
                 countryCode,
                 txType: tx.type,
                 txCurrency,
+                walletCurrency: (tx.metadata as any)?.walletCurrency || txCurrency,
               });
             } else {
               console.error(`[Telegram Approve] Payout failed via ${provider}: ${payoutResult.message}`);
@@ -16756,7 +16832,19 @@ export async function registerRoutes(
             await storage.updateTransactionStatus(tx.id, provider === "pawapay" ? "pending_manual" : "completed");
           }
 
-          return { userName: txUser.fullName || txUser.username, amount: tx.amount, currency: txCurrency };
+          const finalTransaction = await storage.getTransactionById(tx.id).catch(() => null);
+          const finalStatus = finalTransaction?.status === "pending_manual"
+            ? "pending_manual"
+            : finalTransaction?.status === "completed"
+              ? "completed"
+              : "processing";
+          return {
+            userName: txUser.fullName || txUser.username,
+            amount: tx.amount,
+            currency: txCurrency,
+            provider,
+            status: finalStatus,
+          };
         },
 
         // ── Reject withdrawal ────────────────────────────────────────────────

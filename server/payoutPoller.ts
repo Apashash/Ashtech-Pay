@@ -86,6 +86,7 @@ export async function recoverPendingPayouts() {
         countryCode,
         txType:        t.type,
         txCurrency:    t.currency || "XAF",
+        walletCurrency: ((t as any).metadata || {}).walletCurrency || t.currency || "XAF",
       });
       console.log(`[PayoutPoller] Recovered: ${pollerRef} (${t.type}, provider=${provider})`);
     }
@@ -107,6 +108,7 @@ export async function processPayout(payout: PendingPayout, apiStatus: string) {
     }
 
     const currency = transaction.currency || "XAF";
+    const walletCurrency = payout.walletCurrency || ((transaction as any).metadata || {}).walletCurrency || currency;
 
     if (apiStatus === "success") {
       const claimed = await storage.claimTransactionStatus(payout.transactionId, "completed", ["pending", "processing", "pending_manual"]);
@@ -148,6 +150,7 @@ export async function processPayout(payout: PendingPayout, apiStatus: string) {
         reference: (transaction as any).reference || payout.reference,
         externalReference: (transaction as any).externalReference || undefined,
         provider: payout.provider,
+         walletCurrency,
         recipientName: transaction.recipientName || undefined,
         recipientPhone: transaction.recipientPhone || undefined,
         recipientCountry: transaction.recipientCountry || undefined,
@@ -194,6 +197,7 @@ export async function processPayout(payout: PendingPayout, apiStatus: string) {
         externalReference: (transaction as any).externalReference || undefined,
         reason: apiStatus,
         provider: payout.provider,
+         walletCurrency,
         recipientName: transaction.recipientName || undefined,
         recipientPhone: transaction.recipientPhone || undefined,
         recipientCountry: transaction.recipientCountry || undefined,
@@ -225,6 +229,7 @@ export async function processPawaPayPayoutCallback(
     countryCode: (transaction as any).recipientCountry || "CM",
     txType: transaction.type,
     txCurrency: transaction.currency || "XAF",
+    walletCurrency: ((transaction as any).metadata || {}).walletCurrency || transaction.currency || "XAF",
   }, status);
 }
 
