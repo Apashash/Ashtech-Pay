@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  PAWAPAY_SANDBOX_BASE_URL,
+  PAWAPAY_PRODUCTION_BASE_URL,
   clearPawaPayActiveConfigurationCache,
   createPawaPayDeposit,
   createPawaPayPaymentPage,
@@ -15,17 +15,20 @@ import {
   validatePawaPayCurrency,
   validatePawaPayMsisdn,
 } from "../server/pawapay.ts";
+import {
+  PAWAPAY_DEPOSIT_CALLBACK_URL,
+  PAWAPAY_PAYOUT_CALLBACK_URL,
+  PAWAPAY_PRODUCTION_BASE_URL as CONFIGURED_PRODUCTION_URL,
+  maskPawaPaySecret,
+  replacePawaPayCredentials,
+} from "../server/pawapayConfig.ts";
 
 const originalFetch = globalThis.fetch;
 const originalToken = process.env.PAWAPAY_API_TOKEN;
-const originalEnvironment = process.env.PAWAPAY_ENVIRONMENT;
-const originalBaseUrl = process.env.PAWAPAY_BASE_URL;
 const requestId = "5c0cbb4b-8961-45d5-8948-aa7ad7f42c65";
 
 function restoreEnvironment() {
   if (originalToken === undefined) delete process.env.PAWAPAY_API_TOKEN; else process.env.PAWAPAY_API_TOKEN = originalToken;
-  if (originalEnvironment === undefined) delete process.env.PAWAPAY_ENVIRONMENT; else process.env.PAWAPAY_ENVIRONMENT = originalEnvironment;
-  if (originalBaseUrl === undefined) delete process.env.PAWAPAY_BASE_URL; else process.env.PAWAPAY_BASE_URL = originalBaseUrl;
 }
 
 test("PawaPay validates MSISDN, currency, and documented decimal amount format", () => {
@@ -47,16 +50,36 @@ test("PawaPay normalizes provider transaction states", () => {
   assert.equal(normalizePawaPayStatus("ACCEPTED"), "pending");
 });
 
-test("PawaPay is safely unconfigured until a token is supplied", () => {
+test("PawaPay production settings mask secrets and never place them in callback URLs", () => {
+  const token = "prod-token-123456";
+  assert.equal(maskPawaPaySecret(token), "••••3456");
+  assert.equal(maskPawaPaySecret(""), null);
+  assert.equal(CONFIGURED_PRODUCTION_URL, "https://api.pawapay.io/v2");
+  assert.equal(PAWAPAY_DEPOSIT_CALLBACK_URL, "https://ashtechpay.top/api/pawapay/deposit-callback");
+  assert.equal(PAWAPAY_PAYOUT_CALLBACK_URL, "https://ashtechpay.top/api/pawapay/payout-callback");
+  assert.equal(PAWAPAY_DEPOSIT_CALLBACK_URL.includes(token), false);
+  assert.equal(PAWAPAY_PAYOUT_CALLBACK_URL.includes(token), false);
+});
+
+test("PawaPay credential writes fail closed without the field encryption key", async () => {
+  const originalKey = process.env.FIELD_ENCRYPTION_KEY;
+  delete process.env.FIELD_ENCRYPTION_KEY;
+  await assert.rejects(
+    () => replacePawaPayCredentials({ apiToken: "prod-token-123456" }),
+    /FIELD_ENCRYPTION_KEY/,
+  );
+  if (originalKey === undefined) delete process.env.FIELD_ENCRYPTION_KEY;
+  else process.env.FIELD_ENCRYPTION_KEY = originalKey;
+});
+
+test("PawaPay is safely unconfigured until a token is supplied", async () => {
   delete process.env.PAWAPAY_API_TOKEN;
-  assert.equal(isPawaPayConfigured(), false);
+  assert.equal(await isPawaPayConfigured(), false);
   restoreEnvironment();
 });
 
-test("PawaPay uses sandbox bearer auth and sends a v2 MMO deposit", async () => {
+test("PawaPay uses production bearer auth and sends a v2 MMO deposit", async () => {
   process.env.PAWAPAY_API_TOKEN = "test-token";
-  process.env.PAWAPAY_ENVIRONMENT = "sandbox";
-  delete process.env.PAWAPAY_BASE_URL;
   let receivedUrl = "";
   let receivedInit: RequestInit | undefined;
   globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
@@ -76,7 +99,7 @@ test("PawaPay uses sandbox bearer auth and sends a v2 MMO deposit", async () => 
       payer: { provider: "MTN_MOMO_CMR", phoneNumber: "237656000000" },
       metadata: { order: "abc" },
     });
-    assert.equal(receivedUrl, `${PAWAPAY_SANDBOX_BASE_URL}/deposits`);
+    assert.equal(receivedUrl, `${PAWAPAY_PRODUCTION_BASE_URL}/deposits`);
     assert.equal((receivedInit?.headers as Record<string, string>).Authorization, "Bearer test-token");
     const body = JSON.parse(String(receivedInit?.body));
     assert.deepEqual(body.payer, {
@@ -95,7 +118,6 @@ test("PawaPay uses sandbox bearer auth and sends a v2 MMO deposit", async () => 
 
 test("PawaPay reads nested deposit data and creates payment pages with v2 fields", async () => {
   process.env.PAWAPAY_API_TOKEN = "test-token";
-  process.env.PAWAPAY_ENVIRONMENT = "sandbox";
   const requests: Array<{ url: string; body?: any }> = [];
   globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
     requests.push({ url: String(url), body: init?.body ? JSON.parse(String(init.body)) : undefined });
@@ -131,7 +153,6 @@ test("PawaPay reads nested deposit data and creates payment pages with v2 fields
 
 test("PawaPay caches active-conf responses", async () => {
   process.env.PAWAPAY_API_TOKEN = "test-token";
-  process.env.PAWAPAY_ENVIRONMENT = "sandbox";
   clearPawaPayActiveConfigurationCache();
   let calls = 0;
   globalThis.fetch = (async () => {
@@ -151,7 +172,6 @@ test("PawaPay caches active-conf responses", async () => {
 
 test("PawaPay rejects mutation when provider is inactive", async () => {
   process.env.PAWAPAY_API_TOKEN = "test-token";
-  process.env.PAWAPAY_ENVIRONMENT = "sandbox";
   clearPawaPayActiveConfigurationCache();
   let mutationCalled = false;
   globalThis.fetch = (async (url: string | URL | Request) => {

@@ -10,7 +10,8 @@ import {
   Lock,
   ShieldCheck,
   ShieldBan,
-  Mail
+  Mail,
+  KeyRound
 } from "lucide-react";
 
 export default function AdminSettings() {
@@ -65,6 +66,14 @@ export default function AdminSettings() {
       icon: ShieldCheck,
       color: "bg-sky-500/10 text-sky-600",
       borderColor: "border-sky-500/30"
+    },
+    {
+      id: "pawapay",
+      title: "PawaPay production",
+      description: "Clés API et callbacks sécurisés",
+      icon: KeyRound,
+      color: "bg-emerald-500/10 text-emerald-600",
+      borderColor: "border-emerald-500/30"
     },
   ];
 

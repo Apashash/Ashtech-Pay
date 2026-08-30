@@ -3,7 +3,6 @@
  * database dependency, so callers can decide how and when to persist requests.
  */
 
-export const PAWAPAY_SANDBOX_BASE_URL = "https://api.sandbox.pawapay.io/v2";
 export const PAWAPAY_PRODUCTION_BASE_URL = "https://api.pawapay.io/v2";
 
 export type PawaPayStatus = "completed" | "failed" | "pending";
@@ -91,23 +90,26 @@ export interface PawaPayActiveConfigurationOptions {
 }
 
 function configuredBaseUrl(): string {
-  const explicit = process.env.PAWAPAY_BASE_URL?.trim();
-  if (explicit) return explicit.replace(/\/+$/, "");
-  const environment = process.env.PAWAPAY_ENVIRONMENT?.trim().toLowerCase();
-  if (!environment || environment === "sandbox") return PAWAPAY_SANDBOX_BASE_URL;
-  if (environment === "production" || environment === "prod") return PAWAPAY_PRODUCTION_BASE_URL;
-  throw new PawaPayConfigurationError("PAWAPAY_ENVIRONMENT must be sandbox or production");
+  return PAWAPAY_PRODUCTION_BASE_URL;
 }
 
-function apiToken(): string {
-  const token = process.env.PAWAPAY_API_TOKEN?.trim();
-  if (!token) throw new PawaPayConfigurationError("PAWAPAY_API_TOKEN is not configured");
-  return token;
+async function apiToken(): Promise<string> {
+  const { getPawaPayApiToken } = await import("./pawapayConfig");
+  const token = await getPawaPayApiToken();
+  if (token) return token;
+
+  // The environment fallback is intentionally limited to non-production local
+  // development. A value saved through the admin page always takes priority.
+  if (process.env.NODE_ENV !== "production") {
+    const developmentToken = process.env.PAWAPAY_API_TOKEN?.trim();
+    if (developmentToken) return developmentToken;
+  }
+  throw new PawaPayConfigurationError("PawaPay production API token is not configured");
 }
 
-export function isPawaPayConfigured(): boolean {
+export async function isPawaPayConfigured(): Promise<boolean> {
   try {
-    apiToken();
+    await apiToken();
     configuredBaseUrl();
     return true;
   } catch {
@@ -208,10 +210,11 @@ async function request(path: string, method: "GET" | "POST", body?: unknown): Pr
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   let response: Response;
   try {
+    const token = await apiToken();
     response = await fetch(`${configuredBaseUrl()}${path}`, {
       method,
       headers: {
-        Authorization: `Bearer ${apiToken()}`,
+        Authorization: `Bearer ${token}`,
         ...(body === undefined ? {} : { "Content-Type": "application/json" }),
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),

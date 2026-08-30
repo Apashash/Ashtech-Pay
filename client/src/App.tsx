@@ -64,6 +64,7 @@ import AdminSettingsMaintenance from "@/pages/admin/settings/maintenance";
 import AdminSettingsOtp from "@/pages/admin/settings/otp";
 import AdminSettingsLimits from "@/pages/admin/settings/limits";
 import AdminSettingsTurnstile from "@/pages/admin/settings/turnstile";
+import AdminSettingsPawaPay from "@/pages/admin/settings/pawapay";
 
 import AdminWithdrawalNumbers from "@/pages/admin/withdrawal-numbers";
 import AdminDeposits from "@/pages/admin/transactions/deposits";
@@ -218,6 +219,7 @@ function Router() {
       <Route path={`${A}/settings/otp`} component={AdminSettingsOtp} />
       <Route path={`${A}/settings/limits`} component={AdminSettingsLimits} />
       <Route path={`${A}/settings/turnstile`} component={AdminSettingsTurnstile} />
+      <Route path={`${A}/settings/pawapay`} component={AdminSettingsPawaPay} />
       <Route path={`${A}/withdrawal-numbers`} component={AdminWithdrawalNumbers} />
       <Route path={`${A}/global-messages`} component={AdminGlobalMessages} />
       <Route path={`${A}/kyc`} component={AdminKYC} />

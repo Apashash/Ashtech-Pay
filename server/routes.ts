@@ -82,6 +82,11 @@ import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserW
 import { addPendingPayout, removePendingPayout } from "./payoutPoller";
 import { processPawaPayPayoutCallback } from "./payoutPoller";
 import { isPawaPayUuidV4, parsePawaPayCallback, verifyPawaPayCallbackSignature } from "./pawapay";
+import {
+  getPawaPaySettingsView,
+  getPawaPayWebhookSecret,
+  replacePawaPayCredentials,
+} from "./pawapayConfig";
 import { enqueueMerchantWebhook } from "./merchantWebhook";
 import { buildProviderErrorPayload } from "./providerErrors";
 import { addSSEClient, removeSSEClient, setActiveTicket, isUserOnline, getOnlineUserIds, getAdminViewingTicket, getUserViewingTicket, notifyUser, notifyAdmins, broadcastOnlineStatus, notifyUserForceLogout, notifyOtherSessionsForceLogout, notifyAllUsersForceLogout, notifySpecificSessionForceLogout } from "./sse";
@@ -6339,9 +6344,59 @@ export async function registerRoutes(
     }
   });
 
+  // Dedicated PawaPay production credentials. Secrets are intentionally kept
+  // out of the generic settings API and out of every response/log/audit detail.
+  app.get("/api/admin/pawapay/settings", requireAuth, requireAdmin, async (_req, res) => {
+    try {
+      res.json(await getPawaPaySettingsView());
+    } catch (error) {
+      console.error("[Admin PawaPay] settings read failed:", (error as Error)?.message || "unknown error");
+      res.status(500).json({ message: "Impossible de lire la configuration PawaPay" });
+    }
+  });
+
+  app.put("/api/admin/pawapay/settings", requireAuth, requireAdmin, adminActionLimiter, async (req, res) => {
+    try {
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const apiToken = body.apiToken;
+      const webhookSecret = body.webhookSecret;
+      if ((apiToken !== undefined && typeof apiToken !== "string") ||
+          (webhookSecret !== undefined && typeof webhookSecret !== "string")) {
+        return res.status(400).json({ message: "Identifiants PawaPay invalides" });
+      }
+      await replacePawaPayCredentials({ apiToken, webhookSecret });
+      audit(req, AUDIT.SETTINGS_UPDATED, {
+        actorType: "admin",
+        targetType: "platform_setting",
+        targetId: "pawapay",
+        details: {
+          fields: [
+            ...(apiToken?.trim() ? ["api_token"] : []),
+            ...(webhookSecret?.trim() ? ["webhook_secret"] : []),
+          ],
+          replaced: true,
+        },
+      });
+      res.json(await getPawaPaySettingsView());
+    } catch (error: any) {
+      const message = String(error?.message || "");
+      if (message.includes("FIELD_ENCRYPTION_KEY")) {
+        return res.status(503).json({ message: "Le chiffrement serveur n'est pas configuré" });
+      }
+      if (message.includes("invalid length") || message.includes("At least one")) {
+        return res.status(400).json({ message: "Au moins une clé valide est requise" });
+      }
+      console.error("[Admin PawaPay] settings write failed:", message || "unknown error");
+      res.status(500).json({ message: "Impossible d'enregistrer la configuration PawaPay" });
+    }
+  });
+
   // Admin: settings
   app.get("/api/admin/settings/:key", requireAuth, requireAdmin, async (req, res) => {
     try {
+      if (req.params.key.startsWith("pawapay_")) {
+        return res.status(404).json({ message: "Paramètre introuvable" });
+      }
       const setting = await storage.getSetting(req.params.key);
       res.json(setting || { value: "" });
     } catch (error) {
@@ -6356,6 +6411,9 @@ export async function registerRoutes(
       // Prevents injection of arbitrary internal keys (session secrets, botban:* patterns, etc.)
       if (!key || typeof key !== "string" || !/^[a-z0-9_:.\-]{1,100}$/.test(key)) {
         return res.status(400).json({ message: "Clé invalide — format non autorisé" });
+      }
+      if (key.startsWith("pawapay_")) {
+        return res.status(400).json({ message: "Utilisez la page dédiée PawaPay" });
       }
       const setting = await storage.upsertSetting(key, value, description);
       res.json(setting);
@@ -6375,6 +6433,9 @@ export async function registerRoutes(
       const badKey = settings.find(s => !s.key || typeof s.key !== "string" || !/^[a-z0-9_:.\-]{1,100}$/.test(s.key));
       if (badKey) {
         return res.status(400).json({ message: `Clé invalide: ${badKey.key}` });
+      }
+      if (settings.some(s => s.key.startsWith("pawapay_"))) {
+        return res.status(400).json({ message: "Utilisez la page dédiée PawaPay" });
       }
       const results = await Promise.all(
         settings.map(({ key, value, description }) =>
@@ -11842,7 +11903,7 @@ export async function registerRoutes(
   // Admin: Platform settings
   app.get("/api/admin/settings", requireAuth, requireAdmin, async (req, res) => {
     try {
-      const settings = await storage.getAllSettings();
+      const settings = (await storage.getAllSettings()).filter(setting => !setting.key.startsWith("pawapay_"));
       res.json(settings);
     } catch (error) {
       console.error("Admin get settings error:", error);
@@ -11856,6 +11917,9 @@ export async function registerRoutes(
       
       if (!key || value === undefined) {
         return res.status(400).json({ message: "Clé et valeur requises" });
+      }
+      if (typeof key !== "string" || key.startsWith("pawapay_")) {
+        return res.status(400).json({ message: "Utilisez la page dédiée PawaPay" });
       }
       
       const setting = await storage.upsertSetting(key, String(value), description || undefined);
@@ -11887,6 +11951,9 @@ export async function registerRoutes(
       
       const results = [];
       for (const [key, value] of Object.entries(settings)) {
+        if (key && key.startsWith("pawapay_")) {
+          return res.status(400).json({ message: "Utilisez la page dédiée PawaPay" });
+        }
         if (key && value !== undefined) {
           const setting = await storage.upsertSetting(key, String(value));
           results.push(setting);
@@ -13434,15 +13501,15 @@ export async function registerRoutes(
   // PawaPay callbacks contain only a provider UUID.  We deliberately look up
   // that UUID in external_reference rather than accepting a merchant reference.
   async function handlePawaPayCallback(req: Request, res: Response, direction: "deposit" | "payout") {
-    const webhookSecret = process.env.WEBHOOK_SECRET;
-    if (!webhookSecret) {
-      return res.status(503).json({ message: "Webhook endpoint not configured" });
-    }
-    const callbackToken = (req.query.token as string) || (req.headers["x-webhook-token"] as string);
-    if (callbackToken !== webhookSecret) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
     try {
+      const webhookSecret = await getPawaPayWebhookSecret();
+      if (!webhookSecret) {
+        return res.status(503).json({ message: "Webhook endpoint not configured" });
+      }
+      const callbackToken = (req.query.token as string) || (req.headers["x-webhook-token"] as string);
+      if (callbackToken !== webhookSecret) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       if (process.env.PAWAPAY_REQUIRE_SIGNED_CALLBACKS === "true") {
         const headers: Record<string, string | string[] | undefined> = {};
         for (const [key, value] of Object.entries(req.headers)) headers[key] = value;
