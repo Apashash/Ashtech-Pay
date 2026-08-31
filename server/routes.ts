@@ -4496,7 +4496,7 @@ export async function registerRoutes(
               phoneNumber: normalizePhone(recipientPhone) || "",
             },
             clientReferenceId: reference,
-            customerMessage: description || undefined,
+            customerMessage: PAWAPAY_CUSTOMER_MESSAGE,
           });
           payoutResult = { success: pawaResult.success, transaction_id: payoutId, message: pawaResult.providerMessage };
         }
@@ -5674,6 +5674,7 @@ export async function registerRoutes(
               phoneNumber: normalizePhone(data.accountDetails) || "",
             },
             clientReferenceId: withdrawalRef,
+            customerMessage: PAWAPAY_CUSTOMER_MESSAGE,
           });
           payoutResult = { success: result.success, transaction_id: pawaPayPayoutId, message: result.providerMessage };
         }
@@ -10768,6 +10769,7 @@ export async function registerRoutes(
                 phoneNumber: normalizePhone(existingTx.recipientPhone) || "",
               },
               clientReferenceId: existingTx.reference || existingTx.id,
+              customerMessage: PAWAPAY_CUSTOMER_MESSAGE,
             });
             // Only an explicit terminal provider rejection is safe to refund.
             // Non-2xx/transport outcomes are ambiguous and must keep this UUID
@@ -12457,6 +12459,7 @@ export async function registerRoutes(
             phoneNumber: normalizePhone(phone) || "",
           },
           clientReferenceId: txRef,
+          customerMessage: PAWAPAY_CUSTOMER_MESSAGE,
         });
         payoutResult = { success: result.success, transaction_id: pawaPayRetryId, message: result.providerMessage };
         if (result.success) pollerRef = pawaPayRetryId;
@@ -16838,6 +16841,7 @@ export async function registerRoutes(
                   phoneNumber: normalizePhone(beneficiaryPhone) || "",
                 },
                 clientReferenceId: txRef,
+                customerMessage: PAWAPAY_CUSTOMER_MESSAGE,
               });
               telegramPollerRef = payoutId;
               payoutResult = { success: result.success, transaction_id: payoutId, message: result.providerMessage };
