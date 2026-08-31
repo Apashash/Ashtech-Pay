@@ -310,7 +310,9 @@ app.use((req, res, next) => {
       const isMerchantProviderError =
         req.path === "/v1/collect" ||
         /^\/api\/public\/hosted-session\/[^/]+\/pay$/.test(req.path);
-      const isUserProviderError = req.path === "/api/deposits";
+      const isUserProviderError =
+        req.path === "/api/deposits" ||
+        req.path === "/api/withdrawals";
       const isSafeProviderFailure =
         (isMerchantProviderError || isUserProviderError) &&
         (bodyJson.error === "gateway_error" ||

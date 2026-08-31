@@ -5583,8 +5583,14 @@ export async function registerRoutes(
       if (withdrawalProvider === "pawapay") {
         try {
           await assertPawaPayProviderActive(resolvePawaPayProviderCode(withdrawalOperator, withdrawalOperator?.name || "", withdrawalCountryCode), "PAYOUT", pawaPayCountry(withdrawalCountryCode));
-        } catch {
-          return res.status(503).json({ message: "Le service de paiement est temporairement indisponible." });
+        } catch (error: any) {
+          console.error("[Withdrawal] PawaPay provider validation failed:", error);
+          return res.status(503).json(buildProviderErrorPayload({
+            error: "provider_unavailable",
+            message: error?.message,
+            fallback: "Le service de paiement est temporairement indisponible.",
+            provider: "pawapay",
+          }));
         }
       }
 
@@ -5644,7 +5650,14 @@ export async function registerRoutes(
         const countryCode = withdrawalCountryCode.toUpperCase();
         const paymentProvider = withdrawalProvider;
 
-      let payoutResult: { success: boolean; transaction_id?: string; message?: string } = {
+      let payoutResult: {
+        success: boolean;
+        transaction_id?: string;
+        message?: string;
+        status?: string;
+        providerCode?: string;
+        providerStatus?: number;
+      } = {
         success: false,
         message: "Aucun fournisseur de paiement configuré",
       };
@@ -5730,7 +5743,14 @@ export async function registerRoutes(
             clientReferenceId: withdrawalRef,
             customerMessage: PAWAPAY_CUSTOMER_MESSAGE,
           });
-          payoutResult = { success: result.success, transaction_id: pawaPayPayoutId, message: result.providerMessage };
+          payoutResult = {
+            success: result.success,
+            transaction_id: pawaPayPayoutId,
+            message: result.providerMessage,
+            status: result.status,
+            providerCode: result.providerCode,
+            providerStatus: result.providerStatus,
+          };
         }
 
         if (payoutResult.success) {
@@ -5770,7 +5790,27 @@ export async function registerRoutes(
             errMsg.includes("invalid operator") ||
             errMsg.includes("opérateur invalide") ||
             errMsg.includes("blacklist");
-          if (!isDefinitiveRejection) {
+          const isPawaPayDefinitiveRejection =
+            paymentProvider === "pawapay" && payoutResult.status === "failed";
+          if (!isDefinitiveRejection && !isPawaPayDefinitiveRejection) {
+            if (paymentProvider === "pawapay" && pawaPayPayoutId) {
+              // PawaPay may return an HTTP/application error without a final
+              // status even though the payout was accepted. Reconcile the
+              // persisted UUID instead of leaving the transaction untracked.
+              addPendingPayout({
+                transactionId: transaction.id,
+                reference: pawaPayPayoutId,
+                externalReference: pawaPayPayoutId,
+                userId,
+                amount: creditedAmount.toFixed(2),
+                totalDebited: totalAmount.toFixed(2),
+                provider: "pawapay",
+                countryCode,
+                txType: "withdrawal",
+                txCurrency: withdrawalCurrency,
+                walletCurrency: withdrawalCurrency,
+              });
+            }
             console.log(`[Withdrawal] Pending manual review for ${withdrawalRef} (${paymentProvider}): ${payoutResult.message}`);
             await storage.updateTransactionStatus(transaction.id, "pending_manual");
             await storage.createUserNotification({
@@ -5801,6 +5841,18 @@ export async function registerRoutes(
             console.error(`[Withdrawal] Payout failed for ${withdrawalRef} (${paymentProvider}): ${payoutResult.message}`);
             await storage.updateTransactionStatus(transaction.id, "failed");
             await storage.refundToOriginalWallet(userId, "withdrawal", withdrawalCurrency, totalAmount);
+            if (paymentProvider === "pawapay") {
+              return res.status(400).json(buildProviderErrorPayload({
+                error: "payment_initiation_failed",
+                message: payoutResult.message
+                  ? `Le retrait a échoué : ${payoutResult.message}`
+                  : undefined,
+                fallback: "Le retrait a été refusé par le fournisseur de paiement.",
+                provider: "pawapay",
+                providerCode: payoutResult.providerCode,
+                providerStatus: payoutResult.providerStatus,
+              }));
+            }
             return res.status(400).json({
               message: `Le retrait a échoué: ${sanitizeGatewayMessage(payoutResult.message, "erreur du réseau de l'opérateur.")}`,
             });

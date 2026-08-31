@@ -248,7 +248,14 @@ async function checkProviderStatus(payout: PendingPayout): Promise<{ status: str
       // A timeout or not-found is intentionally pending/manual, never refunded.
       const id = payout.externalReference || payout.reference;
       const result = await getPawaPayPayout(id);
-      return { status: result.status };
+      const providerEnvelopeStatus = String((result.raw as any)?.status ?? "").toUpperCase();
+      return {
+        status: result.status,
+        // PawaPay explicitly reports NOT_FOUND when the payout never reached
+        // its platform. Keep our stricter no-auto-refund policy, but stop
+        // polling until an operator decides how to resolve the transaction.
+        shouldRemove: providerEnvelopeStatus === "NOT_FOUND",
+      };
     }
 
     return { status: "pending" };

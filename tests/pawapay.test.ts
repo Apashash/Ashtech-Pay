@@ -4,6 +4,7 @@ import {
   PAWAPAY_PRODUCTION_BASE_URL,
   clearPawaPayActiveConfigurationCache,
   createPawaPayDeposit,
+  createPawaPayPayout,
   createPawaPayPaymentPage,
   assertPawaPayProviderActive,
   classifyPawaPayControlledTransaction,
@@ -187,6 +188,51 @@ test("PawaPay exposes failure reasons from rejected deposit responses", async ()
     assert.equal(result.providerMessage, "The payer account is not active.");
     assert.equal(result.providerCode, "OPERATOR_PAYER_NOT_FOUND");
     assert.equal(result.providerStatus, 422);
+  } finally {
+    clearPawaPayActiveConfigurationCache();
+    globalThis.fetch = originalFetch;
+    restoreEnvironment();
+  }
+});
+
+test("PawaPay exposes failure reasons from rejected payout responses", async () => {
+  process.env.PAWAPAY_API_TOKEN = "test-token";
+  clearPawaPayActiveConfigurationCache();
+  globalThis.fetch = (async (url: string | URL | Request) => {
+    if (String(url).endsWith("/active-conf")) {
+      return new Response(JSON.stringify({
+        countries: [{
+          country: "CMR",
+          providers: [{
+            provider: "MTN_MOMO_CMR",
+            currencies: [{ currency: "XAF", operationTypes: { PAYOUT: { status: "OPERATIONAL" } } }],
+          }],
+        }],
+      }), { status: 200 });
+    }
+    return new Response(JSON.stringify({
+      payoutId: requestId,
+      status: "REJECTED",
+      failureReason: {
+        failureCode: "RECIPIENT_NOT_FOUND",
+        failureMessage: "The recipient account does not exist.",
+      },
+    }), { status: 200 });
+  }) as typeof fetch;
+
+  try {
+    const result = await createPawaPayPayout({
+      payoutId: requestId,
+      amount: "100",
+      currency: "XAF",
+      country: "CMR",
+      recipient: { provider: "MTN_MOMO_CMR", phoneNumber: "237656000000" },
+    });
+    assert.equal(result.success, false);
+    assert.equal(result.status, "failed");
+    assert.equal(result.providerMessage, "The recipient account does not exist.");
+    assert.equal(result.providerCode, "RECIPIENT_NOT_FOUND");
+    assert.equal(result.providerStatus, undefined);
   } finally {
     clearPawaPayActiveConfigurationCache();
     globalThis.fetch = originalFetch;
