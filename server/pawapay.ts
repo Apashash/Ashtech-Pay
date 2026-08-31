@@ -109,7 +109,22 @@ function providerConfigurationCode(provider: any): unknown {
 function providerOperationTypes(provider: any): unknown[] {
   const values = provider?.operationTypes ?? provider?.operation_types ?? provider?.operations ??
     provider?.transactionTypes ?? provider?.transaction_types ?? provider?.operationType ?? provider?.operation_type;
-  return Array.isArray(values) ? values : values === undefined ? [] : [values];
+  const directTypes = Array.isArray(values)
+    ? values
+    : values && typeof values === "object"
+      ? Object.keys(values)
+      : values === undefined ? [] : [values];
+  const currencyTypes = Array.isArray(provider?.currencies)
+    ? provider.currencies.flatMap((currency: any) => {
+        const nested = currency?.operationTypes ?? currency?.operation_types;
+        return Array.isArray(nested)
+          ? nested
+          : nested && typeof nested === "object"
+            ? Object.keys(nested)
+            : nested === undefined ? [] : [nested];
+      })
+    : [];
+  return [...directTypes, ...currencyTypes];
 }
 
 export interface PawaPayActiveConfigurationOptions {
