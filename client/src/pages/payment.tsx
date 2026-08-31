@@ -28,6 +28,8 @@ import { cryptoQrPayload } from "@/lib/crypto-qr";
 import { formatCryptoAmount, minimumCryptoAmount } from "@/lib/crypto-minimum";
 import { useCoinPrice } from "@/lib/use-coin-price";
 import { CoinSelect } from "@/components/ui/coin-select";
+import { apiRequest } from "@/lib/queryClient";
+import { normalizePaymentLinkRequestError, parsePaymentLinkJson } from "@/lib/payment-link-http";
 
 const CRYPTO_COUNTDOWN_SECONDS = 5 * 60;
 
@@ -359,14 +361,15 @@ export default function PaymentPage() {
       if (pawaPayPreAuthCode) {
         body.preAuthorisationCode = pawaPayPreAuthCode;
       }
-      const res = await fetch(`/api/payment-links/${params?.slug}/pay`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (!res.ok) throw Object.assign(new Error(data.message || "Erreur de paiement"), data);
-      return data;
+      try {
+        const res = await apiRequest("POST", `/api/payment-links/${params?.slug}/pay`, body);
+        return await parsePaymentLinkJson<any>(
+          res,
+          "Le serveur n'a renvoyé aucune réponse. Veuillez réessayer.",
+        );
+      } catch (error) {
+        throw normalizePaymentLinkRequestError(error);
+      }
     },
     onSuccess: async (data) => {
       const ref = data.reference || "";
@@ -413,21 +416,40 @@ export default function PaymentPage() {
         return;
       }
       if (error.message !== "Veuillez corriger les erreurs ci-dessus" && error.message !== "Please fix the errors above") {
-        toast({ title: "Erreur", description: error.message, variant: "destructive" });
+        const providerError = error as Error & {
+          provider_code?: unknown;
+          provider_status?: unknown;
+        };
+        const diagnostics = [
+          typeof providerError.provider_code === "string"
+            ? `Code fournisseur : ${providerError.provider_code}`
+            : "",
+          providerError.provider_status !== undefined &&
+          Number.isFinite(Number(providerError.provider_status))
+            ? `Statut : ${providerError.provider_status}`
+            : "",
+        ].filter(Boolean);
+        toast({
+          title: "Erreur",
+          description: [error.message, diagnostics.join(" · ")].filter(Boolean).join("\n"),
+          variant: "destructive",
+        });
       }
     },
   });
 
   const otpMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`/api/payment-links/${params?.slug}/confirm-otp`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ref: paymentReference, otpCode }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Code OTP invalide");
-      return data;
+      try {
+        const res = await apiRequest(
+          "POST",
+          `/api/payment-links/${params?.slug}/confirm-otp`,
+          { ref: paymentReference, otpCode },
+        );
+        return await parsePaymentLinkJson<any>(res, "Le serveur n'a renvoyé aucune réponse.");
+      } catch (error) {
+        throw normalizePaymentLinkRequestError(error);
+      }
     },
     onSuccess: () => {
       setOtpRequired(false);
@@ -459,13 +481,20 @@ export default function PaymentPage() {
       }
       if (payCryptoRefundAddress.trim())
         body.refundAddress = payCryptoRefundAddress.trim();
-      const res = await fetch(`/api/payment-links/${params?.slug}/crypto/address`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Erreur lors de la génération");
+      let data: any;
+      try {
+        const res = await apiRequest(
+          "POST",
+          `/api/payment-links/${params?.slug}/crypto/address`,
+          body,
+        );
+        data = await parsePaymentLinkJson<any>(
+          res,
+          "Le serveur n'a renvoyé aucune réponse. Veuillez réessayer.",
+        );
+      } catch (error) {
+        throw normalizePaymentLinkRequestError(error);
+      }
       if (net.memoRequired && !data.memo) {
         throw new Error(`Le réseau ${net.label} exige un memo/tag, mais le fournisseur n'en a pas retourné.`);
       }
