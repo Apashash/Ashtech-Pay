@@ -206,6 +206,15 @@ export function validatePawaPayAmount(amount: string | number): string {
   return value;
 }
 
+/** Canonicalizes internal fixed-point amounts before applying PawaPay's format. */
+export function formatPawaPayAmount(amount: string | number): string {
+  const value = typeof amount === "number" ? String(amount) : amount;
+  const canonical = value.includes(".")
+    ? value.replace(/0+$/, "").replace(/\.$/, "")
+    : value;
+  return validatePawaPayAmount(canonical);
+}
+
 export function normalizePawaPayStatus(status: unknown): PawaPayStatus {
   const value = typeof status === "string" ? status.toUpperCase() : "";
   if (["COMPLETED", "SUCCESSFUL", "SUCCEEDED"].includes(value)) return "completed";
@@ -335,7 +344,7 @@ export async function createPawaPayDeposit(params: PawaPayDepositParams): Promis
   const depositId = checkedId(params.depositId);
   await assertPawaPayProviderActive(params.payer.provider, "DEPOSIT", params.country);
   return request("/deposits", "POST", {
-    depositId, amount: validatePawaPayAmount(params.amount), currency: validatePawaPayCurrency(params.currency),
+    depositId, amount: formatPawaPayAmount(params.amount), currency: validatePawaPayCurrency(params.currency),
     payer: accountBody(params.payer), customerMessage: params.customerMessage,
     clientReferenceId: params.clientReferenceId, metadata: metadataBody(params.metadata),
     preAuthorisationCode: params.preAuthorisationCode,
@@ -350,7 +359,7 @@ export async function createPawaPayPayout(params: PawaPayPayoutParams): Promise<
   const payoutId = checkedId(params.payoutId);
   await assertPawaPayProviderActive(params.recipient.provider, "PAYOUT", params.country);
   return request("/payouts", "POST", {
-    payoutId, amount: validatePawaPayAmount(params.amount), currency: validatePawaPayCurrency(params.currency),
+    payoutId, amount: formatPawaPayAmount(params.amount), currency: validatePawaPayCurrency(params.currency),
     recipient: accountBody(params.recipient), customerMessage: params.customerMessage,
     clientReferenceId: params.clientReferenceId, metadata: metadataBody(params.metadata),
   });
@@ -366,7 +375,7 @@ export async function createPawaPayPaymentPage(params: PawaPayPaymentPageParams)
   if (!params.provider) throw new Error("PawaPay payment page provider is required for active configuration validation");
   await assertPawaPayProviderActive(params.provider, "DEPOSIT", params.country);
   return request("/paymentpage", "POST", {
-    depositId, amountDetails: { amount: validatePawaPayAmount(params.amount), currency: validatePawaPayCurrency(params.currency) },
+    depositId, amountDetails: { amount: formatPawaPayAmount(params.amount), currency: validatePawaPayCurrency(params.currency) },
     ...(params.phoneNumber ? { phoneNumber: validatePawaPayMsisdn(params.phoneNumber) } : {}),
     customerMessage: params.customerMessage, clientReferenceId: params.clientReferenceId,
     returnUrl: params.returnUrl, language: params.language, country: params.country, reason: params.reason,

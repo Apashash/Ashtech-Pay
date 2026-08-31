@@ -12,6 +12,7 @@ import {
   isPawaPayConfigured,
   normalizePawaPayStatus,
   validatePawaPayAmount,
+  formatPawaPayAmount,
   validatePawaPayCurrency,
   validatePawaPayMsisdn,
 } from "../server/pawapay.ts";
@@ -42,6 +43,9 @@ test("PawaPay validates MSISDN, currency, and documented decimal amount format",
   assert.throws(() => validatePawaPayAmount("1.0000"));
   assert.throws(() => validatePawaPayAmount("1.00001"));
   assert.throws(() => validatePawaPayAmount("1e2"));
+  assert.equal(formatPawaPayAmount("200.00"), "200");
+  assert.equal(formatPawaPayAmount(200), "200");
+  assert.equal(formatPawaPayAmount("100.50"), "100.5");
 });
 
 test("PawaPay normalizes provider transaction states", () => {
@@ -134,14 +138,14 @@ test("PawaPay reads nested deposit data and creates payment pages with v2 fields
     const found = await getPawaPayDeposit(requestId);
     assert.equal(found.id, requestId);
     assert.equal(found.status, "completed");
-    const page = await createPawaPayPaymentPage({
-      depositId: requestId, amount: "1.0001", currency: "USD",
+     const page = await createPawaPayPaymentPage({
+       depositId: requestId, amount: "200.00", currency: "USD",
       returnUrl: "https://merchant.example/return", phoneNumber: "237656000000",
       provider: "MTN_MOMO_CMR",
     });
     assert.equal(page.redirectUrl, "https://pay.example/redirect");
     const pageRequest = requests.find(request => request.url.endsWith("/paymentpage"))!;
-    assert.deepEqual(pageRequest.body.amountDetails, { amount: "1.0001", currency: "USD" });
+     assert.deepEqual(pageRequest.body.amountDetails, { amount: "200", currency: "USD" });
     assert.equal(pageRequest.body.depositId, requestId);
     assert.equal(pageRequest.body.phoneNumber, "237656000000");
     assert.equal("provider" in pageRequest.body, false);
