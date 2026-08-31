@@ -527,7 +527,8 @@ export async function createPawaPayDeposit(params: PawaPayDepositParams): Promis
   await assertPawaPayProviderActive(params.payer.provider, "DEPOSIT", params.country, params.currency);
   const result = await request("/deposits", "POST", {
     depositId, amount: formatPawaPayAmount(params.amount), currency: validatePawaPayCurrency(params.currency),
-    payer: accountBody(params.payer, params.country), customerMessage: params.customerMessage,
+    payer: accountBody(params.payer, params.country),
+    customerMessage: params.customerMessage ?? PAWAPAY_CUSTOMER_MESSAGE,
     clientReferenceId: params.clientReferenceId, metadata: metadataBody(params.metadata),
     preAuthorisationCode: params.preAuthorisationCode,
     successfulUrl: params.successfulUrl,
@@ -552,7 +553,8 @@ export async function createPawaPayPayout(params: PawaPayPayoutParams): Promise<
   await assertPawaPayProviderActive(params.recipient.provider, "PAYOUT", params.country, params.currency);
   return request("/payouts", "POST", {
     payoutId, amount: formatPawaPayAmount(params.amount), currency: validatePawaPayCurrency(params.currency),
-    recipient: accountBody(params.recipient, params.country), customerMessage: params.customerMessage,
+    recipient: accountBody(params.recipient, params.country),
+    customerMessage: params.customerMessage ?? PAWAPAY_CUSTOMER_MESSAGE,
     clientReferenceId: params.clientReferenceId, metadata: metadataBody(params.metadata),
   });
 }
@@ -569,7 +571,8 @@ export async function createPawaPayPaymentPage(params: PawaPayPaymentPageParams)
   return request("/paymentpage", "POST", {
     depositId, amountDetails: { amount: formatPawaPayAmount(params.amount), currency: validatePawaPayCurrency(params.currency) },
     ...(params.phoneNumber ? { phoneNumber: formatPawaPayMsisdn(params.phoneNumber, params.country) } : {}),
-    customerMessage: params.customerMessage, clientReferenceId: params.clientReferenceId,
+    customerMessage: params.customerMessage ?? PAWAPAY_CUSTOMER_MESSAGE,
+    clientReferenceId: params.clientReferenceId,
     returnUrl: params.returnUrl, language: params.language, country: params.country, reason: params.reason,
     metadata: metadataBody(params.metadata),
   });

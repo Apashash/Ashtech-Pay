@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   PAWAPAY_PRODUCTION_BASE_URL,
+  PAWAPAY_CUSTOMER_MESSAGE,
   clearPawaPayActiveConfigurationCache,
   createPawaPayDeposit,
   createPawaPayPayout,
@@ -117,6 +118,7 @@ test("PawaPay uses production bearer auth and sends a v2 MMO deposit", async () 
        accountDetails: { provider: "MTN_MOMO_CMR", phoneNumber: "237656000000" },
     });
     assert.deepEqual(body.metadata, [{ order: "abc" }]);
+    assert.equal(body.customerMessage, PAWAPAY_CUSTOMER_MESSAGE);
     assert.equal("callbackUrl" in body, false);
     assert.equal(result.status, "pending");
     assert.equal(result.success, true);
@@ -154,6 +156,7 @@ test("PawaPay reads nested deposit data and creates payment pages with v2 fields
      assert.deepEqual(pageRequest.body.amountDetails, { amount: "200", currency: "USD" });
     assert.equal(pageRequest.body.depositId, requestId);
     assert.equal(pageRequest.body.phoneNumber, "237656000000");
+     assert.equal(pageRequest.body.customerMessage, PAWAPAY_CUSTOMER_MESSAGE);
     assert.equal("provider" in pageRequest.body, false);
   } finally {
     globalThis.fetch = originalFetch;
