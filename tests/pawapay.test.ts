@@ -119,6 +119,7 @@ test("PawaPay uses production bearer auth and sends a v2 MMO deposit", async () 
     });
     assert.deepEqual(body.metadata, [{ order: "abc" }]);
     assert.equal(body.customerMessage, PAWAPAY_CUSTOMER_MESSAGE);
+    assert.equal("statementDescription" in body, false);
     assert.equal("callbackUrl" in body, false);
     assert.equal(result.status, "pending");
     assert.equal(result.success, true);
