@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildProviderErrorPayload,
+  extractProviderErrorMessage,
   extractProviderErrorDetails,
 } from "../server/providerErrors";
 
@@ -93,4 +94,30 @@ test("provider errors use the documented fallback when the provider sends no mes
     error: "gateway_error",
     message: "Le fournisseur de paiement n'a fourni aucun détail.",
   });
+});
+
+test("provider errors extract PawaPay failure reasons from nested responses", () => {
+  const payload = buildProviderErrorPayload({
+    error: "payment_initiation_failed",
+    fallback: "Paiement impossible.",
+    raw: {
+      data: {
+        failureReason: "PawaPay rejected the payment for +237 690 12 34 56.",
+        errorCode: "OPERATOR_PAYER_NOT_FOUND",
+      },
+      status_code: "422",
+    },
+    sensitiveValues: ["+237 690 12 34 56"],
+  });
+
+  assert.deepEqual(payload, {
+    error: "payment_initiation_failed",
+    message: "le fournisseur de paiement rejected the payment for [redacted].",
+    provider_code: "OPERATOR_PAYER_NOT_FOUND",
+    provider_status: 422,
+  });
+  assert.equal(
+    extractProviderErrorMessage({ errorMessage: "Mobile Money account is unavailable." }),
+    "Mobile Money account is unavailable.",
+  );
 });

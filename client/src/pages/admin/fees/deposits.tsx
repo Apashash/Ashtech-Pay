@@ -176,8 +176,13 @@ export default function AdminFeesDeposits() {
 
   const pawapayMutation = useMutation({
     mutationFn: async ({ id, pawaFee, margin, active }: { id: string; pawaFee: string; margin: string; active: boolean }) =>
-      apiRequest("PATCH", `/api/admin/fees/${id}`, { pawapayFee: pawaFee, ashtechMargin: margin, feeValue: String(parseFloat(pawaFee || "0") + parseFloat(margin || "0")), isActive: active }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/fees"] }); closeEdit(); },
+      apiRequest("PATCH", `/api/admin/fees/${id}/pawapay`, { pawapayFee: pawaFee, ashtechMargin: margin, isActive: active }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/fees"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/operators"] });
+      toast({ title: "Frais PawaPay mis à jour" });
+      closeEdit();
+    },
     onError: (err: any) => toast({ title: "Erreur lors de la mise à jour", description: err?.message || "Erreur serveur", variant: "destructive" }),
   });
 

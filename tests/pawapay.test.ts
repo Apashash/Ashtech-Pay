@@ -151,6 +151,40 @@ test("PawaPay reads nested deposit data and creates payment pages with v2 fields
   }
 });
 
+test("PawaPay exposes failure reasons from rejected deposit responses", async () => {
+  process.env.PAWAPAY_API_TOKEN = "test-token";
+  clearPawaPayActiveConfigurationCache();
+  globalThis.fetch = (async (url: string | URL | Request) => {
+    if (String(url).endsWith("/active-conf")) {
+      return new Response(JSON.stringify({ providers: [{ provider: "MTN_MOMO_CMR", operationTypes: ["DEPOSIT"] }] }), { status: 200 });
+    }
+    return new Response(JSON.stringify({
+      status: "REJECTED",
+      failureReason: "The payer account is not active.",
+      errorCode: "OPERATOR_PAYER_NOT_FOUND",
+    }), { status: 422 });
+  }) as typeof fetch;
+
+  try {
+    const result = await createPawaPayDeposit({
+      depositId: requestId,
+      amount: "100",
+      currency: "XAF",
+      country: "CMR",
+      payer: { provider: "MTN_MOMO_CMR", phoneNumber: "237656000000" },
+    });
+    assert.equal(result.success, false);
+    assert.equal(result.status, "failed");
+    assert.equal(result.providerMessage, "The payer account is not active.");
+    assert.equal(result.providerCode, "OPERATOR_PAYER_NOT_FOUND");
+    assert.equal(result.providerStatus, 422);
+  } finally {
+    clearPawaPayActiveConfigurationCache();
+    globalThis.fetch = originalFetch;
+    restoreEnvironment();
+  }
+});
+
 test("PawaPay caches active-conf responses", async () => {
   process.env.PAWAPAY_API_TOKEN = "test-token";
   clearPawaPayActiveConfigurationCache();

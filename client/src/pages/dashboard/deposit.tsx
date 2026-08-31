@@ -314,8 +314,18 @@ export default function DepositPage() {
         startDepositPolling(ref);
       }
     },
-    onError: (error: Error) => {
-      toast({ title: t.deposit.toastError, description: error.message, variant: "destructive" });
+    onError: (error: Error & { provider_code?: unknown; provider_status?: unknown }) => {
+      const diagnostics = [
+        typeof error.provider_code === "string" ? `Code fournisseur : ${error.provider_code}` : "",
+        error.provider_status !== undefined && Number.isFinite(Number(error.provider_status))
+          ? `Statut : ${error.provider_status}`
+          : "",
+      ].filter(Boolean);
+      toast({
+        title: t.deposit.toastError,
+        description: [error.message, diagnostics.join(" · ")].filter(Boolean).join("\n"),
+        variant: "destructive",
+      });
     },
   });
 

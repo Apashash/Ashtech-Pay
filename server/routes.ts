@@ -90,6 +90,7 @@ import {
 } from "./pawapayConfig";
 import { enqueueMerchantWebhook } from "./merchantWebhook";
 import { buildProviderErrorPayload } from "./providerErrors";
+import { buildPawaPayFeeUpdates } from "./feeUpdates";
 import { addSSEClient, removeSSEClient, setActiveTicket, isUserOnline, getOnlineUserIds, getAdminViewingTicket, getUserViewingTicket, notifyUser, notifyAdmins, broadcastOnlineStatus, notifyUserForceLogout, notifyOtherSessionsForceLogout, notifyAllUsersForceLogout, notifySpecificSessionForceLogout } from "./sse";
 import { sendClean404 } from "./botGuard";
 import {
@@ -14472,17 +14473,7 @@ export async function registerRoutes(
     try {
       const fee = await storage.getFee(req.params.id);
       if (!fee) return res.status(404).json({ message: "Frais non trouvé" });
-      const { pawapayFee, ashtechMargin, isActive, minFee } = req.body;
-      const updates: any = {};
-      if (pawapayFee !== undefined) {
-        const rate = parseFloat(pawapayFee);
-        const margin = parseFloat(ashtechMargin || "0");
-        if (!Number.isFinite(rate) || !Number.isFinite(margin) || rate < 0 || margin < 0) return res.status(400).json({ message: "Taux invalide" });
-        updates.pawapayFee = String(rate); updates.ashtechMargin = String(margin);
-        updates.feeValue = String((rate + margin).toFixed(4));
-      } else if (ashtechMargin !== undefined) updates.ashtechMargin = String(ashtechMargin);
-      if (isActive !== undefined) updates.isActive = Boolean(isActive);
-      if (minFee !== undefined) updates.minFee = minFee ? String(minFee) : null;
+      const updates = buildPawaPayFeeUpdates(req.body, fee);
       const updated = await storage.updateFee(fee.id, updates);
       return res.json({ success: true, fee: updated });
     } catch (err: any) {

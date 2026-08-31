@@ -31,6 +31,53 @@ function firstString(...values: unknown[]): string | undefined {
   return undefined;
 }
 
+function providerCodeString(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    const candidate = nonEmptyString(value);
+    if (candidate && /^[A-Za-z0-9][A-Za-z0-9_.:-]{1,79}$/.test(candidate)) {
+      return candidate;
+    }
+  }
+  return undefined;
+}
+
+export function extractProviderErrorMessage(raw: unknown): string | undefined {
+  const root = asRecord(raw);
+  const data = asRecord(root?.data);
+  const error = asRecord(root?.error);
+  const nestedData = asRecord(data?.data);
+
+  return firstString(
+    root?.providerMessage,
+    root?.message,
+    root?.errorMessage,
+    root?.failureReason,
+    root?.failureCause,
+    root?.reason,
+    root?.description,
+    root?.detail,
+    typeof root?.error === "string" ? root.error : undefined,
+    data?.providerMessage,
+    data?.message,
+    data?.errorMessage,
+    data?.failureReason,
+    data?.failureCause,
+    data?.reason,
+    data?.description,
+    data?.detail,
+    typeof data?.error === "string" ? data.error : undefined,
+    error?.message,
+    error?.description,
+    nestedData?.providerMessage,
+    nestedData?.message,
+    nestedData?.errorMessage,
+    nestedData?.failureReason,
+    nestedData?.failureCause,
+    nestedData?.description,
+    nestedData?.detail,
+  );
+}
+
 function normalizeStatus(value: unknown): number | string | undefined {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   const stringValue = nonEmptyString(value);
@@ -49,7 +96,7 @@ function redactSensitiveText(message: string, sensitiveValues: unknown[] = []): 
   }
 
   // Do not expose the upstream provider's brand in merchant-facing messages.
-  safeMessage = safeMessage.replace(/\b(?:AfribaPay|PixPay|PawaPay|IziChange)\b/gi, "le fournisseur de paiement");
+  safeMessage = safeMessage.replace(/\b(?:Afriba\s*Pay|Pix\s*Pay|Pawa\s*Pay|Izi\s*Change)\b/gi, "le fournisseur de paiement");
 
   // Provider messages occasionally echo a destination phone number or an
   // identifier. Never forward long digit sequences from an upstream message.
@@ -68,15 +115,18 @@ export function extractProviderErrorDetails(raw: unknown): {
   const error = asRecord(root?.error);
   const nestedData = asRecord(data?.data);
 
-  const providerCode = firstString(
+  const providerCode = providerCodeString(
     root?.code,
+    root?.errorCode,
     root?.error_code,
     error?.code,
     typeof root?.error === "string" ? root.error : undefined,
     data?.code,
+    data?.errorCode,
     data?.error_code,
     typeof data?.error === "string" ? data.error : undefined,
     nestedData?.code,
+    nestedData?.errorCode,
     nestedData?.error_code,
   );
 
@@ -100,12 +150,12 @@ export function extractProviderErrorDetails(raw: unknown): {
 export function buildProviderErrorPayload(
   options: ProviderErrorPayloadOptions,
 ): Record<string, unknown> {
+  const extracted = extractProviderErrorDetails(options.raw);
   const message = redactSensitiveText(
-    nonEmptyString(options.message) || options.fallback,
+    nonEmptyString(options.message) || extractProviderErrorMessage(options.raw) || options.fallback,
     options.sensitiveValues,
   );
-  const extracted = extractProviderErrorDetails(options.raw);
-  const providerCode = firstString(options.providerCode, extracted.providerCode);
+  const providerCode = providerCodeString(options.providerCode, extracted.providerCode);
   const providerStatus = normalizeStatus(options.providerStatus) ?? extracted.providerStatus;
 
   return {

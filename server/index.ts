@@ -310,11 +310,13 @@ app.use((req, res, next) => {
       const isMerchantProviderError =
         req.path === "/v1/collect" ||
         /^\/api\/public\/hosted-session\/[^/]+\/pay$/.test(req.path);
+      const isUserProviderError = req.path === "/api/deposits";
       const isSafeProviderFailure =
-        isMerchantProviderError &&
+        (isMerchantProviderError || isUserProviderError) &&
         (bodyJson.error === "gateway_error" ||
           bodyJson.error === "payment_initiation_failed" ||
-          bodyJson.error === "provider_invalid_response");
+          bodyJson.error === "provider_invalid_response" ||
+          bodyJson.error === "provider_unavailable");
       const sanitized = isCryptoApi || isSafeProviderFailure
         ? {
             ...(typeof bodyJson.error === "string" ? { error: bodyJson.error } : { error: "server_error" }),

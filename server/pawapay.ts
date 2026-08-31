@@ -172,9 +172,45 @@ export function normalizePawaPayStatus(status: unknown): PawaPayStatus {
 function responseDetails(raw: any, httpStatus?: number) {
   const root = raw && typeof raw === "object" ? raw : {};
   const error = root.error && typeof root.error === "object" ? root.error : {};
-  const providerMessage = [root.providerMessage, root.message, error.message]
+  const data = root.data && typeof root.data === "object" && !Array.isArray(root.data) ? root.data : {};
+  const nestedError = data.error && typeof data.error === "object" ? data.error : {};
+  const providerMessage = [
+    root.providerMessage,
+    root.message,
+    root.errorMessage,
+    root.failureReason,
+    root.failureCause,
+    root.reason,
+    root.description,
+    root.detail,
+    typeof root.error === "string" ? root.error : undefined,
+    data.providerMessage,
+    data.message,
+    data.errorMessage,
+    data.failureReason,
+    data.failureCause,
+    data.reason,
+    data.description,
+    data.detail,
+    typeof data.error === "string" ? data.error : undefined,
+    error.message,
+    nestedError.message,
+  ]
     .find((value): value is string => typeof value === "string" && value.length > 0);
-  const providerCode = [root.providerCode, root.code, error.code]
+  const providerCode = [
+    root.providerCode,
+    root.code,
+    root.errorCode,
+    root.error_code,
+    typeof root.error === "string" && /^[A-Za-z0-9_.-]{2,80}$/.test(root.error) ? root.error : undefined,
+    data.providerCode,
+    data.code,
+    data.errorCode,
+    data.error_code,
+    typeof data.error === "string" && /^[A-Za-z0-9_.-]{2,80}$/.test(data.error) ? data.error : undefined,
+    error.code,
+    nestedError.code,
+  ]
     .find((value): value is string => typeof value === "string" && value.length > 0);
   return { providerMessage, providerCode, providerStatus: httpStatus };
 }
