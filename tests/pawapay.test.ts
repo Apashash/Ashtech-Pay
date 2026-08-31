@@ -33,11 +33,13 @@ import {
   isPawaPayCredentialEncryptionConfigured,
   readPawaPayStoredSecret,
 } from "../server/pawapayCredentialEncryption.ts";
+import { storage } from "../server/storage.ts";
 
 const originalFetch = globalThis.fetch;
 const originalToken = process.env.PAWAPAY_API_TOKEN;
 const originalFieldEncryptionKey = process.env.FIELD_ENCRYPTION_KEY;
 const originalSessionSecret = process.env.SESSION_SECRET;
+const originalGetSetting = storage.getSetting;
 const requestId = "5c0cbb4b-8961-45d5-8948-aa7ad7f42c65";
 
 function restoreEnvironment() {
@@ -46,6 +48,7 @@ function restoreEnvironment() {
   else process.env.FIELD_ENCRYPTION_KEY = originalFieldEncryptionKey;
   if (originalSessionSecret === undefined) delete process.env.SESSION_SECRET;
   else process.env.SESSION_SECRET = originalSessionSecret;
+  storage.getSetting = originalGetSetting;
 }
 
 test("PawaPay validates MSISDN, currency, and documented decimal amount format", () => {
@@ -122,12 +125,17 @@ test("PawaPay credential writes fail closed without a server encryption secret",
 
 test("PawaPay is safely unconfigured until a token is supplied", async () => {
   delete process.env.PAWAPAY_API_TOKEN;
-  assert.equal(await isPawaPayConfigured(), false);
-  restoreEnvironment();
+  storage.getSetting = async () => undefined;
+  try {
+    assert.equal(await isPawaPayConfigured(), false);
+  } finally {
+    restoreEnvironment();
+  }
 });
 
 test("PawaPay uses production bearer auth and sends a v2 MMO deposit", async () => {
   process.env.PAWAPAY_API_TOKEN = "test-token";
+  storage.getSetting = async () => undefined;
   let receivedUrl = "";
   let receivedInit: RequestInit | undefined;
   globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {

@@ -31,7 +31,7 @@
 - [Admin route cloaking](admin-route-cloaking.md) — unauthenticated and non-admin requests to admin API/panel paths must look like branded 404s before auth/CSRF/PIN layers.
 - [Merchant webhook delivery](merchant-webhook-delivery.md) — all merchant events must use one persisted, HMAC-signed, idempotent queue with retry and cross-worker claims.
 - [Provider API error exposure](provider-api-errors.md) — merchant-facing errors preserve the provider’s useful message and diagnostics, but never its raw response or sensitive data.
-- [PawaPay credential key alignment](pawapay-credential-key-alignment.md) — encrypted PawaPay settings require the same FIELD_ENCRYPTION_KEY at write and runtime, especially across Plesk and local environments.
+- [PawaPay credential key alignment](pawapay-credential-key-alignment.md) — PawaPay credentials use a session-derived dedicated envelope with legacy FIELD_ENCRYPTION_KEY compatibility.
 - [PawaPay active-conf structure](pawapay-active-conf-structure.md) — operationTypes is keyed under each provider currency, so active-provider checks must read currencies[].operationTypes object keys.
 - [PawaPay amount canonicalization](pawapay-amount-format.md) — v2 amounts cannot end with decimal zeros; normalize internal `200.00` values to `200` before sending.
 - [PawaPay MSISDN formatting](pawapay-msisdn-format.md) — PawaPay requires an international number starting with the selected country dial code; local form inputs need country-aware prefixing.
