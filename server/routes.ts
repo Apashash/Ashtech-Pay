@@ -8439,6 +8439,7 @@ export async function registerRoutes(
           }
           await assertPawaPayProviderActive(
             pawaProvider, "DEPOSIT", pawaPayCountry(paymentCountryCode), toPawaPayCurrency(paymentCurrency),
+            pawaPayOperation ?? undefined,
           );
          } catch (error: any) {
            console.error("[PaymentLink] PawaPay provider validation failed:", error);

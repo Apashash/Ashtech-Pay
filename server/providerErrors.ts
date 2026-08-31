@@ -95,6 +95,12 @@ function redactSensitiveText(message: string, sensitiveValues: unknown[] = []): 
     }
   }
 
+  // Configuration failures are actionable for operators but the upstream
+  // wording is too technical for a public checkout.
+  if (/production API token is not configured/i.test(safeMessage)) {
+    return "Le fournisseur de paiement n'est pas configuré. Veuillez réessayer plus tard ou contacter le support.";
+  }
+
   // Do not expose the upstream provider's brand in merchant-facing messages.
   safeMessage = safeMessage.replace(/\b(?:Afriba\s*Pay|Pix\s*Pay|Pawa\s*Pay|Izi\s*Change)\b/gi, "le fournisseur de paiement");
 
