@@ -30,7 +30,7 @@ type PawaPaySettings = {
   webhookSecretConfigured: boolean;
   webhookSecretMasked: string | null;
   webhookSecretUnreadable?: boolean;
-  encryptionKeyConfigured?: boolean;
+  credentialEncryptionConfigured?: boolean;
   baseUrl: string;
   callbackUrls: { deposit: string; payout: string };
 };
@@ -114,7 +114,7 @@ export default function AdminSettingsPawaPay() {
             </CardTitle>
             <CardDescription>
               Les champs sont toujours vides. Laissez un champ vide pour conserver sa valeur actuelle.
-              Les secrets sont chiffrés avant d’être enregistrés en base.
+                Les secrets sont chiffrés côté serveur avant d’être enregistrés en base.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -123,18 +123,19 @@ export default function AdminSettingsPawaPay() {
                 <AlertTriangle className="h-4 w-4" />
                 <AlertTitle>Identifiant enregistré mais illisible</AlertTitle>
                 <AlertDescription>
-                  Une valeur chiffrée existe en base, mais ce serveur ne peut pas la déchiffrer.
-                  Vérifiez que <code>FIELD_ENCRYPTION_KEY</code> est identique sur tous les environnements,
-                  puis remplacez l’identifiant concerné ci-dessous.
+                  Une ancienne valeur chiffrée existe en base, mais ce serveur ne peut pas la lire.
+                  Remplacez simplement l’identifiant concerné ci-dessous ; il sera enregistré avec le
+                  chiffrement sécurisé actuel.
                 </AlertDescription>
               </Alert>
             )}
-            {data && data.encryptionKeyConfigured === false && (
+            {data && data.credentialEncryptionConfigured === false && (
               <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>Chiffrement serveur absent</AlertTitle>
+                <AlertTitle>Chiffrement sécurisé indisponible</AlertTitle>
                 <AlertDescription>
-                  <code>FIELD_ENCRYPTION_KEY</code> doit être configurée avant d’enregistrer des identifiants.
+                  Le serveur ne possède pas le secret nécessaire pour protéger les identifiants.
+                  Contactez l’administrateur de l’hébergement avant d’enregistrer un token.
                 </AlertDescription>
               </Alert>
             )}

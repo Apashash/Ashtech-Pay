@@ -27,13 +27,25 @@ import {
   maskPawaPaySecret,
   replacePawaPayCredentials,
 } from "../server/pawapayConfig.ts";
+import { encryptField } from "../server/fieldEncryption.ts";
+import {
+  encryptPawaPayCredential,
+  isPawaPayCredentialEncryptionConfigured,
+  readPawaPayStoredSecret,
+} from "../server/pawapayCredentialEncryption.ts";
 
 const originalFetch = globalThis.fetch;
 const originalToken = process.env.PAWAPAY_API_TOKEN;
+const originalFieldEncryptionKey = process.env.FIELD_ENCRYPTION_KEY;
+const originalSessionSecret = process.env.SESSION_SECRET;
 const requestId = "5c0cbb4b-8961-45d5-8948-aa7ad7f42c65";
 
 function restoreEnvironment() {
   if (originalToken === undefined) delete process.env.PAWAPAY_API_TOKEN; else process.env.PAWAPAY_API_TOKEN = originalToken;
+  if (originalFieldEncryptionKey === undefined) delete process.env.FIELD_ENCRYPTION_KEY;
+  else process.env.FIELD_ENCRYPTION_KEY = originalFieldEncryptionKey;
+  if (originalSessionSecret === undefined) delete process.env.SESSION_SECRET;
+  else process.env.SESSION_SECRET = originalSessionSecret;
 }
 
 test("PawaPay validates MSISDN, currency, and documented decimal amount format", () => {
@@ -72,15 +84,40 @@ test("PawaPay production settings mask secrets and never place them in callback 
   assert.equal(PAWAPAY_PAYOUT_CALLBACK_URL.includes(token), false);
 });
 
-test("PawaPay credential writes fail closed without the field encryption key", async () => {
-  const originalKey = process.env.FIELD_ENCRYPTION_KEY;
+test("PawaPay credential encryption uses the existing server session secret", () => {
+  process.env.SESSION_SECRET = "stable-session-secret-for-tests";
   delete process.env.FIELD_ENCRYPTION_KEY;
+  const ciphertext = encryptPawaPayCredential("prod-token-123456");
+  assert.ok(ciphertext?.startsWith("enc:pawapay:v1:"));
+  assert.equal(ciphertext?.includes("prod-token-123456"), false);
+  assert.deepEqual(readPawaPayStoredSecret(ciphertext), {
+    value: "prod-token-123456",
+    legacy: false,
+  });
+  assert.equal(isPawaPayCredentialEncryptionConfigured(), true);
+  restoreEnvironment();
+});
+
+test("PawaPay credential reads legacy FIELD_ENCRYPTION_KEY values", () => {
+  delete process.env.SESSION_SECRET;
+  process.env.FIELD_ENCRYPTION_KEY = "legacy-field-key-for-tests";
+  const legacyCiphertext = encryptField("legacy-token-123456");
+  assert.ok(legacyCiphertext?.startsWith("enc:"));
+  assert.deepEqual(readPawaPayStoredSecret(legacyCiphertext), {
+    value: "legacy-token-123456",
+    legacy: true,
+  });
+  restoreEnvironment();
+});
+
+test("PawaPay credential writes fail closed without a server encryption secret", async () => {
+  delete process.env.FIELD_ENCRYPTION_KEY;
+  delete process.env.SESSION_SECRET;
   await assert.rejects(
     () => replacePawaPayCredentials({ apiToken: "prod-token-123456" }),
-    /FIELD_ENCRYPTION_KEY/,
+    /session secret/,
   );
-  if (originalKey === undefined) delete process.env.FIELD_ENCRYPTION_KEY;
-  else process.env.FIELD_ENCRYPTION_KEY = originalKey;
+  restoreEnvironment();
 });
 
 test("PawaPay is safely unconfigured until a token is supplied", async () => {

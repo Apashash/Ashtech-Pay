@@ -6593,8 +6593,8 @@ export async function registerRoutes(
       res.json(await getPawaPaySettingsView());
     } catch (error: any) {
       const message = String(error?.message || "");
-      if (message.includes("FIELD_ENCRYPTION_KEY")) {
-        return res.status(503).json({ message: "Le chiffrement serveur n'est pas configuré" });
+      if (message.includes("credential encryption") || message.includes("FIELD_ENCRYPTION_KEY")) {
+        return res.status(503).json({ message: "Le chiffrement sécurisé du serveur n'est pas configuré" });
       }
       if (message.includes("invalid length") || message.includes("At least one")) {
         return res.status(400).json({ message: "Au moins une clé valide est requise" });

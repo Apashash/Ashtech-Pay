@@ -1,5 +1,9 @@
 import { storage } from "./storage";
-import { decryptField, encryptField, isFieldEncryptionConfigured } from "./fieldEncryption";
+import {
+  encryptPawaPayCredential,
+  isPawaPayCredentialEncryptionConfigured,
+  readPawaPayStoredSecret,
+} from "./pawapayCredentialEncryption";
 
 export const PAWAPAY_API_TOKEN_KEY = "pawapay_api_token";
 export const PAWAPAY_WEBHOOK_SECRET_KEY = "pawapay_webhook_secret";
@@ -16,15 +20,6 @@ type PawaPayCredentials = {
 };
 
 let cachedCredentials: { value: PawaPayCredentials; expiresAt: number } | null = null;
-
-function decryptStoredSecret(value: string | null | undefined): string | null {
-  if (!value) return null;
-  // decryptField intentionally supports legacy plaintext values and returns
-  // them unchanged. Keep that compatibility for credentials saved before
-  // field encryption was enabled.
-  const decrypted = decryptField(value);
-  return decrypted?.trim() || null;
-}
 
 function readEnvironmentSecret(name: string, minimumLength: number): string | null {
   const value = process.env[name]?.trim();
@@ -48,8 +43,10 @@ export async function getPawaPayCredentials(forceRefresh = false): Promise<PawaP
     storage.getSetting(PAWAPAY_API_TOKEN_KEY),
     storage.getSetting(PAWAPAY_WEBHOOK_SECRET_KEY),
   ]);
-  const storedApiToken = decryptStoredSecret(tokenSetting?.value);
-  const storedWebhookSecret = decryptStoredSecret(webhookSetting?.value);
+  const storedApiTokenResult = readPawaPayStoredSecret(tokenSetting?.value);
+  const storedWebhookSecretResult = readPawaPayStoredSecret(webhookSetting?.value);
+  const storedApiToken = storedApiTokenResult.value?.trim() || null;
+  const storedWebhookSecret = storedWebhookSecretResult.value?.trim() || null;
   const environmentApiToken = readEnvironmentSecret("PAWAPAY_API_TOKEN", 8);
   const environmentWebhookSecret = readEnvironmentSecret("PAWAPAY_WEBHOOK_SECRET", 16);
   const value = {
@@ -60,19 +57,33 @@ export async function getPawaPayCredentials(forceRefresh = false): Promise<PawaP
   // A secure environment secret can repair a row encrypted with an old key.
   // The environment value is never returned by the API; once rewritten, the
   // normal encrypted platform setting remains the source of truth.
-  if (isFieldEncryptionConfigured()) {
+  if (isPawaPayCredentialEncryptionConfigured()) {
     const repairs: Promise<unknown>[] = [];
     if (environmentApiToken && !storedApiToken) {
       repairs.push(storage.upsertSetting(
         PAWAPAY_API_TOKEN_KEY,
-        encryptField(environmentApiToken)!,
+        encryptPawaPayCredential(environmentApiToken)!,
         "PawaPay production Bearer token (encrypted)",
       ));
     }
     if (environmentWebhookSecret && !storedWebhookSecret) {
       repairs.push(storage.upsertSetting(
         PAWAPAY_WEBHOOK_SECRET_KEY,
-        encryptField(environmentWebhookSecret)!,
+        encryptPawaPayCredential(environmentWebhookSecret)!,
+        "PawaPay production callback secret (encrypted)",
+      ));
+    }
+    if (storedApiToken && storedApiTokenResult.legacy) {
+      repairs.push(storage.upsertSetting(
+        PAWAPAY_API_TOKEN_KEY,
+        encryptPawaPayCredential(storedApiToken)!,
+        "PawaPay production Bearer token (encrypted)",
+      ));
+    }
+    if (storedWebhookSecret && storedWebhookSecretResult.legacy) {
+      repairs.push(storage.upsertSetting(
+        PAWAPAY_WEBHOOK_SECRET_KEY,
+        encryptPawaPayCredential(storedWebhookSecret)!,
         "PawaPay production callback secret (encrypted)",
       ));
     }
@@ -107,8 +118,8 @@ export async function replacePawaPayCredentials(input: {
   apiToken?: string;
   webhookSecret?: string;
 }): Promise<void> {
-  if (!isFieldEncryptionConfigured()) {
-    throw new Error("FIELD_ENCRYPTION_KEY is required before PawaPay credentials can be saved");
+  if (!isPawaPayCredentialEncryptionConfigured()) {
+    throw new Error("PawaPay credential encryption requires the server session secret");
   }
 
   const apiToken = typeof input.apiToken === "string" ? input.apiToken.trim() : "";
@@ -120,14 +131,14 @@ export async function replacePawaPayCredentials(input: {
   if (apiToken) {
     await storage.upsertSetting(
       PAWAPAY_API_TOKEN_KEY,
-      encryptField(validateSecret("PawaPay API token", apiToken, 8))!,
+      encryptPawaPayCredential(validateSecret("PawaPay API token", apiToken, 8))!,
       "PawaPay production Bearer token (encrypted)",
     );
   }
   if (webhookSecret) {
     await storage.upsertSetting(
       PAWAPAY_WEBHOOK_SECRET_KEY,
-      encryptField(validateSecret("PawaPay webhook secret", webhookSecret, 16))!,
+      encryptPawaPayCredential(validateSecret("PawaPay webhook secret", webhookSecret, 16))!,
       "PawaPay production callback secret (encrypted)",
     );
   }
@@ -138,10 +149,10 @@ export async function replacePawaPayCredentials(input: {
   // sense that the credential is usable.
   const saved = await getPawaPayCredentials(true);
   if (apiToken && saved.apiToken !== apiToken) {
-    throw new Error("PawaPay API token was saved but cannot be read back; verify FIELD_ENCRYPTION_KEY");
+      throw new Error("PawaPay API token was saved but cannot be read back; verify the server session secret");
   }
   if (webhookSecret && saved.webhookSecret !== webhookSecret) {
-    throw new Error("PawaPay webhook secret was saved but cannot be read back; verify FIELD_ENCRYPTION_KEY");
+      throw new Error("PawaPay webhook secret was saved but cannot be read back; verify the server session secret");
   }
 }
 
@@ -160,7 +171,7 @@ export async function getPawaPaySettingsView() {
     webhookSecretConfigured: Boolean(credentials.webhookSecret),
     webhookSecretMasked: maskPawaPaySecret(credentials.webhookSecret),
     webhookSecretUnreadable: webhookStored && !credentials.webhookSecret,
-    encryptionKeyConfigured: isFieldEncryptionConfigured(),
+    credentialEncryptionConfigured: isPawaPayCredentialEncryptionConfigured(),
     baseUrl: PAWAPAY_PRODUCTION_BASE_URL,
     callbackUrls: {
       deposit: PAWAPAY_DEPOSIT_CALLBACK_URL,
