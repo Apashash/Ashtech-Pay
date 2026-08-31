@@ -85,6 +85,7 @@ async function rawFetch(
   url: string,
   data: unknown | undefined,
   pin: string | null,
+  signal?: AbortSignal,
 ): Promise<Response> {
   const headers: Record<string, string> = {
     ...getAuthHeaders() as Record<string, string>,
@@ -97,6 +98,7 @@ async function rawFetch(
     headers,
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
+    signal,
   });
 }
 
@@ -122,12 +124,13 @@ export async function apiRequest(
   method: string,
   url: string,
   data?: unknown | undefined,
+  options?: { signal?: AbortSignal },
 ): Promise<Response> {
   const isAdminRoute = url.startsWith("/api/admin/") || url.startsWith("/api/admin");
   const isStateChanging = method !== "GET" && method !== "HEAD" && method !== "OPTIONS";
 
   // First request — no PIN
-  let res = await rawFetch(method, url, data, null);
+  let res = await rawFetch(method, url, data, null, options?.signal);
 
   // Only intercept PIN challenges for admin routes with a registered handler
   if (!isAdminRoute || !isStateChanging || !hasPinHandler()) {
@@ -172,7 +175,7 @@ export async function apiRequest(
       throw new Error("PIN_CANCELLED");
     }
 
-    res = await rawFetch(method, url, data, pin);
+    res = await rawFetch(method, url, data, pin, options?.signal);
 
     if (res.ok) {
       invokePinSuccess();

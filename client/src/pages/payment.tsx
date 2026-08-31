@@ -32,6 +32,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { normalizePaymentLinkRequestError, parsePaymentLinkJson } from "@/lib/payment-link-http";
 
 const CRYPTO_COUNTDOWN_SECONDS = 5 * 60;
+const PAYMENT_REQUEST_TIMEOUT_MS = 30_000;
 
 const CURRENCY_FLAGS: Record<string, string> = {
   "XAF": "🇨🇲", "XOF": "🇸🇳", "CDF": "🇨🇩",
@@ -361,14 +362,23 @@ export default function PaymentPage() {
       if (pawaPayPreAuthCode) {
         body.preAuthorisationCode = pawaPayPreAuthCode;
       }
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), PAYMENT_REQUEST_TIMEOUT_MS);
       try {
-        const res = await apiRequest("POST", `/api/payment-links/${params?.slug}/pay`, body);
+        const res = await apiRequest(
+          "POST",
+          `/api/payment-links/${params?.slug}/pay`,
+          body,
+          { signal: controller.signal },
+        );
         return await parsePaymentLinkJson<any>(
           res,
           "Le serveur n'a renvoyé aucune réponse. Veuillez réessayer.",
         );
       } catch (error) {
         throw normalizePaymentLinkRequestError(error);
+      } finally {
+        window.clearTimeout(timeout);
       }
     },
     onSuccess: async (data) => {

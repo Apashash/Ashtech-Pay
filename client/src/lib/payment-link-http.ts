@@ -10,10 +10,13 @@ export function normalizePaymentLinkRequestError(error: unknown): Error {
     const message = error.message;
     if (
       error instanceof TypeError ||
+      error.name === "AbortError" ||
       /load failed|failed to fetch|network\s*error|networkerror/i.test(message)
     ) {
       return new Error(
-        "Impossible de joindre le serveur de paiement. Vérifiez votre connexion puis réessayez.",
+        error.name === "AbortError"
+          ? "Le serveur de paiement met trop de temps à répondre. Veuillez réessayer."
+          : "Impossible de joindre le serveur de paiement. Vérifiez votre connexion puis réessayez.",
       );
     }
     return error;

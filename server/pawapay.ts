@@ -434,6 +434,7 @@ async function request(path: string, method: "GET" | "POST", body?: unknown): Pr
   const timeoutMs = Number.isFinite(configuredTimeout) && configuredTimeout > 0 ? configuredTimeout : DEFAULT_TIMEOUT_MS;
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   let response: Response;
+  let raw: unknown;
   try {
     const token = await apiToken();
     response = await fetch(`${configuredBaseUrl()}${path}`, {
@@ -445,16 +446,19 @@ async function request(path: string, method: "GET" | "POST", body?: unknown): Pr
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       signal: controller.signal,
     });
+    // Keep the abort timer active while consuming the response body. Some
+    // upstream/proxy failures return headers but never finish the payload.
+    raw = await readJson(response);
   } finally {
     clearTimeout(timeout);
   }
-  const raw: any = await readJson(response);
-  const data = raw?.data && typeof raw.data === "object" && !Array.isArray(raw.data) ? raw.data : raw;
+  const parsedRaw: any = raw;
+  const data = parsedRaw?.data && typeof parsedRaw.data === "object" && !Array.isArray(parsedRaw.data) ? parsedRaw.data : parsedRaw;
   const status = normalizePawaPayStatus(data?.status);
   // Successful GETs keep transaction data under `data`; errors are commonly
   // top-level, so inspect both without dropping upstream diagnostics.
   const nestedDetails = responseDetails(data);
-  const rootDetails = responseDetails(raw, response.status);
+  const rootDetails = responseDetails(parsedRaw, response.status);
   const details = {
     providerMessage: nestedDetails.providerMessage ?? rootDetails.providerMessage,
     providerCode: nestedDetails.providerCode ?? rootDetails.providerCode,
@@ -463,12 +467,12 @@ async function request(path: string, method: "GET" | "POST", body?: unknown): Pr
     providerStatus: response.ok ? undefined : rootDetails.providerStatus,
   };
   const id = data?.depositId ?? data?.payoutId;
-  const found = String(raw?.status ?? "").toUpperCase() !== "NOT_FOUND";
+  const found = String(parsedRaw?.status ?? "").toUpperCase() !== "NOT_FOUND";
   return {
     success: response.ok && found && status !== "failed",
     id, status, ...details,
     ...resultAuthorizationFields(data),
-    raw,
+    raw: parsedRaw,
   };
 }
 
