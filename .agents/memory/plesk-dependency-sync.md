@@ -7,4 +7,4 @@ Plesk's NPM panel installs from its configured application root and branch, not 
 
 **Why:** The repository can have a clean lockfile while Plesk continues resolving an old transitive dependency from `/data/vhosts/.../httpdocs`.
 
-**How to apply:** Verify the Plesk Git source, branch, application root, and last deployed revision before changing application code. A repository-side `preinstall` cleanup can remove known stale directories only after Plesk has received the updated package.json.
+**How to apply:** Verify the Plesk Git source, branch, application root, and last deployed revision before changing application code. Do not rely on a repository `preinstall` script to repair an `ENOTEMPTY` rename: npm may fail during node_modules reconciliation before lifecycle scripts run. The remote app root must receive the new package metadata and have its stale installation tree removed or replaced with a clean `npm ci`.
