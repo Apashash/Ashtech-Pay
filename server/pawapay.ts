@@ -227,7 +227,12 @@ function responseDetails(raw: any, httpStatus?: number) {
   const error = root.error && typeof root.error === "object" ? root.error : {};
   const data = root.data && typeof root.data === "object" && !Array.isArray(root.data) ? root.data : {};
   const nestedError = data.error && typeof data.error === "object" ? data.error : {};
+  const failureReason = root.failureReason && typeof root.failureReason === "object" ? root.failureReason : {};
+  const nestedFailureReason = data.failureReason && typeof data.failureReason === "object" ? data.failureReason : {};
   const providerMessage = [
+    failureReason.failureMessage,
+    failureReason.message,
+    failureReason.description,
     root.providerMessage,
     root.message,
     root.errorMessage,
@@ -246,11 +251,16 @@ function responseDetails(raw: any, httpStatus?: number) {
     data.description,
     data.detail,
     typeof data.error === "string" ? data.error : undefined,
+    nestedFailureReason.failureMessage,
+    nestedFailureReason.message,
+    nestedFailureReason.description,
     error.message,
     nestedError.message,
   ]
     .find((value): value is string => typeof value === "string" && value.length > 0);
   const providerCode = [
+    failureReason.failureCode,
+    failureReason.code,
     root.providerCode,
     root.code,
     root.errorCode,
@@ -261,6 +271,8 @@ function responseDetails(raw: any, httpStatus?: number) {
     data.errorCode,
     data.error_code,
     typeof data.error === "string" && /^[A-Za-z0-9_.-]{2,80}$/.test(data.error) ? data.error : undefined,
+    nestedFailureReason.failureCode,
+    nestedFailureReason.code,
     error.code,
     nestedError.code,
   ]
@@ -322,7 +334,9 @@ async function request(path: string, method: "GET" | "POST", body?: unknown): Pr
   const details = {
     providerMessage: nestedDetails.providerMessage ?? rootDetails.providerMessage,
     providerCode: nestedDetails.providerCode ?? rootDetails.providerCode,
-    providerStatus: rootDetails.providerStatus,
+    // PawaPay can return HTTP 200 with an application-level REJECTED status.
+    // Do not show "Status: 200" as if it were the reason for that rejection.
+    providerStatus: response.ok ? undefined : rootDetails.providerStatus,
   };
   const id = data?.depositId ?? data?.payoutId;
   const found = String(raw?.status ?? "").toUpperCase() !== "NOT_FOUND";
