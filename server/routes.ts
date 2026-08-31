@@ -8473,7 +8473,9 @@ export async function registerRoutes(
         paymentLinkId: paymentLink.id,
         merchantId: paymentLink.userId,
         payerName: fullName,
-        payerEmail: email,
+        // The public form makes email optional, while payment_intents.payer_email
+        // remains NOT NULL for compatibility with existing records.
+        payerEmail: typeof email === "string" ? email.trim() : "",
         payerPhone: phone,
         payerCountry: countryDisplay,
         amount: netAmount,
@@ -8500,7 +8502,7 @@ export async function registerRoutes(
         paymentLinkId: paymentLink.id,
         paymentIntentId: intent.id,
         payerName: fullName,
-        payerEmail: email,
+        payerEmail: typeof email === "string" ? email.trim() : "",
         recipientCountry: countryDisplay,
         operatorId: resolvedOperatorId || null,
         ...(pawaPayDepositId ? { externalReference: pawaPayDepositId } : {}),
