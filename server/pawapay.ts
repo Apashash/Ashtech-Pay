@@ -4,6 +4,8 @@
  */
 
 export const PAWAPAY_PRODUCTION_BASE_URL = "https://api.pawapay.io/v2";
+/** PawaPay allows a 4–22 character customer message; use the AshTechPay brand. */
+export const PAWAPAY_CUSTOMER_MESSAGE = "AshTechPay";
 
 export type PawaPayStatus = "completed" | "failed" | "pending";
 export type PawaPayDirection = "deposit" | "payout";

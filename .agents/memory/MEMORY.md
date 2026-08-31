@@ -35,3 +35,4 @@
 - [PawaPay active-conf structure](pawapay-active-conf-structure.md) — operationTypes is keyed under each provider currency, so active-provider checks must read currencies[].operationTypes object keys.
 - [PawaPay amount canonicalization](pawapay-amount-format.md) — v2 amounts cannot end with decimal zeros; normalize internal `200.00` values to `200` before sending.
 - [PawaPay MSISDN formatting](pawapay-msisdn-format.md) — PawaPay requires an international number starting with the selected country dial code; local form inputs need country-aware prefixing.
+- [PawaPay SMS branding](pawapay-sms-branding.md) — customerMessage can carry AshTechPay (4–22 chars), but MTN/PawaPay controls the sender header shown in the SMS.

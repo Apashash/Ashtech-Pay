@@ -76,7 +76,7 @@ import {
 } from "./directCrypto";
 import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, getAfribaPayOtpInfo, confirmAfribaPayOtp, isAfribaPayOtpRequiredMessage } from "./afribapay";
 import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, initiatePixPayPayout, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType, getPixPayServiceId, PIXPAY_OTP_USSD_CODES } from "./pixpay";
-import { assertPawaPayProviderActive, classifyPawaPayControlledTransaction, createPawaPayDeposit, createPawaPayId, createPawaPayPayout, createPawaPayPaymentPage, getPawaPayActiveConfiguration, getPawaPayDeposit, getPawaPayPayout } from "./pawapay";
+import { assertPawaPayProviderActive, classifyPawaPayControlledTransaction, createPawaPayDeposit, createPawaPayId, createPawaPayPayout, createPawaPayPaymentPage, getPawaPayActiveConfiguration, getPawaPayDeposit, getPawaPayPayout, PAWAPAY_CUSTOMER_MESSAGE } from "./pawapay";
 import { addPendingPayment, removePendingPayment, expireCryptoPaymentIfNeeded } from "./paymentPoller";
 import { processPawaPayDepositCallback } from "./paymentPoller";
 import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, sameCfaFamily, getConversionPairKey, maybeAutoConvert } from "./walletHelper";
@@ -5270,7 +5270,7 @@ export async function registerRoutes(
                 phoneNumber: normalizePhone(data.phoneNumber) || "",
               },
               clientReferenceId: depositRef,
-              customerMessage: data.description,
+              customerMessage: PAWAPAY_CUSTOMER_MESSAGE,
             });
             if (result.status === "failed") {
               await storage.claimTransactionStatus(transaction.id, "failed");
@@ -8582,6 +8582,7 @@ export async function registerRoutes(
                 phoneNumber: normalizePhone(phone) || "",
               },
               clientReferenceId: reference,
+              customerMessage: PAWAPAY_CUSTOMER_MESSAGE,
             });
             if (result.status === "failed") {
               await storage.updatePaymentIntentStatus(intent.id, "failed");
@@ -15305,7 +15306,8 @@ export async function registerRoutes(
            country: pawaPayCountry(country.code),
            currency: toPawaPayCurrency(walletCurrency),
            payer: { provider: resolvePawaPayProviderCode(operatorRecord, operatorName, country.code), phoneNumber: normalizePhone(phone) || "" },
-           clientReferenceId: depositRef,
+            clientReferenceId: depositRef,
+            customerMessage: PAWAPAY_CUSTOMER_MESSAGE,
          });
          if (result.status === "failed") {
            await storage.claimTransactionStatus(transaction.id, "failed");
@@ -16027,7 +16029,7 @@ export async function registerRoutes(
              depositId: pawaPayDepositId, amount: amount.toFixed(2), currency: toPawaPayCurrency(walletCurrency),
              phoneNumber: normalizePhone(phone) || "", country: pawaPayCountry(countryCode),
              provider: resolvePawaPayProviderCode(operator, operator.name, countryCode),
-             clientReferenceId: txRef, returnUrl: `${appBase}/hpay/${hpSession.id}`,
+             clientReferenceId: txRef, customerMessage: PAWAPAY_CUSTOMER_MESSAGE, returnUrl: `${appBase}/hpay/${hpSession.id}`,
              metadata: { hostedSessionId: hpSession.id },
            });
            if (result.status === "failed" || !result.redirectUrl) throw createProviderFailure(result.providerMessage || "Payment page unavailable", {
