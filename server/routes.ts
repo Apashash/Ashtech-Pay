@@ -3946,6 +3946,7 @@ export async function registerRoutes(
       }
       let pawaPayAuthorizationUrl: string | undefined;
       let pawaPayNextStep: string | undefined;
+      let pawaPayStatusUnavailable = false;
       if (
         latestTransaction.status === "pending" &&
         classifyPawaPayControlledTransaction(latestTransaction.type, latestTransaction.externalReference) === "incoming"
@@ -3956,6 +3957,7 @@ export async function registerRoutes(
           pawaPayNextStep = pawaStatus.nextStep;
         } catch (error) {
           // Status polling must remain useful if PawaPay is temporarily unreachable.
+          pawaPayStatusUnavailable = true;
           console.warn("[PawaPay status] authorization lookup failed:", error instanceof Error ? error.message : "unknown error");
         }
       }
@@ -3965,6 +3967,7 @@ export async function registerRoutes(
         description: latestTransaction.status === "failed" ? latestTransaction.description : undefined,
         authorizationUrl: pawaPayAuthorizationUrl || null,
         nextStep: pawaPayNextStep || null,
+        providerStatusUnavailable: pawaPayStatusUnavailable,
       });
     } catch (error) {
       console.error("Get transaction status error:", error);
@@ -5302,7 +5305,6 @@ export async function registerRoutes(
             const rate = (resolvedFeeRecord as any)?.pawapayFee != null
               ? parseFloat((resolvedFeeRecord as any).pawapayFee) : 3.0;
             const pawaFees = computePixPayFees(totalAmount, rate, ashtechMarginPct);
-            const pawaAppBase = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
             const result = await createPawaPayDeposit({
               depositId: pawaPayDepositId,
               country: pawaPayCountry(countryCode),
@@ -5314,8 +5316,7 @@ export async function registerRoutes(
               },
               clientReferenceId: depositRef,
               customerMessage: PAWAPAY_CUSTOMER_MESSAGE,
-              successfulUrl: `${pawaAppBase}/dashboard/deposit?ref=${depositRef}&status=success`,
-              failedUrl: `${pawaAppBase}/dashboard/deposit?ref=${depositRef}&status=failed`,
+              operationConfiguration: pawaPayOperation,
               preAuthorisationCode: data.preAuthorisationCode,
             });
             if (result.status === "failed") {
@@ -8698,7 +8699,6 @@ export async function registerRoutes(
             }
 
           if (paymentProvider === "pawapay") {
-            const pawaAppBase = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
             const result = await createPawaPayDeposit({
               depositId: pawaPayDepositId,
               country: pawaPayCountry(paymentCountryCode),
@@ -8710,9 +8710,8 @@ export async function registerRoutes(
               },
               clientReferenceId: reference,
               customerMessage: PAWAPAY_CUSTOMER_MESSAGE,
+              operationConfiguration: pawaPayOperation,
               preAuthorisationCode,
-              successfulUrl: `${pawaAppBase}/pay/${paymentLink!.slug}?ref=${reference}&status=success`,
-              failedUrl: `${pawaAppBase}/pay/${paymentLink!.slug}?ref=${reference}&status=failed`,
             });
             if (result.status === "failed") {
               await storage.updatePaymentIntentStatus(intent.id, "failed");
@@ -13800,14 +13799,19 @@ export async function registerRoutes(
   // ─── PawaPay callbacks ────────────────────────────────────────────────────
   // PawaPay callbacks contain only a provider UUID.  We deliberately look up
   // that UUID in external_reference rather than accepting a merchant reference.
+  // PawaPay's documented callback contract requires a publicly reachable POST
+  // endpoint and does not send AshTechPay's locally stored webhook secret.
+  // A token remains supported for deployments that put one in the configured
+  // callback URL, but it is not mandatory by default.
   async function handlePawaPayCallback(req: Request, res: Response, direction: "deposit" | "payout") {
     try {
       const webhookSecret = await getPawaPayWebhookSecret();
-      if (!webhookSecret) {
-        return res.status(503).json({ message: "Webhook endpoint not configured" });
-      }
       const callbackToken = (req.query.token as string) || (req.headers["x-webhook-token"] as string);
-      if (callbackToken !== webhookSecret) {
+      const callbackTokenRequired = process.env.PAWAPAY_REQUIRE_CALLBACK_TOKEN === "true";
+      if (callbackToken && (!webhookSecret || callbackToken !== webhookSecret)) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      if (callbackTokenRequired && (!webhookSecret || !callbackToken)) {
         return res.status(401).json({ message: "Unauthorized" });
       }
       if (process.env.PAWAPAY_REQUIRE_SIGNED_CALLBACKS === "true") {
@@ -15396,10 +15400,11 @@ export async function registerRoutes(
       }
 
       // ── Create transaction ────────────────────────────────────────────────
-       if (paymentProvider === "pawapay") {
+      let pawaOperation: Awaited<ReturnType<typeof resolvePawaPayOperationConfiguration>> | undefined;
+      if (paymentProvider === "pawapay") {
          try {
            const pawaProvider = resolvePawaPayProviderCode(operatorRecord, operatorName, country.code);
-           const pawaOperation = await resolvePawaPayOperationConfiguration(
+           pawaOperation = await resolvePawaPayOperationConfiguration(
              pawaProvider, "DEPOSIT", pawaPayCountry(country.code), toPawaPayCurrency(walletCurrency),
            );
            if (pawaOperation?.authType === "PREAUTH" && !pawaPayPreAuthorisationCode) {
@@ -15410,7 +15415,7 @@ export async function registerRoutes(
              });
            }
            await assertPawaPayProviderActive(
-             pawaProvider, "DEPOSIT", pawaPayCountry(country.code), toPawaPayCurrency(walletCurrency),
+             pawaProvider, "DEPOSIT", pawaPayCountry(country.code), toPawaPayCurrency(walletCurrency), pawaOperation ?? undefined,
            );
          } catch (error: any) {
            console.error("[API v1/collect] PawaPay provider validation failed:", error);
@@ -15462,6 +15467,7 @@ export async function registerRoutes(
            payer: { provider: resolvePawaPayProviderCode(operatorRecord, operatorName, country.code), phoneNumber: normalizePhone(phone) || "" },
             clientReferenceId: depositRef,
             customerMessage: PAWAPAY_CUSTOMER_MESSAGE,
+            operationConfiguration: pawaOperation,
             preAuthorisationCode: pawaPayPreAuthorisationCode,
          });
          if (pawaPayResult.status === "failed") {

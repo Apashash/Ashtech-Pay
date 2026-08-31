@@ -54,8 +54,8 @@ export interface PawaPayDepositParams {
   clientReferenceId?: string;
   metadata?: Record<string, string>;
   preAuthorisationCode?: string;
-  successfulUrl?: string;
-  failedUrl?: string;
+  /** Reuse a route-level active-conf result instead of fetching it again. */
+  operationConfiguration?: PawaPayOperationConfiguration;
 }
 
 export interface PawaPayPayoutParams {
@@ -521,18 +521,19 @@ function checkedId(id: string | undefined): string {
 
 export async function createPawaPayDeposit(params: PawaPayDepositParams): Promise<PawaPayResult> {
   const depositId = checkedId(params.depositId);
-  const operation = await resolvePawaPayOperationConfiguration(
-    params.payer.provider, "DEPOSIT", params.country, params.currency,
+  const operation = params.operationConfiguration ??
+    await resolvePawaPayOperationConfiguration(
+      params.payer.provider, "DEPOSIT", params.country, params.currency,
+    );
+  await assertPawaPayProviderActive(
+    params.payer.provider, "DEPOSIT", params.country, params.currency, operation,
   );
-  await assertPawaPayProviderActive(params.payer.provider, "DEPOSIT", params.country, params.currency);
   const result = await request("/deposits", "POST", {
     depositId, amount: formatPawaPayAmount(params.amount), currency: validatePawaPayCurrency(params.currency),
     payer: accountBody(params.payer, params.country),
     customerMessage: params.customerMessage ?? PAWAPAY_CUSTOMER_MESSAGE,
     clientReferenceId: params.clientReferenceId, metadata: metadataBody(params.metadata),
     preAuthorisationCode: params.preAuthorisationCode,
-    successfulUrl: params.successfulUrl,
-    failedUrl: params.failedUrl,
   });
   return {
     ...result,
@@ -680,8 +681,10 @@ export async function assertPawaPayProviderActive(
   operationType: "DEPOSIT" | "PAYOUT",
   country?: string,
   currency?: string,
+  resolvedOperation?: PawaPayOperationConfiguration,
 ): Promise<void> {
-  const operationResolved = await resolvePawaPayOperationConfiguration(provider, operationType, country, currency);
+  const operationResolved = resolvedOperation ??
+    await resolvePawaPayOperationConfiguration(provider, operationType, country, currency);
   const resolved: any = operationResolved ?? await resolvePawaPayProvider(provider, { country, operationType });
   if (!resolved) {
     throw new Error(`Configured mobile money provider ${provider} is not active for ${operationType}${country ? ` in ${country}` : ""}`);

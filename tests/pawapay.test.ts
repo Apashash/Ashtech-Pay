@@ -415,8 +415,8 @@ test("PawaPay resolves nested authorization details by country, provider, and cu
     }
     assert.equal(String(url).endsWith("/deposits"), true);
     const body = JSON.parse(String(init?.body));
-    assert.equal(body.successfulUrl, "https://merchant.example/success");
-    assert.equal(body.failedUrl, "https://merchant.example/failed");
+    assert.equal("successfulUrl" in body, false);
+    assert.equal("failedUrl" in body, false);
     assert.equal(body.preAuthorisationCode, "367025");
     return new Response(JSON.stringify({
       depositId: requestId,
@@ -436,8 +436,6 @@ test("PawaPay resolves nested authorization details by country, provider, and cu
       currency: "XOF",
       country: "CIV",
       payer: { provider: "WAVE_CIV", phoneNumber: "2250700000000" },
-      successfulUrl: "https://merchant.example/success",
-      failedUrl: "https://merchant.example/failed",
       preAuthorisationCode: "367025",
     });
     assert.equal(result.authType, "REDIRECT_AUTH");

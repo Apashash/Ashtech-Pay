@@ -36,3 +36,4 @@
 - [PawaPay amount canonicalization](pawapay-amount-format.md) — v2 amounts cannot end with decimal zeros; normalize internal `200.00` values to `200` before sending.
 - [PawaPay MSISDN formatting](pawapay-msisdn-format.md) — PawaPay requires an international number starting with the selected country dial code; local form inputs need country-aware prefixing.
 - [PawaPay SMS branding](pawapay-sms-branding.md) — customerMessage can carry AshTechPay (4–22 chars), but MTN/PawaPay controls the sender header shown in the SMS.
+- [PawaPay callback access](pawapay-callback-access.md) — official callbacks are public POSTs; do not require AshTechPay app auth or a locally stored secret unless an explicit callback token is configured.

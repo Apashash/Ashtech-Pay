@@ -32,7 +32,10 @@ import { apiRequest } from "@/lib/queryClient";
 import { normalizePaymentLinkRequestError, parsePaymentLinkJson } from "@/lib/payment-link-http";
 
 const CRYPTO_COUNTDOWN_SECONDS = 5 * 60;
-const PAYMENT_REQUEST_TIMEOUT_MS = 30_000;
+// The server may perform one cached/uncached active-conf lookup before the
+// deposit request. Leave enough margin for both provider calls so the browser
+// does not turn a valid server error into Safari's opaque "Load failed".
+const PAYMENT_REQUEST_TIMEOUT_MS = 35_000;
 
 const CURRENCY_FLAGS: Record<string, string> = {
   "XAF": "🇨🇲", "XOF": "🇸🇳", "CDF": "🇨🇩",
@@ -90,6 +93,7 @@ export default function PaymentPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
+  const statusIssueNotifiedRef = useRef(false);
   const [otpRequired, setOtpRequired] = useState(false);
   const [otpType, setOtpType] = useState<"api" | "ussd">("api");
   const [otpUssdCode, setOtpUssdCode] = useState("");
@@ -280,6 +284,17 @@ export default function PaymentPage() {
         const res = await fetch(`/api/transactions/status/${ref}`);
         if (res.ok) {
           const statusData = await res.json();
+          if (statusData.providerStatusUnavailable && !statusIssueNotifiedRef.current) {
+            statusIssueNotifiedRef.current = true;
+            toast({
+              title: "Suivi temporairement indisponible",
+              description: "Le paiement a été envoyé. La confirmation automatique est momentanément indisponible ; cette page continue de vérifier son statut.",
+              variant: "destructive",
+            });
+          }
+          if (!statusData.providerStatusUnavailable) {
+            statusIssueNotifiedRef.current = false;
+          }
           if (statusData.authorizationUrl && !waveUrl) {
             setWaveUrl(statusData.authorizationUrl);
             setPawaPayAuth((current: any) => current || { authType: "REDIRECT_AUTH" });
@@ -586,6 +601,7 @@ export default function PaymentPage() {
   };
 
   const resetForm = () => {
+    statusIssueNotifiedRef.current = false;
     setPaymentComplete(false);
     setPaymentStatus("pending");
     setPaymentReference("");
