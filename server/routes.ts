@@ -90,6 +90,7 @@ import {
 } from "./pawapayConfig";
 import { enqueueMerchantWebhook } from "./merchantWebhook";
 import { buildProviderErrorPayload } from "./providerErrors";
+import { buildPublicPaymentStatus } from "./publicPaymentState";
 import { buildPawaPayFeeUpdates } from "./feeUpdates";
 import { addSSEClient, removeSSEClient, setActiveTicket, isUserOnline, getOnlineUserIds, getAdminViewingTicket, getUserViewingTicket, notifyUser, notifyAdmins, broadcastOnlineStatus, notifyUserForceLogout, notifyOtherSessionsForceLogout, notifyAllUsersForceLogout, notifySpecificSessionForceLogout } from "./sse";
 import { sendClean404 } from "./botGuard";
@@ -3944,31 +3945,16 @@ export async function registerRoutes(
       if (!latestTransaction) {
         return res.status(404).json({ message: "Transaction non trouvée", status: "not_found" });
       }
-      let pawaPayAuthorizationUrl: string | undefined;
-      let pawaPayNextStep: string | undefined;
-      let pawaPayStatusUnavailable = false;
-      if (
-        latestTransaction.status === "pending" &&
-        classifyPawaPayControlledTransaction(latestTransaction.type, latestTransaction.externalReference) === "incoming"
-      ) {
-        try {
-          const pawaStatus = await getPawaPayDeposit(latestTransaction.externalReference!);
-          pawaPayAuthorizationUrl = pawaStatus.authorizationUrl;
-          pawaPayNextStep = pawaStatus.nextStep;
-        } catch (error) {
-          // Status polling must remain useful if PawaPay is temporarily unreachable.
-          pawaPayStatusUnavailable = true;
-          console.warn("[PawaPay status] authorization lookup failed:", error instanceof Error ? error.message : "unknown error");
-        }
-      }
-      res.json({
+      // The browser must only read our local transaction state. The background
+      // poller is the single component that talks to PawaPay, so a temporary
+      // provider outage cannot turn every public browser poll into a second
+      // provider request (or make Safari report an opaque "Load failed").
+      res.json(buildPublicPaymentStatus({
         status: latestTransaction.status,
         reference: latestTransaction.reference,
-        description: latestTransaction.status === "failed" ? latestTransaction.description : undefined,
-        authorizationUrl: pawaPayAuthorizationUrl || null,
-        nextStep: pawaPayNextStep || null,
-        providerStatusUnavailable: pawaPayStatusUnavailable,
-      });
+        description: latestTransaction.description,
+        metadata: (latestTransaction as any).metadata,
+      }));
     } catch (error) {
       console.error("Get transaction status error:", error);
       res.status(500).json({ message: "Erreur serveur" });
@@ -8717,6 +8703,29 @@ export async function registerRoutes(
             if (result.status === "failed") {
               await storage.updatePaymentIntentStatus(intent.id, "failed");
               await storage.claimTransactionStatus(paymentTransaction.id, "failed");
+              const safeFailure = buildProviderErrorPayload({
+                error: "payment_initiation_failed",
+                message: result.providerMessage,
+                fallback: "Impossible d'initier le paiement.",
+                provider: "pawapay",
+                raw: result.raw,
+                providerCode: result.providerCode,
+                providerStatus: result.providerStatus,
+                sensitiveValues: [phone],
+              });
+              await storage.updateTransaction(paymentTransaction.id, {
+                description: String(safeFailure.message),
+                metadata: {
+                  ...((paymentTransaction as any).metadata || {}),
+                  paymentProvider: "pawapay",
+                  pawaCountry: pawaPayCountry(paymentCountryCode),
+                  countryCode: paymentCountryCode,
+                  failureReason: {
+                    failureCode: safeFailure.provider_code || null,
+                    failureMessage: String(safeFailure.message),
+                  },
+                },
+              });
               return res.status(400).json(buildProviderErrorPayload({
                 error: "payment_initiation_failed", message: result.providerMessage,
                 fallback: "Impossible d'initier le paiement.", provider: "pawapay", raw: result.raw,
@@ -8726,6 +8735,15 @@ export async function registerRoutes(
             if (result.status === "completed") {
               await processPawaPayDepositCallback(paymentTransaction, "completed");
             } else {
+              await storage.updateTransactionMetadata(paymentTransaction.id, {
+                ...((paymentTransaction as any).metadata || {}),
+                paymentProvider: "pawapay",
+                pawaCountry: pawaPayCountry(paymentCountryCode),
+                countryCode: paymentCountryCode,
+                ...(result.authorizationUrl ? { authorizationUrl: result.authorizationUrl } : {}),
+                ...(result.nextStep ? { nextStep: result.nextStep } : {}),
+                ...(result.authType ? { authType: result.authType } : {}),
+              });
               addPendingPayment({
                 transactionId: paymentTransaction.id, reference, externalReference: pawaPayDepositId!,
                 attempts: 0, userId: paymentLink!.userId, type: "payment_link", amount: netAmount,
@@ -13840,6 +13858,29 @@ export async function registerRoutes(
         : ["pending", "processing", "pending_manual"].includes(transaction.status);
       if (!allowedStatus) return res.status(200).json({ success: true });
       if (direction === "deposit") {
+        if (callback.status === "failed") {
+          const safeFailure = buildProviderErrorPayload({
+            error: "payment_failed",
+            message: callback.providerMessage,
+            fallback: "Le paiement a été refusé par le fournisseur.",
+            provider: "pawapay",
+            providerCode: callback.providerCode,
+            sensitiveValues: [
+              transaction.recipientPhone,
+              (transaction as any).payerPhone,
+            ],
+          });
+          await storage.updateTransaction(transaction.id, {
+            description: String(safeFailure.message),
+            metadata: {
+              ...(((transaction as any).metadata || {}) as Record<string, unknown>),
+              failureReason: {
+                failureCode: safeFailure.provider_code || null,
+                failureMessage: String(safeFailure.message),
+              },
+            },
+          });
+        }
         await processPawaPayDepositCallback(transaction, callback.status);
       } else {
         await processPawaPayPayoutCallback(transaction, callback.status === "completed" ? "success" : "failed");

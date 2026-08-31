@@ -93,7 +93,6 @@ export default function PaymentPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
-  const statusIssueNotifiedRef = useRef(false);
   const [otpRequired, setOtpRequired] = useState(false);
   const [otpType, setOtpType] = useState<"api" | "ussd">("api");
   const [otpUssdCode, setOtpUssdCode] = useState("");
@@ -170,7 +169,13 @@ export default function PaymentPage() {
     const allowed = (paymentLink as any)?.allowedCountries;
     if (!allowed || allowed.length === 0) return allCountries;
     // allowedCountries may contain internal IDs (dashboard) or ISO codes (API) — support both
-    return allCountries.filter(c => allowed.includes(c.id) || allowed.includes(c.code));
+    const allowedCodes = new Set(
+      allowed.map((value: unknown) => String(value).toUpperCase()),
+    );
+    return allCountries.filter(c =>
+      allowedCodes.has(c.id.toUpperCase()) ||
+      allowedCodes.has(c.code.toUpperCase()),
+    );
   }, [allCountries, paymentLink]);
 
   const linkCurrency = useMemo(() => (paymentLink?.currency as SupportedCurrency) || "XAF", [paymentLink]);
@@ -279,25 +284,17 @@ export default function PaymentPage() {
     }, 1000);
 
     if (pollingRef.current) clearInterval(pollingRef.current);
-    pollingRef.current = setInterval(async () => {
+    const checkStatus = async () => {
       try {
         const res = await fetch(`/api/transactions/status/${ref}`);
         if (res.ok) {
           const statusData = await res.json();
-          if (statusData.providerStatusUnavailable && !statusIssueNotifiedRef.current) {
-            statusIssueNotifiedRef.current = true;
-            toast({
-              title: "Suivi temporairement indisponible",
-              description: "Le paiement a été envoyé. La confirmation automatique est momentanément indisponible ; cette page continue de vérifier son statut.",
-              variant: "destructive",
-            });
-          }
-          if (!statusData.providerStatusUnavailable) {
-            statusIssueNotifiedRef.current = false;
-          }
           if (statusData.authorizationUrl && !waveUrl) {
             setWaveUrl(statusData.authorizationUrl);
-            setPawaPayAuth((current: any) => current || { authType: "REDIRECT_AUTH" });
+            setPawaPayAuth((current: any) => current || {
+              authType: statusData.authType || "REDIRECT_AUTH",
+              nextStep: statusData.nextStep || undefined,
+            });
           }
           if (statusData.status === "completed") {
             setPaymentStatus("success");
@@ -305,7 +302,14 @@ export default function PaymentPage() {
             if (pollingRef.current) clearInterval(pollingRef.current);
             redirectAfterPayment("success", ref);
           } else if (statusData.status === "failed") {
-            setFailureReason(parseFailureMessage(statusData.description));
+            const persistedFailure = statusData.failureReason?.failureMessage;
+            setFailureReason(
+              typeof persistedFailure === "string" && persistedFailure.trim()
+                ? persistedFailure
+                : parseFailureMessage(statusData.description) ||
+                  statusData.description ||
+                  "Le paiement n'a pas pu être confirmé. Veuillez réessayer.",
+            );
             setPaymentStatus("failed");
             if (countdownRef.current) clearInterval(countdownRef.current);
             if (pollingRef.current) clearInterval(pollingRef.current);
@@ -313,7 +317,11 @@ export default function PaymentPage() {
           }
         }
       } catch (e) { console.error("Error checking payment status:", e); }
-    }, 5000);
+    };
+    // Check the local transaction immediately. This removes the old five-second
+    // blank interval and keeps the browser independent from the provider API.
+    void checkStatus();
+    pollingRef.current = setInterval(checkStatus, 5000);
   };
 
   const validatePaymentForm = (): boolean => {
@@ -399,11 +407,24 @@ export default function PaymentPage() {
     onSuccess: async (data) => {
       const ref = data.reference || "";
 
-          setPaymentComplete(true);
+      setPaymentComplete(true);
       setPaymentReference(ref);
       setOtpCode("");
       setWaveUrl(null);
       setPawaPayAuth(data.pawaPayAuth || null);
+      if (data.status === "completed") {
+        setPaymentStatus("success");
+        toast({ title: "Paiement confirmé", description: data.message });
+        if (ref) redirectAfterPayment("success", ref);
+        return;
+      }
+      if (data.status === "failed") {
+        setPaymentStatus("failed");
+        setFailureReason(data.message || "Le paiement a échoué.");
+        if (ref) redirectAfterPayment("failed", ref);
+        return;
+      }
+      setPaymentStatus("pending");
       toast({ title: "Paiement initié", description: data.message });
 
       const providerAuthorizationUrl = data.authorizationUrl || data.waveUrl ||
@@ -419,10 +440,10 @@ export default function PaymentPage() {
         setOtpUssdCode(data.ussdCode || "");
       } else {
         setOtpRequired(false);
-        startPaymentPolling(ref);
+        if (ref) startPaymentPolling(ref);
       }
 
-      if (ref && paymentLink?.hasPdf) {
+      if (ref && paymentLink?.hasPdfDelivery) {
         try {
           const pdfRes = await fetch(`/api/payment-links/${params?.slug}/download-pdf/${ref}`);
           if (pdfRes.ok) {
@@ -440,6 +461,9 @@ export default function PaymentPage() {
         setPaymentStatus("pending");
         return;
       }
+      if (pollingRef.current) clearInterval(pollingRef.current);
+      if (countdownRef.current) clearInterval(countdownRef.current);
+      setPaymentComplete(false);
       if (error.message !== "Veuillez corriger les erreurs ci-dessus" && error.message !== "Please fix the errors above") {
         const providerError = error as Error & {
           provider_code?: unknown;
@@ -601,7 +625,6 @@ export default function PaymentPage() {
   };
 
   const resetForm = () => {
-    statusIssueNotifiedRef.current = false;
     setPaymentComplete(false);
     setPaymentStatus("pending");
     setPaymentReference("");

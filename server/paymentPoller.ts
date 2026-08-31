@@ -6,6 +6,7 @@ import { creditUserWallet } from "./walletHelper";
 import { sendPayerConfirmationEmail } from "./email";
 import { notifyDepositConfirmed, notifyDepositFailed } from "./telegram";
 import { enqueueMerchantWebhook } from "./merchantWebhook";
+import { buildProviderErrorPayload } from "./providerErrors";
 
 // Status endpoints are rate-limited by providers. A 10s base loop plus a
 // provider-specific AfribaPay cadence avoids repeatedly asking for the same
@@ -122,6 +123,34 @@ async function checkPaymentStatus(payment: PendingPayment): Promise<"pending" | 
       // our merchant-facing reference.
       const result = await getPawaPayDeposit(payment.externalReference);
       console.log(`[PaymentPoller] PawaPay status for ${payment.reference}: ${result.status}`);
+      if (result.status === "failed") {
+        const transaction = await storage.getTransactionByReference(payment.reference);
+        if (transaction) {
+          const safeFailure = buildProviderErrorPayload({
+            error: "payment_failed",
+            message: result.providerMessage,
+            fallback: "Le paiement a été refusé par le fournisseur.",
+            provider: "pawapay",
+            raw: result.raw,
+            providerCode: result.providerCode,
+            providerStatus: result.providerStatus,
+            sensitiveValues: [
+              transaction.recipientPhone,
+              (transaction as any).payerPhone,
+            ],
+          });
+          await storage.updateTransaction(transaction.id, {
+            description: String(safeFailure.message),
+            metadata: {
+              ...(((transaction as any).metadata || {}) as Record<string, unknown>),
+              failureReason: {
+                failureCode: safeFailure.provider_code || null,
+                failureMessage: String(safeFailure.message),
+              },
+            },
+          });
+        }
+      }
       return result.status;
     } else {
       console.error(`[PaymentPoller] Unsupported payment provider for ${payment.reference}`);
