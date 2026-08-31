@@ -309,7 +309,8 @@ app.use((req, res, next) => {
       const isCryptoApi = req.path === "/v1/crypto/collect" || req.path === "/v1/crypto/assets";
       const isMerchantProviderError =
         req.path === "/v1/collect" ||
-        /^\/api\/public\/hosted-session\/[^/]+\/pay$/.test(req.path);
+        /^\/api\/public\/hosted-session\/[^/]+\/pay$/.test(req.path) ||
+        /^\/api\/payment-links\/[^/]+\/pay$/.test(req.path);
       const isUserProviderError =
         req.path === "/api/deposits" ||
         req.path === "/api/withdrawals";
