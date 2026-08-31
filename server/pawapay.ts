@@ -432,11 +432,37 @@ async function request(path: string, method: "GET" | "POST", body?: unknown): Pr
   const controller = new AbortController();
   const configuredTimeout = Number(process.env.PAWAPAY_TIMEOUT_MS);
   const timeoutMs = Number.isFinite(configuredTimeout) && configuredTimeout > 0 ? configuredTimeout : DEFAULT_TIMEOUT_MS;
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const startedAt = Date.now();
+  const deadline = startedAt + timeoutMs;
+  let fetchTimeout: ReturnType<typeof setTimeout> | undefined;
+  let stage: "credentials" | "headers" | "body" = "credentials";
   let response: Response;
   let raw: unknown;
+
+  console.info(`[PawaPay] ${method} ${path} started (timeout=${timeoutMs}ms)`);
   try {
-    const token = await apiToken();
+    // The AbortController cannot cancel a database lookup performed by
+    // apiToken(). Bound that lookup separately so a cold Plesk/pgBouncer
+    // connection cannot leave a public checkout request pending forever.
+    let credentialTimeout: ReturnType<typeof setTimeout> | undefined;
+    const token = await Promise.race([
+      apiToken(),
+      new Promise<never>((_, reject) => {
+        credentialTimeout = setTimeout(() => {
+          reject(new Error(`PawaPay credential lookup timed out after ${timeoutMs}ms`));
+        }, Math.max(1, deadline - Date.now()));
+      }),
+    ]).finally(() => {
+      if (credentialTimeout) clearTimeout(credentialTimeout);
+    });
+
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) {
+      throw new Error(`PawaPay ${method} ${path} timed out before the provider request`);
+    }
+
+    stage = "headers";
+    fetchTimeout = setTimeout(() => controller.abort(), remainingMs);
     response = await fetch(`${configuredBaseUrl()}${path}`, {
       method,
       headers: {
@@ -446,11 +472,22 @@ async function request(path: string, method: "GET" | "POST", body?: unknown): Pr
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       signal: controller.signal,
     });
+    console.info(`[PawaPay] ${method} ${path} headers received (status=${response.status}, elapsed=${Date.now() - startedAt}ms)`);
+
     // Keep the abort timer active while consuming the response body. Some
     // upstream/proxy failures return headers but never finish the payload.
+    stage = "body";
     raw = await readJson(response);
+    console.info(`[PawaPay] ${method} ${path} completed (status=${response.status}, elapsed=${Date.now() - startedAt}ms)`);
+  } catch (error: any) {
+    const elapsed = Date.now() - startedAt;
+    if (error?.name === "AbortError") {
+      throw new Error(`PawaPay ${method} ${path} timed out while reading the ${stage} response after ${elapsed}ms`);
+    }
+    console.error(`[PawaPay] ${method} ${path} failed during ${stage} after ${elapsed}ms: ${error?.message || "unknown error"}`);
+    throw error;
   } finally {
-    clearTimeout(timeout);
+    if (fetchTimeout) clearTimeout(fetchTimeout);
   }
   const parsedRaw: any = raw;
   const data = parsedRaw?.data && typeof parsedRaw.data === "object" && !Array.isArray(parsedRaw.data) ? parsedRaw.data : parsedRaw;
