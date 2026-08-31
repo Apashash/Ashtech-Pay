@@ -9,6 +9,35 @@ export const PAWAPAY_CUSTOMER_MESSAGE = "AshTechPay";
 
 export type PawaPayStatus = "completed" | "failed" | "pending";
 export type PawaPayDirection = "deposit" | "payout";
+export type PawaPayAuthType = "PROVIDER_AUTH" | "PREAUTH" | "REDIRECT_AUTH";
+
+export interface PawaPayInstructionChannel {
+  type?: "USSD" | "APP" | string;
+  displayName?: { en?: string; fr?: string };
+  quickLink?: string;
+  variables?: Record<string, string>;
+  instructions?: {
+    en?: Array<{ text?: string; template?: string; variables?: Record<string, string> }>;
+    fr?: Array<{ text?: string; template?: string; variables?: Record<string, string> }>;
+  };
+}
+
+export interface PawaPayInstructions {
+  channels?: PawaPayInstructionChannel[];
+}
+
+export interface PawaPayOperationConfiguration {
+  provider: string;
+  country?: string;
+  currency?: string;
+  operationType: string;
+  status?: string;
+  authType?: PawaPayAuthType;
+  pinPrompt?: "AUTOMATIC" | "MANUAL" | string;
+  pinPromptRevivable?: boolean;
+  pinPromptInstructions?: PawaPayInstructions;
+  authTokenInstructions?: PawaPayInstructions;
+}
 
 export interface PawaPayAccount {
   provider: string;
@@ -25,6 +54,8 @@ export interface PawaPayDepositParams {
   clientReferenceId?: string;
   metadata?: Record<string, string>;
   preAuthorisationCode?: string;
+  successfulUrl?: string;
+  failedUrl?: string;
 }
 
 export interface PawaPayPayoutParams {
@@ -62,6 +93,13 @@ export interface PawaPayResult {
   providerCode?: string;
   providerStatus?: number;
   redirectUrl?: string;
+  authorizationUrl?: string;
+  nextStep?: string;
+  authType?: PawaPayAuthType;
+  pinPrompt?: string;
+  pinPromptRevivable?: boolean;
+  pinPromptInstructions?: PawaPayInstructions;
+  authTokenInstructions?: PawaPayInstructions;
   raw?: unknown;
 }
 
@@ -135,6 +173,46 @@ function providerOperationTypes(provider: any): unknown[] {
       })
     : [];
   return [...directTypes, ...currencyTypes];
+}
+
+function providerCountry(provider: any): string | undefined {
+  const value = provider?.country ?? provider?.countryCode ?? provider?.country_code;
+  return value === undefined ? undefined : normalizePawaPayCountry(value);
+}
+
+function currencyCode(currency: any): string | undefined {
+  const value = currency?.currency ?? currency?.currencyCode ?? currency?.currency_code;
+  return value === undefined ? undefined : String(value).trim().toUpperCase();
+}
+
+function operationConfiguration(provider: any, operationType: string, currency?: string): any | undefined {
+  const requested = operationType.toUpperCase();
+  const currencies = Array.isArray(provider?.currencies) ? provider.currencies : [];
+  const matchingCurrencies = currency
+    ? currencies.filter((item: any) => currencyCode(item) === currency.toUpperCase())
+    : currencies;
+
+  for (const currencyConfig of matchingCurrencies) {
+    const operations = currencyConfig?.operationTypes ?? currencyConfig?.operation_types;
+    if (operations && typeof operations === "object" && !Array.isArray(operations)) {
+      const key = Object.keys(operations).find(item => item.toUpperCase() === requested);
+      if (key) return { ...operations[key], currency: currencyCode(currencyConfig) };
+    }
+  }
+
+  const direct = provider?.operationTypes ?? provider?.operation_types ?? provider?.operations;
+  if (direct && typeof direct === "object" && !Array.isArray(direct)) {
+    const key = Object.keys(direct).find(item => item.toUpperCase() === requested);
+    if (key) return direct[key];
+  }
+
+  // Older/simplified active-conf responses expose operation names as an array.
+  // Keep those responses usable, but do not invent auth details.
+  if (!currencies.length && Array.isArray(direct) &&
+      direct.some((item: unknown) => String(item).toUpperCase() === requested)) {
+    return {};
+  }
+  return undefined;
 }
 
 export interface PawaPayActiveConfigurationOptions {
@@ -314,6 +392,18 @@ function responseDetails(raw: any, httpStatus?: number) {
   return { providerMessage, providerCode, providerStatus: httpStatus };
 }
 
+function resultAuthorizationFields(data: any): Partial<PawaPayResult> {
+  const authType = data?.authType;
+  return {
+    redirectUrl: data?.redirectUrl ?? data?.redirectURL ?? data?.paymentPageUrl,
+    authorizationUrl: data?.authorizationUrl,
+    nextStep: typeof data?.nextStep === "string" ? data.nextStep : undefined,
+    ...(authType === "PROVIDER_AUTH" || authType === "PREAUTH" || authType === "REDIRECT_AUTH"
+      ? { authType }
+      : {}),
+  };
+}
+
 function accountBody(account: PawaPayAccount, country?: string) {
   if (!account || typeof account.provider !== "string" || !account.provider.trim()) {
     throw new Error("PawaPay provider is required");
@@ -377,7 +467,7 @@ async function request(path: string, method: "GET" | "POST", body?: unknown): Pr
   return {
     success: response.ok && found && status !== "failed",
     id, status, ...details,
-    redirectUrl: data?.redirectUrl ?? data?.redirectURL ?? data?.paymentPageUrl,
+    ...resultAuthorizationFields(data),
     raw,
   };
 }
@@ -390,13 +480,26 @@ function checkedId(id: string | undefined): string {
 
 export async function createPawaPayDeposit(params: PawaPayDepositParams): Promise<PawaPayResult> {
   const depositId = checkedId(params.depositId);
-  await assertPawaPayProviderActive(params.payer.provider, "DEPOSIT", params.country);
-  return request("/deposits", "POST", {
+  const operation = await resolvePawaPayOperationConfiguration(
+    params.payer.provider, "DEPOSIT", params.country, params.currency,
+  );
+  await assertPawaPayProviderActive(params.payer.provider, "DEPOSIT", params.country, params.currency);
+  const result = await request("/deposits", "POST", {
     depositId, amount: formatPawaPayAmount(params.amount), currency: validatePawaPayCurrency(params.currency),
     payer: accountBody(params.payer, params.country), customerMessage: params.customerMessage,
     clientReferenceId: params.clientReferenceId, metadata: metadataBody(params.metadata),
     preAuthorisationCode: params.preAuthorisationCode,
+    successfulUrl: params.successfulUrl,
+    failedUrl: params.failedUrl,
   });
+  return {
+    ...result,
+    authType: result.authType ?? operation?.authType,
+    pinPrompt: operation?.pinPrompt,
+    pinPromptRevivable: operation?.pinPromptRevivable,
+    pinPromptInstructions: operation?.pinPromptInstructions,
+    authTokenInstructions: operation?.authTokenInstructions,
+  };
 }
 
 export async function getPawaPayDeposit(depositId: string): Promise<PawaPayResult> {
@@ -405,7 +508,7 @@ export async function getPawaPayDeposit(depositId: string): Promise<PawaPayResul
 
 export async function createPawaPayPayout(params: PawaPayPayoutParams): Promise<PawaPayResult> {
   const payoutId = checkedId(params.payoutId);
-  await assertPawaPayProviderActive(params.recipient.provider, "PAYOUT", params.country);
+  await assertPawaPayProviderActive(params.recipient.provider, "PAYOUT", params.country, params.currency);
   return request("/payouts", "POST", {
     payoutId, amount: formatPawaPayAmount(params.amount), currency: validatePawaPayCurrency(params.currency),
     recipient: accountBody(params.recipient, params.country), customerMessage: params.customerMessage,
@@ -421,7 +524,7 @@ export async function createPawaPayPaymentPage(params: PawaPayPaymentPageParams)
   const depositId = checkedId(params.depositId);
   if (!params.returnUrl) throw new Error("PawaPay payment page returnUrl is required");
   if (!params.provider) throw new Error("PawaPay payment page provider is required for active configuration validation");
-  await assertPawaPayProviderActive(params.provider, "DEPOSIT", params.country);
+  await assertPawaPayProviderActive(params.provider, "DEPOSIT", params.country, params.currency);
   return request("/paymentpage", "POST", {
     depositId, amountDetails: { amount: formatPawaPayAmount(params.amount), currency: validatePawaPayCurrency(params.currency) },
     ...(params.phoneNumber ? { phoneNumber: formatPawaPayMsisdn(params.phoneNumber, params.country) } : {}),
@@ -490,8 +593,52 @@ export async function isPawaPayProviderActive(provider: string, options: PawaPay
   return (await resolvePawaPayProvider(provider, options)) !== undefined;
 }
 
-export async function assertPawaPayProviderActive(provider: string, operationType: "DEPOSIT" | "PAYOUT", country?: string): Promise<void> {
-  const resolved: any = await resolvePawaPayProvider(provider, { country, operationType });
+/**
+ * Resolves the exact country/provider/currency/operation record from active-conf.
+ * PawaPay nests operationTypes under each provider currency, so callers must not
+ * infer authorisation behavior from the provider name or from PixPay catalogs.
+ */
+export async function resolvePawaPayOperationConfiguration(
+  provider: string,
+  operationType: "DEPOSIT" | "PAYOUT",
+  country?: string,
+  currency?: string,
+): Promise<PawaPayOperationConfiguration | undefined> {
+  const providers = await listPawaPayProviders({ country, operationType });
+  const expectedCountry = country ? normalizePawaPayCountry(country) : undefined;
+  const expectedCurrency = currency?.toUpperCase();
+  for (const item of providers as any[]) {
+    if (String(providerConfigurationCode(item) ?? "").toLowerCase() !== provider.toLowerCase()) continue;
+    if (expectedCountry && providerCountry(item) && providerCountry(item) !== expectedCountry) continue;
+
+    const operation = operationConfiguration(item, operationType, expectedCurrency);
+    if (!operation) continue;
+    return {
+      provider,
+      country: providerCountry(item),
+      currency: operation.currency ?? expectedCurrency,
+      operationType,
+      status: operation.status,
+      authType: ["PROVIDER_AUTH", "PREAUTH", "REDIRECT_AUTH"].includes(String(operation.authType).toUpperCase())
+        ? String(operation.authType).toUpperCase() as PawaPayAuthType
+        : undefined,
+      pinPrompt: operation.pinPrompt,
+      pinPromptRevivable: operation.pinPromptRevivable,
+      pinPromptInstructions: operation.pinPromptInstructions,
+      authTokenInstructions: operation.authTokenInstructions,
+    };
+  }
+  return undefined;
+}
+
+export async function assertPawaPayProviderActive(
+  provider: string,
+  operationType: "DEPOSIT" | "PAYOUT",
+  country?: string,
+  currency?: string,
+): Promise<void> {
+  const operationResolved = await resolvePawaPayOperationConfiguration(provider, operationType, country, currency);
+  const resolved: any = operationResolved ?? await resolvePawaPayProvider(provider, { country, operationType });
   if (!resolved) {
     throw new Error(`Configured mobile money provider ${provider} is not active for ${operationType}${country ? ` in ${country}` : ""}`);
   }
@@ -502,6 +649,14 @@ export async function assertPawaPayProviderActive(provider: string, operationTyp
   const operationTypes = providerOperationTypes(resolved);
   if (operationTypes.some(Boolean) && !operationTypes.some((value: unknown) => String(value).toUpperCase() === operationType)) {
     throw new Error(`Configured mobile money provider ${provider} is not active for ${operationType}`);
+  }
+  const operation = operationConfiguration(resolved, operationType, currency);
+  if (currency && Array.isArray(resolved.currencies) && resolved.currencies.length > 0 && !operation) {
+    throw new Error(`Configured mobile money provider ${provider} is not active for ${operationType} in ${currency}`);
+  }
+  const resolvedStatus = operationResolved?.status ?? operation?.status;
+  if (resolvedStatus && String(resolvedStatus).toUpperCase() === "CLOSED") {
+    throw new Error(`Configured mobile money provider ${provider} is currently unavailable for ${operationType}`);
   }
 }
 

@@ -9,7 +9,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest, queryClient, getAuthHeaders } from "@/lib/queryClient";
 import type { User, SupportedCurrency } from "@shared/schema";
-import { CreditCard, Loader2, AlertCircle, Phone, CheckCircle, XCircle, Smartphone, ExternalLink, Hash, Clock, Copy, TrendingDown, Bitcoin, DollarSign, Hourglass } from "lucide-react";
+import { CreditCard, Loader2, AlertCircle, Phone, CheckCircle, XCircle, Smartphone, ExternalLink, Hash, Clock, Copy, TrendingDown, Bitcoin, DollarSign, Hourglass, Shield } from "lucide-react";
 import { SearchableSelectContent } from "@/components/ui/searchable-select-content";
 import { useLanguage } from "@/lib/language";
 import { BottomSheet, BottomSheetContent, BottomSheetHeader, BottomSheetTitle, BottomSheetFooter } from "@/components/ui/bottom-sheet";
@@ -84,6 +84,8 @@ export default function DepositPage() {
   const [otpUssdCode, setOtpUssdCode] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [waveUrl, setWaveUrl] = useState<string | null>(null);
+  const [pawaPayAuth, setPawaPayAuth] = useState<any | null>(null);
+  const [pawaPayPreAuthCode, setPawaPayPreAuthCode] = useState("");
   const [pixpayOtpCode, setPixpayOtpCode] = useState("");
   const [isCancelling, setIsCancelling] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
@@ -243,6 +245,10 @@ export default function DepositPage() {
         const res = await fetch(`/api/transactions/status/${ref}`, { credentials: "include", headers: getAuthHeaders() });
         if (res.ok) {
           const statusData = await res.json();
+          if (statusData.authorizationUrl && !waveUrl) {
+            setWaveUrl(statusData.authorizationUrl);
+            setPawaPayAuth((current: any) => current || { authType: "REDIRECT_AUTH" });
+          }
           if (statusData.status === "completed") {
             setPaymentStatus("success");
             if (countdownRef.current) clearInterval(countdownRef.current);
@@ -286,6 +292,7 @@ export default function DepositPage() {
         countryId: data.countryId,
         phoneNumber: data.phoneNumber,
         description: data.description,
+          preAuthorisationCode: pawaPayPreAuthCode || undefined,
       };
       if (isPixPayOtp && pixpayOtpCode) payload.pixpayOtp = pixpayOtpCode;
       const res = await apiRequest("POST", "/api/deposits", payload);
@@ -299,10 +306,13 @@ export default function DepositPage() {
       setPaymentStatus("pending");
       setOtpCode("");
       setWaveUrl(null);
+      setPawaPayAuth(data.pawaPayAuth || null);
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
-      if (data.waveUrl) {
-        setWaveUrl(data.waveUrl);
+      const providerAuthorizationUrl = data.authorizationUrl || data.waveUrl ||
+        (data.gateway === "pawapay" ? data.redirectUrl : null);
+      if (providerAuthorizationUrl) {
+        setWaveUrl(providerAuthorizationUrl);
         setOtpRequired(false);
         startDepositPolling(ref);
       } else if (data.otpRequired) {
@@ -315,6 +325,13 @@ export default function DepositPage() {
       }
     },
     onError: (error: Error & { provider_code?: unknown; provider_status?: unknown }) => {
+      const authError = error as Error & { error?: string; pawaPayAuth?: any };
+      if (authError.error === "pawa_preauthorisation_required") {
+        setShowValidationMessage(true);
+        setPawaPayAuth(authError.pawaPayAuth || null);
+        setPaymentStatus("pending");
+        return;
+      }
       const diagnostics = [
         typeof error.provider_code === "string" ? `Code fournisseur : ${error.provider_code}` : "",
         error.provider_status !== undefined && Number.isFinite(Number(error.provider_status))
@@ -436,6 +453,8 @@ export default function DepositPage() {
     setOtpRequired(false);
     setOtpCode("");
     setWaveUrl(null);
+    setPawaPayAuth(null);
+    setPawaPayPreAuthCode("");
     setIsCancelling(false);
     if (countdownRef.current) clearInterval(countdownRef.current);
     if (pollingRef.current) clearInterval(pollingRef.current);
@@ -1118,6 +1137,58 @@ export default function DepositPage() {
                     </>
                   )}
 
+                  {/* PawaPay PREAUTH: the token must be obtained before creating
+                      the deposit. This is deliberately separate from PixPay and
+                      AfribaPay OTP screens. */}
+                  {paymentStatus === "pending" && pawaPayAuth?.authType === "PREAUTH" && !depositReference && (
+                    <>
+                      <div className="relative flex items-center justify-center py-2">
+                        <div className="w-16 h-16 rounded-full bg-amber-500/15 flex items-center justify-center">
+                          <Shield className="w-7 h-7 text-amber-500" />
+                        </div>
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-bold text-foreground">Préautorisation requise</h3>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Obtenez le code de préautorisation dans le menu USSD de votre opérateur, puis saisissez-le ici.
+                        </p>
+                      </div>
+                      {pawaPayAuth.authTokenInstructions?.channels?.map((channel: any, channelIndex: number) => (
+                        <div key={channelIndex} className="w-full rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-left space-y-1">
+                          {(channel.instructions?.fr || channel.instructions?.en || []).map((instruction: any, instructionIndex: number) => (
+                            <p key={instructionIndex} className="text-sm text-muted-foreground">{instruction.text || instruction.template}</p>
+                          ))}
+                          {channel.quickLink && (
+                            <a href={channel.quickLink} className="inline-flex text-sm font-medium text-primary underline">
+                              Ouvrir le menu USSD
+                            </a>
+                          )}
+                        </div>
+                      ))}
+                      <div className="space-y-3 w-full max-w-xs mx-auto">
+                        <Input
+                          type="text"
+                          inputMode="numeric"
+                          value={pawaPayPreAuthCode}
+                          onChange={e => setPawaPayPreAuthCode(e.target.value.replace(/\D/g, ""))}
+                          placeholder="Code de préautorisation"
+                          className="text-center text-xl font-mono tracking-widest h-14"
+                          data-testid="input-pawapay-preauthorisation"
+                          autoFocus
+                        />
+                        <Button
+                          className="w-full"
+                          size="lg"
+                          onClick={() => pendingDepositData && depositMutation.mutate(pendingDepositData)}
+                          disabled={pawaPayPreAuthCode.length < 4 || depositMutation.isPending || !pendingDepositData}
+                          data-testid="button-confirm-pawapay-preauthorisation"
+                        >
+                          {depositMutation.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Traitement…</> : "Continuer le paiement"}
+                        </Button>
+                      </div>
+                    </>
+                  )}
+
                   {/* Wave redirect */}
                   {paymentStatus === "pending" && !otpRequired && waveUrl && (
                     <>
@@ -1174,6 +1245,20 @@ export default function DepositPage() {
                         </p>
                         {selectedOperator && <p className="text-xs text-muted-foreground mt-0.5">via {selectedOperator.name}</p>}
                       </div>
+                      {pawaPayAuth?.authType === "PROVIDER_AUTH" && (
+                        <div className="w-full rounded-xl border border-primary/20 bg-primary/5 p-3 text-left space-y-1">
+                          <p className="text-sm font-medium text-foreground">
+                            {pawaPayAuth.pinPrompt === "MANUAL"
+                              ? "Confirmez la demande sur votre téléphone."
+                              : "Une demande de confirmation va apparaître sur votre téléphone."}
+                          </p>
+                          {pawaPayAuth.pinPromptInstructions?.channels?.flatMap((channel: any) =>
+                            channel.instructions?.fr || channel.instructions?.en || []
+                          ).map((instruction: any, index: number) => (
+                            <p key={index} className="text-sm text-muted-foreground">{instruction.text || instruction.template}</p>
+                          ))}
+                        </div>
+                      )}
                       <div className="flex items-center justify-center gap-1.5">
                         {[0, 150, 300].map((delay) => (
                           <span key={delay} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${delay}ms` }} />

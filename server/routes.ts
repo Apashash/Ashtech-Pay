@@ -76,7 +76,7 @@ import {
 } from "./directCrypto";
 import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, getAfribaPayOtpInfo, confirmAfribaPayOtp, isAfribaPayOtpRequiredMessage } from "./afribapay";
 import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, initiatePixPayPayout, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType, getPixPayServiceId, PIXPAY_OTP_USSD_CODES } from "./pixpay";
-import { assertPawaPayProviderActive, classifyPawaPayControlledTransaction, createPawaPayDeposit, createPawaPayId, createPawaPayPayout, createPawaPayPaymentPage, getPawaPayActiveConfiguration, getPawaPayDeposit, getPawaPayPayout, PAWAPAY_CUSTOMER_MESSAGE } from "./pawapay";
+import { assertPawaPayProviderActive, classifyPawaPayControlledTransaction, createPawaPayDeposit, createPawaPayId, createPawaPayPayout, createPawaPayPaymentPage, getPawaPayActiveConfiguration, getPawaPayDeposit, getPawaPayPayout, resolvePawaPayOperationConfiguration, PAWAPAY_CUSTOMER_MESSAGE } from "./pawapay";
 import { addPendingPayment, removePendingPayment, expireCryptoPaymentIfNeeded } from "./paymentPoller";
 import { processPawaPayDepositCallback } from "./paymentPoller";
 import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, sameCfaFamily, getConversionPairKey, maybeAutoConvert } from "./walletHelper";
@@ -224,6 +224,17 @@ function resolvePawaPayProviderCode(operator: any, name: string, countryCode: st
   if (brand.includes("moov") || brand.includes("flooz")) return `MOOV_${country}`;
   if (brand.includes("wave")) return `WAVE_${country}`;
   throw new Error("PawaPay provider code is not configured for this operator");
+}
+
+function pawaPayAuthPayload(auth: any): Record<string, any> | null {
+  if (!auth?.authType) return null;
+  return {
+    authType: auth.authType,
+    pinPrompt: auth.pinPrompt ?? null,
+    pinPromptRevivable: auth.pinPromptRevivable ?? false,
+    pinPromptInstructions: auth.pinPromptInstructions ?? null,
+    authTokenInstructions: auth.authTokenInstructions ?? null,
+  };
 }
 
 async function reconcilePawaPayPayoutAttempt(transaction: any): Promise<"completed" | "failed" | "unresolved"> {
@@ -3933,10 +3944,27 @@ export async function registerRoutes(
       if (!latestTransaction) {
         return res.status(404).json({ message: "Transaction non trouvée", status: "not_found" });
       }
+      let pawaPayAuthorizationUrl: string | undefined;
+      let pawaPayNextStep: string | undefined;
+      if (
+        latestTransaction.status === "pending" &&
+        classifyPawaPayControlledTransaction(latestTransaction.type, latestTransaction.externalReference) === "incoming"
+      ) {
+        try {
+          const pawaStatus = await getPawaPayDeposit(latestTransaction.externalReference!);
+          pawaPayAuthorizationUrl = pawaStatus.authorizationUrl;
+          pawaPayNextStep = pawaStatus.nextStep;
+        } catch (error) {
+          // Status polling must remain useful if PawaPay is temporarily unreachable.
+          console.warn("[PawaPay status] authorization lookup failed:", error instanceof Error ? error.message : "unknown error");
+        }
+      }
       res.json({
         status: latestTransaction.status,
         reference: latestTransaction.reference,
         description: latestTransaction.status === "failed" ? latestTransaction.description : undefined,
+        authorizationUrl: pawaPayAuthorizationUrl || null,
+        nextStep: pawaPayNextStep || null,
       });
     } catch (error) {
       console.error("Get transaction status error:", error);
@@ -4817,6 +4845,20 @@ export async function registerRoutes(
       if (paymentProvider !== "afribapay" && paymentProvider !== "pixpay" && paymentProvider !== "pawapay") {
         return res.status(400).json({ message: "Aucun fournisseur de paiement configuré pour cet opérateur." });
       }
+      let pawaPayOperation: Awaited<ReturnType<typeof resolvePawaPayOperationConfiguration>> | undefined;
+      if (paymentProvider === "pawapay") {
+        const pawaProvider = resolvePawaPayProviderCode(operatorRecord, operatorName, countryCode);
+        pawaPayOperation = await resolvePawaPayOperationConfiguration(
+          pawaProvider, "DEPOSIT", pawaPayCountry(countryCode), toPawaPayCurrency(countryCurrency),
+        );
+        if (pawaPayOperation?.authType === "PREAUTH" && !data.preAuthorisationCode) {
+          return res.status(428).json({
+            error: "pawa_preauthorisation_required",
+            message: "Une préautorisation Mobile Money est requise avant le paiement.",
+            pawaPayAuth: pawaPayAuthPayload(pawaPayOperation),
+          });
+        }
+      }
       console.log(`[Deposit] operatorId=${data.operatorId} | name=${operatorName} | depositProvider=${(operatorRecord as any)?.depositPaymentProvider || "null"} | payoutProvider=${(operatorRecord as any)?.paymentProvider || "null"} | resolved=${paymentProvider} | afribapayCode=${(operatorRecord as any)?.afribapayOperatorCode || "null"}`);
 
       // Resolve fees from DB (includes afribapayFee + ashtechMargin)
@@ -5260,6 +5302,7 @@ export async function registerRoutes(
             const rate = (resolvedFeeRecord as any)?.pawapayFee != null
               ? parseFloat((resolvedFeeRecord as any).pawapayFee) : 3.0;
             const pawaFees = computePixPayFees(totalAmount, rate, ashtechMarginPct);
+            const pawaAppBase = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
             const result = await createPawaPayDeposit({
               depositId: pawaPayDepositId,
               country: pawaPayCountry(countryCode),
@@ -5271,6 +5314,9 @@ export async function registerRoutes(
               },
               clientReferenceId: depositRef,
               customerMessage: PAWAPAY_CUSTOMER_MESSAGE,
+              successfulUrl: `${pawaAppBase}/dashboard/deposit?ref=${depositRef}&status=success`,
+              failedUrl: `${pawaAppBase}/dashboard/deposit?ref=${depositRef}&status=failed`,
+              preAuthorisationCode: data.preAuthorisationCode,
             });
             if (result.status === "failed") {
               await storage.claimTransactionStatus(transaction.id, "failed");
@@ -5281,13 +5327,21 @@ export async function registerRoutes(
                 sensitiveValues: [data.phoneNumber],
               }));
             }
-            addPendingPayment({
-              transactionId: transaction.id, reference: depositRef, externalReference: pawaPayDepositId!,
-              attempts: 0, userId: user.id, type: "deposit", amount: pawaFees.creditedAmount.toString(),
-              provider: "pawapay",
-            });
+            if (result.status === "completed") {
+              await processPawaPayDepositCallback(transaction, "completed");
+            } else {
+              addPendingPayment({
+                transactionId: transaction.id, reference: depositRef, externalReference: pawaPayDepositId!,
+                attempts: 0, userId: user.id, type: "deposit", amount: pawaFees.creditedAmount.toString(),
+                provider: "pawapay",
+              });
+            }
             return res.json({
               transaction, gateway: "pawapay", status: result.status === "completed" ? "completed" : "pending",
+              authorizationUrl: result.authorizationUrl || null,
+              redirectUrl: result.authorizationUrl || result.redirectUrl || null,
+              nextStep: result.nextStep || null,
+              pawaPayAuth: pawaPayAuthPayload(result) || pawaPayAuthPayload(pawaPayOperation),
               feeDetails: { grossAmount: totalAmount, feeAmount: pawaFees.totalFeeAmount, creditedAmount: pawaFees.creditedAmount, ashtechFee: pawaFees.ashtechFeeAmount },
             });
           }
@@ -8046,7 +8100,10 @@ export async function registerRoutes(
   app.post("/api/payment-links/:slug/pay", publicPayLimiter, async (req, res) => {
     try {
       const { slug } = req.params;
-      const { fullName, email, country, phone, amount: providedAmount, currency: providedCurrency, paymentMethod, operator } = req.body;
+      const {
+        fullName, email, country, phone, amount: providedAmount, currency: providedCurrency,
+        paymentMethod, operator, preAuthorisationCode,
+      } = req.body;
       
       const link = await storage.getPaymentLinkBySlug(slug);
       if (!link || !link.isActive) {
@@ -8313,9 +8370,23 @@ export async function registerRoutes(
 
       // Generate unique ASHPAY reference
       const reference = generateTransactionReference("payment_link");
+      let pawaPayOperation: Awaited<ReturnType<typeof resolvePawaPayOperationConfiguration>> | undefined;
       if (paymentProvider === "pawapay") {
         try {
-          await assertPawaPayProviderActive(resolvePawaPayProviderCode(operatorRecord, operatorName, paymentCountryCode), "DEPOSIT", pawaPayCountry(paymentCountryCode));
+          const pawaProvider = resolvePawaPayProviderCode(operatorRecord, operatorName, paymentCountryCode);
+          pawaPayOperation = await resolvePawaPayOperationConfiguration(
+            pawaProvider, "DEPOSIT", pawaPayCountry(paymentCountryCode), toPawaPayCurrency(paymentCurrency),
+          );
+          if (pawaPayOperation?.authType === "PREAUTH" && !preAuthorisationCode) {
+            return res.status(428).json({
+              error: "pawa_preauthorisation_required",
+              message: "Une préautorisation Mobile Money est requise avant le paiement.",
+              pawaPayAuth: pawaPayAuthPayload(pawaPayOperation),
+            });
+          }
+          await assertPawaPayProviderActive(
+            pawaProvider, "DEPOSIT", pawaPayCountry(paymentCountryCode), toPawaPayCurrency(paymentCurrency),
+          );
          } catch (error: any) {
            console.error("[PaymentLink] PawaPay provider validation failed:", error);
            return res.status(503).json(buildProviderErrorPayload({
@@ -8573,6 +8644,7 @@ export async function registerRoutes(
             }
 
           if (paymentProvider === "pawapay") {
+            const pawaAppBase = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
             const result = await createPawaPayDeposit({
               depositId: pawaPayDepositId,
               country: pawaPayCountry(paymentCountryCode),
@@ -8584,6 +8656,9 @@ export async function registerRoutes(
               },
               clientReferenceId: reference,
               customerMessage: PAWAPAY_CUSTOMER_MESSAGE,
+              preAuthorisationCode,
+              successfulUrl: `${pawaAppBase}/pay/${paymentLink!.slug}?ref=${reference}&status=success`,
+              failedUrl: `${pawaAppBase}/pay/${paymentLink!.slug}?ref=${reference}&status=failed`,
             });
             if (result.status === "failed") {
               await storage.updatePaymentIntentStatus(intent.id, "failed");
@@ -8607,7 +8682,11 @@ export async function registerRoutes(
               message: result.status === "completed" ? "Paiement confirmé." : "Validez le paiement sur votre téléphone.",
               reference: intent.reference, gateway: "mobile_money",
               status: result.status === "completed" ? "completed" : "pending",
-              redirectUrl: paymentLink!.redirectUrl || null, amount: numAmount,
+              authorizationUrl: result.authorizationUrl || null,
+              redirectUrl: result.authorizationUrl || result.redirectUrl || null,
+              nextStep: result.nextStep || null,
+              pawaPayAuth: pawaPayAuthPayload(result) || pawaPayAuthPayload(pawaPayOperation),
+              amount: numAmount,
               feeAmount: parseFloat(totalFeeAmount), totalAmount: numAmount,
             });
           }
@@ -14915,7 +14994,11 @@ export async function registerRoutes(
   app.post("/v1/collect", apiV1Limiter, requireApiKey, async (req: any, res) => {
     try {
       const merchant = req.apiUser;
-      const { amount, currency, phone, operator: operatorName, country_code, reference, notify_url } = req.body;
+      const {
+        amount, currency, phone, operator: operatorName, country_code, reference, notify_url,
+        preAuthorisationCode, preauthorizationCode, otp,
+      } = req.body;
+      const pawaPayPreAuthorisationCode = preAuthorisationCode || preauthorizationCode || otp;
 
       // ── Validation ────────────────────────────────────────────────────────
       if (!amount || !currency || !phone || !operatorName || !country_code) {
@@ -15261,7 +15344,20 @@ export async function registerRoutes(
       // ── Create transaction ────────────────────────────────────────────────
        if (paymentProvider === "pawapay") {
          try {
-           await assertPawaPayProviderActive(resolvePawaPayProviderCode(operatorRecord, operatorName, country.code), "DEPOSIT", pawaPayCountry(country.code));
+           const pawaProvider = resolvePawaPayProviderCode(operatorRecord, operatorName, country.code);
+           const pawaOperation = await resolvePawaPayOperationConfiguration(
+             pawaProvider, "DEPOSIT", pawaPayCountry(country.code), toPawaPayCurrency(walletCurrency),
+           );
+           if (pawaOperation?.authType === "PREAUTH" && !pawaPayPreAuthorisationCode) {
+             return res.status(428).json({
+               error: "pawa_preauthorisation_required",
+               message: "Une préautorisation Mobile Money est requise avant le paiement.",
+               pawaPayAuth: pawaPayAuthPayload(pawaOperation),
+             });
+           }
+           await assertPawaPayProviderActive(
+             pawaProvider, "DEPOSIT", pawaPayCountry(country.code), toPawaPayCurrency(walletCurrency),
+           );
          } catch (error: any) {
            console.error("[API v1/collect] PawaPay provider validation failed:", error);
            return res.status(503).json(buildProviderErrorPayload({
@@ -15302,24 +15398,26 @@ export async function registerRoutes(
       // ── Call payment provider ──────────────────────────────────────────────
       const callbackUrl = buildWebhookUrl("/api/afribapay/webhook");
       const pixpayIpnUrl = buildWebhookUrl("/api/pixpay/webhook");
+      let pawaPayResult: Awaited<ReturnType<typeof createPawaPayDeposit>> | undefined;
 
        if (paymentProvider === "pawapay") {
-         const result = await createPawaPayDeposit({
+         pawaPayResult = await createPawaPayDeposit({
            depositId: pawaPayDepositId, amount: amountNum.toFixed(2),
            country: pawaPayCountry(country.code),
            currency: toPawaPayCurrency(walletCurrency),
            payer: { provider: resolvePawaPayProviderCode(operatorRecord, operatorName, country.code), phoneNumber: normalizePhone(phone) || "" },
             clientReferenceId: depositRef,
             customerMessage: PAWAPAY_CUSTOMER_MESSAGE,
+            preAuthorisationCode: pawaPayPreAuthorisationCode,
          });
-         if (result.status === "failed") {
+         if (pawaPayResult.status === "failed") {
            await storage.claimTransactionStatus(transaction.id, "failed");
            return res.status(502).json(buildProviderErrorPayload({
-             error: "gateway_error", message: result.providerMessage, fallback: "Échec du paiement Mobile Money.",
-             provider: "pawapay", raw: result.raw, providerCode: result.providerCode, providerStatus: result.providerStatus, sensitiveValues: [phone],
+             error: "gateway_error", message: pawaPayResult.providerMessage, fallback: "Échec du paiement Mobile Money.",
+             provider: "pawapay", raw: pawaPayResult.raw, providerCode: pawaPayResult.providerCode, providerStatus: pawaPayResult.providerStatus, sensitiveValues: [phone],
            }));
          }
-         if (result.status === "completed") await processPawaPayDepositCallback(transaction, "completed");
+         if (pawaPayResult.status === "completed") await processPawaPayDepositCallback(transaction, "completed");
          else addPendingPayment({ transactionId: transaction.id, reference: depositRef, externalReference: pawaPayDepositId!, attempts: 0, userId: merchant.id, type: "deposit", amount: creditedAmount.toString(), provider: "pawapay", countryCode: country.code });
        } else if (paymentProvider === "afribapay") {
         warnIfAfribaPayUnsupportedCountry(country.code, "v1/collect");
@@ -15490,6 +15588,12 @@ export async function registerRoutes(
         responseBody.wave_url = (transaction as any)._waveUrl;
         responseBody.flow = "wave";
       }
+      if (pawaPayResult) {
+        responseBody.authorization_url = pawaPayResult.authorizationUrl || null;
+        responseBody.next_step = pawaPayResult.nextStep || null;
+        responseBody.pawa_pay_auth = pawaPayAuthPayload(pawaPayResult);
+        if (pawaPayResult.authorizationUrl) responseBody.flow = "redirect";
+      }
 
       res.status(202).json(responseBody);
     } catch (e: any) {
@@ -15539,6 +15643,18 @@ export async function registerRoutes(
         created_at: latestTx.createdAt,
         confirmed_at: (latestTx as any).confirmedAt || null,
       };
+      if (
+        latestTx.status === "pending" &&
+        classifyPawaPayControlledTransaction(latestTx.type, latestTx.externalReference) === "incoming"
+      ) {
+        try {
+          const pawaStatus = await getPawaPayDeposit(latestTx.externalReference!);
+          responseBody.authorization_url = pawaStatus.authorizationUrl || null;
+          responseBody.next_step = pawaStatus.nextStep || null;
+        } catch (error) {
+          console.warn("[API v1 transaction] PawaPay authorization lookup failed:", error instanceof Error ? error.message : "unknown error");
+        }
+      }
       // Crypto-only fields are added without changing the Mobile Money response.
       if (latestTx.paymentMethod === "crypto") {
         const metadata = (latestTx as any).metadata || {};

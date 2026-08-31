@@ -9,6 +9,7 @@ import {
   classifyPawaPayControlledTransaction,
   getPawaPayDeposit,
   getPawaPayActiveConfiguration,
+  resolvePawaPayOperationConfiguration,
   isPawaPayConfigured,
   normalizePawaPayStatus,
   validatePawaPayAmount,
@@ -331,6 +332,91 @@ test("PawaPay active configuration reads operation types nested under currencies
   }), { status: 200 })) as typeof fetch;
   try {
     await assertPawaPayProviderActive("MTN_MOMO_CMR", "DEPOSIT", "CMR");
+  } finally {
+    clearPawaPayActiveConfigurationCache();
+    globalThis.fetch = originalFetch;
+    restoreEnvironment();
+  }
+});
+
+test("PawaPay resolves nested authorization details by country, provider, and currency", async () => {
+  process.env.PAWAPAY_API_TOKEN = "test-token";
+  clearPawaPayActiveConfigurationCache();
+  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    if (String(url).endsWith("/active-conf")) {
+      return new Response(JSON.stringify({
+        countries: [{
+          country: "CIV",
+          providers: [{
+            provider: "WAVE_CIV",
+            currencies: [{
+              currency: "XOF",
+              operationTypes: {
+                DEPOSIT: {
+                  authType: "REDIRECT_AUTH",
+                  status: "OPERATIONAL",
+                  pinPromptInstructions: { channels: [{ type: "APP", instructions: { fr: [{ text: "Ouvrez Wave" }] } }] },
+                },
+              },
+            }],
+          }],
+        }],
+      }), { status: 200 });
+    }
+    assert.equal(String(url).endsWith("/deposits"), true);
+    const body = JSON.parse(String(init?.body));
+    assert.equal(body.successfulUrl, "https://merchant.example/success");
+    assert.equal(body.failedUrl, "https://merchant.example/failed");
+    assert.equal(body.preAuthorisationCode, "367025");
+    return new Response(JSON.stringify({
+      depositId: requestId,
+      status: "PROCESSING",
+      nextStep: "REDIRECT_TO_AUTH_URL",
+      authorizationUrl: "https://wave.example/authorize",
+    }), { status: 200 });
+  }) as typeof fetch;
+  try {
+    const operation = await resolvePawaPayOperationConfiguration("WAVE_CIV", "DEPOSIT", "CI", "XOF");
+    assert.equal(operation?.authType, "REDIRECT_AUTH");
+    assert.equal(operation?.pinPromptInstructions?.channels?.[0]?.instructions?.fr?.[0]?.text, "Ouvrez Wave");
+
+    const result = await createPawaPayDeposit({
+      depositId: requestId,
+      amount: "100",
+      currency: "XOF",
+      country: "CIV",
+      payer: { provider: "WAVE_CIV", phoneNumber: "2250700000000" },
+      successfulUrl: "https://merchant.example/success",
+      failedUrl: "https://merchant.example/failed",
+      preAuthorisationCode: "367025",
+    });
+    assert.equal(result.authType, "REDIRECT_AUTH");
+    assert.equal(result.authorizationUrl, "https://wave.example/authorize");
+    assert.equal(result.nextStep, "REDIRECT_TO_AUTH_URL");
+  } finally {
+    clearPawaPayActiveConfigurationCache();
+    globalThis.fetch = originalFetch;
+    restoreEnvironment();
+  }
+});
+
+test("PawaPay does not accept a currency that is absent from active-conf", async () => {
+  process.env.PAWAPAY_API_TOKEN = "test-token";
+  clearPawaPayActiveConfigurationCache();
+  globalThis.fetch = (async () => new Response(JSON.stringify({
+    countries: [{
+      country: "CIV",
+      providers: [{
+        provider: "WAVE_CIV",
+        currencies: [{ currency: "XOF", operationTypes: { DEPOSIT: { status: "OPERATIONAL" } } }],
+      }],
+    }],
+  }), { status: 200 })) as typeof fetch;
+  try {
+    await assert.rejects(
+      () => assertPawaPayProviderActive("WAVE_CIV", "DEPOSIT", "CIV", "XAF"),
+      /not active/,
+    );
   } finally {
     clearPawaPayActiveConfigurationCache();
     globalThis.fetch = originalFetch;

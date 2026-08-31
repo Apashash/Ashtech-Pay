@@ -565,6 +565,7 @@ export const depositSchema = z.object({
   phoneNumber: z.string().optional(),
   description: z.string().optional(),
   pixpayOtp: z.string().optional(), // OTP code for PixPay Orange Money operators (CI/SN/ML/BF)
+  preAuthorisationCode: z.string().trim().max(32).optional(), // PawaPay PREAUTH token
 });
 
 export const withdrawSchema = z.object({
