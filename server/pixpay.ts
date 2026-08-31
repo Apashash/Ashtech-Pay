@@ -41,17 +41,27 @@ const COUNTRY_DIAL_CODES: Record<string, string> = {
   CF: "236", TD: "235", GQ: "240", GW: "245",
 };
 
-// Normalise a phone number to local 10-digit format expected by PixPay.
-// Strips international prefix (+225, 00225, 225 …) then ensures a leading 0.
+// Normalise a phone number to the local format expected by PixPay.
+// Other countries strip the international prefix (+225, 00225, 225 …) then
+// ensure a leading 0. Cameroon cash-in (withdrawal/send) is handled as a
+// separate exception because PixPay expects the number as entered.
 // Examples for CI (+225):
 //   +2250708126834  → 0708126834
 //   002250708126834 → 0708126834
 //   2250708126834   → 0708126834
 //   0708126834      → 0708126834  (already good)
 //   708126834       → 0708126834  (missing leading 0 — prepend it)
-export function normalizePixPayPhone(raw: string, countryCode: string): string {
+export function normalizePixPayPhone(
+  raw: string,
+  countryCode: string,
+  options: { preserveCameroonInput?: boolean } = {},
+): string {
   // strip everything but digits
   let digits = raw.replace(/\D/g, "");
+  if (countryCode.toUpperCase() === "CM" && options.preserveCameroonInput) {
+    return digits;
+  }
+
   const dialCode = COUNTRY_DIAL_CODES[countryCode.toUpperCase()];
   if (dialCode) {
     // Remove leading 00 + dial code  (e.g. 00225…)
@@ -212,6 +222,7 @@ export interface PixPayBaseParams {
   orderId: string;
   ipnUrl?: string;
   customData?: string;
+  preserveCameroonInput?: boolean;
 }
 
 export interface PixPayOtpParams extends PixPayBaseParams {
@@ -238,7 +249,9 @@ export interface PixPayinResult {
 
 // ─── Build common request body ────────────────────────────────────────────────
 function buildBaseBody(params: PixPayBaseParams, countryCode: string): Record<string, any> {
-  const normalizedPhone = normalizePixPayPhone(params.phone, countryCode);
+  const normalizedPhone = normalizePixPayPhone(params.phone, countryCode, {
+    preserveCameroonInput: params.preserveCameroonInput,
+  });
   console.log(`[PixPay] Phone normalisation: "${maskPhone(params.phone)}" → "${maskPhone(normalizedPhone)}" (${countryCode})`);
   return {
     amount: params.amount,
@@ -464,7 +477,7 @@ export interface PixPayoutResult {
 export async function initiatePixPayPayout(params: PixPayoutParams): Promise<PixPayoutResult> {
   try {
     const body = buildBaseBody(
-      { ...params, serviceId: params.serviceId },
+      { ...params, serviceId: params.serviceId, preserveCameroonInput: true },
       params.countryCode
     );
     console.log(`[PixPay Payout] Body:`, JSON.stringify(maskPiiInObject({ ...body, api_key: "***" })));
