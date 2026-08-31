@@ -26,6 +26,12 @@ function decryptStoredSecret(value: string | null | undefined): string | null {
   return decrypted?.trim() || null;
 }
 
+function readEnvironmentSecret(name: string, minimumLength: number): string | null {
+  const value = process.env[name]?.trim();
+  if (!value || value.length < minimumLength || value.length > 4096) return null;
+  return value;
+}
+
 export function maskPawaPaySecret(value: string | null | undefined): string | null {
   if (!value) return null;
   const trimmed = value.trim();
@@ -42,10 +48,37 @@ export async function getPawaPayCredentials(forceRefresh = false): Promise<PawaP
     storage.getSetting(PAWAPAY_API_TOKEN_KEY),
     storage.getSetting(PAWAPAY_WEBHOOK_SECRET_KEY),
   ]);
+  const storedApiToken = decryptStoredSecret(tokenSetting?.value);
+  const storedWebhookSecret = decryptStoredSecret(webhookSetting?.value);
+  const environmentApiToken = readEnvironmentSecret("PAWAPAY_API_TOKEN", 8);
+  const environmentWebhookSecret = readEnvironmentSecret("PAWAPAY_WEBHOOK_SECRET", 16);
   const value = {
-    apiToken: decryptStoredSecret(tokenSetting?.value),
-    webhookSecret: decryptStoredSecret(webhookSetting?.value),
+    apiToken: storedApiToken || environmentApiToken,
+    webhookSecret: storedWebhookSecret || environmentWebhookSecret,
   };
+
+  // A secure environment secret can repair a row encrypted with an old key.
+  // The environment value is never returned by the API; once rewritten, the
+  // normal encrypted platform setting remains the source of truth.
+  if (isFieldEncryptionConfigured()) {
+    const repairs: Promise<unknown>[] = [];
+    if (environmentApiToken && !storedApiToken) {
+      repairs.push(storage.upsertSetting(
+        PAWAPAY_API_TOKEN_KEY,
+        encryptField(environmentApiToken)!,
+        "PawaPay production Bearer token (encrypted)",
+      ));
+    }
+    if (environmentWebhookSecret && !storedWebhookSecret) {
+      repairs.push(storage.upsertSetting(
+        PAWAPAY_WEBHOOK_SECRET_KEY,
+        encryptField(environmentWebhookSecret)!,
+        "PawaPay production callback secret (encrypted)",
+      ));
+    }
+    if (repairs.length > 0) await Promise.all(repairs);
+  }
+
   cachedCredentials = { value, expiresAt: Date.now() + CACHE_TTL_MS };
   return value;
 }
