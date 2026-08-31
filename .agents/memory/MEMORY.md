@@ -34,3 +34,4 @@
 - [PawaPay credential key alignment](pawapay-credential-key-alignment.md) — encrypted PawaPay settings require the same FIELD_ENCRYPTION_KEY at write and runtime, especially across Plesk and local environments.
 - [PawaPay active-conf structure](pawapay-active-conf-structure.md) — operationTypes is keyed under each provider currency, so active-provider checks must read currencies[].operationTypes object keys.
 - [PawaPay amount canonicalization](pawapay-amount-format.md) — v2 amounts cannot end with decimal zeros; normalize internal `200.00` values to `200` before sending.
+- [PawaPay MSISDN formatting](pawapay-msisdn-format.md) — PawaPay requires an international number starting with the selected country dial code; local form inputs need country-aware prefixing.

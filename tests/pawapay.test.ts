@@ -13,6 +13,7 @@ import {
   normalizePawaPayStatus,
   validatePawaPayAmount,
   formatPawaPayAmount,
+  formatPawaPayMsisdn,
   validatePawaPayCurrency,
   validatePawaPayMsisdn,
 } from "../server/pawapay.ts";
@@ -36,6 +37,9 @@ test("PawaPay validates MSISDN, currency, and documented decimal amount format",
   assert.equal(validatePawaPayMsisdn("237656000000"), "237656000000");
   assert.throws(() => validatePawaPayMsisdn("+237656000000"));
   assert.throws(() => validatePawaPayMsisdn("0237656000000"));
+  assert.equal(formatPawaPayMsisdn("683677872", "CMR"), "237683677872");
+  assert.equal(formatPawaPayMsisdn("06 83 67 78 72", "CM"), "237683677872");
+  assert.equal(formatPawaPayMsisdn("237683677872", "CMR"), "237683677872");
   assert.equal(validatePawaPayCurrency("XAF"), "XAF");
   assert.throws(() => validatePawaPayCurrency("xaf"));
   assert.equal(validatePawaPayAmount("100.5"), "100.5");
@@ -100,7 +104,7 @@ test("PawaPay uses production bearer auth and sends a v2 MMO deposit", async () 
     const result = await createPawaPayDeposit({
       depositId: requestId, amount: "100", currency: "XAF",
       country: "CMR",
-      payer: { provider: "MTN_MOMO_CMR", phoneNumber: "237656000000" },
+       payer: { provider: "MTN_MOMO_CMR", phoneNumber: "656000000" },
       metadata: { order: "abc" },
     });
     assert.equal(receivedUrl, `${PAWAPAY_PRODUCTION_BASE_URL}/deposits`);
@@ -108,7 +112,7 @@ test("PawaPay uses production bearer auth and sends a v2 MMO deposit", async () 
     const body = JSON.parse(String(receivedInit?.body));
     assert.deepEqual(body.payer, {
       type: "MMO",
-      accountDetails: { provider: "MTN_MOMO_CMR", phoneNumber: "237656000000" },
+       accountDetails: { provider: "MTN_MOMO_CMR", phoneNumber: "237656000000" },
     });
     assert.deepEqual(body.metadata, [{ order: "abc" }]);
     assert.equal("callbackUrl" in body, false);

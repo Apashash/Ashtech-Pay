@@ -93,6 +93,14 @@ const PAWAPAY_COUNTRY_ALIASES: Record<string, string> = {
   ET: "ETH", ETH: "ETH", LS: "LSO", LSO: "LSO", SL: "SLE", SLE: "SLE",
 };
 
+const PAWAPAY_COUNTRY_DIAL_CODES: Record<string, string> = {
+  BEN: "229", BFA: "226", COD: "243", CIV: "225", CMR: "237",
+  COG: "242", GAB: "241", GHA: "233", KEN: "254", MLI: "223",
+  MWI: "265", MOZ: "258", NGA: "234", RWA: "250", SEN: "221",
+  TZA: "255", UGA: "256", ZMB: "260", ETH: "251", LSO: "266",
+  SLE: "232",
+};
+
 function normalizePawaPayCountry(value: unknown): string {
   const normalized = String(value ?? "").trim().toUpperCase();
   return PAWAPAY_COUNTRY_ALIASES[normalized] ?? normalized;
@@ -185,6 +193,30 @@ export function validatePawaPayMsisdn(phoneNumber: string): string {
     throw new Error("PawaPay phoneNumber must contain 6–15 digits, without '+' or a leading zero");
   }
   return phoneNumber;
+}
+
+/**
+ * PawaPay expects an international MSISDN that starts with the selected
+ * country's dial code. The public form accepts local digits, so add the
+ * country prefix at the PawaPay boundary instead of changing stored phones.
+ */
+export function formatPawaPayMsisdn(phoneNumber: string, country?: string): string {
+  const digits = String(phoneNumber ?? "").replace(/\D/g, "");
+  if (!digits) throw new Error("PawaPay phoneNumber is required");
+
+  const countryCode = normalizePawaPayCountry(country);
+  const dialCode = PAWAPAY_COUNTRY_DIAL_CODES[countryCode];
+  if (!dialCode || digits.startsWith(dialCode)) return validatePawaPayMsisdn(digits);
+
+  // Preserve an already-international number for a mismatched country so
+  // PawaPay can return its precise country/provider validation error rather
+  // than corrupting the number by prepending a second country code.
+  const startsWithKnownDialCode = Object.values(PAWAPAY_COUNTRY_DIAL_CODES)
+    .some(candidate => digits.startsWith(candidate));
+  if (startsWithKnownDialCode) return validatePawaPayMsisdn(digits);
+
+  const localDigits = digits.startsWith("0") ? digits.slice(1) : digits;
+  return validatePawaPayMsisdn(`${dialCode}${localDigits}`);
 }
 
 export function validatePawaPayCurrency(currency: string): string {
@@ -280,7 +312,7 @@ function responseDetails(raw: any, httpStatus?: number) {
   return { providerMessage, providerCode, providerStatus: httpStatus };
 }
 
-function accountBody(account: PawaPayAccount) {
+function accountBody(account: PawaPayAccount, country?: string) {
   if (!account || typeof account.provider !== "string" || !account.provider.trim()) {
     throw new Error("PawaPay provider is required");
   }
@@ -288,7 +320,7 @@ function accountBody(account: PawaPayAccount) {
     type: "MMO",
     accountDetails: {
       provider: account.provider,
-      phoneNumber: validatePawaPayMsisdn(account.phoneNumber),
+      phoneNumber: formatPawaPayMsisdn(account.phoneNumber, country),
     },
   };
 }
@@ -359,7 +391,7 @@ export async function createPawaPayDeposit(params: PawaPayDepositParams): Promis
   await assertPawaPayProviderActive(params.payer.provider, "DEPOSIT", params.country);
   return request("/deposits", "POST", {
     depositId, amount: formatPawaPayAmount(params.amount), currency: validatePawaPayCurrency(params.currency),
-    payer: accountBody(params.payer), customerMessage: params.customerMessage,
+    payer: accountBody(params.payer, params.country), customerMessage: params.customerMessage,
     clientReferenceId: params.clientReferenceId, metadata: metadataBody(params.metadata),
     preAuthorisationCode: params.preAuthorisationCode,
   });
@@ -374,7 +406,7 @@ export async function createPawaPayPayout(params: PawaPayPayoutParams): Promise<
   await assertPawaPayProviderActive(params.recipient.provider, "PAYOUT", params.country);
   return request("/payouts", "POST", {
     payoutId, amount: formatPawaPayAmount(params.amount), currency: validatePawaPayCurrency(params.currency),
-    recipient: accountBody(params.recipient), customerMessage: params.customerMessage,
+    recipient: accountBody(params.recipient, params.country), customerMessage: params.customerMessage,
     clientReferenceId: params.clientReferenceId, metadata: metadataBody(params.metadata),
   });
 }
@@ -390,7 +422,7 @@ export async function createPawaPayPaymentPage(params: PawaPayPaymentPageParams)
   await assertPawaPayProviderActive(params.provider, "DEPOSIT", params.country);
   return request("/paymentpage", "POST", {
     depositId, amountDetails: { amount: formatPawaPayAmount(params.amount), currency: validatePawaPayCurrency(params.currency) },
-    ...(params.phoneNumber ? { phoneNumber: validatePawaPayMsisdn(params.phoneNumber) } : {}),
+    ...(params.phoneNumber ? { phoneNumber: formatPawaPayMsisdn(params.phoneNumber, params.country) } : {}),
     customerMessage: params.customerMessage, clientReferenceId: params.clientReferenceId,
     returnUrl: params.returnUrl, language: params.language, country: params.country, reason: params.reason,
     metadata: metadataBody(params.metadata),
