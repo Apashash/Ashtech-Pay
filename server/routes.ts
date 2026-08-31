@@ -14310,10 +14310,10 @@ export async function registerRoutes(
       const countries = Array.isArray(configuration?.countries) ? configuration.countries : [];
       return res.json({
         countries: countries.map((item: any) => ({
-          country: item?.country ?? item?.countryCode,
+          country: item?.country ?? item?.countryCode ?? item?.country_code,
           providers: Array.isArray(item?.providers) ? item.providers.map((provider: any) => ({
-            provider: provider?.provider ?? provider?.providerCode ?? provider?.name,
-            operationTypes: provider?.operationTypes ?? provider?.operationType ?? [],
+            provider: provider?.provider ?? provider?.providerCode ?? provider?.provider_code ?? provider?.name,
+            operationTypes: provider?.operationTypes ?? provider?.operation_types ?? provider?.operationType ?? provider?.operation_type ?? [],
           })) : [],
         })),
       });

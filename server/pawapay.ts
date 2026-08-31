@@ -83,6 +83,35 @@ const ACTIVE_CONF_TTL_MS = 5 * 60 * 1000;
 const DEFAULT_TIMEOUT_MS = 15_000;
 let activeConfCache = new Map<string, { value: unknown; expiresAt: number }>();
 
+const PAWAPAY_COUNTRY_ALIASES: Record<string, string> = {
+  BJ: "BEN", BEN: "BEN", BF: "BFA", BFA: "BFA", CD: "COD", COD: "COD",
+  CI: "CIV", CIV: "CIV", CM: "CMR", CMR: "CMR", CG: "COG", COG: "COG",
+  GA: "GAB", GAB: "GAB", GH: "GHA", GHA: "GHA", KE: "KEN", KEN: "KEN",
+  ML: "MLI", MLI: "MLI", MW: "MWI", MWI: "MWI", MZ: "MOZ", MOZ: "MOZ",
+  NG: "NGA", NGA: "NGA", RW: "RWA", RWA: "RWA", SN: "SEN", SEN: "SEN",
+  TZ: "TZA", TZA: "TZA", UG: "UGA", UGA: "UGA", ZM: "ZMB", ZMB: "ZMB",
+  ET: "ETH", ETH: "ETH", LS: "LSO", LSO: "LSO", SL: "SLE", SLE: "SLE",
+};
+
+function normalizePawaPayCountry(value: unknown): string {
+  const normalized = String(value ?? "").trim().toUpperCase();
+  return PAWAPAY_COUNTRY_ALIASES[normalized] ?? normalized;
+}
+
+function activeConfigurationCountry(item: any): unknown {
+  return item?.country ?? item?.countryCode ?? item?.country_code ?? item?.alpha2 ?? item?.alpha3;
+}
+
+function providerConfigurationCode(provider: any): unknown {
+  return provider?.provider ?? provider?.providerCode ?? provider?.provider_code ?? provider?.code ?? provider?.name;
+}
+
+function providerOperationTypes(provider: any): unknown[] {
+  const values = provider?.operationTypes ?? provider?.operation_types ?? provider?.operations ??
+    provider?.transactionTypes ?? provider?.transaction_types ?? provider?.operationType ?? provider?.operation_type;
+  return Array.isArray(values) ? values : values === undefined ? [] : [values];
+}
+
 export interface PawaPayActiveConfigurationOptions {
   country?: string;
   operationType?: string;
@@ -345,13 +374,14 @@ export async function getPawaPayActiveConfiguration(options: PawaPayActiveConfig
   const filtered = Array.isArray(countries) ? {
     ...raw,
     countries: countries
-      .filter((item: any) => !options.country || String(item?.country ?? item?.countryCode).toUpperCase() === options.country.toUpperCase())
+      .filter((item: any) => !options.country ||
+        normalizePawaPayCountry(activeConfigurationCountry(item)) === normalizePawaPayCountry(options.country))
       .map((item: any) => ({
         ...item,
         providers: Array.isArray(item?.providers) ? item.providers.filter((provider: any) =>
           !options.operationType ||
-          (Array.isArray(provider?.operationTypes) && provider.operationTypes.some((type: unknown) => String(type).toUpperCase() === options.operationType!.toUpperCase())) ||
-          String(provider?.operationType ?? "").toUpperCase() === options.operationType!.toUpperCase(),
+          providerOperationTypes(provider).some((type: unknown) =>
+            String(type).toUpperCase() === options.operationType!.toUpperCase()),
         ) : [],
       })),
   } : result.raw;
@@ -366,7 +396,7 @@ export function clearPawaPayActiveConfigurationCache(): void {
 /** Finds a configured provider by its documented provider code (case-insensitive). */
 export async function resolvePawaPayProvider(provider: string, options: PawaPayActiveConfigurationOptions = {}): Promise<unknown | undefined> {
   const providers = await listPawaPayProviders(options);
-  return providers.find((item: any) => String(item?.provider ?? item?.providerCode ?? item?.name).toLowerCase() === provider.toLowerCase());
+  return providers.find((item: any) => String(providerConfigurationCode(item)).toLowerCase() === provider.toLowerCase());
 }
 
 /** Returns the currently active provider records supplied by PawaPay. */
@@ -379,7 +409,7 @@ export async function listPawaPayProviders(options: PawaPayActiveConfigurationOp
     ...(Array.isArray(countries) ? countries.flatMap((country: any) =>
       Array.isArray(country?.providers) ? country.providers.map((provider: any) => ({
         ...provider,
-        country: provider?.country ?? country?.country ?? country?.countryCode,
+        country: provider?.country ?? provider?.countryCode ?? provider?.country_code ?? activeConfigurationCountry(country),
       })) : []) : []),
   ];
 }
@@ -390,14 +420,16 @@ export async function isPawaPayProviderActive(provider: string, options: PawaPay
 
 export async function assertPawaPayProviderActive(provider: string, operationType: "DEPOSIT" | "PAYOUT", country?: string): Promise<void> {
   const resolved: any = await resolvePawaPayProvider(provider, { country, operationType });
-  if (!resolved) throw new Error("Configured mobile money provider is not active for this operation");
-  const resolvedCountry = resolved.country ?? resolved.countryCode;
-  if (country && resolvedCountry && String(resolvedCountry).toUpperCase() !== country.toUpperCase()) {
-    throw new Error("Configured mobile money provider is not active for this country");
+  if (!resolved) {
+    throw new Error(`Configured mobile money provider ${provider} is not active for ${operationType}${country ? ` in ${country}` : ""}`);
   }
-  const operationTypes = Array.isArray(resolved.operationTypes) ? resolved.operationTypes : [resolved.operationType];
+  const resolvedCountry = resolved.country ?? resolved.countryCode ?? resolved.country_code;
+  if (country && resolvedCountry && normalizePawaPayCountry(resolvedCountry) !== normalizePawaPayCountry(country)) {
+    throw new Error(`Configured mobile money provider ${provider} is not active for this country (${country})`);
+  }
+  const operationTypes = providerOperationTypes(resolved);
   if (operationTypes.some(Boolean) && !operationTypes.some((value: unknown) => String(value).toUpperCase() === operationType)) {
-    throw new Error("Configured mobile money provider is not active for this operation");
+    throw new Error(`Configured mobile money provider ${provider} is not active for ${operationType}`);
   }
 }
 

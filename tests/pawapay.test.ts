@@ -251,6 +251,24 @@ test("PawaPay active configuration enforces country and operation", async () => 
   }
 });
 
+test("PawaPay active configuration accepts snake_case provider and country fields", async () => {
+  process.env.PAWAPAY_API_TOKEN = "test-token";
+  clearPawaPayActiveConfigurationCache();
+  globalThis.fetch = (async () => new Response(JSON.stringify({
+    countries: [{
+      country_code: "CM",
+      providers: [{ provider_code: "MTN_MOMO_CMR", operation_types: ["DEPOSIT"] }],
+    }],
+  }), { status: 200 })) as typeof fetch;
+  try {
+    await assertPawaPayProviderActive("MTN_MOMO_CMR", "DEPOSIT", "CMR");
+  } finally {
+    clearPawaPayActiveConfigurationCache();
+    globalThis.fetch = originalFetch;
+    restoreEnvironment();
+  }
+});
+
 test("UUID-bearing PawaPay incoming transactions are provider controlled", () => {
   assert.equal(classifyPawaPayControlledTransaction("deposit", requestId), "incoming");
   assert.equal(classifyPawaPayControlledTransaction("payment_link", requestId), "incoming");
