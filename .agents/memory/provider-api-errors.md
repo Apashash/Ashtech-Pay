@@ -7,4 +7,4 @@ Merchant API and hosted-payment error responses may include the provider's usefu
 
 **Why:** Integrators need actionable failure reasons, but upstream payloads can echo credentials, tokens, customer phone numbers, or other personal data; the merchant-facing UI/API should remain provider-neutral. PawaPay uses HTTP 200 for some application-level rejections, so the transport status alone is misleading.
 
-**How to apply:** Route all new merchant-facing provider failures through the shared safe error-payload builder. Supply request values that could be echoed so they are redacted, and use the documented fallback only when no usable provider message exists. Internal user-facing payment flows may retain their existing cleaned messaging.
+**How to apply:** Route all new merchant-facing provider failures through the shared safe error-payload builder. Supply request values that could be echoed so they are redacted, and use the documented fallback only when no usable provider message exists. Keep every public payment initiation route in the production sanitizer allowlist, including payment-link checkout, or safe diagnostics are replaced by a generic 500 message.
