@@ -26,8 +26,11 @@ import { useToast } from "@/hooks/use-toast";
 type PawaPaySettings = {
   apiTokenConfigured: boolean;
   apiTokenMasked: string | null;
+  apiTokenUnreadable?: boolean;
   webhookSecretConfigured: boolean;
   webhookSecretMasked: string | null;
+  webhookSecretUnreadable?: boolean;
+  encryptionKeyConfigured?: boolean;
   baseUrl: string;
   callbackUrls: { deposit: string; payout: string };
 };
@@ -115,6 +118,26 @@ export default function AdminSettingsPawaPay() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
+            {(data?.apiTokenUnreadable || data?.webhookSecretUnreadable) && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Identifiant enregistré mais illisible</AlertTitle>
+                <AlertDescription>
+                  Une valeur chiffrée existe en base, mais ce serveur ne peut pas la déchiffrer.
+                  Vérifiez que <code>FIELD_ENCRYPTION_KEY</code> est identique sur tous les environnements,
+                  puis remplacez l’identifiant concerné ci-dessous.
+                </AlertDescription>
+              </Alert>
+            )}
+            {data && data.encryptionKeyConfigured === false && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Chiffrement serveur absent</AlertTitle>
+                <AlertDescription>
+                  <code>FIELD_ENCRYPTION_KEY</code> doit être configurée avant d’enregistrer des identifiants.
+                </AlertDescription>
+              </Alert>
+            )}
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-3">
                 <Label htmlFor="pawapay-api-token">Bearer API token</Label>

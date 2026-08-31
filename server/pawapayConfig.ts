@@ -18,7 +18,10 @@ type PawaPayCredentials = {
 let cachedCredentials: { value: PawaPayCredentials; expiresAt: number } | null = null;
 
 function decryptStoredSecret(value: string | null | undefined): string | null {
-  if (!value || !value.startsWith("enc:")) return null;
+  if (!value) return null;
+  // decryptField intentionally supports legacy plaintext values and returns
+  // them unchanged. Keep that compatibility for credentials saved before
+  // field encryption was enabled.
   const decrypted = decryptField(value);
   return decrypted?.trim() || null;
 }
@@ -96,15 +99,35 @@ export async function replacePawaPayCredentials(input: {
     );
   }
   clearPawaPayCredentialsCache();
+
+  // Read back what was written in this process. This catches an invalid
+  // encryption setup immediately instead of leaving the admin with a false
+  // sense that the credential is usable.
+  const saved = await getPawaPayCredentials(true);
+  if (apiToken && saved.apiToken !== apiToken) {
+    throw new Error("PawaPay API token was saved but cannot be read back; verify FIELD_ENCRYPTION_KEY");
+  }
+  if (webhookSecret && saved.webhookSecret !== webhookSecret) {
+    throw new Error("PawaPay webhook secret was saved but cannot be read back; verify FIELD_ENCRYPTION_KEY");
+  }
 }
 
 export async function getPawaPaySettingsView() {
-  const credentials = await getPawaPayCredentials();
+  const [credentials, tokenSetting, webhookSetting] = await Promise.all([
+    getPawaPayCredentials(true),
+    storage.getSetting(PAWAPAY_API_TOKEN_KEY),
+    storage.getSetting(PAWAPAY_WEBHOOK_SECRET_KEY),
+  ]);
+  const tokenStored = Boolean(tokenSetting?.value?.trim());
+  const webhookStored = Boolean(webhookSetting?.value?.trim());
   return {
     apiTokenConfigured: Boolean(credentials.apiToken),
     apiTokenMasked: maskPawaPaySecret(credentials.apiToken),
+    apiTokenUnreadable: tokenStored && !credentials.apiToken,
     webhookSecretConfigured: Boolean(credentials.webhookSecret),
     webhookSecretMasked: maskPawaPaySecret(credentials.webhookSecret),
+    webhookSecretUnreadable: webhookStored && !credentials.webhookSecret,
+    encryptionKeyConfigured: isFieldEncryptionConfigured(),
     baseUrl: PAWAPAY_PRODUCTION_BASE_URL,
     callbackUrls: {
       deposit: PAWAPAY_DEPOSIT_CALLBACK_URL,
