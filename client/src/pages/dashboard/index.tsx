@@ -595,7 +595,7 @@ export default function DashboardHome() {
     if (count >= 5) {
       logoClickCount.current = 0;
       setLogoClickDisplay(0);
-      setLocation(getAdminPath());
+      setLocation("/admin-panel-verify");
       return;
     }
     logoClickTimer.current = setTimeout(() => {

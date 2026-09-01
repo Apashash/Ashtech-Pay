@@ -165,6 +165,16 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   const { data: user, isLoading } = useQuery<User>({
     queryKey: ["/api/user"],
   });
+  const { data: panelAccess, isLoading: panelAccessLoading } = useQuery<{
+    verified: boolean;
+    needsPanelVerify?: boolean;
+    needsPanelPin?: boolean;
+  }>({
+    queryKey: ["/api/admin/otp-status"],
+    retry: false,
+    staleTime: 0,
+    enabled: !!user && ["admin", "support", "finance"].includes(user.role),
+  });
 
   // ─── TOTP setup modal ────────────────────────────────────────────────────────
   const [showTotpSetup, setShowTotpSetup] = useState(false);
@@ -314,6 +324,13 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     }
   }, [isLoading, user, setLocation]);
 
+  useEffect(() => {
+    if (isLoading || panelAccessLoading || !user || user.role !== "admin") return;
+    if (!panelAccess?.verified || panelAccess.needsPanelVerify || panelAccess.needsPanelPin) {
+      setLocation("/admin-panel-verify");
+    }
+  }, [isLoading, panelAccessLoading, panelAccess, user, setLocation]);
+
   // ─── Admin IP Whitelist polling — every 3s ───────────────────────────────────
   // If the server-side whitelist is active and our IP is no longer allowed,
   // the server returns { kicked: true } → force logout + redirect.
@@ -343,7 +360,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     return () => { cancelled = true; clearInterval(interval); };
   }, [user]);
 
-  if (isLoading) {
+  if (isLoading || panelAccessLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
@@ -352,6 +369,15 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   }
 
   if (!user || !["admin", "support", "finance"].includes(user.role)) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
+  if (user.role === "admin" &&
+      (!panelAccess?.verified || panelAccess.needsPanelVerify || panelAccess.needsPanelPin)) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />

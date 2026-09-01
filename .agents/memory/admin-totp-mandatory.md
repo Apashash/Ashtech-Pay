@@ -26,10 +26,17 @@ Admin/support/finance roles intercepted before session creation:
 - Normal (non-admin) users still get a full session immediately
 
 ### Backend — `/api/auth/admin-panel-verify`
-After successful TOTP code verify, now sets BOTH:
+After successful panel TOTP code verify, it sets:
 - `_avs` (3-day TTL) — makes `requireAdmin` pass
 - `_pav` (30-min TTL) — otp-status panel check
+- clears any previous `_ppv` panel-PIN grant, so the PIN must follow the fresh TOTP
 Also populates `adminVerifiedSessions` in-memory map.
+
+### Backend — panel PIN gate
+- `/api/auth/admin-panel-pin-verify` accepts the PIN only after a valid panel `_pav`
+  bound to the current IP, then stores `_ppv` with the same IP binding.
+- `requireAdmin` rejects admin API access until `_ppv` is valid; the PIN is never
+  sent to the browser or logged.
 
 ### Challenge and session invariants
 - Admin password login never creates a session or bearer token before TOTP succeeds.
@@ -54,17 +61,18 @@ admin token, or bypassing `requireAdmin`.
 - `/api/auth/login` returns `{ requiresAdminOtp: true, adminLoginToken }`
 - `login.tsx` saves token to sessionStorage, redirects to `/admin-login-otp`
 - `/admin-login-otp` page reads token from sessionStorage, calls `/api/auth/admin-login-otp`
-- On success: session created with `_avs`, redirects to admin dashboard
+- On success: session created with `_avs`, clears panel grants, redirects to `/dashboard`
 
 ### Logo-click flow (5 clicks on logo)
 - `dashboard-layout.tsx` handleLogoClick → redirects to `/admin-panel-verify`
+- `dashboard/index.tsx` uses the same redirect for its hidden five-click gesture
 - `/admin-panel-verify` page calls `GET /api/admin/otp-status`
-  - If already verified and no needsPanelVerify → auto-redirect to admin
   - If totpEnabled=false → toast error, redirect to dashboard
-  - Otherwise → show TOTP form
-- On success: `admin-panel-verify` endpoint sets `_avs` + `_pav`, redirects to admin
+  - Otherwise → always show a fresh TOTP form, followed by the PIN form
+- On success: the PIN endpoint creates `_ppv`, then the client opens the admin path
 
 ## What NOT to do
 - Do not add `ADMIN_OTP_BYPASS` env var back — it was removed intentionally
 - Do not set `_avs` without verifying the TOTP code
+- Do not treat `_pav` as sufficient panel access; the PIN gate and `_ppv` are required
 - Do not add useEffect bypasses in admin-login-otp.tsx or admin-panel-verify.tsx

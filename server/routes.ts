@@ -63,7 +63,7 @@ import path from "path";
 import fs from "fs";
 import { uploadToSupabase, getSignedImageUrl, downloadFromSupabase, STORAGE_BUCKET } from "./supabase";
 import { decryptField, encryptField, isFieldEncryptionConfigured } from "./fieldEncryption";
-import { requireAdminPin } from "./adminPin";
+import { requireAdminPin, verifyAdminPinCode } from "./adminPin";
 import { createPaymentIntent, createDirectCharge, validateWebhook, getIziPayWebhookSecret, toIziPayCurrency, isIziPayConfigured } from "./izichange";
 import { fetchCryptoAssets, filterCryptoAssets, parseDisabledCryptoAssets, getStaticCryptoAssets } from "./cryptoAssets";
 import {
@@ -391,6 +391,8 @@ declare module "express-session" {
     loginAt?: string;
     tokenIssuedAt?: number;
     _pav?: number;
+    _ppv?: number;       // panel PIN verification expiry
+    _ppvIp?: string;     // IP at panel PIN verification time
     impersonatedBy?: string;
   }
 }
@@ -1104,6 +1106,19 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
     req.session._avsIp = adminIpEarly;
     adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: newAvsExp, ip: adminIpEarly });
     req.session.save(() => {});
+
+    // A valid login/panel TOTP is not enough to open the admin panel.
+    // The second gate is the server-side admin PIN, bound to the same IP.
+    const panelPinExp = req.session._ppv;
+    const panelPinIp = req.session._ppvIp;
+    if (typeof panelPinExp !== "number" || panelPinExp <= Date.now() ||
+        !panelPinIp || normalizeLoopback(panelPinIp) !== normalizeLoopback(adminIpEarly)) {
+      return res.status(403).json({
+        message: "Code PIN admin requis pour accéder au panneau d'administration.",
+        pinRequired: true,
+        panelPinRequired: true,
+      });
+    }
   }
 
   console.log(`[AdminAccess] OK — user=${req.userId} role=${user.role} path=${req.path}`);
@@ -2982,7 +2997,11 @@ export async function registerRoutes(
         // Set _avs immediately — admin OTP was verified at login time
         req.session._avs = avsExpiresAt;
         req.session._avsIp = ip;
-        req.session._pav = Date.now() + ADMIN_PANEL_ACCESS_TTL_MS;
+        // Do not grant panel access at login. The hidden panel button must
+        // trigger a fresh TOTP challenge followed by the admin PIN.
+        delete req.session._pav;
+        delete req.session._ppv;
+        delete req.session._ppvIp;
 
         req.session.save((err) => {
           if (err) console.error("Session save error (admin-login-otp):", err);
@@ -3066,11 +3085,13 @@ export async function registerRoutes(
       clearOtpFailures(req.userId!);
 
       // Set _avs (admin verified session, 3-day TTL) — makes requireAdmin pass
-      // Set _pav (panel access verified, 30-min TTL) — checked by otp-status
+      // Set _pav (panel TOTP verified, 30-min TTL) — the PIN gate follows this.
       const avsPanelExp = Date.now() + ADMIN_OTP_SESSION_TTL_MS;
       req.session._avs = avsPanelExp;
       req.session._avsIp = getClientIp(req);
       req.session._pav = Date.now() + ADMIN_PANEL_ACCESS_TTL_MS;
+      delete req.session._ppv;
+      delete req.session._ppvIp;
       await new Promise<void>((resolve) => req.session.save((err) => {
         if (err) console.error("admin-panel-verify session save error:", err);
         resolve();
@@ -3096,6 +3117,50 @@ export async function registerRoutes(
       res.json({ ok: true });
     } catch (error) {
       console.error("admin-panel-verify error:", error);
+      res.status(500).json({ message: "Erreur serveur." });
+    }
+  });
+
+  // ── Admin Panel PIN — second gate after the panel TOTP challenge ───────────
+  app.post("/api/auth/admin-panel-pin-verify", requireAuth, loginLimiter, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.userId!);
+      if (!user || user.role !== "admin") {
+        return res.status(403).json({ message: "Accès réservé aux administrateurs." });
+      }
+
+      const currentIp = getClientIp(req);
+      const normalizeLoopback = (ip: string) =>
+        ip === "::1" || ip === "::ffff:127.0.0.1" ? "127.0.0.1" : ip;
+      const panelTotpExp = req.session._pav;
+      const panelTotpIp = req.session._avsIp;
+      if (typeof panelTotpExp !== "number" || panelTotpExp <= Date.now() ||
+          typeof panelTotpIp !== "string" ||
+          normalizeLoopback(panelTotpIp) !== normalizeLoopback(currentIp)) {
+        return res.status(403).json({
+          message: "Vérification Google Authenticator requise avant le code PIN.",
+          totpRequired: true,
+        });
+      }
+
+      const submittedPin = typeof req.body?.pin === "string" ? req.body.pin.trim() : "";
+      const result = verifyAdminPinCode(user.id, submittedPin);
+      if (!result.ok) {
+        console.error(`[AdminPin] Panel gate blocked — status=${result.status} userId=${user.id}`);
+        return res.status(result.status).json(result.body);
+      }
+
+      req.session._ppv = Date.now() + ADMIN_PANEL_ACCESS_TTL_MS;
+      req.session._ppvIp = currentIp;
+      await new Promise<void>((resolve) => req.session.save((err) => {
+        if (err) console.error("admin-panel-pin-verify session save error:", err);
+        resolve();
+      }));
+
+      console.log(`[AdminPin] ✅ Panel PIN vérifié — userId=${user.id}`);
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("admin-panel-pin-verify error:", error);
       res.status(500).json({ message: "Erreur serveur." });
     }
   });
@@ -9123,10 +9188,17 @@ export async function registerRoutes(
   }
 
   const needsPanelVerify = verified && !panelValid && !panelValidDb;
+  const panelPinExp = req.session._ppv;
+  const panelPinIp = req.session._ppvIp;
+  const panelPinValid = typeof panelPinExp === "number" && panelPinExp > now &&
+    typeof panelPinIp === "string" &&
+    normalizeLoopback(panelPinIp) === normalizeLoopback(currentIp);
+  const needsPanelPin = verified && !panelPinValid;
 
     res.json({
       verified,
       needsPanelVerify: needsPanelVerify || undefined,
+      needsPanelPin: needsPanelPin || undefined,
       totpEnabled: !!user.totpEnabled,
       enforcementEnabled: true,
     });

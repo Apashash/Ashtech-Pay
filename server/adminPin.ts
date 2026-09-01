@@ -88,6 +88,109 @@ if (configuredPin) {
 }
 
 // ── Middleware principal ──────────────────────────────────────────────────────
+export type AdminPinCheck =
+  | { ok: true }
+  | { ok: false; status: 403 | 428 | 423 | 503; body: Record<string, unknown> };
+
+export function verifyAdminPinCode(userId: string, submittedPin: string): AdminPinCheck {
+  // ── FAIL-SECURE : PIN non configuré → BLOCAGE total ──────────────────────
+  // Cette branche est atteinte si ADMIN_PIN_CODE est absent ou invalide.
+  // Elle ne laisse JAMAIS passer — enlever la variable env rend le système
+  // plus restrictif, jamais moins.
+  if (!configuredPin) {
+    return {
+      ok: false,
+      status: 503,
+      body: {
+        pinNotConfigured: true,
+        message: "Le panneau d'administration est désactivé : ADMIN_PIN_CODE non configuré sur le serveur. Contactez l'administrateur système.",
+      },
+    };
+  }
+
+  const record = getRecord(userId);
+
+  // ── Vérification du verrouillage ──────────────────────────────────────────
+  if (record.lockedUntil !== null) {
+    const now = Date.now();
+    if (now < record.lockedUntil) {
+      const retryAfterMs = record.lockedUntil - now;
+      const minutes = Math.ceil(retryAfterMs / 60000);
+      return {
+        ok: false,
+        status: 423,
+        body: {
+          pinLocked: true,
+          message: `Trop de tentatives incorrectes. Réessayez dans ${minutes} minute${minutes > 1 ? "s" : ""}.`,
+          retryAfterMs,
+        },
+      };
+    }
+    // Verrou expiré → réinitialisation
+    resetRecord(userId);
+  }
+
+  // ── Présence du PIN ───────────────────────────────────────────────────────
+  if (!submittedPin) {
+    return {
+      ok: false,
+      status: 428,
+      body: {
+        pinRequired: true,
+        message: "Code PIN requis pour effectuer cette action.",
+      },
+    };
+  }
+
+  // ── Format du PIN soumis (4 chiffres) ────────────────────────────────────
+  if (!/^\d{4}$/.test(submittedPin)) {
+    return {
+      ok: false,
+      status: 403,
+      body: {
+        pinInvalid: true,
+        message: "Format invalide — le code PIN doit être exactement 4 chiffres.",
+        attemptsLeft: MAX_ATTEMPTS - getRecord(userId).count,
+      },
+    };
+  }
+
+  // ── Comparaison à temps constant ─────────────────────────────────────────
+  if (!safeEqual(submittedPin, configuredPin)) {
+    const rec = getRecord(userId);
+    rec.count += 1;
+
+    if (rec.count >= MAX_ATTEMPTS) {
+      rec.lockedUntil = Date.now() + LOCKOUT_MS;
+      console.warn(`[AdminPin] LOCKOUT — userId=${userId} — ${MAX_ATTEMPTS} tentatives échouées. Bloqué 20 min.`);
+      return {
+        ok: false,
+        status: 423,
+        body: {
+          pinLocked: true,
+          message: "Trop de tentatives incorrectes. Panneau admin bloqué pendant 20 minutes.",
+          retryAfterMs: LOCKOUT_MS,
+        },
+      };
+    }
+
+    const attemptsLeft = MAX_ATTEMPTS - rec.count;
+    console.warn(`[AdminPin] Mauvais PIN — userId=${userId} (${rec.count}/${MAX_ATTEMPTS})`);
+    return {
+      ok: false,
+      status: 403,
+      body: {
+        pinInvalid: true,
+        message: `Code PIN incorrect. ${attemptsLeft} tentative${attemptsLeft > 1 ? "s" : ""} restante${attemptsLeft > 1 ? "s" : ""} avant blocage de 20 min.`,
+        attemptsLeft,
+      },
+    };
+  }
+
+  resetRecord(userId);
+  return { ok: true };
+}
+
 export function requireAdminPin(req: Request, res: Response, next: NextFunction): void {
   // GET/HEAD/OPTIONS = lecture seule → pas de PIN requis
   if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") {
@@ -101,24 +204,9 @@ export function requireAdminPin(req: Request, res: Response, next: NextFunction)
     return next();
   }
 
-  // ── FAIL-SECURE : PIN non configuré → BLOCAGE total ──────────────────────
-  // Cette branche est atteinte si ADMIN_PIN_CODE est absent ou invalide.
-  // Elle ne laisse JAMAIS passer — enlever la variable env rend le système
-  // plus restrictif, jamais moins.
-  if (!configuredPin) {
-    console.error(`[AdminPin] BLOCKED — PIN not configured. Method=${req.method} Path=${path}`);
-    res.status(503).json({
-      pinNotConfigured: true,
-      message: "Le panneau d'administration est désactivé : ADMIN_PIN_CODE non configuré sur le serveur. Contactez l'administrateur système.",
-    });
-    return;
-  }
-
   // ── userId injecté par le middleware auth global (non forgeable) ──────────
   const userId = (req as any).userId as string | undefined;
-
   if (!userId) {
-    // Non authentifié — requireAdmin rejettera aussi avec 403
     res.status(428).json({
       pinRequired: true,
       message: "Authentification et code PIN requis.",
@@ -126,74 +214,13 @@ export function requireAdminPin(req: Request, res: Response, next: NextFunction)
     return;
   }
 
-  const record = getRecord(userId);
-
-  // ── Vérification du verrouillage ──────────────────────────────────────────
-  if (record.lockedUntil !== null) {
-    const now = Date.now();
-    if (now < record.lockedUntil) {
-      const retryAfterMs = record.lockedUntil - now;
-      const minutes = Math.ceil(retryAfterMs / 60000);
-      res.status(423).json({
-        pinLocked: true,
-        message: `Trop de tentatives incorrectes. Réessayez dans ${minutes} minute${minutes > 1 ? "s" : ""}.`,
-        retryAfterMs,
-      });
-      return;
-    }
-    // Verrou expiré → réinitialisation
-    resetRecord(userId);
-  }
-
-  // ── Présence du PIN ───────────────────────────────────────────────────────
-  const submittedPin = ((req.headers["x-admin-pin"] as string | undefined) ?? "").trim();
-
-  if (!submittedPin) {
-    res.status(428).json({
-      pinRequired: true,
-      message: "Code PIN requis pour effectuer cette action.",
-    });
+  const result = verifyAdminPinCode(userId, ((req.headers["x-admin-pin"] as string | undefined) ?? "").trim());
+  if (!result.ok) {
+    console.error(`[AdminPin] BLOCKED — status=${result.status} Method=${req.method} Path=${path}`);
+    res.status(result.status).json(result.body);
     return;
   }
 
-  // ── Format du PIN soumis (4 chiffres) ────────────────────────────────────
-  if (!/^\d{4}$/.test(submittedPin)) {
-    res.status(403).json({
-      pinInvalid: true,
-      message: "Format invalide — le code PIN doit être exactement 4 chiffres.",
-      attemptsLeft: MAX_ATTEMPTS - getRecord(userId).count,
-    });
-    return;
-  }
-
-  // ── Comparaison à temps constant ─────────────────────────────────────────
-  if (!safeEqual(submittedPin, configuredPin)) {
-    const rec = getRecord(userId);
-    rec.count += 1;
-
-    if (rec.count >= MAX_ATTEMPTS) {
-      rec.lockedUntil = Date.now() + LOCKOUT_MS;
-      console.warn(`[AdminPin] LOCKOUT — userId=${userId} — ${MAX_ATTEMPTS} tentatives échouées. Bloqué 20 min.`);
-      res.status(423).json({
-        pinLocked: true,
-        message: "Trop de tentatives incorrectes. Panneau admin bloqué pendant 20 minutes.",
-        retryAfterMs: LOCKOUT_MS,
-      });
-      return;
-    }
-
-    const attemptsLeft = MAX_ATTEMPTS - rec.count;
-    console.warn(`[AdminPin] Mauvais PIN — userId=${userId} (${rec.count}/${MAX_ATTEMPTS})`);
-    res.status(403).json({
-      pinInvalid: true,
-      message: `Code PIN incorrect. ${attemptsLeft} tentative${attemptsLeft > 1 ? "s" : ""} restante${attemptsLeft > 1 ? "s" : ""} avant blocage de 20 min.`,
-      attemptsLeft,
-    });
-    return;
-  }
-
-  // ── PIN correct ───────────────────────────────────────────────────────────
-  resetRecord(userId);
   console.log(`[AdminPin] ✅ PIN vérifié — userId=${userId} ${req.method} ${path}`);
   next();
 }
