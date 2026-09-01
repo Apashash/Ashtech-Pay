@@ -22,6 +22,7 @@ export default function AdminPanelVerifyPage() {
     verified: boolean;
     needsPanelVerify?: boolean;
     totpEnabled?: boolean;
+    enforcementEnabled?: boolean;
   }>({
     queryKey: ["/api/admin/otp-status"],
     retry: false,
@@ -32,6 +33,11 @@ export default function AdminPanelVerifyPage() {
     if (statusLoading) return;
     if (!otpStatus) {
       setLocation("/login");
+      return;
+    }
+    if (otpStatus.enforcementEnabled === false) {
+      sessionStorage.removeItem("admin_verify_return");
+      setLocation(ADMIN_URL);
       return;
     }
     if (!otpStatus.totpEnabled) {

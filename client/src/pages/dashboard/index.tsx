@@ -44,6 +44,7 @@ import { fr } from "date-fns/locale";
 import { Link } from "wouter";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useLanguage } from "@/lib/language";
+import { getAdminPath } from "@/lib/adminPath";
 
 interface UserStats {
   totalReceived: string;
@@ -594,7 +595,7 @@ export default function DashboardHome() {
     if (count >= 5) {
       logoClickCount.current = 0;
       setLogoClickDisplay(0);
-      setLocation("/admin-panel-verify");
+      setLocation(getAdminPath());
       return;
     }
     logoClickTimer.current = setTimeout(() => {

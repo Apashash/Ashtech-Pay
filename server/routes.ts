@@ -560,6 +560,9 @@ function isIpBannedFromAdmin(ip: string, blocklist: AdminPanelBlock[]): boolean 
 const adminVerifiedSessions = new Map<string, { userId: string; expiresAt: number }>();
 const ADMIN_OTP_SESSION_TTL_MS = 1 * 60 * 60 * 1000; // 1h inactivity — slides on each requireAdmin pass
 const ADMIN_PANEL_ACCESS_TTL_MS = 30 * 60 * 1000; // 30 min — _pav flag (panel access verified)
+// TOTP is temporarily optional while the administrator repairs the authenticator.
+// Re-enable it in the hosting environment with ADMIN_TOTP_ENFORCEMENT=true.
+const ADMIN_TOTP_ENFORCEMENT_ENABLED = process.env.ADMIN_TOTP_ENFORCEMENT === "true";
 
 // Rate-limit Telegram "panel_access" notifications — 1 notif per sessionID per 30 min
 // to avoid spamming on every API call while the admin navigates the panel.
@@ -1064,99 +1067,99 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
     return res.status(403).json({ message: "Votre adresse IP est bloquée du panneau d'administration.", ipBanned: true });
   }
 
-  // ── MANDATORY Google Authenticator (TOTP) — enforced server-side ─────────────
-  // Every admin API call requires TOTP to be (1) configured and (2) verified in
-  // this session.
-  if (!user.totpEnabled || !user.totpSecret) {
-    console.warn(`[AdminAccess] BLOCKED — TOTP not configured — user=${req.userId} role=${user.role} path=${req.path}`);
-    notifyAdminPanelAccess({ type: "blocked_no_auth", ip: adminIpEarly, userId: user.id, userName: user.fullName || user.username, userEmail: user.email || undefined, userRole: user.role, path: req.path }).catch(() => {});
-    return res.status(403).json({
-      message: "Google Authenticator obligatoire. Configurez-le pour accéder au panneau admin.",
-      totpNotConfigured: true,
-    });
-  }
-
-  // Tier 1: in-memory map (instant — no async)
-  const nowTotp = Date.now();
-  const avsMemEntry = adminVerifiedSessions.get(req.sessionID);
-  let avsOk = !!(avsMemEntry && avsMemEntry.expiresAt > nowTotp);
-
-  // Tier 2: session cookie (no extra round-trip)
-  if (!avsOk) {
-    const avsExp = req.session._avs;
-    if (typeof avsExp === "number" && avsExp > nowTotp) {
-      avsOk = true;
-      adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: avsExp });
-    }
-  }
-
-  // Tier 3: DB (multi-process / cold-start fallback — same logic as otp-status)
-  if (!avsOk && req.sessionID) {
-    for (const queryPool of [sessionPool, pool]) {
-      try {
-        const dbRow = await queryPool.query(
-          `SELECT sess FROM session WHERE sid = $1 AND expire > NOW()`,
-          [req.sessionID]
-        );
-        if (dbRow.rows.length > 0) {
-          const sessData = typeof dbRow.rows[0].sess === "string"
-            ? JSON.parse(dbRow.rows[0].sess)
-            : dbRow.rows[0].sess;
-          const dbAvs = sessData?._avs;
-          if (typeof dbAvs === "number" && dbAvs > nowTotp) {
-            avsOk = true;
-            adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: dbAvs });
-          }
-        }
-        break;
-      } catch { /* try next pool */ }
-    }
-  }
-
-  if (!avsOk) {
-    // Session expiry for a legitimate admin — NOT an attack. Do not send Telegram alert.
-    // Only log locally so the admin knows to re-verify TOTP.
-    console.info(`[AdminAccess] TOTP session expired — user=${req.userId} role=${user.role} path=${req.path} — redirecting to panel-verify`);
-    return res.status(403).json({
-      message: "Vérification Google Authenticator requise pour accéder au panneau admin.",
-      totpRequired: true,
-    });
-  }
-
-  // ── Admin session IP pinning — prevent stolen cookie reuse from a different IP ──
-  // _avsIp is stored when TOTP is verified. If the current IP differs, the _avs is
-  // invalidated immediately and the admin must re-verify with Google Authenticator.
-  // Grace: IPv6 ↔ IPv4 loopback equivalences are tolerated (::1 === 127.0.0.1).
-  const avsIp = req.session._avsIp;
-  if (avsIp) {
-    const normalizeLoopback = (ip: string) =>
-      ip === "::1" || ip === "::ffff:127.0.0.1" ? "127.0.0.1" : ip;
-    if (normalizeLoopback(adminIpEarly) !== normalizeLoopback(avsIp)) {
-      // Revoke _avs immediately — delete from all tiers
-      delete req.session._avs;
-      delete req.session._avsIp;
-      req.session.save(() => {});
-      adminVerifiedSessions.delete(req.sessionID);
-      console.warn(`[AdminAccess] IP MISMATCH — cookie stolen? user=${req.userId} avsIp=${avsIp} currentIp=${adminIpEarly} — _avs revoked, TOTP required`);
+  if (ADMIN_TOTP_ENFORCEMENT_ENABLED) {
+    // ── Mandatory Google Authenticator (TOTP) — enforced server-side ───────────
+    // Every admin API call requires TOTP to be (1) configured and (2) verified in
+    // this session.
+    if (!user.totpEnabled || !user.totpSecret) {
+      console.warn(`[AdminAccess] BLOCKED — TOTP not configured — user=${req.userId} role=${user.role} path=${req.path}`);
       notifyAdminPanelAccess({ type: "blocked_no_auth", ip: adminIpEarly, userId: user.id, userName: user.fullName || user.username, userEmail: user.email || undefined, userRole: user.role, path: req.path }).catch(() => {});
       return res.status(403).json({
-        message: "Votre adresse IP a changé. Vérification Google Authenticator requise.",
-        totpRequired: true,
-        ipChanged: true,
+        message: "Google Authenticator obligatoire. Configurez-le pour accéder au panneau admin.",
+        totpNotConfigured: true,
       });
     }
-  }
 
-  console.log(`[AdminAccess] OK — user=${req.userId} role=${user.role} path=${req.path}`);
+    // Tier 1: in-memory map (instant — no async)
+    const nowTotp = Date.now();
+    const avsMemEntry = adminVerifiedSessions.get(req.sessionID);
+    let avsOk = !!(avsMemEntry && avsMemEntry.expiresAt > nowTotp);
 
-  // ── Slide _avs by 1h on every successful admin access (inactivity-based TOTP) ─
-  {
+    // Tier 2: session cookie (no extra round-trip)
+    if (!avsOk) {
+      const avsExp = req.session._avs;
+      if (typeof avsExp === "number" && avsExp > nowTotp) {
+        avsOk = true;
+        adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: avsExp });
+      }
+    }
+
+    // Tier 3: DB (multi-process / cold-start fallback — same logic as otp-status)
+    if (!avsOk && req.sessionID) {
+      for (const queryPool of [sessionPool, pool]) {
+        try {
+          const dbRow = await queryPool.query(
+            `SELECT sess FROM session WHERE sid = $1 AND expire > NOW()`,
+            [req.sessionID]
+          );
+          if (dbRow.rows.length > 0) {
+            const sessData = typeof dbRow.rows[0].sess === "string"
+              ? JSON.parse(dbRow.rows[0].sess)
+              : dbRow.rows[0].sess;
+            const dbAvs = sessData?._avs;
+            if (typeof dbAvs === "number" && dbAvs > nowTotp) {
+              avsOk = true;
+              adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: dbAvs });
+            }
+          }
+          break;
+        } catch { /* try next pool */ }
+      }
+    }
+
+    if (!avsOk) {
+      // Session expiry for a legitimate admin — NOT an attack. Do not send Telegram alert.
+      // Only log locally so the admin knows to re-verify TOTP.
+      console.info(`[AdminAccess] TOTP session expired — user=${req.userId} role=${user.role} path=${req.path} — redirecting to panel-verify`);
+      return res.status(403).json({
+        message: "Vérification Google Authenticator requise pour accéder au panneau admin.",
+        totpRequired: true,
+      });
+    }
+
+    // ── Admin session IP pinning — prevent stolen cookie reuse from a different IP ──
+    // _avsIp is stored when TOTP is verified. If the current IP differs, the _avs is
+    // invalidated immediately and the admin must re-verify with Google Authenticator.
+    // Grace: IPv6 ↔ IPv4 loopback equivalences are tolerated (::1 === 127.0.0.1).
+    const avsIp = req.session._avsIp;
+    if (avsIp) {
+      const normalizeLoopback = (ip: string) =>
+        ip === "::1" || ip === "::ffff:127.0.0.1" ? "127.0.0.1" : ip;
+      if (normalizeLoopback(adminIpEarly) !== normalizeLoopback(avsIp)) {
+        // Revoke _avs immediately — delete from all tiers
+        delete req.session._avs;
+        delete req.session._avsIp;
+        req.session.save(() => {});
+        adminVerifiedSessions.delete(req.sessionID);
+        console.warn(`[AdminAccess] IP MISMATCH — cookie stolen? user=${req.userId} avsIp=${avsIp} currentIp=${adminIpEarly} — _avs revoked, TOTP required`);
+        notifyAdminPanelAccess({ type: "blocked_no_auth", ip: adminIpEarly, userId: user.id, userName: user.fullName || user.username, userEmail: user.email || undefined, userRole: user.role, path: req.path }).catch(() => {});
+        return res.status(403).json({
+          message: "Votre adresse IP a changé. Vérification Google Authenticator requise.",
+          totpRequired: true,
+          ipChanged: true,
+        });
+      }
+    }
+
+    // ── Slide _avs by 1h on every successful admin access (inactivity-based TOTP) ─
     const newAvsExp = Date.now() + ADMIN_OTP_SESSION_TTL_MS;
     req.session._avs = newAvsExp;
     req.session._avsIp = adminIpEarly;
     adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: newAvsExp });
     req.session.save(() => {});
   }
+
+  console.log(`[AdminAccess] OK — user=${req.userId} role=${user.role} path=${req.path}`);
 
   // ── Telegram notification — 1x par session toutes les 30 min (anti-spam) ───
   const nowMs = Date.now();
@@ -9050,6 +9053,14 @@ export async function registerRoutes(
     if (!user || !["admin"].includes(user.role)) {
       return res.status(403).json({ message: "Accès refusé" });
     }
+    if (!ADMIN_TOTP_ENFORCEMENT_ENABLED) {
+      return res.json({
+        verified: true,
+        needsPanelVerify: undefined,
+        totpEnabled: !!user.totpEnabled,
+        enforcementEnabled: false,
+      });
+    }
     const now = Date.now();
     // Keyed by sessionID — each browser login is independently verified
     const memEntry = adminVerifiedSessions.get(req.sessionID);
@@ -9133,7 +9144,12 @@ export async function registerRoutes(
 
   const needsPanelVerify = verified && !panelValid && !panelValidDb;
 
-  res.json({ verified, needsPanelVerify: needsPanelVerify || undefined, totpEnabled: !!user.totpEnabled });
+    res.json({
+      verified,
+      needsPanelVerify: needsPanelVerify || undefined,
+      totpEnabled: !!user.totpEnabled,
+      enforcementEnabled: true,
+    });
   });
 
   // GET /api/admin/debug-storage — tests Supabase Storage connection (admin only)
