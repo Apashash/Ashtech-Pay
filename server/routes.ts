@@ -378,7 +378,7 @@ const SessionStore = connectPgSimple(session);
 declare module "express-session" {
   interface SessionData {
     userId: string;
-    role?: string;          // stored at login — used for inactivity timeout (5h admin / 24h user)
+    role?: string;          // stored at login — used for inactivity timeout (24h admin / 24h user)
     lastActivity?: number;  // ms timestamp — updated on every authenticated request
     _avs?: number;
     _avsIp?: string;      // IP at TOTP verification time — used for admin session IP pinning
@@ -592,8 +592,9 @@ function isIpBannedFromAdmin(ip: string, blocklist: AdminPanelBlock[]): boolean 
 // Keyed by sessionID so each browser session is independently verified.
 // A new login always gets a fresh sessionID → OTP is always re-asked after logout.
 const adminVerifiedSessions = new Map<string, { userId: string; expiresAt: number; ip?: string }>();
-const ADMIN_OTP_SESSION_TTL_MS = 1 * 60 * 60 * 1000; // 1h inactivity — slides on each requireAdmin pass
-const ADMIN_PANEL_ACCESS_TTL_MS = 30 * 60 * 1000; // 30 min — _pav flag (panel access verified)
+const ADMIN_REAUTH_INACTIVITY_TTL_MS = 24 * 60 * 60 * 1000; // 24h without authenticated activity
+const ADMIN_OTP_SESSION_TTL_MS = ADMIN_REAUTH_INACTIVITY_TTL_MS; // slides on each requireAdmin pass
+const ADMIN_PANEL_ACCESS_TTL_MS = ADMIN_REAUTH_INACTIVITY_TTL_MS; // _pav/_ppv slide while the panel is active
 // TOTP is a fixed server-side requirement for every admin API request.
 // Deliberately not configurable through an environment variable: an environment
 // change must never be able to downgrade admin authentication.
@@ -900,7 +901,7 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
   }
 
   // ── Inactivity-based session expiry ──────────────────────────────────────────
-  // Admin/support/finance: 5h — Regular users: 24h
+    // Admin/support/finance: 24h — Regular users: 24h
   {
     const now = Date.now();
     const lastActivity = req.session.lastActivity;
@@ -908,11 +909,11 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
       const role = req.session.role ?? "";
       const isPrivileged = ["admin"].includes(role);
       const maxInactivity = isPrivileged
-        ? 5 * 60 * 60 * 1000   // 5h for admin
+        ? ADMIN_REAUTH_INACTIVITY_TTL_MS // 24h for admin
         : 24 * 60 * 60 * 1000; // 24h for regular users
       if (now - lastActivity > maxInactivity) {
         req.session.destroy(() => {});
-        const label = isPrivileged ? "5h (compte admin)" : "24h";
+        const label = "24h";
         return res.status(401).json({
           message: `Session expirée après ${label} d'inactivité. Reconnectez-vous.`,
           sessionRevoked: true,
@@ -1100,12 +1101,22 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
       });
     }
 
-    // ── Slide _avs by 1h on every successful admin access (inactivity-based TOTP) ─
+    // The panel TOTP is a separate gate from the login TOTP. It must still be
+    // valid when an admin API request is made.
+    const panelTotpExp = req.session._pav;
+    if (typeof panelTotpExp !== "number" || panelTotpExp <= Date.now()) {
+      return res.status(403).json({
+        message: "Vérification Google Authenticator requise pour accéder au panneau admin.",
+        totpRequired: true,
+        panelTotpRequired: true,
+      });
+    }
+
+    // ── Slide all admin factors by 24h on every successful panel access ─────
     const newAvsExp = Date.now() + ADMIN_OTP_SESSION_TTL_MS;
     req.session._avs = newAvsExp;
     req.session._avsIp = adminIpEarly;
     adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: newAvsExp, ip: adminIpEarly });
-    req.session.save(() => {});
 
     // A valid login/panel TOTP is not enough to open the admin panel.
     // The second gate is the server-side admin PIN, bound to the same IP.
@@ -1119,6 +1130,12 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
         panelPinRequired: true,
       });
     }
+
+    const newPanelAuthExp = Date.now() + ADMIN_PANEL_ACCESS_TTL_MS;
+    req.session._pav = newPanelAuthExp;
+    req.session._ppv = newPanelAuthExp;
+    req.session._ppvIp = adminIpEarly;
+    req.session.save(() => {});
   }
 
   console.log(`[AdminAccess] OK — user=${req.userId} role=${user.role} path=${req.path}`);
@@ -3084,8 +3101,8 @@ export async function registerRoutes(
       }
       clearOtpFailures(req.userId!);
 
-      // Set _avs (admin verified session, 3-day TTL) — makes requireAdmin pass
-      // Set _pav (panel TOTP verified, 30-min TTL) — the PIN gate follows this.
+      // Set _avs (admin verified session, 24h inactivity TTL) — makes requireAdmin pass
+      // Set _pav (panel TOTP verified, 24h inactivity TTL) — the PIN gate follows this.
       const avsPanelExp = Date.now() + ADMIN_OTP_SESSION_TTL_MS;
       req.session._avs = avsPanelExp;
       req.session._avsIp = getClientIp(req);
@@ -3150,7 +3167,9 @@ export async function registerRoutes(
         return res.status(result.status).json(result.body);
       }
 
-      req.session._ppv = Date.now() + ADMIN_PANEL_ACCESS_TTL_MS;
+      const panelAuthExp = Date.now() + ADMIN_PANEL_ACCESS_TTL_MS;
+      req.session._pav = panelAuthExp;
+      req.session._ppv = panelAuthExp;
       req.session._ppvIp = currentIp;
       await new Promise<void>((resolve) => req.session.save((err) => {
         if (err) console.error("admin-panel-pin-verify session save error:", err);
@@ -9158,8 +9177,9 @@ export async function registerRoutes(
       }
     }
 
-  // Check _pav (panel access verified) — short-lived flag set by /admin-panel-verify or fresh login
-  // If verified (_avs OK) but _pav missing/expired → needsPanelVerify: true
+  // Check _pav (panel TOTP verified) — 24h inactivity window, refreshed by
+  // successful panel activity. If _avs is valid but _pav is missing/expired,
+  // the panel TOTP must be entered again.
   const pavExp = req.session._pav;
   const panelValid = typeof pavExp === "number" && pavExp > now;
 
@@ -9743,7 +9763,7 @@ export async function registerRoutes(
       storage.createAdminLog({
         adminId: req.userId!,
         action: "otp_verified",
-        details: `Vérification OTP réussie depuis IP ${ip} — session valide 3 jours`,
+        details: `Vérification OTP réussie depuis IP ${ip} — session valide 24h d'inactivité`,
       }).catch(() => {});
 
       console.log(`[AdminOTP] Admin ${user.email?.replace(/(.{2}).+(@.+)/, "$1***$2")} vérifié depuis ${ip}`);
@@ -9966,6 +9986,9 @@ export async function registerRoutes(
       adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt, ip: totpVerifyIp });
       req.session._avs = expiresAt;
       req.session._avsIp = totpVerifyIp;
+      delete req.session._pav;
+      delete req.session._ppv;
+      delete req.session._ppvIp;
       await new Promise<void>((resolve) => req.session.save((err) => {
         if (err) console.error("[AdminTOTP] Session save warning:", err?.message);
         resolve();
@@ -10031,6 +10054,8 @@ export async function registerRoutes(
       delete req.session._avs;
       delete req.session._avsIp;
       delete req.session._pav;
+      delete req.session._ppv;
+      delete req.session._ppvIp;
       adminVerifiedSessions.delete(req.sessionID);
       await new Promise<void>((resolve, reject) => req.session.save((err) => err ? reject(err) : resolve()));
       storage.createAdminLog({

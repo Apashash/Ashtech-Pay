@@ -47,10 +47,14 @@ export default function AdminPanelVerifyPage() {
       setLocation("/dashboard");
       return;
     }
-    // Every visit to this page starts a fresh panel TOTP challenge. Even if
-    // the previous panel verification has not expired, the hidden button must
-    // always require Google Authenticator before the PIN gate.
-  }, [otpStatus, statusLoading]);
+    if (step === "totp" && otpStatus.verified && !otpStatus.needsPanelVerify) {
+      if (otpStatus.needsPanelPin) {
+        setStep("pin");
+      } else {
+        setLocation(ADMIN_URL);
+      }
+    }
+  }, [otpStatus, statusLoading, step, ADMIN_URL]);
 
   useEffect(() => {
     const tick = () => setSecondsLeft(30 - (Math.floor(Date.now() / 1000) % 30));

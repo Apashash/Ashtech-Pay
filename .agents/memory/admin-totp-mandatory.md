@@ -27,8 +27,8 @@ Admin/support/finance roles intercepted before session creation:
 
 ### Backend — `/api/auth/admin-panel-verify`
 After successful panel TOTP code verify, it sets:
-- `_avs` (3-day TTL) — makes `requireAdmin` pass
-- `_pav` (30-min TTL) — otp-status panel check
+- `_avs` (24h inactivity TTL) — makes `requireAdmin` pass and slides on panel activity
+- `_pav` (24h inactivity TTL) — panel TOTP gate and activity window
 - clears any previous `_ppv` panel-PIN grant, so the PIN must follow the fresh TOTP
 Also populates `adminVerifiedSessions` in-memory map.
 
@@ -68,7 +68,8 @@ admin token, or bypassing `requireAdmin`.
 - `dashboard/index.tsx` uses the same redirect for its hidden five-click gesture
 - `/admin-panel-verify` page calls `GET /api/admin/otp-status`
   - If totpEnabled=false → toast error, redirect to dashboard
-  - Otherwise → always show a fresh TOTP form, followed by the PIN form
+  - A valid TOTP+PIN panel grant is reused; after 24h without panel activity,
+    show the TOTP form followed by the PIN form
 - On success: the PIN endpoint creates `_ppv`, then the client opens the admin path
 
 ## What NOT to do
