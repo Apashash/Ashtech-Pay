@@ -19,7 +19,7 @@ test("reports a payment request timeout instead of leaving the button pending", 
 
   assert.equal(
     normalizePaymentLinkRequestError(error).message,
-    "Le serveur de paiement met trop de temps à répondre. Veuillez réessayer.",
+    "La demande a peut-être déjà été enregistrée. Attendez la mise à jour du statut avant de recommencer.",
   );
 });
 

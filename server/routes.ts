@@ -8957,20 +8957,55 @@ export async function registerRoutes(
 
         } catch (gatewayError) {
           console.error("Gateway API error:", gatewayError);
-          await storage.updatePaymentIntentStatus(intent.id, "failed");
-          const failedTransaction = await storage.getTransactionByReference(reference);
-          if (failedTransaction) {
-            await storage.updateTransactionStatus(failedTransaction.id, "failed");
-          }
           if (paymentProvider === "pawapay") {
+             const providerMessage = gatewayError instanceof Error ? gatewayError.message : "";
+             const providerTimedOut = /PawaPay\s+POST\s+\/deposits\s+timed out/i.test(providerMessage);
+             if (providerTimedOut && pawaPayDepositId) {
+               // A PawaPay timeout is ambiguous: the provider may have accepted
+               // the deposit before the response body was available. Keep the
+               // local records pending and let the poller resolve the UUID.
+               // Marking it failed here would invite a duplicate payment retry.
+               addPendingPayment({
+                 transactionId: paymentTransaction.id,
+                 reference,
+                 externalReference: pawaPayDepositId,
+                 attempts: 0,
+                 userId: paymentLink.userId,
+                 type: "payment_link",
+                 amount: netAmount,
+                 provider: "pawapay",
+                 paymentIntentId: intent.id,
+                 payerName: fullName,
+                 countryCode: paymentCountryCode,
+               });
+               return res.status(202).json({
+                 message: "Votre demande est enregistrée. Le statut du paiement sera vérifié automatiquement.",
+                 reference: intent.reference,
+                 gateway: "mobile_money",
+                 status: "pending",
+                 amount: numAmount,
+                 feeAmount: parseFloat(totalFeeAmount),
+                 totalAmount: numAmount,
+               });
+             }
+             await storage.updatePaymentIntentStatus(intent.id, "failed");
+             const failedTransaction = await storage.getTransactionByReference(reference);
+             if (failedTransaction) {
+               await storage.updateTransactionStatus(failedTransaction.id, "failed");
+             }
             return res.status(502).json(buildProviderErrorPayload({
-              error: "gateway_error",
-              message: gatewayError instanceof Error ? gatewayError.message : undefined,
+               error: "gateway_error",
+               message: providerMessage || undefined,
               fallback: "Impossible de contacter le fournisseur de paiement.",
               provider: "pawapay",
               sensitiveValues: [phone],
             }));
           }
+           await storage.updatePaymentIntentStatus(intent.id, "failed");
+           const failedTransaction = await storage.getTransactionByReference(reference);
+           if (failedTransaction) {
+             await storage.updateTransactionStatus(failedTransaction.id, "failed");
+           }
           res.status(500).json({ message: "Erreur lors de l'initiation du paiement. Veuillez réessayer." });
         }
       } else {

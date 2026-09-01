@@ -15,7 +15,7 @@ export function normalizePaymentLinkRequestError(error: unknown): Error {
     ) {
       return new Error(
         error.name === "AbortError"
-          ? "Le serveur de paiement met trop de temps à répondre. Veuillez réessayer."
+          ? "La demande a peut-être déjà été enregistrée. Attendez la mise à jour du statut avant de recommencer."
           : "Impossible de joindre le serveur de paiement. Vérifiez votre connexion puis réessayez.",
       );
     }
