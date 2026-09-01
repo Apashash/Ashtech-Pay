@@ -14,7 +14,11 @@ export function getPawaPayPinInstructions(auth: any): PawaPayDisplayInstruction[
   const seen = new Set<string>();
 
   return instructions.filter((instruction: PawaPayDisplayInstruction) => {
-    const label = String(instruction.text || instruction.template || "").trim();
+    const label = String(instruction.text || instruction.template || "")
+      .normalize("NFKC")
+      .replace(/[\u200B-\u200D\uFEFF]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
     if (!label) return false;
     const key = label.toLocaleLowerCase();
     if (seen.has(key)) return false;

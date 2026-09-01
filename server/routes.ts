@@ -228,14 +228,47 @@ function resolvePawaPayProviderCode(operator: any, name: string, countryCode: st
   throw new Error("PawaPay provider code is not configured for this operator");
 }
 
+function normalizePawaPayInstructionLabel(value: unknown): string {
+  return String(value ?? "")
+    .normalize("NFKC")
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLocaleLowerCase();
+}
+
+function dedupePawaPayInstructions(instructions: any): any {
+  if (!instructions || !Array.isArray(instructions.channels)) return instructions ?? null;
+  const seen = new Set<string>();
+  const channels = instructions.channels.map((channel: any) => {
+    const nextChannel = { ...channel };
+    const nextInstructions = { ...(channel.instructions || {}) };
+
+    for (const locale of ["fr", "en"]) {
+      if (!Array.isArray(channel.instructions?.[locale])) continue;
+      nextInstructions[locale] = channel.instructions[locale].filter((instruction: any) => {
+        const key = normalizePawaPayInstructionLabel(instruction?.text || instruction?.template);
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    }
+
+    nextChannel.instructions = nextInstructions;
+    return nextChannel;
+  });
+
+  return { ...instructions, channels };
+}
+
 function pawaPayAuthPayload(auth: any): Record<string, any> | null {
   if (!auth?.authType) return null;
   return {
     authType: auth.authType,
     pinPrompt: auth.pinPrompt ?? null,
     pinPromptRevivable: auth.pinPromptRevivable ?? false,
-    pinPromptInstructions: auth.pinPromptInstructions ?? null,
-    authTokenInstructions: auth.authTokenInstructions ?? null,
+    pinPromptInstructions: dedupePawaPayInstructions(auth.pinPromptInstructions),
+    authTokenInstructions: dedupePawaPayInstructions(auth.authTokenInstructions),
   };
 }
 
