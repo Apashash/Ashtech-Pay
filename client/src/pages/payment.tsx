@@ -32,10 +32,11 @@ import { apiRequest } from "@/lib/queryClient";
 import { normalizePaymentLinkRequestError, parsePaymentLinkJson } from "@/lib/payment-link-http";
 
 const CRYPTO_COUNTDOWN_SECONDS = 5 * 60;
-// The server may perform one cached/uncached active-conf lookup before the
-// deposit request. Leave enough margin for both provider calls so the browser
-// does not turn a valid server error into Safari's opaque "Load failed".
-const PAYMENT_REQUEST_TIMEOUT_MS = 35_000;
+// The server may perform one uncached active-conf lookup before the deposit
+// request, and PawaPay can take longer while handing an automatic PIN prompt
+// to the operator. Do not let Safari abort an initiation that was already
+// accepted and is pending provider confirmation.
+const PAYMENT_REQUEST_TIMEOUT_MS = 90_000;
 
 const CURRENCY_FLAGS: Record<string, string> = {
   "XAF": "🇨🇲", "XOF": "🇸🇳", "CDF": "🇨🇩",
