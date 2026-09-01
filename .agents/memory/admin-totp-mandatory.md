@@ -31,6 +31,23 @@ After successful TOTP code verify, now sets BOTH:
 - `_pav` (30-min TTL) — otp-status panel check
 Also populates `adminVerifiedSessions` in-memory map.
 
+### Challenge and session invariants
+- Admin password login never creates a session or bearer token before TOTP succeeds.
+- Pending login challenges are stored in PostgreSQL and atomically claimed/consumed, so
+  concurrent requests cannot reuse one valid code.
+- `_avs` without a matching `_avsIp` is rejected; legacy/unbound admin sessions must
+  complete a fresh TOTP verification.
+- The former email/Telegram admin OTP endpoints are retired and cannot establish
+  admin access.
+
+**Why:** A permanent enforcement rule is only meaningful if old alternate OTP paths,
+legacy session flags, and concurrent challenge submissions cannot turn into a
+fallback.
+
+**How to apply:** Any future admin authentication factor must either be part of the
+password→TOTP challenge or be explicitly prevented from setting `_avs`, issuing an
+admin token, or bypassing `requireAdmin`.
+
 ## Frontend flows
 
 ### Login flow (password → TOTP)

@@ -5,7 +5,7 @@ import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient, setAuthToken, setAdminOtpToken } from "@/lib/queryClient";
+import { apiRequest, queryClient, setAuthToken } from "@/lib/queryClient";
 import { Smartphone, Loader2, AlertTriangle, RefreshCw } from "lucide-react";
 
 export default function AdminLoginOtpPage() {
@@ -46,7 +46,6 @@ export default function AdminLoginOtpPage() {
     onSuccess: (data) => {
       sessionStorage.removeItem("adminLoginToken");
       if (data.token) setAuthToken(data.token);
-      if (data.adminOtpToken) setAdminOtpToken(data.adminOtpToken);
       if (data.user) queryClient.setQueryData(["/api/user"], data.user);
       toast({
         title: "Connexion réussie",

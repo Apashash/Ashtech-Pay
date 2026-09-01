@@ -449,9 +449,15 @@ app.use((req, res, next) => {
         user_id VARCHAR NOT NULL,
         otp TEXT NOT NULL,
         expires_at BIGINT NOT NULL,
-        attempts INT NOT NULL DEFAULT 0
+        attempts INT NOT NULL DEFAULT 0,
+        claimed_by TEXT,
+        claimed_until BIGINT,
+        consumed_at BIGINT
       )
     `);
+    await db.execute(sql`ALTER TABLE admin_pending_logins ADD COLUMN IF NOT EXISTS claimed_by TEXT`);
+    await db.execute(sql`ALTER TABLE admin_pending_logins ADD COLUMN IF NOT EXISTS claimed_until BIGINT`);
+    await db.execute(sql`ALTER TABLE admin_pending_logins ADD COLUMN IF NOT EXISTS consumed_at BIGINT`);
     await db.execute(sql`ALTER TABLE operators ADD COLUMN IF NOT EXISTS deposit_payment_provider TEXT`);
     await db.execute(sql`ALTER TABLE operators ADD COLUMN IF NOT EXISTS pawapay_provider_code TEXT`);
     await db.execute(sql`ALTER TABLE fees ADD COLUMN IF NOT EXISTS pawapay_fee DECIMAL(10,4) DEFAULT '0'`);

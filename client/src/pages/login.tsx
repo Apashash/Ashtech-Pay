@@ -247,6 +247,16 @@ export default function LoginPage() {
       return json;
     },
     onSuccess: (data) => {
+      if (data.requiresAdminOtp && data.adminLoginToken) {
+        sessionStorage.setItem("adminLoginToken", data.adminLoginToken);
+        toast({
+          title: "Vérification Google Authenticator requise",
+          description: "Entrez le code affiché dans Google Authenticator pour terminer la connexion.",
+          duration: 5000,
+        });
+        setLocation("/admin-login-otp");
+        return;
+      }
       if (data.token) setAuthToken(data.token);
       if (data.user) queryClient.setQueryData(["/api/user"], data.user);
       toast({ title: t.login.toastSuccess, description: `${t.login.toastSuccessDescPre}${data.user?.fullName ?? ""}!`, duration: 2000, className: "bg-blue-600 text-white border-blue-700" });

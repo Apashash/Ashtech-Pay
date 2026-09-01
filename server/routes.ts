@@ -26,7 +26,6 @@ import {
   transactionStatusLimiter,
   hostedPaymentLimiter,
   bannerLimiter,
-  adminOtpRequestLimiter,
   publicInfoLimiter,
   externalProxyLimiter,
   apiV1Limiter,
@@ -137,7 +136,6 @@ import {
   sendWithdrawalApprovedEmail,
   sendWithdrawalNumberApprovedEmail,
   sendAccountDeletedEmail,
-  sendAdminOtpEmail,
   sendPasswordChangeOtpEmail,
 } from "./email";
 
@@ -409,11 +407,6 @@ function hashOtp(code: string): string {
   return crypto.createHmac("sha256", secret).update(code).digest("hex");
 }
 
-// ─── Admin OTP store (in-memory, per-sessionID) ───────────────────────────────
-// VULN-A5: keyed by sessionID (not userId) so concurrent admin sessions are isolated.
-// Never persisted to DB — cannot be injected via SQL.
-const adminOtpStore = new Map<string, { code: string; expiresAt: number }>();
-
 // ─── OTP email toggle (admin-configurable) ────────────────────────────────────
 // When disabled, withdrawals & transfers skip the mandatory email OTP step.
 async function isOtpEmailEnabled(): Promise<boolean> {
@@ -474,6 +467,7 @@ interface PendingAdminLogin {
   attempts: number;
 }
 const ADMIN_LOGIN_OTP_TTL_MS = 5 * 60 * 1000; // 5 min
+const ADMIN_LOGIN_CLAIM_TTL_MS = 15 * 1000;
 const ADMIN_NOTIF_EMAIL = "ashtechsarl@gmail.com";
 
 async function setPendingAdminLogin(token: string, entry: PendingAdminLogin): Promise<void> {
@@ -485,14 +479,52 @@ async function setPendingAdminLogin(token: string, entry: PendingAdminLogin): Pr
   );
 }
 
-async function getPendingAdminLogin(token: string): Promise<PendingAdminLogin | null> {
+// Reserve a pending login atomically before validating its TOTP. This prevents
+// concurrent requests (including requests handled by different PM2 workers)
+// from consuming the same challenge more than once.
+async function claimPendingAdminLogin(token: string, claimId: string): Promise<PendingAdminLogin | null> {
+  const now = Date.now();
   const r = await pool.query(
-    `SELECT user_id, otp, expires_at, attempts FROM admin_pending_logins WHERE token = $1`,
-    [token]
+    `UPDATE admin_pending_logins
+        SET attempts = attempts + 1,
+            claimed_by = $2,
+            claimed_until = $3
+      WHERE token = $1
+        AND expires_at > $4
+        AND consumed_at IS NULL
+        AND attempts < 5
+        AND (claimed_until IS NULL OR claimed_until <= $4)
+      RETURNING user_id, otp, expires_at, attempts`,
+    [token, claimId, now + ADMIN_LOGIN_CLAIM_TTL_MS, now],
   );
-  if (!r.rows[0]) return null;
   const row = r.rows[0];
-  return { userId: row.user_id, otp: row.otp, expiresAt: Number(row.expires_at), attempts: Number(row.attempts) };
+  if (!row) return null;
+  return {
+    userId: row.user_id,
+    otp: row.otp,
+    expiresAt: Number(row.expires_at),
+    attempts: Number(row.attempts),
+  };
+}
+
+async function releasePendingAdminLogin(token: string, claimId: string): Promise<void> {
+  await pool.query(
+    `UPDATE admin_pending_logins
+        SET claimed_by = NULL, claimed_until = NULL
+      WHERE token = $1 AND claimed_by = $2 AND consumed_at IS NULL`,
+    [token, claimId],
+  );
+}
+
+async function consumePendingAdminLogin(token: string, claimId: string): Promise<boolean> {
+  const r = await pool.query(
+    `UPDATE admin_pending_logins
+        SET consumed_at = $3, claimed_until = NULL
+      WHERE token = $1 AND claimed_by = $2 AND consumed_at IS NULL
+      RETURNING token`,
+    [token, claimId, Date.now()],
+  );
+  return r.rows.length > 0;
 }
 
 async function deletePendingAdminLogin(token: string): Promise<void> {
@@ -579,42 +611,6 @@ setInterval(() => {
   for (const [sid, ts] of adminAccessNotifCache) {
     if (now - ts > ADMIN_ACCESS_NOTIF_INTERVAL_MS) adminAccessNotifCache.delete(sid);
   }
-  // VULN-A5 fix: evict expired OTP entries so abandoned sessions don't accumulate
-  for (const [sid, entry] of adminOtpStore) {
-    if (entry.expiresAt <= now) adminOtpStore.delete(sid);
-  }
-}, 10 * 60 * 1000);
-
-// ─── Admin OTP request throttle (in-memory, per-userId) ───────────────────────
-// VULN-A2: keyed by userId (not IP) so shared-NAT users can't block admins.
-// Max 3 requests per 15 min window. Applied after role check in the handler.
-const adminOtpRequestAttempts = new Map<string, { count: number; resetAt: number }>();
-const ADMIN_OTP_REQUEST_MAX = 3;
-const ADMIN_OTP_REQUEST_WINDOW_MS = 15 * 60 * 1000;
-
-function checkAdminOtpRequestLimit(userId: string): { allowed: boolean; retryAfter?: number } {
-  const now = Date.now();
-  const rec = adminOtpRequestAttempts.get(userId);
-  if (!rec || rec.resetAt <= now) return { allowed: true };
-  if (rec.count >= ADMIN_OTP_REQUEST_MAX) {
-    return { allowed: false, retryAfter: Math.ceil((rec.resetAt - now) / 1000) };
-  }
-  return { allowed: true };
-}
-function recordAdminOtpRequest(userId: string): void {
-  const now = Date.now();
-  const rec = adminOtpRequestAttempts.get(userId);
-  if (!rec || rec.resetAt <= now) {
-    adminOtpRequestAttempts.set(userId, { count: 1, resetAt: now + ADMIN_OTP_REQUEST_WINDOW_MS });
-  } else {
-    rec.count += 1;
-  }
-}
-setInterval(() => {
-  const now = Date.now();
-  for (const [id, rec] of adminOtpRequestAttempts) {
-    if (rec.resetAt <= now) adminOtpRequestAttempts.delete(id);
-  }
 }, 10 * 60 * 1000);
 
 // ─── OTP brute-force rate limiter (in-memory, per-userId) ─────────────────────
@@ -681,12 +677,6 @@ function recordOtpFailure(userId: string): void {
 
 function clearOtpFailures(userId: string): void {
   otpAttempts.delete(userId);
-}
-
-function generateAdminOtp(): string {
-  // FIX-5: crypto.randomInt() est cryptographiquement sécurisé (CSPRNG).
-  // Math.random() est prévisible et ne doit pas être utilisé pour des codes OTP.
-  return crypto.randomInt(100000, 1000000).toString();
 }
 
 const TOKEN_EXPIRY_MS = 3 * 24 * 60 * 60 * 1000;
@@ -980,54 +970,6 @@ async function cloakAdminRoutes(req: Request, res: Response, next: NextFunction)
   next();
 }
 
-// ── Admin OTP signed token (Tier 4) ─────────────────────────────────────────
-// Signed HMAC-SHA256 token stored in localStorage, sent as X-Admin-OTP-Token header.
-// Survives PM2 multi-worker routing, blocked cookies, and Cloudflare proxy.
-// Format: base64url({ payload: "userId:expiresAt", sig: "hmac-hex" })
-//
-// SECURITY: NO hardcoded fallback secret.
-// If neither SESSION_SECRET nor ADMIN_OTP_TOKEN_SECRET is set, Tier 4 is
-// disabled entirely: sign() returns null and verify() always returns invalid.
-// This prevents forging tokens with a known/public fallback string.
-function getAdminTokenSecret(): string | null {
-  return process.env.SESSION_SECRET || process.env.ADMIN_OTP_TOKEN_SECRET || null;
-}
-
-function signAdminOtpToken(userId: string, expiresAt: number): string | null {
-  const secret = getAdminTokenSecret();
-  if (!secret) {
-    console.warn("[AdminToken] Tier4 token signing DISABLED — set SESSION_SECRET or ADMIN_OTP_TOKEN_SECRET");
-    return null;
-  }
-  const payload = `${userId}:${expiresAt}`;
-  const sig = crypto.createHmac("sha256", secret).update(payload).digest("hex");
-  return Buffer.from(JSON.stringify({ payload, sig })).toString("base64url");
-}
-
-function verifyAdminOtpToken(token: string, userId: string): { valid: boolean; expiresAt: number } {
-  const secret = getAdminTokenSecret();
-  // If no secret is configured, Tier 4 is disabled — reject all tokens.
-  if (!secret) return { valid: false, expiresAt: 0 };
-  try {
-    const decoded = JSON.parse(Buffer.from(token, "base64url").toString("utf8"));
-    const { payload, sig } = decoded;
-    if (typeof payload !== "string" || typeof sig !== "string") return { valid: false, expiresAt: 0 };
-    const [tokenUserId, expiresAtStr] = payload.split(":");
-    const expiresAt = parseInt(expiresAtStr, 10);
-    if (isNaN(expiresAt)) return { valid: false, expiresAt: 0 };
-    const expectedSig = crypto.createHmac("sha256", secret).update(payload).digest("hex");
-    // Pad both sides to same length before timingSafeEqual to prevent length-based timing leaks
-    const sigBuf  = Buffer.from(sig.padEnd(64, "0"),         "hex");
-    const expBuf  = Buffer.from(expectedSig.padEnd(64, "0"), "hex");
-    if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) return { valid: false, expiresAt: 0 };
-    if (tokenUserId !== userId) return { valid: false, expiresAt: 0 };
-    if (expiresAt <= Date.now()) return { valid: false, expiresAt };
-    return { valid: true, expiresAt };
-  } catch {
-    return { valid: false, expiresAt: 0 };
-  }
-}
-
 async function requireAdmin(req: Request, res: Response, next: NextFunction) {
   const adminIpEarly = getClientIp(req);
   if (!req.userId) {
@@ -1050,7 +992,7 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
     notifyAdminPanelAccess({ type: "blocked_no_role", ip: adminIpEarly, userId: req.userId, path: req.path }).catch(() => {});
     return sendClean404(res);
   }
-    if (!["admin"].includes(user.role)) {
+  if (!["admin"].includes(user.role)) {
     console.warn(`[AdminAccess] BLOCKED+LOGOUT — user ${req.userId} has role="${user.role}" (not admin) — path=${req.path}`);
     notifyAdminPanelAccess({ type: "blocked_no_role", ip: adminIpEarly, userId: user.id, userName: user.fullName || user.username, userEmail: user.email || undefined, userRole: user.role, path: req.path }).catch(() => {});
     // Force logout — destroy session immediately so the intruder is kicked out
@@ -1084,12 +1026,12 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
     // Tier 1: in-memory map (instant — no async)
     const nowTotp = Date.now();
     const avsMemEntry = adminVerifiedSessions.get(req.sessionID);
-    let avsOk = !!(avsMemEntry && avsMemEntry.expiresAt > nowTotp);
+    let avsOk = !!(avsMemEntry && avsMemEntry.userId === req.userId && avsMemEntry.expiresAt > nowTotp);
 
     // Tier 2: session cookie (no extra round-trip)
     if (!avsOk) {
       const avsExp = req.session._avs;
-    if (typeof avsExp === "number" && avsExp > nowTotp) {
+      if (typeof avsExp === "number" && avsExp > nowTotp) {
         avsOk = true;
         adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: avsExp, ip: req.session._avsIp });
       }
@@ -1110,9 +1052,9 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
             const dbAvs = sessData?._avs;
             if (typeof dbAvs === "number" && dbAvs > nowTotp) {
               avsOk = true;
-                const dbAvsIp = typeof sessData?._avsIp === "string" ? sessData._avsIp : undefined;
-                if (dbAvsIp) req.session._avsIp = dbAvsIp;
-                adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: dbAvs, ip: dbAvsIp });
+              const dbAvsIp = typeof sessData?._avsIp === "string" ? sessData._avsIp : undefined;
+              if (dbAvsIp) req.session._avsIp = dbAvsIp;
+              adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: dbAvs, ip: dbAvsIp });
             }
           }
           break;
@@ -1135,23 +1077,25 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
     // invalidated immediately and the admin must re-verify with Google Authenticator.
     // Grace: IPv6 ↔ IPv4 loopback equivalences are tolerated (::1 === 127.0.0.1).
     const avsIp = req.session._avsIp || avsMemEntry?.ip;
-    if (avsIp) {
-      const normalizeLoopback = (ip: string) =>
-        ip === "::1" || ip === "::ffff:127.0.0.1" ? "127.0.0.1" : ip;
-      if (normalizeLoopback(adminIpEarly) !== normalizeLoopback(avsIp)) {
-        // Revoke _avs immediately — delete from all tiers
-        delete req.session._avs;
-        delete req.session._avsIp;
-        req.session.save(() => {});
-        adminVerifiedSessions.delete(req.sessionID);
-        console.warn(`[AdminAccess] IP MISMATCH — cookie stolen? user=${req.userId} avsIp=${avsIp} currentIp=${adminIpEarly} — _avs revoked, TOTP required`);
-        notifyAdminPanelAccess({ type: "blocked_no_auth", ip: adminIpEarly, userId: user.id, userName: user.fullName || user.username, userEmail: user.email || undefined, userRole: user.role, path: req.path }).catch(() => {});
-        return res.status(403).json({
-          message: "Votre adresse IP a changé. Vérification Google Authenticator requise.",
-          totpRequired: true,
-          ipChanged: true,
-        });
-      }
+    const normalizeLoopback = (ip: string) =>
+      ip === "::1" || ip === "::ffff:127.0.0.1" ? "127.0.0.1" : ip;
+    if (!avsIp || normalizeLoopback(adminIpEarly) !== normalizeLoopback(avsIp)) {
+      // Refuse legacy/unbound _avs values as well as values from another IP.
+      // A fresh TOTP verification is required to bind the session securely.
+      delete req.session._avs;
+      delete req.session._avsIp;
+      req.session.save(() => {});
+      adminVerifiedSessions.delete(req.sessionID);
+      const ipChanged = !!avsIp;
+      console.warn(`[AdminAccess] TOTP session binding rejected — user=${req.userId} avsIp=${avsIp || "missing"} currentIp=${adminIpEarly} — _avs revoked`);
+      notifyAdminPanelAccess({ type: "blocked_no_auth", ip: adminIpEarly, userId: user.id, userName: user.fullName || user.username, userEmail: user.email || undefined, userRole: user.role, path: req.path }).catch(() => {});
+      return res.status(403).json({
+        message: ipChanged
+          ? "Votre adresse IP a changé. Vérification Google Authenticator requise."
+          : "Vérification Google Authenticator requise pour cette session.",
+        totpRequired: true,
+        ...(ipChanged ? { ipChanged: true } : {}),
+      });
     }
 
     // ── Slide _avs by 1h on every successful admin access (inactivity-based TOTP) ─
@@ -2512,11 +2456,8 @@ export async function registerRoutes(
     }
   });
 
-  // GET /api/admin/session-info — diagnostic endpoint
-  // Uses requireAuth + explicit role check (user.role === "admin") so only admins
-  // can access it. requireAdmin is skipped intentionally to avoid the TOTP gate
-  // when debugging session/OTP issues from outside the admin panel.
-  app.get("/api/admin/session-info", requireAuth, async (req, res) => {
+  // GET /api/admin/session-info — diagnostic endpoint (TOTP protected)
+  app.get("/api/admin/session-info", requireAuth, requireAdmin, async (req, res) => {
     try {
       const user = await storage.getUser(req.userId!).catch(() => null);
       if (!user || !["admin"].includes(user.role)) {
@@ -2524,7 +2465,7 @@ export async function registerRoutes(
       }
       const now = Date.now();
       const memEntry = adminVerifiedSessions.get(req.sessionID);
-      const memValid = !!(memEntry && memEntry.expiresAt > now);
+      const memValid = !!(memEntry && memEntry.userId === req.userId && memEntry.expiresAt > now);
       const avsExp = req.session._avs;
       const sessionValid = typeof avsExp === "number" && avsExp > now;
       const avsExpiredAt = typeof avsExp === "number" && avsExp <= now ? new Date(avsExp).toISOString() : null;
@@ -2834,9 +2775,30 @@ export async function registerRoutes(
 
       await clearAuthAttempts(ip, data.identifier);
 
-      // Admin/support/finance log in like normal users.
-      // TOTP is only required when accessing the admin panel (requireAdmin middleware).
-      // No TOTP gate at login — the 5-click logo gesture on the dashboard triggers it.
+      // Admin login is deliberately incomplete until Google Authenticator is
+      // verified. No admin session or bearer token is issued before this gate.
+      if (user.role === "admin") {
+        if (!user.totpEnabled || !user.totpSecret) {
+          return res.status(403).json({
+            message: "Google Authenticator est obligatoire pour ce compte administrateur.",
+            totpNotConfigured: true,
+          });
+        }
+
+        const adminLoginToken = crypto.randomBytes(32).toString("base64url");
+        await setPendingAdminLogin(adminLoginToken, {
+          userId: user.id,
+          // Retained only for compatibility with the existing table. This is
+          // not an OTP and is never accepted as authentication proof.
+          otp: crypto.randomBytes(32).toString("hex"),
+          expiresAt: Date.now() + ADMIN_LOGIN_OTP_TTL_MS,
+          attempts: 0,
+        });
+        return res.json({
+          requiresAdminOtp: true,
+          adminLoginToken,
+        });
+      }
 
       activeIpRegistry.set(user.id, ip);
 
@@ -2890,30 +2852,29 @@ export async function registerRoutes(
       if (!adminLoginToken || !code) {
         return res.status(400).json({ message: "Token et code requis." });
       }
+      const submitted = String(code).replace(/\s/g, "");
+      if (!/^\d{6}$/.test(submitted)) {
+        return res.status(400).json({ message: "Code Google Authenticator à 6 chiffres requis." });
+      }
 
-      const pending = await getPendingAdminLogin(String(adminLoginToken));
+      const claimId = crypto.randomBytes(16).toString("hex");
+      const pending = await claimPendingAdminLogin(String(adminLoginToken), claimId);
       if (!pending) {
         return res.status(400).json({ message: "Session expirée. Veuillez vous reconnecter.", expired: true });
       }
 
       if (Date.now() > pending.expiresAt) {
+        await releasePendingAdminLogin(String(adminLoginToken), claimId);
         await deletePendingAdminLogin(String(adminLoginToken));
         return res.status(400).json({ message: "Code expiré. Veuillez vous reconnecter.", expired: true });
       }
-
-      pending.attempts += 1;
-      if (pending.attempts > 5) {
-        await deletePendingAdminLogin(String(adminLoginToken));
-        return res.status(429).json({ message: "Trop de tentatives. Veuillez vous reconnecter.", expired: true });
-      }
-      // Persist incremented attempt count so all workers see it
-      await setPendingAdminLogin(String(adminLoginToken), pending);
 
       // ── Rate-limit par userId (anti-token-farming) ────────────────────────────
       // Prevents generating many tokens via /login and cycling through 5 attempts per token.
       // Max 10 total TOTP attempts per userId per 30 min, across all tokens.
       const userRateCheck = checkAdminLoginOtpRateLimit(pending.userId);
       if (!userRateCheck.allowed) {
+        await releasePendingAdminLogin(String(adminLoginToken), claimId);
         return res.status(429).json({
           message: `Trop de tentatives. Réessayez dans ${Math.ceil((userRateCheck.retryAfter ?? 1800) / 60)} minute(s).`,
           expired: true,
@@ -2923,10 +2884,17 @@ export async function registerRoutes(
       // ── Vérification Google Authenticator (TOTP) ─────────────────────────────
       const userForTotp = await storage.getUser(pending.userId);
       if (!userForTotp) {
+        await releasePendingAdminLogin(String(adminLoginToken), claimId);
         await deletePendingAdminLogin(String(adminLoginToken));
         return res.status(404).json({ message: "Utilisateur introuvable.", expired: true });
       }
+      if (userForTotp.role !== "admin") {
+        await releasePendingAdminLogin(String(adminLoginToken), claimId);
+        await deletePendingAdminLogin(String(adminLoginToken));
+        return res.status(403).json({ message: "Accès administrateur révoqué.", expired: true });
+      }
       if (!userForTotp.totpEnabled || !userForTotp.totpSecret) {
+        await releasePendingAdminLogin(String(adminLoginToken), claimId);
         await deletePendingAdminLogin(String(adminLoginToken));
         return res.status(400).json({ message: "Google Authenticator non configuré sur ce compte.", expired: true });
       }
@@ -2934,6 +2902,7 @@ export async function registerRoutes(
       const { TOTP, Secret } = await import("otpauth");
       const rawSecret = decryptField(userForTotp.totpSecret);
       if (!rawSecret) {
+        await releasePendingAdminLogin(String(adminLoginToken), claimId);
         await deletePendingAdminLogin(String(adminLoginToken));
         return res.status(400).json({ message: "Erreur de configuration Google Authenticator.", expired: true });
       }
@@ -2945,10 +2914,10 @@ export async function registerRoutes(
         period: 30,
         secret: Secret.fromBase32(rawSecret),
       });
-      const submitted = String(code).replace(/\s/g, "");
       const delta = totp.validate({ token: submitted, window: 1 });
       if (delta === null) {
         recordAdminLoginOtpAttempt(pending.userId); // count against per-userId quota
+        await releasePendingAdminLogin(String(adminLoginToken), claimId);
         const remaining = 5 - pending.attempts;
         return res.status(400).json({
           message: `Code Google Authenticator incorrect. ${remaining} tentative(s) restante(s).`,
@@ -2959,7 +2928,10 @@ export async function registerRoutes(
       // ✅ TOTP correct — single-use: supprimer l'entrée en attente
       const userId = userForTotp.id;
       clearAdminLoginOtpAttempts(userId); // reset per-userId counter on success
-      await deletePendingAdminLogin(String(adminLoginToken));
+      const consumed = await consumePendingAdminLogin(String(adminLoginToken), claimId);
+      if (!consumed) {
+        return res.status(400).json({ message: "Session de connexion déjà utilisée. Veuillez vous reconnecter.", expired: true });
+      }
 
       const user = userForTotp;
       if (user.isBanned) return res.status(403).json({ message: user.banReason || "Compte banni." });
@@ -3016,7 +2988,7 @@ export async function registerRoutes(
           if (err) console.error("Session save error (admin-login-otp):", err);
 
           // Also populate in-memory cache for instant requireAdmin checks
-          adminVerifiedSessions.set(req.sessionID, { userId: user.id, expiresAt: avsExpiresAt });
+          adminVerifiedSessions.set(req.sessionID, { userId: user.id, expiresAt: avsExpiresAt, ip });
 
           audit(req, AUDIT.LOGIN_SUCCESS, {
             userId: user.id,
@@ -3033,8 +3005,7 @@ export async function registerRoutes(
           } as any).catch(() => {});
 
           const { password: _, ...safeUser } = user;
-          const adminOtpToken = signAdminOtpToken(user.id, avsExpiresAt) ?? undefined;
-          res.json({ user: safeUser, token: authToken, adminOtpToken });
+          res.json({ user: safeUser, token: authToken });
         });
       });
     } catch (error) {
@@ -3053,7 +3024,10 @@ export async function registerRoutes(
   app.post("/api/auth/admin-panel-verify", requireAuth, loginLimiter, async (req, res) => {
     try {
       const { code } = req.body;
-      if (!code) return res.status(400).json({ message: "Code requis." });
+      const submittedCode = typeof code === "string" ? code.replace(/\s/g, "") : "";
+      if (!/^\d{6}$/.test(submittedCode)) {
+        return res.status(400).json({ message: "Code Google Authenticator à 6 chiffres requis." });
+      }
 
       const user = await storage.getUser(req.userId!);
       if (!user) return res.status(401).json({ message: "Utilisateur introuvable." });
@@ -3062,6 +3036,13 @@ export async function registerRoutes(
       }
       if (!user.totpEnabled || !user.totpSecret) {
         return res.status(400).json({ message: "Google Authenticator non configuré sur ce compte.", totpNotConfigured: true });
+      }
+      const rateCheck = checkOtpRateLimit(req.userId!);
+      if (!rateCheck.allowed) {
+        return res.status(429).json({
+          message: `Trop de tentatives. Réessayez dans ${Math.ceil((rateCheck.retryAfter ?? 900) / 60)} minute(s).`,
+          retryAfter: rateCheck.retryAfter,
+        });
       }
 
       const { decryptField } = await import("./fieldEncryption");
@@ -3077,10 +3058,12 @@ export async function registerRoutes(
         period: 30,
         secret: Secret.fromBase32(rawSecret),
       });
-      const delta = totp.validate({ token: String(code).replace(/\s/g, ""), window: 1 });
+      const delta = totp.validate({ token: submittedCode, window: 1 });
       if (delta === null) {
+        recordOtpFailure(req.userId!);
         return res.status(400).json({ message: "Code Google Authenticator incorrect." });
       }
+      clearOtpFailures(req.userId!);
 
       // Set _avs (admin verified session, 3-day TTL) — makes requireAdmin pass
       // Set _pav (panel access verified, 30-min TTL) — checked by otp-status
@@ -3093,7 +3076,11 @@ export async function registerRoutes(
         resolve();
       }));
       // Populate in-memory cache so requireAdmin is instant on subsequent requests
-      adminVerifiedSessions.set(req.sessionID, { userId: user.id, expiresAt: avsPanelExp });
+      adminVerifiedSessions.set(req.sessionID, {
+        userId: user.id,
+        expiresAt: avsPanelExp,
+        ip: getClientIp(req),
+      });
 
       // Telegram : notifier la connexion OTP réussie au panneau admin
       notifyAdminPanelAccess({
@@ -9056,21 +9043,19 @@ export async function registerRoutes(
     if (!user || !["admin"].includes(user.role)) {
       return res.status(403).json({ message: "Accès refusé" });
     }
-    if (!ADMIN_TOTP_ENFORCEMENT_ENABLED) {
-      return res.json({
-        verified: true,
-        needsPanelVerify: undefined,
-        totpEnabled: !!user.totpEnabled,
-        enforcementEnabled: false,
-      });
-    }
     const now = Date.now();
     // Keyed by sessionID — each browser login is independently verified
     const memEntry = adminVerifiedSessions.get(req.sessionID);
-    const memValid = !!(memEntry && memEntry.expiresAt > now);
+    const memValid = !!(memEntry && memEntry.userId === req.userId && memEntry.expiresAt > now);
     const avsExp = req.session._avs;
     const sessionValid = typeof avsExp === "number" && avsExp > now;
-    let verified = memValid || sessionValid;
+    const currentIp = getClientIp(req);
+    const normalizeLoopback = (ip: string) =>
+      ip === "::1" || ip === "::ffff:127.0.0.1" ? "127.0.0.1" : ip;
+    const sessionIp = req.session._avsIp || memEntry?.ip;
+    const ipBound = typeof sessionIp === "string" &&
+      normalizeLoopback(sessionIp) === normalizeLoopback(currentIp);
+    let verified = (memValid || sessionValid) && ipBound;
 
     // Tier 3: ONE single DB query fetching the session row — extract both _avs and _pav
     // at once to avoid 2 sequential round-trips to the remote DB (was the main perf bottleneck).
@@ -9090,9 +9075,12 @@ export async function registerRoutes(
                 ? JSON.parse(dbRow.rows[0].sess)
                 : dbRow.rows[0].sess;
               const dbAvs = dbSessData?._avs;
-              if (typeof dbAvs === "number" && dbAvs > now) {
+              const dbAvsIp = typeof dbSessData?._avsIp === "string" ? dbSessData._avsIp : undefined;
+              if (typeof dbAvs === "number" && dbAvs > now && dbAvsIp &&
+                  normalizeLoopback(dbAvsIp) === normalizeLoopback(currentIp)) {
                 verified = true;
-                adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: dbAvs });
+                req.session._avsIp = dbAvsIp;
+                adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: dbAvs, ip: dbAvsIp });
               }
             }
             break dbFetch;
@@ -9104,17 +9092,6 @@ export async function registerRoutes(
         }
       }
     }
-
-  // Tier 4: X-Admin-OTP-Token header — read-only status check only, does NOT populate adminVerifiedSessions
-  if (!verified) {
-    const headerToken = req.headers["x-admin-otp-token"] as string | undefined;
-    if (headerToken) {
-      const result = verifyAdminOtpToken(headerToken, req.userId!);
-      if (result.valid) {
-        verified = true;
-      }
-    }
-  }
 
   // Check _pav (panel access verified) — short-lived flag set by /admin-panel-verify or fresh login
   // If verified (_avs OK) but _pav missing/expired → needsPanelVerify: true
@@ -9418,7 +9395,7 @@ export async function registerRoutes(
       const user = await storage.getUser(req.userId!).catch(() => null);
       const now = Date.now();
       const memEntry = adminVerifiedSessions.get(String(req.userId));
-      const memValid = !!(memEntry && memEntry.expiresAt > now);
+      const memValid = !!(memEntry && memEntry.userId === req.userId && memEntry.expiresAt > now);
       const avsExp = req.session._avs;
       const sessionValid = typeof avsExp === "number" && (avsExp as number) > now;
 
@@ -9492,7 +9469,9 @@ export async function registerRoutes(
   });
 
   // POST /api/admin/request-otp — generate & send 4-digit code to admin email
-  app.post("/api/admin/request-otp", requireAuth, adminOtpRequestLimiter, async (req, res) => {
+  app.post("/api/admin/request-otp", async (req, res) => {
+    return res.status(410).json({ message: "Ce mécanisme OTP a été retiré. Utilisez Google Authenticator." });
+    /*
     try {
       const user = await storage.getUser(req.userId!);
       if (!user || !["admin"].includes(user.role)) {
@@ -9567,10 +9546,13 @@ export async function registerRoutes(
       console.error("Admin OTP request error:", error.message);
       res.status(500).json({ message: "Erreur lors de l'envoi du code" });
     }
+    */
   });
 
   // POST /api/admin/verify-otp — verify 6-digit code and register session in-memory
   app.post("/api/admin/verify-otp", requireAuth, adminActionLimiter, async (req, res) => {
+    return res.status(410).json({ message: "Ce mécanisme OTP a été retiré. Utilisez Google Authenticator." });
+    /*
     try {
       const user = await storage.getUser(req.userId!);
       if (!user || !["admin"].includes(user.role)) {
@@ -9633,7 +9615,9 @@ export async function registerRoutes(
               console.log(`[AdminOTP] Code (hash) trouvé en session DB directe (fallback tier-3) pour userId=${req.userId}`);
             }
           }
-        } catch { /* continue */ }
+        } catch {
+          // Continue without the optional legacy session fallback.
+        }
       }
 
       if (!storedCode || !storedExpiry) {
@@ -9698,6 +9682,7 @@ export async function registerRoutes(
       console.error("Admin OTP verify error:", error.message);
       res.status(500).json({ message: "Erreur serveur" });
     }
+    */
   });
 
   // ─── Admin TOTP (Google Authenticator) Routes ────────────────────────────────
@@ -9726,15 +9711,25 @@ export async function registerRoutes(
         return res.status(403).json({ message: "Accès refusé" });
       }
 
-      // ── SECURITY: protect an active TOTP secret while enforcement is enabled ──
-      // During the temporary opt-out, allow the administrator to generate a new
-      // secret because the old authenticator may be unavailable.
-      if (ADMIN_TOTP_ENFORCEMENT_ENABLED && user.totpEnabled && user.totpSecret) {
+      // ── SECURITY: an active TOTP secret can only be replaced after proof ────
+      // The current code is required even if the server is misconfigured. The
+      // enforcement decision is not delegated to an environment variable.
+      if (user.totpEnabled && user.totpSecret) {
         const { currentCode } = req.body as { currentCode?: string };
-        if (!currentCode) {
+        const submittedCurrentCode = typeof currentCode === "string"
+          ? currentCode.replace(/\s/g, "")
+          : "";
+        if (!/^\d{6}$/.test(submittedCurrentCode)) {
           return res.status(403).json({
             message: "Un code Google Authenticator actuel est requis pour modifier le secret TOTP.",
             requireCurrentCode: true,
+          });
+        }
+        const currentRateCheck = checkOtpRateLimit(req.userId!);
+        if (!currentRateCheck.allowed) {
+          return res.status(429).json({
+            message: `Trop de tentatives. Réessayez dans ${Math.ceil((currentRateCheck.retryAfter ?? 900) / 60)} minute(s).`,
+            retryAfter: currentRateCheck.retryAfter,
           });
         }
         const { decryptField } = await import("./fieldEncryption");
@@ -9742,9 +9737,11 @@ export async function registerRoutes(
         const rawSecret = decryptField(user.totpSecret);
         if (!rawSecret) return res.status(400).json({ message: "Erreur de configuration TOTP actuelle." });
         const totpCheck = new TOTPv({ issuer: "AshTech Pay Admin", label: user.email || user.username, algorithm: "SHA1", digits: 6, period: 30, secret: Secretv.fromBase32(rawSecret) });
-        if (totpCheck.validate({ token: String(currentCode).replace(/\s/g, ""), window: 1 }) === null) {
+        if (totpCheck.validate({ token: submittedCurrentCode, window: 1 }) === null) {
+          recordOtpFailure(req.userId!);
           return res.status(403).json({ message: "Code Google Authenticator actuel incorrect. Impossible de modifier le secret." });
         }
+        clearOtpFailures(req.userId!);
       }
 
       const { TOTP, Secret } = await import("otpauth");
@@ -9758,10 +9755,18 @@ export async function registerRoutes(
         secret,
       });
       const uri = totp.toString();
-      // Store pending secret in DB (not yet enabled) — avoids PM2 session routing issues
+      // Store the pending secret encrypted in this session. The active user
+      // record is not changed until confirmation succeeds.
       const { encryptField } = await import("./fieldEncryption");
       const encryptedPending = encryptField(secret.base32);
-      await storage.updateUser(req.userId!, { totpSecret: encryptedPending, totpEnabled: false });
+      if (!encryptedPending) {
+        return res.status(503).json({ message: "Chiffrement TOTP indisponible. Réessayez plus tard." });
+      }
+      // Keep the currently active secret in the user record until confirmation.
+      // The pending replacement is encrypted and bound to this authenticated
+      // session, so another session cannot confirm or overwrite it.
+      req.session._totpPendingSecret = encryptedPending;
+      await new Promise<void>((resolve, reject) => req.session.save((err) => err ? reject(err) : resolve()));
       res.json({ uri, secret: secret.base32 });
     } catch (err: any) {
       console.error("[AdminTOTP] Setup error:", err?.message);
@@ -9780,14 +9785,24 @@ export async function registerRoutes(
       if (!code || typeof code !== "string" || !/^\d{6}$/.test(code.trim())) {
         return res.status(400).json({ message: "Code à 6 chiffres requis" });
       }
-      // Read pending secret from DB (stored by /setup route)
-      const { decryptField, encryptField } = await import("./fieldEncryption");
-      if (!user.totpSecret || user.totpEnabled) {
+      // Read the encrypted pending secret from this session. For compatibility
+      // with a configuration started before this hardening, accept the legacy
+      // disabled-account value once, then migrate it into the active record.
+      const { decryptField } = await import("./fieldEncryption");
+      const pendingEncrypted = req.session._totpPendingSecret || (!user.totpEnabled ? user.totpSecret : null);
+      if (!pendingEncrypted) {
         return res.status(400).json({ message: "Aucune configuration en cours. Recommencez la configuration." });
       }
-      const pendingSecret = decryptField(user.totpSecret);
+      const pendingSecret = decryptField(pendingEncrypted);
       if (!pendingSecret) {
         return res.status(400).json({ message: "Aucune configuration en cours. Recommencez la configuration." });
+      }
+      const rateCheck = checkOtpRateLimit(req.userId!);
+      if (!rateCheck.allowed) {
+        return res.status(429).json({
+          message: `Trop de tentatives. Réessayez dans ${Math.ceil((rateCheck.retryAfter ?? 900) / 60)} minute(s).`,
+          retryAfter: rateCheck.retryAfter,
+        });
       }
       const { TOTP, Secret } = await import("otpauth");
       const totp = new TOTP({
@@ -9800,11 +9815,15 @@ export async function registerRoutes(
       });
       const delta = totp.validate({ token: code.trim(), window: 1 });
       if (delta === null) {
+        recordOtpFailure(req.userId!);
         return res.status(400).json({ message: "Code incorrect. Vérifiez l'heure de votre appareil et réessayez." });
       }
-      // Re-encrypt and enable TOTP
-      const encryptedSecret = encryptField(pendingSecret);
+      clearOtpFailures(req.userId!);
+      // Activate only after the new secret has produced a valid TOTP code.
+      const encryptedSecret = pendingEncrypted;
       await storage.updateUser(req.userId!, { totpSecret: encryptedSecret, totpEnabled: true });
+      delete req.session._totpPendingSecret;
+      await new Promise<void>((resolve, reject) => req.session.save((err) => err ? reject(err) : resolve()));
       storage.createAdminLog({
         adminId: req.userId!,
         action: "totp_enabled",
@@ -9814,7 +9833,10 @@ export async function registerRoutes(
         ipAddress: req.ip || null,
       }).catch(() => {});
       console.log(`[AdminTOTP] TOTP activé pour ${user.email}`);
-      res.json({ success: true });
+      res.json({ success: true, requiresRelogin: true });
+      // Changing the authenticator invalidates every previous admin session and
+      // bearer token. The next login must prove possession of the new secret.
+      destroyUserSessions(req.userId!, Date.now()).catch(() => {});
     } catch (err: any) {
       console.error("[AdminTOTP] Confirm error:", err?.message);
       res.status(500).json({ message: "Erreur lors de l'activation du TOTP" });
@@ -9869,7 +9891,7 @@ export async function registerRoutes(
       clearOtpFailures(req.userId!);
       const expiresAt = Date.now() + ADMIN_OTP_SESSION_TTL_MS;
       const totpVerifyIp = getClientIp(req);
-      adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt });
+      adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt, ip: totpVerifyIp });
       req.session._avs = expiresAt;
       req.session._avsIp = totpVerifyIp;
       await new Promise<void>((resolve) => req.session.save((err) => {
@@ -9887,8 +9909,7 @@ export async function registerRoutes(
       }).catch(() => {});
       notifyAdminLoginSuccess({ adminName: user.fullName || user.username, adminEmail: user.email || "", ip }).catch(() => {});
       console.log(`[AdminTOTP] Admin ${user.email?.replace(/(.{2}).+(@.+)/, "$1***$2")} vérifié (TOTP) depuis ${ip}`);
-      const adminOtpToken = signAdminOtpToken(req.userId!, expiresAt) ?? undefined;
-      res.json({ success: true, adminOtpToken });
+      res.json({ success: true });
     } catch (err: any) {
       console.error("[AdminTOTP] Verify error:", err?.message);
       res.status(500).json({ message: "Erreur serveur" });
@@ -9911,6 +9932,13 @@ export async function registerRoutes(
       if (!code || !/^\d{6}$/.test(code.trim())) {
         return res.status(400).json({ message: "Code TOTP requis pour désactiver" });
       }
+      const rateCheck = checkOtpRateLimit(req.userId!);
+      if (!rateCheck.allowed) {
+        return res.status(429).json({
+          message: `Trop de tentatives. Réessayez dans ${Math.ceil((rateCheck.retryAfter ?? 900) / 60)} minute(s).`,
+          retryAfter: rateCheck.retryAfter,
+        });
+      }
       const { TOTP, Secret } = await import("otpauth");
       const { decryptField } = await import("./fieldEncryption");
       const plainSecret = decryptField(user.totpSecret);
@@ -9922,9 +9950,17 @@ export async function registerRoutes(
         secret: Secret.fromBase32(plainSecret),
       });
       if (totp.validate({ token: code.trim(), window: 1 }) === null) {
+        recordOtpFailure(req.userId!);
         return res.status(400).json({ message: "Code TOTP incorrect" });
       }
+      clearOtpFailures(req.userId!);
       await storage.updateUser(req.userId!, { totpSecret: null, totpEnabled: false });
+      delete req.session._totpPendingSecret;
+      delete req.session._avs;
+      delete req.session._avsIp;
+      delete req.session._pav;
+      adminVerifiedSessions.delete(req.sessionID);
+      await new Promise<void>((resolve, reject) => req.session.save((err) => err ? reject(err) : resolve()));
       storage.createAdminLog({
         adminId: req.userId!,
         action: "totp_disabled",
@@ -9933,7 +9969,10 @@ export async function registerRoutes(
         details: "TOTP désactivé",
         ipAddress: req.ip || null,
       }).catch(() => {});
-      res.json({ success: true });
+      res.json({ success: true, requiresRelogin: true });
+      // Disabling TOTP invalidates all existing admin sessions and bearer
+      // tokens; an account without an active authenticator cannot enter admin.
+      destroyUserSessions(req.userId!, Date.now()).catch(() => {});
     } catch (err: any) {
       console.error("[AdminTOTP] Disable error:", err?.message);
       res.status(500).json({ message: "Erreur serveur" });

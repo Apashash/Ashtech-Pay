@@ -16,20 +16,6 @@ export function removeAuthToken(): void {
   localStorage.removeItem(AUTH_TOKEN_KEY);
 }
 
-const ADMIN_OTP_TOKEN_KEY = 'ashtech_admin_otp_token';
-
-export function setAdminOtpToken(token: string): void {
-  localStorage.setItem(ADMIN_OTP_TOKEN_KEY, token);
-}
-
-export function getAdminOtpToken(): string | null {
-  return localStorage.getItem(ADMIN_OTP_TOKEN_KEY);
-}
-
-export function removeAdminOtpToken(): void {
-  localStorage.removeItem(ADMIN_OTP_TOKEN_KEY);
-}
-
 export function getAuthHeaders(): HeadersInit {
   const token = getAuthToken();
   const headers: Record<string, string> = {

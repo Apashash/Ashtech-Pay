@@ -35,11 +35,6 @@ export default function AdminPanelVerifyPage() {
       setLocation("/login");
       return;
     }
-    if (otpStatus.enforcementEnabled === false) {
-      sessionStorage.removeItem("admin_verify_return");
-      setLocation(ADMIN_URL);
-      return;
-    }
     if (!otpStatus.totpEnabled) {
       toast({
         title: "Google Authenticator non configuré",

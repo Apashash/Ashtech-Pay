@@ -67,12 +67,6 @@ function safeEqual(a: string, b: string): boolean {
 
 // Routes exemptées du PIN (flux d'authentification eux-mêmes)
 const PIN_EXEMPT_EXACT = new Set([
-  "/api/admin/request-otp",
-  "/api/admin/verify-otp",
-  "/api/admin/totp/setup",
-  "/api/admin/totp/confirm",
-  "/api/admin/totp/verify",
-  "/api/admin/totp/disable",
   "/api/admin/impersonate/exit",
 ]);
 
