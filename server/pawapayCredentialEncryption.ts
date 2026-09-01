@@ -3,9 +3,9 @@ import { decryptField } from "./fieldEncryption";
 
 /**
  * PawaPay credentials use a dedicated envelope. A dedicated PawaPay key is
- * preferred when configured; FIELD_ENCRYPTION_KEY is the stable compatibility
- * key, the database connection secret is a deployment-stable fallback, and
- * SESSION_SECRET remains the final fallback.
+ * preferred when configured; the database connection secret is the automatic
+ * deployment-stable key, FIELD_ENCRYPTION_KEY is retained for compatibility,
+ * and SESSION_SECRET remains the final fallback.
  *
  * This ordering matters on Plesk: all workers must share the same encryption
  * key or a credential saved by one worker becomes unreadable on the next
@@ -18,9 +18,9 @@ const ALGORITHM = "aes-256-gcm";
 function getCandidateRawKeys(): string[] {
   const candidates = [
     process.env.PAWAPAY_CREDENTIAL_ENCRYPTION_KEY,
-    process.env.FIELD_ENCRYPTION_KEY,
     process.env.SUPABASE_DATABASE_URL,
     process.env.DATABASE_URL,
+    process.env.FIELD_ENCRYPTION_KEY,
     process.env.SESSION_SECRET,
   ]
     .map((value) => value?.trim() || "")

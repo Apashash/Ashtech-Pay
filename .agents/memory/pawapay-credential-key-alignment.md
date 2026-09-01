@@ -6,7 +6,8 @@ description: Why encrypted PawaPay settings can appear configured but remain unu
 New PawaPay credentials use a dedicated envelope. The key priority is an optional
 stable `PAWAPAY_CREDENTIAL_ENCRYPTION_KEY`, then `FIELD_ENCRYPTION_KEY`, then the
 database connection secret, then the stable `SESSION_SECRET`; readers try all
-configured keys for compatibility.
+configured keys for compatibility. New ciphertext prioritizes the dedicated key,
+then the database connection secret, before legacy field/session keys.
 
 **Why:** Plesk can route requests across workers with different session secrets;
 the database connection secret is already shared by the application workers, so

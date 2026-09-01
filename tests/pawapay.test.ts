@@ -113,7 +113,7 @@ test("PawaPay credential encryption uses the existing server session secret", ()
   restoreEnvironment();
 });
 
-test("PawaPay credential encryption prefers the stable field key when session keys differ", () => {
+test("PawaPay credential encryption uses the field key when no database key exists", () => {
   delete process.env.PAWAPAY_CREDENTIAL_ENCRYPTION_KEY;
   delete process.env.SUPABASE_DATABASE_URL;
   delete process.env.DATABASE_URL;
@@ -121,6 +121,21 @@ test("PawaPay credential encryption prefers the stable field key when session ke
   process.env.SESSION_SECRET = "worker-specific-session-key";
   const ciphertext = encryptPawaPayCredential("prod-token-123456");
   process.env.SESSION_SECRET = "another-worker-session-key";
+  assert.deepEqual(readPawaPayStoredSecret(ciphertext), {
+    value: "prod-token-123456",
+    legacy: false,
+  });
+  restoreEnvironment();
+});
+
+test("PawaPay credential encryption prefers the stable database key over a changing field key", () => {
+  delete process.env.PAWAPAY_CREDENTIAL_ENCRYPTION_KEY;
+  process.env.SUPABASE_DATABASE_URL = "stable-database-connection-secret-for-tests";
+  process.env.FIELD_ENCRYPTION_KEY = "first-worker-field-key";
+  process.env.SESSION_SECRET = "first-worker-session-key";
+  const ciphertext = encryptPawaPayCredential("prod-token-123456");
+  process.env.FIELD_ENCRYPTION_KEY = "second-worker-field-key";
+  process.env.SESSION_SECRET = "second-worker-session-key";
   assert.deepEqual(readPawaPayStoredSecret(ciphertext), {
     value: "prod-token-123456",
     legacy: false,
