@@ -1,4 +1,3 @@
-import { getAdminPath } from "@/lib/adminPath";
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useMutation } from "@tanstack/react-query";
@@ -49,11 +48,11 @@ export default function AdminLoginOtpPage() {
       if (data.user) queryClient.setQueryData(["/api/user"], data.user);
       toast({
         title: "Connexion réussie",
-        description: "Bienvenue dans le panneau d'administration.",
+        description: "Bienvenue sur votre tableau de bord.",
         duration: 2500,
         className: "bg-green-600 text-white border-green-700",
       });
-      setLocation(getAdminPath());
+      setLocation("/dashboard");
     },
     onError: (error: any) => {
       setCode("");
