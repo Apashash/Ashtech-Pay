@@ -91,6 +91,9 @@ import { enqueueMerchantWebhook } from "./merchantWebhook";
 import { buildProviderErrorPayload } from "./providerErrors";
 import { buildPublicPaymentStatus } from "./publicPaymentState";
 import { buildPawaPayFeeUpdates } from "./feeUpdates";
+
+const PAWAPAY_PUBLIC_INITIATION_TIMEOUT_MS = 20_000;
+
 import { addSSEClient, removeSSEClient, setActiveTicket, isUserOnline, getOnlineUserIds, getAdminViewingTicket, getUserViewingTicket, notifyUser, notifyAdmins, broadcastOnlineStatus, notifyUserForceLogout, notifyOtherSessionsForceLogout, notifyAllUsersForceLogout, notifySpecificSessionForceLogout } from "./sse";
 import { sendClean404 } from "./botGuard";
 import {
@@ -8763,19 +8766,31 @@ export async function registerRoutes(
             }
 
           if (paymentProvider === "pawapay") {
-            const result = await createPawaPayDeposit({
-              depositId: pawaPayDepositId,
-              country: pawaPayCountry(paymentCountryCode),
-              amount: numAmount.toFixed(2),
-              currency: toPawaPayCurrency(paymentCurrency),
-              payer: {
-                provider: resolvePawaPayProviderCode(operatorRecord, operatorName, paymentCountryCode),
-                phoneNumber: normalizePhone(phone) || "",
-              },
-              clientReferenceId: reference,
-              customerMessage: PAWAPAY_CUSTOMER_MESSAGE,
-              operationConfiguration: pawaPayOperation,
-              preAuthorisationCode,
+            let pawaPayTimeoutHandle: ReturnType<typeof setTimeout> | undefined;
+            const result = await Promise.race([
+              createPawaPayDeposit({
+                depositId: pawaPayDepositId,
+                country: pawaPayCountry(paymentCountryCode),
+                amount: numAmount.toFixed(2),
+                currency: toPawaPayCurrency(paymentCurrency),
+                payer: {
+                  provider: resolvePawaPayProviderCode(operatorRecord, operatorName, paymentCountryCode),
+                  phoneNumber: normalizePhone(phone) || "",
+                },
+                clientReferenceId: reference,
+                customerMessage: PAWAPAY_CUSTOMER_MESSAGE,
+                operationConfiguration: pawaPayOperation,
+                preAuthorisationCode,
+              }),
+              new Promise<never>((_, reject) => {
+                pawaPayTimeoutHandle = setTimeout(() => {
+                  reject(new Error(
+                    `PawaPay POST /deposits timed out at the public checkout boundary after ${PAWAPAY_PUBLIC_INITIATION_TIMEOUT_MS}ms`,
+                  ));
+                }, PAWAPAY_PUBLIC_INITIATION_TIMEOUT_MS);
+              }),
+            ]).finally(() => {
+              if (pawaPayTimeoutHandle) clearTimeout(pawaPayTimeoutHandle);
             });
             if (result.status === "failed") {
               await storage.updatePaymentIntentStatus(intent.id, "failed");

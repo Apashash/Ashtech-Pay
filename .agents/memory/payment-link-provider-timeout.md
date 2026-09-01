@@ -11,6 +11,7 @@ and provider initiation, otherwise users may retry and create duplicate charges.
 **Why:** A real 200 XAF MTN Cameroon attempt was present as a pending
 PawaPay transaction after Safari displayed its timeout message.
 
-**How to apply:** Prefer a generous bounded client timeout and show the pending
-provider-confirmation state when the initiation response arrives; never retry a
-timed-out Mobile Money initiation automatically.
+**How to apply:** Bound both layers: use a generous client timeout plus an
+independent short server checkout boundary that returns `202 pending` and
+keeps the provider UUID in the poller. Never retry a timed-out Mobile Money
+initiation automatically.
