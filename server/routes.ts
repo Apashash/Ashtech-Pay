@@ -8764,6 +8764,7 @@ export async function registerRoutes(
               if (failedTx) await storage.updateTransactionStatus(failedTx.id, "failed");
               return res.status(400).json({ message: sanitizeGatewayMessage(afribaResponse.message, "Échec du paiement Mobile Money.") });
             }
+          }
 
           if (paymentProvider === "pawapay") {
             let pawaPayTimeoutHandle: ReturnType<typeof setTimeout> | undefined;
@@ -8967,7 +8968,6 @@ export async function registerRoutes(
               if (failedTxPx2) await storage.updateTransactionStatus(failedTxPx2!.id, "failed");
               return res.status(400).json({ message: sanitizeGatewayMessage(pxResponse.message, "Échec du paiement Mobile Money.") });
             }
-          }
           }
 
         } catch (gatewayError) {
