@@ -2,19 +2,24 @@ import crypto from "node:crypto";
 import { decryptField } from "./fieldEncryption";
 
 /**
- * PawaPay credentials use a dedicated envelope so they no longer depend on
- * FIELD_ENCRYPTION_KEY being configured in the deployment environment.
+ * PawaPay credentials use a dedicated envelope. A dedicated PawaPay key is
+ * preferred when configured; FIELD_ENCRYPTION_KEY is the stable compatibility
+ * key, and SESSION_SECRET remains the final fallback.
  *
- * SESSION_SECRET is already mandatory for production sessions. FIELD_ENCRYPTION_KEY
- * remains a fallback for development and for deployments that have not yet
- * moved their PawaPay credentials to this envelope.
+ * This ordering matters on Plesk: all workers must share the same encryption
+ * key or a credential saved by one worker becomes unreadable on the next
+ * request.
  */
 const PAWAPAY_ENCRYPTION_PREFIX = "enc:pawapay:v1:";
 const PAWAPAY_KEY_CONTEXT = "ashtechpay:pawapay-credentials:v1:";
 const ALGORITHM = "aes-256-gcm";
 
 function getCandidateRawKeys(): string[] {
-  const candidates = [process.env.SESSION_SECRET, process.env.FIELD_ENCRYPTION_KEY]
+  const candidates = [
+    process.env.PAWAPAY_CREDENTIAL_ENCRYPTION_KEY,
+    process.env.FIELD_ENCRYPTION_KEY,
+    process.env.SESSION_SECRET,
+  ]
     .map((value) => value?.trim() || "")
     .filter((value) => value.length >= 8);
   return [...new Set(candidates)];
