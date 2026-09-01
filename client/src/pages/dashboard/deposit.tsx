@@ -22,6 +22,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CoinSelect } from "@/components/ui/coin-select";
 import { cryptoQrPayload } from "@/lib/crypto-qr";
 import { formatCryptoAmount, minimumCryptoAmount } from "@/lib/crypto-minimum";
+import { getPawaPayPinInstructions } from "@/lib/pawapay-instructions";
 
 interface OperatorConfig {
   id: string;
@@ -1252,9 +1253,7 @@ export default function DepositPage() {
                               ? "Confirmez la demande sur votre téléphone."
                               : "Une demande de confirmation va apparaître sur votre téléphone."}
                           </p>
-                          {pawaPayAuth.pinPromptInstructions?.channels?.flatMap((channel: any) =>
-                            channel.instructions?.fr || channel.instructions?.en || []
-                          ).map((instruction: any, index: number) => (
+                          {getPawaPayPinInstructions(pawaPayAuth).map((instruction, index) => (
                             <p key={index} className="text-sm text-muted-foreground">{instruction.text || instruction.template}</p>
                           ))}
                         </div>

@@ -30,6 +30,7 @@ import { useCoinPrice } from "@/lib/use-coin-price";
 import { CoinSelect } from "@/components/ui/coin-select";
 import { apiRequest } from "@/lib/queryClient";
 import { normalizePaymentLinkRequestError, parsePaymentLinkJson } from "@/lib/payment-link-http";
+import { getPawaPayPinInstructions } from "@/lib/pawapay-instructions";
 
 const CRYPTO_COUNTDOWN_SECONDS = 5 * 60;
 // The server may perform one uncached active-conf lookup before the deposit
@@ -1208,9 +1209,7 @@ export default function PaymentPage() {
                           ? "Confirmez la demande sur votre téléphone."
                           : "Une demande de confirmation va apparaître sur votre téléphone."}
                       </p>
-                      {pawaPayAuth.pinPromptInstructions?.channels?.flatMap((channel: any) =>
-                        channel.instructions?.fr || channel.instructions?.en || []
-                      ).map((instruction: any, index: number) => (
+                      {getPawaPayPinInstructions(pawaPayAuth).map((instruction, index) => (
                         <p key={index} className="text-sm text-muted-foreground">{instruction.text || instruction.template}</p>
                       ))}
                     </div>
