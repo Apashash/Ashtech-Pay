@@ -9723,8 +9723,10 @@ export async function registerRoutes(
         return res.status(403).json({ message: "Accès refusé" });
       }
 
-      // ── SECURITY: if TOTP already enabled, require the current code to replace it ──
-      if (user.totpEnabled && user.totpSecret) {
+      // ── SECURITY: protect an active TOTP secret while enforcement is enabled ──
+      // During the temporary opt-out, allow the administrator to generate a new
+      // secret because the old authenticator may be unavailable.
+      if (ADMIN_TOTP_ENFORCEMENT_ENABLED && user.totpEnabled && user.totpSecret) {
         const { currentCode } = req.body as { currentCode?: string };
         if (!currentCode) {
           return res.status(403).json({
