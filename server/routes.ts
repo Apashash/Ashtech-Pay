@@ -387,7 +387,7 @@ declare module "express-session" {
     _otpCode?: string;    // deprecated: plaintext OTP kept for backward compat only
     _otpCodeH?: string;   // VULN-A1 fix: HMAC-SHA256 hash of OTP stored in DB session
     _otpExpiry?: number;
-    _totpPendingSecret?: string;
+    _totpPendingSecret?: string; // encrypted secret awaiting confirmation
     clientIp?: string;
     userAgent?: string;
     loginAt?: string;
@@ -557,12 +557,13 @@ function isIpBannedFromAdmin(ip: string, blocklist: AdminPanelBlock[]): boolean 
 // BACKUP:  session._avs timestamp (PostgreSQL-backed — survives restarts & multi-process)
 // Keyed by sessionID so each browser session is independently verified.
 // A new login always gets a fresh sessionID → OTP is always re-asked after logout.
-const adminVerifiedSessions = new Map<string, { userId: string; expiresAt: number }>();
+const adminVerifiedSessions = new Map<string, { userId: string; expiresAt: number; ip?: string }>();
 const ADMIN_OTP_SESSION_TTL_MS = 1 * 60 * 60 * 1000; // 1h inactivity — slides on each requireAdmin pass
 const ADMIN_PANEL_ACCESS_TTL_MS = 30 * 60 * 1000; // 30 min — _pav flag (panel access verified)
-// TOTP is temporarily optional while the administrator repairs the authenticator.
-// Re-enable it in the hosting environment with ADMIN_TOTP_ENFORCEMENT=true.
-const ADMIN_TOTP_ENFORCEMENT_ENABLED = process.env.ADMIN_TOTP_ENFORCEMENT === "true";
+// TOTP is a fixed server-side requirement for every admin API request.
+// Deliberately not configurable through an environment variable: an environment
+// change must never be able to downgrade admin authentication.
+const ADMIN_TOTP_ENFORCEMENT_ENABLED = true as const;
 
 // Rate-limit Telegram "panel_access" notifications — 1 notif per sessionID per 30 min
 // to avoid spamming on every API call while the admin navigates the panel.
@@ -1049,7 +1050,7 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
     notifyAdminPanelAccess({ type: "blocked_no_role", ip: adminIpEarly, userId: req.userId, path: req.path }).catch(() => {});
     return sendClean404(res);
   }
-  if (!["admin"].includes(user.role)) {
+    if (!["admin"].includes(user.role)) {
     console.warn(`[AdminAccess] BLOCKED+LOGOUT — user ${req.userId} has role="${user.role}" (not admin) — path=${req.path}`);
     notifyAdminPanelAccess({ type: "blocked_no_role", ip: adminIpEarly, userId: user.id, userName: user.fullName || user.username, userEmail: user.email || undefined, userRole: user.role, path: req.path }).catch(() => {});
     // Force logout — destroy session immediately so the intruder is kicked out
@@ -1088,9 +1089,9 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
     // Tier 2: session cookie (no extra round-trip)
     if (!avsOk) {
       const avsExp = req.session._avs;
-      if (typeof avsExp === "number" && avsExp > nowTotp) {
+    if (typeof avsExp === "number" && avsExp > nowTotp) {
         avsOk = true;
-        adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: avsExp });
+        adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: avsExp, ip: req.session._avsIp });
       }
     }
 
@@ -1109,7 +1110,9 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
             const dbAvs = sessData?._avs;
             if (typeof dbAvs === "number" && dbAvs > nowTotp) {
               avsOk = true;
-              adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: dbAvs });
+                const dbAvsIp = typeof sessData?._avsIp === "string" ? sessData._avsIp : undefined;
+                if (dbAvsIp) req.session._avsIp = dbAvsIp;
+                adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: dbAvs, ip: dbAvsIp });
             }
           }
           break;
@@ -1131,7 +1134,7 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
     // _avsIp is stored when TOTP is verified. If the current IP differs, the _avs is
     // invalidated immediately and the admin must re-verify with Google Authenticator.
     // Grace: IPv6 ↔ IPv4 loopback equivalences are tolerated (::1 === 127.0.0.1).
-    const avsIp = req.session._avsIp;
+    const avsIp = req.session._avsIp || avsMemEntry?.ip;
     if (avsIp) {
       const normalizeLoopback = (ip: string) =>
         ip === "::1" || ip === "::ffff:127.0.0.1" ? "127.0.0.1" : ip;
@@ -1155,7 +1158,7 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
     const newAvsExp = Date.now() + ADMIN_OTP_SESSION_TTL_MS;
     req.session._avs = newAvsExp;
     req.session._avsIp = adminIpEarly;
-    adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: newAvsExp });
+    adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: newAvsExp, ip: adminIpEarly });
     req.session.save(() => {});
   }
 
