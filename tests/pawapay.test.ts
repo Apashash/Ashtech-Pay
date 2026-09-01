@@ -38,6 +38,8 @@ import { storage } from "../server/storage.ts";
 const originalFetch = globalThis.fetch;
 const originalToken = process.env.PAWAPAY_API_TOKEN;
 const originalFieldEncryptionKey = process.env.FIELD_ENCRYPTION_KEY;
+const originalSupabaseDatabaseUrl = process.env.SUPABASE_DATABASE_URL;
+const originalDatabaseUrl = process.env.DATABASE_URL;
 const originalSessionSecret = process.env.SESSION_SECRET;
 const originalPawaPayEncryptionKey = process.env.PAWAPAY_CREDENTIAL_ENCRYPTION_KEY;
 const originalGetSetting = storage.getSetting;
@@ -47,6 +49,10 @@ function restoreEnvironment() {
   if (originalToken === undefined) delete process.env.PAWAPAY_API_TOKEN; else process.env.PAWAPAY_API_TOKEN = originalToken;
   if (originalFieldEncryptionKey === undefined) delete process.env.FIELD_ENCRYPTION_KEY;
   else process.env.FIELD_ENCRYPTION_KEY = originalFieldEncryptionKey;
+  if (originalSupabaseDatabaseUrl === undefined) delete process.env.SUPABASE_DATABASE_URL;
+  else process.env.SUPABASE_DATABASE_URL = originalSupabaseDatabaseUrl;
+  if (originalDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+  else process.env.DATABASE_URL = originalDatabaseUrl;
   if (originalSessionSecret === undefined) delete process.env.SESSION_SECRET;
   else process.env.SESSION_SECRET = originalSessionSecret;
   if (originalPawaPayEncryptionKey === undefined) delete process.env.PAWAPAY_CREDENTIAL_ENCRYPTION_KEY;
@@ -92,6 +98,8 @@ test("PawaPay production settings mask secrets and never place them in callback 
 
 test("PawaPay credential encryption uses the existing server session secret", () => {
   delete process.env.PAWAPAY_CREDENTIAL_ENCRYPTION_KEY;
+  delete process.env.SUPABASE_DATABASE_URL;
+  delete process.env.DATABASE_URL;
   process.env.SESSION_SECRET = "stable-session-secret-for-tests";
   delete process.env.FIELD_ENCRYPTION_KEY;
   const ciphertext = encryptPawaPayCredential("prod-token-123456");
@@ -107,10 +115,33 @@ test("PawaPay credential encryption uses the existing server session secret", ()
 
 test("PawaPay credential encryption prefers the stable field key when session keys differ", () => {
   delete process.env.PAWAPAY_CREDENTIAL_ENCRYPTION_KEY;
+  delete process.env.SUPABASE_DATABASE_URL;
+  delete process.env.DATABASE_URL;
   process.env.FIELD_ENCRYPTION_KEY = "stable-field-key-for-tests";
   process.env.SESSION_SECRET = "worker-specific-session-key";
   const ciphertext = encryptPawaPayCredential("prod-token-123456");
   process.env.SESSION_SECRET = "another-worker-session-key";
+  assert.deepEqual(readPawaPayStoredSecret(ciphertext), {
+    value: "prod-token-123456",
+    legacy: false,
+  });
+  restoreEnvironment();
+});
+
+test("PawaPay credential encryption works from the stable database connection secret", () => {
+  delete process.env.PAWAPAY_CREDENTIAL_ENCRYPTION_KEY;
+  delete process.env.FIELD_ENCRYPTION_KEY;
+  delete process.env.SESSION_SECRET;
+  delete process.env.DATABASE_URL;
+  process.env.SUPABASE_DATABASE_URL = "stable-database-connection-secret-for-tests";
+  const ciphertext = encryptPawaPayCredential("prod-token-123456");
+  process.env.SUPABASE_DATABASE_URL = "another-worker-database-secret-should-not-be-used";
+  process.env.SESSION_SECRET = "worker-session-secret";
+  assert.deepEqual(readPawaPayStoredSecret(ciphertext), {
+    value: null,
+    legacy: false,
+  });
+  process.env.SUPABASE_DATABASE_URL = "stable-database-connection-secret-for-tests";
   assert.deepEqual(readPawaPayStoredSecret(ciphertext), {
     value: "prod-token-123456",
     legacy: false,
@@ -134,10 +165,12 @@ test("PawaPay credential reads legacy FIELD_ENCRYPTION_KEY values", () => {
 test("PawaPay credential writes fail closed without a server encryption secret", async () => {
   delete process.env.PAWAPAY_CREDENTIAL_ENCRYPTION_KEY;
   delete process.env.FIELD_ENCRYPTION_KEY;
+  delete process.env.SUPABASE_DATABASE_URL;
+  delete process.env.DATABASE_URL;
   delete process.env.SESSION_SECRET;
   await assert.rejects(
     () => replacePawaPayCredentials({ apiToken: "prod-token-123456" }),
-    /session secret/,
+    /server encryption secret/,
   );
   restoreEnvironment();
 });

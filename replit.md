@@ -134,7 +134,7 @@ Core secrets and variables include:
 | Name | Purpose |
 |------|---------|
 | `SESSION_SECRET` | Session and token signing |
-| `PAWAPAY_CREDENTIAL_ENCRYPTION_KEY` | Optional stable key dedicated to PawaPay credential encryption |
+| `PAWAPAY_CREDENTIAL_ENCRYPTION_KEY` | Optional stable key dedicated to PawaPay credential encryption; database connection secret is the automatic fallback |
 | `SUPABASE_DATABASE_URL` | Supabase PostgreSQL connection |
 | `AFRIBAPAY_PUBLIC_KEY` | AfribaPay public credential |
 | `AFRIBAPAY_SECRET_KEY` | AfribaPay secret credential |

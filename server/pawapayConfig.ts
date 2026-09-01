@@ -119,7 +119,7 @@ export async function replacePawaPayCredentials(input: {
   webhookSecret?: string;
 }): Promise<void> {
   if (!isPawaPayCredentialEncryptionConfigured()) {
-    throw new Error("PawaPay credential encryption requires the server session secret");
+    throw new Error("PawaPay credential encryption requires a server encryption secret");
   }
 
   const apiToken = typeof input.apiToken === "string" ? input.apiToken.trim() : "";
@@ -149,10 +149,10 @@ export async function replacePawaPayCredentials(input: {
   // sense that the credential is usable.
   const saved = await getPawaPayCredentials(true);
   if (apiToken && saved.apiToken !== apiToken) {
-      throw new Error("PawaPay API token was saved but cannot be read back; verify the server session secret");
+      throw new Error("PawaPay API token was saved but cannot be read back; verify the server encryption configuration");
   }
   if (webhookSecret && saved.webhookSecret !== webhookSecret) {
-      throw new Error("PawaPay webhook secret was saved but cannot be read back; verify the server session secret");
+      throw new Error("PawaPay webhook secret was saved but cannot be read back; verify the server encryption configuration");
   }
 }
 
