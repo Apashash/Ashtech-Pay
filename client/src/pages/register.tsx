@@ -134,7 +134,10 @@ export default function RegisterPage() {
     }
   }, [countdown, blockedUntil]);
 
-  const extendedRegisterSchema = registerSchema.extend({
+  // The country is selected outside React Hook Form and added to the request
+  // from selectedCountry. Keeping it in this resolver made every submission
+  // fail silently because the form had no registered "country" field.
+  const extendedRegisterSchema = registerSchema.omit({ country: true }).extend({
     confirmPassword: z.string().min(8, t.register.passwordMinError),
   }).refine((data) => data.password === data.confirmPassword, {
     message: t.register.passwordMismatch,
@@ -256,6 +259,15 @@ export default function RegisterPage() {
     registerMutation.mutate(data);
   };
 
+  const onInvalid = (errors: Record<string, { message?: string }>) => {
+    const firstMessage = Object.values(errors).find(error => error?.message)?.message;
+    toast({
+      title: t.register.toastError,
+      description: firstMessage || "Veuillez vérifier les informations saisies.",
+      variant: "destructive",
+    });
+  };
+
   const handleCountryChange = (countryCode: string) => {
     const country = countries.find(c => c.code === countryCode);
     if (country) {
@@ -330,7 +342,7 @@ export default function RegisterPage() {
             </div>
           ) : (
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4" autoComplete="on">
+              <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-4" autoComplete="on">
                 {attemptsLeft !== null && attemptsLeft > 0 && (
                   <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
                     <ShieldAlert className="w-4 h-4 text-amber-500 flex-shrink-0" />
