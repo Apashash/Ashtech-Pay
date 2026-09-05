@@ -91,6 +91,7 @@ import { enqueueMerchantWebhook } from "./merchantWebhook";
 import { buildProviderErrorPayload } from "./providerErrors";
 import { buildPublicPaymentStatus } from "./publicPaymentState";
 import { buildPawaPayFeeUpdates } from "./feeUpdates";
+import { toLocalMobileMoneyPhone, validateMobileMoneyPhone } from "@shared/mobile-money-phone";
 
 const PAWAPAY_PUBLIC_INITIATION_TIMEOUT_MS = 20_000;
 
@@ -4404,6 +4405,18 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Opérateur invalide pour le pays sélectionné." });
       }
 
+      const phoneValidationError = validateMobileMoneyPhone(
+        recipientPhone,
+        country.code,
+        operator.name || "",
+      );
+      if (phoneValidationError) {
+        return res.status(400).json({
+          message: phoneValidationError,
+          code: "INVALID_RECIPIENT_PHONE",
+        });
+      }
+
       const txCurrency = CURRENCY_ZONE[country.code.toUpperCase()] || country.currency || sender.preferredCurrency || "XAF";
 
       // walletCurrency = the internal wallet code to debit. Uses CURRENCY_ZONE (which holds
@@ -4550,15 +4563,7 @@ export async function registerRoutes(
           console.log(`[Transfer] AfribaPay | country=${countryCode} | currency=${afribapayCurrency} | operator=${afribapayOperatorCode}`);
           const callbackUrl = buildWebhookUrl("/api/afribapay/webhook");
 
-          let localPhone = recipientPhone.replace(/\s/g, "");
-          if (localPhone.startsWith("+")) localPhone = localPhone.slice(1);
-          const phonePrefixes: Record<string, string> = {
-            CM: "237", SN: "221", CI: "225", BF: "226", ML: "223",
-            GN: "224", BJ: "229", TG: "228", NE: "227", CD: "243",
-            CG: "242", CF: "236", TD: "235", GA: "241", GQ: "240",
-          };
-          const pfx = phonePrefixes[countryCode];
-          if (pfx && localPhone.startsWith(pfx)) localPhone = localPhone.slice(pfx.length);
+          const localPhone = toLocalMobileMoneyPhone(recipientPhone, countryCode);
 
           const afribaResult = await initiateAfribaPayout({
             operator: afribapayOperatorCode,

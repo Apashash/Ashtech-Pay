@@ -20,6 +20,7 @@ import { useMemo, useEffect, useState, useCallback } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useLocation } from "wouter";
 import { useExchangeRates } from "@/hooks/use-exchange-rates";
+import { validateMobileMoneyPhone } from "@shared/mobile-money-phone";
 
 const INTERNAL_KEY = "__ashtech_interne__";
 
@@ -663,6 +664,18 @@ export default function SendMoneyPage() {
                   <form
                     id="external-form"
                     onSubmit={form.handleSubmit((d) => {
+                      const phoneValidationError = validateMobileMoneyPhone(
+                        d.recipientPhone,
+                        selectedCountry?.code || "",
+                        selectedOperator?.name || "",
+                      );
+                      if (phoneValidationError) {
+                        form.setError("recipientPhone", {
+                          type: "validate",
+                          message: phoneValidationError,
+                        });
+                        return;
+                      }
                       setPendingExternalData({ ...d, countryId: destination });
                       setShowConfirmDialog(true);
                     })}
