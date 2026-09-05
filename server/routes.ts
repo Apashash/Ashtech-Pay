@@ -11107,12 +11107,14 @@ export async function registerRoutes(
       }
       const isPayout = ["withdrawal", "transfer_out"].includes(existingTx.type);
       const pawaControl = classifyPawaPayControlledTransaction(existingTx.type, existingTx.externalReference);
-      // An admin rejection/cancellation is an explicit local decision. It must
-      // not be blocked by an unavailable or still-pending provider status check.
-      // This also prevents the red reject action (which sends "failed") from
-      // being unusable for PawaPay transactions.
-      const isManualRejection = status === "failed" || status === "cancelled";
-      if (pawaControl && !isManualRejection) {
+      // An admin rejection/cancellation of an incoming deposit is an explicit
+      // local decision. It must not be blocked by an unavailable or still-
+      // pending provider status check. Outgoing payouts keep provider control
+      // so a local rejection cannot hide an already-submitted payout.
+      const isIncomingDeposit = existingTx.type === "deposit" || existingTx.type === "payment_link";
+      const isManualDepositRejection = isIncomingDeposit &&
+        (status === "failed" || status === "cancelled");
+      if (pawaControl && !isManualDepositRejection) {
         const reconciled = pawaControl === "payout"
           ? await reconcilePawaPayPayoutAttempt(existingTx)
           : await reconcilePawaPayIncomingAttempt(existingTx);
