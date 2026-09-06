@@ -178,7 +178,11 @@ function AppInstallBanner() {
 
   if (!visible || isStandalone || !deviceCanInstall || !isEligibleRoute) return null;
 
-  const installLabel = isIos ? "Installer" : isAndroid ? "Installer l’application" : "Installer";
+  const installLabel = isIos
+    ? "Installer"
+    : isAndroid
+      ? deferredPrompt ? "Installer" : "Voir comment installer"
+      : "Installer";
 
   const handleInstall = async () => {
     if (isIos) {
@@ -220,7 +224,11 @@ function AppInstallBanner() {
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-bold tracking-tight text-foreground">📲 Téléchargez notre application</p>
             <p className="hidden truncate text-[11px] text-muted-foreground sm:block">
-              {isIos ? "Une expérience plus rapide sur votre iPhone" : "Retrouvez AshTech Pay depuis votre écran d’accueil"}
+              {isIos
+                ? "Une expérience plus rapide sur votre iPhone"
+                : isAndroid && deferredPrompt
+                  ? "Installation native Android disponible"
+                  : "Retrouvez AshTech Pay depuis votre écran d’accueil"}
             </p>
           </div>
           <button
