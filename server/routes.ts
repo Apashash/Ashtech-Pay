@@ -73,8 +73,8 @@ import {
   parseDirectCryptoRequest,
   type DirectCryptoRequest,
 } from "./directCrypto";
-import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, getAfribaPayOtpInfo, confirmAfribaPayOtp, isAfribaPayOtpRequiredMessage } from "./afribapay";
-import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, initiatePixPayPayout, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType, getPixPayServiceId, PIXPAY_OTP_USSD_CODES } from "./pixpay";
+import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, getAfribaPayOtpInfo, confirmAfribaPayOtp, isAfribaPayOtpRequiredMessage, getAfribaPayToken } from "./afribapay";
+import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, initiatePixPayPayout, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType, getPixPayServiceId, PIXPAY_OTP_USSD_CODES, getPixPayApiKey } from "./pixpay";
 import { assertPawaPayProviderActive, classifyPawaPayControlledTransaction, createPawaPayDeposit, createPawaPayId, createPawaPayPayout, createPawaPayPaymentPage, getPawaPayActiveConfiguration, getPawaPayDeposit, getPawaPayPayout, resolvePawaPayOperationConfiguration, PAWAPAY_CUSTOMER_MESSAGE } from "./pawapay";
 import { addPendingPayment, removePendingPayment, expireCryptoPaymentIfNeeded } from "./paymentPoller";
 import { processPawaPayDepositCallback } from "./paymentPoller";
@@ -5639,6 +5639,25 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Aucun fournisseur de paiement configuré pour cet opérateur." });
       }
 
+      // Validate provider access before debiting the wallet. A provider auth/config
+      // failure must never turn a customer withdrawal into pending_manual after
+      // their balance has already been reduced.
+      try {
+        if (withdrawalProvider === "afribapay") {
+          await getAfribaPayToken();
+        } else if (withdrawalProvider === "pixpay") {
+          getPixPayApiKey(withdrawalCountryCode);
+        }
+      } catch (providerError: any) {
+        const providerLabel = withdrawalProvider === "afribapay" ? "AfribaPay" : "PixPay";
+        console.error(`[Withdrawal] ${providerLabel} preflight failed:`, providerError?.message || providerError);
+        return res.status(503).json({
+          message: `La passerelle ${providerLabel} sélectionnée est temporairement indisponible. Aucun montant n'a été débité.`,
+          code: "PROVIDER_UNAVAILABLE",
+          provider: withdrawalProvider,
+        });
+      }
+
       // Calculate fee using fee resolution — provider-aware
       const fee = await storage.resolveFee("withdrawal", data.countryId, data.operatorId);
       let feeAmount = 0;
@@ -5834,6 +5853,7 @@ export async function registerRoutes(
             success: pixpayResult.success,
             transaction_id: pixpayResult.transactionId,
             message: pixpayResult.message,
+            providerStatus: pixpayResult.providerStatus,
           };
 
         } else if (paymentProvider === "pawapay") {
@@ -5885,6 +5905,9 @@ export async function registerRoutes(
           // en attente de revue manuelle : on ne rembourse jamais sans certitude que
           // l'argent n'est pas parti côté fournisseur.
           const isDefinitiveRejection =
+            (Number.isFinite(Number(payoutResult.providerStatus)) &&
+              Number(payoutResult.providerStatus) >= 400 &&
+              Number(payoutResult.providerStatus) < 500) ||
             errMsg.includes("invalid phone") ||
             errMsg.includes("invalid number") ||
             errMsg.includes("numéro invalide") ||
@@ -5895,7 +5918,14 @@ export async function registerRoutes(
             errMsg.includes("non supporte") ||
             errMsg.includes("invalid operator") ||
             errMsg.includes("opérateur invalide") ||
-            errMsg.includes("blacklist");
+            errMsg.includes("blacklist") ||
+            errMsg.includes("subscription invalid") ||
+            errMsg.includes("subscription inactive") ||
+            errMsg.includes("authentication") ||
+            errMsg.includes("unauthorized") ||
+            errMsg.includes("api key") ||
+            errMsg.includes("clé api") ||
+            errMsg.includes("credential");
           const isPawaPayDefinitiveRejection =
             paymentProvider === "pawapay" && payoutResult.status === "failed";
           if (!isDefinitiveRejection && !isPawaPayDefinitiveRejection) {

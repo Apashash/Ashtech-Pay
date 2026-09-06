@@ -471,6 +471,7 @@ export interface PixPayoutResult {
   transactionId?: string;
   status?: string;
   message?: string;
+  providerStatus?: number;
   raw?: any;
 }
 
@@ -490,13 +491,23 @@ export async function initiatePixPayPayout(params: PixPayoutParams): Promise<Pix
     console.log(`[PixPay Payout] Response:`, JSON.stringify(maskPiiInObject(data)));
 
     if (data.statut_code !== 200 || !data.data) {
-      return { success: false, message: data.message || "Échec de l'envoi Mobile Money", raw: data };
+      return {
+        success: false,
+        message: data.message || "Échec de l'envoi Mobile Money",
+        providerStatus: res.status,
+        raw: data,
+      };
     }
 
     const d = data.data;
     const state = (d.state || "").toUpperCase();
     if (state === "FAILED" || state === "CANCELLED") {
-      return { success: false, message: d.response || data.message || "Payout rejeté", raw: data };
+      return {
+        success: false,
+        message: d.response || data.message || "Payout rejeté",
+        providerStatus: res.status,
+        raw: data,
+      };
     }
 
     return {
@@ -504,6 +515,7 @@ export async function initiatePixPayPayout(params: PixPayoutParams): Promise<Pix
       transactionId: d.transaction_id,
       status: d.state || "PENDING1",
       message: data.message,
+      providerStatus: res.status,
       raw: data,
     };
   } catch (err: any) {
