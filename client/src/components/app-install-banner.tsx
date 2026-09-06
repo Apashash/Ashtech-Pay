@@ -121,7 +121,10 @@ function AppInstallBanner() {
   const [guideMode, setGuideMode] = useState<GuideMode>(null);
   const [iosStep, setIosStep] = useState<1 | 2 | 3>(1);
 
-  const isEligibleRoute = location === "/" || location.startsWith("/dashboard");
+  const isEligibleRoute =
+    location === "/" ||
+    location === "/dashboard" ||
+    location.startsWith("/dashboard/");
   const isIos = device === "ios";
   const isAndroid = device === "android";
 
