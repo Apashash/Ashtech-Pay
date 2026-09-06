@@ -100,6 +100,7 @@ import FAQPage from "@/pages/faq";
 import CountryBlockedPage from "@/pages/country-blocked";
 import BlockedPage from "@/pages/blocked";
 import { getBlockedUntil, getGeoCache, setGeoCache, GEO_BYPASS_PATHS, GEO_CACHE_KEY } from "@/lib/appUtils";
+import AppInstallBanner from "@/components/app-install-banner";
 
 // Redirige immédiatement vers /blocked si l'IP est bloquée (vérif. localStorage)
 // useLayoutEffect + return null = aucun flash de la page login/register
@@ -486,6 +487,16 @@ function AuthenticatedWatchers() {
 }
 
 function App() {
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    navigator.serviceWorker.register("/sw.js", {
+      scope: "/",
+      updateViaCache: "none",
+    }).catch(() => {
+      // Installation guidance remains available even if a browser blocks SW registration.
+    });
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <LanguageProvider>
@@ -495,6 +506,7 @@ function App() {
             <VpnDisconnectGuard />
             <ForceLogoutGuard />
             <AuthenticatedWatchers />
+            <AppInstallBanner />
             <GeoGuard>
               <Router />
             </GeoGuard>
