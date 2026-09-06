@@ -487,16 +487,6 @@ function AuthenticatedWatchers() {
 }
 
 function App() {
-  useEffect(() => {
-    if (!("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register("/sw.js", {
-      scope: "/",
-      updateViaCache: "none",
-    }).catch(() => {
-      // Installation guidance remains available even if a browser blocks SW registration.
-    });
-  }, []);
-
   return (
     <QueryClientProvider client={queryClient}>
       <LanguageProvider>

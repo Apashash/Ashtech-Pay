@@ -123,7 +123,17 @@
       }, TIMEOUT_MS);
     })();
   </script>
-    <script type="module" crossorigin src="/assets/index-eXt9ELlM.js"></script>
+  <script>
+    // Register the PWA worker before the app bundle so Chrome can evaluate
+    // installability as early as possible on the first visit.
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js', {
+        scope: '/',
+        updateViaCache: 'none'
+      }).catch(function() {});
+    }
+  </script>
+    <script type="module" crossorigin src="/assets/index-D7e3MW7i.js"></script>
     <link rel="modulepreload" crossorigin href="/assets/vendor-misc-C4DgRtT6.js">
     <link rel="modulepreload" crossorigin href="/assets/vendor-query-B4WCcJiP.js">
     <link rel="modulepreload" crossorigin href="/assets/vendor-ui-B11u-FBU.js">

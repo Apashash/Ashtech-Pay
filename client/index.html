@@ -123,6 +123,16 @@
       }, TIMEOUT_MS);
     })();
   </script>
+  <script>
+    // Register the PWA worker before the app bundle so Chrome can evaluate
+    // installability as early as possible on the first visit.
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js', {
+        scope: '/',
+        updateViaCache: 'none'
+      }).catch(function() {});
+    }
+  </script>
   </head>
   <body style="background:#F7F8FA;margin:0;">
     <!-- Shell de chargement HTML pur — juste le fond, sans spinner, pour un affichage

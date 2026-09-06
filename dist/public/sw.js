@@ -7,6 +7,16 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());
 });
 
+// Keep the app network-first while providing the fetch handler required by
+// Chrome's installability checks. Static assets remain served by the browser
+// normally; this service worker is not used as an offline cache.
+self.addEventListener("fetch", (event) => {
+  if (event.request.method !== "GET") return;
+  const requestUrl = new URL(event.request.url);
+  if (requestUrl.origin !== self.location.origin) return;
+  event.respondWith(fetch(event.request));
+});
+
 self.addEventListener("push", (event) => {
   let data = {};
   try {
