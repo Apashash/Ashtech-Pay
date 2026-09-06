@@ -6,10 +6,10 @@ description: Withdrawals/transfers must never be auto-failed+refunded on timeout
 # Payouts (retraits & transferts) : jamais d'annulation automatique
 
 Rule: a payout (withdrawal / transfer_out) that has been debited must go to
-`pending_manual` for every provider-side error, including insufficient provider
-liquidity, invalid input, authentication errors, timeouts, 5xx, rate limits,
-ambiguous messages, and provider status `failed/refunded/cancelled`. Do not
-refund automatically; an administrator resolves the outcome.
+`pending_manual` for provider liquidity shortages, authentication errors,
+timeouts, 5xx, rate limits, and ambiguous messages. Definitive provider
+rejections (invalid number, unsupported operation/operator, or terminal
+`failed/refunded/cancelled`) must be marked rejected and the debit reversed.
 
 Only a successful provider initiation/status may continue through automatic
 polling and settlement. An internal wallet balance check that fails before a
@@ -37,8 +37,8 @@ its own" behavior. Replacing an ambiguous provider ID or committing status
 separately from wallet mutation creates the same double-spend risk under
 timeouts, callbacks, admin actions, and process crashes.
 
-**How to apply:** any new payout path or poller must default to
-pending/pending_manual on uncertainty or provider errors; never refund in the
-automatic path. Persist the provider ID before submission, reuse it for every
-reconciliation, block manual terminal changes while unresolved, and settle
-successful status plus wallet mutation atomically.
+**How to apply:** any new payout path or poller must classify only the explicit
+terminal rejection set as failed+refunded; all other provider errors default to
+pending/pending_manual. Persist the provider ID before submission, reuse it for
+every reconciliation, block manual terminal changes while unresolved, and
+settle status plus wallet mutation atomically.

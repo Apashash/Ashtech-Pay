@@ -505,6 +505,7 @@ export async function initiatePixPayPayout(params: PixPayoutParams): Promise<Pix
       return {
         success: false,
         message: d.response || data.message || "Payout rejeté",
+        status: state,
         providerStatus: res.status,
         raw: data,
       };

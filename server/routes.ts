@@ -1557,6 +1557,34 @@ function sanitizeGatewayMessage(msg: string | null | undefined, fallback: string
   return msg.trim();
 }
 
+function isDefinitivePayoutRejection(result: {
+  message?: string | null;
+  status?: string | null;
+}): boolean {
+  const status = String(result.status || "").trim().toLowerCase();
+  if (["failed", "refunded", "cancelled", "canceled"].includes(status)) return true;
+
+  const message = String(result.message || "").toLocaleLowerCase();
+  return (
+    message.includes("invalid phone") ||
+    message.includes("invalid number") ||
+    message.includes("invalid operator") ||
+    message.includes("numéro invalide") ||
+    message.includes("numero invalide") ||
+    message.includes("opérateur invalide") ||
+    message.includes("operateur invalide") ||
+    message.includes("not supported") ||
+    message.includes("unsupported") ||
+    message.includes("non supporté") ||
+    message.includes("non supporte") ||
+    message.includes("opération non supportée") ||
+    message.includes("operation non supportee") ||
+    message.includes("blacklist") ||
+    message.includes("opération refusée") ||
+    message.includes("operation refusee")
+  );
+}
+
 function createProviderFailure(
   message: string,
   details: { provider: string; raw?: unknown; providerCode?: unknown; providerStatus?: unknown },
@@ -4557,6 +4585,7 @@ export async function registerRoutes(
           success: boolean;
           transaction_id?: string;
           message?: string;
+          status?: string;
           providerStatus?: number;
         } = {
           success: false,
@@ -4620,6 +4649,7 @@ export async function registerRoutes(
             success: pixpayResult.success,
             transaction_id: pixpayResult.transactionId,
             message: pixpayResult.message,
+            status: pixpayResult.status,
             providerStatus: pixpayResult.providerStatus,
           };
 
@@ -4640,7 +4670,12 @@ export async function registerRoutes(
             clientReferenceId: reference,
             customerMessage: PAWAPAY_CUSTOMER_MESSAGE,
           });
-          payoutResult = { success: pawaResult.success, transaction_id: payoutId, message: pawaResult.providerMessage };
+          payoutResult = {
+            success: pawaResult.success,
+            transaction_id: payoutId,
+            message: pawaResult.providerMessage,
+            status: pawaResult.status,
+          };
         }
 
         if (payoutResult.success) {
@@ -4681,10 +4716,30 @@ export async function registerRoutes(
             provider: transferProvider,
             isInternal: false,
           }).catch(() => {});
+        } else if (isDefinitivePayoutRejection(payoutResult)) {
+          console.error(`[Transfer] Payout rejected for ${reference} (${transferProvider}): ${payoutResult.message || payoutResult.status}`);
+          await storage.updateTransactionStatus(transaction.id, "failed");
+          if (isPrimaryTransfer) {
+            await storage.updateUserBalance(senderId, totalAmount);
+          } else {
+            await storage.upsertWallet(senderId, walletCurrency, totalAmount);
+          }
+          transaction.status = "failed";
+          await storage.createUserNotification({
+            userId: senderId,
+            type: "transfer_failed",
+            title: "Transfert rejeté",
+            message: `Votre transfert de ${parsedAmount.toLocaleString()} ${txCurrency} vers ${recipientName} a été rejeté. Aucun montant n'a été conservé.`,
+            transactionId: transaction.id,
+            isRead: false,
+          });
+          return res.status(400).json({
+            message: `Le transfert a été rejeté: ${sanitizeGatewayMessage(payoutResult.message, "numéro ou opération non supporté.")}`,
+          });
         } else {
-          // Every provider-side initiation error, including insufficient provider
-          // balance, stays manual. The amount was already debited and must not be
-          // refunded automatically while the provider outcome is unresolved.
+          // Provider balance shortages and every non-terminal/ambiguous error
+          // remain manual. The amount stays reserved until an administrator
+          // resolves the provider outcome.
           console.error(`[Transfer] Provider error — pending manual review for ${reference} (${transferProvider}): ${payoutResult.message}`);
           await storage.updateTransactionStatus(transaction.id, "pending_manual");
           transaction.status = "pending_manual";
@@ -4692,7 +4747,7 @@ export async function registerRoutes(
             userId: senderId,
             type: "transfer_pending",
             title: "Transfert en attente",
-            message: `Votre transfert de ${parsedAmount.toLocaleString()} ${txCurrency} vers ${recipientName} est en attente de vérification par l'équipe Ashtech Pay.`,
+            message: `Votre transfert de ${parsedAmount.toLocaleString()} ${txCurrency} vers ${recipientName} est en attente de vérification par l'équipe AshTech Pay.`,
             transactionId: transaction.id,
             isRead: false,
           });
@@ -5869,10 +5924,38 @@ export async function registerRoutes(
             txType:        "withdrawal",
             txCurrency:    withdrawalCurrency,
           });
+        } else if (isDefinitivePayoutRejection(payoutResult)) {
+          console.error(`[Withdrawal] Payout rejected for ${withdrawalRef} (${paymentProvider}): ${payoutResult.message || payoutResult.status}`);
+          await storage.updateTransactionStatus(transaction.id, "failed");
+          await storage.refundToOriginalWallet(userId, "withdrawal", withdrawalCurrency, totalAmount);
+          transaction.status = "failed";
+          await storage.createUserNotification({
+            userId,
+            type: "withdrawal_failed",
+            title: "Retrait rejeté",
+            message: `Votre retrait de ${amount.toLocaleString()} ${withdrawalCurrency} a été rejeté. Aucun montant n'a été conservé.`,
+            transactionId: transaction.id,
+            isRead: false,
+          });
+          if (paymentProvider === "pawapay") {
+            return res.status(400).json(buildProviderErrorPayload({
+              error: "payment_initiation_failed",
+              message: payoutResult.message
+                ? `Le retrait a été rejeté : ${payoutResult.message}`
+                : undefined,
+              fallback: "Le retrait a été rejeté par le fournisseur de paiement.",
+              provider: "pawapay",
+              providerCode: payoutResult.providerCode,
+              providerStatus: payoutResult.providerStatus,
+            }));
+          }
+          return res.status(400).json({
+            message: `Le retrait a été rejeté: ${sanitizeGatewayMessage(payoutResult.message, "numéro ou opération non supporté.")}`,
+          });
         } else {
-          // Every provider-side initiation error, including insufficient provider
-          // balance, stays manual. The amount was already debited and must not be
-          // refunded automatically while the provider outcome is unresolved.
+          // Provider balance shortages and every non-terminal/ambiguous error
+          // remain manual. The amount stays reserved until an administrator
+          // resolves the provider outcome.
           console.error(`[Withdrawal] Provider error — pending manual review for ${withdrawalRef} (${paymentProvider}): ${payoutResult.message}`);
           await storage.updateTransactionStatus(transaction.id, "pending_manual");
           transaction.status = "pending_manual";
@@ -5880,7 +5963,7 @@ export async function registerRoutes(
             userId,
             type: "withdrawal_pending",
             title: "Retrait en attente",
-            message: `Votre retrait de ${amount.toLocaleString()} ${withdrawalCurrency} est en attente de vérification par l'équipe Ashtech Pay.`,
+            message: `Votre retrait de ${amount.toLocaleString()} ${withdrawalCurrency} est en attente de vérification par l'équipe AshTech Pay.`,
             transactionId: transaction.id,
             isRead: false,
           });

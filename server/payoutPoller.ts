@@ -3,7 +3,8 @@ import { checkAfribaPayStatus, checkAfribaPayoutStatus } from "./afribapay";
 import { checkPixPayStatus } from "./pixpay";
 import { getPawaPayPayout, isPawaPayUuidV4 } from "./pawapay";
 import { sendWithdrawalApprovedEmail } from "./email";
-import { notifyWithdrawalAutoValidated } from "./telegram";
+import { notifyWithdrawalAutoValidated, notifyWithdrawalFailed } from "./telegram";
+import { setFailedCooldown } from "./failedCooldown";
 
 const POLL_INTERVAL  = 6_000; // 6 seconds
 // Pas de limite de tentatives : un payout reste suivi indéfiniment jusqu'à ce que
@@ -157,27 +158,50 @@ export async function processPayout(payout: PendingPayout, apiStatus: string) {
       }).catch(() => {});
 
     } else {
-      // A provider-side failure, including insufficient provider liquidity, is
-      // intentionally manual. The wallet was already debited and an automatic
-      // refund could create a double-spend if the provider settles later.
-      const claimed = await storage.claimTransactionStatus(
-        payout.transactionId,
-        "pending_manual",
-        ["pending", "processing", "pending_manual"],
-      );
+      // These are definitive terminal provider statuses. Reject the payout
+      // and restore the debited amount; ambiguous initiation errors are
+      // handled separately as pending_manual by the route.
+      const claimed = payout.provider === "pawapay"
+        ? await storage.claimPawaPayoutFailedAndRefund(payout.transactionId, ["pending", "processing", "pending_manual"])
+        : await storage.claimTransactionStatus(payout.transactionId, "failed", ["pending", "processing", "pending_manual"]);
       if (!claimed) {
         removePendingPayout(payout.reference);
         return;
       }
+      setFailedCooldown(payout.userId);
+      const refundAmount = parseFloat(payout.totalDebited || payout.amount);
+      if (payout.provider !== "pawapay") {
+        await storage.refundToOriginalWallet(payout.userId, payout.txType, payout.walletCurrency || payout.txCurrency, refundAmount);
+      }
       await storage.createUserNotification({
         userId:        payout.userId,
-        type:          "withdrawal_pending",
-        title:         "Retrait en attente",
-        message: `Votre retrait de ${payout.amount} ${currency} est en attente de vérification par l'équipe AshTech Pay.`,
+        type:          "withdrawal_failed",
+        title:         "Retrait rejeté",
+        message:       `Votre retrait de ${payout.amount} ${currency} a été rejeté. Le montant a été recrédité.`,
         transactionId: payout.transactionId,
         isRead:        false,
       });
-      console.log(`[PayoutPoller] ⚠️ Payout provider error (${apiStatus}): ${payout.reference} — awaiting manual review`);
+      console.log(`[PayoutPoller] ❌ Payout rejected (${apiStatus}): ${payout.reference} — refunded ${refundAmount} ${currency}`);
+
+      const failedUser = await storage.getUser(payout.userId).catch(() => null);
+      notifyWithdrawalFailed({
+        userName: (failedUser as any)?.fullName || (failedUser as any)?.username || "Utilisateur",
+        userEmail: (failedUser as any)?.email || "",
+        userPhone: (failedUser as any)?.phone || undefined,
+        senderCountry: (failedUser as any)?.country || undefined,
+        amount: payout.amount,
+        grossAmount: payout.totalDebited || payout.amount,
+        currency,
+        reference: (transaction as any).reference || payout.reference,
+        externalReference: (transaction as any).externalReference || undefined,
+        reason: apiStatus,
+        provider: payout.provider,
+        walletCurrency,
+        recipientName: transaction.recipientName || undefined,
+        recipientPhone: transaction.recipientPhone || undefined,
+        recipientCountry: transaction.recipientCountry || undefined,
+        txType: payout.txType,
+      }).catch(() => {});
     }
 
     removePendingPayout(payout.reference);
