@@ -422,3 +422,27 @@
   .delay-400 { transition-delay: 400ms; }
   .delay-500 { transition-delay: 500ms; }
 }
+
+/* Keep legacy utility classes inside the same dark surface system. */
+html.dark .bg-white {
+  background-color: hsl(var(--card)) !important;
+}
+
+html.dark .bg-gray-50 {
+  background-color: hsl(var(--muted)) !important;
+}
+
+html.dark .bg-gray-100 {
+  background-color: hsl(var(--secondary)) !important;
+}
+
+html.dark .border-gray-100,
+html.dark .border-gray-200,
+html.dark .border-gray-300 {
+  border-color: hsl(var(--border)) !important;
+}
+
+/* A few legacy buttons set text-black explicitly instead of using the token. */
+html.dark .bg-primary.text-black {
+  color: hsl(var(--primary-foreground)) !important;
+}
