@@ -92,6 +92,7 @@ import { buildProviderErrorPayload } from "./providerErrors";
 import { buildPublicPaymentStatus } from "./publicPaymentState";
 import { buildPawaPayFeeUpdates } from "./feeUpdates";
 import { toLocalMobileMoneyPhone, validateMobileMoneyPhone } from "@shared/mobile-money-phone";
+import { getVapidPublicKey } from "./push";
 
 const PAWAPAY_PUBLIC_INITIATION_TIMEOUT_MS = 20_000;
 
@@ -13116,6 +13117,46 @@ export async function registerRoutes(
   });
 
   // ============= USER NOTIFICATIONS =============
+
+  // Browser Web Push
+  app.get("/api/push/public-key", requireAuth, (_req, res) => {
+    const publicKey = getVapidPublicKey();
+    if (!publicKey) {
+      return res.status(503).json({ message: "Les notifications push ne sont pas configurées sur ce serveur." });
+    }
+    res.json({ publicKey });
+  });
+
+  app.post("/api/push-subscriptions", requireAuth, async (req, res) => {
+    try {
+      const endpoint = typeof req.body?.endpoint === "string" ? req.body.endpoint.trim() : "";
+      const p256dh = typeof req.body?.p256dh === "string" ? req.body.p256dh.trim() : "";
+      const auth = typeof req.body?.auth === "string" ? req.body.auth.trim() : "";
+      if (!endpoint.startsWith("https://") || endpoint.length > 4096 || !p256dh || !auth || p256dh.length > 512 || auth.length > 512) {
+        return res.status(400).json({ message: "Abonnement push invalide." });
+      }
+
+      await storage.savePushSubscription(req.userId!, { endpoint, p256dh, auth }, req.get("user-agent"));
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("[Push] Subscription save error:", error?.message || error);
+      res.status(500).json({ message: "Impossible d'enregistrer cet appareil." });
+    }
+  });
+
+  app.delete("/api/push-subscriptions", requireAuth, async (req, res) => {
+    try {
+      const endpoint = typeof req.body?.endpoint === "string" ? req.body.endpoint.trim() : "";
+      if (!endpoint.startsWith("https://") || endpoint.length > 4096) {
+        return res.status(400).json({ message: "Abonnement push invalide." });
+      }
+      await storage.deletePushSubscription(req.userId!, endpoint);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("[Push] Subscription delete error:", error?.message || error);
+      res.status(500).json({ message: "Impossible de désactiver cet appareil." });
+    }
+  });
 
   // Get user notifications
   app.get("/api/notifications", requireAuth, async (req, res) => {

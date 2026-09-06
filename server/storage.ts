@@ -26,6 +26,7 @@ import {
   withdrawalNumbers,
   withdrawalNumberChanges,
   userNotifications,
+  pushSubscriptions,
   globalMessages,
   dismissedGlobalMessages,
   kycSubmissions,
@@ -60,6 +61,7 @@ import {
   type InsertWithdrawalNumberChange,
   type UserNotification,
   type InsertUserNotification,
+  type PushSubscription,
   type GlobalMessage,
   type InsertGlobalMessage,
   ALL_FX_CURRENCIES,
@@ -273,6 +275,10 @@ export interface IStorage {
   getUserNotifications(userId: string, limit?: number): Promise<UserNotification[]>;
   getUnreadNotificationCount(userId: string): Promise<number>;
   createUserNotification(notification: InsertUserNotification): Promise<UserNotification>;
+  getPushSubscriptions(userId: string): Promise<PushSubscription[]>;
+  savePushSubscription(userId: string, subscription: { endpoint: string; p256dh: string; auth: string }, userAgent?: string | null): Promise<PushSubscription>;
+  deletePushSubscription(userId: string, endpoint: string): Promise<void>;
+  deletePushSubscriptionById(userId: string, id: string): Promise<void>;
   markNotificationAsRead(id: string, userId: string): Promise<void>;
   markAllNotificationsAsRead(userId: string): Promise<void>;
   deleteUserNotification(id: string, userId: string): Promise<void>;
@@ -1921,7 +1927,75 @@ export class DatabaseStorage implements IStorage {
 
   async createUserNotification(notification: InsertUserNotification): Promise<UserNotification> {
     const [newNotif] = await db.insert(userNotifications).values(notification).returning();
+    // Push delivery is intentionally fire-and-forget: a provider outage must
+    // never make a payment notification transaction fail.
+    void import("./push")
+      .then(({ sendPushNotification }) => sendPushNotification(notification.userId, {
+        title: notification.title,
+        body: notification.message,
+        type: notification.type,
+        transactionId: notification.transactionId ?? null,
+        url: "/dashboard/notifications",
+      }))
+      .catch((error) => console.error("[Push] Delivery scheduling failed:", error?.message || error));
     return newNotif;
+  }
+
+  async getPushSubscriptions(userId: string): Promise<PushSubscription[]> {
+    return await db.select().from(pushSubscriptions).where(eq(pushSubscriptions.userId, userId));
+  }
+
+  async savePushSubscription(
+    userId: string,
+    subscription: { endpoint: string; p256dh: string; auth: string },
+    userAgent?: string | null,
+  ): Promise<PushSubscription> {
+    const endpointHash = hmacField(subscription.endpoint);
+    if (!endpointHash) throw new Error("Impossible de sécuriser l'abonnement push");
+
+    const [existing] = await db.select()
+      .from(pushSubscriptions)
+      .where(and(eq(pushSubscriptions.userId, userId), eq(pushSubscriptions.endpointHash, endpointHash)))
+      .limit(1);
+
+    const values = {
+      userId,
+      endpointHash,
+      endpoint: encryptField(subscription.endpoint)!,
+      p256dh: encryptField(subscription.p256dh)!,
+      auth: encryptField(subscription.auth)!,
+      userAgent: userAgent || null,
+      updatedAt: new Date(),
+    };
+
+    if (existing) {
+      const [updated] = await db.update(pushSubscriptions)
+        .set(values)
+        .where(eq(pushSubscriptions.id, existing.id))
+        .returning();
+      return updated;
+    }
+
+    const [created] = await db.insert(pushSubscriptions)
+      .values(values)
+      .returning();
+    return created;
+  }
+
+  async deletePushSubscription(userId: string, endpoint: string): Promise<void> {
+    const endpointHash = hmacField(endpoint);
+    if (!endpointHash) return;
+    await db.delete(pushSubscriptions).where(and(
+      eq(pushSubscriptions.userId, userId),
+      eq(pushSubscriptions.endpointHash, endpointHash),
+    ));
+  }
+
+  async deletePushSubscriptionById(userId: string, id: string): Promise<void> {
+    await db.delete(pushSubscriptions).where(and(
+      eq(pushSubscriptions.userId, userId),
+      eq(pushSubscriptions.id, id),
+    ));
   }
 
   async markNotificationAsRead(id: string, userId: string): Promise<void> {

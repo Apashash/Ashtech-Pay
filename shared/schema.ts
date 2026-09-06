@@ -697,6 +697,32 @@ export const userNotifications = pgTable("user_notifications", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Browser Web Push subscriptions. The endpoint and keys are encrypted by the
+// storage layer; endpointHash allows upserts/revocation without exposing them.
+export const pushSubscriptions = pgTable("push_subscriptions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  endpointHash: varchar("endpoint_hash", { length: 64 }).notNull(),
+  endpoint: text("endpoint").notNull(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (t) => ({
+  userEndpointUnique: uniqueIndex("push_subscriptions_user_endpoint_unique").on(t.userId, t.endpointHash),
+  userIdx: index("push_subscriptions_user_id_idx").on(t.userId),
+}));
+
+export const insertPushSubscriptionSchema = createInsertSchema(pushSubscriptions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type PushSubscription = typeof pushSubscriptions.$inferSelect;
+export type InsertPushSubscription = z.infer<typeof insertPushSubscriptionSchema>;
+
 // Global messages from admin
 export const globalMessages = pgTable("global_messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

@@ -38,3 +38,4 @@
 - [PawaPay SMS branding](pawapay-sms-branding.md) — customerMessage can carry AshTechPay (4–22 chars), but MTN/PawaPay controls the sender header shown in the SMS.
 - [PawaPay callback access](pawapay-callback-access.md) — official callbacks are public POSTs; do not require AshTechPay app auth or a locally stored secret unless an explicit callback token is configured.
 - [Public payment provider timeout](payment-link-provider-timeout.md) — a browser timeout can follow a persisted provider-pending payment; never auto-retry the initiation.
+- [Browser Web Push](browser-web-push.md) — iPhone push requires an installed Home Screen web app; desktop browsers can subscribe from the authenticated settings flow.

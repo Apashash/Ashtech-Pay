@@ -1,0 +1,22 @@
+{
+  "name": "AshTech Pay",
+  "short_name": "AshTech Pay",
+  "description": "Paiements Mobile Money en Afrique",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#F7F8FA",
+  "theme_color": "#F0B90B",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/og-image.png",
+      "sizes": "220x220",
+      "type": "image/png"
+    }
+  ]
+}

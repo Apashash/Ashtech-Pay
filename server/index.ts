@@ -471,6 +471,27 @@ app.use((req, res, next) => {
     await db.execute(sql`ALTER TABLE conversion_requests ADD COLUMN IF NOT EXISTS executed_by_id VARCHAR`);
     await db.execute(sql`ALTER TABLE user_notifications ADD COLUMN IF NOT EXISTS type TEXT NOT NULL DEFAULT 'info'`);
     await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS push_subscriptions (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        endpoint_hash VARCHAR(64) NOT NULL,
+        endpoint TEXT NOT NULL,
+        p256dh TEXT NOT NULL,
+        auth TEXT NOT NULL,
+        user_agent TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await db.execute(sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS push_subscriptions_user_endpoint_unique
+      ON push_subscriptions (user_id, endpoint_hash)
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS push_subscriptions_user_id_idx
+      ON push_subscriptions (user_id)
+    `);
+    await db.execute(sql`
       CREATE UNIQUE INDEX IF NOT EXISTS wallets_user_currency_unique
       ON wallets (user_id, currency)
     `);

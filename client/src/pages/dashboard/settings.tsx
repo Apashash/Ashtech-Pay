@@ -51,6 +51,7 @@ import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useTheme } from "@/components/theme-provider";
 import { useLanguage } from "@/lib/language";
+import { getPushSupport, hasPushSubscription, subscribeToPush, unsubscribeFromPush } from "@/lib/push-notifications";
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -284,10 +285,11 @@ export default function SettingsPage() {
 
   const [notifications, setNotifications] = useState({
     email: true,
-    push: true,
+    push: false,
     sms: false,
     marketing: false,
   });
+  const [pushBusy, setPushBusy] = useState(false);
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -302,6 +304,47 @@ export default function SettingsPage() {
       setIsInitialized(true);
     }
   }, [user, isInitialized]);
+
+  useEffect(() => {
+    let active = true;
+    hasPushSubscription()
+      .then((enabled) => {
+        if (active) setNotifications((prev) => ({ ...prev, push: enabled }));
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
+
+  async function handlePushToggle(checked: boolean) {
+    if (pushBusy) return;
+    setPushBusy(true);
+    try {
+      if (checked) {
+        await subscribeToPush();
+        setNotifications((prev) => ({ ...prev, push: true }));
+        toast({
+          title: "Notifications push activées",
+          description: "Cet appareil recevra les alertes de paiement et de compte.",
+        });
+      } else {
+        await unsubscribeFromPush();
+        setNotifications((prev) => ({ ...prev, push: false }));
+        toast({ title: "Notifications push désactivées" });
+      }
+    } catch (error: any) {
+      setNotifications((prev) => ({ ...prev, push: false }));
+      const support = getPushSupport();
+      toast({
+        title: !support.supported && support.reason === "ios-home-screen"
+          ? "Installation requise sur iPhone"
+          : "Notifications push indisponibles",
+        description: error?.message || "Autorisez les notifications dans les réglages du navigateur.",
+        variant: "destructive",
+      });
+    } finally {
+      setPushBusy(false);
+    }
+  }
 
   const updateProfileMutation = useMutation({
     mutationFn: async (data: { fullName: string }) => {
@@ -590,7 +633,10 @@ export default function SettingsPage() {
                     </div>
                     <Switch
                       checked={notifications[key]}
-                      onCheckedChange={(checked) => setNotifications(prev => ({ ...prev, [key]: checked }))}
+                      disabled={key === "push" && pushBusy}
+                      onCheckedChange={(checked) => key === "push"
+                        ? void handlePushToggle(checked)
+                        : setNotifications(prev => ({ ...prev, [key]: checked }))}
                       data-testid={`switch-${key}-notifications`}
                     />
                   </div>
