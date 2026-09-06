@@ -35,7 +35,11 @@ function urlBase64ToArrayBuffer(value: string): ArrayBuffer {
 }
 
 async function getRegistration(): Promise<ServiceWorkerRegistration> {
-  const registration = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+  const registration = await navigator.serviceWorker.register("/sw.js", {
+    scope: "/",
+    updateViaCache: "none",
+  });
+  await registration.update().catch(() => undefined);
   await navigator.serviceWorker.ready;
   return registration;
 }

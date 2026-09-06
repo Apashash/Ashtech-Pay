@@ -1,4 +1,12 @@
 /* AshTech Pay Web Push service worker */
+self.addEventListener("install", (event) => {
+  event.waitUntil(self.skipWaiting());
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
 self.addEventListener("push", (event) => {
   let data = {};
   try {
@@ -10,8 +18,8 @@ self.addEventListener("push", (event) => {
   const title = data.title || "AshTech Pay";
   const options = {
     body: data.body || "Vous avez une nouvelle notification.",
-    icon: "/favicon.png",
-    badge: "/favicon.png",
+    icon: "/ashtechpay-icon-192.png",
+    badge: "/ashtechpay-icon-192.png",
     lang: "fr",
     dir: "auto",
     tag: data.transactionId ? `ashtech-${data.transactionId}` : (data.type || "ashtech-notification"),
