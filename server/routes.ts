@@ -995,7 +995,7 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
     });
   }
   if (!req.userId) {
-    console.log("Auth failed - No userId. Cookies:", req.headers.cookie ? "present" : "none", "Auth header:", req.headers.authorization ? "present" : "none");
+    console.log("Auth failed - No userId");
     return res.status(401).json({ message: "Non autorisé" });
   }
 

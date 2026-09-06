@@ -16,9 +16,10 @@ if (!databaseUrl) {
   );
 }
 
-// Log which DB source is used at startup
+// Log only the configured source — never expose the database host, username,
+// or connection-string metadata in workflow logs.
 const dbSource = _dbSource;
-console.log(`[DB] Using ${dbSource} — host: ${databaseUrl.replace(/:[^:@]+@/, ":***@").split("/").slice(0, 3).join("/")}`);
+console.log(`[DB] Using ${dbSource}`);
 
 // Replit's managed PostgreSQL does not require SSL.
 // Supabase Transaction pooler uses a self-signed certificate chain — we must
