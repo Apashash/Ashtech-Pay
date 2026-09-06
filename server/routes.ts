@@ -496,6 +496,67 @@ async function clearOtpOpLock(userId: string): Promise<void> {
   } catch (e) { console.error("[OtpLock] clearOtpOpLock error:", e); }
 }
 
+// Shared database lock for payout/transfer submission. This reuses the same
+// short-lived user lock column so it works across workers and survives a
+// process restart. The compare-and-set prevents two requests from both
+// passing the balance check and submitting two provider payouts.
+async function acquirePayoutOperationLock(userId: string): Promise<number | null> {
+  const lockUntil = Date.now() + OTP_OP_LOCK_MS;
+  try {
+    const result = await db.execute(sql`
+      UPDATE users
+      SET otp_locked_until = ${lockUntil}
+      WHERE id = ${userId}
+        AND COALESCE(otp_locked_until, 0) < ${Date.now()}
+      RETURNING id
+    `);
+    const rows = (result as any).rows || [];
+    return rows.length > 0 ? lockUntil : null;
+  } catch (e) {
+    console.error("[PayoutLock] acquire error:", e);
+    throw new Error("Impossible de sécuriser cette opération. Veuillez réessayer.");
+  }
+}
+
+async function releasePayoutOperationLock(userId: string, lockUntil: number | null): Promise<void> {
+  if (!lockUntil) return;
+  try {
+    // Do not clear a newer lock if this request exceeded its TTL and another
+    // operation acquired the slot meanwhile.
+    await db.execute(sql`
+      UPDATE users
+      SET otp_locked_until = 0
+      WHERE id = ${userId} AND otp_locked_until = ${lockUntil}
+    `);
+  } catch (e) {
+    console.error("[PayoutLock] release error:", e);
+  }
+}
+
+async function findRecentActivePayoutDuplicate(params: {
+  userId: string;
+  type: "withdrawal" | "transfer_out";
+  recipientPhone: string;
+  operatorId: string;
+  totalAmount: number;
+}): Promise<{ id: string; reference: string | null; status: string } | null> {
+  const result = await db.execute(sql`
+    SELECT id, reference, status
+    FROM transactions
+    WHERE user_id = ${params.userId}
+      AND type = ${params.type}
+      AND recipient_phone = ${params.recipientPhone}
+      AND operator_id = ${params.operatorId}
+      AND total_amount::numeric = ${params.totalAmount}
+      AND status IN ('pending', 'processing', 'pending_manual')
+      AND created_at > NOW() - INTERVAL '15 minutes'
+    ORDER BY created_at DESC
+    LIMIT 1
+  `);
+  const row = (result as any).rows?.[0];
+  return row ? { id: row.id, reference: row.reference, status: row.status } : null;
+}
+
 // ─── Pending admin logins — DB-backed (survives PM2 worker restarts) ──────────
 // Stores OTP for admin accounts BEFORE any session is created.
 // Session is only created AFTER OTP is verified — impossible to bypass.
@@ -4358,6 +4419,7 @@ export async function registerRoutes(
 
   // Send money externally (with operator and fees)
   app.post("/api/transfers/send", requireAuth, transferLimiter, otpConfirmLimiter, async (req, res) => {
+    let payoutLockUntil: number | null = null;
     try {
       const { recipientName, recipientPhone, countryId, operatorId, amount, description, feeBearer } = req.body;
 
@@ -4508,6 +4570,30 @@ export async function registerRoutes(
       const creditedAmount = senderPaysFees ? parsedAmount : parsedAmount - feeAmount;
       const totalAmount = senderPaysFees ? parsedAmount + feeAmount : parsedAmount;
 
+      payoutLockUntil = await acquirePayoutOperationLock(senderId);
+      if (!payoutLockUntil) {
+        return res.status(409).json({
+          message: "Une opération de retrait ou de transfert est déjà en cours. Attendez sa confirmation avant de recommencer.",
+          code: "PAYOUT_ALREADY_IN_PROGRESS",
+        });
+      }
+      const duplicateTransfer = await findRecentActivePayoutDuplicate({
+        userId: senderId,
+        type: "transfer_out",
+        recipientPhone,
+        operatorId: String(operatorId),
+        totalAmount,
+      });
+      if (duplicateTransfer) {
+        await releasePayoutOperationLock(senderId, payoutLockUntil);
+        payoutLockUntil = null;
+        return res.status(409).json({
+          message: "Un transfert identique est déjà en cours de traitement.",
+          code: "DUPLICATE_PAYOUT",
+          reference: duplicateTransfer.reference,
+        });
+      }
+
       // Debit the wallet matching the destination country exactly (walletCurrency = txCurrency).
       // Strict match only — no cross-family CFA tolerance (must convert first otherwise).
       const senderPrimaryCurrency = sender.preferredCurrency || "XAF";
@@ -4515,6 +4601,8 @@ export async function registerRoutes(
 
       if (isPrimaryTransfer) {
         if (parseFloat(sender.balance) < totalAmount) {
+          await releasePayoutOperationLock(senderId, payoutLockUntil);
+          payoutLockUntil = null;
           return res.status(400).json({
             message: `Solde insuffisant dans votre compte ${senderPrimaryCurrency}. Vous avez ${parseFloat(sender.balance).toFixed(0)} ${senderPrimaryCurrency} — besoin de ${totalAmount.toFixed(0)} ${senderPrimaryCurrency}`,
           });
@@ -4523,6 +4611,8 @@ export async function registerRoutes(
         const senderWallet = await storage.getWallet(senderId, walletCurrency);
         const walletBalance = senderWallet ? parseFloat(senderWallet.balance) : 0;
         if (walletBalance < totalAmount) {
+          await releasePayoutOperationLock(senderId, payoutLockUntil);
+          payoutLockUntil = null;
           return res.status(400).json({
             message: `Solde insuffisant dans votre compte ${walletCurrency}. Vous avez ${walletBalance.toFixed(0)} ${walletCurrency} — besoin de ${totalAmount.toFixed(0)} ${walletCurrency}. Convertissez d'abord depuis votre compte ${senderPrimaryCurrency}.`,
           });
@@ -4536,6 +4626,8 @@ export async function registerRoutes(
             "PAYOUT", pawaPayCountry(country.code),
           );
         } catch {
+          await releasePayoutOperationLock(senderId, payoutLockUntil);
+          payoutLockUntil = null;
           return res.status(503).json({ message: "Le service de paiement est temporairement indisponible." });
         }
       }
@@ -4720,8 +4812,12 @@ export async function registerRoutes(
           console.error(`[Transfer] Payout rejected for ${reference} (${transferProvider}): ${payoutResult.message || payoutResult.status}`);
           await storage.updateTransactionStatus(transaction.id, "failed");
           if (isPrimaryTransfer) {
+            await releasePayoutOperationLock(senderId, payoutLockUntil);
+            payoutLockUntil = null;
             await storage.updateUserBalance(senderId, totalAmount);
           } else {
+            await releasePayoutOperationLock(senderId, payoutLockUntil);
+            payoutLockUntil = null;
             await storage.upsertWallet(senderId, walletCurrency, totalAmount);
           }
           transaction.status = "failed";
@@ -4784,7 +4880,10 @@ export async function registerRoutes(
         feeAmount: feeAmount.toFixed(2),
         totalAmount: totalAmount.toFixed(2),
       });
+      await releasePayoutOperationLock(senderId, payoutLockUntil);
+      payoutLockUntil = null;
     } catch (error) {
+      await releasePayoutOperationLock(req.userId!, payoutLockUntil);
       console.error("Send transfer error:", error);
       res.status(500).json({ message: "Erreur serveur" });
     }
@@ -5592,6 +5691,7 @@ export async function registerRoutes(
 
   // Withdraw money
   app.post("/api/withdrawals", requireAuth, withdrawalLimiter, otpConfirmLimiter, async (req, res) => {
+    let payoutLockUntil: number | null = null;
     try {
       const data = withdrawSchema.parse(req.body);
       const userId = req.userId!;
@@ -5745,12 +5845,38 @@ export async function registerRoutes(
         }
       }
 
+      payoutLockUntil = await acquirePayoutOperationLock(userId);
+      if (!payoutLockUntil) {
+        return res.status(409).json({
+          message: "Une opération de retrait ou de transfert est déjà en cours. Attendez sa confirmation avant de recommencer.",
+          code: "PAYOUT_ALREADY_IN_PROGRESS",
+        });
+      }
+      const duplicateWithdrawal = await findRecentActivePayoutDuplicate({
+        userId,
+        type: "withdrawal",
+        recipientPhone: data.accountDetails,
+        operatorId: String(data.operatorId),
+        totalAmount,
+      });
+      if (duplicateWithdrawal) {
+        await releasePayoutOperationLock(userId, payoutLockUntil);
+        payoutLockUntil = null;
+        return res.status(409).json({
+          message: "Un retrait identique est déjà en cours de traitement.",
+          code: "DUPLICATE_PAYOUT",
+          reference: duplicateWithdrawal.reference,
+        });
+      }
+
       if (isPrimaryWithdrawal) {
         const isDecimalCurrency = userCurrency === "USD" || (userCurrency as string) === "EUR";
         const availableBalance = isDecimalCurrency
           ? Math.floor(parseFloat(user.balance) * 100) / 100
           : Math.round(parseFloat(user.balance));
         if (availableBalance < amount) {
+          await releasePayoutOperationLock(userId, payoutLockUntil);
+          payoutLockUntil = null;
           return res.status(400).json({
             message: `Solde insuffisant dans votre compte ${userCurrency}. Vous avez ${availableBalance.toLocaleString()} ${userCurrency} — besoin de ${amount.toLocaleString()} ${userCurrency}`,
           });
@@ -5760,6 +5886,8 @@ export async function registerRoutes(
         const secondaryWallet = await storage.getWallet(userId, withdrawalCurrency);
         const walletBalance = secondaryWallet ? parseFloat(secondaryWallet.balance) : 0;
         if (walletBalance < amount) {
+          await releasePayoutOperationLock(userId, payoutLockUntil);
+          payoutLockUntil = null;
           return res.status(400).json({
             message: `Solde insuffisant dans votre compte ${withdrawalCurrency}. Vous avez ${walletBalance.toLocaleString()} ${withdrawalCurrency} — besoin de ${amount.toLocaleString()} ${withdrawalCurrency}. Convertissez d'abord depuis votre compte ${userCurrency}.`,
           });
@@ -6053,7 +6181,10 @@ export async function registerRoutes(
           totalDebited: totalAmount
         }
       });
+      await releasePayoutOperationLock(userId, payoutLockUntil);
+      payoutLockUntil = null;
     } catch (error) {
+      await releasePayoutOperationLock(req.userId!, payoutLockUntil);
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: error.errors[0].message });
       }
