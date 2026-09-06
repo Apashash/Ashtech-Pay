@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useLayoutEffect, useState } from "react";
 
 type Theme = "light" | "dark";
 
@@ -19,12 +19,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     return "light";
   });
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const root = document.documentElement;
     root.classList.remove("dark");
     if (theme === "dark") {
       root.classList.add("dark");
     }
+    document.body.style.background = theme === "dark" ? "#0B0E11" : "#F7F8FA";
     localStorage.setItem("ashtech-theme-v2", theme);
   }, [theme]);
 
