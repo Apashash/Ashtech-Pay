@@ -123,6 +123,20 @@ function Navbar() {
               <img src="/logo.png" alt="AshTech Pay" className="h-20 w-auto" />
             </Link>
             <div className="flex items-center gap-1">
+              <div className="hidden lg:flex items-center gap-2 mr-2">
+                <Link href="/login">
+                  <Button variant="outline" size="sm" className="w-44 rounded-full gap-1.5 border-border text-foreground hover:border-primary hover:text-primary" data-testid="button-nav-login-desktop">
+                    <LogIn className="w-3.5 h-3.5" />
+                    {t.nav.login}
+                  </Button>
+                </Link>
+                <Link href="/contact">
+                  <Button size="sm" className="w-44 rounded-full gap-1.5" data-testid="button-nav-contact-desktop">
+                    <Mail className="w-3.5 h-3.5" />
+                    {t.nav.contact}
+                  </Button>
+                </Link>
+              </div>
               <LanguageSwitcher />
               <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-accent transition-colors" aria-label="Changer de thème" data-testid="button-theme-toggle">
                 {theme === "dark" ? <Sun className="w-4 h-4 text-yellow-500" /> : <Moon className="w-4 h-4 text-muted-foreground" />}
@@ -133,7 +147,7 @@ function Navbar() {
             </div>
           </div>
           {/* CTA buttons row */}
-          <div className="flex gap-2 pb-2.5 justify-center sm:justify-end">
+          <div className="flex gap-2 pb-2.5 justify-center sm:justify-end lg:hidden">
             <Link href="/login" className="w-full sm:w-auto">
               <Button variant="outline" size="sm" className="w-full sm:w-44 rounded-full gap-1.5 border-border text-foreground hover:border-primary hover:text-primary" data-testid="button-nav-login">
                 <LogIn className="w-3.5 h-3.5" />
