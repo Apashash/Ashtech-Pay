@@ -133,15 +133,15 @@ function Navbar() {
             </div>
           </div>
           {/* CTA buttons row */}
-          <div className="flex gap-2 pb-2.5">
-            <Link href="/login" className="flex-1">
-              <Button variant="outline" size="sm" className="w-full rounded-full gap-1.5 border-border text-foreground hover:border-primary hover:text-primary" data-testid="button-nav-login">
+          <div className="flex gap-2 pb-2.5 justify-center sm:justify-end">
+            <Link href="/login" className="w-full sm:w-auto">
+              <Button variant="outline" size="sm" className="w-full sm:w-44 rounded-full gap-1.5 border-border text-foreground hover:border-primary hover:text-primary" data-testid="button-nav-login">
                 <LogIn className="w-3.5 h-3.5" />
                 {t.nav.login}
               </Button>
             </Link>
-            <Link href="/contact" className="flex-1">
-              <Button size="sm" className="w-full rounded-full gap-1.5" data-testid="button-nav-contact">
+            <Link href="/contact" className="w-full sm:w-auto">
+              <Button size="sm" className="w-full sm:w-44 rounded-full gap-1.5" data-testid="button-nav-contact">
                 <Mail className="w-3.5 h-3.5" />
                 {t.nav.contact}
               </Button>
