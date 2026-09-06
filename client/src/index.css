@@ -446,3 +446,8 @@ html.dark .border-gray-300 {
 html.dark .bg-primary.text-black {
   color: hsl(var(--primary-foreground)) !important;
 }
+
+/* The original wordmark uses a dark text fill. Swap to its readable dark-mode variant. */
+html.dark img[src="/logo.png"] {
+  content: url("/logo-dark.png");
+}

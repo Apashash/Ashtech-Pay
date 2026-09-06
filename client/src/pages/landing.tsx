@@ -721,10 +721,10 @@ function AnimatedStat({ target, suffix, label, started }: { target: number; suff
   const formatted = count >= 1000 ? count.toLocaleString("fr-FR") : count.toString();
   return (
     <div className="text-center">
-      <p className="text-4xl sm:text-5xl font-extrabold text-slate-900 leading-none">
+      <p className="text-4xl sm:text-5xl font-extrabold text-foreground leading-none">
         {formatted}<span className="text-primary">{suffix}</span>
       </p>
-      <p className="mt-2 text-sm sm:text-base font-semibold text-slate-500 leading-tight">{label}</p>
+      <p className="mt-2 text-sm sm:text-base font-semibold text-muted-foreground leading-tight">{label}</p>
     </div>
   );
 }
@@ -750,11 +750,11 @@ function ReadyToStartSection() {
   ];
 
   return (
-    <section ref={sectionRef} className="py-20 lg:py-28 bg-white relative overflow-hidden">
+    <section ref={sectionRef} className="py-20 lg:py-28 bg-background relative overflow-hidden">
       <div className="absolute inset-0 opacity-[0.04] pointer-events-none" style={{ backgroundImage: `radial-gradient(circle, #1e3a8a 1px, transparent 1px)`, backgroundSize: "28px 28px" }} />
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
-        <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-slate-900 mb-5 leading-tight">{t.landing.statTitle}</h2>
-        <p className="text-base sm:text-lg text-slate-500 max-w-2xl mx-auto mb-14 leading-relaxed">{t.landing.statDesc}</p>
+        <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-foreground mb-5 leading-tight">{t.landing.statTitle}</h2>
+        <p className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto mb-14 leading-relaxed">{t.landing.statDesc}</p>
         <div className="grid grid-cols-2 gap-8 sm:gap-12 max-w-xl mx-auto">
           {stats.map((stat) => (
             <AnimatedStat key={stat.label} target={stat.target} suffix={stat.suffix} label={stat.label} started={started} />
