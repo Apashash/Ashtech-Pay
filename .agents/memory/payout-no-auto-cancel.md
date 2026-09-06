@@ -5,14 +5,15 @@ description: Withdrawals/transfers must never be auto-failed+refunded on timeout
 
 # Payouts (retraits & transferts) : jamais d'annulation automatique
 
-Rule: a payout (withdrawal / transfer_out) that has been debited must NEVER be
-marked `failed` + refunded except on an **explicit, definitive** provider
-rejection (invalid phone/number, unsupported operator, blacklist) or an
-explicit provider status `failed/refunded/cancelled`.
+Rule: a payout (withdrawal / transfer_out) that has been debited must go to
+`pending_manual` for every provider-side error, including insufficient provider
+liquidity, invalid input, authentication errors, timeouts, 5xx, rate limits,
+ambiguous messages, and provider status `failed/refunded/cancelled`. Do not
+refund automatically; an administrator resolves the outcome.
 
-Everything else — network errors, timeouts, 5xx, rate limits, ambiguous
-messages, provider auth outage — must go to `pending_manual` (no refund) or
-simply stay `pending`.
+Only a successful provider initiation/status may continue through automatic
+polling and settlement. An internal wallet balance check that fails before a
+transaction is created remains an immediate user-facing rejection.
 
 Once a provider attempt ID has been persisted, that ID is immutable until the
 provider returns a definitive terminal status. Admin actions, Telegram actions,
@@ -37,7 +38,7 @@ separately from wallet mutation creates the same double-spend risk under
 timeouts, callbacks, admin actions, and process crashes.
 
 **How to apply:** any new payout path or poller must default to
-pending/pending_manual on uncertainty; refunds only on definitive rejection.
-Persist the provider ID before submission, reuse it for every reconciliation,
-block manual terminal changes while unresolved, and settle status plus wallet
-mutation atomically.
+pending/pending_manual on uncertainty or provider errors; never refund in the
+automatic path. Persist the provider ID before submission, reuse it for every
+reconciliation, block manual terminal changes while unresolved, and settle
+successful status plus wallet mutation atomically.

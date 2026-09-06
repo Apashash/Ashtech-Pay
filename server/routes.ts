@@ -73,8 +73,8 @@ import {
   parseDirectCryptoRequest,
   type DirectCryptoRequest,
 } from "./directCrypto";
-import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, getAfribaPayOtpInfo, confirmAfribaPayOtp, isAfribaPayOtpRequiredMessage, getAfribaPayToken } from "./afribapay";
-import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, initiatePixPayPayout, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType, getPixPayServiceId, PIXPAY_OTP_USSD_CODES, getPixPayApiKey } from "./pixpay";
+import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, getAfribaPayOtpInfo, confirmAfribaPayOtp, isAfribaPayOtpRequiredMessage } from "./afribapay";
+import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, initiatePixPayPayout, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType, getPixPayServiceId, PIXPAY_OTP_USSD_CODES } from "./pixpay";
 import { assertPawaPayProviderActive, classifyPawaPayControlledTransaction, createPawaPayDeposit, createPawaPayId, createPawaPayPayout, createPawaPayPaymentPage, getPawaPayActiveConfiguration, getPawaPayDeposit, getPawaPayPayout, resolvePawaPayOperationConfiguration, PAWAPAY_CUSTOMER_MESSAGE } from "./pawapay";
 import { addPendingPayment, removePendingPayment, expireCryptoPaymentIfNeeded } from "./paymentPoller";
 import { processPawaPayDepositCallback } from "./paymentPoller";
@@ -4553,7 +4553,12 @@ export async function registerRoutes(
         const operatorName = (operator.name || "").toUpperCase();
         const countryCode = transferCountryCode.toUpperCase();
 
-        let payoutResult: { success: boolean; transaction_id?: string; message?: string } = {
+        let payoutResult: {
+          success: boolean;
+          transaction_id?: string;
+          message?: string;
+          providerStatus?: number;
+        } = {
           success: false,
           message: "Aucun fournisseur de paiement configuré",
         };
@@ -4615,6 +4620,7 @@ export async function registerRoutes(
             success: pixpayResult.success,
             transaction_id: pixpayResult.transactionId,
             message: pixpayResult.message,
+            providerStatus: pixpayResult.providerStatus,
           };
 
         } else if (transferProvider === "pawapay") {
@@ -4676,49 +4682,33 @@ export async function registerRoutes(
             isInternal: false,
           }).catch(() => {});
         } else {
-          const errMsg = (payoutResult.message || "").toLowerCase();
-          // Rejets définitifs et explicites du fournisseur → échec immédiat + remboursement.
-          // Tout le reste (erreur réseau, timeout, 5xx, rate limit, message ambigu) reste
-          // en attente de revue manuelle : on ne rembourse jamais sans certitude que
-          // l'argent n'est pas parti côté fournisseur.
-          const isDefinitiveRejection =
-            errMsg.includes("invalid phone") ||
-            errMsg.includes("invalid number") ||
-            errMsg.includes("numéro invalide") ||
-            errMsg.includes("numero invalide") ||
-            errMsg.includes("not supported") ||
-            errMsg.includes("unsupported") ||
-            errMsg.includes("non supporté") ||
-            errMsg.includes("non supporte") ||
-            errMsg.includes("invalid operator") ||
-            errMsg.includes("opérateur invalide") ||
-            errMsg.includes("blacklist");
-          if (!isDefinitiveRejection) {
-            console.log(`[Transfer] Pending manual review for ${reference} (${transferProvider}): ${payoutResult.message}`);
-            await storage.updateTransactionStatus(transaction.id, "pending_manual");
-            await storage.createUserNotification({
-              userId: senderId,
-              type: "transfer_pending",
-              title: "Transfert en attente",
-              message: `Votre transfert de ${parsedAmount.toLocaleString()} ${txCurrency} vers ${recipientName} est en cours de traitement et sera envoyé dès validation par l'équipe Ashtech Pay.`,
-              transactionId: transaction.id,
-              isRead: false,
-            });
-          } else {
-            console.error(`[Transfer] Payout failed for ${reference} (${transferProvider}): ${payoutResult.message}`);
-            await storage.updateTransactionStatus(transaction.id, "failed");
-            if (isPrimaryTransfer) {
-              await storage.updateUserBalance(senderId, totalAmount);
-            } else {
-              await storage.upsertWallet(senderId, walletCurrency, totalAmount);
-            }
-            return res.status(400).json({
-              message: `Le transfert a échoué: ${sanitizeGatewayMessage(payoutResult.message, "erreur du réseau de l'opérateur.")}`,
-            });
-          }
+          // Every provider-side initiation error, including insufficient provider
+          // balance, stays manual. The amount was already debited and must not be
+          // refunded automatically while the provider outcome is unresolved.
+          console.error(`[Transfer] Provider error — pending manual review for ${reference} (${transferProvider}): ${payoutResult.message}`);
+          await storage.updateTransactionStatus(transaction.id, "pending_manual");
+          transaction.status = "pending_manual";
+          await storage.createUserNotification({
+            userId: senderId,
+            type: "transfer_pending",
+            title: "Transfert en attente",
+            message: `Votre transfert de ${parsedAmount.toLocaleString()} ${txCurrency} vers ${recipientName} est en attente de vérification par l'équipe Ashtech Pay.`,
+            transactionId: transaction.id,
+            isRead: false,
+          });
         }
       } catch (payoutErr: any) {
         console.error(`[Transfer] Payout error for ${reference}:`, payoutErr.message);
+        await storage.updateTransactionStatus(transaction.id, "pending_manual");
+        transaction.status = "pending_manual";
+        await storage.createUserNotification({
+          userId: senderId,
+          type: "transfer_pending",
+          title: "Transfert en attente",
+          message: `Votre transfert vers ${recipientName} est en attente de vérification par l'équipe Ashtech Pay.`,
+          transactionId: transaction.id,
+          isRead: false,
+        });
       }
 
       audit(req, AUDIT.TRANSFER_SENT, {
@@ -5639,25 +5629,6 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Aucun fournisseur de paiement configuré pour cet opérateur." });
       }
 
-      // Validate provider access before debiting the wallet. A provider auth/config
-      // failure must never turn a customer withdrawal into pending_manual after
-      // their balance has already been reduced.
-      try {
-        if (withdrawalProvider === "afribapay") {
-          await getAfribaPayToken();
-        } else if (withdrawalProvider === "pixpay") {
-          getPixPayApiKey(withdrawalCountryCode);
-        }
-      } catch (providerError: any) {
-        const providerLabel = withdrawalProvider === "afribapay" ? "AfribaPay" : "PixPay";
-        console.error(`[Withdrawal] ${providerLabel} preflight failed:`, providerError?.message || providerError);
-        return res.status(503).json({
-          message: `La passerelle ${providerLabel} sélectionnée est temporairement indisponible. Aucun montant n'a été débité.`,
-          code: "PROVIDER_UNAVAILABLE",
-          provider: withdrawalProvider,
-        });
-      }
-
       // Calculate fee using fee resolution — provider-aware
       const fee = await storage.resolveFee("withdrawal", data.countryId, data.operatorId);
       let feeAmount = 0;
@@ -5899,100 +5870,36 @@ export async function registerRoutes(
             txCurrency:    withdrawalCurrency,
           });
         } else {
-          const errMsg = (payoutResult.message || "").toLowerCase();
-          // Rejets définitifs et explicites du fournisseur → échec immédiat + remboursement.
-          // Tout le reste (erreur réseau, timeout, 5xx, rate limit, message ambigu) reste
-          // en attente de revue manuelle : on ne rembourse jamais sans certitude que
-          // l'argent n'est pas parti côté fournisseur.
-          const isDefinitiveRejection =
-            (Number.isFinite(Number(payoutResult.providerStatus)) &&
-              Number(payoutResult.providerStatus) >= 400 &&
-              Number(payoutResult.providerStatus) < 500) ||
-            errMsg.includes("invalid phone") ||
-            errMsg.includes("invalid number") ||
-            errMsg.includes("numéro invalide") ||
-            errMsg.includes("numero invalide") ||
-            errMsg.includes("not supported") ||
-            errMsg.includes("unsupported") ||
-            errMsg.includes("non supporté") ||
-            errMsg.includes("non supporte") ||
-            errMsg.includes("invalid operator") ||
-            errMsg.includes("opérateur invalide") ||
-            errMsg.includes("blacklist") ||
-            errMsg.includes("subscription invalid") ||
-            errMsg.includes("subscription inactive") ||
-            errMsg.includes("authentication") ||
-            errMsg.includes("unauthorized") ||
-            errMsg.includes("api key") ||
-            errMsg.includes("clé api") ||
-            errMsg.includes("credential");
-          const isPawaPayDefinitiveRejection =
-            paymentProvider === "pawapay" && payoutResult.status === "failed";
-          if (!isDefinitiveRejection && !isPawaPayDefinitiveRejection) {
-            if (paymentProvider === "pawapay" && pawaPayPayoutId) {
-              // PawaPay may return an HTTP/application error without a final
-              // status even though the payout was accepted. Reconcile the
-              // persisted UUID instead of leaving the transaction untracked.
-              addPendingPayout({
-                transactionId: transaction.id,
-                reference: pawaPayPayoutId,
-                externalReference: pawaPayPayoutId,
-                userId,
-                amount: creditedAmount.toFixed(2),
-                totalDebited: totalAmount.toFixed(2),
-                provider: "pawapay",
-                countryCode,
-                txType: "withdrawal",
-                txCurrency: withdrawalCurrency,
-                walletCurrency: withdrawalCurrency,
-              });
-            }
-            console.log(`[Withdrawal] Pending manual review for ${withdrawalRef} (${paymentProvider}): ${payoutResult.message}`);
-            await storage.updateTransactionStatus(transaction.id, "pending_manual");
-            await storage.createUserNotification({
-              userId,
-              type: "withdrawal_pending",
-              title: "Retrait en attente",
-              message: `Votre retrait de ${amount.toLocaleString()} ${withdrawalCurrency} est en cours de traitement. Il sera envoyé sur votre mobile dès validation par l'équipe Ashtech Pay.`,
-              transactionId: transaction.id,
-              isRead: false,
-            });
-            notifyWithdrawalPendingManual({
-              userName: user.fullName || user.username,
-              userEmail: user.email || "",
-              userPhone: user.phone || undefined,
-              amount: creditedAmount,
-              grossAmount: totalAmount,
-              currency: withdrawalCurrency,
-              phone: data.accountDetails,
-              operator: (withdrawalOperator as any)?.name || undefined,
-              reference: withdrawalRef,
-              provider: paymentProvider,
-              walletCurrency: withdrawalCurrency,
-              senderCountry: user.country || "",
-              recipientCountry: withdrawalCountryCode || "",
-              recipientName: user.fullName || user.username,
-            }).catch(() => {});
-          } else {
-            console.error(`[Withdrawal] Payout failed for ${withdrawalRef} (${paymentProvider}): ${payoutResult.message}`);
-            await storage.updateTransactionStatus(transaction.id, "failed");
-            await storage.refundToOriginalWallet(userId, "withdrawal", withdrawalCurrency, totalAmount);
-            if (paymentProvider === "pawapay") {
-              return res.status(400).json(buildProviderErrorPayload({
-                error: "payment_initiation_failed",
-                message: payoutResult.message
-                  ? `Le retrait a échoué : ${payoutResult.message}`
-                  : undefined,
-                fallback: "Le retrait a été refusé par le fournisseur de paiement.",
-                provider: "pawapay",
-                providerCode: payoutResult.providerCode,
-                providerStatus: payoutResult.providerStatus,
-              }));
-            }
-            return res.status(400).json({
-              message: `Le retrait a échoué: ${sanitizeGatewayMessage(payoutResult.message, "erreur du réseau de l'opérateur.")}`,
-            });
-          }
+          // Every provider-side initiation error, including insufficient provider
+          // balance, stays manual. The amount was already debited and must not be
+          // refunded automatically while the provider outcome is unresolved.
+          console.error(`[Withdrawal] Provider error — pending manual review for ${withdrawalRef} (${paymentProvider}): ${payoutResult.message}`);
+          await storage.updateTransactionStatus(transaction.id, "pending_manual");
+          transaction.status = "pending_manual";
+          await storage.createUserNotification({
+            userId,
+            type: "withdrawal_pending",
+            title: "Retrait en attente",
+            message: `Votre retrait de ${amount.toLocaleString()} ${withdrawalCurrency} est en attente de vérification par l'équipe Ashtech Pay.`,
+            transactionId: transaction.id,
+            isRead: false,
+          });
+          notifyWithdrawalPendingManual({
+            userName: user.fullName || user.username,
+            userEmail: user.email || "",
+            userPhone: user.phone || undefined,
+            amount: creditedAmount,
+            grossAmount: totalAmount,
+            currency: withdrawalCurrency,
+            phone: data.accountDetails,
+            operator: (withdrawalOperator as any)?.name || undefined,
+            reference: withdrawalRef,
+            provider: paymentProvider,
+            walletCurrency: withdrawalCurrency,
+            senderCountry: user.country || "",
+            recipientCountry: withdrawalCountryCode || "",
+            recipientName: user.fullName || user.username,
+          }).catch(() => {});
         }
       } catch (payoutErr: any) {
         console.error(`[Withdrawal] Payout error for ${withdrawalRef}:`, payoutErr.message);
@@ -6029,6 +5936,17 @@ export async function registerRoutes(
             recipientCountry: withdrawalCountryCode || "",
             recipientName: user.fullName || user.username,
           }).catch(() => {});
+        } else {
+          await storage.updateTransactionStatus(transaction.id, "pending_manual");
+          transaction.status = "pending_manual";
+          await storage.createUserNotification({
+            userId,
+            type: "withdrawal_pending",
+            title: "Retrait en attente",
+            message: `Votre retrait de ${amount.toLocaleString()} ${withdrawalCurrency} est en attente de vérification par l'équipe Ashtech Pay.`,
+            transactionId: transaction.id,
+            isRead: false,
+          });
         }
       }
 

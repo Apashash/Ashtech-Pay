@@ -3,8 +3,7 @@ import { checkAfribaPayStatus, checkAfribaPayoutStatus } from "./afribapay";
 import { checkPixPayStatus } from "./pixpay";
 import { getPawaPayPayout, isPawaPayUuidV4 } from "./pawapay";
 import { sendWithdrawalApprovedEmail } from "./email";
-import { notifyWithdrawalAutoValidated, notifyWithdrawalFailed } from "./telegram";
-import { setFailedCooldown } from "./failedCooldown";
+import { notifyWithdrawalAutoValidated } from "./telegram";
 
 const POLL_INTERVAL  = 6_000; // 6 seconds
 // Pas de limite de tentatives : un payout reste suivi indéfiniment jusqu'à ce que
@@ -158,51 +157,27 @@ export async function processPayout(payout: PendingPayout, apiStatus: string) {
       }).catch(() => {});
 
     } else {
-      const claimed = payout.provider === "pawapay"
-        ? await storage.claimPawaPayoutFailedAndRefund(payout.transactionId, ["pending", "processing", "pending_manual"])
-        : await storage.claimTransactionStatus(payout.transactionId, "failed", ["pending", "processing", "pending_manual"]);
+      // A provider-side failure, including insufficient provider liquidity, is
+      // intentionally manual. The wallet was already debited and an automatic
+      // refund could create a double-spend if the provider settles later.
+      const claimed = await storage.claimTransactionStatus(
+        payout.transactionId,
+        "pending_manual",
+        ["pending", "processing", "pending_manual"],
+      );
       if (!claimed) {
         removePendingPayout(payout.reference);
         return;
       }
-      // Déclenche le cooldown 5min — l'utilisateur doit attendre avant de relancer
-      setFailedCooldown(payout.userId);
-      const refundAmount = parseFloat(payout.totalDebited || payout.amount);
-      // Use walletCurrency (the key actually debited) when available; fall back to txCurrency.
-      // walletCurrency may differ from txCurrency when the wallet was stored under a generic code
-      // (e.g. "XOF") while the provider needed a country-specific variant (e.g. "XOFB").
-      if (payout.provider !== "pawapay") {
-        await storage.refundToOriginalWallet(payout.userId, payout.txType, payout.walletCurrency || payout.txCurrency, refundAmount);
-      }
       await storage.createUserNotification({
         userId:        payout.userId,
-        type:          "withdrawal_failed",
-        title:         "withdrawal_failed",
-        message:       JSON.stringify({ amount: payout.amount, currency }),
+        type:          "withdrawal_pending",
+        title:         "Retrait en attente",
+        message: `Votre retrait de ${payout.amount} ${currency} est en attente de vérification par l'équipe AshTech Pay.`,
         transactionId: payout.transactionId,
         isRead:        false,
       });
-      console.log(`[PayoutPoller] ❌ Payout failed (${apiStatus}): ${payout.reference} — refunded ${refundAmount} ${currency}`);
-
-      const failedUser = await storage.getUser(payout.userId).catch(() => null);
-      notifyWithdrawalFailed({
-        userName: (failedUser as any)?.fullName || (failedUser as any)?.username || "Utilisateur",
-        userEmail: (failedUser as any)?.email || "",
-        userPhone: (failedUser as any)?.phone || undefined,
-        senderCountry: (failedUser as any)?.country || undefined,
-        amount: payout.amount,
-        grossAmount: payout.totalDebited || payout.amount,
-        currency,
-        reference: (transaction as any).reference || payout.reference,
-        externalReference: (transaction as any).externalReference || undefined,
-        reason: apiStatus,
-        provider: payout.provider,
-         walletCurrency,
-        recipientName: transaction.recipientName || undefined,
-        recipientPhone: transaction.recipientPhone || undefined,
-        recipientCountry: transaction.recipientCountry || undefined,
-        txType: payout.txType,   // "transfer_out" → TRANSFERT ÉCHOUÉ
-      }).catch(() => {});
+      console.log(`[PayoutPoller] ⚠️ Payout provider error (${apiStatus}): ${payout.reference} — awaiting manual review`);
     }
 
     removePendingPayout(payout.reference);
