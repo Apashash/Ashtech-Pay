@@ -217,42 +217,45 @@ function HeroSection() {
   const { t } = useLanguage();
   return (
     <section className="pt-32 pb-16 overflow-x-hidden bg-background">
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 text-center">
-        <h1 className="text-4xl sm:text-5xl font-extrabold text-foreground leading-tight mb-6">
-          {t.hero.title1}{" "}
-          <span className="text-primary">{t.hero.title2}</span>
-        </h1>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)] gap-12 xl:gap-20 items-center">
+          <div className="text-center lg:text-left min-w-0">
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-foreground leading-tight mb-6">
+              {t.hero.title1}{" "}
+              <span className="text-primary">{t.hero.title2}</span>
+            </h1>
 
-        <p className="text-base sm:text-lg text-muted-foreground mb-6 leading-relaxed">
-          <span className="font-bold text-foreground">ASHTECH PAY</span>{t.hero.desc}
-        </p>
+            <p className="text-base sm:text-lg text-muted-foreground mb-6 leading-relaxed max-w-2xl mx-auto lg:mx-0">
+              <span className="font-bold text-foreground">ASHTECH PAY</span>{t.hero.desc}
+            </p>
 
-        <div className="space-y-2.5 text-left max-w-sm mx-auto mb-8">
-          {[t.hero.bullet1, t.hero.bullet2, t.hero.bullet3].map((item) => (
-            <div key={item} className="flex items-center gap-2.5 text-muted-foreground">
-              <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              <span className="text-sm">{item}</span>
+            <div className="space-y-2.5 text-left max-w-sm mx-auto lg:mx-0 mb-8">
+              {[t.hero.bullet1, t.hero.bullet2, t.hero.bullet3].map((item) => (
+                <div key={item} className="flex items-center gap-2.5 text-muted-foreground">
+                  <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span className="text-sm">{item}</span>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
 
-        <div className="flex flex-col gap-3 max-w-xs mx-auto">
-          <Link href="/register" className="w-full">
-            <Button size="lg" className="w-full rounded-full text-base font-semibold py-5" data-testid="button-hero-register">
-              {t.hero.cta}
-            </Button>
-          </Link>
-          <Link href="/login" className="w-full">
-            <Button size="lg" variant="outline" className="w-full rounded-full text-base font-semibold py-5" data-testid="button-hero-login">
-              {t.hero.ctaLogin}
-            </Button>
-          </Link>
-        </div>
+            <div className="flex flex-col gap-3 max-w-xs mx-auto lg:mx-0">
+              <Link href="/register" className="w-full">
+                <Button size="lg" className="w-full rounded-full text-base font-semibold py-5" data-testid="button-hero-register">
+                  {t.hero.cta}
+                </Button>
+              </Link>
+              <Link href="/login" className="w-full">
+                <Button size="lg" variant="outline" className="w-full rounded-full text-base font-semibold py-5" data-testid="button-hero-login">
+                  {t.hero.ctaLogin}
+                </Button>
+              </Link>
+            </div>
+          </div>
 
-        {/* Mini app preview */}
-        <div className="mt-12 bg-card rounded-2xl border border-border p-5 shadow-lg text-left max-w-sm mx-auto">
+          {/* Mini app preview */}
+          <div className="mt-12 lg:mt-0 bg-card rounded-2xl border border-border p-5 shadow-lg text-left w-full max-w-sm mx-auto">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
@@ -293,6 +296,7 @@ function HeroSection() {
               <span className={`text-sm font-semibold ${tx.type === 'in' ? 'text-green-500' : 'text-red-500'}`}>{tx.amount}</span>
             </div>
           ))}
+          </div>
         </div>
       </div>
     </section>
