@@ -220,7 +220,7 @@ function HeroSection() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)] gap-12 xl:gap-20 items-center">
           <div className="text-center lg:text-left min-w-0">
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-foreground leading-tight mb-6">
+            <h1 className="text-4xl sm:text-5xl lg:text-5xl font-extrabold text-foreground leading-tight mb-6">
               {t.hero.title1}{" "}
               <span className="text-primary">{t.hero.title2}</span>
             </h1>
