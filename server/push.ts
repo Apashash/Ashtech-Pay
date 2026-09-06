@@ -20,8 +20,115 @@ interface VapidConfig {
 
 let vapidConfig: VapidConfig | null | undefined;
 
+const PUSH_CTA = "Appuyez pour consulter votre compte.";
+
 function toBase64Url(value: Buffer): string {
   return value.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function formatAmount(amount: unknown, currency: unknown): string | null {
+  if (amount === null || amount === undefined || amount === "") return null;
+
+  const numericAmount = Number(amount);
+  const formattedAmount = Number.isFinite(numericAmount)
+    ? numericAmount.toLocaleString("fr-FR", { maximumFractionDigits: 2 })
+    : String(amount);
+  const formattedCurrency = currency ? ` ${String(currency)}` : "";
+  return `${formattedAmount}${formattedCurrency}`;
+}
+
+function normalizeAmountsInText(text: string): string {
+  return text.replace(/\b(\d+(?:[.,]\d+)?)\s+([A-Z]{3})\b/g, (_match, amount: string, currency: string) => {
+    return formatAmount(amount.replace(",", "."), currency) || `${amount} ${currency}`;
+  });
+}
+
+function parseNotificationMetadata(body: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(body);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function formatPushNotification(payload: BrowserPushPayload): {
+  title: string;
+  body: string;
+  url: string;
+} {
+  const metadata = parseNotificationMetadata(payload.body);
+  const amount = formatAmount(metadata?.amount, metadata?.currency);
+  const type = payload.type || "notification";
+  const detailsUrl = "/dashboard/notifications";
+  const accountUrl = "/dashboard";
+
+  switch (type) {
+    case "deposit_confirmed":
+      return {
+        title: "Dépôt confirmé",
+        body: amount
+          ? `Votre compte a été crédité de ${amount}. ${PUSH_CTA}`
+          : `Votre dépôt a été confirmé. ${PUSH_CTA}`,
+        url: accountUrl,
+      };
+    case "payment_link_received":
+      return {
+        title: "Paiement reçu",
+        body: amount
+          ? `Vous avez reçu un paiement de ${amount} via votre lien. ${PUSH_CTA}`
+          : `Un paiement a été reçu via votre lien. ${PUSH_CTA}`,
+        url: accountUrl,
+      };
+    case "withdrawal_confirmed":
+      return {
+        title: "Retrait confirmé",
+        body: amount
+          ? `Votre retrait de ${amount} a été effectué avec succès. ${PUSH_CTA}`
+          : `Votre retrait a été effectué avec succès. ${PUSH_CTA}`,
+        url: accountUrl,
+      };
+    case "deposit_failed":
+      return {
+        title: "Dépôt non abouti",
+        body: amount
+          ? `Votre dépôt de ${amount} n'a pas pu être confirmé. ${PUSH_CTA}`
+          : `Votre dépôt n'a pas pu être confirmé. ${PUSH_CTA}`,
+        url: detailsUrl,
+      };
+    case "payment_link_failed":
+      return {
+        title: "Paiement non abouti",
+        body: amount
+          ? `Le paiement de ${amount} via votre lien n'a pas abouti. ${PUSH_CTA}`
+          : `Le paiement via votre lien n'a pas abouti. ${PUSH_CTA}`,
+        url: detailsUrl,
+      };
+    case "withdrawal_failed":
+      return {
+        title: "Retrait non abouti",
+        body: amount
+          ? `Votre retrait de ${amount} n'a pas abouti. Consultez les détails dans votre compte.`
+          : `Votre retrait n'a pas abouti. Consultez les détails dans votre compte.`,
+        url: detailsUrl,
+      };
+    case "transfer_received":
+      return {
+        title: "Argent reçu",
+        body: `${normalizeAmountsInText(payload.body).replace(/\s+$/, "")} ${PUSH_CTA}`,
+        url: accountUrl,
+      };
+    default: {
+      const body = normalizeAmountsInText(payload.body);
+      const shouldAddCta = !/Appuyez pour consulter|consulter les détails/i.test(body)
+        && !["admin_message", "global_message"].includes(type);
+      return {
+        title: payload.title,
+        body: shouldAddCta ? `${body.replace(/\s+$/, "")} ${PUSH_CTA}` : body,
+        url: payload.url || detailsUrl,
+      };
+    }
+  }
 }
 
 /**
@@ -77,6 +184,7 @@ function decryptSubscription(subscription: PushSubscription): PushSubscription |
 export async function sendPushNotification(userId: string, payload: BrowserPushPayload): Promise<void> {
   if (!configureWebPush()) return;
 
+  const formatted = formatPushNotification(payload);
   const subscriptions = await db.select()
     .from(pushSubscriptions)
     .where(eq(pushSubscriptions.userId, userId));
@@ -92,11 +200,11 @@ export async function sendPushNotification(userId: string, payload: BrowserPushP
           keys: { p256dh: subscription.p256dh, auth: subscription.auth },
         },
         JSON.stringify({
-          title: payload.title,
-          body: payload.body,
+          title: formatted.title,
+          body: formatted.body,
           type: payload.type || "notification",
           transactionId: payload.transactionId || null,
-          url: payload.url || "/dashboard/notifications",
+          url: formatted.url,
         }),
         { TTL: 300 },
       );

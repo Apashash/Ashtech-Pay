@@ -10,10 +10,13 @@ self.addEventListener("push", (event) => {
   const title = data.title || "AshTech Pay";
   const options = {
     body: data.body || "Vous avez une nouvelle notification.",
-    icon: "/notification-transaction.png",
+    icon: "/favicon.png",
     badge: "/favicon.png",
-    tag: data.type || "ashtech-notification",
+    lang: "fr",
+    dir: "auto",
+    tag: data.transactionId ? `ashtech-${data.transactionId}` : (data.type || "ashtech-notification"),
     renotify: true,
+    actions: [{ action: "open", title: "Consulter mon compte" }],
     data: { url: data.url || "/dashboard/notifications", transactionId: data.transactionId || null },
   };
 
