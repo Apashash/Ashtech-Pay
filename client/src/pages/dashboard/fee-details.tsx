@@ -198,7 +198,7 @@ export default function FeeDetailsPage() {
 
                           return (
                             <div key={key} className="border-b border-border last:border-0">
-                              <div className={`flex items-center justify-between px-5 py-3 ${bg}`}>
+                              <div className={`flex items-center px-5 py-3 ${bg}`}>
                                 <div className="flex items-center gap-2">
                                   <div className="w-6 h-6 rounded-md flex items-center justify-center bg-white/60 dark:bg-black/20">
                                     <Icon className={`w-3.5 h-3.5 ${color}`} />
@@ -207,16 +207,6 @@ export default function FeeDetailsPage() {
                                   {isGlobalFallback && (
                                     <Badge variant="secondary" className="text-xs py-0 h-5">{fp.defaultBadge}</Badge>
                                   )}
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  {fmtMin(baseFee, country.currency) && (
-                                    <span className="text-xs text-muted-foreground hidden sm:inline">
-                                      {fmtMin(baseFee, country.currency)}
-                                    </span>
-                                  )}
-                                  <Badge variant="outline" className={`font-semibold text-sm ${badgeCls}`}>
-                                    {fmtFee(baseFee, country.currency)}
-                                  </Badge>
                                 </div>
                               </div>
 
