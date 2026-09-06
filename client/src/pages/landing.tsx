@@ -600,8 +600,8 @@ function ApiDeveloperSection() {
   return (
     <section className="py-20 lg:py-32 bg-card/50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-          <div className="animate-on-scroll">
+        <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center min-w-0">
+          <div className="animate-on-scroll min-w-0 w-full">
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20 mb-6">
               <Code2 className="w-4 h-4 text-primary" />
               <span className="text-sm text-primary font-medium">{t.landing.apiTag}</span>
@@ -636,8 +636,8 @@ function ApiDeveloperSection() {
             </div>
           </div>
 
-          <div className="animate-on-scroll-right">
-            <div className="rounded-2xl overflow-hidden border border-border shadow-xl">
+          <div className="animate-on-scroll-right min-w-0 w-full max-w-full">
+            <div className="rounded-2xl overflow-hidden border border-border shadow-xl min-w-0 max-w-full">
               <div className="flex items-center gap-2 px-4 py-3 bg-zinc-900 border-b border-zinc-800">
                 <div className="flex gap-1.5">
                   <div className="w-3 h-3 rounded-full bg-rose-500" />
@@ -646,7 +646,7 @@ function ApiDeveloperSection() {
                 </div>
                 <span className="text-xs text-zinc-400 ml-2 flex items-center gap-1.5"><Terminal className="w-3 h-3" />collect.js</span>
               </div>
-              <pre className="text-sm leading-relaxed p-6 bg-zinc-950 overflow-x-auto text-left font-mono">
+              <pre className="text-sm leading-relaxed p-6 bg-zinc-950 overflow-x-auto max-w-full whitespace-pre-wrap break-words text-left font-mono">
                 <span className="text-sky-400">const</span>
                 <span className="text-zinc-300"> response = </span>
                 <span className="text-amber-300">await</span>
@@ -681,7 +681,7 @@ function ApiDeveloperSection() {
                 </div>
               </div>
             </div>
-            <div className="mt-4 grid grid-cols-2 gap-3">
+            <div className="mt-4 grid grid-cols-2 gap-3 min-w-0 w-full">
               {stats.map(({ label, sub }) => (
                 <div key={label} className="rounded-xl border bg-card px-4 py-3 text-center">
                   <p className="text-lg font-bold text-foreground">{label}</p>
