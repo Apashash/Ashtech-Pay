@@ -1,16 +1,29 @@
 import path from "path";
 import fs from "fs";
+import { encryptField, decryptField, isFieldEncryptionConfigured } from "./fieldEncryption";
 
 // ─── AfribaPay Production Credentials ────────────────────────────────────────
-const AFRIBAPAY_PUBLIC_KEY  = process.env.AFRIBAPAY_PUBLIC_KEY!;
-const AFRIBAPAY_SECRET_KEY  = process.env.AFRIBAPAY_SECRET_KEY!;
-const AFRIBAPAY_MERCHANT_KEY = process.env.AFRIBAPAY_MERCHANT_KEY!;
-const AFRIBAPAY_AGENT_ID    = process.env.AFRIBAPAY_AGENT_ID!;
-
 const AFRIBAPAY_PAYIN_URL   = "https://api.afribapay.com";
 const AFRIBAPAY_PAYOUT_URL  = "https://api-payout.afribapay.com";
 
 const TOKEN_FILE = path.join(process.cwd(), ".local", "afribapay_token.json");
+const TOKEN_REFRESH_SKEW_MS = 60_000;
+const TOKEN_FALLBACK_TTL_MS = 15 * 60_000;
+
+function getAfribaPayCredentials() {
+  return {
+    publicKey: process.env.AFRIBAPAY_PUBLIC_KEY
+      || process.env.AFRIBAPAY_API_KEY
+      || process.env.AFRIBAPAY_CLIENT_ID
+      || "",
+    secretKey: process.env.AFRIBAPAY_SECRET_KEY
+      || process.env.AFRIBAPAY_API_SECRET
+      || process.env.AFRIBAPAY_CLIENT_SECRET
+      || "",
+    merchantKey: process.env.AFRIBAPAY_MERCHANT_KEY || "",
+    agentId: process.env.AFRIBAPAY_AGENT_ID || "",
+  };
+}
 
 // ─── PII masking helpers for logs ──────────────────────────────────────────────
 // Avoid printing full phone numbers / emails in server logs (GDPR / PII hygiene).
@@ -44,6 +57,8 @@ function maskPiiInObject(obj: any): any {
 // ─── Token cache ──────────────────────────────────────────────────────────────
 let cachedToken: string | null = null;
 let tokenExpiry: Date | null = null;
+let tokenRefreshPromise: Promise<string> | null = null;
+let tokenRefreshTimer: NodeJS.Timeout | null = null;
 
 // ─── Circuit breaker ──────────────────────────────────────────────────────────
 // After CIRCUIT_BREAK_AFTER consecutive auth failures, stop retrying for
@@ -77,38 +92,85 @@ function recordAuthFailure(raw: string) {
 }
 
 function loadCachedToken() {
+  if (!isFieldEncryptionConfigured()) return;
   try {
     if (fs.existsSync(TOKEN_FILE)) {
-      const data = JSON.parse(fs.readFileSync(TOKEN_FILE, "utf-8"));
-      if (data.token && data.expiry && new Date(data.expiry) > new Date(Date.now() + 60_000)) {
+      const encrypted = fs.readFileSync(TOKEN_FILE, "utf-8");
+      if (!encrypted.startsWith("enc:")) {
+        // Legacy versions wrote this file in cleartext. Never reuse that token.
+        clearCachedTokenFile();
+        return;
+      }
+      const decrypted = decryptField(encrypted);
+      if (!decrypted) return;
+      const data = JSON.parse(decrypted);
+      if (data.token && data.expiry && new Date(data.expiry) > new Date(Date.now() + TOKEN_REFRESH_SKEW_MS)) {
         cachedToken = data.token;
         tokenExpiry = new Date(data.expiry);
+        scheduleTokenRefresh(tokenExpiry);
       }
     }
   } catch {}
 }
 
 function saveCachedToken(token: string, expiry: Date) {
+  // Never persist a bearer token in cleartext. Without the project encryption
+  // key, keep the cache in memory only.
+  if (!isFieldEncryptionConfigured()) return;
   try {
     fs.mkdirSync(path.dirname(TOKEN_FILE), { recursive: true });
-    fs.writeFileSync(TOKEN_FILE, JSON.stringify({ token, expiry: expiry.toISOString() }));
+    const encrypted = encryptField(JSON.stringify({ token, expiry: expiry.toISOString() }));
+    if (!encrypted) return;
+    fs.writeFileSync(TOKEN_FILE, encrypted, { encoding: "utf-8", mode: 0o600 });
+    try { fs.chmodSync(TOKEN_FILE, 0o600); } catch {}
   } catch {}
+}
+
+function clearCachedTokenFile() {
+  try { fs.unlinkSync(TOKEN_FILE); } catch {}
+}
+
+function scheduleTokenRefresh(expiry: Date) {
+  if (tokenRefreshTimer) clearTimeout(tokenRefreshTimer);
+  const delay = Math.max(1_000, expiry.getTime() - Date.now() - TOKEN_REFRESH_SKEW_MS);
+  tokenRefreshTimer = setTimeout(() => {
+    tokenRefreshTimer = null;
+    void getAfribaPayToken().catch((err: any) => {
+      console.error("[AfribaPay Auth] Background token refresh failed:", err?.message || err);
+    });
+  }, delay);
+  tokenRefreshTimer.unref?.();
 }
 
 loadCachedToken();
 
 // ─── Get token ────────────────────────────────────────────────────────────────
 export async function getAfribaPayToken(): Promise<string> {
-  if (cachedToken && tokenExpiry && tokenExpiry > new Date(Date.now() + 60_000)) {
+  if (cachedToken && tokenExpiry && tokenExpiry > new Date(Date.now() + TOKEN_REFRESH_SKEW_MS)) {
     return cachedToken;
   }
 
-  // Circuit open — don't make HTTP calls, fail silently
+  if (tokenRefreshPromise) return tokenRefreshPromise;
+
+  tokenRefreshPromise = refreshAfribaPayToken();
+  try {
+    return await tokenRefreshPromise;
+  } finally {
+    tokenRefreshPromise = null;
+  }
+}
+
+async function refreshAfribaPayToken(): Promise<string> {
   if (isAfribaPayCircuitOpen()) {
-    throw new Error("AfribaPay circuit open — subscription invalid, retry paused for 30 min");
+    throw new Error("AfribaPay circuit open — authentication retry paused temporarily");
   }
 
-  const encoded = Buffer.from(`${AFRIBAPAY_PUBLIC_KEY}:${AFRIBAPAY_SECRET_KEY}`).toString("base64");
+  const { publicKey, secretKey } = getAfribaPayCredentials();
+  if (!publicKey || !secretKey) {
+    throw new Error("AfribaPay API credentials are not configured");
+  }
+
+  const encoded = Buffer.from(`${publicKey}:${secretKey}`).toString("base64");
   const res = await fetch(`${AFRIBAPAY_PAYIN_URL}/v1/token`, {
     method: "POST",
     headers: {
@@ -131,20 +193,85 @@ export async function getAfribaPayToken(): Promise<string> {
   authFailures = 0;
   circuitOpenUntil = null;
   cachedToken = data.data.access_token;
-  tokenExpiry = new Date(data.data.expires_at);
+  const expiresAt = data.data.expires_at || data.expires_at || data.data.expiresAt;
+  const expiresIn = Number(data.data.expires_in ?? data.expires_in);
+  const parsedExpiry = expiresAt ? new Date(expiresAt) : new Date(Date.now() + (
+    Number.isFinite(expiresIn) && expiresIn > 0 ? expiresIn * 1_000 : TOKEN_FALLBACK_TTL_MS
+  ));
+  tokenExpiry = Number.isNaN(parsedExpiry.getTime())
+    ? new Date(Date.now() + TOKEN_FALLBACK_TTL_MS)
+    : parsedExpiry;
   saveCachedToken(cachedToken!, tokenExpiry);
+  scheduleTokenRefresh(tokenExpiry);
   return cachedToken!;
+}
+
+export function invalidateAfribaPayToken() {
+  cachedToken = null;
+  tokenExpiry = null;
+  if (tokenRefreshTimer) clearTimeout(tokenRefreshTimer);
+  tokenRefreshTimer = null;
+  clearCachedTokenFile();
+  // A token rejection means the cached token is stale. Allow a clean
+  // authentication attempt immediately; real auth failures still trip the
+  // normal circuit breaker in refreshAfribaPayToken().
+  authFailures = 0;
+  circuitOpenUntil = null;
 }
 
 // ─── Common headers ───────────────────────────────────────────────────────────
 async function authHeaders() {
   const token = await getAfribaPayToken();
+  const { merchantKey, agentId } = getAfribaPayCredentials();
   return {
     "Authorization": `Bearer ${token}`,
-    "X-Merchant-Key": AFRIBAPAY_MERCHANT_KEY,
-    "X-Agent-ID": AFRIBAPAY_AGENT_ID,
+    "X-Merchant-Key": merchantKey,
+    "X-Agent-ID": agentId,
     "Content-Type": "application/json",
   };
+}
+
+function isInvalidSecurityToken(res: Response, data: any, rawText: string): boolean {
+  const message = [
+    typeof data === "string" ? data : "",
+    data?.message,
+    data?.error?.message,
+    data?.error,
+    data?.data?.message,
+  ].filter(Boolean).join(" ").toLowerCase();
+  return res.status === 401
+    || message.includes("security token is not valid")
+    || message.includes("invalid security token")
+    || message.includes("token has expired")
+    || message.includes("jwt expired")
+    || rawText.toLowerCase().includes("security token is not valid");
+}
+
+async function fetchAfribaPayJson(
+  url: string,
+  init: RequestInit = {},
+): Promise<{ res: Response; data: any }> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const headers = await authHeaders();
+    const response = await fetch(url, {
+      ...init,
+      headers: {
+        ...headers,
+        ...(init.headers as Record<string, string> | undefined),
+      },
+    });
+    const rawText = await response.text();
+    let data: any;
+    try { data = rawText ? JSON.parse(rawText) : null; } catch { data = rawText; }
+
+    if (attempt === 0 && isInvalidSecurityToken(response, data, rawText)) {
+      console.warn("[AfribaPay Auth] Provider rejected the bearer token; refreshing and retrying once.");
+      invalidateAfribaPayToken();
+      continue;
+    }
+    return { res: response, data };
+  }
+  throw new Error("AfribaPay authentication failed after token refresh");
 }
 
 // ─── Fetch countries (from AfribaPay) ────────────────────────────────────────
@@ -167,9 +294,7 @@ export interface AfribaPayCountry {
 }
 
 export async function fetchAfribaPayCountries(): Promise<Record<string, AfribaPayCountry>> {
-  const headers = await authHeaders();
-  const res = await fetch(`${AFRIBAPAY_PAYIN_URL}/v1/countries`, { headers });
-  const data = await res.json();
+  const { res, data } = await fetchAfribaPayJson(`${AFRIBAPAY_PAYIN_URL}/v1/countries`);
   if (!res.ok || data.error) {
     throw new Error(`AfribaPay countries failed: ${data.error?.message || JSON.stringify(data)}`);
   }
@@ -205,7 +330,7 @@ export interface AfribaPayinResult {
 
 export async function initiateAfribaPayin(params: AfribaPayinParams): Promise<AfribaPayinResult> {
   try {
-    const headers = await authHeaders();
+    const { merchantKey } = getAfribaPayCredentials();
     const body = {
       operator: params.operator,
       country: params.country,
@@ -213,7 +338,7 @@ export async function initiateAfribaPayin(params: AfribaPayinParams): Promise<Af
       amount: params.amount,
       currency: params.currency,
       order_id: params.order_id,
-      merchant_key: AFRIBAPAY_MERCHANT_KEY,
+      merchant_key: merchantKey,
       reference_id: params.reference_id || params.order_id,
       lang: params.lang || "fr",
       notify_url: params.notify_url || "",
@@ -223,13 +348,11 @@ export async function initiateAfribaPayin(params: AfribaPayinParams): Promise<Af
 
     console.log(`[AfribaPay Payin] Initiating ${params.amount} ${params.currency} for ${maskPhone(params.phone_number)} (${params.operator}/${params.country})`);
 
-    const res = await fetch(`${AFRIBAPAY_PAYIN_URL}/v1/pay/payin`, {
+    const { res, data } = await fetchAfribaPayJson(`${AFRIBAPAY_PAYIN_URL}/v1/pay/payin`, {
       method: "POST",
-      headers,
       body: JSON.stringify(body),
     });
 
-    const data = await res.json();
     console.log(`[AfribaPay Payin] Response:`, JSON.stringify(maskPiiInObject(data)));
 
     if (!res.ok || data.error) {
@@ -295,11 +418,7 @@ export interface AfribaPayoutResult {
 
 export async function initiateAfribaPayout(params: AfribaPayoutParams): Promise<AfribaPayoutResult> {
   try {
-    const headers = await authHeaders();
-    const payoutHeaders = {
-      ...headers,
-      "Authorization": headers["Authorization"],
-    };
+    const { merchantKey } = getAfribaPayCredentials();
 
     const body = {
       operator: params.operator,
@@ -308,7 +427,7 @@ export async function initiateAfribaPayout(params: AfribaPayoutParams): Promise<
       amount: params.amount,
       currency: params.currency,
       order_id: params.order_id,
-      merchant_key: AFRIBAPAY_MERCHANT_KEY,
+      merchant_key: merchantKey,
       reference_id: params.reference_id || params.order_id,
       lang: params.lang || "fr",
       notify_url: params.notify_url || "",
@@ -318,13 +437,11 @@ export async function initiateAfribaPayout(params: AfribaPayoutParams): Promise<
 
     console.log(`[AfribaPay Payout] Initiating ${params.amount} ${params.currency} to ${maskPhone(params.phone_number)} (${params.operator}/${params.country})`);
 
-    const res = await fetch(`${AFRIBAPAY_PAYOUT_URL}/v1/pay/payout`, {
+    const { res, data } = await fetchAfribaPayJson(`${AFRIBAPAY_PAYOUT_URL}/v1/pay/payout`, {
       method: "POST",
-      headers: payoutHeaders,
       body: JSON.stringify(body),
     });
 
-    const data = await res.json();
     console.log(`[AfribaPay Payout] Response:`, JSON.stringify(maskPiiInObject(data)));
 
     if (!res.ok || data.error) {
@@ -367,11 +484,9 @@ export async function checkAfribaPayStatus(
   type: "order_id" | "transaction_id" = "order_id"
 ): Promise<{ status: "completed" | "failed" | "pending"; raw?: any }> {
   try {
-    const headers = await authHeaders();
     const param = type === "transaction_id" ? `transaction_id=${identifier}` : `order_id=${identifier}`;
     const url = `${AFRIBAPAY_PAYIN_URL}/v1/status?${param}`;
-    const res = await fetch(url, { headers });
-    const data = await res.json();
+    const { res, data } = await fetchAfribaPayJson(url);
 
     const d = data.data;
     const rawStatus = (d?.status || d?.transaction_status || "").toUpperCase();
@@ -397,11 +512,9 @@ export async function checkAfribaPayoutStatus(
   type: "order_id" | "transaction_id" = "order_id"
 ): Promise<{ status: "completed" | "failed" | "pending"; raw?: any }> {
   try {
-    const headers = await authHeaders();
     const param = type === "transaction_id" ? `transaction_id=${identifier}` : `order_id=${identifier}`;
     const url = `${AFRIBAPAY_PAYOUT_URL}/v1/status?${param}`;
-    const res = await fetch(url, { headers });
-    const data = await res.json();
+    const { res, data } = await fetchAfribaPayJson(url);
 
     const d = data.data;
     const rawStatus = (d?.status || d?.transaction_status || d?.payout_status || "").toUpperCase();
@@ -449,9 +562,7 @@ export function computeAfribaPayFees(
 // ─── Get balance ──────────────────────────────────────────────────────────────
 export async function getAfribaPayBalance(): Promise<any> {
   try {
-    const headers = await authHeaders();
-    const res = await fetch(`${AFRIBAPAY_PAYIN_URL}/v1/balance`, { headers });
-    const data = await res.json();
+    const { data } = await fetchAfribaPayJson(`${AFRIBAPAY_PAYIN_URL}/v1/balance`);
     return data.data || data;
   } catch (err: any) {
     console.error("[AfribaPay Balance] Error:", err);
@@ -580,7 +691,7 @@ export async function initiateAfribaPayOtp(params: Omit<AfribaPayinParams, "retu
   raw?: any;
 }> {
   try {
-    const headers = await authHeaders();
+    const { merchantKey } = getAfribaPayCredentials();
     const body = {
       operator: params.operator,
       country: params.country,
@@ -588,7 +699,7 @@ export async function initiateAfribaPayOtp(params: Omit<AfribaPayinParams, "retu
       amount: params.amount,
       currency: params.currency,
       order_id: params.order_id,
-      merchant_key: AFRIBAPAY_MERCHANT_KEY,
+      merchant_key: merchantKey,
       reference_id: params.reference_id || params.order_id,
       lang: params.lang || "fr",
       notify_url: params.notify_url || "",
@@ -597,15 +708,11 @@ export async function initiateAfribaPayOtp(params: Omit<AfribaPayinParams, "retu
 
     console.log(`[AfribaPay OTP Init] Sending OTP SMS: ${params.amount} ${params.currency} for ${maskPhone(params.phone_number)} (${params.operator}/${params.country})`);
 
-    const res = await fetch(`${AFRIBAPAY_PAYIN_URL}/v1/pay/otp`, {
+    const { res, data } = await fetchAfribaPayJson(`${AFRIBAPAY_PAYIN_URL}/v1/pay/otp`, {
       method: "POST",
-      headers,
       body: JSON.stringify(body),
     });
 
-    let data: any = null;
-    const text = await res.text();
-    try { data = JSON.parse(text); } catch { data = text; }
     console.log(`[AfribaPay OTP Init] Response status=${res.status} body=${JSON.stringify(maskPiiInObject(data))}`);
 
     // Treat any non-2xx as failure (previously only >= 500 was checked,
@@ -656,7 +763,7 @@ export interface AfribaPayOtpParams {
 
 export async function confirmAfribaPayOtp(params: AfribaPayOtpParams): Promise<AfribaPayinResult> {
   try {
-    const headers = await authHeaders();
+    const { merchantKey } = getAfribaPayCredentials();
     const body = {
       operator: params.operator,
       country: params.country,
@@ -664,7 +771,7 @@ export async function confirmAfribaPayOtp(params: AfribaPayOtpParams): Promise<A
       amount: params.amount,
       currency: params.currency,
       order_id: params.order_id,
-      merchant_key: AFRIBAPAY_MERCHANT_KEY,
+      merchant_key: merchantKey,
       reference_id: params.reference_id || params.order_id,
       otp_code: params.otp_code,
       notify_url: params.notify_url || "",
@@ -675,15 +782,11 @@ export async function confirmAfribaPayOtp(params: AfribaPayOtpParams): Promise<A
 
     console.log(`[AfribaPay OTP Confirm] Calling /v1/pay/payin with otp_code for order_id=${params.order_id} operator=${params.operator}`);
 
-    const res = await fetch(`${AFRIBAPAY_PAYIN_URL}/v1/pay/payin`, {
+    const { res, data } = await fetchAfribaPayJson(`${AFRIBAPAY_PAYIN_URL}/v1/pay/payin`, {
       method: "POST",
-      headers,
       body: JSON.stringify(body),
     });
 
-    let data: any = null;
-    const text = await res.text();
-    try { data = JSON.parse(text); } catch { data = text; }
     console.log(`[AfribaPay OTP Confirm] Response status=${res.status} body=${JSON.stringify(maskPiiInObject(data))}`);
 
     if (!res.ok) {
