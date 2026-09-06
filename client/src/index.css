@@ -447,7 +447,11 @@ html.dark .bg-primary.text-black {
   color: hsl(var(--primary-foreground)) !important;
 }
 
-/* The original wordmark uses a dark text fill. Swap to its readable dark-mode variant. */
+/* Keep the original logo sizing everywhere else; only the compact header mark swaps in dark mode. */
 html.dark img[src="/logo.png"] {
   content: url("/logo-dark.png");
+}
+
+html.dark img[src="/logo-compact.png"] {
+  content: url("/logo-dark-compact.png");
 }

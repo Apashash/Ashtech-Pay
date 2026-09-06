@@ -120,7 +120,7 @@ function Navbar() {
           {/* Logo row */}
           <div className="flex items-center justify-between h-14">
             <Link href="/">
-              <img src="/logo.png" alt="AshTech Pay" className="h-20 w-auto" />
+              <img src="/logo-compact.png" alt="AshTech Pay" className="h-12 w-auto" />
             </Link>
             <div className="flex items-center gap-1">
               <div className="hidden lg:flex items-center gap-2 mr-2">
