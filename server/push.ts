@@ -88,6 +88,14 @@ function formatPushNotification(payload: BrowserPushPayload): {
           : `Votre retrait a été effectué avec succès. ${PUSH_CTA}`,
         url: accountUrl,
       };
+    case "withdrawal_pending":
+      return {
+        title: "Retrait en attente",
+        body: amount
+          ? `Votre retrait de ${amount} est en attente. Cliquez pour consulter.`
+          : "Votre retrait est en attente. Cliquez pour consulter.",
+        url: detailsUrl,
+      };
     case "deposit_failed":
       return {
         title: "Dépôt non abouti",
