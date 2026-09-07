@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -20,7 +20,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-const HIDE_INSTALL_BANNER_KEY = "hideAppInstallBanner";
+const HIDE_INSTALL_BANNER_KEY = "hideAppInstallBannerUntil";
+const SNOOZE_INSTALL_BANNER_MS = 2 * 60 * 60 * 1000;
+const DISMISS_INSTALL_BANNER_MS = 14 * 24 * 60 * 60 * 1000;
 
 type InstallDevice = "android" | "ios" | "other" | "unknown";
 type GuideMode = "ios" | "android" | null;
@@ -47,6 +49,25 @@ function getInstallDevice(): InstallDevice {
   if (/iphone|ipad|ipod/.test(userAgent) || isAppleTablet) return "ios";
   if (/android/.test(userAgent)) return "android";
   return "other";
+}
+
+function getInstallBannerSuppressedUntil(): number {
+  try {
+    const stored = window.localStorage.getItem(HIDE_INSTALL_BANNER_KEY);
+    if (!stored || stored === "true") {
+      if (stored === "true") window.localStorage.removeItem(HIDE_INSTALL_BANNER_KEY);
+      return 0;
+    }
+
+    const until = Number(stored);
+    if (!Number.isFinite(until) || until <= Date.now()) {
+      window.localStorage.removeItem(HIDE_INSTALL_BANNER_KEY);
+      return 0;
+    }
+    return until;
+  } catch {
+    return 0;
+  }
 }
 
 function IosStepIllustration({ step }: { step: 1 | 2 | 3 }) {
@@ -128,6 +149,7 @@ function AppInstallBanner() {
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
   const [guideMode, setGuideMode] = useState<GuideMode>(null);
   const [iosStep, setIosStep] = useState<1 | 2 | 3>(1);
+  const cooldownTimerRef = useRef<number | null>(null);
 
   const isAdminRoute =
     location === adminPath ||
@@ -167,11 +189,7 @@ function AppInstallBanner() {
 
     setDevice(getInstallDevice());
     updateStandalone();
-    try {
-      setVisible(localStorage.getItem(HIDE_INSTALL_BANNER_KEY) !== "true");
-    } catch {
-      setVisible(true);
-    }
+    setVisible(getInstallBannerSuppressedUntil() <= Date.now());
 
     window.addEventListener("beforeinstallprompt", promptHandler);
     window.addEventListener("ashtechbeforeinstallprompt", adoptStoredPrompt);
@@ -187,6 +205,9 @@ function AppInstallBanner() {
       window.removeEventListener("appinstalled", installedHandler);
       document.removeEventListener("click", sidebarInteractionHandler, true);
       displayMode.removeEventListener?.("change", updateStandalone);
+      if (cooldownTimerRef.current !== null) {
+        window.clearTimeout(cooldownTimerRef.current);
+      }
     };
   }, []);
 
@@ -200,11 +221,7 @@ function AppInstallBanner() {
       setVisible(false);
       return;
     }
-    try {
-      setVisible(localStorage.getItem(HIDE_INSTALL_BANNER_KEY) !== "true");
-    } catch {
-      setVisible(true);
-    }
+    setVisible(getInstallBannerSuppressedUntil() <= Date.now());
   }, [deviceCanInstall, isEligibleRoute, isStandalone]);
 
   if (!visible || isStandalone || !deviceCanInstall || !isEligibleRoute) return null;
