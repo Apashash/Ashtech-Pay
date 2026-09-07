@@ -11,6 +11,9 @@ export interface BrowserPushPayload {
   type?: string;
   transactionId?: string | null;
   url?: string;
+  /** Internal formatting overrides; never sent directly to the browser. */
+  amountOverride?: unknown;
+  currencyOverride?: unknown;
 }
 
 interface VapidConfig {
@@ -70,7 +73,8 @@ function formatPushNotification(payload: BrowserPushPayload): {
   url: string;
 } {
   const metadata = parseNotificationMetadata(payload.body);
-  const amount = formatAmount(metadata?.amount, metadata?.currency)
+  const amount = formatAmount(payload.amountOverride, payload.currencyOverride)
+    || formatAmount(metadata?.amount, metadata?.currency)
     || extractAmountFromText(payload.body);
   const type = payload.type || "notification";
   const detailsUrl = "/dashboard/notifications";
@@ -176,10 +180,8 @@ async function hydrateIncomingPaymentPayload(payload: BrowserPushPayload): Promi
 
   return {
     ...payload,
-    body: JSON.stringify({
-      amount: exactAmount,
-      currency: transaction.currency || "XAF",
-    }),
+    amountOverride: exactAmount,
+    currencyOverride: transaction.currency || "XAF",
   };
 }
 
