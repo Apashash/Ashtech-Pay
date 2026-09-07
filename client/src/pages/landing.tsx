@@ -48,6 +48,25 @@ import { useLanguage } from "@/lib/language";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import operatorsImage from "@assets/IMG_0057_1775398589784.png";
 
+const countryList = [
+  { name: "Cameroun", code: "cm" },
+  { name: "Sénégal", code: "sn" },
+  { name: "Côte d'Ivoire", code: "ci" },
+  { name: "Mali", code: "ml" },
+  { name: "Burkina Faso", code: "bf" },
+  { name: "Niger", code: "ne" },
+  { name: "Togo", code: "tg" },
+  { name: "Bénin", code: "bj" },
+  { name: "Gabon", code: "ga" },
+  { name: "Congo", code: "cg" },
+  { name: "RD Congo", code: "cd" },
+  { name: "Centrafrique", code: "cf" },
+  { name: "Tchad", code: "td" },
+  { name: "Madagascar", code: "mg" },
+  { name: "Maroc", code: "ma" },
+  { name: "Tunisie", code: "tn" },
+  { name: "Algérie", code: "dz" },
+];
 
 function Navbar() {
   const { theme, toggleTheme } = useTheme();
@@ -532,6 +551,35 @@ function TestimonialsSection() {
   );
 }
 
+function CountriesSection() {
+  const { t } = useLanguage();
+  const duplicatedCountries = [...countryList, ...countryList];
+
+  return (
+    <section className="bg-card border-y border-border overflow-hidden">
+      <div className="py-14">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-6">
+          <h3 className="text-center text-lg font-semibold text-foreground">{t.landing.countriesTitle}</h3>
+        </div>
+        <div className="relative overflow-hidden">
+          <div className="flex animate-marquee-reverse">
+            {duplicatedCountries.map((country, index) => (
+              <div key={index} className="flex-shrink-0 mx-4 px-6 py-3 bg-background rounded-lg border border-border flex items-center gap-3">
+                <img
+                  src={`https://flagcdn.com/w40/${country.code}.png`}
+                  alt={`Drapeau ${country.name}`}
+                  className="w-8 h-6 rounded object-cover"
+                />
+                <span className="text-foreground font-medium whitespace-nowrap">{country.name}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function OperatorLogosSection() {
   const { t } = useLanguage();
   const operators = [
@@ -846,6 +894,7 @@ export default function LandingPage() {
       <Navbar />
       <HeroSection />
       <ReadyToStartSection />
+      <CountriesSection />
       <SolutionsSection />
       <OperatorLogosSection />
       <FeaturesSection />
