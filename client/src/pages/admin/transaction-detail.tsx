@@ -42,6 +42,7 @@ interface TransactionDetails {
   recipientName?: string | null;
   recipientCountry?: string | null;
   source?: string | null;
+  notifyUrl?: string | null;
   user?: { id?: string; fullName: string; email: string; username: string; country?: string; phone?: string } | null;
   paymentIntent?: { payerName?: string; payerEmail?: string; payerPhone?: string; payerCountry?: string } | null;
   paymentLink?: { title: string; slug: string } | null;
@@ -209,6 +210,10 @@ export default function AdminTransactionDetail() {
       }
     : null;
   const cryptoCoinName = cryptoMeta?.assetCode ? cryptoMeta.assetCode.split(".")[0] : "USDT";
+  const metadataJson = tx.metadata && Object.keys(tx.metadata).length > 0
+    ? JSON.stringify(tx.metadata, null, 2)
+    : null;
+  const webhookIsLink = !!tx.notifyUrl && /^https?:\/\//i.test(tx.notifyUrl);
 
   const isTerminal = tx.status === "refunded";
   const allowedTransitions = VALID_TRANSITIONS[tx.status] ?? [];
@@ -335,8 +340,61 @@ export default function AdminTransactionDetail() {
             {tx.description && (
               <InfoRow icon={<FileText className="w-4 h-4" />} label="Description" value={tx.description} />
             )}
+            {tx.notifyUrl && (
+              <InfoRow
+                icon={<Link2 className="w-4 h-4" />}
+                label="Webhook marchand"
+                value={
+                  <div className="flex items-center gap-1 justify-end">
+                    {webhookIsLink ? (
+                      <a
+                        href={tx.notifyUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs text-primary hover:underline break-all"
+                      >
+                        {tx.notifyUrl}
+                      </a>
+                    ) : (
+                      <span className="text-xs font-mono break-all">{tx.notifyUrl}</span>
+                    )}
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-6 w-6 shrink-0"
+                      onClick={() => copyToClipboard(tx.notifyUrl!)}
+                      data-testid="button-copy-webhook-url"
+                    >
+                      <Copy className="w-3 h-3" />
+                    </Button>
+                  </div>
+                }
+              />
+            )}
           </CardContent>
         </Card>
+
+        {metadataJson && (
+          <Card>
+            <CardHeader className="pb-2 flex flex-row items-center justify-between">
+              <CardTitle className="text-sm text-muted-foreground uppercase tracking-wide">Metadata</CardTitle>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 gap-1"
+                onClick={() => copyToClipboard(metadataJson)}
+                data-testid="button-copy-metadata"
+              >
+                <Copy className="w-3 h-3" /> Copier
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <pre className="max-h-96 overflow-auto rounded-lg bg-muted/50 p-3 text-xs font-mono whitespace-pre-wrap break-words">
+                {metadataJson}
+              </pre>
+            </CardContent>
+          </Card>
+        )}
 
         {tx.user && (
           <Card>

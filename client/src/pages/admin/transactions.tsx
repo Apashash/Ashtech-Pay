@@ -464,7 +464,61 @@ export default function AdminTransactions() {
                     <span className="text-sm font-medium text-right max-w-[60%]">{txDetails.description}</span>
                   </div>
                 )}
+
+                {txDetails.notifyUrl && (
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-2 text-muted-foreground shrink-0">
+                      <Link2 className="w-4 h-4" />
+                      <span className="text-sm">Webhook marchand</span>
+                    </div>
+                    <div className="flex items-center gap-1 max-w-[65%]">
+                      {/^https?:\/\//i.test(txDetails.notifyUrl) ? (
+                        <a
+                          href={txDetails.notifyUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs text-primary hover:underline break-all text-right"
+                        >
+                          {txDetails.notifyUrl}
+                        </a>
+                      ) : (
+                        <span className="text-xs font-mono break-all text-right">{txDetails.notifyUrl}</span>
+                      )}
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => copyReference(txDetails.notifyUrl!)}
+                        data-testid="button-copy-webhook-url-detail"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
+
+              {txDetails.metadata && Object.keys(txDetails.metadata).length > 0 && (
+                <>
+                  <Separator />
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-semibold text-muted-foreground">Metadata</p>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 gap-1"
+                        onClick={() => copyReference(JSON.stringify(txDetails.metadata, null, 2))}
+                        data-testid="button-copy-metadata-detail"
+                      >
+                        <Copy className="w-3 h-3" /> Copier
+                      </Button>
+                    </div>
+                    <pre className="max-h-64 overflow-auto rounded-lg bg-muted/50 p-3 text-xs font-mono whitespace-pre-wrap break-words">
+                      {JSON.stringify(txDetails.metadata, null, 2)}
+                    </pre>
+                  </div>
+                </>
+              )}
 
               {txDetails.user && (
                 <>
