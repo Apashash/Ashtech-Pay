@@ -355,13 +355,13 @@ function SolutionsSection() {
   return (
     <section className="py-16 lg:py-24 bg-background">
       <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-12">
+        <div className="text-center mb-12 animate-on-scroll">
           <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-3">Nos solutions</h2>
           <p className="text-muted-foreground text-base">Tout ce dont vous avez besoin pour vendre et encaisser en ligne en Afrique.</p>
         </div>
         <div className="flex flex-col gap-6">
-          {solutions.map(({ icon: Icon, badge, title, description, link }) => (
-            <div key={title} className="relative bg-card border border-border rounded-2xl p-7 shadow-sm hover:shadow-md transition-shadow">
+          {solutions.map(({ icon: Icon, badge, title, description, link }, index) => (
+            <div key={title} className="relative bg-card border border-border rounded-2xl p-7 shadow-sm hover:shadow-md transition-shadow animate-on-scroll-scale" style={{ transitionDelay: `${index * 70}ms` }}>
               {badge && (
                 <span className={`absolute top-4 right-4 text-xs font-bold px-3 py-1 rounded-full ${badge.color}`}>
                   {badge.label}
@@ -388,7 +388,7 @@ function CommerceVisualSection() {
     <section className="py-16 lg:py-24 bg-card/50 overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-10 lg:gap-16 items-center">
-          <div className="order-2 lg:order-1">
+          <div className="order-2 lg:order-1 animate-on-scroll-left">
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20 mb-5">
               <Globe className="w-4 h-4 text-primary" />
               <span className="text-sm text-primary font-medium">Le commerce africain, connecté</span>
@@ -400,7 +400,7 @@ function CommerceVisualSection() {
               Proposez une expérience de paiement claire et familière, du Mobile Money aux cartes bancaires, avec une infrastructure pensée pour les réalités du marché africain.
             </p>
           </div>
-          <div className="order-1 lg:order-2 relative group">
+          <div className="order-1 lg:order-2 relative group animate-on-scroll-right">
             <div className="absolute -inset-3 rounded-3xl bg-primary/10 blur-2xl" />
             <div className="relative overflow-hidden rounded-3xl border border-border bg-background shadow-xl">
               <img
@@ -438,8 +438,8 @@ function FeaturesSection() {
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">{t.landing.walletDesc}</p>
         </div>
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {features.map((feature, index) => (
-            <div key={index} className="p-6 bg-card border border-border rounded-2xl hover:border-primary/40 hover:shadow-md transition-all duration-300 group" data-testid={`card-feature-${index}`}>
+            {features.map((feature, index) => (
+            <div key={index} className="p-6 bg-card border border-border rounded-2xl hover:border-primary/40 hover:shadow-md transition-all duration-300 group animate-on-scroll-scale" style={{ transitionDelay: `${index * 70}ms` }} data-testid={`card-feature-${index}`}>
               <div className="w-14 h-14 bg-background border-2 border-border rounded-full flex items-center justify-center mb-5 group-hover:border-primary/50 transition-colors">
                 <feature.icon className="w-7 h-7 text-primary" />
               </div>
@@ -475,7 +475,7 @@ function WhyAshtechSection() {
   return (
     <section className="py-20 lg:py-32 bg-card/50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-16">
+        <div className="text-center mb-16 animate-on-scroll">
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20 mb-4">
             <Users className="w-4 h-4 text-primary" />
             <span className="text-sm text-primary font-medium">{t.landing.whyTag}</span>
@@ -484,19 +484,19 @@ function WhyAshtechSection() {
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">{t.landing.whyDesc}</p>
         </div>
         <div className="flex flex-wrap justify-center gap-3 mb-16">
-          {targetAudience.map((item, index) => (
-            <div key={index} className="flex items-center gap-2.5 px-5 py-2.5 bg-card rounded-full border border-border hover:border-primary/50 hover:shadow-sm transition-all">
+            {targetAudience.map((item, index) => (
+            <div key={index} className="flex items-center gap-2.5 px-5 py-2.5 bg-card rounded-full border border-border hover:border-primary/50 hover:shadow-sm transition-all animate-on-scroll-scale" style={{ transitionDelay: `${index * 45}ms` }}>
               <item.icon className="w-4 h-4 text-primary" />
               <span className="text-foreground text-sm font-semibold">{item.title}</span>
             </div>
           ))}
         </div>
-        <div className="text-center mb-12">
+        <div className="text-center mb-12 animate-on-scroll">
           <h3 className="text-2xl font-bold text-foreground mb-4">{t.landing.whyChooseTitle}</h3>
         </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
-          {benefits.map((benefit, index) => (
-            <div key={index} className="flex gap-4 items-start" data-testid={`benefit-${index}`}>
+            {benefits.map((benefit, index) => (
+            <div key={index} className="flex gap-4 items-start animate-on-scroll-right" style={{ transitionDelay: `${index * 60}ms` }} data-testid={`benefit-${index}`}>
               <div className="w-12 h-12 bg-background border-2 border-border rounded-full flex items-center justify-center flex-shrink-0 shrink-0">
                 <benefit.icon className="w-6 h-6 text-primary" />
               </div>
@@ -556,7 +556,7 @@ function MarketVisualSection() {
     <section className="py-16 lg:py-24 bg-background overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] gap-10 lg:gap-16 items-center">
-          <div className="relative max-w-xl mx-auto w-full group">
+          <div className="relative max-w-xl mx-auto w-full group animate-on-scroll-left">
             <div className="absolute -inset-3 rounded-3xl bg-primary/10 blur-2xl" />
             <div className="relative overflow-hidden rounded-3xl border border-border bg-card shadow-xl">
               <img
@@ -566,7 +566,7 @@ function MarketVisualSection() {
               />
             </div>
           </div>
-          <div>
+          <div className="animate-on-scroll-right">
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20 mb-5">
               <Smartphone className="w-4 h-4 text-primary" />
               <span className="text-sm text-primary font-medium">Une expérience pensée pour le mobile</span>
@@ -611,8 +611,8 @@ function SecuritySection() {
           </p>
         </div>
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {securityFeatures.map((feature, index) => (
-            <div key={index} className="p-6 bg-slate-800/60 border border-slate-700 rounded-2xl hover:border-primary/50 transition-all duration-300 group" data-testid={`security-${index}`}>
+            {securityFeatures.map((feature, index) => (
+            <div key={index} className="p-6 bg-slate-800/60 border border-slate-700 rounded-2xl hover:border-primary/50 transition-all duration-300 group animate-on-scroll-scale" style={{ transitionDelay: `${index * 60}ms` }} data-testid={`security-${index}`}>
               <div className="w-14 h-14 bg-primary/15 border border-primary/30 rounded-full flex items-center justify-center mb-5 group-hover:bg-primary/25 transition-colors">
                 <feature.icon className="w-7 h-7 text-primary" />
               </div>
@@ -661,11 +661,11 @@ function CountriesSection() {
     <section className="bg-card border-y border-border overflow-hidden">
       <div className="py-14">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-6">
-          <h3 className="text-center text-lg font-semibold text-foreground">{t.landing.countriesTitle}</h3>
+          <h3 className="text-center text-lg font-semibold text-foreground animate-on-scroll">{t.landing.countriesTitle}</h3>
         </div>
         <div
           ref={containerRef}
-          className="relative overflow-x-auto overflow-y-hidden select-none cursor-grab active:cursor-grabbing touch-pan-y [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="relative overflow-x-auto overflow-y-hidden select-none cursor-grab active:cursor-grabbing touch-pan-y [scrollbar-width:none] [&::-webkit-scrollbar]:hidden animate-on-scroll-right"
           aria-label="Faire défiler les pays disponibles"
           {...scrollHandlers}
         >
@@ -709,11 +709,11 @@ function OperatorLogosSection() {
   return (
     <section className="py-14 bg-card border-y border-border overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-8 text-center">
-        <p className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">{t.landing.operatorsTitle}</p>
+        <p className="text-sm font-semibold uppercase tracking-widest text-muted-foreground animate-on-scroll">{t.landing.operatorsTitle}</p>
       </div>
       <div
         ref={containerRef}
-        className="relative overflow-x-auto overflow-y-hidden select-none cursor-grab active:cursor-grabbing touch-pan-y [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="relative overflow-x-auto overflow-y-hidden select-none cursor-grab active:cursor-grabbing touch-pan-y [scrollbar-width:none] [&::-webkit-scrollbar]:hidden animate-on-scroll-left"
         aria-label="Faire défiler les opérateurs Mobile Money"
         {...scrollHandlers}
       >
@@ -827,8 +827,8 @@ function ApiDeveloperSection() {
               </div>
             </div>
             <div className="mt-4 grid grid-cols-2 gap-3 min-w-0 w-full">
-              {stats.map(({ label, sub }) => (
-                <div key={label} className="rounded-xl border bg-card px-4 py-3 text-center">
+              {stats.map(({ label, sub }, index) => (
+                <div key={label} className="rounded-xl border bg-card px-4 py-3 text-center animate-on-scroll-scale" style={{ transitionDelay: `${index * 60}ms` }}>
                   <p className="text-lg font-bold text-foreground">{label}</p>
                   <p className="text-xs text-muted-foreground">{sub}</p>
                 </div>
