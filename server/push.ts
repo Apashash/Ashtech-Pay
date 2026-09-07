@@ -38,9 +38,11 @@ function formatAmount(amount: unknown, currency: unknown): string | null {
 }
 
 function normalizeAmountsInText(text: string): string {
-  return text.replace(/\b(\d+(?:[.,]\d+)?)\s+([A-Z]{3})\b/g, (_match, amount: string, currency: string) => {
-    return formatAmount(amount.replace(",", "."), currency) || `${amount} ${currency}`;
-  });
+  return text
+    .replace(/[\u00a0\u202f]/g, " ")
+    .replace(/\b(\d[\d\s.,]*)\s+([A-Z]{3})\b/g, (_match, amount: string, currency: string) => {
+      return formatAmount(amount.replace(/\s/g, "").replace(",", "."), currency) || `${amount} ${currency}`;
+    });
 }
 
 function parseNotificationMetadata(body: string): Record<string, unknown> | null {
@@ -53,7 +55,9 @@ function parseNotificationMetadata(body: string): Record<string, unknown> | null
 }
 
 function extractAmountFromText(text: string): string | null {
-  const match = text.replace(/\u00a0/g, " ").match(/\b(\d[\d\s.,]*)\s+([A-Z]{3})\b/);
+  const match = text
+    .replace(/[\u00a0\u202f]/g, " ")
+    .match(/\b(\d[\d\s.,]*)\s+([A-Z]{3})\b/);
   if (!match) return null;
 
   const rawAmount = match[1].replace(/\s/g, "").replace(",", ".");
@@ -149,22 +153,31 @@ function formatPushNotification(payload: BrowserPushPayload): {
 }
 
 async function hydrateIncomingPaymentPayload(payload: BrowserPushPayload): Promise<BrowserPushPayload> {
-  if (!payload.transactionId || !["deposit_confirmed", "payment_link_received"].includes(payload.type || "")) {
+  if (!payload.transactionId) {
     return payload;
   }
 
   const [transaction] = await db
-    .select({ amount: transactions.amount, currency: transactions.currency })
+    .select({
+      amount: transactions.amount,
+      totalAmount: transactions.totalAmount,
+      currency: transactions.currency,
+    })
     .from(transactions)
     .where(eq(transactions.id, payload.transactionId))
     .limit(1);
 
   if (!transaction) return payload;
 
+  const isWithdrawal = payload.type?.startsWith("withdrawal_") ?? false;
+  const exactAmount = isWithdrawal
+    ? transaction.totalAmount || transaction.amount
+    : transaction.amount;
+
   return {
     ...payload,
     body: JSON.stringify({
-      amount: transaction.amount,
+      amount: exactAmount,
       currency: transaction.currency || "XAF",
     }),
   };
