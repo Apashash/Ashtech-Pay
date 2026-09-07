@@ -209,11 +209,7 @@ function AppInstallBanner() {
 
   if (!visible || isStandalone || !deviceCanInstall || !isEligibleRoute) return null;
 
-  const installLabel = isIos
-    ? "Installer"
-    : isAndroid
-      ? deferredPrompt ? "Installer" : "Voir comment installer"
-      : "Installer";
+  const installLabel = "Installer";
 
   const handleInstall = async () => {
     if (isIos) {
@@ -222,9 +218,10 @@ function AppInstallBanner() {
       return;
     }
 
-    if (deferredPrompt) {
-      await deferredPrompt.prompt();
-      const choice = await deferredPrompt.userChoice;
+    const installPrompt = deferredPrompt ?? window.__ashtechDeferredInstallPrompt;
+    if (installPrompt) {
+      await installPrompt.prompt();
+      const choice = await installPrompt.userChoice;
       setDeferredPrompt(null);
       window.__ashtechDeferredInstallPrompt = null;
       if (choice.outcome === "accepted") setVisible(false);
