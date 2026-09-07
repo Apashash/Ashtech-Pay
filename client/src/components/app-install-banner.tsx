@@ -29,6 +29,12 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
 }
 
+declare global {
+  interface Window {
+    __ashtechDeferredInstallPrompt?: BeforeInstallPromptEvent | null;
+  }
+}
+
 function isStandaloneDisplay(): boolean {
   return window.matchMedia("(display-mode: standalone)").matches
     || Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
@@ -132,14 +138,21 @@ function AppInstallBanner() {
     if (typeof window === "undefined") return;
 
     const updateStandalone = () => setIsStandalone(isStandaloneDisplay());
+    const adoptStoredPrompt = () => {
+      const storedPrompt = window.__ashtechDeferredInstallPrompt;
+      if (storedPrompt) setDeferredPrompt(storedPrompt);
+    };
     const promptHandler = (event: Event) => {
       event.preventDefault();
-      setDeferredPrompt(event as BeforeInstallPromptEvent);
+      const installPrompt = event as BeforeInstallPromptEvent;
+      window.__ashtechDeferredInstallPrompt = installPrompt;
+      setDeferredPrompt(installPrompt);
     };
     const installedHandler = () => {
       setIsStandalone(true);
       setVisible(false);
       setDeferredPrompt(null);
+      window.__ashtechDeferredInstallPrompt = null;
     };
 
     setDevice(getInstallDevice());
@@ -151,12 +164,15 @@ function AppInstallBanner() {
     }
 
     window.addEventListener("beforeinstallprompt", promptHandler);
+    window.addEventListener("ashtechbeforeinstallprompt", adoptStoredPrompt);
     window.addEventListener("appinstalled", installedHandler);
+    adoptStoredPrompt();
     const displayMode = window.matchMedia("(display-mode: standalone)");
     displayMode.addEventListener?.("change", updateStandalone);
 
     return () => {
       window.removeEventListener("beforeinstallprompt", promptHandler);
+      window.removeEventListener("ashtechbeforeinstallprompt", adoptStoredPrompt);
       window.removeEventListener("appinstalled", installedHandler);
       displayMode.removeEventListener?.("change", updateStandalone);
     };
@@ -198,6 +214,7 @@ function AppInstallBanner() {
       await deferredPrompt.prompt();
       const choice = await deferredPrompt.userChoice;
       setDeferredPrompt(null);
+      window.__ashtechDeferredInstallPrompt = null;
       if (choice.outcome === "accepted") setVisible(false);
       return;
     }

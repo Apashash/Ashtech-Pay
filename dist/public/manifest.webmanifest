@@ -1,6 +1,7 @@
 {
   "name": "AshTech Pay",
   "short_name": "AshTech Pay",
+  "id": "/",
   "description": "Paiements Mobile Money en Afrique",
   "start_url": "/dashboard",
   "scope": "/",
