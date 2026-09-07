@@ -40,7 +40,7 @@ import {
   ExternalLink
 } from "lucide-react";
 import heroPaymentImage from "@assets/file_00000000b290820e8318daa118934236_1788747702718.png";
-import marketPaymentImage from "@assets/images_(1)_1788747714286.jpeg";
+import marketPaymentImage from "@assets/images_(1)~2_1788747988443.jpeg";
 import commercePaymentImage from "@assets/barkapay-african-payment-hub-for-e-commerce_1788747792967.webp";
 import { useState, useEffect, useRef } from "react";
 import { useTheme } from "@/components/theme-provider";
