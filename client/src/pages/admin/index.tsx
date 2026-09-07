@@ -40,10 +40,9 @@ import {
   ResponsiveContainer, Legend
 } from "recharts";
 
-type StatsPeriod = "all" | "last_year" | "this_year" | "last_month" | "this_month" | "last_week" | "this_week" | "yesterday" | "today";
+type StatsPeriod = "last_year" | "this_year" | "last_month" | "this_month" | "last_week" | "this_week" | "yesterday" | "today";
 
 const periodLabels: Record<StatsPeriod, string> = {
-  all: "Tout l’historique",
   last_year: "Année Passée",
   this_year: "Cette Année",
   last_month: "Mois Passé",
@@ -70,6 +69,9 @@ interface AdminStats {
   bannedUsers: number;
   totalDeposits: string;
   totalWithdrawals: string;
+  totalTransfers: string;
+  totalPaymentLinks: string;
+  totalConversions: string;
   totalCollected: string;
   totalWithdrawn: string;
   totalRevenue: string;
@@ -82,6 +84,7 @@ interface AdminStats {
   withdrawalCount: number;
   transferCount: number;
   paymentLinkCount: number;
+  conversionCount: number;
   pendingDeposits: number;
   pendingWithdrawals: number;
   pendingTransfers: number;
@@ -207,6 +210,27 @@ export default function AdminDashboard() {
       icon: ArrowUpCircle,
       color: "text-orange-500",
       bgColor: "bg-orange-500/10",
+    },
+    {
+      title: "Volume Envois",
+      value: formatCurrency(parseFloat(stats?.totalTransfers || "0"), "XAF"),
+      icon: Send,
+      color: "text-blue-500",
+      bgColor: "bg-blue-500/10",
+    },
+    {
+      title: "Volume Liens de paiement",
+      value: formatCurrency(parseFloat(stats?.totalPaymentLinks || "0"), "XAF"),
+      icon: Link2,
+      color: "text-purple-500",
+      bgColor: "bg-purple-500/10",
+    },
+    {
+      title: "Volume Échanges",
+      value: formatCurrency(parseFloat(stats?.totalConversions || "0"), "XAF"),
+      icon: RefreshCw,
+      color: "text-pink-500",
+      bgColor: "bg-pink-500/10",
     },
     {
       title: "Revenus Ashtech Pay (Marge)",
@@ -706,7 +730,7 @@ export default function AdminDashboard() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <DollarSign className="w-5 h-5 text-primary" />
-              Volume XAF des transactions terminées — {period === "all" ? "Tout l’historique" : period === "today" ? "Aujourd'hui (par heure)" : period === "yesterday" ? "Hier (par heure)" : "Par jour"}
+              Volume XAF des transactions terminées — {period === "today" ? "Aujourd'hui (par heure)" : period === "yesterday" ? "Hier (par heure)" : "Par jour"}
             </CardTitle>
           </CardHeader>
           <CardContent>
