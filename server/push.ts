@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import webpush from "web-push";
 import { db } from "./db";
-import { pushSubscriptions, type PushSubscription } from "@shared/schema";
+import { pushSubscriptions, transactions, type PushSubscription } from "@shared/schema";
 import { decryptField } from "./fieldEncryption";
 import { eq } from "drizzle-orm";
 
@@ -52,13 +52,22 @@ function parseNotificationMetadata(body: string): Record<string, unknown> | null
   }
 }
 
+function extractAmountFromText(text: string): string | null {
+  const match = text.replace(/\u00a0/g, " ").match(/\b(\d[\d\s.,]*)\s+([A-Z]{3})\b/);
+  if (!match) return null;
+
+  const rawAmount = match[1].replace(/\s/g, "").replace(",", ".");
+  return formatAmount(rawAmount, match[2]);
+}
+
 function formatPushNotification(payload: BrowserPushPayload): {
   title: string;
   body: string;
   url: string;
 } {
   const metadata = parseNotificationMetadata(payload.body);
-  const amount = formatAmount(metadata?.amount, metadata?.currency);
+  const amount = formatAmount(metadata?.amount, metadata?.currency)
+    || extractAmountFromText(payload.body);
   const type = payload.type || "notification";
   const detailsUrl = "/dashboard/notifications";
   const accountUrl = "/dashboard";
@@ -139,6 +148,28 @@ function formatPushNotification(payload: BrowserPushPayload): {
   }
 }
 
+async function hydrateIncomingPaymentPayload(payload: BrowserPushPayload): Promise<BrowserPushPayload> {
+  if (!payload.transactionId || !["deposit_confirmed", "payment_link_received"].includes(payload.type || "")) {
+    return payload;
+  }
+
+  const [transaction] = await db
+    .select({ amount: transactions.amount, currency: transactions.currency })
+    .from(transactions)
+    .where(eq(transactions.id, payload.transactionId))
+    .limit(1);
+
+  if (!transaction) return payload;
+
+  return {
+    ...payload,
+    body: JSON.stringify({
+      amount: transaction.amount,
+      currency: transaction.currency || "XAF",
+    }),
+  };
+}
+
 /**
  * Derive one stable P-256 VAPID key from the dedicated key when available.
  * FIELD_ENCRYPTION_KEY is used as a backwards-compatible fallback so an
@@ -192,7 +223,8 @@ function decryptSubscription(subscription: PushSubscription): PushSubscription |
 export async function sendPushNotification(userId: string, payload: BrowserPushPayload): Promise<void> {
   if (!configureWebPush()) return;
 
-  const formatted = formatPushNotification(payload);
+  const pushPayload = await hydrateIncomingPaymentPayload(payload);
+  const formatted = formatPushNotification(pushPayload);
   const subscriptions = await db.select()
     .from(pushSubscriptions)
     .where(eq(pushSubscriptions.userId, userId));
