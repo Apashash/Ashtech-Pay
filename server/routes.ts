@@ -92,7 +92,7 @@ import { buildProviderErrorPayload } from "./providerErrors";
 import { buildPublicPaymentStatus } from "./publicPaymentState";
 import { buildPawaPayFeeUpdates } from "./feeUpdates";
 import { toLocalMobileMoneyPhone, validateMobileMoneyPhone } from "@shared/mobile-money-phone";
-import { getVapidPublicKey } from "./push";
+import { getVapidPublicKey, sendPushNotificationToAll } from "./push";
 
 const PAWAPAY_PUBLIC_INITIATION_TIMEOUT_MS = 20_000;
 
@@ -13459,6 +13459,18 @@ export async function registerRoutes(
         message,
         isActive: true,
         expiresAt: expiresAt ? new Date(expiresAt) : null,
+      });
+
+      // Global messages are also delivered to every currently subscribed
+      // browser. The persisted global message remains the source of truth
+      // for users who are offline or subscribe after publication.
+      void sendPushNotificationToAll({
+        title,
+        body: message,
+        type: "global_message",
+        url: "/dashboard/notifications",
+      }).catch((error) => {
+        console.error("[Push] Global message broadcast failed:", error?.message || error);
       });
       
       await storage.createAdminLog({
