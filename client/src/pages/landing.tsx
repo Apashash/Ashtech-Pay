@@ -273,7 +273,7 @@ function HeroSection() {
     <section className="pt-32 pb-16 overflow-x-hidden bg-background">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)] gap-12 xl:gap-20 items-center">
-          <div className="text-center lg:text-left min-w-0">
+          <div className="text-center lg:text-left min-w-0 animate-on-scroll">
             <h1 className="text-4xl sm:text-5xl lg:text-5xl font-extrabold text-foreground leading-tight mb-6">
               {t.hero.title1}{" "}
               <span className="text-primary">{t.hero.title2}</span>
@@ -308,7 +308,7 @@ function HeroSection() {
             </div>
           </div>
 
-          <div className="relative mt-10 lg:mt-0 w-full max-w-xl mx-auto group">
+          <div className="relative mt-10 lg:mt-0 w-full max-w-xl mx-auto group animate-on-scroll-right">
             <div className="absolute -inset-3 rounded-[2rem] bg-primary/10 blur-2xl transition-opacity duration-500 group-hover:opacity-80" />
             <div className="relative overflow-hidden rounded-[2rem] border border-border bg-card shadow-2xl">
               <img
@@ -533,8 +533,8 @@ function HowItWorksSection() {
           </p>
         </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-8">
-          {steps.map((step, index) => (
-            <div key={index} className="relative animate-on-scroll-scale" style={{ transitionDelay: `${index * 100}ms` }} data-testid={`step-${index}`}>
+            {steps.map((step, index) => (
+            <div key={index} className="relative animate-on-scroll-scale" style={{ transitionDelay: `${index * 70}ms` }} data-testid={`step-${index}`}>
               {index < steps.length - 1 && <div className="hidden lg:block absolute top-8 left-full w-full h-px bg-gradient-to-r from-primary/50 to-transparent -translate-x-8" />}
               <div className="text-center">
                 <div className="w-16 h-16 bg-background border-2 border-primary rounded-full flex items-center justify-center mx-auto mb-4">

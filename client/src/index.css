@@ -347,8 +347,9 @@
   /* Scroll Animations */
   .animate-on-scroll {
     opacity: 0;
-    transform: translateY(30px);
-    transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+    transform: translateY(24px);
+    transition: opacity 0.42s cubic-bezier(0.22, 1, 0.36, 1), transform 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: opacity, transform;
   }
 
   .animate-on-scroll.visible {
@@ -358,8 +359,9 @@
 
   .animate-on-scroll-left {
     opacity: 0;
-    transform: translateX(-50px);
-    transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+    transform: translateX(-32px);
+    transition: opacity 0.42s cubic-bezier(0.22, 1, 0.36, 1), transform 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: opacity, transform;
   }
 
   .animate-on-scroll-left.visible {
@@ -369,8 +371,9 @@
 
   .animate-on-scroll-right {
     opacity: 0;
-    transform: translateX(50px);
-    transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+    transform: translateX(32px);
+    transition: opacity 0.42s cubic-bezier(0.22, 1, 0.36, 1), transform 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: opacity, transform;
   }
 
   .animate-on-scroll-right.visible {
@@ -380,8 +383,9 @@
 
   .animate-on-scroll-scale {
     opacity: 0;
-    transform: scale(0.9);
-    transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+    transform: scale(0.94);
+    transition: opacity 0.36s cubic-bezier(0.22, 1, 0.36, 1), transform 0.36s cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: opacity, transform;
   }
 
   .animate-on-scroll-scale.visible {
@@ -394,6 +398,32 @@
   .delay-300 { transition-delay: 300ms; }
   .delay-400 { transition-delay: 400ms; }
   .delay-500 { transition-delay: 500ms; }
+
+  @media (max-width: 640px) {
+    .animate-on-scroll {
+      transform: translateY(16px);
+    }
+
+    .animate-on-scroll-left {
+      transform: translateX(-18px);
+    }
+
+    .animate-on-scroll-right {
+      transform: translateX(18px);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-on-scroll,
+    .animate-on-scroll-left,
+    .animate-on-scroll-right,
+    .animate-on-scroll-scale {
+      opacity: 1;
+      transform: none;
+      transition: none;
+      will-change: auto;
+    }
+  }
 }
 
 /* Keep legacy utility classes inside the same dark surface system. */
