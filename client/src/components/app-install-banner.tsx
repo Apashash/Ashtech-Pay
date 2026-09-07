@@ -224,12 +224,16 @@ function AppInstallBanner() {
     setVisible(getInstallBannerSuppressedUntil() <= Date.now());
   }, [deviceCanInstall, isEligibleRoute, isStandalone]);
 
-  if (!visible || isStandalone || !deviceCanInstall || !isEligibleRoute) return null;
+  const shouldShowBanner = visible && !isStandalone && deviceCanInstall && isEligibleRoute;
 
   const installLabel = "Installer";
 
   const handleInstall = async () => {
     if (isIos) {
+      // Keep the guide open while removing the fixed banner underneath it.
+      // The guide is rendered independently from the banner so its "Suivant"
+      // button remains available after this state change.
+      setVisible(false);
       setIosStep(1);
       setGuideMode("ios");
       return;
@@ -275,42 +279,44 @@ function AppInstallBanner() {
 
   return (
     <>
-      <div className="fixed inset-x-0 bottom-0 z-[70] px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5 2xl:hidden">
-        <div className="mx-auto flex max-w-2xl items-center gap-3 rounded-2xl border border-primary/20 bg-background/95 px-3 py-2.5 shadow-[0_-12px_36px_rgba(15,23,42,0.16)] backdrop-blur-xl sm:px-4 dark:shadow-[0_-12px_36px_rgba(0,0,0,0.35)] animate-in slide-in-from-bottom-4 duration-500">
-          <img
-            src="/ashtechpay-icon-192.png"
-            alt="AshTech Pay"
-            className="h-10 w-10 shrink-0 rounded-xl shadow-sm ring-1 ring-black/5"
-          />
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-bold tracking-tight text-foreground">📲 Téléchargez notre application</p>
-            <p className="hidden truncate text-[11px] text-muted-foreground sm:block">
-              {isIos
-                ? "Une expérience plus rapide sur votre iPhone"
-                : isAndroid && deferredPrompt
-                  ? "Installation native Android disponible"
-                  : "Retrouvez AshTech Pay depuis votre écran d’accueil"}
-            </p>
+      {shouldShowBanner && (
+        <div className="fixed inset-x-0 bottom-0 z-[70] px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5 2xl:hidden">
+          <div className="mx-auto flex max-w-2xl items-center gap-3 rounded-2xl border border-primary/20 bg-background/95 px-3 py-2.5 shadow-[0_-12px_36px_rgba(15,23,42,0.16)] backdrop-blur-xl sm:px-4 dark:shadow-[0_-12px_36px_rgba(0,0,0,0.35)] animate-in slide-in-from-bottom-4 duration-500">
+            <img
+              src="/ashtechpay-icon-192.png"
+              alt="AshTech Pay"
+              className="h-10 w-10 shrink-0 rounded-xl shadow-sm ring-1 ring-black/5"
+            />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-bold tracking-tight text-foreground">📲 Téléchargez notre application</p>
+              <p className="hidden truncate text-[11px] text-muted-foreground sm:block">
+                {isIos
+                  ? "Une expérience plus rapide sur votre iPhone"
+                  : isAndroid && deferredPrompt
+                    ? "Installation native Android disponible"
+                    : "Retrouvez AshTech Pay depuis votre écran d’accueil"}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleInstall}
+              className="shrink-0 rounded-xl bg-primary px-3.5 py-2 text-xs font-bold text-primary-foreground shadow-sm transition-transform hover:scale-[1.02] active:scale-95 sm:px-4 sm:text-sm"
+              data-testid="button-install-app"
+            >
+              {isIos ? "Installer" : installLabel}
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmCloseOpen(true)}
+              className="shrink-0 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              aria-label="Fermer l’invitation à installer l’application"
+              data-testid="button-close-install-banner"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={handleInstall}
-            className="shrink-0 rounded-xl bg-primary px-3.5 py-2 text-xs font-bold text-primary-foreground shadow-sm transition-transform hover:scale-[1.02] active:scale-95 sm:px-4 sm:text-sm"
-            data-testid="button-install-app"
-          >
-            {isIos ? "Installer" : installLabel}
-          </button>
-          <button
-            type="button"
-            onClick={() => setConfirmCloseOpen(true)}
-            className="shrink-0 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            aria-label="Fermer l’invitation à installer l’application"
-            data-testid="button-close-install-banner"
-          >
-            <X className="h-4 w-4" />
-          </button>
         </div>
-      </div>
+      )}
 
       <Dialog open={confirmCloseOpen} onOpenChange={setConfirmCloseOpen}>
         <DialogContent className="max-w-sm rounded-2xl border-border p-6">
