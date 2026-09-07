@@ -158,6 +158,11 @@ function AppInstallBanner() {
       setDeferredPrompt(null);
       window.__ashtechDeferredInstallPrompt = null;
     };
+    const sidebarNavigationHandler = (event: MouseEvent) => {
+      const target = event.target as Element | null;
+      const dashboardLink = target?.closest<HTMLAnchorElement>('a[href^="/dashboard"]');
+      if (dashboardLink) setVisible(false);
+    };
 
     setDevice(getInstallDevice());
     updateStandalone();
@@ -170,6 +175,7 @@ function AppInstallBanner() {
     window.addEventListener("beforeinstallprompt", promptHandler);
     window.addEventListener("ashtechbeforeinstallprompt", adoptStoredPrompt);
     window.addEventListener("appinstalled", installedHandler);
+    document.addEventListener("click", sidebarNavigationHandler, true);
     adoptStoredPrompt();
     const displayMode = window.matchMedia("(display-mode: standalone)");
     displayMode.addEventListener?.("change", updateStandalone);
@@ -178,6 +184,7 @@ function AppInstallBanner() {
       window.removeEventListener("beforeinstallprompt", promptHandler);
       window.removeEventListener("ashtechbeforeinstallprompt", adoptStoredPrompt);
       window.removeEventListener("appinstalled", installedHandler);
+      document.removeEventListener("click", sidebarNavigationHandler, true);
       displayMode.removeEventListener?.("change", updateStandalone);
     };
   }, []);
