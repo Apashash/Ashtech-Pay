@@ -611,3 +611,33 @@ html.dark img[src="/logo.png"] {
 html.dark img[src="/logo-compact.png"] {
   content: url("/logo-dark-compact.png");
 }
+
+/* Keep global error notifications as centered, dismissible popups on every viewport. */
+.toast-viewport {
+  position: fixed !important;
+  top: 50% !important;
+  right: auto !important;
+  bottom: auto !important;
+  left: 50% !important;
+  z-index: 100 !important;
+  display: flex !important;
+  width: calc(100% - 2rem) !important;
+  max-width: 420px !important;
+  max-height: calc(100vh - 2rem) !important;
+  transform: translate(-50%, -50%) !important;
+  flex-direction: column !important;
+  gap: 0.5rem !important;
+  overflow-y: auto !important;
+  padding: 0 !important;
+}
+
+.toast-popup {
+  position: relative;
+  width: 100%;
+  border-radius: 1rem;
+}
+
+.toast-popup [toast-close] {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
