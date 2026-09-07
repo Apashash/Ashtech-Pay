@@ -1369,7 +1369,7 @@ export class DatabaseStorage implements IStorage {
     // JOIN transactions with users in SQL — GROUP BY country — returns ~20 rows max
     const conditions: any[] = [
       eq(transactions.status, "completed"),
-      inArray(transactions.type, ["deposit", "payment_link", "withdrawal", "transfer_out"]),
+      inArray(transactions.type, ["deposit", "payment_link", "withdrawal", "transfer_out", "conversion"]),
     ];
     if (periodStart) conditions.push(gte(transactions.createdAt, periodStart));
     if (periodEnd)   conditions.push(lt(transactions.createdAt, periodEnd));
@@ -1435,7 +1435,7 @@ export class DatabaseStorage implements IStorage {
       case "last_month": periodStart = new Date(now.getFullYear(), now.getMonth() - 1, 1); periodEnd = new Date(now.getFullYear(), now.getMonth(), 1); break;
       case "this_year":  periodStart = new Date(now.getFullYear(), 0, 1); break;
       case "last_year":  periodStart = new Date(now.getFullYear() - 1, 0, 1); periodEnd = new Date(now.getFullYear(), 0, 1); break;
-      case "all":        periodStart = new Date(todayStart.getTime() - 89 * 86400000); break;
+      case "all":        periodStart = null; break;
       default:           periodStart = new Date(now.getFullYear(), now.getMonth(), 1); break;
     }
 
@@ -1475,7 +1475,12 @@ export class DatabaseStorage implements IStorage {
         buckets[key] = { ...empty(), date: key };
       }
     } else {
-      const start = periodStart || new Date(todayStart.getTime() - 29 * 86400000);
+      const earliestBucket = period === "all" && rows.length > 0
+        ? rows.reduce((earliest, row) => row.bucket < earliest ? row.bucket : earliest, rows[0].bucket)
+        : null;
+      const start = periodStart || (earliestBucket
+        ? new Date(`${earliestBucket}T00:00:00Z`)
+        : new Date(todayStart.getTime() - 29 * 86400000));
       const end = periodEnd || now;
       for (let d = new Date(start); d <= end; d = new Date(d.getTime() + 86400000)) {
         const key = d.toISOString().slice(0, 10);
@@ -1600,7 +1605,7 @@ export class DatabaseStorage implements IStorage {
     );
 
     // ── Reduce aggregated rows in JS (only ~20 rows, not thousands) ───────────
-    let depositVol = 0, withdrawalVol = 0, transferVol = 0, linkVol = 0;
+    let depositVol = 0, withdrawalVol = 0, transferVol = 0, linkVol = 0, conversionVol = 0;
     let depositFees = 0, withdrawalFees = 0, transferFees = 0, paymentLinkFees = 0, conversionFees = 0;
     let depositCount = 0, withdrawalCount = 0, transferCount = 0, paymentLinkCount = 0;
     let totalTransactions = 0, rejectedTransactions = 0, pendingTransactions = 0;
@@ -1628,6 +1633,7 @@ export class DatabaseStorage implements IStorage {
           // la commission totale (Ashtech + fournisseur) et gonflerait les stats.
           // Les anciennes transactions sans ashtechFeeAmount contribuent 0.
           case "conversion":
+            conversionVol += amt;
             conversionFees += ashtechFee;
             break;
         }
@@ -1647,7 +1653,7 @@ export class DatabaseStorage implements IStorage {
       bannedUsers: bannedCount[0].count,
       statsResetAt: resetAt ? resetAt.toISOString() : null,
       totalTransactions,
-      totalVolume: (depositVol + withdrawalVol + transferVol + linkVol).toFixed(2),
+      totalVolume: (depositVol + withdrawalVol + transferVol + linkVol + conversionVol).toFixed(2),
       monthlyTransactions: 0,
       rejectedTransactions,
       pendingTransactions,

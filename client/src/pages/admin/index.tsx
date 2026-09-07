@@ -40,9 +40,10 @@ import {
   ResponsiveContainer, Legend
 } from "recharts";
 
-type StatsPeriod = "last_year" | "this_year" | "last_month" | "this_month" | "last_week" | "this_week" | "yesterday" | "today";
+type StatsPeriod = "all" | "last_year" | "this_year" | "last_month" | "this_month" | "last_week" | "this_week" | "yesterday" | "today";
 
 const periodLabels: Record<StatsPeriod, string> = {
+  all: "Tout l’historique",
   last_year: "Année Passée",
   this_year: "Cette Année",
   last_month: "Mois Passé",
@@ -590,7 +591,7 @@ export default function AdminDashboard() {
               <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Activité</p>
               <CardTitle className="flex items-center gap-2 text-base">
                 <CreditCard className="w-4 h-4 text-muted-foreground" />
-                Flux transactions par type
+                Flux transactions terminées par type
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -705,7 +706,7 @@ export default function AdminDashboard() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <DollarSign className="w-5 h-5 text-primary" />
-              Volume XAF par type — {period === "today" ? "Aujourd'hui (par heure)" : period === "yesterday" ? "Hier (par heure)" : "Par jour"}
+              Volume XAF des transactions terminées — {period === "all" ? "Tout l’historique" : period === "today" ? "Aujourd'hui (par heure)" : period === "yesterday" ? "Hier (par heure)" : "Par jour"}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -714,8 +715,8 @@ export default function AdminDashboard() {
               <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-cyan-400 inline-block" />Dépôt API</span>
               <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-orange-500 inline-block" />Retrait</span>
               <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-purple-500 inline-block" />Lien paiement</span>
-                <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-blue-500 inline-block" />Envoi</span>
-                <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-pink-500 inline-block" />Échange</span>
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-blue-500 inline-block" />Envoi</span>
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-pink-500 inline-block" />Échange</span>
             </div>
             {activityData.length === 0 || activityData.every(d => d.depositVol === 0 && d.apiDepositVol === 0 && d.withdrawalVol === 0 && d.paymentLinkVol === 0 && d.transferVol === 0 && d.conversionVol === 0) ? (
               <div className="text-center py-8 text-muted-foreground">
