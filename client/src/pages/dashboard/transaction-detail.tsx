@@ -180,6 +180,11 @@ export default function TransactionDetailPage({ params }: { params: { id: string
 
   const payerPhone = tx.paymentIntent?.payerPhone;
   const payerCountry = tx.paymentIntent?.payerCountry || operatorInfo?.country;
+  const merchantReference = typeof tx.metadata?.merchantReference === "string"
+    ? tx.metadata.merchantReference
+    : typeof tx.metadata?.merchant_reference === "string"
+      ? tx.metadata.merchant_reference
+      : null;
 
   const txCurrency = (tx.currency || user?.preferredCurrency || "XAF") as SupportedCurrency;
   const cryptoAssetCode = tx.paymentMethod === "crypto"
@@ -239,22 +244,41 @@ export default function TransactionDetailPage({ params }: { params: { id: string
         </div>
 
         <div className="bg-card border border-border rounded-2xl px-4 pb-4">
-          {tx.reference && (
+          {(tx.reference || merchantReference) && (
             <>
               <SectionLabel>{td.detailSectionRefs}</SectionLabel>
-              <div className="flex items-center justify-between py-3 border-b border-border">
-                <span className="text-sm text-muted-foreground">{td.detailRefAshtech}</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold font-mono text-foreground">{tx.reference}</span>
-                  <button
-                    onClick={() => copy(tx.reference!, td.detailRefCopied)}
-                    className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted transition-colors"
-                    data-testid="button-copy-reference"
-                  >
-                    <Copy className="w-3.5 h-3.5 text-muted-foreground" />
-                  </button>
+              {tx.reference && (
+                <div className="flex items-center justify-between py-3 border-b border-border">
+                  <span className="text-sm text-muted-foreground">{td.detailRefAshtech}</span>
+                  <div className="flex items-center gap-2 max-w-[65%]">
+                    <span className="text-sm font-semibold font-mono text-foreground break-all text-right">{tx.reference}</span>
+                    <button
+                      onClick={() => copy(tx.reference!, td.detailRefCopied)}
+                      className="w-6 h-6 shrink-0 flex items-center justify-center rounded hover:bg-muted transition-colors"
+                      aria-label={td.detailRefAshtech}
+                      data-testid="button-copy-reference"
+                    >
+                      <Copy className="w-3.5 h-3.5 text-muted-foreground" />
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
+              {merchantReference && (
+                <div className="flex items-center justify-between py-3 border-b border-border last:border-0">
+                  <span className="text-sm text-muted-foreground">{td.detailRefMerchant}</span>
+                  <div className="flex items-center gap-2 max-w-[65%]">
+                    <span className="text-sm font-semibold font-mono text-foreground break-all text-right">{merchantReference}</span>
+                    <button
+                      onClick={() => copy(merchantReference, td.detailMerchantRefCopied)}
+                      className="w-6 h-6 shrink-0 flex items-center justify-center rounded hover:bg-muted transition-colors"
+                      aria-label={td.detailRefMerchant}
+                      data-testid="button-copy-merchant-reference"
+                    >
+                      <Copy className="w-3.5 h-3.5 text-muted-foreground" />
+                    </button>
+                  </div>
+                </div>
+              )}
             </>
           )}
 
