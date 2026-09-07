@@ -30,6 +30,7 @@ import {
   CheckCircle, 
   XCircle, 
   Clock,
+  AlertTriangle,
   ArrowUpCircle,
   Eye,
   Copy,
@@ -556,6 +557,31 @@ export default function AdminWithdrawals() {
                       Appliquer
                     </Button>
                   </div>
+                  {(tx.status === "failed" || tx.status === "cancelled") && (
+                    <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 space-y-2">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                        <p className="text-xs text-amber-700 dark:text-amber-300">
+                          La remise en attente débite à nouveau{" "}
+                          <strong>{formatCurrency(tx.totalAmount || tx.amount, (tx.currency || "XAF") as SupportedCurrency)}</strong>{" "}
+                          du wallet de l'utilisateur.
+                        </p>
+                      </div>
+                      <Button
+                        className="w-full"
+                        variant="outline"
+                        onClick={() => updateStatusMutation.mutate({
+                          id: tx.id,
+                          status: "pending",
+                          reason: modalReason || "Transaction rejetée remise en attente par l'administration",
+                        })}
+                        disabled={updateStatusMutation.isPending}
+                        data-testid="button-reopen-withdrawal"
+                      >
+                        Remettre en attente et débiter le wallet
+                      </Button>
+                    </div>
+                  )}
                   {tx.status === "pending" && (
                     <div className="grid grid-cols-1 gap-2 pt-1">
                       <Button
