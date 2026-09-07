@@ -1,6 +1,5 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { 
   Wallet, 
   ArrowDownUp, 
@@ -40,7 +39,9 @@ import {
   Download,
   ExternalLink
 } from "lucide-react";
-import heroImage from "@assets/IMG_0059_1775398520619.png";
+import heroPaymentImage from "@assets/file_00000000b290820e8318daa118934236_1788747702718.png";
+import marketPaymentImage from "@assets/images_(1)_1788747714286.jpeg";
+import commercePaymentImage from "@assets/barkapay-african-payment-hub-for-e-commerce_1788747792967.webp";
 import { useState, useEffect, useRef } from "react";
 import { useTheme } from "@/components/theme-provider";
 import { useScrollAnimation } from "@/hooks/use-scroll-animation";
@@ -240,6 +241,16 @@ function HeroSection() {
             </div>
           </div>
 
+          <div className="relative mt-10 lg:mt-0 w-full max-w-xl mx-auto group">
+            <div className="absolute -inset-3 rounded-[2rem] bg-primary/10 blur-2xl transition-opacity duration-500 group-hover:opacity-80" />
+            <div className="relative overflow-hidden rounded-[2rem] border border-border bg-card shadow-2xl">
+              <img
+                src={heroPaymentImage}
+                alt="AshTech Pay, une plateforme connectée aux paiements africains"
+                className="block w-full aspect-[1752/898] object-cover transition-transform duration-700 group-hover:scale-[1.02]"
+              />
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -299,6 +310,39 @@ function SolutionsSection() {
               </Link>
             </div>
           ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function CommerceVisualSection() {
+  return (
+    <section className="py-16 lg:py-24 bg-card/50 overflow-hidden">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="grid lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-10 lg:gap-16 items-center">
+          <div className="order-2 lg:order-1">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20 mb-5">
+              <Globe className="w-4 h-4 text-primary" />
+              <span className="text-sm text-primary font-medium">Le commerce africain, connecté</span>
+            </div>
+            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-5">
+              Une passerelle simple entre vos clients et leurs moyens de paiement
+            </h2>
+            <p className="text-lg text-muted-foreground leading-relaxed max-w-xl">
+              Proposez une expérience de paiement claire et familière, du Mobile Money aux cartes bancaires, avec une infrastructure pensée pour les réalités du marché africain.
+            </p>
+          </div>
+          <div className="order-1 lg:order-2 relative group">
+            <div className="absolute -inset-3 rounded-3xl bg-primary/10 blur-2xl" />
+            <div className="relative overflow-hidden rounded-3xl border border-border bg-background shadow-xl">
+              <img
+                src={commercePaymentImage}
+                alt="Paiements en ligne et commerce africain"
+                className="block w-full aspect-[1024/576] object-cover transition-transform duration-700 group-hover:scale-[1.02]"
+              />
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -434,6 +478,39 @@ function HowItWorksSection() {
               </div>
             </div>
           ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function MarketVisualSection() {
+  return (
+    <section className="py-16 lg:py-24 bg-background overflow-hidden">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="grid lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] gap-10 lg:gap-16 items-center">
+          <div className="relative max-w-xl mx-auto w-full group">
+            <div className="absolute -inset-3 rounded-3xl bg-primary/10 blur-2xl" />
+            <div className="relative overflow-hidden rounded-3xl border border-border bg-card shadow-xl">
+              <img
+                src={marketPaymentImage}
+                alt="Une utilisatrice africaine effectue un paiement mobile"
+                className="block w-full aspect-square object-cover transition-transform duration-700 group-hover:scale-[1.02]"
+              />
+            </div>
+          </div>
+          <div>
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20 mb-5">
+              <Smartphone className="w-4 h-4 text-primary" />
+              <span className="text-sm text-primary font-medium">Une expérience pensée pour le mobile</span>
+            </div>
+            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-5">
+              Des paiements qui inspirent confiance
+            </h2>
+            <p className="text-lg text-muted-foreground leading-relaxed max-w-xl">
+              Offrez à vos clients une expérience fluide, accessible et adaptée à leurs habitudes, quel que soit le pays ou le moyen de paiement choisi.
+            </p>
+          </div>
         </div>
       </div>
     </section>
@@ -849,10 +926,12 @@ export default function LandingPage() {
       <ReadyToStartSection />
       <CountriesSection />
       <SolutionsSection />
+      <CommerceVisualSection />
       <OperatorLogosSection />
       <FeaturesSection />
       <WhyAshtechSection />
       <HowItWorksSection />
+      <MarketVisualSection />
       <SecuritySection />
       <ApiDeveloperSection />
       <Footer />
