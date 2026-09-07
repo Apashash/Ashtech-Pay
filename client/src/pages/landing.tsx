@@ -42,7 +42,7 @@ import {
 import heroPaymentImage from "@assets/file_00000000b290820e8318daa118934236_1788747702718.png";
 import marketPaymentImage from "@assets/images_(1)~2_1788747988443.jpeg";
 import commercePaymentImage from "@assets/barkapay-african-payment-hub-for-e-commerce_1788747792967.webp";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, type PointerEvent, type RefObject } from "react";
 import { useTheme } from "@/components/theme-provider";
 import { useScrollAnimation } from "@/hooks/use-scroll-animation";
 import { useLanguage } from "@/lib/language";
@@ -67,6 +67,73 @@ const countryList = [
   { name: "Tunisie", code: "tn" },
   { name: "Algérie", code: "dz" },
 ];
+
+function useMarqueeScroll(
+  containerRef: RefObject<HTMLDivElement | null>,
+  pixelsPerSecond: number,
+  loopDivisions: number,
+  direction = 1,
+) {
+  const dragRef = useRef({ active: false, startX: 0, startScrollLeft: 0 });
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    let animationFrame = 0;
+    let previousTime = performance.now();
+    const loopWidth = container.scrollWidth / loopDivisions;
+    if (direction < 0 && container.scrollLeft === 0) {
+      container.scrollLeft = loopWidth;
+    }
+
+    const animate = (currentTime: number) => {
+      const elapsed = Math.min(currentTime - previousTime, 50);
+      previousTime = currentTime;
+
+      if (!dragRef.current.active && container.scrollWidth > container.clientWidth) {
+        container.scrollLeft += (direction * pixelsPerSecond * elapsed) / 1000;
+        if (direction > 0 && container.scrollLeft >= loopWidth) {
+          container.scrollLeft -= loopWidth;
+        } else if (direction < 0 && container.scrollLeft <= 0) {
+          container.scrollLeft += loopWidth;
+        }
+      }
+
+      animationFrame = requestAnimationFrame(animate);
+    };
+
+    animationFrame = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(animationFrame);
+  }, [containerRef, direction, loopDivisions, pixelsPerSecond]);
+
+  const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    dragRef.current = {
+      active: true,
+      startX: event.clientX,
+      startScrollLeft: container.scrollLeft,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    const container = containerRef.current;
+    if (!container || !dragRef.current.active) return;
+    container.scrollLeft = dragRef.current.startScrollLeft - (event.clientX - dragRef.current.startX);
+  };
+
+  const stopDragging = (event: PointerEvent<HTMLDivElement>) => {
+    dragRef.current.active = false;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  return { onPointerDown, onPointerMove, onPointerUp: stopDragging, onPointerCancel: stopDragging };
+}
 
 function Navbar() {
   const { theme, toggleTheme } = useTheme();
@@ -587,6 +654,8 @@ function TestimonialsSection() {
 function CountriesSection() {
   const { t } = useLanguage();
   const duplicatedCountries = [...countryList, ...countryList];
+  const containerRef = useRef<HTMLDivElement>(null);
+  const scrollHandlers = useMarqueeScroll(containerRef, 105, 2, -1);
 
   return (
     <section className="bg-card border-y border-border overflow-hidden">
@@ -594,8 +663,13 @@ function CountriesSection() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-6">
           <h3 className="text-center text-lg font-semibold text-foreground">{t.landing.countriesTitle}</h3>
         </div>
-        <div className="relative overflow-hidden">
-          <div className="flex animate-marquee-reverse">
+        <div
+          ref={containerRef}
+          className="relative overflow-x-auto overflow-y-hidden select-none cursor-grab active:cursor-grabbing touch-pan-y [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          aria-label="Faire défiler les pays disponibles"
+          {...scrollHandlers}
+        >
+          <div className="flex w-max">
             {duplicatedCountries.map((country, index) => (
               <div key={index} className="flex-shrink-0 mx-4 px-6 py-3 bg-background rounded-lg border border-border flex items-center gap-3">
                 <img
@@ -629,14 +703,21 @@ function OperatorLogosSection() {
     { name: "Telecel Money", src: "/op-telecel.jpeg" },
   ];
   const duplicated = [...operators, ...operators, ...operators];
+  const containerRef = useRef<HTMLDivElement>(null);
+  const scrollHandlers = useMarqueeScroll(containerRef, 120, 3);
 
   return (
     <section className="py-14 bg-card border-y border-border overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-8 text-center">
         <p className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">{t.landing.operatorsTitle}</p>
       </div>
-      <div className="relative overflow-hidden">
-        <div className="flex animate-marquee">
+      <div
+        ref={containerRef}
+        className="relative overflow-x-auto overflow-y-hidden select-none cursor-grab active:cursor-grabbing touch-pan-y [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        aria-label="Faire défiler les opérateurs Mobile Money"
+        {...scrollHandlers}
+      >
+        <div className="flex w-max">
           {duplicated.map((op, index) => (
             <div key={index} className="flex-shrink-0 flex flex-col items-center gap-2 mx-5" data-testid={`operator-logo-${index}`}>
               <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-border shadow-md bg-white flex items-center justify-center">
