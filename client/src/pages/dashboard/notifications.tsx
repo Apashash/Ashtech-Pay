@@ -106,18 +106,28 @@ export default function NotificationsPage() {
 
   function getMessage(type: string, stored: string, currency: string): string {
     let params: { amount?: string; currency?: string } = {};
-    try { params = JSON.parse(stored); } catch { /* plain text */ }
+    let isStructuredPayload = false;
+    try {
+      const parsed = JSON.parse(stored);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        params = parsed;
+        isStructuredPayload = true;
+      }
+    } catch { /* plain text */ }
     const amt = params.amount;
     const cur = (params.currency || "XAF").replace(/\bXAF\b/g, currency);
     const tpl = (tmpl: string) => tmpl.replace("{amount}", amt || "").replace("{currency}", cur);
+    const safeStructuredMessage = amt
+      ? tpl(t.notifications.genericOperationMsg)
+      : t.notifications.genericNotificationMsg;
     switch (type) {
-      case "deposit_confirmed":    return amt ? tpl(t.notifications.typeDepositConfirmedMsg)    : stored.replace(/\bXAF\b/g, currency);
+      case "deposit_confirmed":    return amt ? tpl(t.notifications.typeDepositConfirmedMsg)    : (isStructuredPayload ? safeStructuredMessage : stored.replace(/\bXAF\b/g, currency));
       case "deposit_failed":       return t.notifications.typeDepositFailedMsg;
-      case "payment_link_received":return amt ? tpl(t.notifications.typePaymentLinkReceivedMsg): stored.replace(/\bXAF\b/g, currency);
+      case "payment_link_received":return amt ? tpl(t.notifications.typePaymentLinkReceivedMsg): (isStructuredPayload ? safeStructuredMessage : stored.replace(/\bXAF\b/g, currency));
       case "payment_link_failed":  return t.notifications.typePaymentLinkFailedMsg;
-      case "withdrawal_confirmed": return amt ? tpl(t.notifications.typeWithdrawalConfirmedMsg): stored.replace(/\bXAF\b/g, currency);
-      case "withdrawal_failed":    return amt ? tpl(t.notifications.typeWithdrawalFailedMsg)   : stored.replace(/\bXAF\b/g, currency);
-      default:                     return stored.replace(/\bXAF\b/g, currency);
+      case "withdrawal_confirmed": return amt ? tpl(t.notifications.typeWithdrawalConfirmedMsg): (isStructuredPayload ? safeStructuredMessage : stored.replace(/\bXAF\b/g, currency));
+      case "withdrawal_failed":    return amt ? tpl(t.notifications.typeWithdrawalFailedMsg)   : (isStructuredPayload ? safeStructuredMessage : stored.replace(/\bXAF\b/g, currency));
+      default:                     return isStructuredPayload ? safeStructuredMessage : stored.replace(/\bXAF\b/g, currency);
     }
   }
 

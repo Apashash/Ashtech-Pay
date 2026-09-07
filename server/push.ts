@@ -140,11 +140,19 @@ function formatPushNotification(payload: BrowserPushPayload): {
     case "transfer_received":
       return {
         title: "Argent reçu",
-        body: `${normalizeAmountsInText(payload.body).replace(/\s+$/, "")} ${PUSH_CTA}`,
+        body: metadata
+          ? (amount
+            ? `Une opération de ${amount} a été enregistrée. ${PUSH_CTA}`
+            : `Vous avez une nouvelle notification. ${PUSH_CTA}`)
+          : `${normalizeAmountsInText(payload.body).replace(/\s+$/, "")} ${PUSH_CTA}`,
         url: accountUrl,
       };
     default: {
-      const body = normalizeAmountsInText(payload.body);
+      const body = metadata
+        ? (amount
+          ? `Une opération de ${amount} a été enregistrée.`
+          : "Vous avez une nouvelle notification.")
+        : normalizeAmountsInText(payload.body);
       const shouldAddCta = !/Appuyez pour consulter|consulter les détails/i.test(body)
         && !["admin_message", "global_message"].includes(type);
       return {

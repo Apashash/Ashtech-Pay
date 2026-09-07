@@ -723,6 +723,8 @@ const translations = {
       typeWithdrawalConfirmedMsg: "Votre retrait de {amount} {currency} a été envoyé avec succès.",
       typeWithdrawalFailedTitle: "Retrait échoué",
       typeWithdrawalFailedMsg: "Votre retrait de {amount} {currency} a échoué. Le montant a été recrédité sur votre compte.",
+      genericNotificationMsg: "Vous avez une nouvelle notification.",
+      genericOperationMsg: "Une opération de {amount} {currency} a été enregistrée.",
     },
     linkDetail: {
       loading: "Chargement...",
@@ -2017,6 +2019,8 @@ const translations = {
       typeWithdrawalConfirmedMsg: "Your withdrawal of {amount} {currency} was sent successfully.",
       typeWithdrawalFailedTitle: "Withdrawal failed",
       typeWithdrawalFailedMsg: "Your withdrawal of {amount} {currency} failed. The amount was refunded to your account.",
+      genericNotificationMsg: "You have a new notification.",
+      genericOperationMsg: "An operation of {amount} {currency} was recorded.",
     },
     linkDetail: {
       loading: "Loading...",
