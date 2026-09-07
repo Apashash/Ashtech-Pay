@@ -134,9 +134,7 @@ function AppInstallBanner() {
     location.startsWith(`${adminPath}/`);
   const isEligibleRoute =
     !isAdminRoute &&
-    (location === "/" ||
-      location === "/dashboard" ||
-      location.startsWith("/dashboard/"));
+    (location === "/" || location === "/dashboard");
   const isIos = device === "ios";
   const isAndroid = device === "android";
 
