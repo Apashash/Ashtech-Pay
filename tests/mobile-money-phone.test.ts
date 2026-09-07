@@ -10,17 +10,12 @@ test("normalizes an international Togo number for the provider", () => {
   assert.equal(toLocalMobileMoneyPhone("0022873039533", "TG"), "73039533");
 });
 
-test("rejects a Flooz number selected as T-Money", () => {
-  const error = validateMobileMoneyPhone("22873039533", "TG", "T-Money");
-  assert.match(error || "", /Flooz \(Moov\)/);
+test("accepts valid Togo numbers regardless of selected operator", () => {
+  assert.equal(validateMobileMoneyPhone("22873039533", "TG"), null);
+  assert.equal(validateMobileMoneyPhone("22890123456", "TG"), null);
 });
 
-test("accepts matching Togo operator ranges", () => {
-  assert.equal(validateMobileMoneyPhone("22873039533", "TG", "Flooz (Moov)"), null);
-  assert.equal(validateMobileMoneyPhone("22890123456", "TG", "T-Money"), null);
-});
-
-test("rejects a T-Money number selected as Flooz", () => {
-  const error = validateMobileMoneyPhone("22890123456", "TG", "Flooz (Moov)");
-  assert.match(error || "", /T-Money/);
+test("rejects a Togo number with the wrong length", () => {
+  const error = validateMobileMoneyPhone("2287303953", "TG");
+  assert.match(error || "", /8 chiffres/);
 });

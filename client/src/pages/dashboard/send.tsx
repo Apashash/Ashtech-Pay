@@ -667,7 +667,6 @@ export default function SendMoneyPage() {
                       const phoneValidationError = validateMobileMoneyPhone(
                         d.recipientPhone,
                         selectedCountry?.code || "",
-                        selectedOperator?.name || "",
                       );
                       if (phoneValidationError) {
                         form.setError("recipientPhone", {

@@ -4529,7 +4529,6 @@ export async function registerRoutes(
       const phoneValidationError = validateMobileMoneyPhone(
         recipientPhone,
         country.code,
-        operator.name || "",
       );
       if (phoneValidationError) {
         return res.status(400).json({
