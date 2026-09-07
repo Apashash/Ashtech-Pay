@@ -240,49 +240,6 @@ function HeroSection() {
             </div>
           </div>
 
-          {/* Mini app preview */}
-          <div className="mt-12 lg:mt-0 bg-card rounded-2xl border border-border p-5 shadow-lg text-left w-full max-w-sm mx-auto">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
-                <Wallet className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">{t.hero.totalBalance}</p>
-                <p className="text-xl font-bold text-foreground">1,250,000 XAF</p>
-              </div>
-            </div>
-            <TrendingUp className="w-6 h-6 text-green-500" />
-          </div>
-          <div className="grid grid-cols-3 gap-2 mb-4">
-            {[
-              { icon: Send, label: t.hero.send },
-              { icon: ArrowDownUp, label: t.hero.receive },
-              { icon: CreditCard, label: t.hero.topup },
-            ].map(({ icon: Icon, label }) => (
-              <div key={label} className="bg-secondary/60 rounded-xl p-3 text-center">
-                <Icon className="w-5 h-5 text-primary mx-auto mb-1" />
-                <p className="text-xs text-muted-foreground">{label}</p>
-              </div>
-            ))}
-          </div>
-          <p className="text-xs font-medium text-muted-foreground mb-2">{t.hero.recentTx}</p>
-          {[
-            { name: "Jean Dupont", amount: "+50,000 XAF", type: "in" },
-            { name: "Marie Claire", amount: "-25,000 XAF", type: "out" },
-            { name: "Recharge MTN", amount: "+100,000 XAF", type: "in" },
-          ].map((tx, i) => (
-            <div key={i} className="flex items-center justify-between py-2 border-b border-border last:border-0">
-              <div className="flex items-center gap-2">
-                <div className={`w-7 h-7 rounded-full flex items-center justify-center ${tx.type === 'in' ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
-                  <Users className={`w-3.5 h-3.5 ${tx.type === 'in' ? 'text-green-500' : 'text-red-500'}`} />
-                </div>
-                <span className="text-sm text-foreground">{tx.name}</span>
-              </div>
-              <span className={`text-sm font-semibold ${tx.type === 'in' ? 'text-green-500' : 'text-red-500'}`}>{tx.amount}</span>
-            </div>
-          ))}
-          </div>
         </div>
       </div>
     </section>
