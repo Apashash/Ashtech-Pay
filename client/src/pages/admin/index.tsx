@@ -275,6 +275,14 @@ export default function AdminDashboard() {
       href: `${A}/transactions/deposits`,
     },
     {
+      title: "Échanges",
+      value: stats?.conversionCount || 0,
+      icon: RefreshCw,
+      color: "text-pink-500",
+      bgColor: "bg-pink-500/10",
+      href: `${A}/conversions`,
+    },
+    {
       title: "Transactions Rejetées",
       value: stats?.rejectedTransactions || 0,
       icon: XCircle,

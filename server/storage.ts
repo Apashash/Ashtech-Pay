@@ -234,6 +234,9 @@ export interface IStorage {
     bannedUsers: number;
     totalDeposits: string;
     totalWithdrawals: string;
+    totalTransfers: string;
+    totalPaymentLinks: string;
+    totalConversions: string;
     totalRevenue: string;
     depositFees: string;
     withdrawalFees: string;
@@ -243,6 +246,7 @@ export interface IStorage {
     withdrawalCount: number;
     transferCount: number;
     paymentLinkCount: number;
+    conversionCount: number;
     pendingDeposits: number;
     pendingWithdrawals: number;
     pendingTransfers: number;
@@ -1607,7 +1611,7 @@ export class DatabaseStorage implements IStorage {
     // ── Reduce aggregated rows in JS (only ~20 rows, not thousands) ───────────
     let depositVol = 0, withdrawalVol = 0, transferVol = 0, linkVol = 0, conversionVol = 0;
     let depositFees = 0, withdrawalFees = 0, transferFees = 0, paymentLinkFees = 0, conversionFees = 0;
-    let depositCount = 0, withdrawalCount = 0, transferCount = 0, paymentLinkCount = 0;
+    let depositCount = 0, withdrawalCount = 0, transferCount = 0, paymentLinkCount = 0, conversionCount = 0;
     let totalTransactions = 0, rejectedTransactions = 0, pendingTransactions = 0;
     let pendingDeposits = 0, pendingWithdrawals = 0, pendingTransfers = 0;
 
@@ -1635,6 +1639,7 @@ export class DatabaseStorage implements IStorage {
           case "conversion":
             conversionVol += amt;
             conversionFees += ashtechFee;
+            conversionCount += n;
             break;
         }
       }
@@ -1659,6 +1664,9 @@ export class DatabaseStorage implements IStorage {
       pendingTransactions,
       totalDeposits: depositVol.toFixed(2),
       totalWithdrawals: withdrawalVol.toFixed(2),
+      totalTransfers: transferVol.toFixed(2),
+      totalPaymentLinks: linkVol.toFixed(2),
+      totalConversions: conversionVol.toFixed(2),
       totalCollected: (depositVol + linkVol).toFixed(2),
       totalWithdrawn: (withdrawalVol + transferVol).toFixed(2),
       totalRevenue: totalRevenue.toFixed(2),
@@ -1671,6 +1679,7 @@ export class DatabaseStorage implements IStorage {
       withdrawalCount,
       transferCount,
       paymentLinkCount,
+      conversionCount,
       pendingDeposits,
       pendingWithdrawals,
       pendingTransfers,
