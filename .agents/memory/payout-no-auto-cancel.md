@@ -45,3 +45,8 @@ rejections, including NOT_FOUND/404, as failed+refunded; all other provider
 errors default to pending/pending_manual. Persist the provider ID before
 submission, reuse it for every reconciliation, block manual terminal changes
 while unresolved, and settle status plus wallet mutation atomically.
+
+Administrative reopening of a rejected withdrawal or transfer must also debit
+the previously refunded total from the original wallet in the same database
+transaction as the `failed/cancelled` → `pending` transition. If the wallet
+cannot cover it, leave the transaction rejected and report the insufficiency.

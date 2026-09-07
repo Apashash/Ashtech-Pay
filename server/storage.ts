@@ -112,6 +112,7 @@ export interface IStorage {
   createTransaction(transaction: InsertTransaction): Promise<Transaction>;
   updateTransactionStatus(id: string, status: string): Promise<Transaction | undefined>;
   claimTransactionStatus(id: string, status: string, allowedFrom?: string[]): Promise<Transaction | undefined>;
+  reopenRejectedPayoutAndDebit(id: string, amount: number, walletCurrency: string, allowedFrom?: string[]): Promise<Transaction | undefined>;
   claimPawaIncomingAndCredit(id: string, allowedFrom?: string[]): Promise<Transaction | undefined>;
   claimPawaPayoutFailedAndRefund(id: string, allowedFrom?: string[]): Promise<Transaction | undefined>;
   updateTransactionMetadata(id: string, metadata: Record<string, unknown>): Promise<void>;
@@ -614,6 +615,66 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(transactions.id, id), inArray(transactions.status, allowedFrom)))
       .returning();
     return transaction || undefined;
+  }
+
+  async reopenRejectedPayoutAndDebit(
+    id: string,
+    amount: number,
+    walletCurrency: string,
+    allowedFrom: string[] = ["failed", "cancelled"],
+  ): Promise<Transaction | undefined> {
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new Error("INVALID_REOPEN_DEBIT_AMOUNT");
+    }
+
+    const reopened = await db.transaction(async (trx) => {
+      const [transaction] = await trx.update(transactions)
+        .set({ status: "pending" })
+        .where(and(
+          eq(transactions.id, id),
+          inArray(transactions.status, allowedFrom),
+          inArray(transactions.type, ["withdrawal", "transfer_out"]),
+        ))
+        .returning();
+      if (!transaction) return undefined;
+
+      const [user] = await trx.select({ preferredCurrency: users.preferredCurrency })
+        .from(users)
+        .where(eq(users.id, transaction.userId))
+        .limit(1);
+      if (!user) throw new Error("Transaction user not found");
+
+      const { sameCfaFamily } = await import("./walletHelper");
+      const primaryCurrency = user.preferredCurrency || "XAF";
+      const usesPrimaryWallet = sameCfaFamily(walletCurrency, primaryCurrency);
+      const debitCondition = sql`${usesPrimaryWallet ? users.balance : wallets.balance}::numeric >= ${amount}::numeric`;
+
+      if (usesPrimaryWallet) {
+        const [debited] = await trx.update(users)
+          .set({ balance: sql`${users.balance}::numeric - ${amount}::numeric` })
+          .where(and(eq(users.id, transaction.userId), debitCondition))
+          .returning({ id: users.id });
+        if (!debited) throw new Error("INSUFFICIENT_WALLET_BALANCE");
+      } else {
+        const [debited] = await trx.update(wallets)
+          .set({
+            balance: sql`${wallets.balance}::numeric - ${amount}::numeric`,
+            updatedAt: new Date(),
+          })
+          .where(and(
+            eq(wallets.userId, transaction.userId),
+            eq(wallets.currency, walletCurrency),
+            debitCondition,
+          ))
+          .returning({ id: wallets.id });
+        if (!debited) throw new Error("INSUFFICIENT_WALLET_BALANCE");
+      }
+
+      return transaction;
+    });
+
+    if (reopened) invalidateUserCache(reopened.userId);
+    return reopened;
   }
 
   async claimPawaIncomingAndCredit(id: string, allowedFrom: string[] = ["pending"]): Promise<Transaction | undefined> {

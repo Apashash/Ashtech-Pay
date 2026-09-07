@@ -11285,6 +11285,9 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Transaction non trouvée" });
       }
       const isPayout = ["withdrawal", "transfer_out"].includes(existingTx.type);
+      const isReopeningRejectedPayout = isPayout
+        && status === "pending"
+        && ["failed", "cancelled"].includes(existingTx.status);
       const pawaControl = classifyPawaPayControlledTransaction(existingTx.type, existingTx.externalReference);
       // An admin rejection/cancellation of an incoming deposit is an explicit
       // local decision. It must not be blocked by an unavailable or still-
@@ -11293,7 +11296,7 @@ export async function registerRoutes(
       const isIncomingDeposit = existingTx.type === "deposit" || existingTx.type === "payment_link";
       const isManualDepositRejection = isIncomingDeposit &&
         (status === "failed" || status === "cancelled");
-      if (pawaControl && !isManualDepositRejection) {
+      if (pawaControl && !isManualDepositRejection && !isReopeningRejectedPayout) {
         const reconciled = pawaControl === "payout"
           ? await reconcilePawaPayPayoutAttempt(existingTx)
           : await reconcilePawaPayIncomingAttempt(existingTx);
@@ -11403,9 +11406,33 @@ export async function registerRoutes(
       const wasNotCompleted = existingTx.status !== "completed";
       const isNowCompleted = status === "completed";
 
-      const transaction = await storage.updateTransactionStatus(id, status);
+      let transaction: Transaction | undefined;
+      if (isReopeningRejectedPayout) {
+        const metadata = (existingTx.metadata || {}) as Record<string, unknown>;
+        const walletCurrency = typeof metadata.walletCurrency === "string"
+          ? metadata.walletCurrency
+          : (existingTx.currency || "XAF");
+        const debitAmount = parseFloat(existingTx.totalAmount || existingTx.amount);
+        try {
+          transaction = await storage.reopenRejectedPayoutAndDebit(
+            id,
+            debitAmount,
+            walletCurrency,
+            ["failed", "cancelled"],
+          );
+        } catch (error: any) {
+          if (error?.message === "INSUFFICIENT_WALLET_BALANCE") {
+            return res.status(400).json({
+              message: `Solde insuffisant sur le wallet ${walletCurrency}. Le statut n'a pas été modifié.`,
+            });
+          }
+          throw error;
+        }
+      } else {
+        transaction = await storage.updateTransactionStatus(id, status);
+      }
       if (!transaction) {
-        return res.status(404).json({ message: "Erreur lors de la mise à jour" });
+        return res.status(409).json({ message: "Transaction déjà modifiée ou solde indisponible." });
       }
       
       // Credit user wallet when transaction is approved (payment_link type)
@@ -11654,6 +11681,7 @@ export async function registerRoutes(
             from: existingTx.status,
             to: status,
             balanceUpdated: wasNotCompleted && isNowCompleted,
+            walletDebited: isReopeningRejectedPayout,
             reason: reason.trim(),
             forceComplete: !!forceComplete,
           }),
