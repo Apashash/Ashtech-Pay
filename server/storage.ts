@@ -1395,7 +1395,7 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
-  async getStatsActivity(period: string = "this_month"): Promise<{ date: string; deposit: number; withdrawal: number; payment_link: number; transfer: number; depositVol: number; withdrawalVol: number; paymentLinkVol: number; transferVol: number }[]> {
+  async getStatsActivity(period: string = "this_month"): Promise<{ date: string; deposit: number; withdrawal: number; payment_link: number; transfer: number; conversion: number; depositVol: number; withdrawalVol: number; paymentLinkVol: number; transferVol: number; conversionVol: number }[]> {
     const [resetSetting, allSettings] = await Promise.all([
       this.getSetting("stats_reset_at"),
       this.getAllSettings(),
@@ -1463,8 +1463,8 @@ export class DatabaseStorage implements IStorage {
       .groupBy(truncExpr, transactions.type, transactions.source, transactions.currency);
 
     // Build empty bucket scaffold, then fill from aggregated rows
-    type Bucket = { date: string; deposit: number; withdrawal: number; payment_link: number; transfer: number; api_deposit: number; depositVol: number; withdrawalVol: number; paymentLinkVol: number; transferVol: number; apiDepositVol: number };
-    const empty = (): Bucket => ({ date: "", deposit: 0, withdrawal: 0, payment_link: 0, transfer: 0, api_deposit: 0, depositVol: 0, withdrawalVol: 0, paymentLinkVol: 0, transferVol: 0, apiDepositVol: 0 });
+    type Bucket = { date: string; deposit: number; withdrawal: number; payment_link: number; transfer: number; conversion: number; api_deposit: number; depositVol: number; withdrawalVol: number; paymentLinkVol: number; transferVol: number; conversionVol: number; apiDepositVol: number };
+    const empty = (): Bucket => ({ date: "", deposit: 0, withdrawal: 0, payment_link: 0, transfer: 0, conversion: 0, api_deposit: 0, depositVol: 0, withdrawalVol: 0, paymentLinkVol: 0, transferVol: 0, conversionVol: 0, apiDepositVol: 0 });
     const buckets: Record<string, Bucket> = {};
 
     if (useHourly) {
@@ -1494,6 +1494,7 @@ export class DatabaseStorage implements IStorage {
       else if (row.type === "withdrawal")   { b.withdrawal   += n; b.withdrawalVol   += vol; }
       else if (row.type === "payment_link") { b.payment_link += n; b.paymentLinkVol  += vol; }
       else if (row.type === "transfer_out") { b.transfer     += n; b.transferVol     += vol; }
+      else if (row.type === "conversion")   { b.conversion   += n; b.conversionVol   += vol; }
     }
 
     return Object.values(buckets);

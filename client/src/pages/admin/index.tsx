@@ -131,7 +131,7 @@ export default function AdminDashboard() {
     refetchInterval: 30000,
   });
 
-  const { data: activityData = [] } = useQuery<{ date: string; deposit: number; withdrawal: number; payment_link: number; transfer: number; api_deposit: number; depositVol: number; withdrawalVol: number; paymentLinkVol: number; transferVol: number; apiDepositVol: number }[]>({
+  const { data: activityData = [] } = useQuery<{ date: string; deposit: number; withdrawal: number; payment_link: number; transfer: number; conversion: number; api_deposit: number; depositVol: number; withdrawalVol: number; paymentLinkVol: number; transferVol: number; conversionVol: number; apiDepositVol: number }[]>({
     queryKey: [`/api/admin/stats/activity?period=${period}`],
     refetchInterval: 30000,
   });
@@ -600,8 +600,9 @@ export default function AdminDashboard() {
                 <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-orange-500 inline-block" />Retrait</span>
                 <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-purple-500 inline-block" />Lien paiement</span>
                 <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-blue-500 inline-block" />Envoi</span>
+                <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-pink-500 inline-block" />Échange</span>
               </div>
-              {activityData.length === 0 || activityData.every(d => d.deposit === 0 && d.api_deposit === 0 && d.withdrawal === 0 && d.payment_link === 0 && d.transfer === 0) ? (
+              {activityData.length === 0 || activityData.every(d => d.deposit === 0 && d.api_deposit === 0 && d.withdrawal === 0 && d.payment_link === 0 && d.transfer === 0 && d.conversion === 0) ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <CreditCard className="w-10 h-10 mx-auto mb-3 opacity-30" />
                   <p className="text-sm">Aucune activité sur cette période</p>
@@ -713,9 +714,10 @@ export default function AdminDashboard() {
               <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-cyan-400 inline-block" />Dépôt API</span>
               <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-orange-500 inline-block" />Retrait</span>
               <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-purple-500 inline-block" />Lien paiement</span>
-              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-blue-500 inline-block" />Envoi</span>
+                <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-blue-500 inline-block" />Envoi</span>
+                <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-pink-500 inline-block" />Échange</span>
             </div>
-            {activityData.length === 0 || activityData.every(d => d.depositVol === 0 && d.apiDepositVol === 0 && d.withdrawalVol === 0 && d.paymentLinkVol === 0 && d.transferVol === 0) ? (
+            {activityData.length === 0 || activityData.every(d => d.depositVol === 0 && d.apiDepositVol === 0 && d.withdrawalVol === 0 && d.paymentLinkVol === 0 && d.transferVol === 0 && d.conversionVol === 0) ? (
               <div className="text-center py-8 text-muted-foreground">
                 <DollarSign className="w-10 h-10 mx-auto mb-3 opacity-30" />
                 <p className="text-sm">Aucun volume sur cette période</p>
@@ -730,7 +732,7 @@ export default function AdminDashboard() {
                     contentStyle={{ background: "#1a1a1a", border: "1px solid #333", borderRadius: 8, fontSize: 12 }}
                     labelStyle={{ color: "#ccc" }}
                     formatter={(value: number, name: string) => {
-                      const labels: Record<string, string> = { depositVol: "Dépôt", apiDepositVol: "Dépôt API", withdrawalVol: "Retrait", paymentLinkVol: "Lien paiement", transferVol: "Envoi" };
+                      const labels: Record<string, string> = { depositVol: "Dépôt", apiDepositVol: "Dépôt API", withdrawalVol: "Retrait", paymentLinkVol: "Lien paiement", transferVol: "Envoi", conversionVol: "Échange" };
                       return [value.toLocaleString("fr-FR", { maximumFractionDigits: 0 }) + " XAF", labels[name] || name];
                     }}
                   />
@@ -739,6 +741,7 @@ export default function AdminDashboard() {
                   <Bar dataKey="withdrawalVol" stackId="vol" fill="#f97316" name="withdrawalVol" />
                   <Bar dataKey="paymentLinkVol" stackId="vol" fill="#a855f7" name="paymentLinkVol" />
                   <Bar dataKey="transferVol" stackId="vol" fill="#3b82f6" name="transferVol" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="conversionVol" stackId="vol" fill="#ec4899" name="conversionVol" radius={[3, 3, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             )}
