@@ -248,14 +248,29 @@ function AppInstallBanner() {
     setGuideMode("android");
   };
 
-  const confirmPermanentClose = () => {
+  const hideBannerFor = (durationMs: number) => {
+    const suppressedUntil = Date.now() + durationMs;
     try {
-      localStorage.setItem(HIDE_INSTALL_BANNER_KEY, "true");
+      localStorage.setItem(HIDE_INSTALL_BANNER_KEY, String(suppressedUntil));
     } catch {
       // If storage is unavailable, closing is still allowed for this visit.
     }
     setConfirmCloseOpen(false);
     setVisible(false);
+
+    if (cooldownTimerRef.current !== null) {
+      window.clearTimeout(cooldownTimerRef.current);
+    }
+    cooldownTimerRef.current = window.setTimeout(() => {
+      cooldownTimerRef.current = null;
+      const currentPath = window.location.pathname;
+      if (
+        !isStandaloneDisplay() &&
+        (currentPath === "/" || currentPath === "/dashboard")
+      ) {
+        setVisible(true);
+      }
+    }, durationMs);
   };
 
   return (
@@ -308,14 +323,14 @@ function AppInstallBanner() {
           <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:justify-end">
             <button
               type="button"
-              onClick={() => setConfirmCloseOpen(false)}
+              onClick={() => hideBannerFor(SNOOZE_INSTALL_BANNER_MS)}
               className="rounded-xl border border-border px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
             >
               Non, continuer à afficher
             </button>
             <button
               type="button"
-              onClick={confirmPermanentClose}
+              onClick={() => hideBannerFor(DISMISS_INSTALL_BANNER_MS)}
               className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700"
             >
               Oui, ne plus afficher
