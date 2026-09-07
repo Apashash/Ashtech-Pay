@@ -294,14 +294,14 @@ function AppInstallBanner() {
               onClick={() => setConfirmCloseOpen(false)}
               className="rounded-xl border border-border px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
             >
-              🔴 Non, continuer à afficher
+              Non, continuer à afficher
             </button>
             <button
               type="button"
               onClick={confirmPermanentClose}
               className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700"
             >
-              🟢 Oui, ne plus afficher
+              Oui, ne plus afficher
             </button>
           </div>
         </DialogContent>
