@@ -16,6 +16,12 @@ interface TransactionDetails extends Transaction {
   paymentIntent?: { payerCountry: string; payerPhone: string } | null;
   recipient?: { fullName: string; username: string } | null;
   metadata: Record<string, any> | null;
+  balanceCurrency?: string;
+  balanceBefore?: string;
+  balanceAfter?: string;
+  targetBalanceCurrency?: string;
+  targetBalanceBefore?: string;
+  targetBalanceAfter?: string;
 }
 
 function formatDate(date: string | Date | null | undefined): string {
@@ -391,7 +397,31 @@ export default function TransactionDetailPage({ params }: { params: { id: string
             <Row label={td.detailPayer} value={tx.payerName} />
           )}
 
-          <Row label={td.detailTxId} value={`#${tx.id.slice(-8).toUpperCase()}`} />
+          {tx.balanceBefore !== undefined && tx.balanceAfter !== undefined && (
+            <>
+              <SectionLabel>ÉVOLUTION DU SOLDE</SectionLabel>
+              <Row
+                label={`Solde avant (${tx.balanceCurrency || tx.currency || "XAF"})`}
+                value={formatCurrency(tx.balanceBefore, (tx.balanceCurrency || tx.currency || "XAF") as SupportedCurrency)}
+              />
+              <Row
+                label={`Solde après (${tx.balanceCurrency || tx.currency || "XAF"})`}
+                value={formatCurrency(tx.balanceAfter, (tx.balanceCurrency || tx.currency || "XAF") as SupportedCurrency)}
+              />
+              {tx.targetBalanceCurrency && tx.targetBalanceBefore !== undefined && tx.targetBalanceAfter !== undefined && (
+                <>
+                  <Row
+                    label={`Solde cible avant (${tx.targetBalanceCurrency})`}
+                    value={formatCurrency(tx.targetBalanceBefore, tx.targetBalanceCurrency as SupportedCurrency)}
+                  />
+                  <Row
+                    label={`Solde cible après (${tx.targetBalanceCurrency})`}
+                    value={formatCurrency(tx.targetBalanceAfter, tx.targetBalanceCurrency as SupportedCurrency)}
+                  />
+                </>
+              )}
+            </>
+          )}
           <Row label={td.detailCreatedAt} value={formatDate(tx.createdAt)} />
           {tx.confirmedAt && (
             <Row label={td.detailUpdatedAt} value={formatDate(tx.confirmedAt)} />

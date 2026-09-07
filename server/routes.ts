@@ -93,6 +93,7 @@ import { buildPublicPaymentStatus } from "./publicPaymentState";
 import { buildPawaPayFeeUpdates } from "./feeUpdates";
 import { toLocalMobileMoneyPhone, validateMobileMoneyPhone } from "@shared/mobile-money-phone";
 import { getVapidPublicKey, sendPushNotificationToAll } from "./push";
+import { buildTransactionBalanceSnapshots } from "./transactionBalances";
 
 const PAWAPAY_PUBLIC_INITIATION_TIMEOUT_MS = 20_000;
 
@@ -4070,10 +4071,17 @@ export async function registerRoutes(
   app.get("/api/transactions", requireAuth, async (req, res) => {
     try {
       const all = await storage.getTransactionsByUserId(req.userId!);
+      const user = await storage.getUser(req.userId!);
+      const wallets = await storage.getUserWallets(req.userId!);
+      const snapshots = user
+        ? buildTransactionBalanceSnapshots(all, user.preferredCurrency || "XAF", parseFloat(user.balance || "0"), wallets)
+        : new Map();
       // Admin-only adjustments (admin_debit / admin_credit) must not appear
       // in the user's transaction history — they are internal ledger operations.
       const HIDDEN_TYPES = new Set(["admin_debit", "admin_credit"]);
-      res.json(all.filter(t => !HIDDEN_TYPES.has(t.type)));
+      res.json(all
+        .filter(t => !HIDDEN_TYPES.has(t.type))
+        .map(t => ({ ...t, ...(snapshots.get(t.id) || {}) })));
     } catch (error) {
       console.error("Get transactions error:", error);
       res.status(500).json({ message: "Erreur serveur" });
@@ -4110,8 +4118,19 @@ export async function registerRoutes(
         const recipient = await storage.getUser(transaction.recipientId);
         additionalInfo.recipient = recipient ? { fullName: recipient.fullName, username: recipient.username } : null;
       }
+
+      const user = await storage.getUser(req.userId!);
+      const wallets = await storage.getUserWallets(req.userId!);
+      const snapshots = user
+        ? buildTransactionBalanceSnapshots(
+            await storage.getTransactionsByUserId(req.userId!),
+            user.preferredCurrency || "XAF",
+            parseFloat(user.balance || "0"),
+            wallets,
+          )
+        : new Map();
       
-      res.json({ ...transaction, ...additionalInfo });
+      res.json({ ...transaction, ...(snapshots.get(transaction.id) || {}), ...additionalInfo });
     } catch (error) {
       console.error("Get transaction error:", error);
       res.status(500).json({ message: "Erreur serveur" });
@@ -11232,9 +11251,20 @@ export async function registerRoutes(
           depositPaymentProvider: (operatorData as any).depositPaymentProvider || null,
         } : null;
       }
+
+      const userWallets = await storage.getUserWallets(transaction.userId);
+      const snapshots = user
+        ? buildTransactionBalanceSnapshots(
+            await storage.getTransactionsByUserId(transaction.userId),
+            user.preferredCurrency || "XAF",
+            parseFloat(user.balance || "0"),
+            userWallets,
+          )
+        : new Map();
       
       res.json({
         ...transaction,
+        ...(snapshots.get(transaction.id) || {}),
         user: user ? { 
           fullName: user.fullName, 
           email: user.email, 
