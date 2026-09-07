@@ -180,6 +180,11 @@ function AppInstallBanner() {
       setDeferredPrompt(null);
       window.__ashtechDeferredInstallPrompt = null;
     };
+    const openInstallGuideHandler = () => {
+      setVisible(false);
+      setIosStep(1);
+      setGuideMode(getInstallDevice() === "ios" ? "ios" : "android");
+    };
     const sidebarInteractionHandler = (event: MouseEvent) => {
       const target = event.target as Element | null;
       const dashboardLink = target?.closest<HTMLAnchorElement>('a[href^="/dashboard"]');
@@ -194,6 +199,7 @@ function AppInstallBanner() {
     window.addEventListener("beforeinstallprompt", promptHandler);
     window.addEventListener("ashtechbeforeinstallprompt", adoptStoredPrompt);
     window.addEventListener("appinstalled", installedHandler);
+    window.addEventListener("ashtech-open-install-guide", openInstallGuideHandler);
     document.addEventListener("click", sidebarInteractionHandler, true);
     adoptStoredPrompt();
     const displayMode = window.matchMedia("(display-mode: standalone)");
@@ -203,6 +209,7 @@ function AppInstallBanner() {
       window.removeEventListener("beforeinstallprompt", promptHandler);
       window.removeEventListener("ashtechbeforeinstallprompt", adoptStoredPrompt);
       window.removeEventListener("appinstalled", installedHandler);
+      window.removeEventListener("ashtech-open-install-guide", openInstallGuideHandler);
       document.removeEventListener("click", sidebarInteractionHandler, true);
       displayMode.removeEventListener?.("change", updateStandalone);
       if (cooldownTimerRef.current !== null) {

@@ -60,6 +60,11 @@ export function PushNotificationPrompt() {
 
   async function enablePush() {
     if (busy) return;
+    if (isIosInstallPrompt) {
+      window.dispatchEvent(new CustomEvent("ashtech-open-install-guide"));
+      dismiss();
+      return;
+    }
     setBusy(true);
     setErrorMessage("");
     try {
@@ -71,7 +76,7 @@ export function PushNotificationPrompt() {
     } catch (error: any) {
       setErrorMessage(error?.message || "Impossible d'activer les notifications.");
       const support = getPushSupport();
-      setState(support.reason === "ios-home-screen" ? "ios-install" : "error");
+      setState(!support.supported && support.reason === "ios-home-screen" ? "ios-install" : "error");
     } finally {
       setBusy(false);
     }
@@ -94,7 +99,7 @@ export function PushNotificationPrompt() {
 
   return (
     <div
-      className="fixed inset-x-3 bottom-4 z-[70] mx-auto max-w-lg rounded-2xl border border-primary/20 bg-background/95 p-4 shadow-2xl backdrop-blur-md sm:inset-x-auto sm:bottom-6 sm:w-[min(92vw, thirtyrem)]"
+      className="fixed inset-x-3 bottom-4 z-[70] mx-auto max-w-lg rounded-2xl border border-primary/20 bg-background/95 p-4 shadow-2xl backdrop-blur-md sm:inset-x-auto sm:bottom-6 sm:w-[min(92vw,32rem)]"
       role="dialog"
       aria-live="polite"
       aria-label="Notifications AshTech Pay"
