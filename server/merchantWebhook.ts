@@ -40,6 +40,7 @@ function buildPayload(transaction: Transaction, finalStatus: FinalStatus, notify
     event: finalStatus === "completed" ? `${eventPrefix}.completed` : `${eventPrefix}.failed`,
     transaction_id: transaction.id,
     reference: transaction.reference,
+    merchant_reference: metadata.merchantReference ?? null,
     status: finalStatus,
     amount: Number(transaction.amount),
     total_amount: Number(transaction.totalAmount || transaction.amount),

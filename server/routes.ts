@@ -15413,9 +15413,10 @@ export async function registerRoutes(
 
       const amounts = await resolveCryptoFeeBreakdown(grossUsdt);
 
-      const reference = request.reference || generateTransactionReference("deposit");
-      if (request.reference) {
-        const existing = await storage.getTransactionByUserReference(merchant.id, reference);
+      const merchantReference = request.reference?.trim() || null;
+      const reference = generateTransactionReference("deposit");
+      if (merchantReference) {
+        const existing = await storage.getApiTransactionByMerchantReference(merchant.id, merchantReference);
         if (existing) {
           const existingMetadata = (existing as any).metadata || {};
           const sameRequest =
@@ -15431,6 +15432,7 @@ export async function registerRoutes(
           return res.status(200).json({
             transaction_id: existing.id,
             reference: existing.reference,
+            merchant_reference: existingMetadata.merchantReference || merchantReference,
             status: existing.status === "completed" ? "success" : existing.status,
             payment_method: "crypto",
             asset_code: existingMetadata.assetCode || request.assetCode,
@@ -15470,10 +15472,13 @@ export async function registerRoutes(
             sdk: "direct",
             originalAmount,
             originalCurrency,
+            ...(merchantReference ? { merchantReference } : {}),
           },
         });
       } catch (reservationError: any) {
-        const raced = await storage.getTransactionByUserReference(merchant.id, reference);
+        const raced = merchantReference
+          ? await storage.getApiTransactionByMerchantReference(merchant.id, merchantReference)
+          : await storage.getTransactionByReference(reference);
         if (raced) {
           return res.status(200).json({
             transaction_id: raced.id,
@@ -15505,6 +15510,7 @@ export async function registerRoutes(
           metadata: {
             merchantId: merchant.id,
             source: "direct_sdk",
+            ...(merchantReference ? { merchantReference } : {}),
             assetCode: request.assetCode,
             currency: originalCurrency,
             originalAmount,
@@ -15570,14 +15576,18 @@ export async function registerRoutes(
             ...(_creditedCoin !== null ? { creditedAmountCoin: parseFloat(_creditedCoin.toFixed(8)) } : {}),
           };
         })();
+      const finalCryptoMetadata = {
+        ...cryptoMetadata,
+        ...(merchantReference ? { merchantReference } : {}),
+      };
       await storage.updateTransaction(transaction.id, {
         externalReference: charge.id || undefined,
-        metadata: cryptoMetadata,
+        metadata: finalCryptoMetadata,
       });
       transaction = {
         ...transaction,
         externalReference: charge.id || transaction.externalReference,
-        metadata: cryptoMetadata,
+        metadata: finalCryptoMetadata,
       } as Transaction;
 
       console.log(
@@ -15586,7 +15596,8 @@ export async function registerRoutes(
       );
       return res.status(202).json({
         transaction_id: transaction.id,
-        reference,
+            reference,
+            merchant_reference: merchantReference,
         status: "pending",
         payment_method: "crypto",
         asset_code: request.assetCode,
@@ -15634,6 +15645,9 @@ export async function registerRoutes(
         amount, currency, phone, operator: operatorName, country_code, reference, notify_url,
         preAuthorisationCode, preauthorizationCode, otp,
       } = req.body;
+      const merchantReference = typeof reference === "string" && reference.trim()
+        ? reference.trim()
+        : null;
       const pawaPayPreAuthorisationCode = preAuthorisationCode || preauthorizationCode || otp;
 
       // ── Validation ────────────────────────────────────────────────────────
@@ -15731,10 +15745,12 @@ export async function registerRoutes(
         ashtechFeeAmount = pf.ashtechFeeAmount;
       }
 
-       const depositRef = reference || generateTransactionReference("deposit");
+       // The merchant reference is kept for idempotency and merchant webhooks,
+       // but every provider receives an AshTech-generated reference.
+       const depositRef = generateTransactionReference("deposit");
 
-       if (reference) {
-         const existing = await storage.getTransactionByUserReference(merchant.id, String(reference));
+       if (merchantReference && !req.body.otp) {
+         const existing = await storage.getApiTransactionByMerchantReference(merchant.id, merchantReference);
          if (existing) {
            const sameRequest =
              parseFloat(String(existing.totalAmount || existing.amount)) === amountNum &&
@@ -15750,6 +15766,7 @@ export async function registerRoutes(
            return res.status(200).json({
              transaction_id: existing.id,
              reference: existing.reference,
+             merchant_reference: merchantReference,
              status: existing.status === "completed" ? "success" : existing.status,
              amount: parseFloat(String(existing.totalAmount || existing.amount)),
              credited_amount: parseFloat(String(existing.amount)),
@@ -15796,7 +15813,8 @@ export async function registerRoutes(
         });
       }
       if (paymentProvider === "afribapay" && req.body.otp && req.body.reference) {
-        const ctx = await loadOtpContext(req.body.reference as string);
+        const otpMerchantReference = String(req.body.reference).trim();
+        const ctx = await loadOtpContext(otpMerchantReference);
         if (!ctx) {
           return res.status(400).json({
             error: "otp_expired",
@@ -15814,16 +15832,19 @@ export async function registerRoutes(
           phone_number: ctx.phone,
           amount: ctx.amount,
           currency: afribapayCurrencyOtp,
-          order_id: req.body.reference as string,
-          reference_id: req.body.reference as string,
+          order_id: ctx.afribaTransactionId,
+          reference_id: ctx.afribaTransactionId,
           otp_code: req.body.otp as string,
           notify_url: callbackUrlOtp,
           return_url: `${process.env.APP_URL}/dashboard/deposit?status=success`,
           cancel_url: `${process.env.APP_URL}/dashboard/deposit?status=cancelled`,
           lang: "fr",
         });
-        await deleteOtpContext(req.body.reference as string);
-        const existingTxOtp = await storage.getTransactionByReference(req.body.reference as string);
+        await deleteOtpContext(otpMerchantReference);
+        if (otpMerchantReference !== ctx.afribaTransactionId) {
+          await deleteOtpContext(ctx.afribaTransactionId);
+        }
+        const existingTxOtp = await storage.getTransactionByReference(ctx.afribaTransactionId);
         if (!confirmedResponse.success) {
           if (existingTxOtp) await storage.updateTransactionStatus(existingTxOtp.id, "failed");
           return res.status(502).json(buildProviderErrorPayload({
@@ -15837,12 +15858,12 @@ export async function registerRoutes(
             sensitiveValues: [phone],
           }));
         }
-        const extRefOtp = confirmedResponse.transaction_id || (req.body.reference as string);
+        const extRefOtp = confirmedResponse.transaction_id || ctx.afribaTransactionId;
         if (existingTxOtp) {
           await storage.updateTransactionExternalReference(existingTxOtp.id, extRefOtp);
           addPendingPayment({
             transactionId: existingTxOtp.id,
-            reference: req.body.reference as string,
+            reference: existingTxOtp.reference || ctx.afribaTransactionId,
             externalReference: extRefOtp,
             attempts: 0,
             userId: merchant.id,
@@ -15853,8 +15874,9 @@ export async function registerRoutes(
           });
         }
         return res.status(202).json({
-          transaction_id: existingTxOtp?.id || (req.body.reference as string),
-          reference: req.body.reference as string,
+          transaction_id: existingTxOtp?.id || ctx.afribaTransactionId,
+          reference: existingTxOtp?.reference || ctx.afribaTransactionId,
+          merchant_reference: otpMerchantReference,
           status: "pending",
           amount: amountNum,
           credited_amount: creditedAmount,
@@ -15917,6 +15939,7 @@ export async function registerRoutes(
             recipientPhone: phone,
             notifyUrl: notify_url || null,
             source: "api",
+            metadata: merchantReference ? { merchantReference } : undefined,
           });
 
           if (otpInfoPre.type === "api") {
@@ -15948,7 +15971,7 @@ export async function registerRoutes(
           // USSD-type OTP: user dials the USSD code shown in ussd_code — no SMS
           // endpoint to call. Cache immediately so the confirm call can find the session.
 
-          await persistOtpContext(depositRef, {
+          const otpContext: OtpContext = {
             userId: merchant.id,
             operator: afribaOpCodePre,
             country: country.code,
@@ -15957,8 +15980,12 @@ export async function registerRoutes(
             currency: afribapayCurrencyPre,
             afribaTransactionId: depositRef,
             expiresAt: Date.now() + 15 * 60 * 1000, // 15 min
-                otpType: otpInfoPre.type === "none" ? undefined : otpInfoPre.type,
-          });
+            otpType: otpInfoPre.type === "none" ? undefined : otpInfoPre.type,
+          };
+          await persistOtpContext(depositRef, otpContext);
+          if (merchantReference && merchantReference !== depositRef) {
+            await persistOtpContext(merchantReference, otpContext);
+          }
 
           // Substitute "montant" placeholder with the actual amount (e.g. BF Orange: *144*4*6*5000#)
           const ussdCodeForCollect = otpInfoPre.ussdCode?.includes("montant")
@@ -15972,6 +15999,7 @@ export async function registerRoutes(
             error: "otp_required",
             message: otpMsg,
             reference: depositRef, // client MUST include this in the confirmation call
+            ...(merchantReference ? { merchant_reference: merchantReference } : {}),
             ussd_code: ussdCodeForCollect,
           });
         }
@@ -16022,14 +16050,15 @@ export async function registerRoutes(
         notifyUrl: notify_url || null,
         source: "api",
          ...(pawaPayDepositId ? { externalReference: pawaPayDepositId } : {}),
-          ...(pawaPayDepositId ? {
-            metadata: {
+        metadata: {
+              ...(merchantReference ? { merchantReference } : {}),
+              ...(pawaPayDepositId ? {
               paymentProvider: "pawapay",
               pawaCountry: pawaPayCountry(country.code),
               countryCode: country.code,
               walletCurrency,
+              } : {}),
             },
-          } : {}),
       });
 
       // ── Call payment provider ──────────────────────────────────────────────
@@ -16221,6 +16250,7 @@ export async function registerRoutes(
         phone,
         country_code: country.code,
         created_at: (transaction as any).createdAt,
+        ...(merchantReference ? { merchant_reference: merchantReference } : {}),
       };
       if (isWave && (transaction as any)._waveUrl) {
         responseBody.wave_url = (transaction as any)._waveUrl;
@@ -16271,6 +16301,7 @@ export async function registerRoutes(
       const responseBody: Record<string, any> = {
         transaction_id: latestTx.id,
         reference: latestTx.reference,
+        merchant_reference: ((latestTx as any).metadata || {}).merchantReference || null,
         status: isoStatus,
         amount: parseFloat((latestTx as any).totalAmount || latestTx.amount),
         credited_amount: parseFloat(latestTx.amount),

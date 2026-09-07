@@ -108,6 +108,7 @@ export interface IStorage {
   getTransactionById(id: string): Promise<Transaction | undefined>;
   getTransactionByReference(reference: string): Promise<Transaction | undefined>;
   getTransactionByUserReference(userId: string, reference: string): Promise<Transaction | undefined>;
+  getApiTransactionByMerchantReference(userId: string, reference: string): Promise<Transaction | undefined>;
   getLastIncomingTransactionByCurrency(userId: string, currency: string): Promise<Transaction | undefined>;
   createTransaction(transaction: InsertTransaction): Promise<Transaction>;
   updateTransactionStatus(id: string, status: string): Promise<Transaction | undefined>;
@@ -561,6 +562,23 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(transactions)
       .where(and(eq(transactions.userId, userId), eq(transactions.reference, reference)))
+      .limit(1);
+    return transaction || undefined;
+  }
+
+  async getApiTransactionByMerchantReference(userId: string, reference: string): Promise<Transaction | undefined> {
+    const [transaction] = await db
+      .select()
+      .from(transactions)
+      .where(and(
+        eq(transactions.userId, userId),
+        eq(transactions.source, "api"),
+        or(
+          eq(transactions.reference, reference),
+          sql`${transactions.metadata}->>'merchantReference' = ${reference}`,
+        ),
+      ))
+      .orderBy(desc(transactions.createdAt))
       .limit(1);
     return transaction || undefined;
   }
