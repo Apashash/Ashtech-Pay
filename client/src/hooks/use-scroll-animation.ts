@@ -4,9 +4,7 @@ export function useScrollAnimation() {
   useEffect(() => {
     const observerCallback: IntersectionObserverCallback = (entries) => {
       entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add("visible");
-        }
+        entry.target.classList.toggle("visible", entry.isIntersecting);
       });
     };
 
