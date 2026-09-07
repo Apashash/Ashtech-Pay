@@ -46,7 +46,6 @@ import { useTheme } from "@/components/theme-provider";
 import { useScrollAnimation } from "@/hooks/use-scroll-animation";
 import { useLanguage } from "@/lib/language";
 import { LanguageSwitcher } from "@/components/language-switcher";
-import operatorsImage from "@assets/IMG_0057_1775398589784.png";
 
 const countryList = [
   { name: "Cameroun", code: "cm" },
@@ -613,9 +612,6 @@ function OperatorLogosSection() {
             </div>
           ))}
         </div>
-      </div>
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 mt-10">
-        <img src={operatorsImage} alt="Tous les opérateurs de paiement acceptés" className="w-full" />
       </div>
     </section>
   );
