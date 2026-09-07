@@ -615,7 +615,7 @@ html.dark img[src="/logo-compact.png"] {
 /* Keep global error notifications as centered, dismissible popups on every viewport. */
 .toast-viewport {
   position: fixed !important;
-  top: 50% !important;
+  top: max(1rem, env(safe-area-inset-top)) !important;
   right: auto !important;
   bottom: auto !important;
   left: 50% !important;
@@ -624,7 +624,7 @@ html.dark img[src="/logo-compact.png"] {
   width: calc(100% - 2rem) !important;
   max-width: 420px !important;
   max-height: calc(100vh - 2rem) !important;
-  transform: translate(-50%, -50%) !important;
+  transform: translateX(-50%) !important;
   flex-direction: column !important;
   gap: 0.5rem !important;
   overflow-y: auto !important;
@@ -635,6 +635,8 @@ html.dark img[src="/logo-compact.png"] {
   position: relative;
   width: 100%;
   border-radius: 1rem;
+  box-shadow: 0 18px 42px -18px hsl(222 47% 11% / 0.38);
+  backdrop-filter: blur(14px);
 }
 
 .toast-popup [toast-close] {
