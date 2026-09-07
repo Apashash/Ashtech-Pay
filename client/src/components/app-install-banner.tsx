@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { useLocation } from "wouter";
+import { getAdminPath } from "@/lib/adminPath";
 import {
   Dialog,
   DialogContent,
@@ -119,6 +120,7 @@ function AndroidGuideIllustration() {
 
 function AppInstallBanner() {
   const [location] = useLocation();
+  const adminPath = getAdminPath();
   const [device, setDevice] = useState<InstallDevice>("unknown");
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isStandalone, setIsStandalone] = useState(false);
@@ -127,10 +129,14 @@ function AppInstallBanner() {
   const [guideMode, setGuideMode] = useState<GuideMode>(null);
   const [iosStep, setIosStep] = useState<1 | 2 | 3>(1);
 
+  const isAdminRoute =
+    location === adminPath ||
+    location.startsWith(`${adminPath}/`);
   const isEligibleRoute =
-    location === "/" ||
-    location === "/dashboard" ||
-    location.startsWith("/dashboard/");
+    !isAdminRoute &&
+    (location === "/" ||
+      location === "/dashboard" ||
+      location.startsWith("/dashboard/"));
   const isIos = device === "ios";
   const isAndroid = device === "android";
 
