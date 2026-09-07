@@ -41,45 +41,13 @@ import {
   ExternalLink
 } from "lucide-react";
 import heroImage from "@assets/IMG_0059_1775398520619.png";
-import operatorsImage from "@assets/IMG_0057_1775398589784.png";
 import { useState, useEffect, useRef } from "react";
 import { useTheme } from "@/components/theme-provider";
 import { useScrollAnimation } from "@/hooks/use-scroll-animation";
 import { useLanguage } from "@/lib/language";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import operatorsImage from "@assets/IMG_0057_1775398589784.png";
 
-
-const paymentMethods = [
-  { name: "Orange Money" },
-  { name: "MTN Mobile Money" },
-  { name: "Wave" },
-  { name: "Airtel Money" },
-  { name: "M-Pesa" },
-  { name: "Moov Money" },
-  { name: "PayPal" },
-  { name: "Visa" },
-  { name: "Mastercard" },
-];
-
-const countryList = [
-  { name: "Cameroun", code: "cm" },
-  { name: "Sénégal", code: "sn" },
-  { name: "Côte d'Ivoire", code: "ci" },
-  { name: "Mali", code: "ml" },
-  { name: "Burkina Faso", code: "bf" },
-  { name: "Niger", code: "ne" },
-  { name: "Togo", code: "tg" },
-  { name: "Bénin", code: "bj" },
-  { name: "Gabon", code: "ga" },
-  { name: "Congo", code: "cg" },
-  { name: "RD Congo", code: "cd" },
-  { name: "Centrafrique", code: "cf" },
-  { name: "Tchad", code: "td" },
-  { name: "Madagascar", code: "mg" },
-  { name: "Maroc", code: "ma" },
-  { name: "Tunisie", code: "tn" },
-  { name: "Algérie", code: "dz" },
-];
 
 function Navbar() {
   const { theme, toggleTheme } = useTheme();
@@ -870,44 +838,6 @@ function Footer() {
   );
 }
 
-function VideoPaymentSection() {
-  const { t } = useLanguage();
-  const duplicatedMethods = [...paymentMethods, ...paymentMethods];
-  const duplicatedCountries = [...countryList, ...countryList];
-
-  return (
-    <section className="bg-card border-y border-border overflow-hidden">
-      <div className="py-14">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-6">
-          <h3 className="text-center text-lg font-semibold text-foreground">{t.landing.paymentMethodsTitle}</h3>
-        </div>
-        <div className="relative overflow-hidden">
-          <div className="flex animate-marquee">
-            {duplicatedMethods.map((method, index) => (
-              <div key={index} className="flex-shrink-0 mx-4 px-6 py-3 bg-background rounded-lg border border-border flex items-center">
-                <span className="text-foreground font-medium whitespace-nowrap">{method.name}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-10 mb-6">
-          <h3 className="text-center text-lg font-semibold text-foreground">{t.landing.countriesTitle}</h3>
-        </div>
-        <div className="relative overflow-hidden">
-          <div className="flex animate-marquee-reverse">
-            {duplicatedCountries.map((country, index) => (
-              <div key={index} className="flex-shrink-0 mx-4 px-6 py-3 bg-background rounded-lg border border-border flex items-center gap-3">
-                <img src={`https://flagcdn.com/w40/${country.code}.png`} alt={`Drapeau ${country.name}`} className="w-8 h-6 rounded object-cover" />
-                <span className="text-foreground font-medium whitespace-nowrap">{country.name}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
 export default function LandingPage() {
   useScrollAnimation();
   
@@ -916,9 +846,8 @@ export default function LandingPage() {
       <Navbar />
       <HeroSection />
       <ReadyToStartSection />
-      <VideoPaymentSection />
-      <OperatorLogosSection />
       <SolutionsSection />
+      <OperatorLogosSection />
       <FeaturesSection />
       <WhyAshtechSection />
       <HowItWorksSection />
