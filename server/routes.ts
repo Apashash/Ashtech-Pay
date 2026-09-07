@@ -1621,11 +1621,16 @@ function sanitizeGatewayMessage(msg: string | null | undefined, fallback: string
 function isDefinitivePayoutRejection(result: {
   message?: string | null;
   status?: string | null;
+  providerCode?: string | null;
+  providerStatus?: number | string | null;
 }): boolean {
   const status = String(result.status || "").trim().toLowerCase();
-  if (["failed", "refunded", "cancelled", "canceled"].includes(status)) return true;
+  if (["failed", "refunded", "cancelled", "canceled", "rejected", "not_found", "not found"].includes(status)) return true;
 
-  const message = String(result.message || "").toLocaleLowerCase();
+  const providerStatus = Number(result.providerStatus);
+  if (providerStatus === 404) return true;
+
+  const message = `${String(result.message || "")} ${String(result.providerCode || "")}`.toLocaleLowerCase();
   return (
     message.includes("invalid phone") ||
     message.includes("invalid number") ||
@@ -1642,7 +1647,13 @@ function isDefinitivePayoutRejection(result: {
     message.includes("operation non supportee") ||
     message.includes("blacklist") ||
     message.includes("opération refusée") ||
-    message.includes("operation refusee")
+    message.includes("operation refusee") ||
+    message.includes("not found") ||
+    message.includes("not_found") ||
+    message.includes("introuvable") ||
+    message.includes("does not exist") ||
+    message.includes("transaction inconnue") ||
+    message.includes("payout inconnue")
   );
 }
 

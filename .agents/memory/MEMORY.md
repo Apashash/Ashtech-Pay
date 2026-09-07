@@ -28,7 +28,7 @@
 - [Mobile password autofill](mobile-password-autofill.md) — mark email as the login username and registration pseudo as nickname so mobile managers do not autofill the pseudo.
 - [Auth country detection](auth-country-detection.md) — login and registration select the active country from server-side IP geolocation, while manual selection always wins.
 - [AfribaPay country operators](afribapay-country-operators.md) — BJ/CI/NE require country-specific operator catalogs and exact AfribaPay codes across deposit, withdrawal, and transfer.
-- [Payout no auto-cancel](payout-no-auto-cancel.md) — debited payouts never auto-fail+refund on timeouts/transient errors; only explicit provider rejection or failed status triggers refund; else pending_manual.
+- [Payout no auto-cancel](payout-no-auto-cancel.md) — debited payouts never auto-fail+refund on timeouts/transient errors; explicit rejection, failed status, or provider NOT_FOUND/404 triggers refund.
 - [Admin route cloaking](admin-route-cloaking.md) — unauthenticated and non-admin requests to admin API/panel paths must look like branded 404s before auth/CSRF/PIN layers.
 - [Merchant webhook delivery](merchant-webhook-delivery.md) — all merchant events must use one persisted, HMAC-signed, idempotent queue with retry and cross-worker claims.
 - [Provider API error exposure](provider-api-errors.md) — merchant-facing errors preserve the provider’s useful message and diagnostics, but never its raw response or sensitive data.

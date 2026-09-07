@@ -41,6 +41,13 @@ export function removePendingPayout(reference: string) {
   pendingPayouts.delete(reference);
 }
 
+function providerResponseIndicatesNotFound(raw: unknown): boolean {
+  if (!raw) return false;
+  const serialized = typeof raw === "string" ? raw : JSON.stringify(raw);
+  return /\bnot[_ -]?found\b|\bintrouvable\b|\bdoes not exist\b|\bno (?:such|matching) (?:transaction|payout)\b/i.test(serialized)
+    || /"(?:status|status_code|statut_code|providerStatus)"\s*:\s*"?404"?/i.test(serialized);
+}
+
 // ─── Recover pending payouts from DB on startup ───────────────────────────
 export async function recoverPendingPayouts() {
   try {
@@ -236,30 +243,26 @@ async function checkProviderStatus(payout: PendingPayout): Promise<{ status: str
   try {
     if (payout.provider === "afribapay") {
       const result = await checkAfribaPayoutStatus(payout.reference, "order_id");
+      if (providerResponseIndicatesNotFound(result.raw)) return { status: "failed" };
       return { status: result.status };
     }
 
     if (payout.provider === "pixpay") {
       const result = await checkPixPayStatus(payout.reference, payout.countryCode);
+      if (providerResponseIndicatesNotFound(result.raw)) return { status: "failed" };
       return { status: result.status };
     }
     if (payout.provider === "pawapay") {
-      // A timeout or not-found is intentionally pending/manual, never refunded.
       const id = payout.externalReference || payout.reference;
       const result = await getPawaPayPayout(id);
-      const providerEnvelopeStatus = String((result.raw as any)?.status ?? "").toUpperCase();
-      return {
-        status: result.status,
-        // PawaPay explicitly reports NOT_FOUND when the payout never reached
-        // its platform. Keep our stricter no-auto-refund policy, but stop
-        // polling until an operator decides how to resolve the transaction.
-        shouldRemove: providerEnvelopeStatus === "NOT_FOUND",
-      };
+      if (providerResponseIndicatesNotFound(result.raw)) return { status: "failed" };
+      return { status: result.status };
     }
 
     return { status: "pending" };
   } catch (err: any) {
     console.error(`[PayoutPoller] checkProviderStatus error for ${payout.reference}:`, err?.message);
+    if (providerResponseIndicatesNotFound(err?.message)) return { status: "failed" };
     return { status: "pending" };
   }
 }
@@ -277,13 +280,7 @@ async function pollPendingPayouts() {
           continue;
         }
 
-        const { status, shouldRemove } = await checkProviderStatus(payout);
-
-        if (shouldRemove) {
-          console.log(`[PayoutPoller] Transaction not found for ${reference} — stopping poll (awaiting admin)`);
-          removePendingPayout(reference);
-          continue;
-        }
+        const { status } = await checkProviderStatus(payout);
 
         console.log(`[PayoutPoller] ${reference}: status=${status} provider=${payout.provider} (attempt ${payout.attempts}${payout.attempts > SLOW_AFTER_ATTEMPTS ? ", slow-poll 2min" : ""})`);
 

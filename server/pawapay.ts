@@ -330,7 +330,7 @@ export function formatPawaPayAmount(amount: string | number): string {
 export function normalizePawaPayStatus(status: unknown): PawaPayStatus {
   const value = typeof status === "string" ? status.toUpperCase() : "";
   if (["COMPLETED", "SUCCESSFUL", "SUCCEEDED"].includes(value)) return "completed";
-  if (["FAILED", "REJECTED", "CANCELLED", "EXPIRED", "ERROR"].includes(value)) return "failed";
+  if (["FAILED", "REJECTED", "CANCELLED", "EXPIRED", "ERROR", "NOT_FOUND", "NOT FOUND"].includes(value)) return "failed";
   return "pending";
 }
 

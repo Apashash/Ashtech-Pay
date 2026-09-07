@@ -412,6 +412,14 @@ export async function checkPixPayStatus(
     const data = await res.json();
     console.log(`[PixPay Status] raw response for ${transactionId}:`, JSON.stringify(maskPiiInObject(data)));
 
+    const serializedResponse = JSON.stringify(data).toLowerCase();
+    if (
+      data.statut_code === 404
+      || /\bnot[_ -]?found\b|\bintrouvable\b|\bdoes not exist\b/.test(serializedResponse)
+    ) {
+      return { status: "failed", raw: data };
+    }
+
     if (data.statut_code !== 200 || !data.data) return { status: "pending", raw: data };
 
     // PixPay may return data.data as a single object or an array
@@ -421,7 +429,14 @@ export async function checkPixPayStatus(
     const state = (d.state || d.status || "").toUpperCase();
     if (state === "SUCCESS" || state === "SUCCESSFUL" || state === "COMPLETED") {
       return { status: "completed", raw: data };
-    } else if (state === "FAILED" || state === "CANCELLED" || state === "FAILURE" || state === "CANCEL") {
+    } else if (
+      state === "FAILED"
+      || state === "CANCELLED"
+      || state === "FAILURE"
+      || state === "CANCEL"
+      || state === "NOT_FOUND"
+      || state === "NOT FOUND"
+    ) {
       return { status: "failed", raw: data };
     }
     return { status: "pending", raw: data };
@@ -494,14 +509,14 @@ export async function initiatePixPayPayout(params: PixPayoutParams): Promise<Pix
       return {
         success: false,
         message: data.message || "Échec de l'envoi Mobile Money",
-        providerStatus: res.status,
+        providerStatus: data.statut_code ?? res.status,
         raw: data,
       };
     }
 
     const d = data.data;
     const state = (d.state || "").toUpperCase();
-    if (state === "FAILED" || state === "CANCELLED") {
+    if (["FAILED", "CANCELLED", "FAILURE", "CANCEL", "REJECTED", "EXPIRED", "NOT_FOUND", "NOT FOUND"].includes(state)) {
       return {
         success: false,
         message: d.response || data.message || "Payout rejeté",

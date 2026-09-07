@@ -9,7 +9,8 @@ Rule: a payout (withdrawal / transfer_out) that has been debited must go to
 `pending_manual` for provider liquidity shortages, authentication errors,
 timeouts, 5xx, rate limits, and ambiguous messages. Definitive provider
 rejections (invalid number, unsupported operation/operator, or terminal
-`failed/refunded/cancelled`) must be marked rejected and the debit reversed.
+`failed/refunded/cancelled`, or an explicit provider `NOT_FOUND`/HTTP 404)
+must be marked rejected and the debit reversed.
 
 Only a successful provider initiation/status may continue through automatic
 polling and settlement. An internal wallet balance check that fails before a
@@ -33,12 +34,14 @@ protect provider API quotas. Never reintroduce a max-attempts bailout.
 **Why:** transient initiation errors and a 60-min poll timeout were
 auto-failing + refunding payouts while the provider still said PENDING —
 risking double payout (money sent + refunded) and user-visible "cancels on
-its own" behavior. Replacing an ambiguous provider ID or committing status
-separately from wallet mutation creates the same double-spend risk under
-timeouts, callbacks, admin actions, and process crashes.
+its own" behavior. An explicit provider NOT_FOUND/404 is different: the
+provider has stated that the submitted payment does not exist, so leaving it
+reserved forever is incorrect. Replacing an ambiguous provider ID or
+committing status separately from wallet mutation creates the same double-spend
+risk under timeouts, callbacks, admin actions, and process crashes.
 
-**How to apply:** any new payout path or poller must classify only the explicit
-terminal rejection set as failed+refunded; all other provider errors default to
-pending/pending_manual. Persist the provider ID before submission, reuse it for
-every reconciliation, block manual terminal changes while unresolved, and
-settle status plus wallet mutation atomically.
+**How to apply:** any new payout path or poller must classify explicit terminal
+rejections, including NOT_FOUND/404, as failed+refunded; all other provider
+errors default to pending/pending_manual. Persist the provider ID before
+submission, reuse it for every reconciliation, block manual terminal changes
+while unresolved, and settle status plus wallet mutation atomically.

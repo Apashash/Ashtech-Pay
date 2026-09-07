@@ -455,10 +455,12 @@ export async function initiateAfribaPayout(params: AfribaPayoutParams): Promise<
     }
 
     const d = data.data;
-    if (d?.status === "FAILED" || d?.status === "ERROR") {
+    const payoutStatus = String(d?.status || "").toUpperCase();
+    if (["FAILED", "ERROR", "REJECTED", "CANCELLED", "EXPIRED", "NOT_FOUND", "NOT FOUND"].includes(payoutStatus)) {
       return {
         success: false,
         message: d.message || "Échec payout AfribaPay",
+        status: payoutStatus,
         providerCode: typeof d.code === "string" ? d.code : undefined,
         providerStatus: res.status,
         raw: data,
@@ -469,7 +471,7 @@ export async function initiateAfribaPayout(params: AfribaPayoutParams): Promise<
       success: true,
       transaction_id: d?.transaction_id,
       order_id: d?.order_id,
-      status: d?.status || "PENDING",
+      status: payoutStatus || "PENDING",
       raw: data,
     };
   } catch (err: any) {
@@ -519,6 +521,10 @@ export async function checkAfribaPayoutStatus(
     const d = data.data;
     const rawStatus = (d?.status || d?.transaction_status || d?.payout_status || "").toUpperCase();
     console.log(`[AfribaPay PayoutStatus] ${param} → HTTP ${res.status} | raw_status="${rawStatus}" | data=${JSON.stringify(maskPiiInObject(d))}`);
+
+    if (res.status === 404 || rawStatus === "NOT_FOUND" || rawStatus === "NOT FOUND") {
+      return { status: "failed", raw: data };
+    }
 
     if (rawStatus === "SUCCESS" || rawStatus === "COMPLETED" || rawStatus === "SUCCESSFUL"
         || rawStatus === "PAID" || rawStatus === "APPROVED" || rawStatus === "PROCESSED") {
