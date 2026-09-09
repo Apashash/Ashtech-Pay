@@ -1,6 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage, normalizePhone } from "./storage";
+import { appPath } from "./appPaths";
 import { audit, AUDIT } from "./auditLogger";
 import { setFailedCooldown, getFailedCooldown } from "./failedCooldown";
 import {
@@ -353,7 +354,7 @@ async function reconcilePawaPayIncomingAttempt(transaction: any): Promise<"compl
 //   /var/www/vhosts/ashtechpay.top/upload_data
 const uploadsDir = process.env.UPLOADS_DIR
   ? path.resolve(process.env.UPLOADS_DIR)
-  : path.join(process.cwd(), "uploads");
+  : appPath("uploads");
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }

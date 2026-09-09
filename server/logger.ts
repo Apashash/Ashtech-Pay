@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { appPath } from "./appPaths";
 
 // ── Logger avec rotation quotidienne ─────────────────────────────────────────
 // En dev  : forwarde vers console (comportement identique à avant)
@@ -12,7 +13,7 @@ import path from "path";
 // ─────────────────────────────────────────────────────────────────────────────
 
 const isProd = process.env.NODE_ENV === "production";
-const LOGS_DIR = path.join(process.cwd(), "logs");
+const LOGS_DIR = appPath("logs");
 const MAX_DAYS = 7;
 
 // ── Patterns de redaction ─────────────────────────────────────────────────────

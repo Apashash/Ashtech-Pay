@@ -3,8 +3,9 @@
 // Ce loader lit .env au démarrage (même format que dotenv) SANS dépendance externe.
 // Les variables déjà définies dans process.env (passées par Passenger) ont priorité.
 import { existsSync as _envExists, readFileSync as _envRead } from "fs";
+import { appPath } from "./appPaths";
 (function loadDotEnv() {
-  const envFile = ".env";
+  const envFile = appPath(".env");
   if (!_envExists(envFile)) return;
   try {
     const lines = _envRead(envFile, "utf-8").split("\n");
@@ -56,6 +57,12 @@ const app = express();
 const httpServer = createServer(app);
 const isProd = process.env.NODE_ENV === "production";
 
+// Passenger considers the application failed when no port is opened during
+// long migrations or route initialization. Keep the process reachable while
+// bootstrapping, then replace this gate with the real application routes.
+let startupReady = false;
+let startupFailure: string | null = null;
+
 // ── Gestionnaires d'erreurs globaux ──────────────────────────────────────────
 // unhandledRejection: log + continue — safe, these are async promise failures.
 process.on("unhandledRejection", (reason: unknown) => {
@@ -87,6 +94,19 @@ if ((isProd || isMultiWorker) && !process.env.SESSION_SECRET) {
   // In dev with PM2: warn loudly but don't exit (allows single-worker dev to work)
   console.error("[SECURITY] WARNING: Running multi-worker without SESSION_SECRET — sessions WILL break across workers!");
 }
+
+app.use((req, res, next) => {
+  if (startupReady) return next();
+  res
+    .status(503)
+    .set("Retry-After", "5")
+    .set("Content-Type", "text/html; charset=utf-8")
+    .send(
+      startupFailure
+        ? "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Service temporairement indisponible</title></head><body>Le service rencontre un problème de démarrage. Consultez les logs de l'application.</body></html>"
+        : "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Démarrage</title></head><body>Le service démarre. Veuillez réessayer dans quelques instants.</body></html>",
+    );
+});
 
 // ── FIX-6: Trust proxy — nécessaire pour que req.ip soit fiable derrière Replit/Nginx ──
 // Sans cela, X-Forwarded-For peut être forgé par le client pour contourner les rate limiters.
@@ -358,6 +378,22 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  const port = parseInt(process.env.PORT || "5000", 10);
+  const useReusePort = !!process.env.PM2_HOME || !!process.env.pm_id;
+
+  // Open the Passenger socket before database migrations. Requests remain
+  // behind the startup gate above until every route and static handler is
+  // installed, but Passenger no longer mistakes a slow DB for a dead app.
+  httpServer.once("error", (err) => {
+    console.error("[Startup] HTTP listener failed:", err);
+    setTimeout(() => process.exit(1), 300);
+  });
+  httpServer.listen(
+    { port, host: "0.0.0.0", ...(useReusePort ? { reusePort: true } : {}) },
+    () => log(`listener opened on port ${port}; application bootstrap in progress`),
+  );
+
+  try {
   // ── Startup migration: ensure new columns exist in production DB ──────────
   try {
     await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS api_key TEXT UNIQUE`);
@@ -928,41 +964,37 @@ app.use((req, res, next) => {
     await setupVite(httpServer, app);
   }
 
-  const port = parseInt(process.env.PORT || "5000", 10);
-  // reusePort is useful for PM2 cluster mode but breaks Phusion Passenger
-  // (Passenger manages its own socket binding). Only enable when PM2 is detected.
-  const useReusePort = !!process.env.PM2_HOME || !!process.env.pm_id;
-  httpServer.listen(
-    { port, host: "0.0.0.0", ...(useReusePort ? { reusePort: true } : {}) },
-    () => {
-      log(`serving on port ${port}`);
-      startPaymentPoller();
-      recoverPendingDeposits().catch(err =>
-        console.error("[PaymentPoller] Recovery error:", err)
-      );
-      startPayoutPoller();
-      recoverPendingPayouts().catch(err =>
-        console.error("[PayoutPoller] Recovery error:", err)
-      );
-      startConversionPoller();
-      startMerchantWebhookWorker();
-      seedPawaPayCountries()
-        .then(result => {
-          if (result.countries || result.operators) {
-            console.log(`[PawaPayCatalog] Seeded ${result.countries} country(ies) and ${result.operators} operator(s)`);
-          }
-          return seedWithdrawalTransferFees();
-        })
-        .catch(err => console.error("[PawaPayCatalog/FeesSeed] Error during seeding:", err));
-      startCleanupScheduler();
-      startDailyReportScheduler();
-      hydrateIpBlocker().catch(err =>
-        console.error("[IpBlocker] Hydration error:", err)
-      );
-      hydrateBotBans().catch(err =>
-        console.error("[BotGuard] Hydration error:", err)
-      );
-      startDbWatchdog();
-    },
+  startupReady = true;
+  log(`serving on port ${port}`);
+  startPaymentPoller();
+  recoverPendingDeposits().catch(err =>
+    console.error("[PaymentPoller] Recovery error:", err)
   );
+  startPayoutPoller();
+  recoverPendingPayouts().catch(err =>
+    console.error("[PayoutPoller] Recovery error:", err)
+  );
+  startConversionPoller();
+  startMerchantWebhookWorker();
+  seedPawaPayCountries()
+    .then(result => {
+      if (result.countries || result.operators) {
+        console.log(`[PawaPayCatalog] Seeded ${result.countries} country(ies) and ${result.operators} operator(s)`);
+      }
+      return seedWithdrawalTransferFees();
+    })
+    .catch(err => console.error("[PawaPayCatalog/FeesSeed] Error during seeding:", err));
+  startCleanupScheduler();
+  startDailyReportScheduler();
+  hydrateIpBlocker().catch(err =>
+    console.error("[IpBlocker] Hydration error:", err)
+  );
+  hydrateBotBans().catch(err =>
+    console.error("[BotGuard] Hydration error:", err)
+  );
+  startDbWatchdog();
+  } catch (err) {
+    startupFailure = err instanceof Error ? err.message : String(err);
+    console.error("[Startup] Application bootstrap failed:", err);
+  }
 })();

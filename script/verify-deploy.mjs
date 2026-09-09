@@ -18,7 +18,11 @@ const warn= (msg) => console.log(`${YELLOW}  ⚠${RESET} ${msg}`);
 const info= (msg) => console.log(`${CYAN}  →${RESET} ${msg}`);
 
 const REQUIRED = [
-  { key: "DATABASE_URL",          label: "Base de données",           critical: true  },
+  {
+    keys: ["SUPABASE_DB_URL", "SUPABASE_DATABASE_URL", "DATABASE_URL"],
+    label: "Base de données",
+    critical: true,
+  },
   { key: "SESSION_SECRET",        label: "Session secret",            critical: true  },
   { key: "TURNSTILE_SITE_KEY",    label: "Turnstile clé publique",    critical: false },
   { key: "TURNSTILE_SECRET_KEY",  label: "Turnstile clé secrète",     critical: false },
@@ -39,16 +43,18 @@ let missingCritical = 0;
 let missingOptional = 0;
 
 console.log(`${BOLD}Variables d'environnement :${RESET}`);
-for (const { key, label, critical } of REQUIRED) {
-  const val = process.env[key];
+for (const requirement of REQUIRED) {
+  const { label, critical } = requirement;
+  const keys = requirement.keys || [requirement.key];
+  const configuredKey = keys.find((key) => process.env[key]);
+  const val = configuredKey ? process.env[configuredKey] : undefined;
   if (val) {
-    const preview = val.length > 12 ? val.slice(0, 6) + "…" + val.slice(-4) : "***";
-    ok(`${label.padEnd(30)} ${CYAN}[${key}]${RESET} → ${preview}`);
+    ok(`${label.padEnd(30)} ${CYAN}[${configuredKey}]${RESET} → configurée`);
   } else if (critical) {
-    err(`${label.padEnd(30)} ${CYAN}[${key}]${RESET} → MANQUANT (critique)`);
+    err(`${label.padEnd(30)} ${CYAN}[${keys.join(" / ")}]${RESET} → MANQUANTE (critique)`);
     missingCritical++;
   } else {
-    warn(`${label.padEnd(30)} ${CYAN}[${key}]${RESET} → non configuré`);
+    warn(`${label.padEnd(30)} ${CYAN}[${keys.join(" / ")}]${RESET} → non configurée`);
     missingOptional++;
   }
 }

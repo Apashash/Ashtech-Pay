@@ -3,9 +3,10 @@ import fs from "fs";
 import path from "path";
 import { isSpaRoute } from "./spaRoutes";
 import { renderPaymentLinkMeta } from "./paymentLinkMeta";
+import { appPath } from "./appPaths";
 
 export function serveStatic(app: Express) {
-  const distPath = path.resolve(process.cwd(), "dist", "public");
+  const distPath = appPath("dist", "public");
   if (!fs.existsSync(distPath)) {
     // Log the error clearly but DO NOT throw — throwing here crashes the entire process
     // under Phusion Passenger, showing a red "could not be started" error page.

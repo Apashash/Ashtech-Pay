@@ -1,12 +1,13 @@
 import path from "path";
 import fs from "fs";
 import { encryptField, decryptField, isFieldEncryptionConfigured } from "./fieldEncryption";
+import { appPath } from "./appPaths";
 
 // ─── AfribaPay Production Credentials ────────────────────────────────────────
 const AFRIBAPAY_PAYIN_URL   = "https://api.afribapay.com";
 const AFRIBAPAY_PAYOUT_URL  = "https://api-payout.afribapay.com";
 
-const TOKEN_FILE = path.join(process.cwd(), ".local", "afribapay_token.json");
+const TOKEN_FILE = appPath(".local", "afribapay_token.json");
 const TOKEN_REFRESH_SKEW_MS = 60_000;
 const TOKEN_FALLBACK_TTL_MS = 15 * 60_000;
 

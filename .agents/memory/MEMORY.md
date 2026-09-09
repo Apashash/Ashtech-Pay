@@ -43,3 +43,4 @@
 - [Public payment provider timeout](payment-link-provider-timeout.md) — a browser timeout can follow a persisted provider-pending payment; never auto-retry the initiation.
 - [Browser Web Push](browser-web-push.md) — iPhone push requires an installed Home Screen web app; desktop browsers can subscribe from the authenticated settings flow.
 - [Samsung Internet PWA installs](samsung-internet-pwa-installs.md) — Samsung Internet may wrap a PWA in an old-target Android package that triggers Play Protect; this is not an AshTech APK.
+- [Passenger startup resilience](passenger-startup-resilience.md) — open the listener before bootstrap and resolve paths from the committed bundle for reliable Plesk restarts.
