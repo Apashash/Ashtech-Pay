@@ -56,7 +56,7 @@ import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import { pool, db, sessionPool, poolStats } from "./db";
 import { transactions as transactionsTable, users as usersTable, wallets as walletsTable } from "@shared/schema";
-import { and, desc, eq, sql, sql as drizzleSql } from "drizzle-orm";
+import { and, desc, eq, notIn, sql, sql as drizzleSql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import multer from "multer";
 import path from "path";
@@ -3721,7 +3721,10 @@ export async function registerRoutes(
       const [user, recentTransactions, paymentLinks, extraWallets, notifications, txStats, globalMsgs, ticketStatsRow] = await Promise.all([
         storage.getUser(userId),
         // Only fetch the 50 most recent transactions for display
-        db.select().from(transactionsTable).where(eq(transactionsTable.userId, userId))
+        db.select().from(transactionsTable).where(and(
+          eq(transactionsTable.userId, userId),
+          notIn(transactionsTable.type, ["admin_debit", "admin_credit"]),
+        ))
           .orderBy(desc(transactionsTable.createdAt)).limit(50),
         storage.getPaymentLinksByUserId(userId),
         storage.getUserWallets(userId),
@@ -3736,7 +3739,9 @@ export async function registerRoutes(
             COUNT(*) FILTER (WHERE status='pending')::int AS pending_transactions,
             COUNT(*) FILTER (WHERE status='completed' AND type='payment_link')::int AS link_payments,
             COALESCE(SUM(amount::numeric) FILTER (WHERE status='completed' AND type='payment_link'), 0) AS total_collected
-          FROM transactions WHERE user_id = ${userId}
+          FROM transactions
+          WHERE user_id = ${userId}
+            AND type NOT IN ('admin_debit', 'admin_credit')
         `),
         // Global messages (banner announcements)
         storage.getActiveGlobalMessages().then(all => {
