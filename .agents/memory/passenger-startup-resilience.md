@@ -10,3 +10,5 @@ Passenger may report a generic startup 500 when the Node process does not open i
 **How to apply:** Keep `dist/index.cjs` committed for Plesk pull/restart deployments. Defer DB-transitive imports and fatal production configuration checks until after the listener opens, then verify startup from a non-project working directory. Keep the Plesk application root at the parent directory containing `dist/`, with startup file `dist/index.cjs`.
 
 **Why:** Static imports such as the route registry or bot guard can evaluate `db.ts` before the listener even when migrations are inside a later bootstrap function, turning a missing environment variable into Passenger's generic startup 500.
+
+**How to apply:** Do not hold the public page behind the full idempotent migration set. Serve the frontend and `/api/ping` after route setup, keep database APIs gated until migrations finish, and start pollers only after the migration promise resolves.
