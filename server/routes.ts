@@ -56,7 +56,7 @@ import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import { pool, db, sessionPool, poolStats } from "./db";
 import { transactions as transactionsTable, users as usersTable, wallets as walletsTable } from "@shared/schema";
-import { and, desc, eq, notIn, sql, sql as drizzleSql } from "drizzle-orm";
+import { and, desc, eq, sql, sql as drizzleSql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import multer from "multer";
 import path from "path";
@@ -3723,7 +3723,7 @@ export async function registerRoutes(
         // Only fetch the 50 most recent transactions for display
         db.select().from(transactionsTable).where(and(
           eq(transactionsTable.userId, userId),
-          notIn(transactionsTable.type, ["admin_debit", "admin_credit"]),
+          sql`${transactionsTable.type} NOT IN ('admin_debit', 'admin_credit')`,
         ))
           .orderBy(desc(transactionsTable.createdAt)).limit(50),
         storage.getPaymentLinksByUserId(userId),
