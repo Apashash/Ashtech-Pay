@@ -1672,8 +1672,11 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  // Restaurer les révocations de tokens depuis la DB (persistance après redémarrage)
-  await loadTokenRevocationsFromDb();
+  // Restaurer les révocations de tokens depuis la DB sans bloquer l'ouverture
+  // des routes. Sur Plesk/Supavisor, une requête de restauration peut attendre
+  // une connexion alors que le serveur est déjà capable de servir la page.
+  // La carte est hydratée dès que la DB répond ; le démarrage HTTP reste rapide.
+  void loadTokenRevocationsFromDb();
 
   // ── Filet de sécurité global : aucune réponse non-admin ne doit contenir
   //    un nom de fournisseur interne (AfribaPay/PixPay), même en cas d'erreur
