@@ -33,25 +33,10 @@ import express, { type Request, Response, NextFunction } from "express";
 import compression from "compression";
 import helmet from "helmet";
 import { globalLimiter } from "./rateLimiter";
-import { botGuard, sendClean404 } from "./botGuard";
-import { registerRoutes } from "./routes";
-import { serveStatic } from "./static";
+import { sendClean404 } from "./clean404";
 import { isSpaRoute } from "./spaRoutes";
 import { createServer } from "http";
-import { startPaymentPoller, recoverPendingDeposits } from "./paymentPoller";
-import { startPayoutPoller, recoverPendingPayouts } from "./payoutPoller";
-import { startConversionPoller } from "./conversionPoller";
-import { startMerchantWebhookWorker } from "./merchantWebhook";
-import { seedWithdrawalTransferFees } from "./seedWithdrawalTransferFees";
-import { seedPawaPayCountries } from "./pawapayCatalog";
-import { startCleanupScheduler } from "./cleanup";
-import { startDailyReportScheduler } from "./dailyReport";
-import { hydrateIpBlocker } from "./ipBlocker";
-import { hydrateBotBans } from "./botGuard";
-import { db } from "./db";
-import { sql } from "drizzle-orm";
 import { encryptField, hmacField } from "./fieldEncryption";
-import { createDbAuditTriggers, installGuardTrigger, startDbWatchdog, purgeOldAdminOtpSessions } from "./dbWatchdog";
 
 const app = express();
 const httpServer = createServer(app);
@@ -86,14 +71,10 @@ process.on("uncaughtException", (err: Error) => {
 // → déconnexion immédiate après login (singleDeviceKick).
 const pm2Count = Math.max(1, parseInt(process.env.PM2_INSTANCES || "1", 10) || 1);
 const isMultiWorker = pm2Count > 1;
-if ((isProd || isMultiWorker) && !process.env.SESSION_SECRET) {
-  console.error("[SECURITY] FATAL: SESSION_SECRET env var must be set in production or multi-worker PM2.");
-  console.error("[SECURITY] Without SESSION_SECRET, each PM2 worker uses a different random key.");
-  console.error("[SECURITY] This causes immediate logout after login (token cross-worker mismatch).");
-  if (isProd) process.exit(1);
-  // In dev with PM2: warn loudly but don't exit (allows single-worker dev to work)
-  console.error("[SECURITY] WARNING: Running multi-worker without SESSION_SECRET — sessions WILL break across workers!");
-}
+
+// The real bot guard is loaded after the listener opens. This no-op keeps the
+// middleware position stable without importing the DB-backed module early.
+let runtimeBotGuard = (_req: Request, _res: Response, next: NextFunction): void => next();
 
 app.use((req, res, next) => {
   if (startupReady) return next();
@@ -223,7 +204,7 @@ app.get("/api/ping", (_req, res) => {
 });
 
 // ── Security: Bot guard (UA check, honeypot, path injection, IP ban) ─────────
-app.use(botGuard);
+app.use((req, res, next) => runtimeBotGuard(req, res, next));
 
 // ── Security: Global rate limit (50 req/min/IP on all /api routes) ───────────
 app.use(globalLimiter);
@@ -394,6 +375,38 @@ app.use((req, res, next) => {
   );
 
   try {
+  // Keep Passenger's socket reachable even when a required environment
+  // variable, native dependency, or database import is broken. The startup
+  // gate below will return a clean 503 and the exact cause is logged.
+  if ((isProd || isMultiWorker) && !process.env.SESSION_SECRET) {
+    throw new Error("SESSION_SECRET env var must be set in production or multi-worker PM2.");
+  }
+
+  // These modules transitively import the database and must not be evaluated
+  // before the listener above. This is important on Passenger, where a
+  // top-level import failure is reported as a generic HTTP 500.
+  const { db } = await import("./db");
+  const { sql } = await import("drizzle-orm");
+  const { botGuard, hydrateBotBans } = await import("./botGuard");
+  const { registerRoutes } = await import("./routes");
+  const { serveStatic } = await import("./static");
+  const { startPaymentPoller, recoverPendingDeposits } = await import("./paymentPoller");
+  const { startPayoutPoller, recoverPendingPayouts } = await import("./payoutPoller");
+  const { startConversionPoller } = await import("./conversionPoller");
+  const { startMerchantWebhookWorker } = await import("./merchantWebhook");
+  const { seedWithdrawalTransferFees } = await import("./seedWithdrawalTransferFees");
+  const { seedPawaPayCountries } = await import("./pawapayCatalog");
+  const { startCleanupScheduler } = await import("./cleanup");
+  const { startDailyReportScheduler } = await import("./dailyReport");
+  const { hydrateIpBlocker } = await import("./ipBlocker");
+  const {
+    createDbAuditTriggers,
+    installGuardTrigger,
+    startDbWatchdog,
+    purgeOldAdminOtpSessions,
+  } = await import("./dbWatchdog");
+  runtimeBotGuard = botGuard;
+
   // ── Startup migration: ensure new columns exist in production DB ──────────
   try {
     await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS api_key TEXT UNIQUE`);
