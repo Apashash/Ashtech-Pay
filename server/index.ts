@@ -47,6 +47,7 @@ const isProd = process.env.NODE_ENV === "production";
 // bootstrapping, then replace this gate with the real application routes.
 let startupReady = false;
 let startupFailure: string | null = null;
+let migrationsReady = false;
 
 // ── Gestionnaires d'erreurs globaux ──────────────────────────────────────────
 // unhandledRejection: log + continue — safe, these are async promise failures.
@@ -77,7 +78,9 @@ const isMultiWorker = pm2Count > 1;
 let runtimeBotGuard = (_req: Request, _res: Response, next: NextFunction): void => next();
 
 app.use((req, res, next) => {
-  if (startupReady) return next();
+  const publicDuringMigration =
+    req.path === "/api/ping" || !req.path.startsWith("/api");
+  if (startupReady && (migrationsReady || publicDuringMigration)) return next();
   res
     .status(503)
     .set("Retry-After", "5")
@@ -362,9 +365,10 @@ app.use((req, res, next) => {
   const port = parseInt(process.env.PORT || "5000", 10);
   const useReusePort = !!process.env.PM2_HOME || !!process.env.pm_id;
 
-  // Open the Passenger socket before database migrations. Requests remain
-  // behind the startup gate above until every route and static handler is
-  // installed, but Passenger no longer mistakes a slow DB for a dead app.
+  // Open the Passenger socket before database migrations. The frontend and
+  // /api/ping become available as soon as routes/static handling are installed;
+  // database-backed APIs remain behind the migration gate until the schema is
+  // ready, so a slow DB cannot turn into an nginx/Passenger timeout.
   httpServer.once("error", (err) => {
     console.error("[Startup] HTTP listener failed:", err);
     setTimeout(() => process.exit(1), 300);
@@ -408,6 +412,9 @@ app.use((req, res, next) => {
   runtimeBotGuard = botGuard;
 
   // ── Startup migration: ensure new columns exist in production DB ──────────
+  // Run this in the background. Plesk/nginx commonly times out before the
+  // complete idempotent migration set finishes on a cold restart.
+  const migrationPromise = (async () => {
   try {
     await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS api_key TEXT UNIQUE`);
     await db.execute(sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS notify_url TEXT`);
@@ -933,6 +940,7 @@ app.use((req, res, next) => {
       console.warn("[Migration] warning:", err?.message);
     }
   }
+  })();
 
   await registerRoutes(httpServer, app);
 
@@ -977,35 +985,49 @@ app.use((req, res, next) => {
     await setupVite(httpServer, app);
   }
 
+  const startBackgroundWorkers = () => {
+    startPaymentPoller();
+    recoverPendingDeposits().catch(err =>
+      console.error("[PaymentPoller] Recovery error:", err)
+    );
+    startPayoutPoller();
+    recoverPendingPayouts().catch(err =>
+      console.error("[PayoutPoller] Recovery error:", err)
+    );
+    startConversionPoller();
+    startMerchantWebhookWorker();
+    seedPawaPayCountries()
+      .then(result => {
+        if (result.countries || result.operators) {
+          console.log(`[PawaPayCatalog] Seeded ${result.countries} country(ies) and ${result.operators} operator(s)`);
+        }
+        return seedWithdrawalTransferFees();
+      })
+      .catch(err => console.error("[PawaPayCatalog/FeesSeed] Error during seeding:", err));
+    startCleanupScheduler();
+    startDailyReportScheduler();
+    hydrateIpBlocker().catch(err =>
+      console.error("[IpBlocker] Hydration error:", err)
+    );
+    hydrateBotBans().catch(err =>
+      console.error("[BotGuard] Hydration error:", err)
+    );
+    startDbWatchdog();
+  };
+
   startupReady = true;
-  log(`serving on port ${port}`);
-  startPaymentPoller();
-  recoverPendingDeposits().catch(err =>
-    console.error("[PaymentPoller] Recovery error:", err)
-  );
-  startPayoutPoller();
-  recoverPendingPayouts().catch(err =>
-    console.error("[PayoutPoller] Recovery error:", err)
-  );
-  startConversionPoller();
-  startMerchantWebhookWorker();
-  seedPawaPayCountries()
-    .then(result => {
-      if (result.countries || result.operators) {
-        console.log(`[PawaPayCatalog] Seeded ${result.countries} country(ies) and ${result.operators} operator(s)`);
-      }
-      return seedWithdrawalTransferFees();
+  log(`serving on port ${port}; database migrations continue in background`);
+  migrationPromise
+    .then(() => {
+      migrationsReady = true;
+      log("database migrations complete");
+      startBackgroundWorkers();
     })
-    .catch(err => console.error("[PawaPayCatalog/FeesSeed] Error during seeding:", err));
-  startCleanupScheduler();
-  startDailyReportScheduler();
-  hydrateIpBlocker().catch(err =>
-    console.error("[IpBlocker] Hydration error:", err)
-  );
-  hydrateBotBans().catch(err =>
-    console.error("[BotGuard] Hydration error:", err)
-  );
-  startDbWatchdog();
+    .catch(err => {
+      console.error("[Migration] Background migration failed:", err);
+      migrationsReady = true;
+      startBackgroundWorkers();
+    });
   } catch (err) {
     startupFailure = err instanceof Error ? err.message : String(err);
     console.error("[Startup] Application bootstrap failed:", err);
