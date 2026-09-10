@@ -57,8 +57,8 @@ import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import { MySqlSessionStore } from "./mysqlSessionStore";
 import { pool, db, sessionPool, poolStats } from "./db";
-import { transactions as transactionsTable, users as usersTable, wallets as walletsTable } from "@shared/schema-runtime";
-import { and, desc, eq, sql, sql as drizzleSql } from "drizzle-orm";
+import { transactions as transactionsTable, users as usersTable, wallets as walletsTable, supportTickets, ticketMessages } from "@shared/schema-runtime";
+import { and, count, desc, eq, sql, sql as drizzleSql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import multer from "multer";
 import path from "path";
@@ -418,6 +418,28 @@ const upload = multer({
 
 const SessionStore = connectPgSimple(session);
 const isMysqlDialect = process.env.DB_DIALECT?.toLowerCase() === "mysql";
+
+async function getUserTicketStats(userId: string): Promise<{ unreadCount: number; totalCount: number }> {
+  const [totalRows, unreadRows] = await Promise.all([
+    db.select({ count: count() })
+      .from(supportTickets)
+      .where(eq(supportTickets.userId, userId)),
+    db.select({ count: count() })
+      .from(ticketMessages)
+      .innerJoin(supportTickets, eq(ticketMessages.ticketId, supportTickets.id))
+      .where(and(
+        eq(supportTickets.userId, userId),
+        eq(ticketMessages.isAdmin, true),
+        eq(ticketMessages.readByUser, false),
+        sql`${supportTickets.status} IN ('open', 'in_progress')`,
+      )),
+  ]);
+
+  return {
+    unreadCount: Number(unreadRows[0]?.count || 0),
+    totalCount: Number(totalRows[0]?.count || 0),
+  };
+}
 
 declare module "express-session" {
   interface SessionData {
@@ -3999,20 +4021,8 @@ export async function registerRoutes(
           const now = new Date();
           return all.filter((m: any) => !m.expiresAt || new Date(m.expiresAt) > now);
         }),
-        // Ticket stats — single SQL query instead of N message fetches
-        db.execute(drizzleSql`
-          SELECT
-            COUNT(*)::int AS total_count,
-            COUNT(*) FILTER (
-              WHERE st.status IN ('open', 'in_progress')
-              AND EXISTS (
-                SELECT 1 FROM ticket_messages tm
-                WHERE tm.ticket_id = st.id AND tm.is_admin = true
-                AND tm.created_at = (SELECT MAX(tm2.created_at) FROM ticket_messages tm2 WHERE tm2.ticket_id = st.id)
-              )
-            )::int AS unread_count
-          FROM support_tickets st WHERE st.user_id = ${userId}
-        `),
+        // Ticket stats — count the actual unread admin messages.
+        getUserTicketStats(userId),
       ]);
 
       if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
@@ -4044,8 +4054,7 @@ export async function registerRoutes(
         activeLinks: paymentLinks.filter(l => l.isActive).length,
       };
 
-      const ticketRow = (ticketStatsRow.rows?.[0] || {}) as any;
-      const ticketStats = { unreadCount: Number(ticketRow.unread_count || 0), totalCount: Number(ticketRow.total_count || 0) };
+      const ticketStats = ticketStatsRow;
 
       const { password: _, ...safeUser } = user;
       res.json({ user: safeUser, transactions: recentTransactions, paymentLinks, wallets, stats, notifications, globalMessages: globalMsgs, ticketStats });
@@ -12626,24 +12635,7 @@ export async function registerRoutes(
   app.get("/api/tickets/stats", requireAuth, async (req, res) => {
     try {
       const userId = req.userId!;
-      const result = await db.execute(drizzleSql`
-        SELECT
-          COUNT(*)::int AS total_count,
-          COUNT(*) FILTER (
-            WHERE st.status IN ('open', 'in_progress')
-            AND EXISTS (
-              SELECT 1 FROM ticket_messages tm
-              WHERE tm.ticket_id = st.id AND tm.is_admin = true
-              AND tm.created_at = (
-                SELECT MAX(tm2.created_at) FROM ticket_messages tm2 WHERE tm2.ticket_id = st.id
-              )
-            )
-          )::int AS unread_count
-        FROM support_tickets st
-        WHERE st.user_id = ${userId}
-      `);
-      const row = (result.rows?.[0] || {}) as any;
-      res.json({ unreadCount: Number(row.unread_count || 0), totalCount: Number(row.total_count || 0) });
+      res.json(await getUserTicketStats(userId));
     } catch (error) {
       console.error("Get ticket stats error:", error);
       res.status(500).json({ message: "Erreur serveur" });

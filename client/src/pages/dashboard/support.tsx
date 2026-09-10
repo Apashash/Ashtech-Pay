@@ -22,6 +22,9 @@ import { useSSE } from "@/hooks/use-sse";
 import type { SSEEvent } from "@/hooks/use-sse";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/lib/language";
+import directChatIcon from "@assets/a60625748a61e88e4ae17d53bc286910_1789046907975.jpg";
+import whatsappIcon from "@assets/7415d00f6b719e40a4b1f9a75fc7eea5_1789046907994.jpg";
+import gmailIcon from "@assets/26c7089c48f9bb763e9cca3db502bd57_1789046908005.jpg";
 
 interface SupportTicket {
   id: string;
@@ -118,9 +121,9 @@ export default function SupportPage() {
   const whatsappUrl = `https://wa.me/${whatsappPhone}?text=Bonjour%20Ashtech%20Pay%2C%20j%27ai%20besoin%20d%27aide.`;
 
   const contactOptions = [
-    { icon: MessageSquare, title: t.support.chatTitle, description: t.support.chatDesc, available: true, action: "chat", badge: ticketStats?.unreadCount || 0 },
-    { icon: Mail, title: "Email", description: supportContact?.email || "support@ashtechpay.com", available: true, action: "email", badge: 0 },
-    { icon: SiWhatsapp, title: "WhatsApp", description: supportContact?.phone || "+237 6XX XXX XXX", available: true, action: "whatsapp", badge: 0 },
+    { icon: MessageSquare, imageSrc: directChatIcon, title: t.support.chatTitle, description: t.support.chatDesc, available: true, action: "chat", badge: ticketStats?.unreadCount || 0 },
+    { icon: Mail, imageSrc: gmailIcon, title: "Email", description: supportContact?.email || "support@ashtechpay.com", available: true, action: "email", badge: 0 },
+    { icon: SiWhatsapp, imageSrc: whatsappIcon, title: "WhatsApp", description: supportContact?.phone || "+237 6XX XXX XXX", available: true, action: "whatsapp", badge: 0 },
   ];
 
   const [ticketPage, setTicketPage] = useState(0);
@@ -141,9 +144,14 @@ export default function SupportPage() {
   });
 
   const { isOnline } = useSSE(useCallback((event: SSEEvent) => {
+    if (event.type === "new_message") {
+      queryClient.invalidateQueries({ queryKey: ["/api/tickets/stats"] });
+    }
     if (event.type === "new_message" && event.data.ticketId === selectedTicket?.id) {
       refetchMessages();
-      apiRequest("POST", `/api/tickets/${selectedTicket!.id}/read`).catch(() => {});
+      apiRequest("POST", `/api/tickets/${selectedTicket!.id}/read`)
+        .then(() => queryClient.invalidateQueries({ queryKey: ["/api/tickets/stats"] }))
+        .catch(() => {});
     }
     if (event.type === "typing" && event.data.ticketId === selectedTicket?.id && event.data.from === "admin") {
       setAdminTyping(!!event.data.isTyping);
@@ -170,7 +178,9 @@ export default function SupportPage() {
     if (selectedTicket && ticketData?.messages) {
       const hasUnread = ticketData.messages.some(m => m.isAdmin && !m.readByUser);
       if (hasUnread) {
-        apiRequest("POST", `/api/tickets/${selectedTicket.id}/read`).catch(() => {});
+        apiRequest("POST", `/api/tickets/${selectedTicket.id}/read`)
+          .then(() => queryClient.invalidateQueries({ queryKey: ["/api/tickets/stats"] }))
+          .catch(() => {});
       }
     }
   }, [selectedTicket, ticketData?.messages]);
@@ -526,8 +536,8 @@ export default function SupportPage() {
                 onClick={() => handleContactClick(option.action)}
                 data-testid={`contact-option-${option.action}`}
               >
-                <div className={cn("w-9 h-9 shrink-0 rounded-xl flex items-center justify-center", option.action === "whatsapp" ? "bg-green-500/10" : "bg-primary/10")}>
-                  <option.icon className={cn("w-4 h-4", option.action === "whatsapp" ? "text-green-500" : "text-primary")} />
+                <div className={cn("w-9 h-9 shrink-0 rounded-xl flex items-center justify-center overflow-hidden", option.action === "whatsapp" ? "bg-green-500/10" : "bg-primary/10")}>
+                  <img src={option.imageSrc} alt="" aria-hidden="true" className="w-8 h-8 object-cover" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-foreground">{option.title}</p>
@@ -546,8 +556,8 @@ export default function SupportPage() {
           <CardContent className="p-5">
             <div className="flex items-center justify-between gap-4 flex-wrap">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-green-500/15 flex items-center justify-center shrink-0">
-                  <SiWhatsapp className="w-5 h-5 text-green-500" />
+                <div className="w-10 h-10 rounded-xl bg-green-500/15 flex items-center justify-center shrink-0 overflow-hidden">
+                  <img src={whatsappIcon} alt="" aria-hidden="true" className="w-9 h-9 object-cover" />
                 </div>
                 <div>
                   <p className="font-semibold text-foreground">{t.support.whatsappChannelTitle}</p>
@@ -560,7 +570,7 @@ export default function SupportPage() {
                 onClick={() => window.open("https://whatsapp.com/channel/0029VbC5tPPCxoAveJ44Vs2w", "_blank", "noopener,noreferrer")}
                 data-testid="button-join-whatsapp-channel"
               >
-                <SiWhatsapp className="w-4 h-4" />
+                <img src={whatsappIcon} alt="" aria-hidden="true" className="w-4 h-4 object-cover" />
                 {t.support.joinChannel}
                 <ExternalLink className="w-3 h-3" />
               </Button>
@@ -575,7 +585,7 @@ export default function SupportPage() {
               {tickets.slice(0, 3).map((ticket) => (
                 <div key={ticket.id} className="flex items-center gap-3 px-4 py-3.5 cursor-pointer hover:bg-muted/40 transition-colors" onClick={() => openTicket(ticket)} data-testid={`recent-ticket-${ticket.id}`}>
                   <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                    <MessageSquare className="w-4 h-4 text-primary" />
+                    <img src={directChatIcon} alt="" aria-hidden="true" className="w-8 h-8 object-cover" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-foreground truncate">{ticket.subject}</p>
