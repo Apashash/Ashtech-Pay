@@ -263,48 +263,48 @@ export default function TransactionsPage() {
 
         {/* Stats summary */}
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">{hasActiveFilters ? t.transactions.summaryFiltered : t.transactions.summaryLabel}</p>
-          <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
-            <div className="flex items-center justify-between px-4 py-3.5">
+          <p className="text-sm font-medium uppercase tracking-[0.16em] text-muted-foreground mb-3">{hasActiveFilters ? t.transactions.summaryFiltered : t.transactions.summaryLabel}</p>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between rounded-2xl border border-border/70 bg-card px-4 py-4 shadow-sm">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-green-500/10 flex items-center justify-center">
-                  <HistoryIcon src="/dashboard-icons/action-deposit.png" className="h-8 w-8" />
+                <div className="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center">
+                  <HistoryIcon src="/dashboard-icons/action-deposit.png" className="h-9 w-9" />
                 </div>
-                <span className="text-sm text-muted-foreground">{t.transactions.totalIn}</span>
+                <span className="text-base font-normal text-foreground">{t.transactions.totalIn}</span>
               </div>
-              <span className="text-sm font-semibold text-green-500">
+              <span className="text-base font-medium text-green-500">
                 +{formatCurrency(stats.totalIn, stats.currency, rates)}
               </span>
             </div>
-            <div className="flex items-center justify-between px-4 py-3.5">
+            <div className="flex items-center justify-between rounded-2xl border border-border/70 bg-card px-4 py-4 shadow-sm">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-red-500/10 flex items-center justify-center">
-                  <HistoryIcon src="/dashboard-icons/action-withdraw.png" className="h-8 w-8" />
+                <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center">
+                  <HistoryIcon src="/dashboard-icons/action-withdraw.png" className="h-9 w-9" />
                 </div>
-                <span className="text-sm text-muted-foreground">{t.transactions.totalOut}</span>
+                <span className="text-base font-normal text-foreground">{t.transactions.totalOut}</span>
               </div>
-              <span className="text-sm font-semibold text-red-500">
+              <span className="text-base font-medium text-red-500">
                 -{formatCurrency(stats.totalOut, stats.currency, rates)}
               </span>
             </div>
-            <div className="flex items-center justify-between px-4 py-3.5">
+            <div className="flex items-center justify-between rounded-2xl border border-border/70 bg-card px-4 py-4 shadow-sm">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-                  <HistoryIcon src="/dashboard-icons/stat-clicks.png" className="h-8 w-8" />
+                <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center">
+                  <HistoryIcon src="/dashboard-icons/stat-clicks.png" className="h-9 w-9" />
                 </div>
-                <span className="text-sm text-muted-foreground">{t.transactions.displayed}</span>
+                <span className="text-base font-normal text-foreground">{t.transactions.displayed}</span>
               </div>
-              <span className="text-sm font-semibold">{filteredTransactions.length}</span>
+              <span className="text-base font-medium">{filteredTransactions.length}</span>
             </div>
             {stats.pendingCount > 0 && (
-              <div className="flex items-center justify-between px-4 py-3.5">
+              <div className="flex items-center justify-between rounded-2xl border border-border/70 bg-card px-4 py-4 shadow-sm">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-amber-500/10 flex items-center justify-center">
-                    <HistoryIcon src="/sidebar-icons/pending.png" className="h-8 w-8" />
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center">
+                    <HistoryIcon src="/sidebar-icons/pending.png" className="h-9 w-9" />
                   </div>
-                  <span className="text-sm text-muted-foreground">{t.transactions.pendingCount}</span>
+                  <span className="text-base font-normal text-foreground">{t.transactions.pendingCount}</span>
                 </div>
-                <span className="text-sm font-semibold text-amber-500">{stats.pendingCount}</span>
+                <span className="text-base font-medium text-amber-500">{stats.pendingCount}</span>
               </div>
             )}
           </div>
@@ -312,7 +312,7 @@ export default function TransactionsPage() {
 
         {/* Filters */}
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">{t.transactions.filtersLabel}</p>
+          <p className="text-sm font-medium uppercase tracking-[0.16em] text-muted-foreground mb-3">{t.transactions.filtersLabel}</p>
           <div className="space-y-2">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
@@ -320,7 +320,7 @@ export default function TransactionsPage() {
                 placeholder={t.transactions.searchPlaceholder}
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="pl-9 pr-9 h-9 text-sm"
+                className="pl-10 pr-10 h-12 rounded-2xl bg-card text-base shadow-sm"
                 data-testid="input-search-transactions"
               />
               {searchQuery && (
@@ -334,9 +334,9 @@ export default function TransactionsPage() {
               )}
             </div>
 
-            <div className="flex flex-wrap gap-2 items-center">
+            <div className="flex flex-wrap gap-3 items-center">
               <Select value={typeFilter} onValueChange={setTypeFilter}>
-                <SelectTrigger className="h-9 w-auto min-w-[150px] text-sm" data-testid="select-filter-type">
+                <SelectTrigger className="h-12 w-auto min-w-[150px] rounded-2xl bg-card px-4 text-base shadow-sm" data-testid="select-filter-type">
                   <SelectValue placeholder="Tous les types" />
                 </SelectTrigger>
                 <SelectContent>
@@ -347,7 +347,7 @@ export default function TransactionsPage() {
               </Select>
 
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="h-9 w-auto min-w-[140px] text-sm" data-testid="select-filter-status">
+                <SelectTrigger className="h-12 w-auto min-w-[140px] rounded-2xl bg-card px-4 text-base shadow-sm" data-testid="select-filter-status">
                   <SelectValue placeholder={t.transactions.allStatuses} />
                 </SelectTrigger>
                 <SelectContent>
@@ -360,7 +360,7 @@ export default function TransactionsPage() {
               </Select>
 
               <Select value={currencyFilter} onValueChange={setCurrencyFilter}>
-                <SelectTrigger className="h-9 w-auto min-w-[120px] text-sm" data-testid="select-filter-currency">
+                <SelectTrigger className="h-12 w-auto min-w-[120px] rounded-2xl bg-card px-4 text-base shadow-sm" data-testid="select-filter-currency">
                   <SelectValue placeholder={t.transactions.allCurrencies} />
                 </SelectTrigger>
                 <SelectContent>
@@ -378,14 +378,14 @@ export default function TransactionsPage() {
                     {t.transactions.clearFilters}
                   </Button>
                 )}
-                <Button variant="outline" className="h-9 text-sm gap-1.5" onClick={() => refetch()} disabled={isFetching} data-testid="button-refresh-transactions">
+                <Button variant="outline" className="h-12 rounded-2xl bg-card text-base gap-2 shadow-sm" onClick={() => refetch()} disabled={isFetching} data-testid="button-refresh-transactions">
                   <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? "animate-spin" : ""}`} />
                   {isFetching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
                   {t.transactions.refresh}
                 </Button>
                 <Button
                   variant="outline"
-                  className="h-9 text-sm gap-1.5"
+                  className="h-12 rounded-2xl bg-card text-base gap-2 shadow-sm"
                   onClick={() => exportToCSV(filteredTransactions, user, { transactions: t.transactions })}
                   disabled={filteredTransactions.length === 0}
                   data-testid="button-export-csv"
@@ -400,10 +400,10 @@ export default function TransactionsPage() {
 
         {/* Transaction list */}
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">{t.transactions.historyLabel}</p>
+          <p className="text-sm font-medium uppercase tracking-[0.16em] text-muted-foreground mb-3">{t.transactions.historyLabel}</p>
 
           {filteredTransactions.length === 0 ? (
-            <div className="rounded-xl border border-border bg-card">
+            <div className="rounded-2xl border border-border/70 bg-card shadow-sm">
               <div className="text-center py-16">
                 <Clock className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
                 <p className="text-sm font-medium text-foreground mb-1">{t.transactions.noTransaction}</p>
@@ -421,17 +421,17 @@ export default function TransactionsPage() {
             <div className="space-y-5">
               {groupedByDate.map(([dateKey, txs]) => (
                 <div key={dateKey}>
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
+                  <p className="text-sm font-medium uppercase tracking-[0.16em] text-muted-foreground mb-3">
                     {formatDateLabel(dateKey, t)}
                   </p>
-                  <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
+                  <div className="space-y-3">
                     {txs.map((tx) => {
                       const apiBadge = getApiBadge(tx);
                       const operatorName = tx.operatorId ? operatorMap[tx.operatorId] : null;
                       return (
                         <div
                           key={tx.id}
-                          className={`flex items-center gap-3 px-4 py-3.5 cursor-pointer transition-colors ${getTransactionRowClass(tx.status)}`}
+                          className={`flex items-center gap-3 rounded-2xl border border-border/70 px-4 py-4 shadow-sm cursor-pointer transition-colors ${getTransactionRowClass(tx.status)}`}
                           onClick={() => setLocation(`/dashboard/transactions/${tx.id}`)}
                           data-testid={`transaction-item-${tx.id}`}
                         >
@@ -441,19 +441,19 @@ export default function TransactionsPage() {
 
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <p className="text-sm font-medium text-foreground truncate max-w-[180px]">
+                              <p className="text-base font-normal text-foreground truncate max-w-[180px]">
                                 {typeLabels[tx.type] || tx.type}
                               </p>
                               {apiBadge}
                             </div>
-                            <p className="text-xs text-muted-foreground mt-0.5">
+                            <p className="text-sm text-muted-foreground mt-0.5">
                               {operatorName || (tx.description ? tx.description.slice(0, 28) : "—")}
                               {tx.createdAt && <span className="ml-1">· {format(new Date(tx.createdAt), "HH:mm")}</span>}
                             </p>
                           </div>
 
                           <div className="flex flex-col items-end gap-1 shrink-0">
-                            <span className={`text-sm font-semibold whitespace-nowrap ${getAmountColor(tx)}`}>
+                            <span className={`text-base font-medium whitespace-nowrap ${getAmountColor(tx)}`}>
                               {getAmountPrefix(tx)}{formatWalletBalance(tx.amount, tx.currency || user?.preferredCurrency || "XAF")}
                             </span>
                             {getStatusBadge(tx.status)}
@@ -466,7 +466,7 @@ export default function TransactionsPage() {
               ))}
 
               {totalPages > 1 && (
-                <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
+                <div className="rounded-2xl border border-border/70 bg-card shadow-sm">
                   <div className="flex items-center justify-between px-4 py-3">
                     <span className="text-sm text-muted-foreground">
                       {t.transactions.page} <span className="font-semibold text-foreground">{page}</span> {t.transactions.of} <span className="font-semibold text-foreground">{totalPages}</span>
