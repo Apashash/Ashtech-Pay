@@ -2703,7 +2703,11 @@ export async function registerRoutes(
       }
 
       // Turnstile verification — token required when secret is configured
-      const turnstileSecret = process.env.TURNSTILE_SECRET_KEY;
+      const turnstileSecret = process.env.TURNSTILE_SECRET_KEY?.trim();
+      const turnstileRequired = process.env.NODE_ENV === "production" || Boolean(turnstileSecret);
+      if (turnstileRequired && !turnstileSecret) {
+        return res.status(503).json({ message: "Vérification anti-bot temporairement indisponible. Veuillez réessayer." });
+      }
       if (turnstileSecret) {
         const turnstileToken = req.body.turnstileToken;
         if (!turnstileToken) {
@@ -2851,7 +2855,11 @@ export async function registerRoutes(
       }
 
       // Turnstile verification — token required when secret is configured
-      const turnstileSecret = process.env.TURNSTILE_SECRET_KEY;
+      const turnstileSecret = process.env.TURNSTILE_SECRET_KEY?.trim();
+      const turnstileRequired = process.env.NODE_ENV === "production" || Boolean(turnstileSecret);
+      if (turnstileRequired && !turnstileSecret) {
+        return res.status(503).json({ message: "Vérification anti-bot temporairement indisponible. Veuillez réessayer." });
+      }
       if (turnstileSecret) {
         const turnstileToken = req.body.turnstileToken;
         if (!turnstileToken) {
@@ -7720,7 +7728,10 @@ export async function registerRoutes(
 
   // Public maintenance status — no auth required so frontend can check before rendering dashboard
   app.get("/api/public/turnstile-key", publicInfoLimiter, (_req, res) => {
-    res.json({ siteKey: process.env.TURNSTILE_SITE_KEY || "" });
+    const siteKey = process.env.TURNSTILE_SITE_KEY?.trim() || "";
+    const required = process.env.NODE_ENV === "production" || Boolean(process.env.TURNSTILE_SECRET_KEY?.trim());
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ siteKey, required });
   });
 
   app.get("/api/public/maintenance", publicInfoLimiter, async (_req, res) => {

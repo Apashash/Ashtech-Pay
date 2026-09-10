@@ -106,11 +106,20 @@ export default function RegisterPage() {
   const countdown = useCountdown(blockedUntil);
   const isBlocked = blockedUntil !== null && countdown > 0;
 
-  const { data: turnstileConfig } = useQuery<{ siteKey: string }>({
+  const {
+    data: turnstileConfig,
+    isLoading: turnstileLoading,
+    isError: turnstileConfigError,
+    refetch: refetchTurnstileConfig,
+  } = useQuery<{ siteKey: string; required?: boolean }>({
     queryKey: ["/api/public/turnstile-key"],
     staleTime: Infinity,
+    retry: 3,
+    retryDelay: attempt => Math.min(500 * 2 ** attempt, 3000),
   });
   const siteKey = turnstileConfig?.siteKey || import.meta.env.VITE_TURNSTILE_SITE_KEY || "";
+  const turnstileRequired = turnstileConfig?.required ?? true;
+  const turnstileEnabled = turnstileRequired || Boolean(siteKey);
 
   useEffect(() => {
     fetch("/api/auth/ip-status")
@@ -280,7 +289,7 @@ export default function RegisterPage() {
     }
   };
 
-  const canSubmit = !siteKey || !!turnstileToken;
+  const canSubmit = !turnstileEnabled || !!turnstileToken;
 
   return (
     <div className="min-h-screen bg-muted flex items-center justify-center p-4 py-8">
@@ -519,18 +528,35 @@ export default function RegisterPage() {
                   )}
                 />
 
-                {siteKey ? (
+                {turnstileEnabled ? (
                   <div className="py-1">
-                    <TurnstileWidget
-                      key={turnstileKey}
-                      siteKey={siteKey}
-                      onSuccess={handleTurnstileSuccess}
-                      onExpire={handleTurnstileExpire}
-                      onError={handleTurnstileError}
-                    />
-                    {turnstileError && (
+                    {turnstileLoading ? (
+                      <p className="text-xs text-muted-foreground text-center py-2">
+                        Chargement de la vérification anti-bot…
+                      </p>
+                    ) : siteKey ? (
+                      <>
+                        <TurnstileWidget
+                          key={turnstileKey}
+                          siteKey={siteKey}
+                          onSuccess={handleTurnstileSuccess}
+                          onExpire={handleTurnstileExpire}
+                          onError={handleTurnstileError}
+                        />
+                        {turnstileError && (
+                          <p className="text-xs text-destructive text-center mt-2">
+                            Vérification impossible. <button type="button" className="underline" onClick={() => { setTurnstileError(false); setTurnstileToken(null); setTurnstileKey(k => k + 1); }}>Réessayer</button>
+                          </p>
+                        )}
+                      </>
+                    ) : (
                       <p className="text-xs text-destructive text-center mt-2">
-                        Vérification impossible. <button type="button" className="underline" onClick={() => { setTurnstileError(false); setTurnstileKey(k => k + 1); }}>Réessayer</button>
+                        {turnstileConfigError
+                          ? "La vérification anti-bot ne se charge pas. "
+                          : "La vérification anti-bot n’est pas configurée. "}
+                        <button type="button" className="underline" onClick={() => { setTurnstileError(false); void refetchTurnstileConfig(); }}>
+                          Réessayer
+                        </button>
                       </p>
                     )}
                   </div>
