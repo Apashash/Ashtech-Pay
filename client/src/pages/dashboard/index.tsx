@@ -100,10 +100,11 @@ function formatDashboardWalletBalance(amount: string | number, currency: string)
   }).format(Number.isFinite(numericAmount) ? numericAmount : 0).replace(/\u202f/g, " ")} ${currency}`;
 }
 
-function StatCard({ title, value, icon: Icon, trend, color, href }: {
+function StatCard({ title, value, icon: Icon, imageSrc, trend, color, href }: {
   title: string;
   value: string | number;
   icon: React.ElementType;
+  imageSrc?: string;
   trend?: string;
   color: string;
   href?: string;
@@ -117,8 +118,17 @@ function StatCard({ title, value, icon: Icon, trend, color, href }: {
             <p className="text-2xl font-bold text-foreground">{value}</p>
             {trend && <p className="text-xs text-green-500 mt-1">{trend}</p>}
           </div>
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${color}`}>
-            <Icon className="w-5 h-5" />
+          <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${color}`}>
+            {imageSrc ? (
+              <img
+                src={imageSrc}
+                alt=""
+                aria-hidden="true"
+                className="h-12 w-12 object-contain drop-shadow-[0_4px_4px_rgba(0,0,0,0.16)]"
+              />
+            ) : (
+              <Icon className="w-5 h-5" />
+            )}
           </div>
         </div>
       </CardContent>
@@ -842,24 +852,28 @@ export default function DashboardHome() {
             title={t.dashboard.linkClicks} 
             value={(userStats?.totalClicks || 0).toLocaleString('fr-FR')} 
             icon={MousePointer} 
+            imageSrc="/dashboard-icons/stat-clicks.png"
             color="bg-blue-500/10 text-blue-500"
           />
           <StatCard 
             title={t.dashboard.totalTransactions} 
             value={userStats?.totalTransactions || 0} 
             icon={ArrowDownUp} 
+            imageSrc="/dashboard-icons/stat-transactions.png"
             color="bg-green-500/10 text-green-500"
           />
           <StatCard 
             title={t.dashboard.totalCollected} 
             value={formatCurrency(parseFloat(userStats?.totalCollected || "0"), (user?.preferredCurrency || "XAF") as SupportedCurrency, rates)} 
             icon={Wallet} 
+            imageSrc="/dashboard-icons/stat-collected.png"
             color="bg-primary/10 text-primary"
           />
           <StatCard 
             title={t.dashboard.activeLinks} 
             value={userStats?.activeLinks || 0}
             icon={Link2} 
+            imageSrc="/dashboard-icons/stat-active-links.png"
             color="bg-purple-500/10 text-purple-500"
             href="/dashboard/links"
           />
