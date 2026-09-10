@@ -20,6 +20,10 @@ import { useLanguage } from "@/lib/language";
 
 const PAGE_SIZE = 25;
 
+function HistoryIcon({ src, className = "h-7 w-7" }: { src: string; className?: string }) {
+  return <img src={src} alt="" aria-hidden="true" className={`${className} object-contain drop-shadow-[0_3px_3px_rgba(0,0,0,0.14)]`} />;
+}
+
 function exportToCSV(transactions: Transaction[], user: User | undefined, tObj: any) {
   const currency = user?.preferredCurrency || "XAF";
   const tl: Record<string, string> = {
@@ -192,10 +196,10 @@ export default function TransactionsPage() {
   };
 
   const getTxIcon = (tx: Transaction) => {
-    if (tx.type === "conversion") return <ArrowLeftRight className="w-4 h-4 text-blue-500" />;
-    if (tx.type === "payment_link") return <Link2 className="w-4 h-4 text-primary" />;
-    if (["deposit", "transfer_in"].includes(tx.type)) return <TrendingUp className="w-4 h-4 text-green-500" />;
-    return <TrendingDown className="w-4 h-4 text-red-500" />;
+    if (tx.type === "conversion") return <HistoryIcon src="/sidebar-icons/transactions.png" />;
+    if (tx.type === "payment_link") return <HistoryIcon src="/sidebar-icons/links.png" />;
+    if (["deposit", "transfer_in"].includes(tx.type)) return <HistoryIcon src="/sidebar-icons/deposit.png" />;
+    return <HistoryIcon src="/sidebar-icons/withdraw.png" />;
   };
 
   const getTxIconBg = (tx: Transaction) => {
@@ -249,7 +253,7 @@ export default function TransactionsPage() {
             <div className="flex items-center justify-between px-4 py-3.5">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-green-500/10 flex items-center justify-center">
-                  <TrendingUp className="w-3.5 h-3.5 text-green-500" />
+                  <HistoryIcon src="/dashboard-icons/action-deposit.png" className="h-8 w-8" />
                 </div>
                 <span className="text-sm text-muted-foreground">{t.transactions.totalIn}</span>
               </div>
@@ -260,7 +264,7 @@ export default function TransactionsPage() {
             <div className="flex items-center justify-between px-4 py-3.5">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-red-500/10 flex items-center justify-center">
-                  <TrendingDown className="w-3.5 h-3.5 text-red-500" />
+                  <HistoryIcon src="/dashboard-icons/action-withdraw.png" className="h-8 w-8" />
                 </div>
                 <span className="text-sm text-muted-foreground">{t.transactions.totalOut}</span>
               </div>
@@ -271,7 +275,7 @@ export default function TransactionsPage() {
             <div className="flex items-center justify-between px-4 py-3.5">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-                  <Filter className="w-3.5 h-3.5 text-muted-foreground" />
+                  <HistoryIcon src="/dashboard-icons/stat-clicks.png" className="h-8 w-8" />
                 </div>
                 <span className="text-sm text-muted-foreground">{t.transactions.displayed}</span>
               </div>
@@ -281,7 +285,7 @@ export default function TransactionsPage() {
               <div className="flex items-center justify-between px-4 py-3.5">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-full bg-amber-500/10 flex items-center justify-center">
-                    <Clock className="w-3.5 h-3.5 text-amber-500" />
+                    <HistoryIcon src="/sidebar-icons/pending.png" className="h-8 w-8" />
                   </div>
                   <span className="text-sm text-muted-foreground">{t.transactions.pendingCount}</span>
                 </div>
