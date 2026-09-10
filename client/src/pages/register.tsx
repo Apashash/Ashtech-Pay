@@ -125,6 +125,14 @@ export default function RegisterPage() {
     preloadTurnstileScript();
   }, []);
 
+  const { data: serverStatus } = useQuery<{ ok: boolean }>({
+    queryKey: ["/api/ping"],
+    staleTime: 0,
+    retry: true,
+    retryDelay: 700,
+  });
+  const serverReady = serverStatus?.ok === true;
+
   useEffect(() => {
     fetch("/api/auth/ip-status")
       .then(r => r.json())
@@ -265,6 +273,10 @@ export default function RegisterPage() {
   });
 
   const onSubmit = (data: RegisterFormData) => {
+    if (!serverReady) {
+      toast({ title: "Serveur en démarrage", description: "Veuillez patienter quelques instants.", variant: "destructive" });
+      return;
+    }
     if (!selectedCountry) {
       toast({ title: t.register.errorCountry, description: t.register.errorNoCountry, variant: "destructive" });
       return;
@@ -293,7 +305,7 @@ export default function RegisterPage() {
     }
   };
 
-  const canSubmit = !turnstileEnabled || !!turnstileToken;
+  const canSubmit = serverReady && (!turnstileEnabled || !!turnstileToken);
 
   return (
     <div className="min-h-screen bg-muted flex items-center justify-center p-4 py-8">
@@ -568,6 +580,12 @@ export default function RegisterPage() {
                   <div className="py-2 px-3 rounded-md border border-dashed border-muted-foreground/40 bg-muted/50 text-center" data-testid="status-turnstile-no-key">
                     <p className="text-xs text-muted-foreground">🔒 Vérification anti-bot non disponible — clé Turnstile manquante</p>
                   </div>
+                )}
+
+                {!serverReady && (
+                  <p className="text-xs text-muted-foreground text-center">
+                    Le serveur termine son démarrage. Cette page s’activera automatiquement.
+                  </p>
                 )}
 
                 <Button
