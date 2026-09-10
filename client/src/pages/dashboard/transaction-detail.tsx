@@ -121,33 +121,67 @@ export default function TransactionDetailPage({ params }: { params: { id: string
   const amountPrefix = isConversion ? "⇄ " : (isIncoming ? "+" : "-");
   const amountColor = isConversion
     ? "text-blue-500"
-    : tx.status === "completed"
+    : ["completed", "success", "succeeded"].includes(tx.status)
       ? (isIncoming ? "text-green-500" : "text-red-500")
       : tx.status === "pending" || tx.status === "pending_manual"
         ? "text-amber-500"
         : "text-muted-foreground";
 
-  const headerBg = isConversion
-    ? "from-blue-500/10 to-blue-500/5"
-    : isIncoming
-      ? "from-green-500/10 to-green-500/5"
-      : "from-red-500/10 to-red-500/5";
+  const isSuccessful = ["completed", "success", "succeeded"].includes(tx.status);
+  const isPending = ["pending", "pending_manual"].includes(tx.status);
+  const isFailed = ["failed", "cancelled", "rejected"].includes(tx.status);
+  const statusTone = isSuccessful ? "success" : isPending ? "pending" : isFailed ? "failed" : null;
 
-  const iconBg = isConversion ? "bg-blue-500/20" : isIncoming ? "bg-green-500/20" : "bg-red-500/20";
+  const headerBg = statusTone === "success"
+    ? "from-green-500/15 to-green-500/5"
+    : statusTone === "pending"
+      ? "from-amber-500/15 to-amber-500/5"
+      : statusTone === "failed"
+        ? "from-red-500/15 to-red-500/5"
+        : isConversion
+          ? "from-blue-500/10 to-blue-500/5"
+          : isIncoming
+            ? "from-green-500/10 to-green-500/5"
+            : "from-red-500/10 to-red-500/5";
+
+  const iconBg = statusTone === "success"
+    ? "bg-green-500/20"
+    : statusTone === "pending"
+      ? "bg-amber-500/20"
+      : statusTone === "failed"
+        ? "bg-red-500/20"
+        : isConversion
+          ? "bg-blue-500/20"
+          : isIncoming
+            ? "bg-green-500/20"
+            : "bg-red-500/20";
   const TxIcon = isConversion ? ArrowLeftRight : isPaymentLink ? Link2 : isIncoming ? TrendingUp : TrendingDown;
-  const iconColor = isConversion ? "text-blue-500" : isIncoming ? "text-green-500" : "text-red-500";
+  const iconColor = statusTone === "success"
+    ? "text-green-500"
+    : statusTone === "pending"
+      ? "text-amber-500"
+      : statusTone === "failed"
+        ? "text-red-500"
+        : isConversion
+          ? "text-blue-500"
+          : isIncoming
+            ? "text-green-500"
+            : "text-red-500";
 
   const statusBadge = () => {
     switch (tx.status) {
       case "completed":
+      case "success":
+      case "succeeded":
         return <Badge className="bg-green-500/20 text-green-600 border-green-500/30">{td.detailStatusCompleted}</Badge>;
       case "pending":
       case "pending_manual":
         return <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/30">{td.detailStatusPending}</Badge>;
       case "failed":
+      case "rejected":
         return <Badge className="bg-red-500/20 text-red-600 border-red-500/30">{td.detailStatusFailed}</Badge>;
       case "cancelled":
-        return <Badge className="bg-muted text-muted-foreground">{td.detailStatusCancelled}</Badge>;
+        return <Badge className="bg-red-500/20 text-red-600 border-red-500/30">{td.detailStatusCancelled}</Badge>;
       default:
         return <Badge variant="secondary">{tx.status}</Badge>;
     }
