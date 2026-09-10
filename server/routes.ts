@@ -467,6 +467,7 @@ declare module "express-session" {
     loginAt?: string;
     tokenIssuedAt?: number;
     _pav?: number;
+    _pavVerifiedAt?: number; // time of the most recent panel TOTP verification
     _ppv?: number;       // panel PIN verification expiry
     _ppvIp?: string;     // IP at panel PIN verification time
     impersonatedBy?: string;
@@ -810,6 +811,10 @@ const adminVerifiedSessions = new Map<string, { userId: string; expiresAt: numbe
 const ADMIN_REAUTH_INACTIVITY_TTL_MS = 24 * 60 * 60 * 1000; // 24h without authenticated activity
 const ADMIN_OTP_SESSION_TTL_MS = ADMIN_REAUTH_INACTIVITY_TTL_MS; // slides on each requireAdmin pass
 const ADMIN_PANEL_ACCESS_TTL_MS = ADMIN_REAUTH_INACTIVITY_TTL_MS; // _pav/_ppv slide while the panel is active
+// Mobile networks can rotate the public IP between the panel TOTP request and
+// the following PIN request. Allow only this short post-TOTP handoff window;
+// normal panel activity remains IP-bound.
+const ADMIN_PANEL_TOTP_HANDOFF_MS = 2 * 60 * 1000;
 // TOTP is a fixed server-side requirement for every admin API request.
 // Deliberately not configurable through an environment variable: an environment
 // change must never be able to downgrade admin authentication.
@@ -3498,6 +3503,7 @@ export async function registerRoutes(
         // Do not grant panel access at login. The hidden panel button must
         // trigger a fresh TOTP challenge followed by the admin PIN.
         delete req.session._pav;
+        delete req.session._pavVerifiedAt;
         delete req.session._ppv;
         delete req.session._ppvIp;
 
@@ -3588,6 +3594,7 @@ export async function registerRoutes(
       req.session._avs = avsPanelExp;
       req.session._avsIp = getClientIp(req);
       req.session._pav = Date.now() + ADMIN_PANEL_ACCESS_TTL_MS;
+      req.session._pavVerifiedAt = Date.now();
       delete req.session._ppv;
       delete req.session._ppvIp;
       await new Promise<void>((resolve) => req.session.save((err) => {
@@ -3632,9 +3639,13 @@ export async function registerRoutes(
         ip === "::1" || ip === "::ffff:127.0.0.1" ? "127.0.0.1" : ip;
       const panelTotpExp = req.session._pav;
       const panelTotpIp = req.session._avsIp;
-      if (typeof panelTotpExp !== "number" || panelTotpExp <= Date.now() ||
-          typeof panelTotpIp !== "string" ||
-          normalizeLoopback(panelTotpIp) !== normalizeLoopback(currentIp)) {
+      const now = Date.now();
+      const panelTotpFresh = typeof req.session._pavVerifiedAt === "number" &&
+        now - req.session._pavVerifiedAt <= ADMIN_PANEL_TOTP_HANDOFF_MS;
+      const panelTotpIpMatches = typeof panelTotpIp === "string" &&
+        normalizeLoopback(panelTotpIp) === normalizeLoopback(currentIp);
+      if (typeof panelTotpExp !== "number" || panelTotpExp <= now ||
+          (!panelTotpIpMatches && !panelTotpFresh)) {
         return res.status(403).json({
           message: "Vérification Google Authenticator requise avant le code PIN.",
           totpRequired: true,
@@ -3649,6 +3660,11 @@ export async function registerRoutes(
       }
 
       const panelAuthExp = Date.now() + ADMIN_PANEL_ACCESS_TTL_MS;
+      // A mobile carrier may have rotated the IP during the two-step panel
+      // handoff. Rebind the already TOTP-verified session before the first
+      // protected admin request, so requireAdmin does not immediately reject
+      // the successful PIN with another TOTP challenge.
+      req.session._avsIp = currentIp;
       req.session._pav = panelAuthExp;
       req.session._ppv = panelAuthExp;
       req.session._ppvIp = currentIp;
