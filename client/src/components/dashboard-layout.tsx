@@ -414,7 +414,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           </SidebarContent>
 
           <SidebarFooter className="p-3 border-t border-sidebar-border">
-            <div className="flex items-center gap-3 mb-2 px-2 py-2 rounded-xl hover:bg-sidebar-accent/60 transition-colors">
+            <Link
+              href="/dashboard/settings"
+              className="flex items-center gap-3 mb-2 px-2 py-2 rounded-xl hover:bg-sidebar-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring transition-colors"
+              data-testid="link-sidebar-profile-settings"
+            >
               <div className="w-10 h-10 rounded-full bg-primary/15 border border-primary/20 flex items-center justify-center shrink-0">
                 <UserIcon className="w-5 h-5 text-primary" />
               </div>
@@ -422,7 +426,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 <p className="text-sm font-semibold text-sidebar-foreground truncate">{user.fullName}</p>
                 <p className="text-xs text-muted-foreground truncate">{user.email}</p>
               </div>
-            </div>
+            </Link>
             <Button 
               variant="ghost" 
               className="w-full justify-start h-10 rounded-xl gap-3 text-red-500 hover:text-red-500 hover:bg-red-500/10" 
