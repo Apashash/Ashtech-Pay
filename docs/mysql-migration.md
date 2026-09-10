@@ -40,6 +40,12 @@ Les triggers PostgreSQL, fonctions PL/pgSQL, `LISTEN/NOTIFY`, RLS et Storage
 ne sont pas transformés silencieusement en faux SQL MySQL. Les fichiers de
 sortie sont temporaires jusqu'à la fin de l'export et restent ignorés par Git.
 
+Les colonnes PostgreSQL `text` utilisées par une clé primaire, unique, étrangère
+ou un index sont exportées en `VARCHAR(255)`. MariaDB refuse une colonne
+`TEXT`/`BLOB` dans une clé sans longueur. Il faut donc toujours régénérer le
+dump avec le convertisseur courant après une correction de celui-ci et importer
+le fichier SQL le plus récent.
+
 Le dossier `exports/` est ignoré par Git. Ne jamais ajouter un dump de données
 à un commit.
 

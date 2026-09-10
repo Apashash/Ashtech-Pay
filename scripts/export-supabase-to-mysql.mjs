@@ -127,19 +127,23 @@ const formatValue = (value, column) => {
   return quoteString(value);
 };
 
-const mapColumnType = (column) => {
+const mapColumnType = (column, boundedForKey = false) => {
   const dataType = column.data_type;
   const udt = column.udt_name;
 
   if (dataType === "character varying") {
     return column.character_maximum_length
       ? `VARCHAR(${column.character_maximum_length})`
-      : "TEXT";
+      : boundedForKey
+        ? "VARCHAR(255)"
+        : "TEXT";
   }
   if (dataType === "character") {
     return `CHAR(${column.character_maximum_length || 1})`;
   }
-  if (dataType === "text") return "LONGTEXT";
+  if (dataType === "text") {
+    return boundedForKey ? "VARCHAR(255)" : "LONGTEXT";
+  }
   if (dataType === "uuid") return "CHAR(36)";
   if (dataType === "boolean") return "TINYINT(1)";
   if (dataType === "smallint") return "SMALLINT";
@@ -427,13 +431,25 @@ const constraintSql = (metadata, kind = null) => {
   return definitions;
 };
 
+const mysqlKeyColumns = (metadata) => {
+  const columns = new Set(
+    metadata.constraints.map((constraint) => constraint.column_name)
+  );
+  for (const index of metadata.indexes) {
+    for (const column of index.columns || []) columns.add(column);
+  }
+  return columns;
+};
+
 const createTableSql = (tableName, metadata) => {
+  const keyColumns = mysqlKeyColumns(metadata);
   const definitions = metadata.columns.map((column) => {
     const nullable = column.is_nullable === "YES" ? "" : " NOT NULL";
     const defaultValue = portableDefault(column.column_default, column);
     const defaultSql = defaultValue === null ? "" : ` DEFAULT ${defaultValue}`;
     return `${quoteIdentifier(column.column_name)} ${mapColumnType(
-      column
+      column,
+      keyColumns.has(column.column_name)
     )}${nullable}${defaultSql}`;
   });
 
@@ -460,6 +476,7 @@ const portableIndexSql = (tableName, metadata) => {
   const columnByName = new Map(
     metadata.columns.map((column) => [column.column_name, column])
   );
+  const keyColumns = mysqlKeyColumns(metadata);
   const portable = [];
   const unsupported = [];
 
@@ -475,7 +492,10 @@ const portableIndexSql = (tableName, metadata) => {
       reason = "index has no portable column list";
     } else {
       const indexedTypes = index.columns.map((name) =>
-        mapColumnType(columnByName.get(name))
+        mapColumnType(
+          columnByName.get(name),
+          keyColumns.has(name)
+        )
       );
       if (
         indexedTypes.some((type) => ["JSON", "LONGBLOB"].includes(type))
