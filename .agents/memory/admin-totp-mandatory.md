@@ -79,6 +79,14 @@ The panel PIN endpoint validates the submitted PIN before checking the panel TOT
 
 **How to apply:** Preserve the fail-closed grant behavior: validating a correct PIN never opens the panel by itself, and the TOTP plus session/IP checks must still pass before `_ppv` is stored.
 
+### Panel verification query state
+
+After a successful panel PIN, clear both `needsPanelPin` and `needsPanelVerify` in the client query cache, and do not redirect while the admin-access query is fetching.
+
+**Why:** A stale `needsPanelVerify` flag from the pre-PIN query could immediately redirect a valid PIN success back to the Google Authenticator page, even when the server had granted panel access.
+
+**How to apply:** Treat the post-verification query state as a complete success state and let the server refresh finish before the admin layout applies its redirect guard.
+
 ## Frontend flows
 
 ### Login flow (password → TOTP)
