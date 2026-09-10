@@ -1480,13 +1480,23 @@ function pushSessionError(e: SessionOpError) {
   if (sessionOpErrors.length > SESSION_OP_ERRORS_MAX) sessionOpErrors.shift();
 }
 
-async function readMysqlSessionRows(): Promise<Array<{ sid: string; userId?: string; clientIp?: string }>> {
-  const result = await pool.query(`SELECT sid, sess FROM session`);
+type MysqlSessionRecord = {
+  sid: string;
+  sess: Record<string, any>;
+  expire: any;
+  userId?: string;
+  clientIp?: string;
+};
+
+async function readMysqlSessionRecords(): Promise<MysqlSessionRecord[]> {
+  const result = await pool.query(`SELECT sid, sess, expire FROM session`);
   return result.rows.flatMap((row: any) => {
     try {
       const parsed = typeof row.sess === "string" ? JSON.parse(row.sess) : row.sess;
       return [{
         sid: String(row.sid),
+        sess: parsed || {},
+        expire: row.expire,
         userId: typeof parsed?.userId === "string" ? parsed.userId : undefined,
         clientIp: typeof parsed?.clientIp === "string" ? parsed.clientIp : undefined,
       }];
@@ -1494,6 +1504,14 @@ async function readMysqlSessionRows(): Promise<Array<{ sid: string; userId?: str
       return [];
     }
   });
+}
+
+async function readMysqlSessionRows(): Promise<Array<{ sid: string; userId?: string; clientIp?: string }>> {
+  return (await readMysqlSessionRecords()).map(({ sid, userId, clientIp }) => ({
+    sid,
+    userId,
+    clientIp,
+  }));
 }
 
 async function destroyUserSessions(userId: string, blockedUntil: number): Promise<void> {
@@ -3665,26 +3683,33 @@ export async function registerRoutes(
     try {
       let rows: any[] = [];
       let usedPool = "session";
-      try {
-        const result = await sessionPool.query(
-          `SELECT sid, sess, expire FROM session WHERE sess->>'userId' = $1 ORDER BY expire DESC`,
-          [req.userId]
-        );
-        rows = result.rows || [];
-      } catch (dbErr: any) {
-        // Fallback to main pool
-        usedPool = "main";
+      if (isMysqlDialect) {
+        rows = (await readMysqlSessionRecords())
+          .filter((row) => row.userId === req.userId)
+          .sort((a, b) => new Date(b.expire).getTime() - new Date(a.expire).getTime())
+          .map((row) => ({ sid: row.sid, sess: row.sess, expire: row.expire }));
+      } else {
         try {
           const result2 = await pool.query(
             `SELECT sid, sess, expire FROM session WHERE sess->>'userId' = $1 ORDER BY expire DESC`,
             [req.userId]
           );
           rows = result2.rows || [];
-        } catch (dbErr2: any) {
-          usedPool = "both_failed";
-          pushSessionError({ at: new Date().toISOString(), op: "list", userId: req.userId, pool: "both_failed", error: dbErr2?.message || String(dbErr2) });
-          console.error("[Sessions] Impossible de lire la table session:", dbErr2?.message);
-          return res.json([]);
+        } catch (dbErr: any) {
+          // Fallback to main pool
+          usedPool = "main";
+          try {
+            const result2 = await sessionPool.query(
+              `SELECT sid, sess, expire FROM session WHERE sess->>'userId' = $1 ORDER BY expire DESC`,
+              [req.userId]
+            );
+            rows = result2.rows || [];
+          } catch (dbErr2: any) {
+            usedPool = "both_failed";
+            pushSessionError({ at: new Date().toISOString(), op: "list", userId: req.userId, pool: "both_failed", error: dbErr2?.message || String(dbErr2) });
+            console.error("[Sessions] Impossible de lire la table session:", dbErr2?.message);
+            return res.json([]);
+          }
         }
       }
 
@@ -3730,34 +3755,45 @@ export async function registerRoutes(
 
       let count = 0;
       try {
-        // Fallback: sessionPool → main pool (handles PM2 / pool exhaustion)
-        let qPool = sessionPool;
-        try { await sessionPool.query("SELECT 1"); } catch { qPool = pool; }
+        if (isMysqlDialect) {
+          const otherSessions = (await readMysqlSessionRecords())
+            .filter((row) => row.userId === userId && row.sid !== (currentSid ?? ""));
+          count = otherSessions.length;
+          for (const row of otherSessions) {
+            singleDeviceKicks.add(row.sid);
+            await pool.query(`DELETE FROM session WHERE sid = ?`, [row.sid]);
+          }
+          notifyOtherSessionsForceLogout(userId, currentSid ?? "");
+        } else {
+          // Fallback: sessionPool → main pool (handles PM2 / pool exhaustion)
+          let qPool = sessionPool;
+          try { await sessionPool.query("SELECT 1"); } catch { qPool = pool; }
 
-        // Count other sessions
-        const countResult = await qPool.query(
-          `SELECT COUNT(*) as cnt FROM session WHERE sess->>'userId' = $1 AND sid != $2`,
-          [userId, currentSid ?? ""]
-        );
-        count = parseInt(countResult.rows[0]?.cnt || "0", 10);
+          // Count other sessions
+          const countResult = await qPool.query(
+            `SELECT COUNT(*) as cnt FROM session WHERE sess->>'userId' = $1 AND sid != $2`,
+            [userId, currentSid ?? ""]
+          );
+          count = parseInt(countResult.rows[0]?.cnt || "0", 10);
 
-        // Add them to in-memory kicks so pending requests get sessionRevoked
-        const othersResult = await qPool.query(
-          `SELECT sid FROM session WHERE sess->>'userId' = $1 AND sid != $2`,
-          [userId, currentSid ?? ""]
-        );
-        for (const row of othersResult.rows as { sid: string }[]) {
-          singleDeviceKicks.add(row.sid);
+          // Add them to in-memory kicks so pending requests get sessionRevoked
+          const othersResult = await qPool.query(
+            `SELECT sid FROM session WHERE sess->>'userId' = $1 AND sid != $2`,
+            [userId, currentSid ?? ""]
+          );
+          for (const row of othersResult.rows as { sid: string }[]) {
+            singleDeviceKicks.add(row.sid);
+          }
+
+          // Send SSE force_logout to other browsers in real-time (not current)
+          notifyOtherSessionsForceLogout(userId, currentSid ?? "");
+
+          // Delete other sessions from DB
+          await qPool.query(
+            `DELETE FROM session WHERE sess->>'userId' = $1 AND sid != $2`,
+            [userId, currentSid ?? ""]
+          );
         }
-
-        // Send SSE force_logout to other browsers in real-time (not current)
-        notifyOtherSessionsForceLogout(userId, currentSid ?? "");
-
-        // Delete other sessions from DB
-        await qPool.query(
-          `DELETE FROM session WHERE sess->>'userId' = $1 AND sid != $2`,
-          [userId, currentSid ?? ""]
-        );
       } catch (sessErr: any) {
         console.error("[Sessions] Erreur opérations session:", sessErr?.message);
         // Continue — revoke tokens even if session table is unavailable
@@ -3817,26 +3853,37 @@ export async function registerRoutes(
         // Look up the session by SID only — avoids sess->>'userId' comparison failures
         // when sessions are saved asynchronously (race with req.session.save())
         let sessRow: { sid: string; sess_user_id: string | null; token_ts: string | null } | null = null;
-        try {
-          const check = await qPool.query(
-            `SELECT sid,
-                    sess->>'userId' AS sess_user_id,
-                    sess->>'tokenIssuedAt' AS token_ts
-             FROM session WHERE sid = $1`,
-            [targetSid]
-          );
-          sessRow = check.rows[0] ?? null;
-        } catch (lookupErr: any) {
-          // Pool issue — try fallback
-          console.warn("[Sessions] Lookup error, retrying with main pool:", lookupErr?.message);
-          const check2 = await pool.query(
-            `SELECT sid,
-                    sess->>'userId' AS sess_user_id,
-                    sess->>'tokenIssuedAt' AS token_ts
-             FROM session WHERE sid = $1`,
-            [targetSid]
-          );
-          sessRow = check2.rows[0] ?? null;
+        if (isMysqlDialect) {
+          const record = (await readMysqlSessionRecords()).find((row) => row.sid === targetSid);
+          sessRow = record
+            ? {
+                sid: record.sid,
+                sess_user_id: record.userId ?? null,
+                token_ts: record.sess?.tokenIssuedAt == null ? null : String(record.sess.tokenIssuedAt),
+              }
+            : null;
+        } else {
+          try {
+            const check = await qPool.query(
+              `SELECT sid,
+                      sess->>'userId' AS sess_user_id,
+                      sess->>'tokenIssuedAt' AS token_ts
+               FROM session WHERE sid = $1`,
+              [targetSid]
+            );
+            sessRow = check.rows[0] ?? null;
+          } catch (lookupErr: any) {
+            // Pool issue — try fallback
+            console.warn("[Sessions] Lookup error, retrying with main pool:", lookupErr?.message);
+            const check2 = await pool.query(
+              `SELECT sid,
+                      sess->>'userId' AS sess_user_id,
+                      sess->>'tokenIssuedAt' AS token_ts
+               FROM session WHERE sid = $1`,
+              [targetSid]
+            );
+            sessRow = check2.rows[0] ?? null;
+          }
         }
 
         if (!sessRow) {
