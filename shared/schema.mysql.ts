@@ -174,7 +174,10 @@ export const kycSubmissions = mysqlTable("kyc_submissions", {
 });
 export const kycDocuments = mysqlTable("kyc_documents", {
   id: id(),
-  userId: varchar("user_id", { length: 191 }).notNull().references(() => users.id),
+  // Ownership is enforced by the authenticated service layer. Keep this
+  // table free of a database FK because imported Plesk users tables can have
+  // incompatible engine/collation definitions.
+  userId: varchar("user_id", { length: 191 }).notNull(),
   storagePath: varchar("storage_path", { length: 500 }).notNull().unique(),
   contentType: varchar("content_type", { length: 120 }).notNull(),
   originalName: text("original_name"),
