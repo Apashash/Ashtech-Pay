@@ -2448,6 +2448,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createKycSubmission(submission: InsertKycSubmission): Promise<KycSubmission> {
+    if (isMysqlDialect) {
+      return mysqlInsertAndRead(
+        kycSubmissions,
+        { ...submission, id: randomUUID() } as any,
+        (id) => this.getKycSubmissionById(id),
+      );
+    }
     const [newSubmission] = await db.insert(kycSubmissions).values(submission).returning();
     return newSubmission;
   }

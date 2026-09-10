@@ -14124,11 +14124,9 @@ export async function registerRoutes(
       res.json(submission);
     } catch (error) {
       if (privateBundle) await removePrivateKycBundle(privateBundle);
-      await Promise.all([
-        removePrivateKycUpload(String(req.body?.documentFrontPath || "")),
-        removePrivateKycUpload(String(req.body?.documentBackPath || "")),
-        removePrivateKycUpload(String(req.body?.selfiePath || "")),
-      ]);
+      // Keep the original inbox documents after a failed submission so the
+      // user can retry without having to upload all three files again.
+      // They are removed only after the KYC row is successfully created.
       console.error("Submit KYC error:", error);
       const submitError = error as NodeJS.ErrnoException;
       const errorCode = String(submitError.code || "");
