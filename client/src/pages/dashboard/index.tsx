@@ -705,10 +705,9 @@ export default function DashboardHome() {
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">{t.dashboard.title}</h1>
-          <p className="text-muted-foreground">{t.dashboard.welcome}, {user?.fullName}</p>
         </div>
 
-        <Card className="bg-[#1A237E] border-[#1A237E] overflow-hidden">
+        <Card className="rounded-2xl bg-[#1A237E] border-[#1A237E] overflow-hidden">
           <CardContent className="p-6">
             <div className="flex flex-col gap-6">
               <div className="flex items-center justify-between gap-4">
@@ -733,7 +732,7 @@ export default function DashboardHome() {
                 <div className="flex flex-col items-end gap-3 flex-shrink-0">
                   <button
                     onClick={() => setLocation("/dashboard/wallets")}
-                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/20 hover:bg-primary/30 text-primary text-sm font-semibold transition-all border border-primary/30"
+                    className="flex items-center gap-2 px-3 py-2 rounded-xl bg-primary/20 hover:bg-primary/30 text-primary text-sm font-semibold transition-all border border-primary/30"
                     data-testid="button-wallets"
                   >
                     <Wallet className="w-4 h-4" />
@@ -773,7 +772,7 @@ export default function DashboardHome() {
                           : "text-xs";
 
                     return (
-                      <div key={wallet.currency} className="w-full min-w-0 overflow-hidden rounded-lg border border-white/20 bg-white/10 px-2 py-2.5">
+                      <div key={wallet.currency} className="w-full min-w-0 overflow-hidden rounded-xl border border-white/20 bg-white/10 px-2 py-2.5">
                         <p className={`${balanceSizeClass} max-w-full overflow-hidden text-center font-bold leading-tight tracking-tight text-white whitespace-nowrap`}>
                           {balanceText}
                         </p>
