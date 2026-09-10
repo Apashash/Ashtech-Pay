@@ -256,7 +256,7 @@ export default function LinkCreatePage() {
                 {wizardSteps[currentStep - 1].title}
               </p>
             </div>
-            <span className="text-xs text-muted-foreground whitespace-nowrap">
+            <span className="text-xs font-medium text-[#1A237E] whitespace-nowrap">
               {Math.round((currentStep / wizardSteps.length) * 100)}%
             </span>
           </div>
@@ -284,20 +284,20 @@ export default function LinkCreatePage() {
                   >
                     <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
                       isCompleted || isCurrent
-                        ? "bg-primary text-primary-foreground"
+                        ? "bg-[#1A237E] text-white"
                         : "bg-muted text-muted-foreground"
                     }`}>
                       {isCompleted ? <Check className="h-4 w-4" /> : <StepIcon className="h-4 w-4" />}
                     </span>
                     <span className={`hidden truncate text-xs sm:block ${
-                      isCurrent ? "font-medium text-foreground" : "text-muted-foreground"
+                      isCurrent ? "font-medium text-[#1A237E]" : "text-muted-foreground"
                     }`}>
                       {step.title}
                     </span>
                   </button>
                   {index < wizardSteps.length - 1 && (
                     <div className="h-0.5 min-w-2 flex-1 overflow-hidden rounded-full bg-muted">
-                      <div className={`h-full rounded-full transition-all ${isCompleted ? "w-full bg-primary" : "w-0"}`} />
+                      <div className={`h-full rounded-full transition-all ${isCompleted ? "w-full bg-[#1A237E]" : "w-0"}`} />
                     </div>
                   )}
                 </div>
