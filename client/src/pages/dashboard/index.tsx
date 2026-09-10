@@ -58,8 +58,9 @@ interface UserStats {
   activeLinks: number;
 }
 
-function QuickActionCard({ icon: Icon, label, color, onClick, testId }: { 
+function QuickActionCard({ icon: Icon, imageSrc, label, color, onClick, testId }: {
   icon: React.ElementType; 
+  imageSrc?: string;
   label: string; 
   color: string; 
   onClick: () => void;
@@ -71,11 +72,20 @@ function QuickActionCard({ icon: Icon, label, color, onClick, testId }: {
       onClick={onClick}
       data-testid={testId}
     >
-      <CardContent className="p-4 flex flex-col items-center gap-2">
-        <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${color}`}>
-          <Icon className="w-6 h-6" />
+      <CardContent className="p-3.5 flex flex-col items-center gap-2.5">
+        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${color}`}>
+          {imageSrc ? (
+            <img
+              src={imageSrc}
+              alt=""
+              aria-hidden="true"
+              className="h-14 w-14 object-contain drop-shadow-[0_5px_5px_rgba(0,0,0,0.18)]"
+            />
+          ) : (
+            <Icon className="w-6 h-6" />
+          )}
         </div>
-        <span className="text-sm font-medium text-foreground">{label}</span>
+        <span className="text-sm font-semibold text-foreground">{label}</span>
       </CardContent>
     </Card>
   );
@@ -788,10 +798,10 @@ export default function DashboardHome() {
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">{t.dashboard.quickActions}</p>
           <div className="grid grid-cols-2 gap-3">
-            <QuickActionCard icon={CreditCard} label={t.dashboard.deposit} color="bg-green-500/10 text-green-500" onClick={() => setLocation("/dashboard/deposit")} testId="button-action-deposit" />
-            <QuickActionCard icon={Send} label={t.dashboard.send} color="bg-blue-500/10 text-blue-500" onClick={() => setLocation("/dashboard/send")} testId="button-action-send" />
-            <QuickActionCard icon={ArrowDownUp} label={t.dashboard.withdraw} color="bg-orange-500/10 text-orange-500" onClick={() => setLocation("/dashboard/withdraw")} testId="button-action-withdraw" />
-            <QuickActionCard icon={Link2} label={t.dashboard.paymentLink} color="bg-purple-500/10 text-purple-500" onClick={() => setLocation("/dashboard/links")} testId="button-action-link" />
+            <QuickActionCard icon={CreditCard} imageSrc="/dashboard-icons/action-deposit.png" label={t.dashboard.deposit} color="bg-green-500/10" onClick={() => setLocation("/dashboard/deposit")} testId="button-action-deposit" />
+            <QuickActionCard icon={Send} imageSrc="/dashboard-icons/action-send.png" label={t.dashboard.send} color="bg-blue-500/10" onClick={() => setLocation("/dashboard/send")} testId="button-action-send" />
+            <QuickActionCard icon={ArrowDownUp} imageSrc="/dashboard-icons/action-withdraw.png" label={t.dashboard.withdraw} color="bg-orange-500/10" onClick={() => setLocation("/dashboard/withdraw")} testId="button-action-withdraw" />
+            <QuickActionCard icon={Link2} imageSrc="/dashboard-icons/action-payment-link.png" label={t.dashboard.paymentLink} color="bg-purple-500/10" onClick={() => setLocation("/dashboard/links")} testId="button-action-link" />
           </div>
         </div>
 
