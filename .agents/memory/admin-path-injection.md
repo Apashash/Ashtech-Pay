@@ -68,3 +68,19 @@ mechanism (env / disk cache / hardcoded fallback) is actually in play.
 - `server/index.ts` — `.env` file loader (top of file, before imports)
 - `client/index.html` — build-time `%VITE_ADMIN_PATH%` injection (secondary)
 - `client/src/lib/adminPath.ts` — client fallback chain: injection → localStorage → "/admin"
+
+## Bearer-authenticated admin refreshes
+
+The browser cannot attach a Bearer token stored in `localStorage` to the initial
+HTML request made by a full-page refresh. The secret admin frontend guard must
+allow an HTML document shell for that path; the client then sends the token on
+its authenticated API requests. Non-HTML probes and every admin API route must
+remain protected.
+
+**Why:** Blocking the initial document request with a 404 prevents the React
+application from loading far enough to attach the token, so an admin can
+navigate into the panel but gets a 404 after refreshing on mobile Safari.
+
+**How to apply:** Keep API authorization and role checks server-side. In the
+frontend-path cloaking middleware, distinguish browser HTML document requests
+from probes and only allow the former to reach the SPA shell.
