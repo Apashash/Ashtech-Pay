@@ -3147,6 +3147,7 @@ export async function notifyAuditEvent(opts: {
 export async function notifyAdminPanelAccess(opts: {
   type:
     | "otp_success"      // OTP TOTP validé → session admin ouverte
+    | "admin_login"      // Connexion admin réussie
     | "panel_access"     // Accès à une route admin (succès, 1x/session)
     | "blocked_no_role"  // Rôle insuffisant
     | "blocked_otp"      // OTP admin invalide / expiré
@@ -3166,6 +3167,7 @@ export async function notifyAdminPanelAccess(opts: {
   type TypeDef = { emoji: string; label: string; success: boolean };
   const types: Record<typeof opts.type, TypeDef> = {
     otp_success:      { emoji: "🔓", label: "CONNEXION ADMIN — OTP validé",           success: true  },
+    admin_login:      { emoji: "🔓", label: "CONNEXION ADMIN — accès autorisé",       success: true  },
     panel_access:     { emoji: "👁️",  label: "ACCÈS PANNEAU ADMIN",                    success: true  },
     blocked_no_role:  { emoji: "🚫", label: "TENTATIVE BLOQUÉE — rôle insuffisant",   success: false },
     blocked_otp:      { emoji: "❌", label: "TENTATIVE BLOQUÉE — OTP invalide",       success: false },

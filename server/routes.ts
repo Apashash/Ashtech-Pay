@@ -865,31 +865,11 @@ async function loadBearerAuthSessionData(req: Request): Promise<Record<string, a
   return null;
 }
 
-// Rate-limit Telegram "panel_access" notifications — 1 notif per authenticated
-// session/token per 30 min. Mobile browsers can create a fresh Express session
-// for every Bearer-authenticated request, so sessionID alone is not stable enough.
-const adminAccessNotifCache = new Map<string, number>(); // stable auth key → lastNotifAt (ms)
-const ADMIN_ACCESS_NOTIF_INTERVAL_MS = 30 * 60 * 1000;
-
-function getAdminAccessNotificationKey(req: Request, userId: string): string {
-  const authHeader = req.headers.authorization;
-  if (authHeader?.startsWith("Bearer ")) {
-    const tokenTimestamp = extractTokenTimestamp(authHeader.substring(7));
-    if (tokenTimestamp !== null) {
-      return `${userId}:bearer:${tokenTimestamp}`;
-    }
-  }
-  return `${userId}:session:${req.sessionID}`;
-}
-
 // Periodic cleanup of expired in-memory entries (every 10 min)
 setInterval(() => {
   const now = Date.now();
   for (const [sid, entry] of adminVerifiedSessions) {
     if (entry.expiresAt <= now) adminVerifiedSessions.delete(sid);
-  }
-  for (const [sid, ts] of adminAccessNotifCache) {
-    if (now - ts > ADMIN_ACCESS_NOTIF_INTERVAL_MS) adminAccessNotifCache.delete(sid);
   }
 }, 10 * 60 * 1000);
 
@@ -1456,15 +1436,6 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
   }
 
   console.log(`[AdminAccess] OK — user=${req.userId} role=${user.role} path=${req.path}`);
-
-  // ── Telegram notification — 1x par session toutes les 30 min (anti-spam) ───
-  const nowMs = Date.now();
-  const accessNotifKey = getAdminAccessNotificationKey(req, user.id);
-  const lastNotif = adminAccessNotifCache.get(accessNotifKey);
-  if (!lastNotif || nowMs - lastNotif >= ADMIN_ACCESS_NOTIF_INTERVAL_MS) {
-    adminAccessNotifCache.set(accessNotifKey, nowMs);
-    notifyAdminPanelAccess({ type: "panel_access", ip: adminIpEarly, userId: user.id, userName: user.fullName || user.username, userEmail: user.email || undefined, userRole: user.role, path: req.path }).catch(() => {});
-  }
 
   next();
 }
@@ -3452,6 +3423,17 @@ export async function registerRoutes(
             userEmail: user.email || undefined,
             details: { role: user.role },
           });
+          if (user.role === "admin") {
+            notifyAdminPanelAccess({
+              type: "admin_login",
+              ip,
+              userId: user.id,
+              userName: user.fullName || user.username,
+              userEmail: user.email || undefined,
+              userRole: user.role,
+              path: "/api/auth/login",
+            }).catch(() => {});
+          }
           const { password: _, ...safeUser } = user;
           res.json({ user: safeUser, token: authToken });
         });
@@ -3630,6 +3612,16 @@ export async function registerRoutes(
             userEmail: user.email || undefined,
             details: { role: user.role, method: "admin_login_otp" },
           });
+
+          notifyAdminPanelAccess({
+            type: "admin_login",
+            ip,
+            userId: user.id,
+            userName: user.fullName || user.username,
+            userEmail: user.email || undefined,
+            userRole: user.role,
+            path: "/api/auth/admin-login-otp",
+          }).catch(() => {});
 
           storage.createAdminLog?.({
             adminId: user.id,
