@@ -347,7 +347,11 @@ app.use((req, res, next) => {
       // diagnosable instead of becoming the opaque "server_error".
       const isSafeUploadFailure =
         req.path === "/api/uploads/file" &&
-        (bodyJson.code === "KYC_STORAGE_UNAVAILABLE" || bodyJson.code === "UPLOAD_FAILED");
+        (
+          bodyJson.code === "KYC_STORAGE_UNAVAILABLE" ||
+          bodyJson.code === "KYC_DATABASE_UNAVAILABLE" ||
+          bodyJson.code === "UPLOAD_FAILED"
+        );
       const sanitized = isCryptoApi || isSafeProviderFailure
         ? {
             ...(typeof bodyJson.error === "string" ? { error: bodyJson.error } : { error: "server_error" }),
