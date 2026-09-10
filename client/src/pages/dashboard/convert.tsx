@@ -304,7 +304,7 @@ export default function ConvertPage() {
               <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-0">
                 <Command>
                   <CommandInput placeholder="Rechercher par devise ou pays..." />
-                  <CommandList>
+                  <CommandList className="max-h-[min(60vh,320px)] overflow-y-auto overscroll-contain touch-pan-y">
                     <CommandEmpty>Aucune devise trouvée.</CommandEmpty>
                     <CommandGroup>
                       {walletList.map((w) => (
@@ -369,7 +369,7 @@ export default function ConvertPage() {
               <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-0">
                 <Command>
                   <CommandInput placeholder="Rechercher par devise ou pays..." />
-                  <CommandList>
+                  <CommandList className="max-h-[min(60vh,320px)] overflow-y-auto overscroll-contain touch-pan-y">
                     <CommandEmpty>Aucune devise trouvée.</CommandEmpty>
                     <CommandGroup>
                       {toCurrencyOptions.filter((c) => c !== fromCurrency).map((currency) => (
