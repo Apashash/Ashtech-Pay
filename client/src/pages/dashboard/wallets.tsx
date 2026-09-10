@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { ArrowLeftRight, Plus, X, ChevronRight, TrendingUp, Repeat2, Loader2, AlertTriangle } from "lucide-react";
+import { ArrowLeftRight, Plus, X, ChevronRight, Repeat2, Loader2, AlertTriangle } from "lucide-react";
 import { ALL_FX_CURRENCIES, CURRENCY_SYMBOLS } from "@shared/schema";
 import type { User, Transaction } from "@shared/schema";
 import { useLanguage } from "@/lib/language";
@@ -137,7 +137,6 @@ export default function WalletsPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-foreground">{t.wallets.title}</h1>
-            <p className="text-sm text-muted-foreground">{t.wallets.subtitle}</p>
           </div>
           <Button
             size="sm"
@@ -152,29 +151,22 @@ export default function WalletsPage() {
         </div>
 
         {/* Portfolio hero card */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/20 via-primary/10 to-transparent border border-primary/20 p-5">
-          <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-primary/5 -translate-y-8 translate-x-8" />
-          <div className="absolute bottom-0 left-0 w-24 h-24 rounded-full bg-primary/5 translate-y-6 -translate-x-6" />
-          <div className="relative">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-                <TrendingUp className="w-4 h-4 text-primary" />
-              </div>
-              <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">{t.wallets.walletsLabel}</span>
-            </div>
+        <div className="rounded-2xl bg-[#1A237E] border border-[#1A237E] overflow-hidden p-6 text-white">
+          <div className="flex flex-col gap-6">
             <div className="flex items-end justify-between">
               <div>
-                <p className="text-3xl font-bold text-foreground tabular-nums">
+                <p className="text-white/75 text-sm mb-1">{t.wallets.walletsLabel}</p>
+                <p className="text-4xl font-bold text-white tabular-nums">
                   {walletList.length}
                 </p>
-                <p className="text-sm text-muted-foreground mt-0.5">
+                <p className="text-sm text-white/75 mt-1">
                   {walletList.length === 1 ? "compte actif" : "comptes actifs"}
                 </p>
               </div>
               <button
                 onClick={() => { if (walletList.length >= 2) navigate("/dashboard/convert"); }}
                 disabled={walletList.length < 2}
-                className="flex items-center gap-2 bg-primary text-black font-bold text-sm px-4 py-2 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed hover:bg-primary/90 transition-all"
+                className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-sm font-semibold text-white transition-all hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-40"
                 data-testid="button-open-convert"
               >
                 <Repeat2 className="w-4 h-4" />
