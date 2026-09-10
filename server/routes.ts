@@ -102,6 +102,7 @@ import {
   createPrivateKycDocumentBundle,
   isPrivateKycPath,
   readPrivateKycDocument,
+  readPrivateKycDocumentFile,
   removePrivateKycBundle,
   removePrivateKycUpload,
   savePrivateKycUpload,
@@ -14108,11 +14109,11 @@ export async function registerRoutes(
       // Telegram as multipart files. No public URL is created or exposed.
       void (async () => {
         try {
-          const [frontBuffer, backBuffer, selfieBuffer, summaryPdfBuffer] = await Promise.all([
-            readPrivateKycDocument(privateBundle!.frontPath),
-            readPrivateKycDocument(privateBundle!.backPath),
-            readPrivateKycDocument(privateBundle!.selfiePath),
-            readPrivateKycDocument(privateBundle!.summaryPdfPath),
+          const [frontFile, backFile, selfieFile, summaryPdfFile] = await Promise.all([
+            readPrivateKycDocumentFile(privateBundle!.frontPath),
+            readPrivateKycDocumentFile(privateBundle!.backPath),
+            readPrivateKycDocumentFile(privateBundle!.selfiePath),
+            readPrivateKycDocumentFile(privateBundle!.summaryPdfPath),
           ]);
 
           await notifyKycSubmittedFull({
@@ -14128,13 +14129,13 @@ export async function registerRoutes(
             businessCategory,
             businessDescription,
             photoFiles: {
-              front: { buffer: frontBuffer, contentType: "image/jpeg", fileName: "kyc-recto.jpg" },
-              back: { buffer: backBuffer, contentType: "image/jpeg", fileName: "kyc-verso.jpg" },
-              selfie: { buffer: selfieBuffer, contentType: "image/jpeg", fileName: "kyc-selfie.jpg" },
+              front: { buffer: frontFile.buffer, contentType: frontFile.contentType, fileName: `kyc-recto${path.extname(privateBundle!.frontPath)}` },
+              back: { buffer: backFile.buffer, contentType: backFile.contentType, fileName: `kyc-verso${path.extname(privateBundle!.backPath)}` },
+              selfie: { buffer: selfieFile.buffer, contentType: selfieFile.contentType, fileName: `kyc-selfie${path.extname(privateBundle!.selfiePath)}` },
             },
             summaryPdf: {
-              buffer: summaryPdfBuffer,
-              contentType: "application/pdf",
+              buffer: summaryPdfFile.buffer,
+              contentType: summaryPdfFile.contentType,
               fileName: "dossier-kyc.pdf",
             },
           });

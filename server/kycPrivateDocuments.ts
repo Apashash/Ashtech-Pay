@@ -97,6 +97,10 @@ export async function readPrivateKycDocument(storagePath: string): Promise<Buffe
   return document.buffer;
 }
 
+export async function readPrivateKycDocumentFile(storagePath: string): Promise<{ buffer: Buffer; contentType: string }> {
+  return readPrivateDocumentRecord(storagePath);
+}
+
 async function readPrivateDocumentRecord(storagePath: string): Promise<{ buffer: Buffer; contentType: string }> {
   if (storagePath.startsWith(DATABASE_PREFIX)) {
     if (!isFieldEncryptionConfigured()) {
