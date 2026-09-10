@@ -1373,7 +1373,12 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
     const avsIp = req.session._avsIp || avsMemEntry?.ip;
     const normalizeLoopback = (ip: string) =>
       ip === "::1" || ip === "::ffff:127.0.0.1" ? "127.0.0.1" : ip;
-    if (!avsIp || normalizeLoopback(adminIpEarly) !== normalizeLoopback(avsIp)) {
+    const panelTotpFreshForIpHandoff =
+      typeof req.session._pavVerifiedAt === "number" &&
+      Date.now() - req.session._pavVerifiedAt <= ADMIN_PANEL_TOTP_HANDOFF_MS;
+    const adminIpChanged = !!avsIp &&
+      normalizeLoopback(adminIpEarly) !== normalizeLoopback(avsIp);
+    if (!avsIp || (adminIpChanged && !panelTotpFreshForIpHandoff)) {
       // Refuse legacy/unbound _avs values as well as values from another IP.
       // A fresh TOTP verification is required to bind the session securely.
       delete req.session._avs;
@@ -1390,6 +1395,14 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
         totpRequired: true,
         ...(ipChanged ? { ipChanged: true } : {}),
       });
+    }
+    if (adminIpChanged && panelTotpFreshForIpHandoff) {
+      // Mobile carriers may rotate the public IP during the immediate
+      // TOTP-to-panel transition. Rebind only this freshly TOTP-verified
+      // session; normal panel activity remains IP-bound afterward.
+      console.warn(`[AdminAccess] Fresh TOTP IP handoff — user=${req.userId} previousIp=${avsIp} currentIp=${adminIpEarly}`);
+      req.session._avsIp = adminIpEarly;
+      req.session.save(() => {});
     }
 
     // The panel TOTP is a separate gate from the login TOTP. It must still be
@@ -9939,8 +9952,12 @@ export async function registerRoutes(
     const normalizeLoopback = (ip: string) =>
       ip === "::1" || ip === "::ffff:127.0.0.1" ? "127.0.0.1" : ip;
     const sessionIp = req.session._avsIp || memEntry?.ip;
+    const panelTotpFreshForIpHandoff =
+      typeof req.session._pavVerifiedAt === "number" &&
+      now - req.session._pavVerifiedAt <= ADMIN_PANEL_TOTP_HANDOFF_MS;
     const ipBound = typeof sessionIp === "string" &&
-      normalizeLoopback(sessionIp) === normalizeLoopback(currentIp);
+      (normalizeLoopback(sessionIp) === normalizeLoopback(currentIp) ||
+       panelTotpFreshForIpHandoff);
     let verified = (memValid || sessionValid) && ipBound;
 
     // Tier 3: ONE single DB query fetching the session row — extract both _avs and _pav
