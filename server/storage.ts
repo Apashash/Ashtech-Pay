@@ -2328,12 +2328,34 @@ export class DatabaseStorage implements IStorage {
       updatedAt: new Date(),
     };
 
+    const readById = async (id: string): Promise<PushSubscription | undefined> => {
+      const [row] = await db.select()
+        .from(pushSubscriptions)
+        .where(eq(pushSubscriptions.id, id))
+        .limit(1);
+      return row;
+    };
+
     if (existing) {
+      if (isMysqlDialect) {
+        const updated = await mysqlUpdateAndRead(
+          pushSubscriptions,
+          eq(pushSubscriptions.id, existing.id),
+          values,
+          () => readById(existing.id),
+        );
+        if (!updated) throw new Error("MYSQL_PUSH_SUBSCRIPTION_UPDATE_FAILED");
+        return updated;
+      }
       const [updated] = await db.update(pushSubscriptions)
         .set(values)
         .where(eq(pushSubscriptions.id, existing.id))
         .returning();
       return updated;
+    }
+
+    if (isMysqlDialect) {
+      return mysqlInsertAndRead(pushSubscriptions, { ...values, id: randomUUID() }, readById);
     }
 
     const [created] = await db.insert(pushSubscriptions)

@@ -189,11 +189,23 @@ export default function ConvertPage() {
           queryClient.invalidateQueries({ queryKey: ["/api/user"] });
           queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
           queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
+        } else if (json.status === "cancelled" || json.status === "failed") {
+          clearInterval(pollingRef.current!);
+          pollingRef.current = null;
+          setConversionPending(null);
+          queryClient.invalidateQueries({ queryKey: ["/api/wallets"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
+          toast({
+            title: "Conversion annulée",
+            description: "La conversion n’a pas pu être finalisée. Votre solde a été rétabli.",
+            variant: "destructive",
+          });
         }
       } catch { /* ignore */ }
     }, 3000);
     return () => { if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; } };
-  }, [conversionPending]);
+  }, [conversionPending, toast]);
 
   if (isLoading) {
     return (

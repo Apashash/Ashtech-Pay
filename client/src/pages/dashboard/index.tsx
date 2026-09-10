@@ -558,6 +558,11 @@ export default function DashboardHome() {
     stats: UserStats;
   }>({ queryKey: ["/api/dashboard"] });
 
+  const { data: liveWallets } = useQuery<WalletEntry[]>({
+    queryKey: ["/api/wallets"],
+    enabled: !!dashboardData?.user,
+  });
+
   useEffect(() => {
     if (dashboardData) {
       queryClient.setQueryData(["/api/user"], dashboardData.user);
@@ -574,7 +579,13 @@ export default function DashboardHome() {
   const transactions = dashboardData?.transactions ?? [];
   const paymentLinks = dashboardData?.paymentLinks ?? [];
   const userStats = dashboardData?.stats;
-  const wallets = dashboardData?.wallets ?? [];
+  const wallets = useMemo(() => {
+    const merged = new Map<string, WalletEntry>();
+    for (const wallet of [...(dashboardData?.wallets ?? []), ...(liveWallets ?? [])]) {
+      merged.set(wallet.currency, wallet);
+    }
+    return [...merged.values()];
+  }, [dashboardData?.wallets, liveWallets]);
 
   const [, setLocation] = useLocation();
 
@@ -605,6 +616,12 @@ export default function DashboardHome() {
   }, [isAdminRole, setLocation]);
 
   const localCurrency = user?.preferredCurrency || "XAF";
+  const secondaryWallets = useMemo(() => (
+    wallets
+      .filter(wallet => wallet.currency !== localCurrency)
+      .sort((a, b) => parseFloat(b.balance || "0") - parseFloat(a.balance || "0"))
+      .slice(0, 2)
+  ), [wallets, localCurrency]);
 
   const totalBalanceInLocalCurrency = useMemo(() => {
     if (wallets.length === 0) return user?.balance || "0.00";
@@ -702,7 +719,18 @@ export default function DashboardHome() {
                       </p>
                     );
                   })()}
-                  <p className="text-xs text-muted-foreground mt-2">Ashtech Pay</p>
+                  {secondaryWallets.length > 0 && (
+                    <div className="grid grid-cols-2 gap-2 mt-3">
+                      {secondaryWallets.map((wallet) => (
+                        <div key={wallet.currency} className="rounded-lg border border-primary/10 bg-background/40 px-2.5 py-2">
+                          <p className="text-[10px] font-bold uppercase text-muted-foreground">Sous-compte {wallet.currency}</p>
+                          <p className="text-xs font-bold text-foreground mt-0.5">
+                            {formatWalletBalance(wallet.balance, wallet.currency)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="flex flex-col items-end gap-3 flex-shrink-0">
                   <button
@@ -733,22 +761,6 @@ export default function DashboardHome() {
                 </div>
               </div>
 
-              {wallets.length > 1 && (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-primary/10">
-                  {wallets
-                    .filter(w => w.currency !== (user?.preferredCurrency || "XAF"))
-                    .sort((a, b) => parseFloat(b.balance || "0") - parseFloat(a.balance || "0"))
-                    .slice(0, 2)
-                    .map((wallet) => (
-                      <div key={wallet.currency} className="bg-background/40 p-3 rounded-lg border border-primary/5">
-                        <p className="text-[10px] text-muted-foreground uppercase font-bold mb-1">{wallet.currency}</p>
-                        <p className="text-sm font-bold text-foreground">
-                          {formatWalletBalance(wallet.balance, wallet.currency)}
-                        </p>
-                      </div>
-                    ))}
-                </div>
-              )}
             </div>
           </CardContent>
         </Card>
