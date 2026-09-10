@@ -524,13 +524,13 @@ export default function DepositPage() {
             const usdtWallet = wallets?.find(w => w.currency === "USDT");
             const usdtBalance = usdtWallet?.balance || "0";
             return (
-              <div className="flex items-center gap-3 bg-gradient-to-r from-blue-500/10 to-transparent border border-blue-500/20 rounded-2xl px-4 py-3">
-                <div className="w-9 h-9 rounded-full bg-blue-500/15 flex items-center justify-center shrink-0">
-                  <Bitcoin className="w-4 h-4 text-blue-500" />
+              <div className="flex items-center gap-3 bg-[#1A237E] border border-[#1A237E] rounded-2xl px-5 py-4 shadow-sm">
+                <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
+                  <Bitcoin className="w-5 h-5 text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs text-muted-foreground">Solde USDT actuel</p>
-                  <p className="text-base font-bold text-foreground tabular-nums">
+                  <p className="text-white/75 text-sm mb-1">Solde USDT actuel</p>
+                  <p className="text-2xl font-bold text-white tabular-nums">
                     {parseFloat(usdtBalance).toFixed(4)} USDT
                   </p>
                 </div>
@@ -544,16 +544,16 @@ export default function DepositPage() {
             ? (user?.balance || "0")
             : (secondaryWallet?.balance || "0");
           return (
-            <div className="flex items-center gap-3 bg-gradient-to-r from-green-500/10 to-transparent border border-green-500/20 rounded-2xl px-4 py-3">
-              <div className="w-9 h-9 rounded-full bg-green-500/15 flex items-center justify-center shrink-0">
-                <CreditCard className="w-4 h-4 text-green-500" />
+            <div className="flex items-center gap-3 bg-[#1A237E] border border-[#1A237E] rounded-2xl px-5 py-4 shadow-sm">
+              <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
+                <CreditCard className="w-5 h-5 text-white" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs text-muted-foreground">
+                <p className="text-white/75 text-sm mb-1">
                   {t.deposit.currentBalance}
                   {selectedCountry && ` (${displayCurrency})`}
                 </p>
-                <p className="text-base font-bold text-foreground tabular-nums">
+                <p className="text-2xl font-bold text-white tabular-nums">
                   {formatCurrency(displayBalance, displayCurrency)}
                 </p>
               </div>
