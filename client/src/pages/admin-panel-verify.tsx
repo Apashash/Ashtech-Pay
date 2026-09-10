@@ -19,7 +19,7 @@ export default function AdminPanelVerifyPage() {
   const returnPath = sessionStorage.getItem("admin_verify_return") || getAdminPath();
   const ADMIN_URL = returnPath.startsWith("/admin-panel-verify") ? getAdminPath() : returnPath;
 
-  const { data: otpStatus, isLoading: statusLoading } = useQuery<{
+  const { data: otpStatus, isLoading: statusLoading, isError: statusError, error: otpStatusError, refetch: refetchStatus } = useQuery<{
     verified: boolean;
     needsPanelVerify?: boolean;
     needsPanelPin?: boolean;
@@ -33,8 +33,20 @@ export default function AdminPanelVerifyPage() {
 
   useEffect(() => {
     if (statusLoading) return;
+    if (statusError) {
+      const error = otpStatusError as (Error & { status?: number; sessionRevoked?: boolean });
+      if (error?.status === 401 || error?.sessionRevoked) {
+        setLocation("/login");
+        return;
+      }
+      toast({
+        title: "Vérification temporairement indisponible",
+        description: error?.message || "Le serveur n'a pas pu vérifier la session admin.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (!otpStatus) {
-      setLocation("/login");
       return;
     }
     if (otpStatus.enforcementEnabled === false) {
@@ -58,7 +70,7 @@ export default function AdminPanelVerifyPage() {
     } else if (otpStatus.verified) {
       setLocation(ADMIN_URL);
     }
-  }, [otpStatus, statusLoading, step, ADMIN_URL]);
+  }, [otpStatus, statusLoading, statusError, otpStatusError, step, ADMIN_URL, toast]);
 
   useEffect(() => {
     const tick = () => setSecondsLeft(30 - (Math.floor(Date.now() / 1000) % 30));
@@ -149,6 +161,24 @@ export default function AdminPanelVerifyPage() {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (statusError && !((otpStatusError as any)?.status === 401 || (otpStatusError as any)?.sessionRevoked)) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="w-full max-w-sm text-center">
+          <div className="bg-card border border-border rounded-2xl p-8">
+            <h1 className="text-xl font-bold text-foreground mb-2">Vérification indisponible</h1>
+            <p className="text-sm text-muted-foreground mb-6">
+              La session admin n'a pas pu être vérifiée. Votre connexion n'a pas été supprimée.
+            </p>
+            <Button onClick={() => refetchStatus()} className="w-full">
+              Réessayer
+            </Button>
+          </div>
+        </div>
       </div>
     );
   }

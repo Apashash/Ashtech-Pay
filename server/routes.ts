@@ -831,6 +831,20 @@ async function loadBearerAuthSessionData(req: Request): Promise<Record<string, a
   const tokenTimestamp = extractTokenTimestamp(authHeader.substring(7));
   if (tokenTimestamp === null) return null;
 
+  // A cookie-less mobile browser can create more than one Express session row
+  // for the same Bearer token while moving between the dashboard and the admin
+  // panel. Prefer the row carrying the newest verified admin factors instead
+  // of depending on database row order.
+  let bestMatch: Record<string, any> | null = null;
+  let bestScore = -1;
+  const now = Date.now();
+  const factorScore = (sessionData: Record<string, any>): number => {
+    const panelExpiry = typeof sessionData._pav === "number" && sessionData._pav > now ? 3 : 0;
+    const pinExpiry = typeof sessionData._ppv === "number" && sessionData._ppv > now ? 2 : 0;
+    const adminExpiry = typeof sessionData._avs === "number" && sessionData._avs > now ? 1 : 0;
+    return panelExpiry + pinExpiry + adminExpiry;
+  };
+
   for (const queryPool of [sessionPool, pool]) {
     try {
       const result: { rows: any[] } = isMysqlDialect
@@ -854,15 +868,18 @@ async function loadBearerAuthSessionData(req: Request): Promise<Record<string, a
           String(sessionData.userId) === String(req.userId) &&
           Number(sessionData.tokenIssuedAt) === tokenTimestamp
         ) {
-          return sessionData;
+          const score = factorScore(sessionData);
+          if (score > bestScore) {
+            bestMatch = sessionData;
+            bestScore = score;
+          }
         }
       }
-      return null;
     } catch {
       // Try the main pool if the dedicated session pool is exhausted.
     }
   }
-  return null;
+  return bestMatch;
 }
 
 // Periodic cleanup of expired in-memory entries (every 10 min)

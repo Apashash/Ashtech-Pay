@@ -33,7 +33,7 @@ async function throwIfResNotOk(res: Response) {
       const message = res.status === 503
         ? "Le serveur termine son démarrage. Veuillez patienter quelques instants."
         : "Le serveur est temporairement indisponible. Veuillez réessayer.";
-      throw new Error(message);
+      throw Object.assign(new Error(message), { status: res.status });
     }
     try {
       const json = JSON.parse(text);
@@ -62,10 +62,10 @@ async function throwIfResNotOk(res: Response) {
         window.location.href = "/admin-panel-verify";
         return;
       }
-      throw Object.assign(new Error(json.message || text), json);
+      throw Object.assign(new Error(json.message || text), json, { status: res.status });
     } catch (e) {
       if (e instanceof SyntaxError) {
-        throw new Error(text);
+        throw Object.assign(new Error(text), { status: res.status });
       }
       throw e;
     }

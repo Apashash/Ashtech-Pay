@@ -14,3 +14,9 @@ Admin TOTP grants must also recover the durable session associated with the veri
 **Why:** Mobile Safari may not return the session cookie consistently, so the TOTP request and the first admin API request can have different session IDs even though they use the same signed token.
 
 **How to apply:** Match the verified session by the authenticated token timestamp plus user ID, expiration, and IP; never fall back to a user-wide admin grant.
+
+When several durable session rows share one token timestamp, prefer the row with the newest valid panel/admin factors and search all configured session pools.
+
+**Why:** Cookie-less navigation can leave an older row without `_pav` beside the freshly verified row; taking the first database result makes a successful panel verification appear to expire immediately.
+
+**How to apply:** Recover `_pav`, `_ppv`, and `_avs` from the strongest matching row rather than relying on database row order or stopping after an empty first-pool result.
