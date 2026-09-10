@@ -71,27 +71,31 @@ import { useLanguage } from "@/lib/language";
 import { LanguageSwitcher } from "@/components/language-switcher";
 
 const MENU_URLS = [
-  { key: "dashboard", url: "/dashboard", icon: LayoutDashboard, color: "bg-primary/10 text-primary" },
-  { key: "links", url: "/dashboard/links", icon: Link2, color: "bg-blue-500/10 text-blue-500" },
-  { key: "transactions", url: "/dashboard/transactions", icon: History, color: "bg-purple-500/10 text-purple-500" },
-  { key: "deposit", url: "/dashboard/deposit", icon: CreditCard, color: "bg-green-500/10 text-green-500" },
-  { key: "withdraw", url: "/dashboard/withdraw", icon: Wallet, color: "bg-orange-500/10 text-orange-500" },
-  { key: "send", url: "/dashboard/send", icon: Send, color: "bg-sky-500/10 text-sky-500" },
-  { key: "wallets", url: "/dashboard/wallets", icon: Coins, color: "bg-teal-500/10 text-teal-500" },
+  { key: "dashboard", url: "/dashboard", icon: LayoutDashboard, imageSrc: "/sidebar-icons/dashboard.png", color: "bg-primary/10 text-primary" },
+  { key: "links", url: "/dashboard/links", icon: Link2, imageSrc: "/sidebar-icons/links.png", color: "bg-blue-500/10 text-blue-500" },
+  { key: "transactions", url: "/dashboard/transactions", icon: History, imageSrc: "/sidebar-icons/transactions.png", color: "bg-purple-500/10 text-purple-500" },
+  { key: "deposit", url: "/dashboard/deposit", icon: CreditCard, imageSrc: "/sidebar-icons/deposit.png", color: "bg-green-500/10 text-green-500" },
+  { key: "withdraw", url: "/dashboard/withdraw", icon: Wallet, imageSrc: "/sidebar-icons/withdraw.png", color: "bg-orange-500/10 text-orange-500" },
+  { key: "send", url: "/dashboard/send", icon: Send, imageSrc: "/sidebar-icons/send.png", color: "bg-sky-500/10 text-sky-500" },
+  { key: "wallets", url: "/dashboard/wallets", icon: Coins, imageSrc: "/sidebar-icons/wallets.png", color: "bg-teal-500/10 text-teal-500" },
 ] as const;
 
 const SETTINGS_URLS = [
-  { key: "kyc", url: "/dashboard/kyc", icon: Shield, color: "bg-green-500/10 text-green-500" },
-  { key: "support", url: "/dashboard/support", icon: Headphones, color: "bg-blue-500/10 text-blue-500" },
-  { key: "apiKeys", url: "/dashboard/api-keys", icon: Key, color: "bg-purple-500/10 text-purple-500" },
-  { key: "settings", url: "/dashboard/settings", icon: Settings, color: "bg-slate-500/10 text-slate-500" },
-  { key: "fees", url: "/dashboard/fee-details", icon: Receipt, color: "bg-amber-500/10 text-amber-500" },
+  { key: "kyc", url: "/dashboard/kyc", icon: Shield, imageSrc: "/sidebar-icons/kyc.png", color: "bg-green-500/10 text-green-500" },
+  { key: "support", url: "/dashboard/support", icon: Headphones, imageSrc: "/sidebar-icons/support.png", color: "bg-blue-500/10 text-blue-500" },
+  { key: "apiKeys", url: "/dashboard/api-keys", icon: Key, imageSrc: "/sidebar-icons/api-keys.png", color: "bg-purple-500/10 text-purple-500" },
+  { key: "settings", url: "/dashboard/settings", icon: Settings, imageSrc: "/sidebar-icons/settings.png", color: "bg-slate-500/10 text-slate-500" },
+  { key: "fees", url: "/dashboard/fee-details", icon: Receipt, imageSrc: "/sidebar-icons/fees.png", color: "bg-amber-500/10 text-amber-500" },
 ] as const;
 
-function SidebarIconBadge({ icon: Icon, color, className = "" }: { icon: React.ComponentType<{ className?: string }>; color: string; className?: string }) {
+function SidebarIconBadge({ icon: Icon, imageSrc, color, className = "" }: { icon: React.ComponentType<{ className?: string }>; imageSrc?: string; color: string; className?: string }) {
   return (
     <span className={`flex items-center justify-center w-7 h-7 rounded-lg shrink-0 ${color} ${className}`}>
-      <Icon className="w-4 h-4" />
+      {imageSrc ? (
+        <img src={imageSrc} alt="" aria-hidden="true" className="h-7 w-7 object-contain drop-shadow-[0_2px_2px_rgba(0,0,0,0.14)]" />
+      ) : (
+        <Icon className="w-4 h-4" />
+      )}
     </span>
   );
 }
@@ -122,8 +126,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     });
   }, [setLocation]);
 
-  const menuItems = MENU_URLS.map(item => ({ title: t.sidebar[item.key], url: item.url, icon: item.icon, color: item.color }));
-  const settingsItems = SETTINGS_URLS.map(item => ({ title: t.sidebar[item.key], url: item.url, icon: item.icon, color: item.color }));
+  const menuItems = MENU_URLS.map(item => ({ title: t.sidebar[item.key], url: item.url, icon: item.icon, imageSrc: item.imageSrc, color: item.color }));
+  const settingsItems = SETTINGS_URLS.map(item => ({ title: t.sidebar[item.key], url: item.url, icon: item.icon, imageSrc: item.imageSrc, color: item.color }));
 
   const { data: user, isLoading } = useQuery<User>({
     queryKey: ["/api/user"],
@@ -334,7 +338,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton asChild isActive={location === item.url} className="h-11 rounded-xl gap-3 group-data-[collapsible=icon]:h-9!">
                         <Link href={item.url}>
-                          <SidebarIconBadge icon={item.icon} color={item.color} />
+                          <SidebarIconBadge icon={item.icon} imageSrc={item.imageSrc} color={item.color} />
                           <span>{item.title}</span>
                         </Link>
                       </SidebarMenuButton>
@@ -360,7 +364,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                             onClick={handleKycClick}
                             className="cursor-pointer h-11 rounded-xl gap-3 group-data-[collapsible=icon]:h-9!"
                           >
-                            <SidebarIconBadge icon={item.icon} color={item.color} />
+                            <SidebarIconBadge icon={item.icon} imageSrc={item.imageSrc} color={item.color} />
                             <span className="flex-1">{item.title}</span>
                             <Badge className="ml-auto bg-green-500 text-white h-5 px-1.5 text-xs">
                               {t.sidebar.verified}
@@ -375,7 +379,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                         <SidebarMenuItem key={item.title}>
                           <SidebarMenuButton asChild isActive={location === item.url} className="h-11 rounded-xl gap-3 group-data-[collapsible=icon]:h-9!">
                             <Link href={item.url}>
-                              <SidebarIconBadge icon={item.icon} color="bg-red-500/10 text-red-500" className="animate-bell-ring" />
+                              <SidebarIconBadge icon={item.icon} imageSrc={item.imageSrc} color="bg-red-500/10 text-red-500" className="animate-bell-ring" />
                               <span className="flex-1 text-red-500 font-semibold">{item.title}</span>
                               <span className="relative ml-auto flex h-2 w-2">
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
@@ -391,7 +395,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                       <SidebarMenuItem key={item.title}>
                         <SidebarMenuButton asChild isActive={location === item.url} className="h-11 rounded-xl gap-3 group-data-[collapsible=icon]:h-9!">
                           <Link href={item.url}>
-                            <SidebarIconBadge icon={item.icon} color={item.color} />
+                            <SidebarIconBadge icon={item.icon} imageSrc={item.imageSrc} color={item.color} />
                             <span className="flex-1">{item.title}</span>
                             {badgeCount > 0 && (
                               <Badge className="ml-auto bg-red-500 text-white h-5 min-w-5 px-1.5 text-xs">
