@@ -1192,7 +1192,6 @@ export default function PaymentLinksPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-semibold text-foreground">{t.links.title}</h1>
-            <p className="text-muted-foreground">{t.links.subtitle}</p>
           </div>
           <Button onClick={() => navigate("/dashboard/links/new")} data-testid="button-new-link">
             <Plus className="w-4 h-4 mr-2" />
