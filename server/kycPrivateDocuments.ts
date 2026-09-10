@@ -7,6 +7,7 @@ import { appPath } from "./appPaths";
 import { db } from "./db";
 import { kycDocuments } from "@shared/schema-runtime";
 import { decryptField, encryptField, isFieldEncryptionConfigured } from "./fieldEncryption";
+import { ensureMysqlKycDocumentsSchema } from "./mysqlBootstrap";
 import { downloadFromSupabase } from "./supabase";
 
 const PRIVATE_PREFIX = "private-kyc/";
@@ -232,10 +233,17 @@ async function saveDatabaseDocument(
   originalName: string,
 ): Promise<void> {
   if (!isFieldEncryptionConfigured()) {
-    throw new Error("KYC_ENCRYPTION_NOT_CONFIGURED");
+    const error = new Error("KYC_ENCRYPTION_NOT_CONFIGURED");
+    (error as NodeJS.ErrnoException).code = "KYC_ENCRYPTION_NOT_CONFIGURED";
+    throw error;
   }
+  await ensureMysqlKycDocumentsSchema();
   const encryptedData = encryptField(buffer.toString("base64"));
-  if (!encryptedData) throw new Error("KYC_ENCRYPTION_FAILED");
+  if (!encryptedData) {
+    const error = new Error("KYC_ENCRYPTION_FAILED");
+    (error as NodeJS.ErrnoException).code = "KYC_ENCRYPTION_FAILED";
+    throw error;
+  }
   await db.insert(kycDocuments).values({
     id: crypto.randomUUID(),
     userId,

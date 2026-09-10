@@ -2587,6 +2587,7 @@ export async function registerRoutes(
 
   // Direct file upload endpoint - uses Supabase Storage for persistence
   app.post("/api/uploads/file", requireAuth, handleMemoryUpload, async (req, res) => {
+    const isKycUpload = req.query.folder === "kyc";
     try {
       if (!req.file) {
         return res.status(400).json({ error: "Aucun fichier fourni" });
@@ -2664,11 +2665,22 @@ export async function registerRoutes(
     } catch (error) {
       const uploadError = error as NodeJS.ErrnoException;
       const isPrivateStorageUnavailable = ["EACCES", "EPERM", "ENOENT", "EROFS"].includes(uploadError.code || "");
+      const uploadMessage = uploadError.message || String(error);
+      const isKycDatabaseError = isKycUpload && (
+        uploadError.code === "KYC_ENCRYPTION_NOT_CONFIGURED" ||
+        uploadError.code === "KYC_ENCRYPTION_FAILED" ||
+        uploadError.code === "ER_NO_SUCH_TABLE" ||
+        uploadError.code === "ER_ACCESS_DENIED_ERROR" ||
+        uploadError.code === "ECONNREFUSED" ||
+        uploadMessage.includes("kyc_documents") ||
+        uploadMessage.includes("connect ECONN") ||
+        uploadMessage.includes("Access denied")
+      );
       console.error("[Upload] Échec du stockage fichier:", {
         userId: req.userId || null,
         folder: req.query.folder || null,
         code: uploadError.code || null,
-        message: uploadError.message || String(error),
+        message: uploadMessage,
       });
       const storageMessage = uploadError.code === "EACCES" || uploadError.code === "EPERM"
         ? "L'utilisateur de l'application Node.js n'a pas les droits d'écriture sur le dossier private-documents."
@@ -2676,12 +2688,22 @@ export async function registerRoutes(
           ? "Le chemin du stockage privé est introuvable. Vérifiez PRIVATE_DOCUMENTS_ROOT et le dossier private-documents."
           : uploadError.code === "EROFS"
             ? "Le stockage privé est en lecture seule sur le serveur."
+            : uploadError.code === "KYC_ENCRYPTION_NOT_CONFIGURED"
+              ? "La clé de chiffrement des documents KYC n'est pas configurée sur le serveur."
+              : isKycDatabaseError
+                ? "La base MySQL Plesk ne peut pas enregistrer le document KYC. Vérifiez la connexion et la table kyc_documents."
             : "Le serveur ne peut pas écrire dans le stockage sécurisé des documents.";
       res.status(isPrivateStorageUnavailable ? 503 : 500).json({
         error: isPrivateStorageUnavailable
           ? storageMessage
-          : "Erreur lors de l'upload",
-        code: isPrivateStorageUnavailable ? "KYC_STORAGE_UNAVAILABLE" : "UPLOAD_FAILED",
+          : isKycDatabaseError || isKycUpload
+            ? storageMessage
+            : "Erreur lors de l'upload",
+        code: isPrivateStorageUnavailable
+          ? "KYC_STORAGE_UNAVAILABLE"
+          : isKycDatabaseError
+            ? "KYC_DATABASE_UNAVAILABLE"
+            : "UPLOAD_FAILED",
       });
     }
   });
