@@ -14,6 +14,8 @@ import { queryClient, apiRequest, getAuthHeaders } from "@/lib/queryClient";
 import type { User, KycSubmission } from "@shared/schema";
 import { KYC_DOCUMENT_TYPES, BUSINESS_CATEGORIES } from "@shared/schema";
 import {
+  ArrowLeft,
+  ArrowRight,
   Shield,
   CheckCircle,
   Clock,
@@ -32,6 +34,11 @@ import { createPortal } from "react-dom";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/lib/language";
 import { LocationMapPicker, type LocationMapPickerHandle } from "@/components/LocationMapPicker";
+import preparationGuideImage from "@assets/7ef12cb0a491071f360b23951b55820a_1789045683454.jpg";
+import documentFrontGuideImage from "@assets/Screenshot_20260910_140615_Photos_1789045619760.jpg";
+import documentBackGuideImage from "@assets/be51e9648060e89b9ff77a8a3922c4ca~2_1789045633889.jpg";
+import selfieGuideImage from "@assets/06f166f7f90dde075e178df77302fb0f_1789045683418.jpg";
+import securityGuideImage from "@assets/fc66946ad03da8c59e73d0b550811f08_1789045683478.jpg";
 
 const africanCountries = [
   { code: "CM", name: "Cameroun", flag: "🇨🇲" },
@@ -86,6 +93,7 @@ export default function KYCPage() {
   const [businessCategory, setBusinessCategory] = useState("");
   const [businessDescription, setBusinessDescription] = useState("");
   const [categoryOpen, setCategoryOpen] = useState(false);
+  const [currentStep, setCurrentStep] = useState(1);
 
   const [uploadedPaths, setUploadedPaths] = useState<UploadState>({
     front: null,
@@ -241,6 +249,44 @@ export default function KYCPage() {
     const words = businessDescription.trim().split(/\s+/).filter(Boolean);
     return words.length;
   }, [businessDescription]);
+
+  const wizardSteps = [
+    {
+      number: 1,
+      title: t.kyc.wizardStep1Title,
+      description: t.kyc.wizardStep1Desc,
+      image: preparationGuideImage,
+      icon: Shield,
+    },
+    {
+      number: 2,
+      title: t.kyc.wizardStep2Title,
+      description: t.kyc.wizardStep2Desc,
+      image: documentFrontGuideImage,
+      icon: CreditCard,
+    },
+    {
+      number: 3,
+      title: t.kyc.wizardStep3Title,
+      description: t.kyc.wizardStep3Desc,
+      image: documentBackGuideImage,
+      icon: FileText,
+    },
+    {
+      number: 4,
+      title: t.kyc.wizardStep4Title,
+      description: t.kyc.wizardStep4Desc,
+      image: selfieGuideImage,
+      icon: Camera,
+    },
+    {
+      number: 5,
+      title: t.kyc.wizardStep5Title,
+      description: t.kyc.wizardStep5Desc,
+      image: securityGuideImage,
+      icon: Building2,
+    },
+  ];
 
   const submitMutation = useMutation({
     mutationFn: async (data: {
@@ -419,6 +465,42 @@ export default function KYCPage() {
     });
   };
 
+  const handleNextStep = () => {
+    const missing: string[] = [];
+
+    if (currentStep === 1) {
+      if (!city) missing.push("Ville");
+      if (!lieuDit) missing.push("Lieu dit");
+      if (!locationConfirmed) missing.push("Confirmation de l'emplacement sur la carte");
+      if (countryMismatch) missing.push("Emplacement dans le pays d'inscription");
+    } else if (currentStep === 2) {
+      if (!documentType) missing.push("Type de document");
+      if (!documentNumber) missing.push("Numéro de document");
+      if (!uploadedPaths.front) missing.push("Photo recto du document");
+    } else if (currentStep === 3) {
+      if (!uploadedPaths.back) missing.push("Photo verso du document");
+    } else if (currentStep === 4) {
+      if (!uploadedPaths.selfie) missing.push("Selfie avec le document");
+    }
+
+    if (missing.length > 0) {
+      toast({
+        title: "Champs manquants",
+        description: "Veuillez compléter : " + missing.join(", ") + ".",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setCurrentStep(step => Math.min(step + 1, wizardSteps.length));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handlePreviousStep = () => {
+    setCurrentStep(step => Math.max(step - 1, 1));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const renderStatusCard = () => {
     if (isLoadingKyc) {
       return (
@@ -571,6 +653,7 @@ export default function KYCPage() {
   };
 
   const canSubmitForm = !kycSubmission || kycSubmission.status === "rejected";
+  const currentWizardStep = wizardSteps[currentStep - 1];
 
   if (isLoadingKyc) {
     return (
