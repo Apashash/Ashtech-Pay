@@ -278,7 +278,7 @@ export default function LinkCreatePage() {
                         size="sm"
                         variant="secondary"
                         onClick={() => imageInputRef.current?.click()}
-                        className="rounded-lg"
+                        className="rounded-xl"
                       >
                         <Upload className="w-3.5 h-3.5 mr-1.5" />
                         {lk.formImageChange}
@@ -288,7 +288,7 @@ export default function LinkCreatePage() {
                         size="sm"
                         variant="destructive"
                         onClick={clearImage}
-                        className="rounded-lg"
+                        className="rounded-xl"
                       >
                         <X className="w-3.5 h-3.5 mr-1.5" />
                         {lk.formImageDelete}
@@ -307,7 +307,7 @@ export default function LinkCreatePage() {
                     onDragLeave={() => setIsDragOver(false)}
                     onDrop={handleDrop}
                   >
-                    <div className="w-12 h-12 rounded-xl bg-muted/50 flex items-center justify-center mx-auto mb-3">
+                    <div className="w-12 h-12 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-3">
                       <Image className="w-5 h-5 text-muted-foreground" />
                     </div>
                     <p className="text-base font-normal text-foreground mb-1">{lk.formImageDrag}</p>
@@ -323,10 +323,10 @@ export default function LinkCreatePage() {
                 control={form.control}
                 name="isFixedAmount"
                 render={({ field }) => (
-                  <FormItem className="flex items-center justify-between rounded-xl border border-border/60 p-4 bg-muted/20">
+                  <FormItem className="flex items-center justify-between rounded-2xl border border-border/60 p-4 bg-card shadow-sm">
                     <div>
-                      <FormLabel className="text-sm font-medium cursor-pointer">{lk.formAmountType}</FormLabel>
-                      <FormDescription className="text-xs mt-0.5">
+                      <FormLabel className="text-base font-normal cursor-pointer">{lk.formAmountType}</FormLabel>
+                      <FormDescription className="text-sm mt-0.5">
                         {field.value ? lk.formFixedDesc : lk.formFreeDesc}
                       </FormDescription>
                     </div>
@@ -347,7 +347,7 @@ export default function LinkCreatePage() {
                   name="amount"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-sm font-medium">{lk.formAmount} ({currency}) <span className="text-destructive">*</span></FormLabel>
+                      <FormLabel className="text-base font-normal">{lk.formAmount} ({currency}) <span className="text-destructive">*</span></FormLabel>
                       <FormControl>
                         <div className="relative">
                           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">{currency}</span>
@@ -355,7 +355,7 @@ export default function LinkCreatePage() {
                             type="text"
                             inputMode="decimal"
                             placeholder="0"
-                            className="h-11 rounded-xl border-border/60 focus:border-primary bg-background pl-14 text-lg font-semibold"
+                            className="h-12 rounded-2xl border-border/60 focus:border-primary bg-card pl-14 text-base font-medium"
                             {...field}
                             data-testid="input-link-amount"
                           />
@@ -372,7 +372,7 @@ export default function LinkCreatePage() {
                 name="pdfPath"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="flex items-center gap-2 text-sm font-medium">
+                    <FormLabel className="flex items-center gap-2 text-base font-normal">
                       <FileText className="w-4 h-4 text-amber-500" />
                       {lk.formPdf}
                     </FormLabel>
@@ -381,13 +381,13 @@ export default function LinkCreatePage() {
                         <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                         <Input
                           placeholder="https://drive.google.com/file/d/..."
-                          className="h-11 rounded-xl border-border/60 focus:border-primary bg-background pl-9"
+                          className="h-12 rounded-2xl border-border/60 focus:border-primary bg-card pl-9 text-base"
                           {...field}
                           data-testid="input-link-pdf-url"
                         />
                       </div>
                     </FormControl>
-                    <FormDescription className="text-xs text-amber-500/80 flex items-center gap-1">
+                    <FormDescription className="text-sm text-amber-500/80 flex items-center gap-1">
                       <AlertCircle className="w-3 h-3" />
                       {lk.formPdfAuto}
                     </FormDescription>
@@ -401,10 +401,10 @@ export default function LinkCreatePage() {
                   control={form.control}
                   name="hasPdfDelivery"
                   render={({ field }) => (
-                    <FormItem className="flex items-center justify-between rounded-xl border border-amber-500/30 bg-amber-500/8 p-4">
+                    <FormItem className="flex items-center justify-between rounded-2xl border border-amber-500/30 bg-amber-500/8 p-4 shadow-sm">
                       <div>
-                        <FormLabel className="text-sm font-medium text-amber-600 dark:text-amber-400">{lk.formPdfDelivery}</FormLabel>
-                        <FormDescription className="text-xs mt-0.5">
+                        <FormLabel className="text-base font-normal text-amber-600 dark:text-amber-400">{lk.formPdfDelivery}</FormLabel>
+                        <FormDescription className="text-sm mt-0.5">
                           {lk.formPdfDeliveryDesc}
                         </FormDescription>
                       </div>
@@ -422,20 +422,20 @@ export default function LinkCreatePage() {
             </SectionCard>
 
             <SectionCard number={3} title={lk.step3Title} subtitle={lk.step3Sub} icon={Globe}>
-              <div className="rounded-xl border border-border/60 overflow-hidden">
+              <div className="rounded-2xl border border-border/60 overflow-hidden shadow-sm">
                 <button
                   type="button"
                   onClick={() => setShowCountries(!showCountries)}
-                  className="w-full flex items-center justify-between px-4 py-3.5 bg-muted/20 hover:bg-muted/40 transition-colors text-left"
+                  className="w-full flex items-center justify-between px-4 py-4 bg-card hover:bg-muted/40 transition-colors text-left"
                   data-testid="button-toggle-countries"
                 >
                   <div className="flex items-center gap-3">
                     <Globe className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-sm font-medium">{countriesLabel}</span>
+                    <span className="text-base font-normal">{countriesLabel}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     {selectedCountries.length > 0 && (
-                      <Badge className="bg-primary/15 text-primary border-primary/20 text-xs">
+                      <Badge className="bg-primary/15 text-primary border-primary/20 text-sm">
                         {selectedCountries.length}
                       </Badge>
                     )}
@@ -450,14 +450,14 @@ export default function LinkCreatePage() {
                         placeholder={lk.countrySearch}
                         value={countrySearch}
                         onChange={e => setCountrySearch(e.target.value)}
-                        className="h-9 rounded-lg text-sm"
+                        className="h-12 rounded-2xl text-base"
                       />
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
                         onClick={toggleAll}
-                        className="shrink-0 text-xs"
+                        className="shrink-0 text-sm"
                         data-testid="button-toggle-all-countries"
                       >
                         {selectedCountries.length === allCountries.length && allCountries.length > 0 ? lk.deselectAll : lk.selectAll}
@@ -484,7 +484,7 @@ export default function LinkCreatePage() {
                               {isSelected && <Check className="w-3 h-3 text-primary-foreground" />}
                             </span>
                             <span className="mr-0.5">{c.flag}</span>
-                            <span className="truncate text-xs">{c.name}</span>
+                            <span className="truncate text-sm">{c.name}</span>
                           </button>
                         );
                       })}
@@ -502,7 +502,7 @@ export default function LinkCreatePage() {
                       <Badge
                         key={id}
                         variant="secondary"
-                        className="gap-1 cursor-pointer text-xs rounded-lg pr-1.5 hover:bg-destructive/10"
+                        className="gap-1 cursor-pointer text-sm rounded-xl pr-1.5 hover:bg-destructive/10"
                         onClick={() => toggleCountry(id)}
                       >
                         {country.flag} {country.name}
@@ -511,7 +511,7 @@ export default function LinkCreatePage() {
                     );
                   })}
                   {selectedCountries.length > 8 && (
-                    <Badge variant="secondary" className="text-xs rounded-lg">
+                    <Badge variant="secondary" className="text-sm rounded-xl">
                       +{selectedCountries.length - 8} {lk.moreLinks}
                     </Badge>
                   )}
@@ -526,19 +526,19 @@ export default function LinkCreatePage() {
                 name="customSlug"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-sm font-medium">{lk.formSlug}</FormLabel>
+                    <FormLabel className="text-base font-normal">{lk.formSlug}</FormLabel>
                     <FormControl>
-                      <div className="flex items-center rounded-xl border border-border/60 focus-within:border-primary overflow-hidden bg-background">
-                        <span className="px-3 py-2 bg-muted/40 text-muted-foreground text-sm border-r border-border/60 whitespace-nowrap shrink-0">/pay/</span>
+                      <div className="flex items-center rounded-2xl border border-border/60 focus-within:border-primary overflow-hidden bg-card">
+                        <span className="px-4 py-3 bg-muted/40 text-muted-foreground text-base border-r border-border/60 whitespace-nowrap shrink-0">/pay/</span>
                         <Input
                           placeholder="mon-lien-unique"
-                          className="border-0 rounded-none focus-visible:ring-0 h-11 bg-transparent"
+                          className="border-0 rounded-none focus-visible:ring-0 h-12 bg-transparent text-base"
                           {...field}
                           data-testid="input-link-slug"
                         />
                       </div>
                     </FormControl>
-                    <FormDescription className="text-xs">{lk.formSlugHint}</FormDescription>
+                    <FormDescription className="text-sm">{lk.formSlugHint}</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -549,14 +549,14 @@ export default function LinkCreatePage() {
                 name="expiresAt"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="flex items-center gap-2 text-sm font-medium">
+                    <FormLabel className="flex items-center gap-2 text-base font-normal">
                       <Calendar className="w-4 h-4" />
                       {lk.formExpiry}
                     </FormLabel>
                     <FormControl>
                       <Input
                         type="datetime-local"
-                        className="h-11 rounded-xl border-border/60 focus:border-primary bg-background"
+                        className="h-12 rounded-2xl border-border/60 focus:border-primary bg-card text-base"
                         {...field}
                         data-testid="input-link-expiry"
                       />
@@ -571,19 +571,19 @@ export default function LinkCreatePage() {
                 name="redirectUrl"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="flex items-center gap-2 text-sm font-medium">
+                    <FormLabel className="flex items-center gap-2 text-base font-normal">
                       <ExternalLink className="w-4 h-4" />
                       {lk.formRedirect}
                     </FormLabel>
                     <FormControl>
                       <Input
                         placeholder="https://monsite.com/merci"
-                        className="h-11 rounded-xl border-border/60 focus:border-primary bg-background"
+                        className="h-12 rounded-2xl border-border/60 focus:border-primary bg-card text-base"
                         {...field}
                         data-testid="input-link-redirect"
                       />
                     </FormControl>
-                    <FormDescription className="text-xs">{lk.formRedirectDesc}</FormDescription>
+                    <FormDescription className="text-sm">{lk.formRedirectDesc}</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -592,24 +592,24 @@ export default function LinkCreatePage() {
 
             {titleValue && (
               <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 flex items-start gap-3">
-                <div className="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center shrink-0 mt-0.5">
+                <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center shrink-0 mt-0.5">
                   <Eye className="w-4 h-4 text-primary" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-foreground truncate">{titleValue}</p>
-                  {descriptionValue && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{descriptionValue}</p>}
+                  <p className="text-base font-normal text-foreground truncate">{titleValue}</p>
+                  {descriptionValue && <p className="text-sm text-muted-foreground mt-0.5 line-clamp-1">{descriptionValue}</p>}
                   <div className="flex items-center gap-3 mt-2 flex-wrap">
                     {formattedAmount && (
-                      <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md">{formattedAmount}</span>
+                      <span className="text-sm font-medium text-primary bg-primary/10 px-2 py-1 rounded-lg">{formattedAmount}</span>
                     )}
                     {!isFixedAmount && (
-                      <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-md">{lk.freeAmount}</span>
+                      <span className="text-sm text-muted-foreground bg-muted px-2 py-1 rounded-lg">{lk.freeAmount}</span>
                     )}
                     {selectedCountries.length > 0 && (
-                      <span className="text-xs text-muted-foreground">{selectedCountries.length} {lk.countriesSelectedPlural}</span>
+                      <span className="text-sm text-muted-foreground">{selectedCountries.length} {lk.countriesSelectedPlural}</span>
                     )}
                     {imagePreview && (
-                      <span className="text-xs text-green-600 flex items-center gap-1">
+                      <span className="text-sm text-green-600 flex items-center gap-1">
                         <Check className="w-3 h-3" /> {lk.imageAdded}
                       </span>
                     )}
@@ -622,7 +622,7 @@ export default function LinkCreatePage() {
               <Button
                 type="button"
                 variant="outline"
-                className="flex-1 h-12 rounded-xl font-medium"
+                className="flex-1 h-12 rounded-2xl font-normal text-base"
                 onClick={() => navigate("/dashboard/links")}
                 data-testid="button-create-link-cancel"
               >
@@ -630,7 +630,7 @@ export default function LinkCreatePage() {
               </Button>
               <Button
                 type="submit"
-                className="flex-[2] h-12 rounded-xl font-semibold text-base gap-2"
+                className="flex-[2] h-12 rounded-2xl font-medium text-base gap-2"
                 disabled={createMutation.isPending}
                 data-testid="button-create-link-confirm"
               >
