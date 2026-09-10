@@ -74,11 +74,11 @@ export default function AdminPanelVerifyPage() {
       queryClient.setQueryData(["/api/admin/otp-status"], (old: any) => ({
         ...(old || {}),
         needsPanelVerify: undefined,
-        needsPanelPin: true,
+        needsPanelPin: undefined,
         verified: true,
       }));
       setCode("");
-      setStep("pin");
+      setLocation(ADMIN_URL);
     },
     onError: (err: any) => {
       setCode("");

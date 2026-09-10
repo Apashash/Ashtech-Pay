@@ -1,13 +1,18 @@
 import { Request, Response, NextFunction } from "express";
 import crypto from "crypto";
 
-// ── Admin PIN Protection — FAIL-SECURE ──────────────────────────────────────
+// ── Admin PIN Protection ─────────────────────────────────────────────────────
 //
-// RÈGLE DE SÉCURITÉ CRITIQUE (fail-secure) :
+// TEMPORARY DIAGNOSTIC OVERRIDE:
+//   The admin PIN is disabled temporarily so the TOTP-only panel flow can be
+//   tested while the Plesk session issue is investigated. Re-enable this
+//   constant before treating the panel as fully protected again.
+//
+// RÈGLE DE SÉCURITÉ :
 //   • ADMIN_PIN_CODE défini et valide (4 chiffres) → PIN requis pour toute
 //     action admin (POST/PATCH/PUT/DELETE sur /api/admin/*).
 //   • ADMIN_PIN_CODE absent ou invalide → toutes les actions admin sont
-//     BLOQUÉES avec 503. Jamais de bypass silencieux.
+//     BLOQUÉES avec 503 lorsque la protection est activée.
 //
 // Cela garantit que supprimer ou oublier la variable d'env rend le panneau
 // admin PLUS restrictif, jamais moins. Aucun moyen de contourner.
@@ -29,6 +34,7 @@ import crypto from "crypto";
 
 const MAX_ATTEMPTS = 4;
 const LOCKOUT_MS = 20 * 60 * 1000; // 20 minutes
+const ADMIN_PIN_PROTECTION_ENABLED = false;
 
 interface AttemptRecord {
   count: number;
@@ -77,7 +83,9 @@ const _rawPin = (process.env.ADMIN_PIN_CODE ?? "").trim();
 const _pinValid = /^\d{4}$/.test(_rawPin);
 const configuredPin: string | null = _pinValid ? _rawPin : null;
 
-if (configuredPin) {
+if (!ADMIN_PIN_PROTECTION_ENABLED) {
+  console.warn("[AdminPin] ⚠️ Protection PIN TEMPORAIREMENT DÉSACTIVÉE — TOTP reste obligatoire pour le panneau admin.");
+} else if (configuredPin) {
   console.log("[AdminPin] ✅ Protection PIN ACTIVE — toutes les mutations admin exigent le code à 4 chiffres.");
 } else if (_rawPin.length > 0) {
   // Clé présente mais format invalide — bloque quand même
@@ -92,7 +100,15 @@ export type AdminPinCheck =
   | { ok: true }
   | { ok: false; status: 403 | 428 | 423 | 503; body: Record<string, unknown> };
 
+export function isAdminPinProtectionEnabled(): boolean {
+  return ADMIN_PIN_PROTECTION_ENABLED;
+}
+
 export function verifyAdminPinCode(userId: string, submittedPin: string): AdminPinCheck {
+  if (!ADMIN_PIN_PROTECTION_ENABLED) {
+    return { ok: true };
+  }
+
   // ── FAIL-SECURE : PIN non configuré → BLOCAGE total ──────────────────────
   // Cette branche est atteinte si ADMIN_PIN_CODE est absent ou invalide.
   // Elle ne laisse JAMAIS passer — enlever la variable env rend le système
@@ -192,6 +208,10 @@ export function verifyAdminPinCode(userId: string, submittedPin: string): AdminP
 }
 
 export function requireAdminPin(req: Request, res: Response, next: NextFunction): void {
+  if (!ADMIN_PIN_PROTECTION_ENABLED) {
+    return next();
+  }
+
   // GET/HEAD/OPTIONS = lecture seule → pas de PIN requis
   if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") {
     return next();

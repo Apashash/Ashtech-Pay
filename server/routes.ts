@@ -65,7 +65,7 @@ import path from "path";
 import fs from "fs";
 import { uploadToSupabase, getSignedImageUrl, downloadFromSupabase, STORAGE_BUCKET } from "./supabase";
 import { decryptField, encryptField, isFieldEncryptionConfigured } from "./fieldEncryption";
-import { requireAdminPin, verifyAdminPinCode } from "./adminPin";
+import { isAdminPinProtectionEnabled, requireAdminPin, verifyAdminPinCode } from "./adminPin";
 import { createPaymentIntent, createDirectCharge, validateWebhook, getIziPayWebhookSecret, toIziPayCurrency, isIziPayConfigured } from "./izichange";
 import { fetchCryptoAssets, filterCryptoAssets, parseDisabledCryptoAssets, getStaticCryptoAssets } from "./cryptoAssets";
 import {
@@ -1335,12 +1335,13 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
     req.session._avsIp = adminIpEarly;
     adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: newAvsExp, ip: adminIpEarly });
 
-    // A valid login/panel TOTP is not enough to open the admin panel.
-    // The second gate is the server-side admin PIN, bound to the same IP.
+    // When enabled, the second gate is the server-side admin PIN, bound to
+    // the same IP. Diagnostic mode intentionally relies on panel TOTP only.
     const panelPinExp = req.session._ppv;
     const panelPinIp = req.session._ppvIp;
-    if (typeof panelPinExp !== "number" || panelPinExp <= Date.now() ||
-        !panelPinIp || normalizeLoopback(panelPinIp) !== normalizeLoopback(adminIpEarly)) {
+    if (isAdminPinProtectionEnabled() &&
+        (typeof panelPinExp !== "number" || panelPinExp <= Date.now() ||
+         !panelPinIp || normalizeLoopback(panelPinIp) !== normalizeLoopback(adminIpEarly))) {
       return res.status(403).json({
         message: "Code PIN admin requis pour accéder au panneau d'administration.",
         pinRequired: true,
@@ -3501,7 +3502,7 @@ export async function registerRoutes(
         req.session._avs = avsExpiresAt;
         req.session._avsIp = ip;
         // Do not grant panel access at login. The hidden panel button must
-        // trigger a fresh TOTP challenge followed by the admin PIN.
+        // trigger a fresh TOTP challenge, even while the PIN is disabled.
         delete req.session._pav;
         delete req.session._pavVerifiedAt;
         delete req.session._ppv;
@@ -9940,7 +9941,7 @@ export async function registerRoutes(
   const panelPinValid = typeof panelPinExp === "number" && panelPinExp > now &&
     typeof panelPinIp === "string" &&
     normalizeLoopback(panelPinIp) === normalizeLoopback(currentIp);
-  const needsPanelPin = verified && !panelPinValid;
+  const needsPanelPin = isAdminPinProtectionEnabled() && verified && !panelPinValid;
 
     res.json({
       verified,
@@ -9948,6 +9949,7 @@ export async function registerRoutes(
       needsPanelPin: needsPanelPin || undefined,
       totpEnabled: !!user.totpEnabled,
       enforcementEnabled: true,
+      pinEnabled: isAdminPinProtectionEnabled(),
     });
   });
 
