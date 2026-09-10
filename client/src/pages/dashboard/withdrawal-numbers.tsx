@@ -6,8 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { WithdrawalNumber, WithdrawalNumberChange } from "@shared/schema";
-import { Phone, Plus, Loader2, Edit, Trash2, Clock, CheckCircle2, XCircle, AlertCircle, ChevronLeft, ChevronRight, ArrowRight } from "lucide-react";
-import { Link } from "wouter";
+import { Phone, Plus, Loader2, Edit, Trash2, Clock, CheckCircle2, XCircle, AlertCircle, ChevronLeft, ChevronRight, ArrowRight, ArrowLeft } from "lucide-react";
+import { Link, useLocation } from "wouter";
 import { useLanguage } from "@/lib/language";
 
 const HISTORY_PAGE_SIZE = 5;
@@ -15,7 +15,16 @@ const HISTORY_PAGE_SIZE = 5;
 export default function WithdrawalNumbersPage() {
   const { toast } = useToast();
   const { t } = useLanguage();
+  const [, setLocation] = useLocation();
   const [historyPage, setHistoryPage] = useState(1);
+
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      setLocation("/dashboard");
+    }
+  };
 
   const { data: withdrawalNumbers = [], isLoading: numbersLoading } = useQuery<WithdrawalNumber[]>({
     queryKey: ["/api/withdrawal-numbers"],
@@ -114,9 +123,22 @@ export default function WithdrawalNumbersPage() {
     <DashboardLayout>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <div>
+          <div className="flex items-start gap-2 min-w-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="mt-0.5 h-9 w-9 shrink-0"
+              onClick={handleBack}
+              aria-label="Retour"
+              title="Retour"
+              data-testid="button-back-withdrawal-numbers"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <div className="min-w-0">
             <h1 className="text-xl font-semibold text-foreground">{t.withdrawalNumbers.title}</h1>
             <p className="text-muted-foreground">{t.withdrawalNumbers.subtitle}</p>
+            </div>
           </div>
           {withdrawalNumbers.length < 2 && (
             <Link href="/dashboard/withdrawal-numbers/add">
