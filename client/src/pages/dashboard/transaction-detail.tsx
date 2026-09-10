@@ -119,71 +119,53 @@ export default function TransactionDetailPage({ params }: { params: { id: string
   const isPaymentLink = tx.type === "payment_link";
 
   const amountPrefix = isConversion ? "⇄ " : (isIncoming ? "+" : "-");
-  const amountColor = isConversion
-    ? "text-blue-500"
-    : ["completed", "success", "succeeded"].includes(tx.status)
-      ? (isIncoming ? "text-green-500" : "text-red-500")
-      : tx.status === "pending" || tx.status === "pending_manual"
-        ? "text-amber-500"
-        : "text-muted-foreground";
-
   const isSuccessful = ["completed", "success", "succeeded"].includes(tx.status);
   const isPending = ["pending", "pending_manual"].includes(tx.status);
   const isFailed = ["failed", "cancelled", "rejected"].includes(tx.status);
   const statusTone = isSuccessful ? "success" : isPending ? "pending" : isFailed ? "failed" : null;
 
   const headerBg = statusTone === "success"
-    ? "from-green-500/15 to-green-500/5"
+    ? "bg-green-600"
     : statusTone === "pending"
-      ? "from-amber-500/15 to-amber-500/5"
+      ? "bg-amber-500"
       : statusTone === "failed"
-        ? "from-red-500/15 to-red-500/5"
+        ? "bg-red-600"
         : isConversion
-          ? "from-blue-500/10 to-blue-500/5"
+          ? "bg-blue-500"
           : isIncoming
-            ? "from-green-500/10 to-green-500/5"
-            : "from-red-500/10 to-red-500/5";
+            ? "bg-green-600"
+            : "bg-red-600";
 
   const iconBg = statusTone === "success"
-    ? "bg-green-500/20"
+    ? "bg-white/20"
     : statusTone === "pending"
-      ? "bg-amber-500/20"
+      ? "bg-white/20"
       : statusTone === "failed"
-        ? "bg-red-500/20"
+        ? "bg-white/20"
         : isConversion
-          ? "bg-blue-500/20"
+          ? "bg-white/20"
           : isIncoming
-            ? "bg-green-500/20"
-            : "bg-red-500/20";
+            ? "bg-white/20"
+            : "bg-white/20";
   const TxIcon = isConversion ? ArrowLeftRight : isPaymentLink ? Link2 : isIncoming ? TrendingUp : TrendingDown;
-  const iconColor = statusTone === "success"
-    ? "text-green-500"
-    : statusTone === "pending"
-      ? "text-amber-500"
-      : statusTone === "failed"
-        ? "text-red-500"
-        : isConversion
-          ? "text-blue-500"
-          : isIncoming
-            ? "text-green-500"
-            : "text-red-500";
+  const iconColor = "text-white";
 
   const statusBadge = () => {
     switch (tx.status) {
       case "completed":
       case "success":
       case "succeeded":
-        return <Badge className="bg-green-500/20 text-green-600 border-green-500/30">{td.detailStatusCompleted}</Badge>;
+        return <Badge className="bg-white/20 text-white border-white/30 font-semibold">{td.detailStatusCompleted}</Badge>;
       case "pending":
       case "pending_manual":
-        return <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/30">{td.detailStatusPending}</Badge>;
+        return <Badge className="bg-white/20 text-white border-white/30 font-semibold">{td.detailStatusPending}</Badge>;
       case "failed":
       case "rejected":
-        return <Badge className="bg-red-500/20 text-red-600 border-red-500/30">{td.detailStatusFailed}</Badge>;
+        return <Badge className="bg-white/20 text-white border-white/30 font-semibold">{td.detailStatusFailed}</Badge>;
       case "cancelled":
-        return <Badge className="bg-red-500/20 text-red-600 border-red-500/30">{td.detailStatusCancelled}</Badge>;
+        return <Badge className="bg-white/20 text-white border-white/30 font-semibold">{td.detailStatusCancelled}</Badge>;
       default:
-        return <Badge variant="secondary">{tx.status}</Badge>;
+        return <Badge className="bg-white/20 text-white border-white/30 font-semibold">{tx.status}</Badge>;
     }
   };
 
@@ -240,38 +222,41 @@ export default function TransactionDetailPage({ params }: { params: { id: string
         coinPriceUsdt: tx.metadata.coinPriceUsdt != null ? Number(tx.metadata.coinPriceUsdt) : null,
       }
     : null;
+  const headerAmountText = cryptoFeeDetails
+    ? `${amountPrefix}${cryptoFeeDetails.credited.toFixed(4)} USDT`
+    : `${amountPrefix}${formatCurrency(headerAmount, txCurrency)}`;
+  const headerAmountLength = headerAmountText.replace(/\s/g, "").length;
+  const headerAmountSize = headerAmountLength > 14 ? "text-2xl" : headerAmountLength > 11 ? "text-3xl" : "text-4xl";
 
   return (
     <DashboardLayout>
       <div className="max-w-lg mx-auto">
-        <div className={`relative rounded-2xl bg-gradient-to-b ${headerBg} p-5 mb-4`}>
+        <div className={`relative rounded-2xl ${headerBg} p-6 mb-4`}>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <div className={`w-9 h-9 rounded-full flex items-center justify-center ${iconBg}`}>
                 <TxIcon className={`w-5 h-5 ${iconColor}`} />
               </div>
-              <span className="font-semibold text-foreground text-sm">{typeLabels[tx.type] || tx.type}</span>
+              <span className="text-white/75 text-sm font-semibold">{typeLabels[tx.type] || tx.type}</span>
             </div>
             <button
               onClick={() => setLocation("/dashboard/transactions")}
-              className="w-8 h-8 rounded-full bg-muted/60 flex items-center justify-center hover:bg-muted transition-colors"
+              className="w-8 h-8 rounded-full bg-white/15 flex items-center justify-center hover:bg-white/25 transition-colors"
               data-testid="button-close-detail"
             >
-              <X className="w-4 h-4 text-muted-foreground" />
+              <X className="w-4 h-4 text-white/80" />
             </button>
           </div>
 
           <div className="text-center">
             {statusBadge()}
-            <p className={`text-4xl font-bold mt-2 ${amountColor}`}>
-              {cryptoFeeDetails
-                ? `${amountPrefix}${cryptoFeeDetails.credited.toFixed(4)} USDT`
-                : `${amountPrefix}${formatCurrency(headerAmount, txCurrency)}`}
+            <p className={`${headerAmountSize} font-bold leading-tight tracking-tight text-white whitespace-nowrap mt-2`}>
+              {headerAmountText}
             </p>
             {cryptoFeeDetails && cryptoAssetCode && (
-              <p className="text-xs text-amber-500 font-mono mt-0.5">{cryptoAssetCode}</p>
+              <p className="text-xs text-white/75 font-mono mt-0.5">{cryptoAssetCode}</p>
             )}
-            <p className="text-sm text-muted-foreground mt-1">
+            <p className="text-sm text-white/75 mt-1">
               {formatDate(tx.createdAt)}
             </p>
           </div>
