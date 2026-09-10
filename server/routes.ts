@@ -14104,22 +14104,44 @@ export async function registerRoutes(
         removePrivateKycUpload(selfiePath),
       ]);
 
-      // Private documents are intentionally not exposed through public URLs.
-      // Telegram still receives the submission metadata and admin actions.
-      notifyKycSubmittedFull({
-        submissionId: submission.id,
-        userName: kycSubmitter.fullName || kycSubmitter.username,
-        userEmail: kycSubmitter.email || "",
-        userId: kycSubmitter.id,
-        documentType,
-        documentNumber,
-        country: country || undefined,
-        city: city || undefined,
-        businessType,
-        businessCategory,
-        businessDescription,
-        photoUrls: { front: null, back: null, selfie: null },
-      }).catch(() => {});
+      // Private documents are read from encrypted storage and uploaded to
+      // Telegram as multipart files. No public URL is created or exposed.
+      void (async () => {
+        try {
+          const [frontBuffer, backBuffer, selfieBuffer, summaryPdfBuffer] = await Promise.all([
+            readPrivateKycDocument(privateBundle!.frontPath),
+            readPrivateKycDocument(privateBundle!.backPath),
+            readPrivateKycDocument(privateBundle!.selfiePath),
+            readPrivateKycDocument(privateBundle!.summaryPdfPath),
+          ]);
+
+          await notifyKycSubmittedFull({
+            submissionId: submission.id,
+            userName: kycSubmitter.fullName || kycSubmitter.username,
+            userEmail: kycSubmitter.email || "",
+            userId: kycSubmitter.id,
+            documentType,
+            documentNumber,
+            country: country || undefined,
+            city: city || undefined,
+            businessType,
+            businessCategory,
+            businessDescription,
+            photoFiles: {
+              front: { buffer: frontBuffer, contentType: "image/jpeg", fileName: "kyc-recto.jpg" },
+              back: { buffer: backBuffer, contentType: "image/jpeg", fileName: "kyc-verso.jpg" },
+              selfie: { buffer: selfieBuffer, contentType: "image/jpeg", fileName: "kyc-selfie.jpg" },
+            },
+            summaryPdf: {
+              buffer: summaryPdfBuffer,
+              contentType: "application/pdf",
+              fileName: "dossier-kyc.pdf",
+            },
+          });
+        } catch (telegramError: any) {
+          console.error("[Telegram] KYC files notification failed:", telegramError?.message || telegramError);
+        }
+      })();
 
       res.json(submission);
     } catch (error) {

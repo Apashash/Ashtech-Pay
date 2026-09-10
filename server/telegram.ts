@@ -71,6 +71,70 @@ async function sendPhoto(photoUrl: string, caption?: string): Promise<void> {
   });
 }
 
+export type TelegramKycFile = {
+  buffer: Buffer;
+  contentType: string;
+  fileName: string;
+};
+
+async function sendPhotoBuffer(photo: TelegramKycFile, caption?: string): Promise<void> {
+  if (!isConfigured() || !BOT_API) return;
+
+  try {
+    const form = new FormData();
+    form.append("chat_id", CHAT_ID!);
+    form.append(
+      "photo",
+      new Blob([new Uint8Array(photo.buffer)], { type: photo.contentType }),
+      photo.fileName,
+    );
+    if (caption) {
+      form.append("caption", caption);
+      form.append("parse_mode", "HTML");
+    }
+
+    const response = await fetch(`${BOT_API}/sendPhoto`, {
+      method: "POST",
+      body: form,
+    });
+    const result = await response.json();
+    if (!result.ok) {
+      console.error("[Telegram] sendPhoto (KYC) réponse d'erreur:", JSON.stringify(result));
+    }
+  } catch (error: any) {
+    console.error("[Telegram] sendPhoto (KYC) exception:", error?.message || error);
+  }
+}
+
+async function sendDocumentBuffer(document: TelegramKycFile, caption?: string): Promise<void> {
+  if (!isConfigured() || !BOT_API) return;
+
+  try {
+    const form = new FormData();
+    form.append("chat_id", CHAT_ID!);
+    form.append(
+      "document",
+      new Blob([new Uint8Array(document.buffer)], { type: document.contentType }),
+      document.fileName,
+    );
+    if (caption) {
+      form.append("caption", caption);
+      form.append("parse_mode", "HTML");
+    }
+
+    const response = await fetch(`${BOT_API}/sendDocument`, {
+      method: "POST",
+      body: form,
+    });
+    const result = await response.json();
+    if (!result.ok) {
+      console.error("[Telegram] sendDocument (KYC) réponse d'erreur:", JSON.stringify(result));
+    }
+  } catch (error: any) {
+    console.error("[Telegram] sendDocument (KYC) exception:", error?.message || error);
+  }
+}
+
 async function sendWithBanner(
   chatId: string,
   bannerType: string,
@@ -1236,11 +1300,17 @@ export async function notifyKycSubmittedFull(opts: {
   businessType: string;
   businessCategory: string;
   businessDescription: string;
-  photoUrls: {
+  photoUrls?: {
     front: string | null;
     back: string | null;
     selfie: string | null;
   };
+  photoFiles?: {
+    front: TelegramKycFile;
+    back: TelegramKycFile;
+    selfie: TelegramKycFile;
+  };
+  summaryPdf?: TelegramKycFile;
 }): Promise<void> {
   if (!isConfigured()) return;
 
@@ -1264,15 +1334,25 @@ export async function notifyKycSubmittedFull(opts: {
     ngo: "🌍 ONG",
   };
 
-  // 1. Send photos
-  if (opts.photoUrls.front) {
-    await sendPhoto(opts.photoUrls.front, "📄 <b>Document — Recto</b>");
+  // 1. Send private KYC files directly as multipart uploads.
+  // They are encrypted in MySQL and must not be exposed through public URLs.
+  if (opts.photoFiles) {
+    await sendPhotoBuffer(opts.photoFiles.front, "📄 <b>Document — Recto</b>");
+    await sendPhotoBuffer(opts.photoFiles.back, "📄 <b>Document — Verso</b>");
+    await sendPhotoBuffer(opts.photoFiles.selfie, "🤳 <b>Selfie avec document</b>");
+  } else {
+    if (opts.photoUrls?.front) {
+      await sendPhoto(opts.photoUrls.front, "📄 <b>Document — Recto</b>");
+    }
+    if (opts.photoUrls?.back) {
+      await sendPhoto(opts.photoUrls.back, "📄 <b>Document — Verso</b>");
+    }
+    if (opts.photoUrls?.selfie) {
+      await sendPhoto(opts.photoUrls.selfie, "🤳 <b>Selfie avec document</b>");
+    }
   }
-  if (opts.photoUrls.back) {
-    await sendPhoto(opts.photoUrls.back, "📄 <b>Document — Verso</b>");
-  }
-  if (opts.photoUrls.selfie) {
-    await sendPhoto(opts.photoUrls.selfie, "🤳 <b>Selfie avec document</b>");
+  if (opts.summaryPdf) {
+    await sendDocumentBuffer(opts.summaryPdf, "📑 <b>Dossier KYC PDF</b>");
   }
 
   // 2. Info message + inline keyboard
