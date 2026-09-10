@@ -389,17 +389,27 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function StatCard({ title, value, icon: Icon, trend, color }: {
+function StatCard({ title, value, icon: Icon, imageSrc, trend, color }: {
   title: string;
   value: string | number;
   icon: React.ElementType;
+  imageSrc?: string;
   trend?: string;
   color: string;
 }) {
   return (
     <div className="rounded-2xl border border-border/70 bg-card p-4 flex items-center gap-4 shadow-sm">
       <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${color}`}>
-        <Icon className="w-5 h-5" />
+        {imageSrc ? (
+          <img
+            src={imageSrc}
+            alt=""
+            aria-hidden="true"
+            className="h-10 w-10 object-contain drop-shadow-[0_3px_3px_rgba(0,0,0,0.14)]"
+          />
+        ) : (
+          <Icon className="w-5 h-5" />
+        )}
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-base font-normal text-foreground">{title}</p>
@@ -1320,6 +1330,7 @@ export default function PaymentLinksPage() {
             title={t.links.statClicks} 
             value={analytics.clicks.toLocaleString('fr-FR')} 
             icon={MousePointer} 
+            imageSrc="/dashboard-icons/stat-clicks.png"
             trend={t.links.trendVsPrevious}
             color="bg-blue-500/10 text-blue-500"
           />
@@ -1327,6 +1338,7 @@ export default function PaymentLinksPage() {
             title={t.links.statTransactions} 
             value={analytics.transactions} 
             icon={ArrowDownUp} 
+            imageSrc="/dashboard-icons/stat-transactions.png"
             trend={t.links.trendTransactions}
             color="bg-green-500/10 text-green-500"
           />
@@ -1334,12 +1346,14 @@ export default function PaymentLinksPage() {
             title={t.links.statCollected} 
             value={formatCurrency(analytics.totalCollected, (user?.preferredCurrency || "XAF") as SupportedCurrency)} 
             icon={Wallet} 
+            imageSrc="/dashboard-icons/stat-collected.png"
             color="bg-primary/10 text-primary"
           />
           <StatCard 
             title={t.links.statConversion} 
             value={analytics.clicks > 0 ? `${((analytics.transactions / analytics.clicks) * 100).toFixed(1)}%` : "0%"}
             icon={TrendingUp} 
+            imageSrc="/dashboard-icons/stat-active-links.png"
             color="bg-purple-500/10 text-purple-500"
           />
         </div>
