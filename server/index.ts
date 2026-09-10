@@ -48,6 +48,10 @@ const isProd = process.env.NODE_ENV === "production";
 let startupReady = false;
 let startupFailure: string | null = null;
 let migrationsReady = false;
+// Bump this value whenever the idempotent migration block below gains a new
+// schema change. Completed versions are stored in platform_settings so a
+// normal Passenger restart does not repeat every ALTER TABLE/CREATE INDEX.
+const SCHEMA_MIGRATION_VERSION = "2026-09-10-boot-v1";
 
 // ── Gestionnaires d'erreurs globaux ──────────────────────────────────────────
 // unhandledRejection: log + continue — safe, these are async promise failures.
@@ -420,6 +424,23 @@ app.use((req, res, next) => {
   // Run this in the background. Plesk/nginx commonly times out before the
   // complete idempotent migration set finishes on a cold restart.
   const migrationPromise = (async () => {
+  try {
+    const marker = await db.execute(sql`
+      SELECT value
+      FROM platform_settings
+      WHERE key = 'schema_migration_version'
+      LIMIT 1
+    `);
+    const markerValue = (marker as any).rows?.[0]?.value;
+    if (markerValue === SCHEMA_MIGRATION_VERSION) {
+      console.log(`[Migration] Schema already current (${SCHEMA_MIGRATION_VERSION})`);
+      return;
+    }
+  } catch {
+    // Older installations may not have platform_settings yet. Run the full
+    // migration set and let its existing CREATE TABLE statements repair it.
+  }
+
   try {
     await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS api_key TEXT UNIQUE`);
     await db.execute(sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS notify_url TEXT`);
@@ -940,6 +961,15 @@ app.use((req, res, next) => {
     } catch (mErr: any) {
       console.warn("[Migration] Togo normalization warning:", mErr?.message);
     }
+
+    await db.execute(sql`
+      INSERT INTO platform_settings (id, key, value, description, updated_at)
+      VALUES (gen_random_uuid(), 'schema_migration_version', ${SCHEMA_MIGRATION_VERSION},
+              'Last completed application schema migration version', NOW())
+      ON CONFLICT (key) DO UPDATE
+      SET value = EXCLUDED.value, description = EXCLUDED.description, updated_at = NOW()
+    `);
+    console.log(`[Migration] Schema migration marker saved (${SCHEMA_MIGRATION_VERSION})`);
   } catch (err: any) {
     if (!err?.message?.includes("already exists")) {
       console.warn("[Migration] warning:", err?.message);
