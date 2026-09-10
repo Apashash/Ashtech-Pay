@@ -730,10 +730,10 @@ export default function DashboardHome() {
                     );
                   })()}
                   {secondaryWallets.length > 0 && (
-                    <div className="grid grid-cols-2 gap-2 mt-3">
+                    <div className="grid w-full grid-cols-2 gap-4 mt-4">
                       {secondaryWallets.map((wallet) => (
-                        <div key={wallet.currency} className="rounded-lg border border-primary/10 bg-background/40 px-2.5 py-2">
-                          <p className="text-xs font-bold text-foreground">
+                        <div key={wallet.currency} className="w-full min-w-0 rounded-lg border border-primary/10 bg-background/40 px-3 py-2.5">
+                          <p className="text-sm font-bold text-foreground whitespace-nowrap">
                             {formatDashboardWalletBalance(wallet.balance, wallet.currency)}
                           </p>
                         </div>
