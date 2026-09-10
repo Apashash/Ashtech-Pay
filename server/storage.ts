@@ -2460,6 +2460,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateKycSubmission(id: string, updates: Partial<KycSubmission>): Promise<KycSubmission | undefined> {
+    if (isMysqlDialect) {
+      return mysqlUpdateAndRead(
+        kycSubmissions,
+        eq(kycSubmissions.id, id),
+        { ...updates, updatedAt: new Date() },
+        () => this.getKycSubmissionById(id),
+      );
+    }
     const [updated] = await db.update(kycSubmissions).set({ ...updates, updatedAt: new Date() }).where(eq(kycSubmissions.id, id)).returning();
     return updated || undefined;
   }
@@ -2503,6 +2511,14 @@ export class DatabaseStorage implements IStorage {
     // Try full update (with reviewer fields). Fall back to status-only if columns
     // don't exist yet on older production deployments.
     try {
+      if (isMysqlDialect) {
+        return mysqlUpdateAndRead(
+          kycSubmissions,
+          eq(kycSubmissions.id, id),
+          { status: "approved", reviewerId, reviewNote: note, reviewedAt: new Date(), updatedAt: new Date() },
+          () => this.getKycSubmissionById(id),
+        );
+      }
       const [updated] = await db.update(kycSubmissions)
         .set({ status: "approved", reviewerId, reviewNote: note, reviewedAt: new Date(), updatedAt: new Date() })
         .where(eq(kycSubmissions.id, id))
@@ -2510,6 +2526,14 @@ export class DatabaseStorage implements IStorage {
       return updated;
     } catch (e) {
       console.error("[KYC approve] Full update failed — falling back to status-only update:", e);
+      if (isMysqlDialect) {
+        return mysqlUpdateAndRead(
+          kycSubmissions,
+          eq(kycSubmissions.id, id),
+          { status: "approved" },
+          () => this.getKycSubmissionById(id),
+        );
+      }
       const [updated] = await db.update(kycSubmissions)
         .set({ status: "approved" })
         .where(eq(kycSubmissions.id, id))
@@ -2526,6 +2550,14 @@ export class DatabaseStorage implements IStorage {
 
     // Try full update. Fall back to status-only if columns don't exist yet.
     try {
+      if (isMysqlDialect) {
+        return mysqlUpdateAndRead(
+          kycSubmissions,
+          eq(kycSubmissions.id, id),
+          { status: "rejected", reviewerId, reviewNote: note, reviewedAt: new Date(), updatedAt: new Date() },
+          () => this.getKycSubmissionById(id),
+        );
+      }
       const [updated] = await db.update(kycSubmissions)
         .set({ status: "rejected", reviewerId, reviewNote: note, reviewedAt: new Date(), updatedAt: new Date() })
         .where(eq(kycSubmissions.id, id))
@@ -2533,6 +2565,14 @@ export class DatabaseStorage implements IStorage {
       return updated;
     } catch (e) {
       console.error("[KYC reject] Full update failed — falling back to status-only update:", e);
+      if (isMysqlDialect) {
+        return mysqlUpdateAndRead(
+          kycSubmissions,
+          eq(kycSubmissions.id, id),
+          { status: "rejected" },
+          () => this.getKycSubmissionById(id),
+        );
+      }
       const [updated] = await db.update(kycSubmissions)
         .set({ status: "rejected" })
         .where(eq(kycSubmissions.id, id))
