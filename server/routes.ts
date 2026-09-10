@@ -9950,6 +9950,14 @@ export async function registerRoutes(
     if (!user || !["admin"].includes(user.role)) {
       return res.status(403).json({ message: "Accès refusé" });
     }
+    if (!ADMIN_TOTP_ENFORCEMENT_ENABLED) {
+      return res.json({
+        verified: true,
+        totpEnabled: !!user.totpEnabled,
+        enforcementEnabled: false,
+        pinEnabled: false,
+      });
+    }
     const now = Date.now();
     // Keyed by sessionID — each browser login is independently verified
     const memEntry = adminVerifiedSessions.get(req.sessionID);

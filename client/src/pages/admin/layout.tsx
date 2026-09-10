@@ -169,6 +169,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     verified: boolean;
     needsPanelVerify?: boolean;
     needsPanelPin?: boolean;
+    enforcementEnabled?: boolean;
   }>({
     queryKey: ["/api/admin/otp-status"],
     retry: false,
@@ -326,6 +327,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
 
   useEffect(() => {
     if (isLoading || panelAccessLoading || panelAccessFetching || !user || user.role !== "admin") return;
+    if (panelAccess?.enforcementEnabled === false) return;
     if (!panelAccess?.verified || panelAccess.needsPanelVerify || panelAccess.needsPanelPin) {
       setLocation("/admin-panel-verify");
     }
