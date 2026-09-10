@@ -2390,6 +2390,16 @@ export async function registerRoutes(
       // Also accept _apl (admin pending login) set during mid-login OTP step
       const sessionAdminPending = (req.session as any)?._apl;
       if (!req.userId && !sessionAdminPending) {
+        // A full-page refresh cannot send the Bearer token stored in
+        // localStorage: the browser must first receive this HTML shell before
+        // the client can attach Authorization to API requests. Keep the
+        // route hidden from non-document probes, while allowing the shell to
+        // load so the client-side auth guard can validate the real session.
+        const accept = String(req.headers.accept || "").toLowerCase();
+        const isHtmlDocumentRequest =
+          req.method === "GET" &&
+          (accept.includes("text/html") || accept.includes("application/xhtml+xml"));
+        if (isHtmlDocumentRequest) return next();
         return sendClean404(res);
       }
       if (req.userId) {
