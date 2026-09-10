@@ -76,9 +76,31 @@ rollback :
 SUPABASE_DATABASE_URL=...
 ```
 
-L'application ne doit pas basculer sur MySQL avant que les requêtes PostgreSQL,
-les sessions, les transactions financières, les index, les triggers de sécurité
-et les fichiers Storage aient été adaptés et testés.
+Le mode MySQL est explicitement activé avec :
+
+```text
+DB_DIALECT=mysql
+MYSQL_DATABASE_URL=...
+SUPABASE_DATABASE_URL=...
+```
+
+Sans `DB_DIALECT=mysql`, PostgreSQL reste la source active. En mode MySQL,
+l'application ne lance pas les migrations PostgreSQL au démarrage et conserve
+le watchdog PL/pgSQL désactivé. La table `session` est créée idempotemment par
+le store MySQL. Les tables métier doivent déjà provenir de l'import vérifié ;
+le démarrage ne doit jamais tenter une traduction destructive improvisée.
+
+Le chemin de rollback est donc réversible :
+
+1. remettre `DB_DIALECT=postgres` ;
+2. conserver `SUPABASE_DATABASE_URL` ;
+3. redémarrer l'application ;
+4. vérifier les compteurs et les écritures sur Supabase.
+
+Les requêtes SQL PostgreSQL restantes doivent être traitées avant d'utiliser
+MySQL pour les écritures financières en production. Les chemins déjà adaptés
+incluent le schéma Drizzle isolé, les pools, les sessions, le nettoyage de
+rétention et la file de webhooks.
 
 ## 4. Points à valider avant le basculement
 

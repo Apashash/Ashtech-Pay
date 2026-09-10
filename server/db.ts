@@ -1,18 +1,27 @@
-import { drizzle } from "drizzle-orm/node-postgres";
+import { drizzle as drizzlePg } from "drizzle-orm/node-postgres";
+import { drizzle as drizzleMysql } from "drizzle-orm/mysql2";
 import pg from "pg";
-import * as schema from "@shared/schema";
+import mysql from "mysql2/promise";
+import * as pgSchema from "@shared/schema";
+import * as mysqlSchema from "@shared/schema.mysql";
 
 const { Pool } = pg;
 
-// Prefer SUPABASE_DB_URL (pooler URL, editable env var) > SUPABASE_DATABASE_URL (secret) > Replit local DB
-const databaseUrl = process.env.SUPABASE_DB_URL || process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
+const useMysql = process.env.DB_DIALECT?.toLowerCase() === "mysql";
+// MySQL is opt-in and never falls back to a PostgreSQL URL. This prevents a
+// mistyped migration setting from sending a MySQL client to Supabase.
+const databaseUrl = useMysql
+  ? process.env.MYSQL_DATABASE_URL || process.env.MYSQL_URL
+  : process.env.SUPABASE_DB_URL || process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
 
 // Log which DB source is used at startup (override the one below)
-const _dbSource = process.env.SUPABASE_DB_URL ? "SUPABASE_DB_URL" : process.env.SUPABASE_DATABASE_URL ? "SUPABASE_DATABASE_URL" : "DATABASE_URL";
+const _dbSource = useMysql
+  ? (process.env.MYSQL_DATABASE_URL ? "MYSQL_DATABASE_URL" : process.env.MYSQL_URL ? "MYSQL_URL" : "missing")
+  : process.env.SUPABASE_DB_URL ? "SUPABASE_DB_URL" : process.env.SUPABASE_DATABASE_URL ? "SUPABASE_DATABASE_URL" : "DATABASE_URL";
 
 if (!databaseUrl) {
   throw new Error(
-    "DATABASE_URL must be set.",
+    useMysql ? "MYSQL_DATABASE_URL or MYSQL_URL must be set when DB_DIALECT=mysql." : "DATABASE_URL must be set.",
   );
 }
 
@@ -67,7 +76,52 @@ const APP_DB_NAME = "ashtech_secure_app";
 // — no prepared statements. We detect pooler by hostname and set allowExitOnIdle.
 const isPooler = (databaseUrl || "").includes("pooler.supabase.com");
 
-export const pool = new Pool({
+type CompatibleQueryResult = { rows: any[]; rowCount: number; fields?: any[] };
+type CompatiblePool = {
+  query: (...args: any[]) => Promise<CompatibleQueryResult>;
+  totalCount: number;
+  idleCount: number;
+  waitingCount: number;
+  on: (event: string, listener: (err: any) => void) => void;
+  end?: () => Promise<void>;
+};
+
+function normalizeMysqlQuery(query: string, values: any[] = []): { text: string; values: any[] } {
+  const ordered: any[] = [];
+  const text = query.replace(/\$(\d+)/g, (_match, index: string) => {
+    ordered.push(values[Number(index) - 1]);
+    return "?";
+  });
+  return { text, values: ordered.length ? ordered : values };
+}
+
+function createMysqlCompatiblePool(url: string, connectionLimit: number): CompatiblePool {
+  const rawPool = mysql.createPool({
+    uri: url,
+    connectionLimit,
+    waitForConnections: true,
+    queueLimit: 0,
+    enableKeepAlive: true,
+  });
+  const wrapper: CompatiblePool = {
+    async query(queryOrConfig: any, values?: any[]): Promise<CompatibleQueryResult> {
+      const query = typeof queryOrConfig === "string" ? queryOrConfig : queryOrConfig.text;
+      const params = values ?? (typeof queryOrConfig === "string" ? [] : queryOrConfig.values ?? []);
+      const normalized = normalizeMysqlQuery(query, params);
+      const [rows, fields] = await rawPool.query(normalized.text, normalized.values);
+      const rowArray = Array.isArray(rows) ? rows as any[] : [];
+      return { rows: rowArray, rowCount: rowArray.length, fields: fields as any[] };
+    },
+    get totalCount() { return connectionLimit; },
+    get idleCount() { return connectionLimit; },
+    get waitingCount() { return 0; },
+    on() { /* mysql2 pool errors are surfaced by query() */ },
+    async end() { await rawPool.end(); },
+  };
+  return wrapper;
+}
+
+const pgPool = useMysql ? null : new Pool({
   connectionString: addAppName(databaseUrl, APP_DB_NAME),
   ssl: sslConfig,
   max: MAIN_POOL_MAX,
@@ -76,6 +130,17 @@ export const pool = new Pool({
   // Disable prepared statements for pgBouncer Transaction mode
   ...(isPooler ? { statement_timeout: 0 } : {}),
 });
+const mysqlPool = useMysql ? mysql.createPool({
+  uri: databaseUrl,
+  connectionLimit: MAIN_POOL_MAX,
+  waitForConnections: true,
+  queueLimit: 0,
+  enableKeepAlive: true,
+}) : null;
+
+export const pool: any = useMysql
+  ? createMysqlCompatiblePool(databaseUrl, MAIN_POOL_MAX)
+  : pgPool;
 
 // ── Error tracking per pool (for /api/admin/pool-status diagnostic) ─────────
 export const poolStats = {
@@ -97,25 +162,31 @@ export const poolStats = {
   },
 };
 
-pool.on("error", (err) => {
+pool.on("error", (err: any) => {
   console.error("[DB] Pool error (main):", err.message);
   poolStats.main.errors++;
   poolStats.main.lastError = err.message;
   poolStats.main.lastErrorAt = Date.now();
 });
 
-export const db = drizzle(pool, { schema });
+export const db: ReturnType<typeof drizzlePg> = (useMysql
+  ? drizzleMysql(mysqlPool as any, { schema: mysqlSchema, mode: "default" })
+  : drizzlePg(pgPool as any, { schema: pgSchema })) as any;
 
-const sessionDatabaseUrl = process.env.DIRECT_DATABASE_URL || databaseUrl;
-export const sessionPool = new Pool({
-  connectionString: sessionDatabaseUrl,
-  ssl: sslConfig,
-  max: SESSION_POOL_MAX,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
-});
+const sessionDatabaseUrl = useMysql
+  ? databaseUrl
+  : process.env.DIRECT_DATABASE_URL || databaseUrl;
+export const sessionPool: any = useMysql
+  ? createMysqlCompatiblePool(sessionDatabaseUrl, SESSION_POOL_MAX)
+  : new Pool({
+      connectionString: sessionDatabaseUrl,
+      ssl: sslConfig,
+      max: SESSION_POOL_MAX,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 5000,
+    });
 
-sessionPool.on("error", (err) => {
+sessionPool.on("error", (err: any) => {
   console.error("[DB] Pool error (session):", err.message);
   poolStats.session.errors++;
   poolStats.session.lastError = err.message;
@@ -125,6 +196,6 @@ sessionPool.on("error", (err) => {
 // Test connection at startup
 pool.query("SELECT 1").then(() => {
   console.log("[DB] Main pool connection OK");
-}).catch((err) => {
+}).catch((err: any) => {
   console.error("[DB] CRITICAL: Main pool connection FAILED:", err.message);
 });

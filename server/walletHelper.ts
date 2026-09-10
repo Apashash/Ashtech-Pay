@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { storage } from "./storage";
-import { ALL_FX_CURRENCIES } from "@shared/schema";
+import { ALL_FX_CURRENCIES } from "@shared/schema-runtime";
 import { notifyConversionStarted } from "./telegram";
 
 // CFA franc currencies — XAF, XOF, and country-specific wallet variants

@@ -41,6 +41,7 @@ import { encryptField, hmacField } from "./fieldEncryption";
 const app = express();
 const httpServer = createServer(app);
 const isProd = process.env.NODE_ENV === "production";
+const isMysqlDialect = process.env.DB_DIALECT?.toLowerCase() === "mysql";
 
 // Passenger considers the application failed when no port is opened during
 // long migrations or route initialization. Keep the process reachable while
@@ -412,6 +413,7 @@ app.use((req, res, next) => {
   const { startCleanupScheduler } = await import("./cleanup");
   const { startDailyReportScheduler } = await import("./dailyReport");
   const { hydrateIpBlocker } = await import("./ipBlocker");
+  const { ensureMysqlAuxiliarySchema } = await import("./mysqlBootstrap");
   const {
     createDbAuditTriggers,
     installGuardTrigger,
@@ -424,6 +426,15 @@ app.use((req, res, next) => {
   // Run this in the background. Plesk/nginx commonly times out before the
   // complete idempotent migration set finishes on a cold restart.
   const migrationPromise = (async () => {
+  if (isMysqlDialect) {
+    // The long migration block below is PostgreSQL-specific (JSONB, partial
+    // indexes, ON CONFLICT, RETURNING and PL/pgSQL helpers). MySQL data must
+    // arrive through the verified export/import procedure instead of being
+    // mutated by an unsafe best-effort translation at boot.
+    await ensureMysqlAuxiliarySchema();
+    console.log("[Migration] DB_DIALECT=mysql — PostgreSQL boot migrations skipped; using imported MySQL schema");
+    return;
+  }
   try {
     const marker = await db.execute(sql`
       SELECT value
@@ -1047,7 +1058,7 @@ app.use((req, res, next) => {
     hydrateBotBans().catch(err =>
       console.error("[BotGuard] Hydration error:", err)
     );
-    startDbWatchdog();
+    if (!isMysqlDialect) startDbWatchdog();
   };
 
   startupReady = true;

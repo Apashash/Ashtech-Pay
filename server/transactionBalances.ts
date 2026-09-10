@@ -1,4 +1,4 @@
-import type { Transaction, Wallet } from "@shared/schema";
+import type { Transaction, Wallet } from "@shared/schema-runtime";
 
 export interface TransactionBalanceSnapshot {
   balanceCurrency: string;

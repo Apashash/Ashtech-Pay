@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import webpush from "web-push";
 import { db } from "./db";
-import { pushSubscriptions, transactions, type PushSubscription } from "@shared/schema";
+import { pushSubscriptions, transactions, type PushSubscription } from "@shared/schema-runtime";
 import { decryptField } from "./fieldEncryption";
 import { eq } from "drizzle-orm";
 

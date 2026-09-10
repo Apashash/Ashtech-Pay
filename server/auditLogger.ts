@@ -11,7 +11,7 @@
  */
 
 import { db } from "./db";
-import { auditLogs } from "@shared/schema";
+import { auditLogs } from "@shared/schema-runtime";
 import { notifyAuditEvent } from "./telegram";
 import type { Request } from "express";
 

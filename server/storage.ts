@@ -79,7 +79,7 @@ import {
   autoConversionRules,
   type AutoConversionRule,
   type InsertAutoConversionRule,
-} from "@shared/schema";
+} from "@shared/schema-runtime";
 import { db } from "./db";
 import { eq, desc, sql, and, or, like, ilike, count, inArray, gt, gte, lt, lte } from "drizzle-orm";
 

@@ -1,13 +1,19 @@
 import crypto from "crypto";
-import { db } from "./db";
+import { randomUUID } from "node:crypto";
+import { db, pool } from "./db";
 import { storage } from "./storage";
 import { decryptField, encryptField, isFieldEncryptionConfigured } from "./fieldEncryption";
-import type { Transaction } from "@shared/schema";
+import type { Transaction } from "@shared/schema-runtime";
 import { sql } from "drizzle-orm";
 
 type FinalStatus = "completed" | "failed";
 
 let workerStarted = false;
+const isMysql = process.env.DB_DIALECT?.toLowerCase() === "mysql";
+
+async function mysqlQuery(text: string, values: unknown[] = []) {
+  return pool.query(text, values);
+}
 
 export function isSafeMerchantWebhookUrl(rawUrl: string): boolean {
   let parsed: URL;
@@ -83,6 +89,21 @@ export async function enqueueMerchantWebhook(
 
   const payload = buildPayload(transaction, finalStatus, notifyUrl);
   delete (payload as any)._notify_url;
+  if (isMysql) {
+    await mysqlQuery(
+      `INSERT IGNORE INTO merchant_webhook_deliveries
+        (id, merchant_id, transaction_id, event, notify_url, payload)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [randomUUID(), transaction.userId, transaction.id, payload.event, notifyUrl, JSON.stringify(payload)],
+    );
+    const inserted = await mysqlQuery(
+      `SELECT id FROM merchant_webhook_deliveries WHERE transaction_id = ? AND event = ? LIMIT 1`,
+      [transaction.id, payload.event],
+    );
+    const deliveryId = inserted.rows[0]?.id;
+    if (deliveryId) await deliverMerchantWebhook(String(deliveryId));
+    return;
+  }
   const inserted = await db.execute(sql`
     INSERT INTO merchant_webhook_deliveries
       (merchant_id, transaction_id, event, notify_url, payload)
@@ -97,6 +118,28 @@ export async function enqueueMerchantWebhook(
 }
 
 async function deliverMerchantWebhook(deliveryId: string): Promise<void> {
+  if (isMysql) {
+    const claim = await mysqlQuery(
+      `UPDATE merchant_webhook_deliveries
+       SET status = 'delivering',
+           attempts = attempts + 1,
+           next_attempt_at = DATE_ADD(NOW(), INTERVAL 5 MINUTE)
+       WHERE id = ?
+         AND status IN ('pending', 'delivering')
+         AND delivered_at IS NULL
+         AND next_attempt_at <= NOW()`,
+      [deliveryId],
+    );
+    if (claim.rowCount === 0) return;
+    const claimed = await mysqlQuery(
+      `SELECT * FROM merchant_webhook_deliveries WHERE id = ? AND status = 'delivering' LIMIT 1`,
+      [deliveryId],
+    );
+    const delivery = claimed.rows[0] as any;
+    if (!delivery) return;
+    await deliverClaimedMerchantWebhook(delivery);
+    return;
+  }
   const claimed = await db.execute(sql`
     UPDATE merchant_webhook_deliveries
     SET status = 'delivering',
@@ -110,7 +153,11 @@ async function deliverMerchantWebhook(deliveryId: string): Promise<void> {
   `);
   const delivery = claimed.rows[0] as any;
   if (!delivery) return;
+  await deliverClaimedMerchantWebhook(delivery);
+}
 
+async function deliverClaimedMerchantWebhook(delivery: any): Promise<void> {
+  const deliveryId = String(delivery.id);
   const merchant = delivery.merchant_id ? await storage.getUser(delivery.merchant_id) : undefined;
   if (!isFieldEncryptionConfigured()) {
     await markRetry(deliveryId, "field encryption is not configured", 900);
@@ -147,7 +194,14 @@ async function deliverMerchantWebhook(deliveryId: string): Promise<void> {
       signal: controller.signal,
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    await db.execute(sql`
+    if (isMysql) {
+      await mysqlQuery(
+        `UPDATE merchant_webhook_deliveries
+         SET status = 'delivered', delivered_at = NOW(), last_error = NULL
+         WHERE id = ?`,
+        [deliveryId],
+      );
+    } else await db.execute(sql`
       UPDATE merchant_webhook_deliveries
       SET status = 'delivered', delivered_at = NOW(), last_error = NULL
       WHERE id = ${deliveryId}
@@ -159,7 +213,16 @@ async function deliverMerchantWebhook(deliveryId: string): Promise<void> {
     const maxAttempts = 8;
     const permanentlyFailed = attempts >= maxAttempts;
     const delaySeconds = Math.min(3600, Math.max(30, 30 * 2 ** Math.min(attempts - 1, 6)));
-    await db.execute(sql`
+    if (isMysql) {
+      const retryState = permanentlyFailed ? "failed" : "pending";
+      const retryDelay = permanentlyFailed ? 900 : delaySeconds;
+      await mysqlQuery(
+        `UPDATE merchant_webhook_deliveries
+         SET status = ?, last_error = ?, next_attempt_at = DATE_ADD(NOW(), INTERVAL ${retryDelay} SECOND)
+         WHERE id = ?`,
+        [retryState, message, deliveryId],
+      );
+    } else await db.execute(sql`
       UPDATE merchant_webhook_deliveries
       SET status = ${permanentlyFailed ? "failed" : "pending"},
           last_error = ${message},
@@ -176,7 +239,16 @@ async function deliverMerchantWebhook(deliveryId: string): Promise<void> {
 }
 
 async function markRetry(deliveryId: string, message: string, delaySeconds: number): Promise<void> {
-  await db.execute(sql`
+  if (isMysql) {
+    await mysqlQuery(
+      `UPDATE merchant_webhook_deliveries
+       SET status = 'pending',
+           last_error = ?,
+           next_attempt_at = DATE_ADD(NOW(), INTERVAL ${delaySeconds} SECOND)
+       WHERE id = ?`,
+      [message, deliveryId],
+    );
+  } else await db.execute(sql`
     UPDATE merchant_webhook_deliveries
     SET status = 'pending',
         last_error = ${message},
@@ -188,6 +260,21 @@ async function markRetry(deliveryId: string, message: string, delaySeconds: numb
 
 async function processDueMerchantWebhooks(): Promise<void> {
   for (let i = 0; i < 20; i++) {
+    if (isMysql) {
+      const due = await mysqlQuery(
+        `SELECT id
+         FROM merchant_webhook_deliveries
+         WHERE status IN ('pending', 'delivering')
+           AND delivered_at IS NULL
+           AND next_attempt_at <= NOW()
+         ORDER BY next_attempt_at ASC
+         LIMIT 1`,
+      );
+      const id = due.rows[0]?.id;
+      if (!id) break;
+      await deliverMerchantWebhook(String(id));
+      continue;
+    }
     const due = await db.execute(sql`
       SELECT id
       FROM merchant_webhook_deliveries

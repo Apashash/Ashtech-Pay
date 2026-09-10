@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { db } from "./db";
-import { platformSettings } from "@shared/schema";
+import { platformSettings } from "@shared/schema-runtime";
 import { like, eq } from "drizzle-orm";
 import { sendMessage } from "./telegram";
 export { CLEAN_404_HTML, sendClean404 } from "./clean404";

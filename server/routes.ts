@@ -49,14 +49,15 @@ import {
   type SupportedCurrency,
   type Transaction,
   insertAutoConversionRuleSchema,
-} from "@shared/schema";
+} from "@shared/schema-runtime";
 import { seedPawaPayCountries, syncPawaPayCatalog } from "./pawapayCatalog";
 import crypto from "crypto";
 import { z } from "zod";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
+import { MySqlSessionStore } from "./mysqlSessionStore";
 import { pool, db, sessionPool, poolStats } from "./db";
-import { transactions as transactionsTable, users as usersTable, wallets as walletsTable } from "@shared/schema";
+import { transactions as transactionsTable, users as usersTable, wallets as walletsTable } from "@shared/schema-runtime";
 import { and, desc, eq, sql, sql as drizzleSql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import multer from "multer";
@@ -414,6 +415,7 @@ const upload = multer({
 });
 
 const SessionStore = connectPgSimple(session);
+const isMysqlDialect = process.env.DB_DIALECT?.toLowerCase() === "mysql";
 
 declare module "express-session" {
   interface SessionData {
@@ -505,6 +507,15 @@ async function clearOtpOpLock(userId: string): Promise<void> {
 async function acquirePayoutOperationLock(userId: string): Promise<number | null> {
   const lockUntil = Date.now() + OTP_OP_LOCK_MS;
   try {
+    if (isMysqlDialect) {
+      const updated = await pool.query(
+        `UPDATE users
+         SET otp_locked_until = ?
+         WHERE id = ? AND COALESCE(otp_locked_until, 0) < ?`,
+        [lockUntil, userId, Date.now()],
+      );
+      return updated.rowCount > 0 ? lockUntil : null;
+    }
     const result = await db.execute(sql`
       UPDATE users
       SET otp_locked_until = ${lockUntil}
@@ -542,6 +553,26 @@ async function findRecentActivePayoutDuplicate(params: {
   operatorId: string;
   totalAmount: number;
 }): Promise<{ id: string; reference: string | null; status: string } | null> {
+  if (isMysqlDialect) {
+    const result = await pool.query(
+      `SELECT id, reference, status
+       FROM transactions
+       WHERE user_id = ? AND type = ? AND recipient_phone = ?
+         AND operator_id = ? AND total_amount = ?
+         AND status IN ('pending', 'processing', 'pending_manual')
+         AND created_at > DATE_SUB(NOW(), INTERVAL 15 MINUTE)
+       ORDER BY created_at DESC LIMIT 1`,
+      [
+        params.userId,
+        params.type,
+        params.recipientPhone,
+        params.operatorId,
+        params.totalAmount,
+      ],
+    );
+    const row = result.rows[0];
+    return row ? { id: row.id, reference: row.reference, status: row.status } : null;
+  }
   const result = await db.execute(sql`
     SELECT id, reference, status
     FROM transactions
@@ -549,9 +580,9 @@ async function findRecentActivePayoutDuplicate(params: {
       AND type = ${params.type}
       AND recipient_phone = ${params.recipientPhone}
       AND operator_id = ${params.operatorId}
-      AND total_amount::numeric = ${params.totalAmount}
+       AND total_amount::numeric = ${params.totalAmount}
       AND status IN ('pending', 'processing', 'pending_manual')
-      AND created_at > NOW() - INTERVAL '15 minutes'
+       AND created_at > NOW() - INTERVAL '15 minutes'
     ORDER BY created_at DESC
     LIMIT 1
   `);
@@ -574,6 +605,17 @@ const ADMIN_LOGIN_CLAIM_TTL_MS = 15 * 1000;
 const ADMIN_NOTIF_EMAIL = "ashtechsarl@gmail.com";
 
 async function setPendingAdminLogin(token: string, entry: PendingAdminLogin): Promise<void> {
+  if (isMysqlDialect) {
+    await pool.query(
+      `INSERT INTO admin_pending_logins (token, user_id, otp, expires_at, attempts)
+       VALUES (?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         user_id = VALUES(user_id), otp = VALUES(otp),
+         expires_at = VALUES(expires_at), attempts = VALUES(attempts)`,
+      [token, entry.userId, entry.otp, entry.expiresAt, entry.attempts],
+    );
+    return;
+  }
   await pool.query(
     `INSERT INTO admin_pending_logins (token, user_id, otp, expires_at, attempts)
      VALUES ($1, $2, $3, $4, $5)
@@ -587,6 +629,35 @@ async function setPendingAdminLogin(token: string, entry: PendingAdminLogin): Pr
 // from consuming the same challenge more than once.
 async function claimPendingAdminLogin(token: string, claimId: string): Promise<PendingAdminLogin | null> {
   const now = Date.now();
+  if (isMysqlDialect) {
+    const updated = await pool.query(
+      `UPDATE admin_pending_logins
+          SET attempts = attempts + 1,
+              claimed_by = ?,
+              claimed_until = ?
+        WHERE token = ?
+          AND expires_at > ?
+          AND consumed_at IS NULL
+          AND attempts < 5
+          AND (claimed_until IS NULL OR claimed_until <= ?)`,
+      [claimId, now + ADMIN_LOGIN_CLAIM_TTL_MS, token, now, now],
+    );
+    if (updated.rowCount === 0) return null;
+    const selected = await pool.query(
+      `SELECT user_id, otp, expires_at, attempts
+       FROM admin_pending_logins
+       WHERE token = ? AND claimed_by = ? LIMIT 1`,
+      [token, claimId],
+    );
+    const row = selected.rows[0];
+    if (!row) return null;
+    return {
+      userId: row.user_id,
+      otp: row.otp,
+      expiresAt: Number(row.expires_at),
+      attempts: Number(row.attempts),
+    };
+  }
   const r = await pool.query(
     `UPDATE admin_pending_logins
         SET attempts = attempts + 1,
@@ -620,6 +691,15 @@ async function releasePendingAdminLogin(token: string, claimId: string): Promise
 }
 
 async function consumePendingAdminLogin(token: string, claimId: string): Promise<boolean> {
+  if (isMysqlDialect) {
+    const result = await pool.query(
+      `UPDATE admin_pending_logins
+          SET consumed_at = ?, claimed_until = NULL
+        WHERE token = ? AND claimed_by = ? AND consumed_at IS NULL`,
+      [Date.now(), token, claimId],
+    );
+    return result.rowCount > 0;
+  }
   const r = await pool.query(
     `UPDATE admin_pending_logins
         SET consumed_at = $3, claimed_until = NULL
@@ -1305,6 +1385,17 @@ type OtpContext = {
 const otpContextCache = new Map<string, OtpContext>();
 
 async function persistOtpContext(reference: string, context: OtpContext): Promise<void> {
+  if (isMysqlDialect) {
+    await pool.query(
+      `INSERT INTO api_otp_sessions (reference, user_id, context, expires_at)
+       VALUES (?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         user_id = VALUES(user_id), context = VALUES(context), expires_at = VALUES(expires_at)`,
+      [reference, context.userId || null, JSON.stringify(context), new Date(context.expiresAt)],
+    );
+    otpContextCache.set(reference, context);
+    return;
+  }
   await db.execute(sql`
     INSERT INTO api_otp_sessions (reference, user_id, context, expires_at)
     VALUES (${reference}, ${context.userId || null}, ${JSON.stringify(context)}::jsonb, to_timestamp(${context.expiresAt / 1000}))
@@ -1317,6 +1408,16 @@ async function persistOtpContext(reference: string, context: OtpContext): Promis
 async function loadOtpContext(reference: string): Promise<OtpContext | undefined> {
   const cached = otpContextCache.get(reference);
   if (cached) return cached;
+  if (isMysqlDialect) {
+    const result = await pool.query(
+      `SELECT context FROM api_otp_sessions
+       WHERE reference = ? AND expires_at > NOW() LIMIT 1`,
+      [reference],
+    );
+    const context = result.rows[0]?.context as OtpContext | undefined;
+    if (context) otpContextCache.set(reference, context);
+    return context;
+  }
   const result = await db.execute(sql`
     SELECT context FROM api_otp_sessions
     WHERE reference = ${reference} AND expires_at > NOW()
@@ -1329,7 +1430,11 @@ async function loadOtpContext(reference: string): Promise<OtpContext | undefined
 
 async function deleteOtpContext(reference: string): Promise<void> {
   otpContextCache.delete(reference);
-  await db.execute(sql`DELETE FROM api_otp_sessions WHERE reference = ${reference}`);
+  if (isMysqlDialect) {
+    await pool.query(`DELETE FROM api_otp_sessions WHERE reference = ?`, [reference]);
+  } else {
+    await db.execute(sql`DELETE FROM api_otp_sessions WHERE reference = ${reference}`);
+  }
 }
 
 setInterval(() => {
@@ -1337,7 +1442,11 @@ setInterval(() => {
   for (const [key, ctx] of otpContextCache.entries()) {
     if (ctx.expiresAt < now) otpContextCache.delete(key);
   }
-  db.execute(sql`DELETE FROM api_otp_sessions WHERE expires_at < NOW()`).catch(() => {});
+  if (isMysqlDialect) {
+    pool.query(`DELETE FROM api_otp_sessions WHERE expires_at < NOW()`).catch(() => {});
+  } else {
+    db.execute(sql`DELETE FROM api_otp_sessions WHERE expires_at < NOW()`).catch(() => {});
+  }
 }, 5 * 60 * 1000); // Clean expired entries every 5 min
 
 // ─── Forced-logout map : userId → blockedUntil timestamp ─────────────────────
@@ -1370,19 +1479,41 @@ function pushSessionError(e: SessionOpError) {
   if (sessionOpErrors.length > SESSION_OP_ERRORS_MAX) sessionOpErrors.shift();
 }
 
+async function readMysqlSessionRows(): Promise<Array<{ sid: string; userId?: string; clientIp?: string }>> {
+  const result = await pool.query(`SELECT sid, sess FROM session`);
+  return result.rows.flatMap((row: any) => {
+    try {
+      const parsed = typeof row.sess === "string" ? JSON.parse(row.sess) : row.sess;
+      return [{
+        sid: String(row.sid),
+        userId: typeof parsed?.userId === "string" ? parsed.userId : undefined,
+        clientIp: typeof parsed?.clientIp === "string" ? parsed.clientIp : undefined,
+      }];
+    } catch {
+      return [];
+    }
+  });
+}
+
 async function destroyUserSessions(userId: string, blockedUntil: number): Promise<void> {
   try {
     // Marque les sessions comme révoquées AVANT la suppression pour que
     // les requêtes en cours reçoivent sessionRevoked:true
-    const result = await db.execute(sql`SELECT sid FROM session WHERE sess->>'userId' = ${userId}`);
-    for (const row of result.rows as { sid: string }[]) {
+    const sessionRows = isMysqlDialect
+      ? (await readMysqlSessionRows()).filter((row) => row.userId === userId)
+      : (await db.execute(sql`SELECT sid FROM session WHERE sess->>'userId' = ${userId}`)).rows as { sid: string }[];
+    for (const row of sessionRows) {
       revokedSessions.set(row.sid, blockedUntil);
     }
     forcedLogoutMap.set(userId, blockedUntil);
     revokedTokensBefore.set(userId, Date.now());
     // Pousse la déconnexion immédiatement via SSE (sans attendre la prochaine requête)
     notifyUserForceLogout(userId, blockedUntil);
-    await db.execute(sql`DELETE FROM session WHERE sess->>'userId' = ${userId}`);
+    if (isMysqlDialect) {
+      for (const row of sessionRows) await pool.query(`DELETE FROM session WHERE sid = ?`, [row.sid]);
+    } else {
+      await db.execute(sql`DELETE FROM session WHERE sess->>'userId' = ${userId}`);
+    }
     console.log(`[Auth] destroyUserSessions — userId=${userId} déconnecté immédiatement`);
   } catch (err: any) {
     console.error("[Auth] Failed to destroy sessions for user:", userId, err?.message);
@@ -1393,12 +1524,18 @@ async function destroyUserSessions(userId: string, blockedUntil: number): Promis
 // individuellement pour qu'elles reçoivent sessionRevoked:true, puis les supprime.
 async function revokeSessionsForIpChange(userId: string): Promise<void> {
   try {
-    const result = await db.execute(sql`SELECT sid FROM session WHERE sess->>'userId' = ${userId}`);
+    const sessionRows = isMysqlDialect
+      ? (await readMysqlSessionRows()).filter((row) => row.userId === userId)
+      : (await db.execute(sql`SELECT sid FROM session WHERE sess->>'userId' = ${userId}`)).rows as { sid: string }[];
     const expiresAt = Date.now() + 30 * 60 * 1000;
-    for (const row of result.rows as { sid: string }[]) {
+    for (const row of sessionRows) {
       revokedSessions.set(row.sid, expiresAt);
     }
-    await db.execute(sql`DELETE FROM session WHERE sess->>'userId' = ${userId}`);
+    if (isMysqlDialect) {
+      for (const row of sessionRows) await pool.query(`DELETE FROM session WHERE sid = ?`, [row.sid]);
+    } else {
+      await db.execute(sql`DELETE FROM session WHERE sess->>'userId' = ${userId}`);
+    }
     revokedTokensBefore.set(userId, Date.now());
     console.log(`[Auth] IP change — sessions révoquées pour userId=${userId}`);
   } catch (err: any) {
@@ -1412,10 +1549,13 @@ async function revokeSessionsForIpChange(userId: string): Promise<void> {
 async function revokeSessionsByIp(ip: string, blockedUntil: number): Promise<void> {
   try {
     // Cherche toutes les sessions dont l'IP stockée correspond à l'IP bloquée
-    const result = await db.execute(
-      sql`SELECT sid, sess->>'userId' as user_id FROM session WHERE sess->>'clientIp' = ${ip}`
-    );
-    const rows = result.rows as { sid: string; user_id: string }[];
+    const rows = isMysqlDialect
+      ? (await readMysqlSessionRows())
+          .filter((row) => row.clientIp === ip)
+          .map((row) => ({ sid: row.sid, user_id: row.userId || "" }))
+      : (await db.execute(
+          sql`SELECT sid, sess->>'userId' as user_id FROM session WHERE sess->>'clientIp' = ${ip}`
+        )).rows as { sid: string; user_id: string }[];
     if (rows.length === 0) return;
 
     // Déduplique les userIds
@@ -1435,9 +1575,11 @@ async function revokeSessionsByIp(ip: string, blockedUntil: number): Promise<voi
     }
 
     // Supprime les sessions de la DB
-    await db.execute(
-      sql`DELETE FROM session WHERE sess->>'clientIp' = ${ip}`
-    );
+    if (isMysqlDialect) {
+      for (const row of rows) await pool.query(`DELETE FROM session WHERE sid = ?`, [row.sid]);
+    } else {
+      await db.execute(sql`DELETE FROM session WHERE sess->>'clientIp' = ${ip}`);
+    }
     console.log(`[Auth] IP block — sessions supprimées pour IP=${ip}`);
   } catch (err: any) {
     console.error("[Auth] revokeSessionsByIp failed:", err?.message);
@@ -1448,19 +1590,25 @@ async function revokeSessionsByIp(ip: string, blockedUntil: number): Promise<voi
 // Les sessions expulsées reçoivent sessionRevoked:true sans retryAfter → redirigées vers /login
 async function revokeOtherSessionsForSingleDevice(userId: string): Promise<void> {
   try {
-    const result = await db.execute(sql`SELECT sid FROM session WHERE sess->>'userId' = ${userId}`);
-    for (const row of result.rows as { sid: string }[]) {
+    const sessionRows = isMysqlDialect
+      ? (await readMysqlSessionRows()).filter((row) => row.userId === userId)
+      : (await db.execute(sql`SELECT sid FROM session WHERE sess->>'userId' = ${userId}`)).rows as { sid: string }[];
+    for (const row of sessionRows) {
       singleDeviceKicks.add(row.sid);
     }
     // Pousser l'événement SSE en temps réel AVANT de supprimer les sessions
     // → l'ancien navigateur reçoit force_logout immédiatement via la connexion SSE ouverte
     notifyUserForceLogout(userId, undefined, "new_device");
-    await db.execute(sql`DELETE FROM session WHERE sess->>'userId' = ${userId}`);
+    if (isMysqlDialect) {
+      for (const row of sessionRows) await pool.query(`DELETE FROM session WHERE sid = ?`, [row.sid]);
+    } else {
+      await db.execute(sql`DELETE FROM session WHERE sess->>'userId' = ${userId}`);
+    }
     const revokedAt = Date.now();
     revokedTokensBefore.set(userId, revokedAt);
     // Persister en DB pour survivre aux redémarrages du serveur
     await db.execute(sql`UPDATE users SET token_revoked_before = ${revokedAt} WHERE id = ${userId}`);
-    console.log(`[Auth] Single-device — ${(result.rows as any[]).length} session(s) révoquée(s) pour userId=${userId}`);
+    console.log(`[Auth] Single-device — ${sessionRows.length} session(s) révoquée(s) pour userId=${userId}`);
   } catch (err: any) {
     console.error("[Auth] revokeOtherSessionsForSingleDevice failed:", err?.message);
   }
@@ -1940,11 +2088,17 @@ export async function registerRoutes(
       secret: sessionSecret || _DEV_TOKEN_SECRET,
       resave: false,
       saveUninitialized: false,
-      store: new SessionStore({
-        pool: resilientSessionPool as any,
-        tableName: "session",
-        errorLog: (err: Error) => console.error("[SessionStore]", err.message),
-      }),
+      store: process.env.DB_DIALECT?.toLowerCase() === "mysql"
+        ? new MySqlSessionStore({
+            pool: sessionPool as any,
+            tableName: "session",
+            errorLog: (err: Error) => console.error("[SessionStore]", err.message),
+          })
+        : new SessionStore({
+            pool: resilientSessionPool as any,
+            tableName: "session",
+            errorLog: (err: Error) => console.error("[SessionStore]", err.message),
+          }),
       proxy: isSecureProxy,
       name: "__ash_sid",
       cookie: {

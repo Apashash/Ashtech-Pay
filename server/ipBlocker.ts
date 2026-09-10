@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { platformSettings } from "@shared/schema";
+import { platformSettings } from "@shared/schema-runtime";
 import { like, eq } from "drizzle-orm";
 
 const MAX_AUTH_ATTEMPTS = 4;
