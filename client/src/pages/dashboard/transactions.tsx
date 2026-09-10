@@ -258,7 +258,7 @@ export default function TransactionsPage() {
 
         <div>
           <h1 className="text-2xl font-semibold text-foreground">{t.transactions.title}</h1>
-          <p className="text-muted-foreground">{transactions.length} {transactions.length !== 1 ? t.transactions.totalCountPlural : t.transactions.totalCount}</p>
+          <p className="text-sm text-muted-foreground mt-1">{transactions.length} {transactions.length !== 1 ? t.transactions.totalCountPlural : t.transactions.totalCount}</p>
         </div>
 
         {/* Stats summary */}
@@ -336,7 +336,7 @@ export default function TransactionsPage() {
 
             <div className="flex flex-wrap gap-2 items-center">
               <Select value={typeFilter} onValueChange={setTypeFilter}>
-                <SelectTrigger className="h-8 w-auto min-w-[150px] text-xs" data-testid="select-filter-type">
+                <SelectTrigger className="h-9 w-auto min-w-[150px] text-sm" data-testid="select-filter-type">
                   <SelectValue placeholder="Tous les types" />
                 </SelectTrigger>
                 <SelectContent>
@@ -347,7 +347,7 @@ export default function TransactionsPage() {
               </Select>
 
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="h-8 w-auto min-w-[140px] text-xs" data-testid="select-filter-status">
+                <SelectTrigger className="h-9 w-auto min-w-[140px] text-sm" data-testid="select-filter-status">
                   <SelectValue placeholder={t.transactions.allStatuses} />
                 </SelectTrigger>
                 <SelectContent>
@@ -360,7 +360,7 @@ export default function TransactionsPage() {
               </Select>
 
               <Select value={currencyFilter} onValueChange={setCurrencyFilter}>
-                <SelectTrigger className="h-8 w-auto min-w-[120px] text-xs" data-testid="select-filter-currency">
+                <SelectTrigger className="h-9 w-auto min-w-[120px] text-sm" data-testid="select-filter-currency">
                   <SelectValue placeholder={t.transactions.allCurrencies} />
                 </SelectTrigger>
                 <SelectContent>
@@ -378,15 +378,14 @@ export default function TransactionsPage() {
                     {t.transactions.clearFilters}
                   </Button>
                 )}
-                <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={() => refetch()} disabled={isFetching} data-testid="button-refresh-transactions">
+                <Button variant="outline" className="h-9 text-sm gap-1.5" onClick={() => refetch()} disabled={isFetching} data-testid="button-refresh-transactions">
                   <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? "animate-spin" : ""}`} />
                   {isFetching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
                   {t.transactions.refresh}
                 </Button>
                 <Button
                   variant="outline"
-                  size="sm"
-                  className="h-8 text-xs gap-1.5"
+                  className="h-9 text-sm gap-1.5"
                   onClick={() => exportToCSV(filteredTransactions, user, { transactions: t.transactions })}
                   disabled={filteredTransactions.length === 0}
                   data-testid="button-export-csv"
@@ -454,7 +453,7 @@ export default function TransactionsPage() {
                           </div>
 
                           <div className="flex flex-col items-end gap-1 shrink-0">
-                            <span className={`text-sm font-bold whitespace-nowrap ${getAmountColor(tx)}`}>
+                            <span className={`text-sm font-semibold whitespace-nowrap ${getAmountColor(tx)}`}>
                               {getAmountPrefix(tx)}{formatWalletBalance(tx.amount, tx.currency || user?.preferredCurrency || "XAF")}
                             </span>
                             {getStatusBadge(tx.status)}
