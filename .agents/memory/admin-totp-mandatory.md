@@ -55,6 +55,14 @@ fallback.
 password→TOTP challenge or be explicitly prevented from setting `_avs`, issuing an
 admin token, or bypassing `requireAdmin`.
 
+### MySQL challenge compatibility
+
+The MySQL pool adapter must map `ResultSetHeader.affectedRows` to its compatible `rowCount`. The admin login challenge uses an atomic `UPDATE` and treats `rowCount === 0` as an expired challenge.
+
+**Why:** Without this mapping, a successful MySQL claim was reported as zero affected rows, so every valid Google Authenticator code appeared to have an expired login session.
+
+**How to apply:** Keep the adapter's result normalization correct for every `INSERT`, `UPDATE`, and `DELETE` path that relies on `rowCount`, especially pending admin-login claims and session housekeeping.
+
 ## Frontend flows
 
 ### Login flow (password → TOTP)

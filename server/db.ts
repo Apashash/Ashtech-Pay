@@ -109,8 +109,15 @@ function createMysqlCompatiblePool(url: string, connectionLimit: number): Compat
       const params = values ?? (typeof queryOrConfig === "string" ? [] : queryOrConfig.values ?? []);
       const normalized = normalizeMysqlQuery(query, params);
       const [rows, fields] = await rawPool.query(normalized.text, normalized.values);
-      const rowArray = Array.isArray(rows) ? rows as any[] : [];
-      return { rows: rowArray, rowCount: rowArray.length, fields: fields as any[] };
+      const isRowResult = Array.isArray(rows);
+      const rowArray = isRowResult ? rows as any[] : [];
+      // mysql2 returns a ResultSetHeader for INSERT/UPDATE/DELETE instead of
+      // an array. Preserve affectedRows so callers that use rowCount for
+      // atomic claims (including the admin OTP challenge) see the real result.
+      const affectedRows = !isRowResult && typeof (rows as any)?.affectedRows === "number"
+        ? Number((rows as any).affectedRows)
+        : rowArray.length;
+      return { rows: rowArray, rowCount: affectedRows, fields: fields as any[] };
     },
     get totalCount() { return connectionLimit; },
     get idleCount() { return connectionLimit; },
