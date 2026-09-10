@@ -290,7 +290,8 @@ export default function ConvertPage() {
               <SelectContent>
                 {walletList.map(w => (
                   <SelectItem key={w.currency} value={w.currency}>
-                    {CURRENCY_FLAGS[w.currency] || "🌍"} {w.currency} — {parseFloat(w.balance || "0").toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {w.symbol || walletSymbol(w.currency)}
+                    {CURRENCY_FLAGS[w.currency] || "🌍"} {w.currency}{" "}
+                    {parseFloat(w.balance || "0").toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {w.symbol || walletSymbol(w.currency)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -323,7 +324,8 @@ export default function ConvertPage() {
               <SelectContent>
                 {toCurrencyOptions.filter(c => c !== fromCurrency).map(currency => (
                   <SelectItem key={currency} value={currency}>
-                    {CURRENCY_FLAGS[currency] || "🌍"} {currency} — {CURRENCY_NAMES[currency] || currency}
+                    {CURRENCY_FLAGS[currency] || "🌍"} {currency}{" "}
+                    {CURRENCY_NAMES[currency] || currency}
                   </SelectItem>
                 ))}
               </SelectContent>
