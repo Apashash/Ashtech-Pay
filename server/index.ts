@@ -81,13 +81,18 @@ app.use((req, res, next) => {
   const publicDuringMigration =
     req.path === "/api/ping" || !req.path.startsWith("/api");
   if (startupReady && (migrationsReady || publicDuringMigration)) return next();
-  res
-    .status(503)
-    .set("Retry-After", "5")
+  const message = startupFailure
+    ? "Le service rencontre un problème de démarrage. Veuillez réessayer plus tard."
+    : "Le service démarre. Veuillez réessayer dans quelques instants.";
+  res.status(503).set("Retry-After", "2");
+  if (req.path.startsWith("/api")) {
+    return res.json({ ok: false, ready: false, message });
+  }
+  return res
     .set("Content-Type", "text/html; charset=utf-8")
     .send(
       startupFailure
-        ? "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Service temporairement indisponible</title></head><body>Le service rencontre un problème de démarrage. Consultez les logs de l'application.</body></html>"
+        ? "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Service temporairement indisponible</title></head><body>Le service rencontre un problème de démarrage. Veuillez réessayer plus tard.</body></html>"
         : "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Démarrage</title></head><body>Le service démarre. Veuillez réessayer dans quelques instants.</body></html>",
     );
 });

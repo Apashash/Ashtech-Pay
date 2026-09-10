@@ -28,6 +28,13 @@ export function getAuthHeaders(): HeadersInit {
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
+    const contentType = res.headers.get("content-type") || "";
+    if (contentType.includes("text/html") || /^\s*<!doctype html/i.test(text)) {
+      const message = res.status === 503
+        ? "Le serveur termine son démarrage. Veuillez patienter quelques instants."
+        : "Le serveur est temporairement indisponible. Veuillez réessayer.";
+      throw new Error(message);
+    }
     try {
       const json = JSON.parse(text);
       if (json.vpnDetected && res.status === 403) {

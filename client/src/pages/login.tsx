@@ -154,6 +154,14 @@ export default function LoginPage() {
     refetchOnMount: "always",
   });
 
+  const { data: serverStatus } = useQuery<{ ok: boolean }>({
+    queryKey: ["/api/ping"],
+    staleTime: 0,
+    retry: true,
+    retryDelay: 700,
+  });
+  const serverReady = serverStatus?.ok === true;
+
   useEffect(() => {
     if (countryManuallySelected || countries.length === 0) return;
     if (!geoFetched) {
@@ -242,6 +250,10 @@ export default function LoginPage() {
   }, []);
 
   const handleSubmit = (data: LoginFormData) => {
+    if (!serverReady) {
+      toast({ title: "Serveur en démarrage", description: "Veuillez patienter quelques instants.", variant: "destructive" });
+      return;
+    }
     if (loginMode === "phone" && phoneInput.replace(/\D/g, "").length < 6) {
       form.setError("identifier", { message: t.login.phoneValidation });
       return;
@@ -294,7 +306,7 @@ export default function LoginPage() {
     },
   });
 
-  const canSubmit = !turnstileEnabled || !!turnstileToken;
+  const canSubmit = serverReady && (!turnstileEnabled || !!turnstileToken);
 
   return (
     <div className="min-h-screen bg-muted flex items-center justify-center p-4">
@@ -556,6 +568,12 @@ export default function LoginPage() {
                     )}
                   </div>
                 ) : null}
+
+                {!serverReady && (
+                  <p className="text-xs text-muted-foreground text-center">
+                    Le serveur termine son démarrage. Cette page s’activera automatiquement.
+                  </p>
+                )}
 
                 <Button
                   type="submit"
