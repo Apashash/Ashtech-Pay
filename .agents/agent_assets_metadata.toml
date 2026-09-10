@@ -14,3 +14,17 @@ mtime_ms = 1789008703838
 storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:08d29eda-6470-454d-b16d-f2197667fe92/95b48b1b-52af-4f7a-8da3-4564092d9a24/c8dc53ba-2624-4b32-8b06-69f694bae70b"
 storage_version_token = "1789008759843743"
 content_type = "application/octet-stream"
+
+[[outputs]]
+id = "jaBQQFhnI3VxnWpFrxZLW"
+uri = "file://exports/ashtechpay-supabase-mysql-fixed.sql"
+type = "unspecified"
+title = "Dump MySQL AshTech Pay — fichier corrigé"
+description = "Utilise ce nouveau fichier uniquement après avoir recréé une base MariaDB vide. admin_logs.id et les autres colonnes de clés sont compatibles avec MariaDB."
+logical_id = "1de34091-b411-42ac-a4a2-1be57cc0b88c"
+content_hash = "sha256:90f9c5c70b47a954f2f48bf96155c74223541cb10ca350483b5966677f14fd9d"
+size = 6726132
+mtime_ms = 1789009043335
+storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:08d29eda-6470-454d-b16d-f2197667fe92/1de34091-b411-42ac-a4a2-1be57cc0b88c/2f44e58d-02b5-47ca-8e2e-4963ba8b1ff5"
+storage_version_token = "1789009054329113"
+content_type = "application/octet-stream"
