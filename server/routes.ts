@@ -818,7 +818,7 @@ const ADMIN_PANEL_TOTP_HANDOFF_MS = 2 * 60 * 1000;
 // TOTP is a fixed server-side requirement for every admin API request.
 // Deliberately not configurable through an environment variable: an environment
 // change must never be able to downgrade admin authentication.
-const ADMIN_TOTP_ENFORCEMENT_ENABLED = false as const;
+const ADMIN_TOTP_ENFORCEMENT_ENABLED = true as const;
 
 // Bearer-authenticated mobile browsers can arrive with a fresh Express session
 // on each request when the session cookie is unavailable. Recover the verified
@@ -10088,10 +10088,10 @@ export async function registerRoutes(
     }
   }
 
-  // The initial admin-login TOTP is the first factor for dashboard → panel
-  // entry. The PIN is the second factor, so a missing _pav does not require
-  // another Google Authenticator code here.
-  const needsPanelVerify = false;
+  // The initial admin-login TOTP authenticates the account. Require a fresh
+  // panel TOTP before opening the admin area as well; the PIN gate remains
+  // independently disabled.
+  const needsPanelVerify = !panelValid && !panelValidDb;
   const panelPinExp = req.session._ppv;
   const panelPinIp = req.session._ppvIp;
   const panelPinValid = typeof panelPinExp === "number" && panelPinExp > now &&
@@ -14300,12 +14300,7 @@ export async function registerRoutes(
       // Telegram as multipart files. No public URL is created or exposed.
       void (async () => {
         try {
-          const [frontFile, backFile, selfieFile, summaryPdfFile] = await Promise.all([
-            readPrivateKycDocumentFile(privateBundle!.frontPath),
-            readPrivateKycDocumentFile(privateBundle!.backPath),
-            readPrivateKycDocumentFile(privateBundle!.selfiePath),
-            readPrivateKycDocumentFile(privateBundle!.summaryPdfPath),
-          ]);
+          const summaryPdfFile = await readPrivateKycDocumentFile(privateBundle!.summaryPdfPath);
 
           await notifyKycSubmittedFull({
             submissionId: submission.id,
@@ -14319,11 +14314,6 @@ export async function registerRoutes(
             businessType,
             businessCategory,
             businessDescription,
-            photoFiles: {
-              front: { buffer: frontFile.buffer, contentType: frontFile.contentType, fileName: `kyc-recto${path.extname(privateBundle!.frontPath)}` },
-              back: { buffer: backFile.buffer, contentType: backFile.contentType, fileName: `kyc-verso${path.extname(privateBundle!.backPath)}` },
-              selfie: { buffer: selfieFile.buffer, contentType: selfieFile.contentType, fileName: `kyc-selfie${path.extname(privateBundle!.selfiePath)}` },
-            },
             summaryPdf: {
               buffer: summaryPdfFile.buffer,
               contentType: summaryPdfFile.contentType,

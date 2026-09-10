@@ -6,24 +6,24 @@ description: How mandatory Google Authenticator is enforced for all admin panel 
 # Admin TOTP mandatory enforcement
 
 ## The rule
-Google Authenticator and the admin PIN are currently disabled for the admin panel by explicit project configuration. Admin access still requires the normal authenticated admin account and server-side role checks.
+Google Authenticator is mandatory for admin login and admin panel access. The admin PIN remains disabled by explicit project configuration.
 
 ## Why
-The current operational requirement is to use password authentication only while isolating the panel access and session behavior. This is a deliberate security reduction and must not be mistaken for a safe default.
+The administrator explicitly re-enabled the password → Google Authenticator flow. The PIN remains off, so do not reintroduce it unless separately requested.
 
 ## How it works now
 
 ### Backend — `requireAdmin` (server/routes.ts)
-The TOTP gate is retained in code for future re-enablement but is currently disabled by the project constant. With it disabled, admin access proceeds after the role and IP blocklist checks.
+The TOTP gate is enabled by the fixed server-side requirement. Admin requests fail closed unless the account has a configured secret and the current session has a valid TOTP verification.
 
 ### Backend — `/api/auth/login`
-Admin accounts currently receive the normal authenticated session after password verification; no pending TOTP challenge is created.
+Admin password verification creates a short-lived pending challenge; the session and bearer token are issued only after Google Authenticator succeeds.
 
 ### Backend — `/api/auth/admin-panel-verify`
-The legacy endpoint remains available for controlled re-enablement, but the client redirects directly to the panel while TOTP enforcement is disabled.
+The endpoint verifies a fresh Google Authenticator code before the panel opens when the panel verification grant is missing or expired.
 
 ### Backend — panel PIN gate
-The PIN middleware and panel PIN gate are currently disabled. When re-enabled,
+The PIN middleware and panel PIN gate remain disabled. If re-enabled later,
 the PIN must remain server-side and never be sent to the browser or logged.
 
 ### Challenge and session invariants

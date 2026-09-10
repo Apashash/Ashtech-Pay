@@ -61,50 +61,11 @@ async function sendMessageWithKeyboard(text: string, inline_keyboard: any[][]): 
   return result?.result?.message_id ?? null;
 }
 
-async function sendPhoto(photoUrl: string, caption?: string): Promise<void> {
-  if (!isConfigured()) return;
-  await callBotApi("sendPhoto", {
-    chat_id: CHAT_ID,
-    photo: photoUrl,
-    caption: caption ?? "",
-    parse_mode: "HTML",
-  });
-}
-
 export type TelegramKycFile = {
   buffer: Buffer;
   contentType: string;
   fileName: string;
 };
-
-async function sendPhotoBuffer(photo: TelegramKycFile, caption?: string): Promise<void> {
-  if (!isConfigured() || !BOT_API) return;
-
-  try {
-    const form = new FormData();
-    form.append("chat_id", CHAT_ID!);
-    form.append(
-      "photo",
-      new Blob([new Uint8Array(photo.buffer)], { type: photo.contentType }),
-      photo.fileName,
-    );
-    if (caption) {
-      form.append("caption", caption);
-      form.append("parse_mode", "HTML");
-    }
-
-    const response = await fetch(`${BOT_API}/sendPhoto`, {
-      method: "POST",
-      body: form,
-    });
-    const result = await response.json();
-    if (!result.ok) {
-      console.error("[Telegram] sendPhoto (KYC) réponse d'erreur:", JSON.stringify(result));
-    }
-  } catch (error: any) {
-    console.error("[Telegram] sendPhoto (KYC) exception:", error?.message || error);
-  }
-}
 
 async function sendDocumentBuffer(document: TelegramKycFile, caption?: string): Promise<void> {
   if (!isConfigured() || !BOT_API) return;
@@ -1286,7 +1247,7 @@ export async function notifySupportMessage(opts: {
   });
 }
 
-// ─── KYC COMPLET AVEC PHOTOS + BOUTONS ──────────────────
+// ─── KYC COMPLET AVEC PDF + BOUTONS ─────────────────────
 
 export async function notifyKycSubmittedFull(opts: {
   submissionId: string;
@@ -1300,16 +1261,6 @@ export async function notifyKycSubmittedFull(opts: {
   businessType: string;
   businessCategory: string;
   businessDescription: string;
-  photoUrls?: {
-    front: string | null;
-    back: string | null;
-    selfie: string | null;
-  };
-  photoFiles?: {
-    front: TelegramKycFile;
-    back: TelegramKycFile;
-    selfie: TelegramKycFile;
-  };
   summaryPdf?: TelegramKycFile;
 }): Promise<void> {
   if (!isConfigured()) return;
@@ -1334,23 +1285,8 @@ export async function notifyKycSubmittedFull(opts: {
     ngo: "🌍 ONG",
   };
 
-  // 1. Send private KYC files directly as multipart uploads.
-  // They are encrypted in MySQL and must not be exposed through public URLs.
-  if (opts.photoFiles) {
-    await sendPhotoBuffer(opts.photoFiles.front, "📄 <b>Document — Recto</b>");
-    await sendPhotoBuffer(opts.photoFiles.back, "📄 <b>Document — Verso</b>");
-    await sendPhotoBuffer(opts.photoFiles.selfie, "🤳 <b>Selfie avec document</b>");
-  } else {
-    if (opts.photoUrls?.front) {
-      await sendPhoto(opts.photoUrls.front, "📄 <b>Document — Recto</b>");
-    }
-    if (opts.photoUrls?.back) {
-      await sendPhoto(opts.photoUrls.back, "📄 <b>Document — Verso</b>");
-    }
-    if (opts.photoUrls?.selfie) {
-      await sendPhoto(opts.photoUrls.selfie, "🤳 <b>Selfie avec document</b>");
-    }
-  }
+  // Send only the private summary PDF. The PDF already contains all KYC
+  // photos and is the sole document that may be delivered to Telegram.
   if (opts.summaryPdf) {
     await sendDocumentBuffer(opts.summaryPdf, "📑 <b>Dossier KYC PDF</b>");
   }

@@ -12,7 +12,7 @@ export default function AdminPanelVerifyPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [code, setCode] = useState("");
-  const [step, setStep] = useState<"totp" | "pin">("pin");
+  const [step, setStep] = useState<"totp" | "pin">("totp");
   const [secondsLeft, setSecondsLeft] = useState(30);
 
   // Restore the page the admin was on before TOTP expiry; fall back to admin root
@@ -51,7 +51,11 @@ export default function AdminPanelVerifyPage() {
       setLocation("/dashboard");
       return;
     }
-    if (otpStatus.verified && !otpStatus.needsPanelPin) {
+    if (otpStatus.needsPanelVerify || !otpStatus.verified) {
+      setStep("totp");
+    } else if (otpStatus.needsPanelPin) {
+      setStep("pin");
+    } else if (otpStatus.verified) {
       setLocation(ADMIN_URL);
     }
   }, [otpStatus, statusLoading, step, ADMIN_URL]);

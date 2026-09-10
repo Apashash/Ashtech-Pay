@@ -1,5 +1,5 @@
 import { getAdminPath } from "@/lib/adminPath";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { AdminLayout } from "./layout";
 const A = getAdminPath();
@@ -35,7 +35,7 @@ import {
   Building2,
   CreditCard,
   User as UserIcon,
-  Image as ImageIcon,
+  FileText,
   Shield,
   Loader2,
   MapPin,
@@ -118,62 +118,27 @@ export default function AdminKYC() {
   const [rejectModal, setRejectModal] = useState<KycSubmission | null>(null);
   const [rejectNote, setRejectNote] = useState("");
   const [approveNote, setApproveNote] = useState("");
-  const [imageModal, setImageModal] = useState<{ url: string; title: string } | null>(null);
-  const [documentUrls, setDocumentUrls] = useState<Record<string, string>>({});
-  const [documentErrors, setDocumentErrors] = useState<Record<string, boolean>>({});
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfStatus, setPdfStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
 
-  useEffect(() => {
-    const submission = viewSubmission;
-    setDocumentUrls({});
-    setDocumentErrors({});
+  const loadSummaryPdf = async (submission: KycSubmission) => {
     setPdfUrl(null);
-    if (!submission) return;
+    setPdfStatus(submission.summaryPdfPath ? "loading" : "error");
+    if (!submission.summaryPdfPath) return;
+    try {
+      setPdfUrl(await fetchImageBlobUrl(submission.summaryPdfPath));
+      setPdfStatus("ready");
+    } catch {
+      setPdfStatus("error");
+    }
+  };
 
-    let disposed = false;
-    const objectUrls: string[] = [];
-    const load = async (path: string | null | undefined) => {
-      if (!path) return null;
-      try {
-        const url = await fetchImageBlobUrl(path);
-        objectUrls.push(url);
-        return url;
-      } catch {
-        return null;
-      }
-    };
-
-    Promise.all([
-      load(submission.documentFrontPath),
-      load(submission.documentBackPath),
-      load(submission.selfiePath),
-      load(submission.summaryPdfPath),
-    ]).then(([front, back, selfie, pdf]) => {
-      if (disposed) return;
-      setDocumentUrls({
-        ...(front ? { Recto: front } : {}),
-        ...(back ? { Verso: back } : {}),
-        ...(selfie ? { Selfie: selfie } : {}),
-      });
-      setDocumentErrors({
-        ...(submission.documentFrontPath && !front ? { Recto: true } : {}),
-        ...(submission.documentBackPath && !back ? { Verso: true } : {}),
-        ...(submission.selfiePath && !selfie ? { Selfie: true } : {}),
-      });
-      setPdfUrl(pdf);
-    });
-
-    return () => {
-      disposed = true;
-      objectUrls.forEach((url) => URL.revokeObjectURL(url));
-    };
-  }, [
-    viewSubmission?.id,
-    viewSubmission?.documentFrontPath,
-    viewSubmission?.documentBackPath,
-    viewSubmission?.selfiePath,
-    viewSubmission?.summaryPdfPath,
-  ]);
+  const closeViewSubmission = () => {
+    if (pdfUrl) URL.revokeObjectURL(pdfUrl);
+    setPdfUrl(null);
+    setPdfStatus("idle");
+    setViewSubmission(null);
+  };
 
   const { data: submissions, isLoading } = useQuery<KycSubmission[]>({
     queryKey: ["/api/admin/kyc", statusFilter],
@@ -404,7 +369,10 @@ export default function AdminKYC() {
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8"
-                              onClick={() => setViewSubmission(sub)}
+                               onClick={() => {
+                                 setViewSubmission(sub);
+                                 void loadSummaryPdf(sub);
+                               }}
                               data-testid={`button-view-kyc-${sub.id}`}
                             >
                               <Eye className="w-4 h-4" />
@@ -470,7 +438,7 @@ export default function AdminKYC() {
         </Card>
 
         {/* View modal */}
-        <Dialog open={!!viewSubmission} onOpenChange={() => setViewSubmission(null)}>
+        <Dialog open={!!viewSubmission} onOpenChange={closeViewSubmission}>
           <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
@@ -622,60 +590,29 @@ export default function AdminKYC() {
                 <Card>
                   <CardHeader className="pb-2 pt-4 px-4">
                     <CardTitle className="text-sm flex items-center gap-2">
-                      <ImageIcon className="w-4 h-4 shrink-0" />
-                      Documents soumis
+                      <FileText className="w-4 h-4 shrink-0" />
+                      Dossier KYC
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="px-4 pb-4">
-                    {viewSubmission.summaryPdfPath && (
-                      <div className="mb-3 flex justify-end">
-                         <Button asChild variant="outline" size="sm" disabled={!pdfUrl}>
+                    <div className="flex justify-end">
+                      <Button asChild variant="outline" size="sm" disabled={pdfStatus !== "ready"}>
                           <a
                              href={pdfUrl || "#"}
                             target="_blank"
                             rel="noreferrer"
                              onClick={(event) => {
-                               if (!pdfUrl) event.preventDefault();
+                                if (pdfStatus !== "ready") event.preventDefault();
                              }}
                           >
                             <ExternalLink className="w-4 h-4 mr-2" />
-                             {pdfUrl ? "Ouvrir le PDF récapitulatif" : "Chargement du PDF..."}
+                             {pdfStatus === "ready"
+                               ? "Ouvrir le PDF récapitulatif"
+                               : pdfStatus === "loading"
+                                 ? "Chargement du PDF..."
+                                 : "PDF non disponible"}
                           </a>
-                        </Button>
-                      </div>
-                    )}
-                    <div className="grid grid-cols-3 gap-3">
-                      {[
-                        { path: viewSubmission.documentFrontPath, label: "Recto", testId: "button-view-front", alt: "Document recto" },
-                        { path: viewSubmission.documentBackPath, label: "Verso", testId: "button-view-back", alt: "Document verso" },
-                        { path: viewSubmission.selfiePath, label: "Selfie", testId: "button-view-selfie", alt: "Selfie" },
-                      ].map(({ path, label, testId, alt }) => (
-                        <div key={testId}>
-                          <p className="text-xs text-muted-foreground mb-1 text-center">{label}</p>
-                          <button
-                             onClick={() => documentUrls[label] && setImageModal({ url: documentUrls[label], title: label })}
-                            className="w-full aspect-video bg-muted rounded-lg overflow-hidden hover:opacity-80 transition-opacity relative"
-                            data-testid={testId}
-                          >
-                            <img
-                               src={documentUrls[label] || ""}
-                              alt={alt}
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                const target = e.currentTarget;
-                                target.style.display = "none";
-                                const parent = target.parentElement;
-                                if (parent && !parent.querySelector(".img-error-msg")) {
-                                  const msg = document.createElement("div");
-                                  msg.className = "img-error-msg flex flex-col items-center justify-center h-full text-muted-foreground text-xs p-2 text-center";
-                                  msg.innerHTML = `<svg xmlns='http://www.w3.org/2000/svg' class='w-5 h-5 mb-1 opacity-40' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z'/></svg>Non disponible`;
-                                  parent.appendChild(msg);
-                                }
-                              }}
-                            />
-                          </button>
-                        </div>
-                      ))}
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -759,21 +696,6 @@ export default function AdminKYC() {
           </DialogContent>
         </Dialog>
 
-        {/* Image fullscreen modal */}
-        <Dialog open={!!imageModal} onOpenChange={() => setImageModal(null)}>
-          <DialogContent className="w-[95vw] max-w-3xl p-2">
-            <DialogHeader className="p-2">
-              <DialogTitle className="text-sm">{imageModal?.title}</DialogTitle>
-            </DialogHeader>
-            <div className="flex items-center justify-center">
-              <img
-                src={imageModal?.url}
-                alt={imageModal?.title}
-                className="max-w-full max-h-[80vh] object-contain rounded-lg"
-              />
-            </div>
-          </DialogContent>
-        </Dialog>
       </div>
     </AdminLayout>
   );
