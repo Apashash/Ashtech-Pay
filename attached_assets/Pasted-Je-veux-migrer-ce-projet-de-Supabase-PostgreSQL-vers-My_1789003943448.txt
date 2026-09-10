@@ -1,0 +1,329 @@
+Je veux migrer ce projet de Supabase/PostgreSQL vers MySQL/MariaDB.
+
+Objectif :
+- Remplacer la base de données Supabase/PostgreSQL par MySQL/MariaDB.
+- Conserver 100 % des données déjà présentes dans Supabase.
+- Ne supprimer, vider ou modifier aucune donnée Supabase avant validation complète de la migration.
+- Préparer le projet pour fonctionner avec MySQL en production, éventuellement sur Plesk.
+
+IMPORTANT — RÈGLES DE SÉCURITÉ :
+1. Ne supprime jamais la base Supabase.
+2. Ne lance jamais de DROP DATABASE, TRUNCATE, DELETE global ou migration destructive.
+3. Ne modifie pas le schéma Supabase sans créer une sauvegarde préalable.
+4. Avant toute modification, inspecte le projet et explique-moi :
+   - quelles tables existent ;
+   - quelles relations existent ;
+   - quelles données doivent être migrées ;
+   - si le projet utilise Supabase Auth, Storage, RLS, Realtime, Edge Functions ou des triggers ;
+   - quels risques spécifiques existent.
+5. Ne commence pas le basculement en production tant que :
+   - les données Supabase n'ont pas été exportées ;
+   - l'import MySQL n'a pas été vérifié ;
+   - les comptes et relations n'ont pas été contrôlés ;
+   - les endpoints principaux n'ont pas été testés.
+6. Utilise les secrets et variables d'environnement de la plateforme. N'affiche jamais les mots de passe, tokens ou chaînes de connexion dans les logs ou dans tes réponses.
+
+PHASE 1 — INSPECTION DU PROJET :
+Commence par inspecter :
+- package.json et la configuration du monorepo ;
+- le schéma Drizzle/Prisma/SQL existant ;
+- les fichiers de connexion à Supabase/PostgreSQL ;
+- les routes API et les requêtes SQL brutes ;
+- les appels frontend vers l'API ;
+- les fonctions d'authentification ;
+- les scripts de migration ;
+- les workflows de développement et de production.
+
+Ne modifie pas encore le code. Donne-moi d'abord un rapport avec :
+- les fichiers concernés ;
+- la structure actuelle de la base ;
+- la liste des tables ;
+- les clés primaires ;
+- les clés étrangères ;
+- les index ;
+- les enums ;
+- les colonnes JSON ;
+- les dates et timestamps ;
+- les colonnes UUID ;
+- les colonnes avec valeurs par défaut ;
+- les données liées aux utilisateurs ;
+- les éventuels fichiers ou images dans Supabase Storage.
+
+PHASE 2 — SAUVEGARDE COMPLÈTE DE SUPABASE :
+Avant d'écrire dans MySQL, crée une sauvegarde/export complet des données Supabase.
+
+La sauvegarde doit contenir :
+- toutes les tables métier ;
+- tous les utilisateurs nécessaires au fonctionnement de l'application ;
+- toutes les relations ;
+- tous les statuts et historiques ;
+- tous les champs JSON ;
+- tous les timestamps ;
+- toutes les données financières ou sensibles ;
+- les métadonnées importantes ;
+- la liste des fichiers Supabase Storage si le projet en utilise.
+
+Ne considère pas uniquement le schéma SQL comme une sauvegarde : je veux également les lignes de données existantes.
+
+Si l'accès direct à PostgreSQL est disponible :
+- exporte le schéma et les données ;
+- conserve les valeurs originales ;
+- exporte les données dans un format contrôlable, par exemple SQL, JSON ou CSV.
+
+Si l'accès direct n'est pas disponible :
+- utilise l'API Supabase avec pagination ;
+- récupère toutes les lignes, pas seulement les premières ;
+- vérifie le nombre total de lignes récupérées ;
+- enregistre les exports dans un dossier de sauvegarde local non public.
+
+Avant de continuer, affiche seulement les statistiques non sensibles :
+- nombre de tables exportées ;
+- nombre de lignes par table ;
+- nombre d'utilisateurs ;
+- nombre de relations ;
+- nombre de fichiers Storage ;
+- date et heure de l'export.
+
+PHASE 3 — CONVERSION DU SCHÉMA VERS MYSQL :
+Convertis le schéma PostgreSQL vers MySQL/MariaDB sans changer la signification des données.
+
+Règles de conversion :
+- PostgreSQL `serial`/`bigserial` → `AUTO_INCREMENT`.
+- PostgreSQL `uuid` → conserver les UUID comme chaînes ou utiliser `CHAR(36)` selon le schéma existant.
+- Ne remplace pas automatiquement les UUID par des nombres si cela casse les relations.
+- PostgreSQL `boolean` → `BOOLEAN` ou `TINYINT(1)`, en conservant le comportement attendu.
+- PostgreSQL `numeric`/`decimal` → `DECIMAL` avec une précision suffisante pour les montants.
+- Ne convertis jamais les montants financiers en `FLOAT`.
+- PostgreSQL `jsonb` → `JSON`.
+- PostgreSQL `timestamp with time zone` → type MySQL approprié, en conservant les dates dans une convention UTC.
+- PostgreSQL `text` → `TEXT` ou `LONGTEXT` selon la taille réelle.
+- PostgreSQL enums → `ENUM` MySQL ou table de référence si cela est plus sûr.
+- Conserve les valeurs NULL.
+- Conserve les valeurs par défaut utiles.
+- Recrée les clés primaires.
+- Recrée les clés étrangères.
+- Recrée les index uniques et index de recherche.
+- Vérifie les noms réservés MySQL.
+- Vérifie les différences de casse entre PostgreSQL et MySQL.
+- Vérifie les colonnes JSON et les requêtes qui les utilisent.
+
+Ne modifie pas les données uniquement pour rendre la migration plus facile. Si une conversion est ambiguë, arrête-toi et explique le problème.
+
+PHASE 4 — MIGRATION DU CODE SERVEUR :
+Remplace la connexion PostgreSQL/Supabase par MySQL/MariaDB avec le driver adapté, par exemple :
+- `mysql2/promise`;
+- `drizzle-orm/mysql2`;
+- `drizzle-orm/mysql-core`.
+
+Utilise une variable d'environnement comme :
+`MYSQL_DATABASE_URL`
+
+Conserve temporairement l'ancienne variable PostgreSQL uniquement si cela permet un rollback sûr, mais le code final doit utiliser explicitement MySQL.
+
+Adapte les requêtes PostgreSQL incompatibles avec MySQL :
+
+1. `.returning()`
+MySQL ne supporte pas `.returning()` comme PostgreSQL.
+
+Remplacer :
+- INSERT + RETURNING → INSERT, récupérer `insertId`, puis SELECT de la ligne créée.
+- UPDATE + RETURNING → UPDATE, puis SELECT si la réponse doit contenir la ligne.
+- DELETE + RETURNING → DELETE, puis utiliser `affectedRows` ou SELECT avant suppression si nécessaire.
+
+Avec Drizzle/MySQL :
+- le résultat d'un INSERT est un tableau ;
+- l'identifiant doit être lu avec `result[0].insertId` ;
+- pour UPDATE/DELETE, le nombre de lignes doit être lu avec `result[0].affectedRows`.
+
+Ne jamais utiliser `rowCount` PostgreSQL dans le code MySQL.
+
+2. SQL brut
+Convertir notamment :
+- `::int` ;
+- `::numeric` ;
+- `::text` ;
+- `::jsonb` ;
+- `FILTER (WHERE ...)` ;
+- `ON CONFLICT`;
+- `RETURNING`;
+- `ILIKE`;
+- `ANY(...)`;
+- `INTERVAL '24 hours'`;
+- `metadata->>'field'`;
+- les opérateurs JSON PostgreSQL ;
+- les casts PostgreSQL.
+
+Exemples :
+- `count(*)::int` → `count(*)` ou `CAST(... AS SIGNED)`.
+- `amount::numeric` → `CAST(amount AS DECIMAL(...))`.
+- `count(*) FILTER (WHERE status = 'SUCCESS')`
+  → `SUM(CASE WHEN status = 'SUCCESS' THEN 1 ELSE 0 END)`.
+- `ON CONFLICT (...) DO UPDATE`
+  → `ON DUPLICATE KEY UPDATE`.
+- `metadata->>'paymentId'`
+  → `JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.paymentId'))`.
+- `NOW() - INTERVAL '24 hours'`
+  → `NOW() - INTERVAL 24 HOUR`.
+- `ILIKE`
+  → `LIKE`, avec une vérification de la casse et de la collation.
+- `WHERE id = ANY($1::int[])`
+  → `WHERE id IN (?)`, avec gestion explicite des tableaux vides.
+
+Si le projet contient beaucoup de SQL brut avec des paramètres `$1`, `$2`, etc., crée si nécessaire une couche de compatibilité contrôlée qui convertit les paramètres PostgreSQL vers les paramètres `?` de MySQL. Teste cette couche avec :
+- des paramètres dans un ordre différent ;
+- des paramètres réutilisés ;
+- des requêtes SELECT ;
+- des requêtes INSERT ;
+- des requêtes UPDATE ;
+- des requêtes DELETE.
+
+PHASE 5 — MIGRATION DES DONNÉES :
+Crée un script de migration séparé et relançable, par exemple :
+- `scripts/export-supabase-data.*`
+- `scripts/import-mysql-data.*`
+- `scripts/verify-migration.*`
+
+Le script d'import doit :
+- préserver les identifiants existants ;
+- préserver les dates ;
+- préserver les relations ;
+- importer les parents avant les enfants ;
+- désactiver temporairement les contraintes si nécessaire, puis les réactiver ;
+- ne pas créer de doublons ;
+- pouvoir être relancé sans doubler les données ;
+- utiliser des transactions lorsque c'est possible ;
+- produire un rapport par table ;
+- signaler les lignes refusées au lieu de les ignorer silencieusement.
+
+Pour les tables avec `AUTO_INCREMENT` :
+- importe les anciens IDs ;
+- remets ensuite la séquence `AUTO_INCREMENT` au-dessus du plus grand ID existant ;
+- vérifie qu'aucun nouvel enregistrement ne réutilise un ancien ID.
+
+Pour les utilisateurs :
+- conserve les IDs si les autres tables les référencent ;
+- conserve les emails ;
+- conserve les rôles et statuts ;
+- ne réinitialise pas les mots de passe ;
+- si les mots de passe Supabase Auth ne peuvent pas être migrés directement, ne les remplace pas silencieusement ;
+- propose une procédure contrôlée de réinitialisation ou de migration progressive ;
+- conserve les profils métier même si l'authentification est traitée séparément.
+
+Pour Supabase Storage :
+- ne supprime aucun fichier ;
+- liste tous les fichiers ;
+- copie les fichiers vers le stockage cible ou conserve temporairement Supabase Storage ;
+- mets à jour les références uniquement après vérification ;
+- vérifie les URL et permissions.
+
+PHASE 6 — VÉRIFICATION AUTOMATIQUE :
+Après l'import, compare Supabase et MySQL.
+
+Pour chaque table, vérifie :
+- nombre de lignes ;
+- nombre de lignes non NULL par colonne importante ;
+- minimum et maximum des IDs ;
+- minimum et maximum des dates ;
+- somme et total des montants financiers ;
+- nombre de statuts par valeur ;
+- nombre d'utilisateurs par rôle ;
+- nombre de relations orphelines ;
+- valeurs JSON invalides ;
+- doublons sur les colonnes uniques ;
+- clés étrangères cassées.
+
+Pour les tables financières, compare aussi :
+- total des dépôts ;
+- total des retraits ;
+- total des transferts ;
+- soldes ;
+- frais ;
+- commissions ;
+- marges ;
+- nombres de transactions par statut.
+
+Ne déclare pas la migration réussie si une différence est inexpliquée.
+
+Génère un rapport clair :
+- table ;
+- lignes Supabase ;
+- lignes MySQL ;
+- différence ;
+- statut PASS/FAIL ;
+- explication éventuelle.
+
+PHASE 7 — TESTS FONCTIONNELS :
+Avec une copie de la base migrée, teste au minimum :
+- inscription ;
+- connexion ;
+- récupération du profil ;
+- affichage du dashboard ;
+- affichage des soldes ;
+- affichage des services et frais ;
+- création d'une transaction ;
+- mise à jour d'une transaction ;
+- webhook ou callback de paiement ;
+- crédit wallet ;
+- débit wallet ;
+- transfert ;
+- notifications ;
+- KYC si présent ;
+- administration ;
+- export ou historique des transactions ;
+- upload et téléchargement de fichiers si présent.
+
+Vérifie spécialement la concurrence :
+- deux webhooks identiques ne doivent jamais créditer deux fois ;
+- un webhook et une action admin simultanés ne doivent pas doubler le crédit ;
+- une transaction déjà traitée ne doit pas être retraitée ;
+- les contrôles MySQL doivent utiliser `affectedRows`, pas `rowCount`.
+
+PHASE 8 — DÉPLOIEMENT :
+Ne bascule pas la production immédiatement.
+
+Prépare d'abord :
+1. un environnement MySQL de test ;
+2. un import complet des données ;
+3. un build backend ;
+4. un build frontend ;
+5. un test local complet ;
+6. un rapport de validation.
+
+Le déploiement production doit suivre ce plan :
+1. sauvegarde finale Supabase ;
+2. arrêt temporaire des écritures si nécessaire ;
+3. export final des nouvelles données ;
+4. import final dans MySQL ;
+5. vérification des compteurs et montants ;
+6. changement de `MYSQL_DATABASE_URL` ;
+7. redémarrage de l'application ;
+8. test de connexion ;
+9. test d'une lecture ;
+10. test contrôlé d'une écriture ;
+11. surveillance des logs ;
+12. conservation de Supabase intacte pendant la période de rollback.
+
+Si le projet utilise Plesk :
+- prépare le build compatible avec Passenger ;
+- vérifie que le point d'entrée Node.js est correct ;
+- copie le build réellement utilisé par la production ;
+- ne te limite pas au code source si Plesk exécute un dossier `dist/` déjà compilé ;
+- vérifie que `dist/` est bien à jour ;
+- documente les commandes `git pull`, installation des dépendances et redémarrage ;
+- ne mets jamais la chaîne de connexion contenant le mot de passe dans Git.
+
+LIVRABLES OBLIGATOIRES :
+1. Rapport d'inspection initial.
+2. Sauvegarde/export Supabase.
+3. Schéma MySQL converti.
+4. Script d'import des données.
+5. Script de vérification.
+6. Code serveur compatible MySQL.
+7. Build frontend/backend à jour.
+8. Rapport de comparaison Supabase/MySQL.
+9. Liste des tests réalisés.
+10. Procédure de rollback vers Supabase.
+11. Instructions exactes pour la mise en production.
+12. Liste des éventuels problèmes non résolus.
+
+À chaque étape, arrête-toi si tu détectes un risque de perte de données. N'utilise jamais une solution silencieuse qui ignore les erreurs. Toute ligne non importée doit être signalée avec sa table, son identifiant et la cause de l'erreur.
