@@ -180,7 +180,7 @@ export const ALL_FX_CURRENCIES: FxCurrency[] = [
   { code: "USD", name: "US Dollar", defaultRate: 1.00 },
   { code: "EUR", name: "Euro Zone", defaultRate: 0.94 },
   { code: "GBP", name: "Great British Pounds", defaultRate: 0.82 },
-  { code: "XAF", name: "Central African CFA Franc BEAC", defaultRate: 585.00 },
+  { code: "XAF", name: "Cameroon XAF", defaultRate: 585.00 },
   { code: "XOF", name: "West African CFA Franc", defaultRate: 585.00 },
   { code: "XOFC", name: "Côte d'Ivoire (XOF)", defaultRate: 585.00 },
   { code: "XOFF", name: "Burkina Faso (XOF)", defaultRate: 585.00 },

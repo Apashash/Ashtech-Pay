@@ -301,10 +301,17 @@ export default function ConvertPage() {
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </button>
               </PopoverTrigger>
-              <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-0">
+              <PopoverContent
+                align="start"
+                className="w-[var(--radix-popover-trigger-width)] p-0"
+                onOpenAutoFocus={(event) => event.preventDefault()}
+              >
                 <Command>
                   <CommandInput placeholder="Rechercher par devise ou pays..." />
-                  <CommandList className="max-h-[min(60vh,320px)] overflow-y-auto overscroll-contain touch-pan-y">
+                  <CommandList
+                    className="max-h-[240px] min-h-0 overflow-y-auto overscroll-contain touch-pan-y"
+                    style={{ WebkitOverflowScrolling: "touch" }}
+                  >
                     <CommandEmpty>Aucune devise trouvée.</CommandEmpty>
                     <CommandGroup>
                       {walletList.map((w) => (
@@ -366,10 +373,17 @@ export default function ConvertPage() {
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </button>
               </PopoverTrigger>
-              <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-0">
+              <PopoverContent
+                align="start"
+                className="w-[var(--radix-popover-trigger-width)] p-0"
+                onOpenAutoFocus={(event) => event.preventDefault()}
+              >
                 <Command>
                   <CommandInput placeholder="Rechercher par devise ou pays..." />
-                  <CommandList className="max-h-[min(60vh,320px)] overflow-y-auto overscroll-contain touch-pan-y">
+                  <CommandList
+                    className="max-h-[240px] min-h-0 overflow-y-auto overscroll-contain touch-pan-y"
+                    style={{ WebkitOverflowScrolling: "touch" }}
+                  >
                     <CommandEmpty>Aucune devise trouvée.</CommandEmpty>
                     <CommandGroup>
                       {toCurrencyOptions.filter((c) => c !== fromCurrency).map((currency) => (
