@@ -729,27 +729,6 @@ export default function DashboardHome() {
                       </p>
                     );
                   })()}
-                  {secondaryWallets.length > 0 && (
-                    <div className="grid w-full grid-cols-2 gap-4 mt-4">
-                      {secondaryWallets.map((wallet) => {
-                        const balanceText = formatDashboardWalletBalance(wallet.balance, wallet.currency);
-                        const compactLength = balanceText.replace(/\s/g, "").length;
-                        const balanceSizeClass = compactLength > 18
-                          ? "text-[10px]"
-                          : compactLength > 14
-                            ? "text-xs"
-                            : "text-sm";
-
-                        return (
-                          <div key={wallet.currency} className="w-full min-w-0 overflow-hidden rounded-lg border border-primary/10 bg-background/40 px-3 py-2.5">
-                            <p className={`${balanceSizeClass} max-w-full font-bold leading-tight text-foreground whitespace-normal break-words`}>
-                              {balanceText}
-                            </p>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
                 </div>
                 <div className="flex flex-col items-end gap-3 flex-shrink-0">
                   <button
@@ -780,6 +759,29 @@ export default function DashboardHome() {
                 </div>
               </div>
 
+              {secondaryWallets.length > 0 && (
+                <div className="grid w-full grid-cols-2 gap-4">
+                  {secondaryWallets.map((wallet) => {
+                    const balanceText = formatDashboardWalletBalance(wallet.balance, wallet.currency);
+                    const compactLength = balanceText.replace(/\s/g, "").length;
+                    const balanceSizeClass = compactLength > 18
+                      ? "text-[9px]"
+                      : compactLength > 14
+                        ? "text-[10px]"
+                        : compactLength > 10
+                          ? "text-[11px]"
+                          : "text-xs";
+
+                    return (
+                      <div key={wallet.currency} className="w-full min-w-0 overflow-hidden rounded-lg border border-primary/10 bg-background/40 px-2 py-2.5">
+                        <p className={`${balanceSizeClass} max-w-full overflow-hidden text-center font-bold leading-tight tracking-tight text-foreground whitespace-nowrap`}>
+                          {balanceText}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
