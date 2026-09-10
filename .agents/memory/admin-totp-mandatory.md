@@ -71,6 +71,14 @@ The panel TOTP-to-PIN handoff permits a short IP transition window for mobile ne
 
 **How to apply:** Keep the handoff narrow and tied to a freshly verified panel TOTP; do not turn off the broader session IP checks or mandatory TOTP enforcement.
 
+### Panel PIN error ordering
+
+The panel PIN endpoint validates the submitted PIN before checking the panel TOTP session. A wrong PIN must return the PIN error; only a correct PIN may proceed to the TOTP/session gate.
+
+**Why:** Checking the session first made every PIN typo look like an expired Google Authenticator session when the mobile IP or panel session was not recognized.
+
+**How to apply:** Preserve the fail-closed grant behavior: validating a correct PIN never opens the panel by itself, and the TOTP plus session/IP checks must still pass before `_ppv` is stored.
+
 ## Frontend flows
 
 ### Login flow (password → TOTP)
