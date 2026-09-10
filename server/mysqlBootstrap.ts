@@ -9,8 +9,7 @@ const KYC_DOCUMENTS_TABLE_SQL = `CREATE TABLE IF NOT EXISTS kyc_documents (
   encrypted_data MEDIUMTEXT NOT NULL,
   created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   UNIQUE KEY kyc_documents_storage_path_unique (storage_path),
-  INDEX kyc_documents_user_id_idx (user_id),
-  CONSTRAINT kyc_documents_user_fk FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  INDEX kyc_documents_user_id_idx (user_id)
 ) ENGINE=InnoDB`;
 
 let kycDocumentsSchemaPromise: Promise<void> | null = null;
