@@ -7,4 +7,4 @@ Plesk/Nginx may enforce a request body limit around 2 MB even when the Node/Mult
 
 **Why:** A real production request reproduced `413` for a 2.65 MB image, while smaller unauthenticated requests reached the Node application. This makes the client’s nominal 5 MB limit misleading on Plesk.
 
-**How to apply:** Keep KYC images below the proxy threshold through client-side JPEG compression with multipart overhead room, or explicitly raise the Plesk Nginx `client_max_body_size` and retest through the public domain.
+**How to apply:** Keep KYC images below the proxy threshold through client-side JPEG compression with multipart overhead room, or explicitly raise the Plesk Nginx `client_max_body_size` and retest through the public domain. Production error sanitization must preserve only fixed upload/storage error codes; otherwise a real private-storage permission failure becomes the unhelpful `server_error`.
