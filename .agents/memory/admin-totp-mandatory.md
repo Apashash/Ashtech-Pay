@@ -63,13 +63,13 @@ The MySQL pool adapter must map `ResultSetHeader.affectedRows` to its compatible
 
 **How to apply:** Keep the adapter's result normalization correct for every `INSERT`, `UPDATE`, and `DELETE` path that relies on `rowCount`, especially pending admin-login claims and session housekeeping.
 
-### Mobile panel PIN handoff
+### Mobile panel TOTP handoff
 
-The panel TOTP-to-PIN handoff permits a short IP transition window for mobile networks, then rebinds the session to the IP present when the PIN succeeds. Normal panel requests remain IP-bound.
+The panel TOTP handoff permits a short IP transition window for mobile networks, then rebinds the session to the IP present on the first panel request. This applies whether the temporary PIN gate is enabled or disabled; normal panel requests remain IP-bound.
 
-**Why:** A 4G/5G address can rotate between the TOTP and PIN requests, causing a valid PIN to be rejected with `totpRequired` and sending the admin back to Google Authenticator.
+**Why:** A 4G/5G address can rotate between the TOTP request and the first protected panel request, causing a valid TOTP to be rejected with `totpRequired` and sending the admin back to Google Authenticator.
 
-**How to apply:** Keep the handoff narrow and tied to a freshly verified panel TOTP; do not turn off the broader session IP checks or mandatory TOTP enforcement.
+**How to apply:** Keep the handoff narrow and tied to a freshly verified panel TOTP; do not turn off the broader session IP checks or mandatory TOTP enforcement. If a PIN is later restored, the same handoff window must cover the TOTP-only-to-PIN transition.
 
 ### Panel PIN error ordering
 
