@@ -163,13 +163,33 @@ export default function WithdrawPage() {
 
   useEffect(() => {
     setSelectedOperator("");
+    setSelectedNumber("");
     form.setValue("countryId", selectedCountry);
     form.setValue("operatorId", "");
+    form.setValue("accountDetails", "");
   }, [selectedCountry, form]);
 
   useEffect(() => {
     form.setValue("operatorId", selectedOperator);
-  }, [selectedOperator, form]);
+    if (!selectedOperator || !selectedOperatorData?.name) {
+      setSelectedNumber("");
+      form.setValue("accountDetails", "");
+      return;
+    }
+
+    const operatorName = selectedOperatorData.name.trim().toLowerCase();
+    const matchingNumber = withdrawalNumbers.find(
+      number => number.operatorName.trim().toLowerCase() === operatorName
+    );
+
+    if (matchingNumber) {
+      setSelectedNumber(matchingNumber.id);
+      form.setValue("accountDetails", matchingNumber.phoneNumber);
+    } else {
+      setSelectedNumber("");
+      form.setValue("accountDetails", "");
+    }
+  }, [selectedOperator, selectedOperatorData?.name, withdrawalNumbers, form]);
 
   useEffect(() => {
     if (!showOtpDialog) return;
