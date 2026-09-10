@@ -2674,6 +2674,7 @@ export async function registerRoutes(
         error: isPrivateStorageUnavailable
           ? "Le stockage sécurisé des documents est temporairement indisponible. Veuillez réessayer plus tard."
           : "Erreur lors de l'upload",
+        code: isPrivateStorageUnavailable ? "KYC_STORAGE_UNAVAILABLE" : "UPLOAD_FAILED",
       });
     }
   });

@@ -342,6 +342,12 @@ app.use((req, res, next) => {
           bodyJson.error === "payment_initiation_failed" ||
           bodyJson.error === "provider_invalid_response" ||
           bodyJson.error === "provider_unavailable");
+      // This route only emits fixed, user-safe upload/storage messages. Keep
+      // those messages visible so Plesk permission/configuration failures are
+      // diagnosable instead of becoming the opaque "server_error".
+      const isSafeUploadFailure =
+        req.path === "/api/uploads/file" &&
+        (bodyJson.code === "KYC_STORAGE_UNAVAILABLE" || bodyJson.code === "UPLOAD_FAILED");
       const sanitized = isCryptoApi || isSafeProviderFailure
         ? {
             ...(typeof bodyJson.error === "string" ? { error: bodyJson.error } : { error: "server_error" }),
@@ -354,6 +360,12 @@ app.use((req, res, next) => {
               ? { provider_status: Number(bodyJson.provider_status) }
               : {}),
           }
+        : isSafeUploadFailure
+          ? {
+              ...(typeof bodyJson.error === "string" ? { error: bodyJson.error } : { error: "server_error" }),
+              ...(typeof bodyJson.message === "string" ? { message: bodyJson.message } : {}),
+              ...(typeof bodyJson.code === "string" ? { code: bodyJson.code } : {}),
+            }
         : {
             message: "Une erreur interne s'est produite.",
             ...(bodyJson.error ? { error: "server_error" } : {}),

@@ -42,7 +42,12 @@ export type KycDocumentBundleInput = {
 
 function getPrivateDocumentsRoot(): string {
   const configured = process.env.PRIVATE_DOCUMENTS_ROOT?.trim();
-  return path.resolve(configured || appPath("private-documents"));
+  // On Plesk, the compiled app is normally inside httpdocs. Keep the default
+  // outside that webroot so a missing env var cannot make KYC files public.
+  const defaultRoot = process.env.NODE_ENV === "production"
+    ? path.resolve(appPath(".."), "private-documents")
+    : appPath("private-documents");
+  return path.resolve(configured || defaultRoot);
 }
 
 function isInside(parent: string, candidate: string): boolean {
