@@ -87,7 +87,7 @@ function formatDashboardWalletBalance(amount: string | number, currency: string)
   return `${new Intl.NumberFormat("fr-FR", {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
-  }).format(Number.isFinite(numericAmount) ? numericAmount : 0)} ${currency}`;
+  }).format(Number.isFinite(numericAmount) ? numericAmount : 0).replace(/\u202f/g, " ")} ${currency}`;
 }
 
 function StatCard({ title, value, icon: Icon, trend, color, href }: {
@@ -731,13 +731,23 @@ export default function DashboardHome() {
                   })()}
                   {secondaryWallets.length > 0 && (
                     <div className="grid w-full grid-cols-2 gap-4 mt-4">
-                      {secondaryWallets.map((wallet) => (
-                        <div key={wallet.currency} className="w-full min-w-0 rounded-lg border border-primary/10 bg-background/40 px-3 py-2.5">
-                          <p className="text-sm font-bold text-foreground whitespace-nowrap">
-                            {formatDashboardWalletBalance(wallet.balance, wallet.currency)}
-                          </p>
-                        </div>
-                      ))}
+                      {secondaryWallets.map((wallet) => {
+                        const balanceText = formatDashboardWalletBalance(wallet.balance, wallet.currency);
+                        const compactLength = balanceText.replace(/\s/g, "").length;
+                        const balanceSizeClass = compactLength > 18
+                          ? "text-[10px]"
+                          : compactLength > 14
+                            ? "text-xs"
+                            : "text-sm";
+
+                        return (
+                          <div key={wallet.currency} className="w-full min-w-0 overflow-hidden rounded-lg border border-primary/10 bg-background/40 px-3 py-2.5">
+                            <p className={`${balanceSizeClass} max-w-full font-bold leading-tight text-foreground whitespace-normal break-words`}>
+                              {balanceText}
+                            </p>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
