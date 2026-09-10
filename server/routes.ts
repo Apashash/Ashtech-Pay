@@ -820,6 +820,51 @@ const ADMIN_PANEL_TOTP_HANDOFF_MS = 2 * 60 * 1000;
 // change must never be able to downgrade admin authentication.
 const ADMIN_TOTP_ENFORCEMENT_ENABLED = true as const;
 
+// Bearer-authenticated mobile browsers can arrive with a fresh Express session
+// on each request when the session cookie is unavailable. Recover the verified
+// factors from the durable session created for the same signed token instead
+// of treating that fresh session as an unverified admin.
+async function loadBearerAuthSessionData(req: Request): Promise<Record<string, any> | null> {
+  if (!req.userId) return null;
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) return null;
+  const tokenTimestamp = extractTokenTimestamp(authHeader.substring(7));
+  if (tokenTimestamp === null) return null;
+
+  for (const queryPool of [sessionPool, pool]) {
+    try {
+      const result: { rows: any[] } = isMysqlDialect
+        ? await queryPool.query(
+            `SELECT sess FROM session WHERE expire > NOW() AND sess LIKE $1`,
+            [`%"tokenIssuedAt":${tokenTimestamp}%`],
+          )
+        : await queryPool.query(
+            `SELECT sess FROM session
+             WHERE expire > NOW()
+               AND sess->>'userId' = $1
+               AND sess->>'tokenIssuedAt' = $2`,
+            [req.userId, String(tokenTimestamp)],
+          );
+
+      for (const row of result.rows || []) {
+        const sessionData: Record<string, any> | null =
+          typeof row.sess === "string" ? JSON.parse(row.sess) : row.sess;
+        if (
+          sessionData &&
+          String(sessionData.userId) === String(req.userId) &&
+          Number(sessionData.tokenIssuedAt) === tokenTimestamp
+        ) {
+          return sessionData;
+        }
+      }
+      return null;
+    } catch {
+      // Try the main pool if the dedicated session pool is exhausted.
+    }
+  }
+  return null;
+}
+
 // Rate-limit Telegram "panel_access" notifications — 1 notif per sessionID per 30 min
 // to avoid spamming on every API call while the admin navigates the panel.
 const adminAccessNotifCache = new Map<string, number>(); // sessionID → lastNotifAt (ms)
@@ -1274,11 +1319,40 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
               avsOk = true;
               const dbAvsIp = typeof sessData?._avsIp === "string" ? sessData._avsIp : undefined;
               if (dbAvsIp) req.session._avsIp = dbAvsIp;
+              if (typeof sessData?._pav === "number") req.session._pav = sessData._pav;
+              if (typeof sessData?._pavVerifiedAt === "number") req.session._pavVerifiedAt = sessData._pavVerifiedAt;
+              if (typeof sessData?._ppv === "number") req.session._ppv = sessData._ppv;
+              if (typeof sessData?._ppvIp === "string") req.session._ppvIp = sessData._ppvIp;
               adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: dbAvs, ip: dbAvsIp });
             }
           }
           break;
         } catch { /* try next pool */ }
+      }
+    }
+
+    if (!avsOk || typeof req.session._pav !== "number") {
+      const bearerSessionData = await loadBearerAuthSessionData(req);
+      if (bearerSessionData) {
+        const bearerAvs = bearerSessionData._avs;
+        const bearerAvsIp = typeof bearerSessionData._avsIp === "string"
+          ? bearerSessionData._avsIp
+          : undefined;
+        if (!avsOk && typeof bearerAvs === "number" && bearerAvs > nowTotp) {
+          avsOk = true;
+          if (bearerAvsIp) req.session._avsIp = bearerAvsIp;
+          adminVerifiedSessions.set(req.sessionID, {
+            userId: req.userId!,
+            expiresAt: bearerAvs,
+            ip: bearerAvsIp,
+          });
+        }
+        if (typeof bearerSessionData._pav === "number") req.session._pav = bearerSessionData._pav;
+        if (typeof bearerSessionData._pavVerifiedAt === "number") {
+          req.session._pavVerifiedAt = bearerSessionData._pavVerifiedAt;
+        }
+        if (typeof bearerSessionData._ppv === "number") req.session._ppv = bearerSessionData._ppv;
+        if (typeof bearerSessionData._ppvIp === "string") req.session._ppvIp = bearerSessionData._ppvIp;
       }
     }
 
@@ -9904,6 +9978,37 @@ export async function registerRoutes(
         }
       }
     }
+
+  if (!verified || typeof req.session._pav !== "number") {
+    const bearerSessionData = await loadBearerAuthSessionData(req);
+    if (bearerSessionData) {
+      dbSessData = bearerSessionData;
+      const bearerAvs = bearerSessionData._avs;
+      const bearerAvsIp = typeof bearerSessionData._avsIp === "string"
+        ? bearerSessionData._avsIp
+        : undefined;
+      if (
+        typeof bearerAvs === "number" &&
+        bearerAvs > now &&
+        bearerAvsIp &&
+        normalizeLoopback(bearerAvsIp) === normalizeLoopback(currentIp)
+      ) {
+        verified = true;
+        req.session._avsIp = bearerAvsIp;
+        adminVerifiedSessions.set(req.sessionID, {
+          userId: req.userId!,
+          expiresAt: bearerAvs,
+          ip: bearerAvsIp,
+        });
+      }
+      if (typeof bearerSessionData._pav === "number") req.session._pav = bearerSessionData._pav;
+      if (typeof bearerSessionData._pavVerifiedAt === "number") {
+        req.session._pavVerifiedAt = bearerSessionData._pavVerifiedAt;
+      }
+      if (typeof bearerSessionData._ppv === "number") req.session._ppv = bearerSessionData._ppv;
+      if (typeof bearerSessionData._ppvIp === "string") req.session._ppvIp = bearerSessionData._ppvIp;
+    }
+  }
 
   // Check _pav (panel TOTP verified) — 24h inactivity window, refreshed by
   // successful panel activity. If _avs is valid but _pav is missing/expired,
