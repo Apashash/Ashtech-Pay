@@ -322,21 +322,21 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           
           <SidebarContent>
             <SidebarGroup>
-              <div className="px-4 py-3.5 mx-2 my-2 bg-gradient-to-br from-primary/15 to-primary/5 rounded-xl border border-primary/20 shadow-sm">
-                <p className="text-[11px] font-medium text-muted-foreground mb-1 uppercase tracking-wide">{t.sidebar.availableBalance}</p>
-                <p className="text-lg font-bold text-primary" data-testid="text-sidebar-balance">
+              <div className="mx-2 my-2 overflow-hidden rounded-2xl border border-[#1A237E] bg-[#1A237E] px-4 py-4 shadow-sm">
+                <p className="mb-1 text-sm text-white/75">{t.sidebar.availableBalance}</p>
+                <p className="whitespace-nowrap text-2xl font-bold text-white" data-testid="text-sidebar-balance">
                   {formatWalletBalance(sidebarBalance, preferredCurrency)}
                 </p>
               </div>
             </SidebarGroup>
 
             <SidebarGroup>
-              <SidebarGroupLabel className="px-4">{t.sidebar.mainMenu}</SidebarGroupLabel>
+              <SidebarGroupLabel className="px-4 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{t.sidebar.mainMenu}</SidebarGroupLabel>
               <SidebarGroupContent className="px-2">
                 <SidebarMenu>
                   {menuItems.map((item) => (
                     <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton asChild isActive={location === item.url} className="h-11 rounded-xl gap-3 group-data-[collapsible=icon]:h-9!">
+                      <SidebarMenuButton asChild isActive={location === item.url} className="h-11 rounded-xl gap-3 text-sm font-semibold group-data-[collapsible=icon]:h-9!">
                         <Link href={item.url}>
                           <SidebarIconBadge icon={item.icon} imageSrc={item.imageSrc} color={item.color} />
                           <span>{item.title}</span>
@@ -349,7 +349,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             </SidebarGroup>
 
             <SidebarGroup>
-              <SidebarGroupLabel className="px-4">{t.sidebar.settingsSupport}</SidebarGroupLabel>
+              <SidebarGroupLabel className="px-4 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{t.sidebar.settingsSupport}</SidebarGroupLabel>
               <SidebarGroupContent className="px-2">
                 <SidebarMenu>
                   {settingsItems.map((item) => {
@@ -362,7 +362,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                           <SidebarMenuButton 
                             isActive={location === item.url}
                             onClick={handleKycClick}
-                            className="cursor-pointer h-11 rounded-xl gap-3 group-data-[collapsible=icon]:h-9!"
+                            className="cursor-pointer h-11 rounded-xl gap-3 text-sm font-semibold group-data-[collapsible=icon]:h-9!"
                           >
                             <SidebarIconBadge icon={item.icon} imageSrc={item.imageSrc} color={item.color} />
                             <span className="flex-1">{item.title}</span>
@@ -377,7 +377,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                     if (isKyc && user?.kycStatus !== "approved" && user?.kycStatus !== "verified") {
                       return (
                         <SidebarMenuItem key={item.title}>
-                          <SidebarMenuButton asChild isActive={location === item.url} className="h-11 rounded-xl gap-3 group-data-[collapsible=icon]:h-9!">
+                          <SidebarMenuButton asChild isActive={location === item.url} className="h-11 rounded-xl gap-3 text-sm font-semibold group-data-[collapsible=icon]:h-9!">
                             <Link href={item.url}>
                               <SidebarIconBadge icon={item.icon} imageSrc={item.imageSrc} color="bg-red-500/10 text-red-500" className="animate-bell-ring" />
                               <span className="flex-1 text-red-500 font-semibold">{item.title}</span>
@@ -393,7 +393,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                     
                     return (
                       <SidebarMenuItem key={item.title}>
-                        <SidebarMenuButton asChild isActive={location === item.url} className="h-11 rounded-xl gap-3 group-data-[collapsible=icon]:h-9!">
+                        <SidebarMenuButton asChild isActive={location === item.url} className="h-11 rounded-xl gap-3 text-sm font-semibold group-data-[collapsible=icon]:h-9!">
                           <Link href={item.url}>
                             <SidebarIconBadge icon={item.icon} imageSrc={item.imageSrc} color={item.color} />
                             <span className="flex-1">{item.title}</span>
