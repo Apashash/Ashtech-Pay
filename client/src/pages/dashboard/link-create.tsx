@@ -211,7 +211,6 @@ export default function LinkCreatePage() {
           </Button>
           <div>
             <h1 className="text-xl font-bold text-foreground">{lk.pageCreateTitle}</h1>
-            <p className="text-muted-foreground text-sm">{lk.pageCreateSub}</p>
           </div>
         </div>
 
