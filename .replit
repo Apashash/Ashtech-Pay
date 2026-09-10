@@ -69,6 +69,8 @@ TRUST_PROXY = "true"
 APP_URL = "https://ashtechpay.top"
 
 [userenv.development]
+DB_DIALECT = "mysql"
+DEBUG_DATABASE_ERRORS = "true"
 
 [userenv.production]
 

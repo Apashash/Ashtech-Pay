@@ -413,7 +413,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(ilike(users.email, email.trim()));
+    const normalizedEmail = email.trim();
+    const emailCondition = isMysqlDialect
+      ? sql`lower(${users.email}) = lower(${normalizedEmail})`
+      : ilike(users.email, normalizedEmail);
+    const [user] = await db.select().from(users).where(emailCondition);
     return user || undefined;
   }
 

@@ -37,6 +37,7 @@ import { sendClean404 } from "./clean404";
 import { isSpaRoute } from "./spaRoutes";
 import { createServer } from "http";
 import { encryptField, hmacField } from "./fieldEncryption";
+import { formatDebugError, shouldExposeDebugErrors } from "./errorDiagnostics";
 
 const app = express();
 const httpServer = createServer(app);
@@ -87,11 +88,18 @@ app.use((req, res, next) => {
     req.path === "/api/ping" || !req.path.startsWith("/api");
   if (startupReady && (migrationsReady || publicDuringMigration)) return next();
   const message = startupFailure
-    ? "Le service rencontre un problème de démarrage. Veuillez réessayer plus tard."
+    ? shouldExposeDebugErrors
+      ? `Démarrage impossible : ${formatDebugError(startupFailure)}`
+      : "Le service rencontre un problème de démarrage. Veuillez réessayer plus tard."
     : "Le service démarre. Veuillez réessayer dans quelques instants.";
   res.status(503).set("Retry-After", "2");
   if (req.path.startsWith("/api")) {
-    return res.json({ ok: false, ready: false, message });
+    return res.json({
+      ok: false,
+      ready: false,
+      message,
+      ...(shouldExposeDebugErrors && startupFailure ? { error_code: "STARTUP_FAILURE" } : {}),
+    });
   }
   return res
     .set("Content-Type", "text/html; charset=utf-8")

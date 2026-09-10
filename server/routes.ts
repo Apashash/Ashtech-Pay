@@ -96,6 +96,7 @@ import { buildPawaPayFeeUpdates } from "./feeUpdates";
 import { toLocalMobileMoneyPhone, validateMobileMoneyPhone } from "@shared/mobile-money-phone";
 import { getVapidPublicKey, sendPushNotificationToAll } from "./push";
 import { buildTransactionBalanceSnapshots } from "./transactionBalances";
+import { formatDebugError, shouldExposeDebugErrors } from "./errorDiagnostics";
 
 const PAWAPAY_PUBLIC_INITIATION_TIMEOUT_MS = 20_000;
 
@@ -3175,8 +3176,15 @@ export async function registerRoutes(
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: error.errors[0].message });
       }
-      console.error("Login error:", error);
-      res.status(500).json({ message: "Erreur serveur" });
+      const requestId = crypto.randomUUID();
+      console.error(`[Login error][${requestId}]`, error);
+      const debugMessage = shouldExposeDebugErrors
+        ? `Erreur de connexion [${requestId}] : ${formatDebugError(error)}`
+        : "Erreur serveur";
+      res.status(500).json({
+        message: debugMessage,
+        ...(shouldExposeDebugErrors ? { request_id: requestId } : {}),
+      });
     }
   });
 
