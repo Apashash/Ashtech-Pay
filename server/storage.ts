@@ -2669,17 +2669,39 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createAutoConversionRule(data: InsertAutoConversionRule): Promise<AutoConversionRule> {
+    if (isMysqlDialect) {
+      return mysqlInsertAndRead(
+        autoConversionRules,
+        data as Record<string, unknown>,
+        (id) => this.getAutoConversionRuleById(id),
+      );
+    }
     const [created] = await db.insert(autoConversionRules).values(data).returning();
     return created;
   }
 
   async updateAutoConversionRule(id: string, userId: string, toCurrency: string): Promise<AutoConversionRule | undefined> {
+    if (isMysqlDialect) {
+      return mysqlUpdateAndRead(
+        autoConversionRules,
+        and(eq(autoConversionRules.id, id), eq(autoConversionRules.userId, userId)),
+        { toCurrency },
+        () => this.getAutoConversionRuleById(id, userId),
+      );
+    }
     const [updated] = await db
       .update(autoConversionRules)
       .set({ toCurrency })
       .where(and(eq(autoConversionRules.id, id), eq(autoConversionRules.userId, userId)))
       .returning();
     return updated;
+  }
+
+  private async getAutoConversionRuleById(id: string, userId?: string): Promise<AutoConversionRule | undefined> {
+    const conditions = [eq(autoConversionRules.id, id)];
+    if (userId) conditions.push(eq(autoConversionRules.userId, userId));
+    const [rule] = await db.select().from(autoConversionRules).where(and(...conditions));
+    return rule;
   }
 
   async deleteAutoConversionRule(id: string, userId: string): Promise<void> {
