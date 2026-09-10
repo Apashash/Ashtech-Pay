@@ -165,7 +165,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   const { data: user, isLoading } = useQuery<User>({
     queryKey: ["/api/user"],
   });
-  const { data: panelAccess, isLoading: panelAccessLoading } = useQuery<{
+  const { data: panelAccess, isLoading: panelAccessLoading, isFetching: panelAccessFetching } = useQuery<{
     verified: boolean;
     needsPanelVerify?: boolean;
     needsPanelPin?: boolean;
@@ -325,11 +325,11 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   }, [isLoading, user, setLocation]);
 
   useEffect(() => {
-    if (isLoading || panelAccessLoading || !user || user.role !== "admin") return;
+    if (isLoading || panelAccessLoading || panelAccessFetching || !user || user.role !== "admin") return;
     if (!panelAccess?.verified || panelAccess.needsPanelVerify || panelAccess.needsPanelPin) {
       setLocation("/admin-panel-verify");
     }
-  }, [isLoading, panelAccessLoading, panelAccess, user, setLocation]);
+  }, [isLoading, panelAccessLoading, panelAccessFetching, panelAccess, user, setLocation]);
 
   // ─── Admin IP Whitelist polling — every 3s ───────────────────────────────────
   // If the server-side whitelist is active and our IP is no longer allowed,

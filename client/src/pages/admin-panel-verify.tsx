@@ -100,6 +100,7 @@ export default function AdminPanelVerifyPage() {
     onSuccess: () => {
       queryClient.setQueryData(["/api/admin/otp-status"], (old: any) => ({
         ...(old || {}),
+        needsPanelVerify: undefined,
         needsPanelPin: undefined,
         verified: true,
       }));
