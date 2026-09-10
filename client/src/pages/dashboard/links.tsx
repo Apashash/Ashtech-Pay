@@ -383,7 +383,7 @@ function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => voi
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-sm font-medium uppercase tracking-[0.16em] text-muted-foreground select-none pb-1">
+    <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground select-none pb-1">
       {children}
     </p>
   );
@@ -412,8 +412,8 @@ function StatCard({ title, value, icon: Icon, imageSrc, trend, color }: {
         )}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-base font-normal text-foreground">{title}</p>
-        <p className="text-base font-medium text-foreground mt-0.5">{value}</p>
+        <p className="text-sm font-normal text-foreground">{title}</p>
+        <p className="text-sm font-medium text-foreground mt-0.5">{value}</p>
         {trend && <p className="text-xs text-green-500">{trend}</p>}
       </div>
     </div>
@@ -851,22 +851,22 @@ function LinkAnalyticsDialog({
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="text-center p-4 rounded-lg bg-muted/50">
                   <MousePointer className="w-5 h-5 mx-auto mb-2 text-blue-500" />
-                  <p className="text-2xl font-bold">{data.analytics.clickCount}</p>
+                  <p className="text-xl font-bold">{data.analytics.clickCount}</p>
                   <p className="text-xs text-muted-foreground">Clics</p>
                 </div>
                 <div className="text-center p-4 rounded-lg bg-muted/50">
                   <ArrowDownUp className="w-5 h-5 mx-auto mb-2 text-green-500" />
-                  <p className="text-2xl font-bold">{data.analytics.completedCount}</p>
+                  <p className="text-xl font-bold">{data.analytics.completedCount}</p>
                   <p className="text-xs text-muted-foreground">Validés</p>
                 </div>
                 <div className="text-center p-4 rounded-lg bg-muted/50">
                   <Clock className="w-5 h-5 mx-auto mb-2 text-amber-500" />
-                  <p className="text-2xl font-bold">{data.analytics.pendingCount}</p>
+                  <p className="text-xl font-bold">{data.analytics.pendingCount}</p>
                   <p className="text-xs text-muted-foreground">En cours</p>
                 </div>
                 <div className="text-center p-4 rounded-lg bg-muted/50">
                   <TrendingUp className="w-5 h-5 mx-auto mb-2 text-purple-500" />
-                  <p className="text-2xl font-bold">{data.analytics.conversionRate}%</p>
+                  <p className="text-xl font-bold">{data.analytics.conversionRate}%</p>
                   <p className="text-xs text-muted-foreground">Conversion</p>
                 </div>
               </div>
@@ -874,16 +874,16 @@ function LinkAnalyticsDialog({
               <div className="grid grid-cols-2 gap-4">
                 <Card>
                   <CardContent className="p-4">
-                    <p className="text-muted-foreground text-sm mb-1">Total collecté</p>
-                    <p className="text-xl font-bold text-green-500">
+                    <p className="text-muted-foreground text-xs mb-1">Total collecté</p>
+                    <p className="text-lg font-bold text-green-500">
                       {formatCurrency(parseFloat(data.analytics.totalCollected), userCurrency)}
                     </p>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="p-4">
-                    <p className="text-muted-foreground text-sm mb-1">En attente</p>
-                    <p className="text-xl font-bold text-amber-500">
+                    <p className="text-muted-foreground text-xs mb-1">En attente</p>
+                    <p className="text-lg font-bold text-amber-500">
                       {formatCurrency(parseFloat(data.analytics.totalPending), userCurrency)}
                     </p>
                   </CardContent>
@@ -891,7 +891,7 @@ function LinkAnalyticsDialog({
               </div>
 
               <div>
-                <h4 className="font-semibold mb-3 flex items-center gap-2">
+                <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
                   <BarChart3 className="w-4 h-4" />
                   Historique des transactions ({data.transactions.length})
                 </h4>
@@ -908,14 +908,14 @@ function LinkAnalyticsDialog({
                       >
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
-                            <p className="font-medium text-sm">{tx.payerName || "Client"}</p>
+                            <p className="font-medium text-xs">{tx.payerName || "Client"}</p>
                             {getStatusBadge(tx.status)}
                           </div>
                           <p className="text-xs text-muted-foreground">
                             {tx.payerEmail} {tx.createdAt && `• ${format(new Date(tx.createdAt), "dd/MM/yyyy HH:mm", { locale: fr })}`}
                           </p>
                         </div>
-                        <p className={`font-bold ${tx.status === "completed" ? "text-green-500" : tx.status === "pending" ? "text-amber-500" : "text-red-500"}`}>
+                        <p className={`text-sm font-bold ${tx.status === "completed" ? "text-green-500" : tx.status === "pending" ? "text-amber-500" : "text-red-500"}`}>
                           {formatCurrency(parseFloat(tx.amount), tx.currency as SupportedCurrency)}
                         </p>
                       </div>
@@ -1201,9 +1201,9 @@ export default function PaymentLinksPage() {
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-foreground">{t.links.title}</h1>
+            <h1 className="text-xl font-semibold text-foreground">{t.links.title}</h1>
           </div>
-          <Button className="h-12 rounded-2xl px-4 text-base shadow-sm" onClick={() => navigate("/dashboard/links/new")} data-testid="button-new-link">
+          <Button className="h-12 rounded-2xl px-4 text-sm shadow-sm" onClick={() => navigate("/dashboard/links/new")} data-testid="button-new-link">
             <Plus className="w-4 h-4 mr-2" />
             {t.links.newLink}
           </Button>
@@ -1235,19 +1235,19 @@ export default function PaymentLinksPage() {
                       )}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
-                           <p className="text-base font-normal text-foreground truncate">{link.title}</p>
+                           <p className="text-sm font-normal text-foreground truncate">{link.title}</p>
                           {link.isActive
                             ? <CheckCircle className="w-3.5 h-3.5 text-green-500 shrink-0" />
                             : <XCircle className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
                         </div>
-                         <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
+                         <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
                           <span className="flex items-center gap-1"><Eye className="w-3 h-3" />{link.clickCount || 0} {t.links.clicks}</span>
                           <span>{link.isFixedAmount ? formatCurrency(link.amount, (user?.preferredCurrency || "XAF") as SupportedCurrency) : t.links.freeAmount}</span>
                         </div>
                       </div>
                       <div className="text-right shrink-0">
-                         <p className="text-base font-medium text-foreground">{formatCurrency(stats.totalCollected, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</p>
-                         <p className="text-sm text-muted-foreground">{stats.transactionCount} pmt.</p>
+                       <p className="text-sm font-medium text-foreground">{formatCurrency(stats.totalCollected, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</p>
+                       <p className="text-xs text-muted-foreground">{stats.transactionCount} pmt.</p>
                       </div>
                     </div>
                      <div className="flex items-center justify-between px-4 py-3 gap-2 border-t border-border/40">
@@ -1283,7 +1283,7 @@ export default function PaymentLinksPage() {
               })}
               {sortedLinks.length > 5 && (
                 <button
-                   className="w-full flex items-center justify-center gap-2 rounded-2xl border border-border/70 bg-card px-4 py-4 text-sm font-medium uppercase tracking-[0.16em] text-muted-foreground shadow-sm hover:bg-muted/40 transition-colors"
+                   className="w-full flex items-center justify-center gap-2 rounded-2xl border border-border/70 bg-card px-4 py-4 text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground shadow-sm hover:bg-muted/40 transition-colors"
                   onClick={() => setShowAllRecentLinks(!showAllRecentLinks)}
                   data-testid="button-toggle-all-links"
                 >
@@ -1299,7 +1299,7 @@ export default function PaymentLinksPage() {
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-muted-foreground" />
             <Select value={selectedLink} onValueChange={setSelectedLink}>
-              <SelectTrigger className="w-48 h-12 rounded-2xl bg-card text-base shadow-sm" data-testid="select-link-filter">
+              <SelectTrigger className="w-48 h-12 rounded-2xl bg-card text-sm shadow-sm" data-testid="select-link-filter">
                 <SelectValue placeholder={t.links.allLinks} />
               </SelectTrigger>
               <SelectContent>
@@ -1313,7 +1313,7 @@ export default function PaymentLinksPage() {
           <div className="flex items-center gap-2">
             <Calendar className="w-4 h-4 text-muted-foreground" />
             <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
-              <SelectTrigger className="w-48 h-12 rounded-2xl bg-card text-base shadow-sm" data-testid="select-period-filter">
+              <SelectTrigger className="w-48 h-12 rounded-2xl bg-card text-sm shadow-sm" data-testid="select-period-filter">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1379,7 +1379,7 @@ export default function PaymentLinksPage() {
               <Card className="lg:col-span-2">
                 <CardHeader>
                   <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{t.links.tabAnalytics}</p>
-                  <CardTitle className="flex items-center gap-2 text-base">
+                  <CardTitle className="flex items-center gap-2 text-sm">
                     <BarChart3 className="w-4 h-4 text-muted-foreground" />
                     {t.links.chartTitle}
                   </CardTitle>
@@ -1421,7 +1421,7 @@ export default function PaymentLinksPage() {
               <Card>
                 <CardHeader>
                   <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{t.links.geoSection}</p>
-                  <CardTitle className="flex items-center gap-2 text-base">
+                  <CardTitle className="flex items-center gap-2 text-sm">
                     <Globe className="w-4 h-4 text-muted-foreground" />
                     {t.links.geoTitle}
                   </CardTitle>
@@ -1462,7 +1462,7 @@ export default function PaymentLinksPage() {
             <Card>
               <CardHeader>
                 <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{t.links.methodsSection}</p>
-                <CardTitle className="text-base">{t.links.methodsTitle}</CardTitle>
+                <CardTitle className="text-sm">{t.links.methodsTitle}</CardTitle>
                 <CardDescription>{t.links.methodsDesc}</CardDescription>
               </CardHeader>
               <CardContent>
@@ -1515,7 +1515,7 @@ export default function PaymentLinksPage() {
             <Card>
               <CardHeader>
                 <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{t.links.tabPayments}</p>
-                <CardTitle className="flex items-center gap-2 text-base">
+                  <CardTitle className="flex items-center gap-2 text-sm">
                   <Wallet className="w-4 h-4 text-muted-foreground" />
                   {t.links.paymentsTitle}
                 </CardTitle>
@@ -1556,7 +1556,7 @@ export default function PaymentLinksPage() {
                             </div>
                             <div className="flex items-center gap-4 mt-2 flex-wrap">
                               <div className="flex flex-col">
-                                <span className="text-lg font-bold text-primary">
+                                <span className="text-base font-bold text-primary">
                                   {formatCurrency(
                                     intent.feeAmount 
                                       ? parseFloat(String(intent.amount)) - parseFloat(intent.feeAmount)
@@ -1604,8 +1604,8 @@ export default function PaymentLinksPage() {
               ) : paymentLinks.length === 0 ? (
                 <div className="text-center py-12 rounded-2xl border border-border/70 bg-card shadow-sm">
                   <Link2 className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-base text-muted-foreground mb-4">{t.links.noLinks}</p>
-                  <Button className="h-12 rounded-2xl px-4 text-base shadow-sm" onClick={() => navigate("/dashboard/links/new")} data-testid="button-create-first-link">
+                  <p className="text-sm text-muted-foreground mb-4">{t.links.noLinks}</p>
+                  <Button className="h-12 rounded-2xl px-4 text-sm shadow-sm" onClick={() => navigate("/dashboard/links/new")} data-testid="button-create-first-link">
                     <Plus className="w-4 h-4 mr-2" />
                     {t.links.createFirstLink}
                   </Button>
@@ -1630,23 +1630,23 @@ export default function PaymentLinksPage() {
                           )}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5">
-                               <p className="text-base font-normal text-foreground truncate">{link.title}</p>
+                               <p className="text-sm font-normal text-foreground truncate">{link.title}</p>
                               {link.isActive ? <CheckCircle className="w-3.5 h-3.5 text-green-500 shrink-0" /> : <XCircle className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
                             </div>
-                             <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
+                             <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
                               <span className="flex items-center gap-1"><Eye className="w-3 h-3" />{link.clickCount || 0} {t.links.clicks}</span>
                               <span className="flex items-center gap-1"><ArrowDownUp className="w-3 h-3" />{stats.transactionCount} {t.links.pmtShort}</span>
                               <span>{link.isFixedAmount ? formatCurrency(link.amount, (user?.preferredCurrency || "XAF") as SupportedCurrency) : t.links.freeAmount}</span>
                             </div>
-                             {link.description && <p className="text-sm text-muted-foreground mt-1 truncate">{link.description}</p>}
+                             {link.description && <p className="text-xs text-muted-foreground mt-1 truncate">{link.description}</p>}
                           </div>
                           <div className="text-right shrink-0">
-                           <p className="text-base font-medium text-foreground">{formatCurrency(stats.totalCollected, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</p>
-                           <p className="text-sm text-muted-foreground">{link.createdAt ? format(new Date(link.createdAt), "d MMM yy", { locale: fr }) : "-"}</p>
+                           <p className="text-sm font-medium text-foreground">{formatCurrency(stats.totalCollected, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</p>
+                           <p className="text-xs text-muted-foreground">{link.createdAt ? format(new Date(link.createdAt), "d MMM yy", { locale: fr }) : "-"}</p>
                           </div>
                         </div>
                          <div className="flex items-center justify-between px-4 py-3 gap-2 border-t border-border/40">
-                           <p className="text-sm text-muted-foreground truncate">/pay/{link.slug}</p>
+                           <p className="text-xs text-muted-foreground truncate">/pay/{link.slug}</p>
                           <div className="flex items-center gap-0.5 shrink-0">
                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => copyLink(link.slug)} title="Copier" data-testid={`button-copy-all-${link.id}`}><Copy className="w-3.5 h-3.5" /></Button>
                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setQrModalLink(link)} title="QR" data-testid={`button-qr-all-${link.id}`}><QrCode className="w-3.5 h-3.5" /></Button>

@@ -257,21 +257,21 @@ export default function TransactionsPage() {
       <div className="space-y-6">
 
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">{t.transactions.title}</h1>
+          <h1 className="text-xl font-semibold text-foreground">{t.transactions.title}</h1>
         </div>
 
         {/* Stats summary */}
         <div>
-          <p className="text-sm font-medium uppercase tracking-[0.16em] text-muted-foreground mb-3">{hasActiveFilters ? t.transactions.summaryFiltered : t.transactions.summaryLabel}</p>
+          <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground mb-3">{hasActiveFilters ? t.transactions.summaryFiltered : t.transactions.summaryLabel}</p>
           <div className="space-y-3">
             <div className="flex items-center justify-between rounded-2xl border border-border/70 bg-card px-4 py-4 shadow-sm">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center">
                   <HistoryIcon src="/dashboard-icons/action-deposit.png" className="h-9 w-9" />
                 </div>
-                <span className="text-base font-normal text-foreground">{t.transactions.totalIn}</span>
+                <span className="text-sm font-normal text-foreground">{t.transactions.totalIn}</span>
               </div>
-              <span className="text-base font-medium text-green-500">
+              <span className="text-sm font-medium text-green-500">
                 +{formatCurrency(stats.totalIn, stats.currency, rates)}
               </span>
             </div>
@@ -280,9 +280,9 @@ export default function TransactionsPage() {
                 <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center">
                   <HistoryIcon src="/dashboard-icons/action-withdraw.png" className="h-9 w-9" />
                 </div>
-                <span className="text-base font-normal text-foreground">{t.transactions.totalOut}</span>
+                <span className="text-sm font-normal text-foreground">{t.transactions.totalOut}</span>
               </div>
-              <span className="text-base font-medium text-red-500">
+              <span className="text-sm font-medium text-red-500">
                 -{formatCurrency(stats.totalOut, stats.currency, rates)}
               </span>
             </div>
@@ -291,9 +291,9 @@ export default function TransactionsPage() {
                 <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center">
                   <HistoryIcon src="/dashboard-icons/stat-clicks.png" className="h-9 w-9" />
                 </div>
-                <span className="text-base font-normal text-foreground">{t.transactions.displayed}</span>
+                <span className="text-sm font-normal text-foreground">{t.transactions.displayed}</span>
               </div>
-              <span className="text-base font-medium">{filteredTransactions.length}</span>
+              <span className="text-sm font-medium">{filteredTransactions.length}</span>
             </div>
             {stats.pendingCount > 0 && (
               <div className="flex items-center justify-between rounded-2xl border border-border/70 bg-card px-4 py-4 shadow-sm">
@@ -301,9 +301,9 @@ export default function TransactionsPage() {
                   <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center">
                     <HistoryIcon src="/sidebar-icons/pending.png" className="h-9 w-9" />
                   </div>
-                  <span className="text-base font-normal text-foreground">{t.transactions.pendingCount}</span>
+                  <span className="text-sm font-normal text-foreground">{t.transactions.pendingCount}</span>
                 </div>
-                <span className="text-base font-medium text-amber-500">{stats.pendingCount}</span>
+                <span className="text-sm font-medium text-amber-500">{stats.pendingCount}</span>
               </div>
             )}
           </div>
@@ -311,7 +311,7 @@ export default function TransactionsPage() {
 
         {/* Filters */}
         <div>
-          <p className="text-sm font-medium uppercase tracking-[0.16em] text-muted-foreground mb-3">{t.transactions.filtersLabel}</p>
+          <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground mb-3">{t.transactions.filtersLabel}</p>
           <div className="space-y-2">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
@@ -319,7 +319,7 @@ export default function TransactionsPage() {
                 placeholder={t.transactions.searchPlaceholder}
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="pl-10 pr-10 h-12 rounded-2xl bg-card text-base shadow-sm"
+                className="pl-10 pr-10 h-12 rounded-2xl bg-card text-sm shadow-sm"
                 data-testid="input-search-transactions"
               />
               {searchQuery && (
@@ -335,7 +335,7 @@ export default function TransactionsPage() {
 
             <div className="flex flex-wrap gap-3 items-center">
               <Select value={typeFilter} onValueChange={setTypeFilter}>
-                <SelectTrigger className="h-12 w-auto min-w-[150px] rounded-2xl bg-card px-4 text-base shadow-sm" data-testid="select-filter-type">
+                <SelectTrigger className="h-12 w-auto min-w-[150px] rounded-2xl bg-card px-4 text-sm shadow-sm" data-testid="select-filter-type">
                   <SelectValue placeholder="Tous les types" />
                 </SelectTrigger>
                 <SelectContent>
@@ -346,7 +346,7 @@ export default function TransactionsPage() {
               </Select>
 
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="h-12 w-auto min-w-[140px] rounded-2xl bg-card px-4 text-base shadow-sm" data-testid="select-filter-status">
+                <SelectTrigger className="h-12 w-auto min-w-[140px] rounded-2xl bg-card px-4 text-sm shadow-sm" data-testid="select-filter-status">
                   <SelectValue placeholder={t.transactions.allStatuses} />
                 </SelectTrigger>
                 <SelectContent>
@@ -359,7 +359,7 @@ export default function TransactionsPage() {
               </Select>
 
               <Select value={currencyFilter} onValueChange={setCurrencyFilter}>
-                <SelectTrigger className="h-12 w-auto min-w-[120px] rounded-2xl bg-card px-4 text-base shadow-sm" data-testid="select-filter-currency">
+                <SelectTrigger className="h-12 w-auto min-w-[120px] rounded-2xl bg-card px-4 text-sm shadow-sm" data-testid="select-filter-currency">
                   <SelectValue placeholder={t.transactions.allCurrencies} />
                 </SelectTrigger>
                 <SelectContent>
@@ -399,7 +399,7 @@ export default function TransactionsPage() {
 
         {/* Transaction list */}
         <div>
-          <p className="text-sm font-medium uppercase tracking-[0.16em] text-muted-foreground mb-3">{t.transactions.historyLabel}</p>
+          <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground mb-3">{t.transactions.historyLabel}</p>
 
           {filteredTransactions.length === 0 ? (
             <div className="rounded-2xl border border-border/70 bg-card shadow-sm">
@@ -420,7 +420,7 @@ export default function TransactionsPage() {
             <div className="space-y-5">
               {groupedByDate.map(([dateKey, txs]) => (
                 <div key={dateKey}>
-                  <p className="text-sm font-medium uppercase tracking-[0.16em] text-muted-foreground mb-3">
+                  <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground mb-3">
                     {formatDateLabel(dateKey, t)}
                   </p>
                   <div className="space-y-3">
@@ -440,19 +440,19 @@ export default function TransactionsPage() {
 
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <p className="text-base font-normal text-foreground truncate max-w-[180px]">
+                              <p className="text-sm font-normal text-foreground truncate max-w-[180px]">
                                 {typeLabels[tx.type] || tx.type}
                               </p>
                               {apiBadge}
                             </div>
-                            <p className="text-sm text-muted-foreground mt-0.5">
+                            <p className="text-xs text-muted-foreground mt-0.5">
                               {operatorName || (tx.description ? tx.description.slice(0, 28) : "—")}
                               {tx.createdAt && <span className="ml-1">· {format(new Date(tx.createdAt), "HH:mm")}</span>}
                             </p>
                           </div>
 
                           <div className="flex flex-col items-end gap-1 shrink-0">
-                            <span className={`text-base font-medium whitespace-nowrap ${getAmountColor(tx)}`}>
+                            <span className={`text-sm font-medium whitespace-nowrap ${getAmountColor(tx)}`}>
                               {getAmountPrefix(tx)}{formatWalletBalance(tx.amount, tx.currency || user?.preferredCurrency || "XAF")}
                             </span>
                             {getStatusBadge(tx.status)}
@@ -467,7 +467,7 @@ export default function TransactionsPage() {
               {totalPages > 1 && (
                 <div className="rounded-2xl border border-border/70 bg-card shadow-sm">
                   <div className="flex items-center justify-between px-4 py-3">
-                    <span className="text-sm text-muted-foreground">
+                    <span className="text-xs text-muted-foreground">
                       {t.transactions.page} <span className="font-semibold text-foreground">{page}</span> {t.transactions.of} <span className="font-semibold text-foreground">{totalPages}</span>
                       <span className="ml-2 text-xs">({filteredTransactions.length} {t.transactions.results})</span>
                     </span>
