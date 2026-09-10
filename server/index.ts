@@ -516,6 +516,18 @@ app.use((req, res, next) => {
     await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS api_key_hash TEXT UNIQUE`);
     await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS api_webhook_secret TEXT`);
     await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS kyc_documents (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        storage_path VARCHAR(500) NOT NULL UNIQUE,
+        content_type VARCHAR(120) NOT NULL,
+        original_name TEXT,
+        encrypted_data TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS kyc_documents_user_id_idx ON kyc_documents(user_id)`);
+    await db.execute(sql`
       CREATE TABLE IF NOT EXISTS api_otp_sessions (
         reference TEXT PRIMARY KEY,
         user_id VARCHAR REFERENCES users(id) ON DELETE CASCADE,

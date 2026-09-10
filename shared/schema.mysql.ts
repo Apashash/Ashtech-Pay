@@ -15,6 +15,7 @@ import {
   mysqlTable,
   varchar,
   text,
+  mediumtext,
   int,
   boolean,
   decimal,
@@ -171,6 +172,17 @@ export const kycSubmissions = mysqlTable("kyc_submissions", {
   reviewedAt: timestamp("reviewed_at"), privateFolderPath: text("private_folder_path"), summaryPdfPath: text("summary_pdf_path"),
   createdAt: dt("created_at"), updatedAt: dt("updated_at"),
 });
+export const kycDocuments = mysqlTable("kyc_documents", {
+  id: id(),
+  userId: varchar("user_id", { length: 191 }).notNull().references(() => users.id),
+  storagePath: varchar("storage_path", { length: 500 }).notNull().unique(),
+  contentType: varchar("content_type", { length: 120 }).notNull(),
+  originalName: text("original_name"),
+  encryptedData: mediumtext("encrypted_data").notNull(),
+  createdAt: dt("created_at"),
+}, t => ({
+  userIdx: index("kyc_documents_user_id_idx").on(t.userId),
+}));
 export const wallets = mysqlTable("wallets", {
   id: id(), userId: varchar("user_id", { length: 191 }).notNull().references(() => users.id), currency: text("currency").notNull(),
   balance: money("balance").default("0.00").notNull(), updatedAt: dt("updated_at"),
@@ -223,6 +235,7 @@ export const insertWithdrawalNumberChangeSchema = insert(withdrawalNumberChanges
 export const insertUserNotificationSchema = insert(userNotifications);
 export const insertGlobalMessageSchema = insert(globalMessages);
 export const insertKycSubmissionSchema = insert(kycSubmissions);
+export const insertKycDocumentSchema = insert(kycDocuments);
 export const insertWalletSchema = insert(wallets);
 export const insertConversionRequestSchema = insert(conversionRequests);
 export const insertAutoConversionRuleSchema = insert(autoConversionRules);

@@ -43,6 +43,18 @@ export async function ensureMysqlAuxiliarySchema(): Promise<void> {
     ) ENGINE=InnoDB`,
     `ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS private_folder_path TEXT NULL`,
     `ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS summary_pdf_path TEXT NULL`,
+    `CREATE TABLE IF NOT EXISTS kyc_documents (
+      id VARCHAR(191) NOT NULL PRIMARY KEY,
+      user_id VARCHAR(191) NOT NULL,
+      storage_path VARCHAR(500) NOT NULL,
+      content_type VARCHAR(120) NOT NULL,
+      original_name TEXT NULL,
+      encrypted_data MEDIUMTEXT NOT NULL,
+      created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      UNIQUE KEY kyc_documents_storage_path_unique (storage_path),
+      INDEX kyc_documents_user_id_idx (user_id),
+      CONSTRAINT kyc_documents_user_fk FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB`,
   ];
 
   for (const statement of statements) {

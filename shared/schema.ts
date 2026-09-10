@@ -769,6 +769,21 @@ export const kycSubmissions = pgTable("kyc_submissions", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// KYC files are encrypted before storage. The application never exposes this
+// table directly; document access continues through the authenticated image
+// proxy and admin routes.
+export const kycDocuments = pgTable("kyc_documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  storagePath: varchar("storage_path", { length: 500 }).notNull().unique(),
+  contentType: varchar("content_type", { length: 120 }).notNull(),
+  originalName: text("original_name"),
+  encryptedData: text("encrypted_data").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (t) => ({
+  userIdx: index("kyc_documents_user_id_idx").on(t.userId),
+}));
+
 // KYC Document types
 export const KYC_DOCUMENT_TYPES = [
   { id: "cni", name: "Pièce d'identité Nationale (CIN)" },
@@ -1043,6 +1058,7 @@ export const insertKycSubmissionSchema = createInsertSchema(kycSubmissions).omit
   reviewedAt: true,
   status: true,
 });
+export const insertKycDocumentSchema = createInsertSchema(kycDocuments);
 
 export const kycSubmissionFormSchema = z.object({
   documentType: z.string().min(1, "Type de document requis"),

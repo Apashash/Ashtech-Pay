@@ -30,6 +30,7 @@ export const pushSubscriptions = active.pushSubscriptions as typeof pg.pushSubsc
 export const globalMessages = active.globalMessages as typeof pg.globalMessages;
 export const dismissedGlobalMessages = active.dismissedGlobalMessages as typeof pg.dismissedGlobalMessages;
 export const kycSubmissions = active.kycSubmissions as typeof pg.kycSubmissions;
+export const kycDocuments = active.kycDocuments as typeof pg.kycDocuments;
 export const wallets = active.wallets as typeof pg.wallets;
 export const conversionRequests = active.conversionRequests as typeof pg.conversionRequests;
 export const autoConversionRules = active.autoConversionRules as typeof pg.autoConversionRules;

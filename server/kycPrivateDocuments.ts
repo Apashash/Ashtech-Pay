@@ -2,11 +2,17 @@ import fs from "fs/promises";
 import path from "path";
 import crypto from "crypto";
 import { jsPDF } from "jspdf";
+import { eq, like } from "drizzle-orm";
 import { appPath } from "./appPaths";
+import { db } from "./db";
+import { kycDocuments } from "@shared/schema-runtime";
+import { decryptField, encryptField, isFieldEncryptionConfigured } from "./fieldEncryption";
 import { downloadFromSupabase } from "./supabase";
 
 const PRIVATE_PREFIX = "private-kyc/";
 const TEMP_PREFIX = `${PRIVATE_PREFIX}inbox/`;
+const DATABASE_PREFIX = `${PRIVATE_PREFIX}db/`;
+const DATABASE_TEMP_PREFIX = `${DATABASE_PREFIX}inbox/`;
 
 type SourceFile = {
   path: string;
@@ -85,13 +91,38 @@ export function getPrivateDocumentAbsolutePath(storagePath: string): string {
 }
 
 export async function readPrivateKycDocument(storagePath: string): Promise<Buffer> {
-  return fs.readFile(getPrivateDocumentAbsolutePath(storagePath));
+  const document = await readPrivateDocumentRecord(storagePath);
+  return document.buffer;
+}
+
+async function readPrivateDocumentRecord(storagePath: string): Promise<{ buffer: Buffer; contentType: string }> {
+  if (storagePath.startsWith(DATABASE_PREFIX)) {
+    if (!isFieldEncryptionConfigured()) {
+      throw new Error("KYC_ENCRYPTION_NOT_CONFIGURED");
+    }
+    const [row] = await db
+      .select({
+        encryptedData: kycDocuments.encryptedData,
+        contentType: kycDocuments.contentType,
+      })
+      .from(kycDocuments)
+      .where(eq(kycDocuments.storagePath, storagePath))
+      .limit(1);
+    if (!row) throw new Error("KYC_DOCUMENT_NOT_FOUND");
+    const base64 = decryptField(row.encryptedData);
+    if (!base64) throw new Error("KYC_DOCUMENT_DECRYPT_FAILED");
+    return { buffer: Buffer.from(base64, "base64"), contentType: row.contentType };
+  }
+
+  return {
+    buffer: await fs.readFile(getPrivateDocumentAbsolutePath(storagePath)),
+    contentType: contentTypeFromPath(storagePath),
+  };
 }
 
 async function readUploadedSource(storagePath: string): Promise<{ buffer: Buffer; contentType: string }> {
   if (storagePath.startsWith(PRIVATE_PREFIX)) {
-    const buffer = await readPrivateKycDocument(storagePath);
-    return { buffer, contentType: contentTypeFromPath(storagePath) };
+    return readPrivateDocumentRecord(storagePath);
   }
 
   if (storagePath.startsWith("/uploads/")) {
@@ -159,9 +190,8 @@ function addPdfImage(pdf: jsPDF, title: string, buffer: Buffer, contentType: str
 
 async function createSummaryPdf(
   input: KycDocumentBundleInput,
-  targetPath: string,
   files: { front: { buffer: Buffer; contentType: string }; back: { buffer: Buffer; contentType: string }; selfie: { buffer: Buffer; contentType: string } },
-): Promise<void> {
+): Promise<Buffer> {
   const pdf = new jsPDF({ unit: "mm", format: "a4" });
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(18);
@@ -191,24 +221,47 @@ async function createSummaryPdf(
   addPdfImage(pdf, "Document — Verso", files.back.buffer, files.back.contentType);
   addPdfImage(pdf, "Selfie avec document", files.selfie.buffer, files.selfie.contentType);
 
-  const output = Buffer.from(pdf.output("arraybuffer"));
-  await fs.writeFile(targetPath, output, { mode: 0o600 });
+  return Buffer.from(pdf.output("arraybuffer"));
+}
+
+async function saveDatabaseDocument(
+  userId: string,
+  storagePath: string,
+  buffer: Buffer,
+  contentType: string,
+  originalName: string,
+): Promise<void> {
+  if (!isFieldEncryptionConfigured()) {
+    throw new Error("KYC_ENCRYPTION_NOT_CONFIGURED");
+  }
+  const encryptedData = encryptField(buffer.toString("base64"));
+  if (!encryptedData) throw new Error("KYC_ENCRYPTION_FAILED");
+  await db.insert(kycDocuments).values({
+    id: crypto.randomUUID(),
+    userId,
+    storagePath,
+    contentType,
+    originalName,
+    encryptedData,
+    createdAt: new Date(),
+  } as any);
 }
 
 export async function savePrivateKycUpload(userId: string, originalPath: string, buffer: Buffer, contentType: string): Promise<string> {
   const extension = extensionFromContentType(contentType, originalPath);
   const userFolder = safeSegment(userId, "user");
-  const relative = `inbox/${userFolder}/${crypto.randomUUID()}${extension}`;
-  const absolute = path.join(getPrivateDocumentsRoot(), relative);
-  if (!isInside(getPrivateDocumentsRoot(), absolute)) throw new Error("INVALID_PRIVATE_DOCUMENT_PATH");
-  await fs.mkdir(path.dirname(absolute), { recursive: true, mode: 0o700 });
-  await fs.writeFile(absolute, buffer, { mode: 0o600 });
-  return `${PRIVATE_PREFIX}${relative}`;
+  const storagePath = `${DATABASE_PREFIX}inbox/${userFolder}/${crypto.randomUUID()}${extension}`;
+  await saveDatabaseDocument(userId, storagePath, buffer, contentType, originalPath);
+  return storagePath;
 }
 
 export async function removePrivateKycUpload(storagePath: string): Promise<void> {
-  if (!storagePath.startsWith(TEMP_PREFIX)) return;
+  if (!storagePath.startsWith(TEMP_PREFIX) && !storagePath.startsWith(DATABASE_TEMP_PREFIX)) return;
   try {
+    if (storagePath.startsWith(DATABASE_PREFIX)) {
+      await db.delete(kycDocuments).where(eq(kycDocuments.storagePath, storagePath));
+      return;
+    }
     await fs.rm(getPrivateDocumentAbsolutePath(storagePath), { force: true });
   } catch (error) {
     console.error("[KYC private documents] Temporary upload cleanup failed:", error);
@@ -218,6 +271,10 @@ export async function removePrivateKycUpload(storagePath: string): Promise<void>
 export async function removePrivateKycBundle(bundle: Partial<PrivateKycDocumentBundle>): Promise<void> {
   if (!bundle.folderPath) return;
   try {
+    if (bundle.folderPath.startsWith(DATABASE_PREFIX)) {
+      await db.delete(kycDocuments).where(like(kycDocuments.storagePath, `${bundle.folderPath}/%`));
+      return;
+    }
     const folder = getPrivateDocumentAbsolutePath(bundle.folderPath);
     await fs.rm(folder, { recursive: true, force: true });
   } catch (error) {
@@ -227,9 +284,7 @@ export async function removePrivateKycBundle(bundle: Partial<PrivateKycDocumentB
 
 export async function createPrivateKycDocumentBundle(input: KycDocumentBundleInput): Promise<PrivateKycDocumentBundle> {
   const folderName = `${safeSegment(input.fullName, "user")}-${safeSegment(input.userId, "id")}-${Date.now().toString(36)}`;
-  const folderPath = `${PRIVATE_PREFIX}${folderName}`;
-  const folderAbsolute = getPrivateDocumentAbsolutePath(folderPath);
-  await fs.mkdir(folderAbsolute, { recursive: true, mode: 0o700 });
+  const folderPath = `${DATABASE_PREFIX}${folderName}`;
 
   try {
     const [front, back, selfie] = await Promise.all([
@@ -248,16 +303,13 @@ export async function createPrivateKycDocumentBundle(input: KycDocumentBundleInp
     for (const item of files) {
       const extension = extensionFromContentType(item.file.contentType, item.source);
       const storagePath = `${folderPath}/${item.name}${extension}`;
-      await fs.writeFile(
-        getPrivateDocumentAbsolutePath(storagePath),
-        item.file.buffer,
-        { mode: 0o600 },
-      );
+      await saveDatabaseDocument(input.userId, storagePath, item.file.buffer, item.file.contentType, item.name);
       result[item.key] = storagePath;
     }
 
     const summaryPdfPath = `${folderPath}/kyc-resume.pdf`;
-    await createSummaryPdf(input, getPrivateDocumentAbsolutePath(summaryPdfPath), { front, back, selfie });
+    const summaryPdf = await createSummaryPdf(input, { front, back, selfie });
+    await saveDatabaseDocument(input.userId, summaryPdfPath, summaryPdf, "application/pdf", "kyc-resume.pdf");
     result.summaryPdfPath = summaryPdfPath;
 
     return result as PrivateKycDocumentBundle;
