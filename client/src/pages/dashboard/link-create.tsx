@@ -16,7 +16,7 @@ import type { User } from "@shared/schema";
 import { apiRequest, queryClient, getAuthHeaders } from "@/lib/queryClient";
 import { useLanguage } from "@/lib/language";
 import {
-  ArrowLeft, Loader2, Upload, X, FileText, Link as LinkIcon,
+  ArrowLeft, ArrowRight, Loader2, Upload, X, FileText, Link as LinkIcon,
   ExternalLink, Calendar, Image, Globe, Check, Link2,
   DollarSign, Settings2, ImageIcon, ChevronDown, ChevronUp,
   Eye, Sparkles, AlertCircle
@@ -74,6 +74,7 @@ export default function LinkCreatePage() {
   const [showCountries, setShowCountries] = useState(false);
   const [countrySearch, setCountrySearch] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
+  const [currentStep, setCurrentStep] = useState(1);
 
   const { data: depositConfigData } = useQuery<DepositConfigResponse>({
     queryKey: ["/api/public/deposit-config"],
@@ -195,6 +196,37 @@ export default function LinkCreatePage() {
     ? lk.allCountries
     : `${selectedCountries.length} ${selectedCountries.length > 1 ? lk.countriesSelectedPlural : lk.countriesSelected}`;
 
+  const wizardSteps = [
+    { number: 1, title: lk.step1Title, icon: ImageIcon },
+    { number: 2, title: lk.step2Title, icon: DollarSign },
+    { number: 3, title: lk.step3Title, icon: Globe },
+    { number: 4, title: lk.wizardReviewTitle, icon: Eye },
+  ];
+
+  const stepFields: Record<number, string[]> = {
+    1: ["title"],
+    2: ["amount"],
+    3: ["customSlug", "expiresAt", "redirectUrl"],
+    4: [],
+  };
+
+  const handleNextStep = async () => {
+    const fields = stepFields[currentStep] || [];
+    const isValid = fields.length === 0
+      ? true
+      : await form.trigger(fields as any, { shouldFocus: true });
+
+    if (isValid) {
+      setCurrentStep(step => Math.min(step + 1, 4));
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
+  const handlePreviousStep = () => {
+    setCurrentStep(step => Math.max(step - 1, 1));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   return (
     <DashboardLayout>
       <div className="max-w-3xl mx-auto">
@@ -214,9 +246,75 @@ export default function LinkCreatePage() {
           </div>
         </div>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit((d) => createMutation.mutate(d))} className="space-y-4">
+        <div className="mb-6 rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                {lk.step} {currentStep} {lk.wizardStepOf} 4
+              </p>
+              <p className="text-sm font-medium text-foreground mt-1">
+                {wizardSteps[currentStep - 1].title}
+              </p>
+            </div>
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
+              {Math.round((currentStep / wizardSteps.length) * 100)}%
+            </span>
+          </div>
 
+          <div className="mt-4 flex items-center gap-2">
+            {wizardSteps.map((step, index) => {
+              const StepIcon = step.icon;
+              const isCompleted = step.number < currentStep;
+              const isCurrent = step.number === currentStep;
+              return (
+                <div key={step.number} className="flex min-w-0 flex-1 items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={step.number > currentStep}
+                    onClick={() => {
+                      if (isCompleted) {
+                        setCurrentStep(step.number);
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                      }
+                    }}
+                    className={`flex min-w-0 items-center gap-2 text-left transition-colors ${
+                      step.number > currentStep ? "cursor-not-allowed opacity-40" : "cursor-pointer"
+                    }`}
+                    aria-current={isCurrent ? "step" : undefined}
+                  >
+                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+                      isCompleted || isCurrent
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground"
+                    }`}>
+                      {isCompleted ? <Check className="h-4 w-4" /> : <StepIcon className="h-4 w-4" />}
+                    </span>
+                    <span className={`hidden truncate text-xs sm:block ${
+                      isCurrent ? "font-medium text-foreground" : "text-muted-foreground"
+                    }`}>
+                      {step.title}
+                    </span>
+                  </button>
+                  {index < wizardSteps.length - 1 && (
+                    <div className="h-0.5 min-w-2 flex-1 overflow-hidden rounded-full bg-muted">
+                      <div className={`h-full rounded-full transition-all ${isCompleted ? "w-full bg-primary" : "w-0"}`} />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <Form {...form}>
+          <form
+            onSubmit={currentStep < 4
+              ? (event) => { event.preventDefault(); void handleNextStep(); }
+              : form.handleSubmit((d) => createMutation.mutate(d))}
+            className="space-y-4"
+          >
+
+            {currentStep === 1 && (
             <SectionCard number={1} title={lk.step1Title} subtitle={lk.step1Sub} icon={ImageIcon}>
 
               <FormField
@@ -316,7 +414,9 @@ export default function LinkCreatePage() {
                 )}
               </div>
             </SectionCard>
+            )}
 
+            {currentStep === 2 && (
             <SectionCard number={2} title={lk.step2Title} subtitle={lk.step2Sub} icon={DollarSign}>
 
               <FormField
@@ -420,7 +520,9 @@ export default function LinkCreatePage() {
                 />
               )}
             </SectionCard>
+            )}
 
+            {currentStep === 3 && (
             <SectionCard number={3} title={lk.step3Title} subtitle={lk.step3Sub} icon={Globe}>
               <div className="rounded-2xl border border-border/60 overflow-hidden shadow-sm">
                 <button
@@ -517,9 +619,16 @@ export default function LinkCreatePage() {
                   )}
                 </div>
               )}
-            </SectionCard>
-
-            <SectionCard number={4} title={lk.step4Title} subtitle={lk.step4Sub} icon={Settings2}>
+            <div className="rounded-2xl border border-border/70 bg-card p-5 shadow-sm">
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                  <Settings2 className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <h3 className="text-base font-normal text-foreground">{lk.step4Title}</h3>
+                  <p className="text-sm text-muted-foreground mt-0.5">{lk.step4Sub}</p>
+                </div>
+              </div>
 
               <FormField
                 control={form.control}
@@ -588,8 +697,12 @@ export default function LinkCreatePage() {
                   </FormItem>
                 )}
               />
+            </div>
             </SectionCard>
+            )}
 
+            {currentStep === 4 && (
+            <SectionCard number={4} title={lk.wizardReviewTitle} subtitle={lk.wizardReviewSub} icon={Eye}>
             {titleValue && (
               <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 flex items-start gap-3">
                 <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center shrink-0 mt-0.5">
@@ -617,35 +730,54 @@ export default function LinkCreatePage() {
                 </div>
               </div>
             )}
+            </SectionCard>
+            )}
 
             <div className="flex gap-3 pt-1 pb-6">
               <Button
                 type="button"
                 variant="outline"
                 className="flex-1 h-12 rounded-2xl font-normal text-base"
-                onClick={() => navigate("/dashboard/links")}
+                onClick={currentStep === 1 ? () => navigate("/dashboard/links") : handlePreviousStep}
                 data-testid="button-create-link-cancel"
               >
-                {lk.cancel}
-              </Button>
-              <Button
-                type="submit"
-                className="flex-[2] h-12 rounded-2xl font-medium text-base gap-2"
-                disabled={createMutation.isPending}
-                data-testid="button-create-link-confirm"
-              >
-                {createMutation.isPending ? (
+                {currentStep === 1 ? lk.cancel : (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    {lk.creating}
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4" />
-                    {lk.formCreateButton}
+                    <ArrowLeft className="w-4 h-4 mr-2" />
+                    {lk.wizardBack}
                   </>
                 )}
               </Button>
+              {currentStep < 4 ? (
+                <Button
+                  type="button"
+                  className="flex-[2] h-12 rounded-2xl font-medium text-base gap-2"
+                  onClick={handleNextStep}
+                  data-testid="button-create-link-next"
+                >
+                  {lk.wizardNext}
+                  <ArrowRight className="w-4 h-4" />
+                </Button>
+              ) : (
+                <Button
+                  type="submit"
+                  className="flex-[2] h-12 rounded-2xl font-medium text-base gap-2"
+                  disabled={createMutation.isPending}
+                  data-testid="button-create-link-confirm"
+                >
+                  {createMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      {lk.creating}
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      {lk.formCreateButton}
+                    </>
+                  )}
+                </Button>
+              )}
             </div>
 
           </form>
