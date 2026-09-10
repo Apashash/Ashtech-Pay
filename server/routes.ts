@@ -6043,10 +6043,10 @@ export async function registerRoutes(
       const fxRates = await loadFxRates();
 
       const minWithdrawalSetting = await storage.getSetting("min_withdrawal");
-      const minWithdrawalXAF = minWithdrawalSetting ? parseFloat(minWithdrawalSetting.value) : 150;
+      const minWithdrawalXAF = minWithdrawalSetting ? parseFloat(minWithdrawalSetting.value) : 300;
       const minWithdrawal = Math.ceil(convertFromXAF(minWithdrawalXAF, userCurrency, fxRates));
       const maxWithdrawalSetting = await storage.getSetting("max_withdrawal");
-      const maxWithdrawalXAF = maxWithdrawalSetting ? parseFloat(maxWithdrawalSetting.value) : 5000000;
+      const maxWithdrawalXAF = maxWithdrawalSetting ? parseFloat(maxWithdrawalSetting.value) : 500000;
       const maxWithdrawal = Math.floor(convertFromXAF(maxWithdrawalXAF, userCurrency, fxRates));
 
       if (amount < minWithdrawal) {
@@ -7917,8 +7917,8 @@ export async function registerRoutes(
       res.json({
         minTransfer: get("min_transfer", 150),
         maxTransfer: get("max_transfer", 5000000),
-        minWithdrawal: get("min_withdrawal", 150),
-        maxWithdrawal: get("max_withdrawal", 5000000),
+        minWithdrawal: get("min_withdrawal", 300),
+        maxWithdrawal: get("max_withdrawal", 500000),
       });
     } catch (error) {
       console.error("Public get limits error:", error);

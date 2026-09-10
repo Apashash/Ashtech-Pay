@@ -93,7 +93,7 @@ export const countries = mysqlTable("countries", {
   isActiveForDeposit: boolean("is_active_for_deposit").default(true), isActiveForTransfer: boolean("is_active_for_transfer").default(true),
   isActiveForWithdrawal: boolean("is_active_for_withdrawal").default(true),
   minDeposit: money("min_deposit").default("100").notNull(), maxDeposit: money("max_deposit").default("5000000").notNull(),
-  minWithdrawal: money("min_withdrawal").default("500").notNull(), maxWithdrawal: money("max_withdrawal").default("2000000").notNull(), createdAt: dt("created_at"),
+  minWithdrawal: money("min_withdrawal").default("300").notNull(), maxWithdrawal: money("max_withdrawal").default("500000").notNull(), createdAt: dt("created_at"),
 }, t => ({ nameUnique: uniqueIndex("countries_name_unique").on(t.name), codeUnique: uniqueIndex("countries_code_unique").on(t.code) }));
 export const operators = mysqlTable("operators", {
   id: id(), name: text("name").notNull(), type: text("type").notNull(), countryId: varchar("country_id", { length: 191 }).notNull().references(() => countries.id),

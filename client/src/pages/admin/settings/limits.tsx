@@ -18,8 +18,8 @@ export default function AdminSettingsLimits() {
   const [settings, setSettings] = useState<Record<string, string>>({
     min_transfer: "2650",
     max_transfer: "5000000",
-    min_withdrawal: "2650",
-    max_withdrawal: "5000000",
+    min_withdrawal: "300",
+    max_withdrawal: "500000",
   });
 
   const { data: savedSettings, isLoading } = useQuery<PlatformSetting[]>({

@@ -138,8 +138,8 @@ export default function WithdrawPage() {
   const withdrawalRate = fxRates[withdrawalCurrency] || 1;
   const convertFromXAF = (xaf: number) => Math.ceil(xaf / withdrawalRate);
   const limitsLoaded = limits !== undefined && fxRates && Object.keys(fxRates).length > 0;
-  const minWithdrawal = convertFromXAF(limits?.minWithdrawal ?? 150);
-  const maxWithdrawal = Math.floor((limits?.maxWithdrawal ?? 5000000) / withdrawalRate);
+  const minWithdrawal = convertFromXAF(limits?.minWithdrawal ?? 300);
+  const maxWithdrawal = Math.floor((limits?.maxWithdrawal ?? 500000) / withdrawalRate);
 
   useEffect(() => {
     if (countriesConfig.length > 0 && !selectedCountry) {

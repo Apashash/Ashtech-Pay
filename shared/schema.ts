@@ -343,8 +343,8 @@ export const countries = pgTable("countries", {
   isActiveForWithdrawal: boolean("is_active_for_withdrawal").default(true),
   minDeposit: decimal("min_deposit", { precision: 15, scale: 2 }).default("100").notNull(),
   maxDeposit: decimal("max_deposit", { precision: 15, scale: 2 }).default("5000000").notNull(),
-  minWithdrawal: decimal("min_withdrawal", { precision: 15, scale: 2 }).default("500").notNull(),
-  maxWithdrawal: decimal("max_withdrawal", { precision: 15, scale: 2 }).default("2000000").notNull(),
+  minWithdrawal: decimal("min_withdrawal", { precision: 15, scale: 2 }).default("300").notNull(),
+  maxWithdrawal: decimal("max_withdrawal", { precision: 15, scale: 2 }).default("500000").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
