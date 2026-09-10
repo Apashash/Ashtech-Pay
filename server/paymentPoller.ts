@@ -1,5 +1,5 @@
 import { storage } from "./storage";
-import { checkAfribaPayStatus, isAfribaPayCircuitOpen } from "./afribapay";
+import { checkAfribaPayStatus, isAfribaPayCircuitOpen, isAfribaPayConfigured } from "./afribapay";
 import { checkPixPayStatus } from "./pixpay";
 import { getPawaPayDeposit, isPawaPayUuidV4 } from "./pawapay";
 import { creditUserWallet } from "./walletHelper";
@@ -103,6 +103,9 @@ export async function expireCryptoPaymentIfNeeded(
 async function checkPaymentStatus(payment: PendingPayment): Promise<"pending" | "completed" | "failed"> {
   try {
     if (payment.provider === "afribapay") {
+      // Do not retry a missing configuration for every pending transaction.
+      // Keep the payment pending so it can resume when credentials are added.
+      if (!isAfribaPayConfigured()) return "pending";
       // If AfribaPay circuit is open (subscription invalid), don't make any HTTP calls.
       // Return "pending" — the normal timeout logic will auto-fail the transaction after 7 min.
       if (isAfribaPayCircuitOpen()) return "pending";

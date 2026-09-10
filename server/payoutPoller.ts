@@ -1,5 +1,5 @@
 import { storage } from "./storage";
-import { checkAfribaPayStatus, checkAfribaPayoutStatus } from "./afribapay";
+import { checkAfribaPayStatus, checkAfribaPayoutStatus, isAfribaPayConfigured } from "./afribapay";
 import { checkPixPayStatus } from "./pixpay";
 import { getPawaPayPayout, isPawaPayUuidV4 } from "./pawapay";
 import { sendWithdrawalApprovedEmail } from "./email";
@@ -242,6 +242,9 @@ export async function processPawaPayPayoutCallback(
 async function checkProviderStatus(payout: PendingPayout): Promise<{ status: string; shouldRemove?: boolean }> {
   try {
     if (payout.provider === "afribapay") {
+      // Missing credentials are a configuration state, not a provider failure.
+      // Leave the payout pending without generating repeated failed requests.
+      if (!isAfribaPayConfigured()) return { status: "pending" };
       const result = await checkAfribaPayoutStatus(payout.reference, "order_id");
       if (providerResponseIndicatesNotFound(result.raw)) return { status: "failed" };
       return { status: result.status };

@@ -28,7 +28,17 @@ export function serveStatic(app: Express) {
   // index:false empêche express.static de servir dist/public/index.html
   // automatiquement sur "/" (comportement par défaut d'Express), pour que
   // la route /pay et /hpay ci-dessous (sans og:image) puissent s'appliquer.
-  app.use(express.static(distPath, { index: false }));
+  app.use(express.static(distPath, {
+    index: false,
+    maxAge: "1d",
+    setHeaders: (res, filePath) => {
+      // Vite fingerprints bundled assets, so they can be cached aggressively.
+      // Keep the HTML shell short-lived so deployments become visible quickly.
+      if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      }
+    },
+  }));
 
   // Inject the payment product title/description/image before social crawlers
   // receive the SPA shell.

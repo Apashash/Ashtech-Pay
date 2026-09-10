@@ -26,6 +26,11 @@ function getAfribaPayCredentials() {
   };
 }
 
+export function isAfribaPayConfigured(): boolean {
+  const credentials = getAfribaPayCredentials();
+  return Boolean(credentials.publicKey && credentials.secretKey);
+}
+
 // ─── PII masking helpers for logs ──────────────────────────────────────────────
 // Avoid printing full phone numbers / emails in server logs (GDPR / PII hygiene).
 function maskPhone(phone: string | undefined | null): string {

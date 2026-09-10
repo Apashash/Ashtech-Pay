@@ -1,0 +1,1 @@
+function i(r,t,o,c){if(!o)return t;const n=r.toUpperCase(),e=encodeURIComponent(o);return c==="tag"||n==="XRP"?`xrpl:${t}?dt=${e}`:n==="XLM"?`web+stellar:pay?destination=${encodeURIComponent(t)}&memo=${e}`:n==="TON"||n.endsWith(".TON")||n==="DOGS.TON"?`ton://transfer/${t}?text=${e}`:t}export{i as c};
