@@ -3525,7 +3525,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/auth/logout", (req, res) => {
+  app.post("/api/auth/logout", async (req, res) => {
     // Remove the Bearer token if present
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -3538,12 +3538,24 @@ export async function registerRoutes(
 
     // Clear in-memory OTP verification for THIS session + destroy session
     adminVerifiedSessions.delete(req.sessionID);
-    req.session.destroy((err) => {
-      if (err) {
-        return res.status(500).json({ message: "Erreur lors de la déconnexion" });
+    const sid = req.sessionID;
+    try {
+      await new Promise<void>((resolve, reject) => {
+        req.session.destroy((err) => err ? reject(err) : resolve());
+      });
+
+      // Explicit delete is a safety net for MySQL/MariaDB stores. It prevents
+      // a stale row from appearing after the same browser logs in again.
+      if (isMysqlDialect) {
+        await pool.query(`DELETE FROM session WHERE sid = ?`, [sid]);
+      } else {
+        await db.execute(sql`DELETE FROM session WHERE sid = ${sid}`);
       }
       res.json({ message: "Déconnecté" });
-    });
+    } catch (err: any) {
+      console.error("[Auth] Logout session cleanup failed:", err?.message || err);
+      res.status(500).json({ message: "Erreur lors de la déconnexion" });
+    }
   });
 
   // Forgot password
@@ -3676,16 +3688,17 @@ export async function registerRoutes(
   // ─── Sessions / appareils connectés ──────────────────────────────────────────
 
   function parseDeviceFromUA(ua: string): { device: string; browser: string } {
-    const isMobile = /Mobile|Android|iPhone|iPad|iPod/i.test(ua);
-    const isTablet = /iPad|Tablet/i.test(ua);
-    let device = isMobile ? (isTablet ? "Tablette" : "Mobile") : "Ordinateur";
+    const isTablet = /iPad|Tablet/i.test(ua) || (/Android/i.test(ua) && !/Mobile/i.test(ua));
+    const isMobile = !isTablet && /Mobile|Android|iPhone|iPod/i.test(ua);
+    let device = isTablet ? "Tablette" : (isMobile ? "Mobile" : "Ordinateur");
     let browser = "Navigateur inconnu";
-    if (/Chrome\/(\d+)/.test(ua) && !/Chromium|Edg|OPR/.test(ua)) browser = "Chrome";
-    else if (/Firefox\/(\d+)/.test(ua)) browser = "Firefox";
-    else if (/Safari\/(\d+)/.test(ua) && !/Chrome/.test(ua)) browser = "Safari";
-    else if (/Edg\/(\d+)/.test(ua)) browser = "Edge";
-    else if (/OPR\/(\d+)/.test(ua)) browser = "Opera";
-    else if (/SamsungBrowser\/(\d+)/.test(ua)) browser = "Samsung Internet";
+    // Check vendor-specific mobile browsers before their Chromium marker.
+    if (/SamsungBrowser\/\d+/i.test(ua)) browser = "Samsung Internet";
+    else if (/EdgA?\/\d+|EdgiOS\/\d+/i.test(ua)) browser = "Edge";
+    else if (/OPR\/\d+|Opera Mini\/\d+/i.test(ua)) browser = "Opera";
+    else if (/CriOS\/\d+|Chrome\/\d+/i.test(ua) && !/Chromium/i.test(ua)) browser = "Chrome";
+    else if (/FxiOS\/\d+|Firefox\/\d+/i.test(ua)) browser = "Firefox";
+    else if (/Safari\/\d+/i.test(ua) && !/Chrome|CriOS|Chromium/i.test(ua)) browser = "Safari";
     return { device, browser };
   }
 
