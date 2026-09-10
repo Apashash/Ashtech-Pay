@@ -174,6 +174,8 @@ export default function TransactionsPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "completed":
+      case "success":
+      case "succeeded":
         return <Badge className="text-[10px] px-1.5 py-0 bg-green-500/20 text-green-600 border-green-500/30 font-medium">{t.transactions.statusCompleted}</Badge>;
       case "pending":
       case "pending_manual":
@@ -185,6 +187,19 @@ export default function TransactionsPage() {
       default:
         return <Badge className="text-[10px] px-1.5 py-0 bg-muted text-muted-foreground">{status}</Badge>;
     }
+  };
+
+  const getTransactionRowClass = (status: string) => {
+    if (["completed", "success", "succeeded"].includes(status)) {
+      return "border-l-4 border-green-500 bg-green-500/10 hover:bg-green-500/15";
+    }
+    if (["pending", "pending_manual"].includes(status)) {
+      return "border-l-4 border-amber-500 bg-amber-500/10 hover:bg-amber-500/15";
+    }
+    if (["failed", "cancelled", "rejected"].includes(status)) {
+      return "border-l-4 border-red-500 bg-red-500/10 hover:bg-red-500/15";
+    }
+    return "hover:bg-muted/40";
   };
 
   const getApiBadge = (tx: Transaction) => {
@@ -210,7 +225,7 @@ export default function TransactionsPage() {
 
   const getAmountColor = (tx: Transaction) => {
     if (tx.type === "conversion") return "text-blue-500";
-    if (tx.status === "completed") return ["deposit", "transfer_in", "payment_link"].includes(tx.type) ? "text-green-500" : "text-red-500";
+    if (["completed", "success", "succeeded"].includes(tx.status)) return ["deposit", "transfer_in", "payment_link"].includes(tx.type) ? "text-green-500" : "text-red-500";
     if (tx.status === "pending" || tx.status === "pending_manual") return "text-amber-500";
     return "text-muted-foreground";
   };
@@ -417,7 +432,7 @@ export default function TransactionsPage() {
                       return (
                         <div
                           key={tx.id}
-                          className="flex items-center gap-3 px-4 py-3.5 cursor-pointer hover:bg-muted/40 transition-colors"
+                          className={`flex items-center gap-3 px-4 py-3.5 cursor-pointer transition-colors ${getTransactionRowClass(tx.status)}`}
                           onClick={() => setLocation(`/dashboard/transactions/${tx.id}`)}
                           data-testid={`transaction-item-${tx.id}`}
                         >
