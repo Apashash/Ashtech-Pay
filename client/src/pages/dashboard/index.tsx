@@ -708,12 +708,12 @@ export default function DashboardHome() {
           <p className="text-muted-foreground">{t.dashboard.welcome}, {user?.fullName}</p>
         </div>
 
-        <Card className="bg-gradient-to-br from-primary/20 via-primary/10 to-transparent border-primary/20 overflow-hidden">
+        <Card className="bg-[#1A237E] border-[#1A237E] overflow-hidden">
           <CardContent className="p-6">
             <div className="flex flex-col gap-6">
               <div className="flex items-center justify-between gap-4">
                 <div className="flex-1 min-w-0">
-                  <p className="text-muted-foreground text-sm mb-1">{t.dashboard.mainBalance} ({user?.preferredCurrency || "XAF"})</p>
+                  <p className="text-white/75 text-sm mb-1">{t.dashboard.mainBalance} ({user?.preferredCurrency || "XAF"})</p>
                   {(() => {
                     const cur = user?.preferredCurrency || "XAF";
                     const primaryWallet = wallets.find(wallet => wallet.currency === cur);
@@ -724,7 +724,7 @@ export default function DashboardHome() {
                     const len = balanceText.length;
                     const sizeClass = len > 14 ? "text-2xl" : len > 11 ? "text-3xl" : "text-4xl";
                     return (
-                      <p className={`${sizeClass} font-bold text-foreground whitespace-nowrap`} data-testid="text-balance">
+                      <p className={`${sizeClass} font-bold text-white whitespace-nowrap`} data-testid="text-balance">
                         {balanceText}
                       </p>
                     );
@@ -773,8 +773,8 @@ export default function DashboardHome() {
                           : "text-xs";
 
                     return (
-                      <div key={wallet.currency} className="w-full min-w-0 overflow-hidden rounded-lg border border-primary/10 bg-background/40 px-2 py-2.5">
-                        <p className={`${balanceSizeClass} max-w-full overflow-hidden text-center font-bold leading-tight tracking-tight text-foreground whitespace-nowrap`}>
+                      <div key={wallet.currency} className="w-full min-w-0 overflow-hidden rounded-lg border border-white/20 bg-white/10 px-2 py-2.5">
+                        <p className={`${balanceSizeClass} max-w-full overflow-hidden text-center font-bold leading-tight tracking-tight text-white whitespace-nowrap`}>
                           {balanceText}
                         </p>
                       </div>
