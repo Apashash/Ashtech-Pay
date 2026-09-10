@@ -3,11 +3,6 @@ import crypto from "crypto";
 
 // ── Admin PIN Protection ─────────────────────────────────────────────────────
 //
-// TEMPORARY DIAGNOSTIC OVERRIDE:
-//   The admin PIN is disabled temporarily so the TOTP-only panel flow can be
-//   tested while the Plesk session issue is investigated. Re-enable this
-//   constant before treating the panel as fully protected again.
-//
 // RÈGLE DE SÉCURITÉ :
 //   • ADMIN_PIN_CODE défini et valide (4 chiffres) → PIN requis pour toute
 //     action admin (POST/PATCH/PUT/DELETE sur /api/admin/*).
@@ -34,7 +29,7 @@ import crypto from "crypto";
 
 const MAX_ATTEMPTS = 4;
 const LOCKOUT_MS = 20 * 60 * 1000; // 20 minutes
-const ADMIN_PIN_PROTECTION_ENABLED = false;
+const ADMIN_PIN_PROTECTION_ENABLED = true;
 
 interface AttemptRecord {
   count: number;
@@ -83,9 +78,7 @@ const _rawPin = (process.env.ADMIN_PIN_CODE ?? "").trim();
 const _pinValid = /^\d{4}$/.test(_rawPin);
 const configuredPin: string | null = _pinValid ? _rawPin : null;
 
-if (!ADMIN_PIN_PROTECTION_ENABLED) {
-  console.warn("[AdminPin] ⚠️ Protection PIN TEMPORAIREMENT DÉSACTIVÉE — TOTP reste obligatoire pour le panneau admin.");
-} else if (configuredPin) {
+if (configuredPin) {
   console.log("[AdminPin] ✅ Protection PIN ACTIVE — toutes les mutations admin exigent le code à 4 chiffres.");
 } else if (_rawPin.length > 0) {
   // Clé présente mais format invalide — bloque quand même

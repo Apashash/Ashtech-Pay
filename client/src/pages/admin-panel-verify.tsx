@@ -12,7 +12,7 @@ export default function AdminPanelVerifyPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [code, setCode] = useState("");
-  const [step, setStep] = useState<"totp" | "pin">("totp");
+  const [step, setStep] = useState<"totp" | "pin">("pin");
   const [secondsLeft, setSecondsLeft] = useState(30);
 
   // Restore the page the admin was on before TOTP expiry; fall back to admin root
@@ -47,12 +47,8 @@ export default function AdminPanelVerifyPage() {
       setLocation("/dashboard");
       return;
     }
-    if (step === "totp" && otpStatus.verified && !otpStatus.needsPanelVerify) {
-      if (otpStatus.needsPanelPin) {
-        setStep("pin");
-      } else {
-        setLocation(ADMIN_URL);
-      }
+    if (otpStatus.verified && !otpStatus.needsPanelPin) {
+      setLocation(ADMIN_URL);
     }
   }, [otpStatus, statusLoading, step, ADMIN_URL]);
 
@@ -110,10 +106,14 @@ export default function AdminPanelVerifyPage() {
     onError: (err: any) => {
       setCode("");
       if (err.totpRequired) {
-        setStep("totp");
+        setLocation("/login");
       }
       toast({
-        title: err.totpRequired ? "Vérification Google Authenticator requise" : "Code PIN incorrect",
+        title: err.adminSessionExpired
+          ? "Session admin expirée"
+          : err.totpRequired
+            ? "Vérification Google Authenticator requise"
+            : "Code PIN incorrect",
         description: err.message || "Vérifiez le code PIN administrateur.",
         variant: "destructive",
       });
@@ -236,7 +236,7 @@ export default function AdminPanelVerifyPage() {
         </div>
 
         <p className="text-center text-xs text-muted-foreground mt-4 px-2">
-          🔒 L'authentification à deux facteurs est obligatoire pour le panneau admin.
+          🔒 Le code PIN est requis pour ouvrir le panneau admin.
         </p>
       </div>
     </div>
