@@ -5,10 +5,11 @@ import { DashboardLayout } from "@/components/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { ArrowLeftRight, Loader2, CheckCircle2, AlertTriangle, ChevronLeft } from "lucide-react";
+import { ArrowLeftRight, Loader2, CheckCircle2, AlertTriangle, ChevronLeft, Check, ChevronsUpDown } from "lucide-react";
 import { ALL_FX_CURRENCIES, CURRENCY_SYMBOLS } from "@shared/schema";
 import type { User, Transaction } from "@shared/schema";
 import { useLanguage } from "@/lib/language";
@@ -53,6 +54,8 @@ export default function ConvertPage() {
   const [fromCurrency, setFromCurrency] = useState(presetFrom || "XAF");
   const [toCurrency, setToCurrency] = useState(presetTo || "XOF");
   const [convertAmount, setConvertAmount] = useState("");
+  const [sourcePickerOpen, setSourcePickerOpen] = useState(false);
+  const [targetPickerOpen, setTargetPickerOpen] = useState(false);
   const [conversionPending, setConversionPending] = useState<{
     conversionId: string; fromCurrency: string; toCurrency: string; fromAmount: number; toAmount: number;
   } | null>(null);
@@ -282,19 +285,50 @@ export default function ConvertPage() {
           {/* Source account */}
           <div className="space-y-1.5">
             <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t.wallets.fromAccount}</Label>
-            <Select value={fromCurrency} onValueChange={(v) => { setFromCurrency(v); setConvertAmount(""); }}>
-              <SelectTrigger className="h-12 rounded-xl" data-testid="select-from-currency">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {walletList.map(w => (
-                  <SelectItem key={w.currency} value={w.currency}>
-                    {CURRENCY_FLAGS[w.currency] || "🌍"} {w.currency}{" "}
-                    {parseFloat(w.balance || "0").toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {w.symbol || walletSymbol(w.currency)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Popover open={sourcePickerOpen} onOpenChange={setSourcePickerOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  role="combobox"
+                  aria-expanded={sourcePickerOpen}
+                  className="flex h-12 w-full items-center justify-between rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  data-testid="select-from-currency"
+                >
+                  <span className="min-w-0 truncate">
+                    {CURRENCY_FLAGS[fromCurrency] || "🌍"} {fromCurrency}{" "}
+                    {parseFloat(sourceBalance?.balance || "0").toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {sourceBalance?.symbol || walletSymbol(fromCurrency)}
+                  </span>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-0">
+                <Command>
+                  <CommandInput placeholder="Rechercher par devise ou pays..." />
+                  <CommandList>
+                    <CommandEmpty>Aucune devise trouvée.</CommandEmpty>
+                    <CommandGroup>
+                      {walletList.map((w) => (
+                        <CommandItem
+                          key={w.currency}
+                          value={`${w.currency} ${CURRENCY_NAMES[w.currency] || ""} ${w.symbol || ""}`}
+                          onSelect={() => {
+                            setFromCurrency(w.currency);
+                            setConvertAmount("");
+                            setSourcePickerOpen(false);
+                          }}
+                        >
+                          <Check className={`mr-2 h-4 w-4 ${fromCurrency === w.currency ? "opacity-100" : "opacity-0"}`} />
+                          <span className="truncate">
+                            {CURRENCY_FLAGS[w.currency] || "🌍"} {w.currency}{" "}
+                            {parseFloat(w.balance || "0").toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {w.symbol || walletSymbol(w.currency)}
+                          </span>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* Swap indicator */}
@@ -316,19 +350,49 @@ export default function ConvertPage() {
           {/* Target account */}
           <div className="space-y-1.5">
             <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t.wallets.toAccount}</Label>
-            <Select value={toCurrency} onValueChange={setToCurrency}>
-              <SelectTrigger className="h-12 rounded-xl" data-testid="select-to-currency">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {toCurrencyOptions.filter(c => c !== fromCurrency).map(currency => (
-                  <SelectItem key={currency} value={currency}>
-                    {CURRENCY_FLAGS[currency] || "🌍"} {currency}{" "}
-                    {CURRENCY_NAMES[currency] || currency}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Popover open={targetPickerOpen} onOpenChange={setTargetPickerOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  role="combobox"
+                  aria-expanded={targetPickerOpen}
+                  className="flex h-12 w-full items-center justify-between rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  data-testid="select-to-currency"
+                >
+                  <span className="min-w-0 truncate">
+                    {CURRENCY_FLAGS[toCurrency] || "🌍"} {toCurrency}{" "}
+                    {CURRENCY_NAMES[toCurrency] || toCurrency}
+                  </span>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-0">
+                <Command>
+                  <CommandInput placeholder="Rechercher par devise ou pays..." />
+                  <CommandList>
+                    <CommandEmpty>Aucune devise trouvée.</CommandEmpty>
+                    <CommandGroup>
+                      {toCurrencyOptions.filter((c) => c !== fromCurrency).map((currency) => (
+                        <CommandItem
+                          key={currency}
+                          value={`${currency} ${CURRENCY_NAMES[currency] || ""}`}
+                          onSelect={() => {
+                            setToCurrency(currency);
+                            setTargetPickerOpen(false);
+                          }}
+                        >
+                          <Check className={`mr-2 h-4 w-4 ${toCurrency === currency ? "opacity-100" : "opacity-0"}`} />
+                          <span className="truncate">
+                            {CURRENCY_FLAGS[currency] || "🌍"} {currency}{" "}
+                            {CURRENCY_NAMES[currency] || currency}
+                          </span>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
             {presetTo && !walletList.some(w => w.currency === presetTo) && toCurrency === presetTo && (
               <p className="text-xs text-muted-foreground">Ce portefeuille sera créé automatiquement lors de la conversion.</p>
             )}
