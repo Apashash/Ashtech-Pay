@@ -2,6 +2,7 @@ import fs from "fs/promises";
 import path from "path";
 import crypto from "crypto";
 import { jsPDF } from "jspdf";
+import sharp from "sharp";
 import { eq, like } from "drizzle-orm";
 import { appPath } from "./appPaths";
 import { db } from "./db";
@@ -189,10 +190,25 @@ function addPdfImage(pdf: jsPDF, title: string, buffer: Buffer, contentType: str
   pdf.addImage(dataUri, format, (210 - width) / 2, 30, width, height, undefined, "MEDIUM");
 }
 
+async function preparePdfImage(file: { buffer: Buffer; contentType: string }): Promise<{ buffer: Buffer; contentType: string }> {
+  if (file.contentType === "image/jpeg" || file.contentType === "image/png") {
+    return file;
+  }
+  return {
+    buffer: await sharp(file.buffer).jpeg({ quality: 90 }).toBuffer(),
+    contentType: "image/jpeg",
+  };
+}
+
 async function createSummaryPdf(
   input: KycDocumentBundleInput,
   files: { front: { buffer: Buffer; contentType: string }; back: { buffer: Buffer; contentType: string }; selfie: { buffer: Buffer; contentType: string } },
 ): Promise<Buffer> {
+  const pdfFiles = {
+    front: await preparePdfImage(files.front),
+    back: await preparePdfImage(files.back),
+    selfie: await preparePdfImage(files.selfie),
+  };
   const pdf = new jsPDF({ unit: "mm", format: "a4" });
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(18);
@@ -218,9 +234,9 @@ async function createSummaryPdf(
   pdf.setFont("helvetica", "normal");
   pdf.text(pdf.splitTextToSize(input.businessDescription || "Non renseigné", 174), 18, y + 6);
 
-  addPdfImage(pdf, "Document — Recto", files.front.buffer, files.front.contentType);
-  addPdfImage(pdf, "Document — Verso", files.back.buffer, files.back.contentType);
-  addPdfImage(pdf, "Selfie avec document", files.selfie.buffer, files.selfie.contentType);
+  addPdfImage(pdf, "Document — Recto", pdfFiles.front.buffer, pdfFiles.front.contentType);
+  addPdfImage(pdf, "Document — Verso", pdfFiles.back.buffer, pdfFiles.back.contentType);
+  addPdfImage(pdf, "Selfie avec document", pdfFiles.selfie.buffer, pdfFiles.selfie.contentType);
 
   return Buffer.from(pdf.output("arraybuffer"));
 }

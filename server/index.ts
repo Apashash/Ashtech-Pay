@@ -346,11 +346,21 @@ app.use((req, res, next) => {
       // those messages visible so Plesk permission/configuration failures are
       // diagnosable instead of becoming the opaque "server_error".
       const isSafeUploadFailure =
-        req.path === "/api/uploads/file" &&
         (
-          bodyJson.code === "KYC_STORAGE_UNAVAILABLE" ||
-          bodyJson.code === "KYC_DATABASE_UNAVAILABLE" ||
-          bodyJson.code === "UPLOAD_FAILED"
+          req.path === "/api/uploads/file" &&
+          (
+            bodyJson.code === "KYC_STORAGE_UNAVAILABLE" ||
+            bodyJson.code === "KYC_DATABASE_UNAVAILABLE" ||
+            bodyJson.code === "UPLOAD_FAILED"
+          )
+        ) ||
+        (
+          req.path === "/api/kyc" &&
+          (
+            bodyJson.code === "KYC_DATABASE_UNAVAILABLE" ||
+            bodyJson.code === "KYC_DOCUMENT_UNAVAILABLE" ||
+            bodyJson.code === "KYC_SUBMISSION_FAILED"
+          )
         );
       const sanitized = isCryptoApi || isSafeProviderFailure
         ? {

@@ -106,6 +106,7 @@ import {
   removePrivateKycUpload,
   savePrivateKycUpload,
 } from "./kycPrivateDocuments";
+import { ensureMysqlKycSubmissionSchema } from "./mysqlBootstrap";
 
 const PAWAPAY_PUBLIC_INITIATION_TIMEOUT_MS = 20_000;
 
@@ -14025,6 +14026,7 @@ export async function registerRoutes(
     let privateBundle: Awaited<ReturnType<typeof createPrivateKycDocumentBundle>> | undefined;
     try {
       const userId = req.userId!;
+      await ensureMysqlKycSubmissionSchema();
       
       // Check if user already has a pending KYC submission
       const existingSubmission = await storage.getKycSubmissionByUserId(userId);
@@ -14128,7 +14130,34 @@ export async function registerRoutes(
         removePrivateKycUpload(String(req.body?.selfiePath || "")),
       ]);
       console.error("Submit KYC error:", error);
-      res.status(500).json({ message: "Erreur serveur" });
+      const submitError = error as NodeJS.ErrnoException;
+      const errorCode = String(submitError.code || "");
+      const errorMessage = String(submitError.message || error);
+      const isDatabaseError = [
+        "ER_NO_SUCH_TABLE",
+        "ER_BAD_FIELD_ERROR",
+        "ER_ACCESS_DENIED_ERROR",
+        "ECONNREFUSED",
+        "KYC_ENCRYPTION_NOT_CONFIGURED",
+      ].includes(errorCode) ||
+        /kyc_(submissions|documents)|unknown column|connect ECONN|access denied/i.test(errorMessage);
+      const isDocumentError = [
+        "KYC_DOCUMENT_NOT_FOUND",
+        "KYC_SOURCE_FILE_NOT_FOUND",
+        "INVALID_PRIVATE_DOCUMENT_PATH",
+      ].includes(errorCode) ||
+        /KYC_DOCUMENT_NOT_FOUND|KYC_SOURCE_FILE_NOT_FOUND|INVALID_PRIVATE_DOCUMENT_PATH/.test(errorMessage);
+      const safeCode = isDatabaseError
+        ? "KYC_DATABASE_UNAVAILABLE"
+        : isDocumentError
+          ? "KYC_DOCUMENT_UNAVAILABLE"
+          : "KYC_SUBMISSION_FAILED";
+      const safeMessage = isDatabaseError
+        ? "La base MySQL Plesk ne peut pas finaliser la demande KYC. Vérifiez les colonnes private_folder_path et summary_pdf_path de kyc_submissions."
+        : isDocumentError
+          ? "Un document KYC temporaire est introuvable. Téléchargez à nouveau le recto, le verso et le selfie."
+          : "Impossible de finaliser le dossier KYC. Vérifiez les documents et réessayez.";
+      res.status(500).json({ message: safeMessage, code: safeCode });
     }
   });
 

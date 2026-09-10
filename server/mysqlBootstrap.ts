@@ -13,6 +13,7 @@ const KYC_DOCUMENTS_TABLE_SQL = `CREATE TABLE IF NOT EXISTS kyc_documents (
 ) ENGINE=InnoDB`;
 
 let kycDocumentsSchemaPromise: Promise<void> | null = null;
+let kycSubmissionSchemaPromise: Promise<void> | null = null;
 
 /**
  * KYC uploads can arrive before a delayed Passenger migration finishes.
@@ -31,6 +32,38 @@ export function ensureMysqlKycDocumentsSchema(): Promise<void> {
     kycDocumentsSchemaPromise = schemaPromise;
   }
   return kycDocumentsSchemaPromise!;
+}
+
+/**
+ * The imported kyc_submissions table may predate the private database-backed
+ * document storage columns. Add them lazily before a submission as well as
+ * during startup. Duplicate-column errors are expected on later runs.
+ */
+export function ensureMysqlKycSubmissionSchema(): Promise<void> {
+  if (process.env.DB_DIALECT?.toLowerCase() !== "mysql") return Promise.resolve();
+  if (!kycSubmissionSchemaPromise) {
+    const schemaPromise = (async () => {
+      for (const statement of [
+        "ALTER TABLE kyc_submissions ADD COLUMN private_folder_path TEXT NULL",
+        "ALTER TABLE kyc_submissions ADD COLUMN summary_pdf_path TEXT NULL",
+      ]) {
+        try {
+          await pool.query(statement);
+        } catch (error: any) {
+          const code = String(error?.code || "");
+          const message = String(error?.message || "");
+          if (code !== "ER_DUP_FIELDNAME" && !/duplicate column/i.test(message)) {
+            throw error;
+          }
+        }
+      }
+    })().catch((error: unknown) => {
+      kycSubmissionSchemaPromise = null;
+      throw error;
+    });
+    kycSubmissionSchemaPromise = schemaPromise;
+  }
+  return kycSubmissionSchemaPromise!;
 }
 
 /**
