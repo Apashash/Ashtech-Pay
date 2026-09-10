@@ -3,6 +3,7 @@ import { notifyConversionCompleted } from "./telegram";
 import { convertCurrency, loadFxRates } from "./walletHelper";
 
 const POLL_INTERVAL = 10_000; // 10 seconds
+let conversionProcessing = false;
 
 interface ConversionMeta {
   executeAt?: number;
@@ -22,7 +23,9 @@ function parseMeta(notes: string | null | undefined): ConversionMeta | null {
   return null;
 }
 
-async function processPendingConversions() {
+export async function processPendingConversions() {
+  if (conversionProcessing) return;
+  conversionProcessing = true;
   try {
     const pending = await storage.getPendingConversionRequests();
     if (pending.length === 0) return;
@@ -137,6 +140,8 @@ async function processPendingConversions() {
     }
   } catch (err: any) {
     console.error("[ConversionPoller] Poll error:", err.message);
+  } finally {
+    conversionProcessing = false;
   }
 }
 

@@ -81,6 +81,15 @@ function QuickActionCard({ icon: Icon, label, color, onClick, testId }: {
   );
 }
 
+function formatDashboardWalletBalance(amount: string | number, currency: string): string {
+  const numericAmount = typeof amount === "string" ? parseFloat(amount) : amount;
+  const decimals = ["USD", "EUR", "USDT"].includes(currency) ? 2 : 0;
+  return `${new Intl.NumberFormat("fr-FR", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(Number.isFinite(numericAmount) ? numericAmount : 0)} ${currency}`;
+}
+
 function StatCard({ title, value, icon: Icon, trend, color, href }: {
   title: string;
   value: string | number;
@@ -707,7 +716,8 @@ export default function DashboardHome() {
                   <p className="text-muted-foreground text-sm mb-1">{t.dashboard.mainBalance} ({user?.preferredCurrency || "XAF"})</p>
                   {(() => {
                     const cur = user?.preferredCurrency || "XAF";
-                    const num = parseFloat(user?.balance || "0.00");
+                    const primaryWallet = wallets.find(wallet => wallet.currency === cur);
+                    const num = parseFloat(primaryWallet?.balance || user?.balance || "0.00");
                     const balanceText = (cur === "USD" || cur === "EUR")
                       ? num.toFixed(2)
                       : new Intl.NumberFormat("fr-FR").format(Math.round(num));
@@ -723,9 +733,8 @@ export default function DashboardHome() {
                     <div className="grid grid-cols-2 gap-2 mt-3">
                       {secondaryWallets.map((wallet) => (
                         <div key={wallet.currency} className="rounded-lg border border-primary/10 bg-background/40 px-2.5 py-2">
-                          <p className="text-[10px] font-bold uppercase text-muted-foreground">Sous-compte {wallet.currency}</p>
-                          <p className="text-xs font-bold text-foreground mt-0.5">
-                            {formatWalletBalance(wallet.balance, wallet.currency)}
+                          <p className="text-xs font-bold text-foreground">
+                            {formatDashboardWalletBalance(wallet.balance, wallet.currency)}
                           </p>
                         </div>
                       ))}

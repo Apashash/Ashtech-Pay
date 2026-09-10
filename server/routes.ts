@@ -82,6 +82,7 @@ import { addPendingPayment, removePendingPayment, expireCryptoPaymentIfNeeded } 
 import { processPawaPayDepositCallback } from "./paymentPoller";
 import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, sameCfaFamily, getConversionPairKey, maybeAutoConvert } from "./walletHelper";
 import { addPendingPayout, removePendingPayout } from "./payoutPoller";
+import { processPendingConversions } from "./conversionPoller";
 import { processPawaPayPayoutCallback } from "./payoutPoller";
 import { isPawaPayUuidV4, parsePawaPayCallback, verifyPawaPayCallbackSignature } from "./pawapay";
 import {
@@ -4018,8 +4019,13 @@ export async function registerRoutes(
 
       // Build wallets list
       const primaryCurrency = (user.preferredCurrency || "XAF") as SupportedCurrency;
+      const primaryWalletRecord = extraWallets.find(w => w.currency === primaryCurrency);
+      const storedPrimaryBalance = parseFloat(user.balance || "0");
+      const primaryBalance = storedPrimaryBalance !== 0 || !primaryWalletRecord
+        ? user.balance
+        : primaryWalletRecord.balance;
       const wallets = [
-        { currency: primaryCurrency, balance: user.balance, symbol: CURRENCY_SYMBOLS[primaryCurrency] || primaryCurrency },
+        { currency: primaryCurrency, balance: primaryBalance, symbol: CURRENCY_SYMBOLS[primaryCurrency] || primaryCurrency },
         ...extraWallets
           .filter(w => w.currency !== primaryCurrency)
           .map(w => ({ currency: w.currency, balance: w.balance, symbol: CURRENCY_SYMBOLS[w.currency as SupportedCurrency] || w.currency })),
@@ -6554,9 +6560,17 @@ export async function registerRoutes(
 
       // Primary wallet uses the user's preferred currency (not hardcoded XAF)
       const primaryCurrency = (user.preferredCurrency || "XAF") as SupportedCurrency;
+      const primaryWalletRecord = extraWallets.find(w => w.currency === primaryCurrency);
+      const storedPrimaryBalance = parseFloat(user.balance || "0");
+      // Older imports may have kept the primary wallet in the wallets table
+      // while users.balance is still zero. Prefer the canonical users value
+      // whenever it is populated, otherwise use that legacy wallet record.
+      const primaryBalance = storedPrimaryBalance !== 0 || !primaryWalletRecord
+        ? user.balance
+        : primaryWalletRecord.balance;
       const primaryWallet = {
         currency: primaryCurrency,
-        balance: user.balance,
+        balance: primaryBalance,
         symbol: CURRENCY_SYMBOLS[primaryCurrency] || primaryCurrency,
       };
 
@@ -6751,6 +6765,14 @@ export async function registerRoutes(
       const convReq = await storage.getConversionRequest(req.params.id);
       if (!convReq || convReq.userId !== req.userId) {
         return res.status(404).json({ message: "Conversion introuvable" });
+      }
+      if (convReq.status === "pending") {
+        // The background worker normally handles this. Running the same guarded
+        // pass here also recovers conversions when a Plesk worker was restarted
+        // or temporarily missed its interval.
+        await processPendingConversions();
+        const refreshed = await storage.getConversionRequest(req.params.id);
+        return res.json({ status: refreshed?.status || convReq.status, conversionId: convReq.id });
       }
       return res.json({ status: convReq.status, conversionId: convReq.id });
     } catch (error) {
