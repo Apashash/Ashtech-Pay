@@ -87,6 +87,14 @@ After a successful panel PIN, clear both `needsPanelPin` and `needsPanelVerify` 
 
 **How to apply:** Treat the post-verification query state as a complete success state and let the server refresh finish before the admin layout applies its redirect guard.
 
+### Session-save failures
+
+Panel TOTP and PIN endpoints must not return success until `req.session.save()` completes without an error.
+
+**Why:** Reporting a successful factor before persisting its session flags sends the browser to the admin route, where the first protected request correctly sees no grant and redirects back to Google.
+
+**How to apply:** Return a non-success response that keeps the user on the current verification step, and inspect the Plesk session-store/database logs before changing the TOTP flow.
+
 ## Frontend flows
 
 ### Login flow (password → TOTP)

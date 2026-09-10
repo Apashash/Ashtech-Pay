@@ -3597,10 +3597,16 @@ export async function registerRoutes(
       req.session._pavVerifiedAt = Date.now();
       delete req.session._ppv;
       delete req.session._ppvIp;
-      await new Promise<void>((resolve) => req.session.save((err) => {
-        if (err) console.error("admin-panel-verify session save error:", err);
-        resolve();
-      }));
+      const panelTotpSaveError = await new Promise<Error | null>((resolve) => {
+        req.session.save((err) => resolve(err ? (err instanceof Error ? err : new Error(String(err))) : null));
+      });
+      if (panelTotpSaveError) {
+        console.error("admin-panel-verify session save error:", panelTotpSaveError);
+        return res.status(503).json({
+          message: "La session admin n'a pas pu être enregistrée. Réessayez dans quelques instants.",
+          sessionSaveError: true,
+        });
+      }
       // Populate in-memory cache so requireAdmin is instant on subsequent requests
       adminVerifiedSessions.set(req.sessionID, {
         userId: user.id,
@@ -3672,10 +3678,16 @@ export async function registerRoutes(
       req.session._pav = panelAuthExp;
       req.session._ppv = panelAuthExp;
       req.session._ppvIp = currentIp;
-      await new Promise<void>((resolve) => req.session.save((err) => {
-        if (err) console.error("admin-panel-pin-verify session save error:", err);
-        resolve();
-      }));
+      const panelPinSaveError = await new Promise<Error | null>((resolve) => {
+        req.session.save((err) => resolve(err ? (err instanceof Error ? err : new Error(String(err))) : null));
+      });
+      if (panelPinSaveError) {
+        console.error("admin-panel-pin-verify session save error:", panelPinSaveError);
+        return res.status(503).json({
+          message: "La session admin n'a pas pu être enregistrée. Réessayez dans quelques instants.",
+          sessionSaveError: true,
+        });
+      }
 
       console.log(`[AdminPin] ✅ Panel PIN vérifié — userId=${user.id}`);
       res.json({ ok: true });
