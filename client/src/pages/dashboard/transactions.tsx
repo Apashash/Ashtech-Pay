@@ -258,7 +258,6 @@ export default function TransactionsPage() {
 
         <div>
           <h1 className="text-2xl font-semibold text-foreground">{t.transactions.title}</h1>
-          <p className="text-sm text-muted-foreground mt-1">{transactions.length} {transactions.length !== 1 ? t.transactions.totalCountPlural : t.transactions.totalCount}</p>
         </div>
 
         {/* Stats summary */}
