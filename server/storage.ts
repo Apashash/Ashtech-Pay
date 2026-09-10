@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { encryptField, decryptField, hmacField } from "./fieldEncryption";
 
 /**
@@ -81,7 +82,36 @@ import {
   type InsertAutoConversionRule,
 } from "@shared/schema-runtime";
 import { db } from "./db";
+import { pool } from "./db";
 import { eq, desc, sql, and, or, like, ilike, count, inArray, gt, gte, lt, lte } from "drizzle-orm";
+
+const isMysqlDialect = process.env.DB_DIALECT?.toLowerCase() === "mysql";
+const numericSql = (expression: unknown) =>
+  isMysqlDialect
+    ? sql`CAST(${expression} AS DECIMAL(30, 10))`
+    : sql`${expression}::numeric`;
+
+async function mysqlInsertAndRead<T>(
+  table: any,
+  values: Record<string, unknown>,
+  read: (id: string) => Promise<T | undefined>,
+): Promise<T> {
+  const id = String(values.id || randomUUID());
+  await (db as any).insert(table).values({ ...values, id });
+  const row = await read(id);
+  if (!row) throw new Error("MYSQL_INSERT_READBACK_FAILED");
+  return row;
+}
+
+async function mysqlUpdateAndRead<T>(
+  table: any,
+  whereClause: any,
+  updates: Record<string, unknown>,
+  read: () => Promise<T | undefined>,
+): Promise<T | undefined> {
+  await (db as any).update(table).set(updates).where(whereClause);
+  return read();
+}
 
 export interface IStorage {
   // User operations
@@ -392,7 +422,9 @@ export class DatabaseStorage implements IStorage {
     if (!normalized) return undefined;
     const [user] = await db.select().from(users).where(or(
       eq(users.phone, normalized),
-      sql`regexp_replace(${users.phone}, '[^0-9]', '', 'g') = ${normalized}`,
+      isMysqlDialect
+        ? sql`REGEXP_REPLACE(${users.phone}, '[^0-9]', '') = ${normalized}`
+        : sql`regexp_replace(${users.phone}, '[^0-9]', '', 'g') = ${normalized}`,
     ));
     return user || undefined;
   }
@@ -419,11 +451,20 @@ export class DatabaseStorage implements IStorage {
     for (let attempt = 0; attempt < 10; attempt++) {
       const id = generateId();
       try {
+        if (isMysqlDialect) {
+          await db.insert(users).values({ ...insertUser, id });
+          const user = await this.getUser(id);
+          if (!user) throw new Error("USER_INSERT_READBACK_FAILED");
+          return user;
+        }
         const [user] = await db.insert(users).values({ ...insertUser, id }).returning();
         return user;
       } catch (err: any) {
         // 23505 = unique_violation — retry with a new ID
-        if (err?.code === "23505" && err?.detail?.includes("(id)")) {
+        if (
+          (err?.code === "23505" && err?.detail?.includes("(id)")) ||
+          (isMysqlDialect && err?.code === "ER_DUP_ENTRY" && /PRIMARY|id/i.test(String(err?.message)))
+        ) {
           continue;
         }
         throw err;
@@ -444,11 +485,19 @@ export class DatabaseStorage implements IStorage {
       throw new Error("Solde insuffisant");
     }
     
-    const [updatedUser] = await db
-      .update(users)
-      .set({ balance: newBalance.toFixed(2) })
-      .where(eq(users.id, id))
-      .returning();
+    let updatedUser: User | undefined;
+    if (isMysqlDialect) {
+      await db.update(users)
+        .set({ balance: newBalance.toFixed(2) })
+        .where(eq(users.id, id));
+      updatedUser = await this.getUser(id);
+    } else {
+      [updatedUser] = await db
+        .update(users)
+        .set({ balance: newBalance.toFixed(2) })
+        .where(eq(users.id, id))
+        .returning();
+    }
     
     if (updatedUser) setCachedUser(updatedUser);
     return updatedUser;
@@ -470,11 +519,17 @@ export class DatabaseStorage implements IStorage {
 
   async updateUserCurrency(id: string, currency: SupportedCurrency): Promise<User | undefined> {
     invalidateUserCache(id);
-    const [updatedUser] = await db
-      .update(users)
-      .set({ preferredCurrency: currency })
-      .where(eq(users.id, id))
-      .returning();
+    let updatedUser: User | undefined;
+    if (isMysqlDialect) {
+      await db.update(users).set({ preferredCurrency: currency }).where(eq(users.id, id));
+      updatedUser = await this.getUser(id);
+    } else {
+      [updatedUser] = await db
+        .update(users)
+        .set({ preferredCurrency: currency })
+        .where(eq(users.id, id))
+        .returning();
+    }
     if (updatedUser) setCachedUser(updatedUser);
     return updatedUser || undefined;
   }
@@ -487,31 +542,53 @@ export class DatabaseStorage implements IStorage {
   }
 
   async setResetToken(id: string, token: string, expiry: Date): Promise<User | undefined> {
-    const [updatedUser] = await db
-      .update(users)
-      .set({ resetToken: token, resetTokenExpiry: expiry })
-      .where(eq(users.id, id))
-      .returning();
+    let updatedUser: User | undefined;
+    if (isMysqlDialect) {
+      await db.update(users)
+        .set({ resetToken: token, resetTokenExpiry: expiry })
+        .where(eq(users.id, id));
+      updatedUser = await this.getUser(id);
+    } else {
+      [updatedUser] = await db
+        .update(users)
+        .set({ resetToken: token, resetTokenExpiry: expiry })
+        .where(eq(users.id, id))
+        .returning();
+    }
     
     return updatedUser || undefined;
   }
 
   async updatePassword(id: string, hashedPassword: string): Promise<User | undefined> {
-    const [updatedUser] = await db
-      .update(users)
-      .set({ password: hashedPassword })
-      .where(eq(users.id, id))
-      .returning();
+    let updatedUser: User | undefined;
+    if (isMysqlDialect) {
+      await db.update(users).set({ password: hashedPassword }).where(eq(users.id, id));
+      updatedUser = await this.getUser(id);
+    } else {
+      [updatedUser] = await db
+        .update(users)
+        .set({ password: hashedPassword })
+        .where(eq(users.id, id))
+        .returning();
+    }
     
     return updatedUser || undefined;
   }
 
   async clearResetToken(id: string): Promise<User | undefined> {
-    const [updatedUser] = await db
-      .update(users)
-      .set({ resetToken: null, resetTokenExpiry: null })
-      .where(eq(users.id, id))
-      .returning();
+    let updatedUser: User | undefined;
+    if (isMysqlDialect) {
+      await db.update(users)
+        .set({ resetToken: null, resetTokenExpiry: null })
+        .where(eq(users.id, id));
+      updatedUser = await this.getUser(id);
+    } else {
+      [updatedUser] = await db
+        .update(users)
+        .set({ resetToken: null, resetTokenExpiry: null })
+        .where(eq(users.id, id))
+        .returning();
+    }
     
     return updatedUser || undefined;
   }
@@ -575,7 +652,9 @@ export class DatabaseStorage implements IStorage {
         eq(transactions.source, "api"),
         or(
           eq(transactions.reference, reference),
-          sql`${transactions.metadata}->>'merchantReference' = ${reference}`,
+          isMysqlDialect
+            ? sql`JSON_UNQUOTE(JSON_EXTRACT(${transactions.metadata}, '$.merchantReference')) = ${reference}`
+            : sql`${transactions.metadata}->>'merchantReference' = ${reference}`,
         ),
       ))
       .orderBy(desc(transactions.createdAt))
@@ -606,6 +685,18 @@ export class DatabaseStorage implements IStorage {
 
   async createTransaction(insertTransaction: InsertTransaction): Promise<Transaction> {
     const reference = insertTransaction.reference || `TX-${Date.now()}`;
+    if (isMysqlDialect) {
+      const id = (insertTransaction as any).id || randomUUID();
+      await db.insert(transactions).values({
+        ...insertTransaction,
+        id,
+        status: insertTransaction.status || "pending",
+        reference,
+      });
+      const created = await this.getTransactionById(id);
+      if (!created) throw new Error("TRANSACTION_INSERT_READBACK_FAILED");
+      return created;
+    }
     const [transaction] = await db
       .insert(transactions)
       .values({
@@ -620,6 +711,10 @@ export class DatabaseStorage implements IStorage {
   async updateTransactionStatus(id: string, status: string): Promise<Transaction | undefined> {
     const updateData: Record<string, any> = { status };
     if (status === "completed") updateData.confirmedAt = new Date();
+    if (isMysqlDialect) {
+      await db.update(transactions).set(updateData).where(eq(transactions.id, id));
+      return this.getTransactionById(id);
+    }
     const [transaction] = await db
       .update(transactions)
       .set(updateData)
@@ -631,6 +726,16 @@ export class DatabaseStorage implements IStorage {
   async claimTransactionStatus(id: string, status: string, allowedFrom: string[] = ["pending"]): Promise<Transaction | undefined> {
     const updateData: Record<string, any> = { status };
     if (status === "completed") updateData.confirmedAt = new Date();
+    if (isMysqlDialect) {
+      const current = await db.select().from(transactions)
+        .where(and(eq(transactions.id, id), inArray(transactions.status, allowedFrom)))
+        .limit(1);
+      if (current.length === 0) return undefined;
+      await db.update(transactions)
+        .set(updateData)
+        .where(and(eq(transactions.id, id), inArray(transactions.status, allowedFrom)));
+      return this.getTransactionById(id);
+    }
     const [transaction] = await db
       .update(transactions)
       .set(updateData)
@@ -669,18 +774,23 @@ export class DatabaseStorage implements IStorage {
       const { sameCfaFamily } = await import("./walletHelper");
       const primaryCurrency = user.preferredCurrency || "XAF";
       const usesPrimaryWallet = sameCfaFamily(walletCurrency, primaryCurrency);
-      const debitCondition = sql`${usesPrimaryWallet ? users.balance : wallets.balance}::numeric >= ${amount}::numeric`;
+      const balanceExpression = usesPrimaryWallet ? users.balance : wallets.balance;
+      const debitCondition = isMysqlDialect
+        ? sql`CAST(${balanceExpression} AS DECIMAL(30, 10)) >= ${amount}`
+        : sql`${balanceExpression}::numeric >= ${amount}::numeric`;
 
       if (usesPrimaryWallet) {
         const [debited] = await trx.update(users)
-          .set({ balance: sql`${users.balance}::numeric - ${amount}::numeric` })
+          .set({ balance: isMysqlDialect ? sql`${users.balance} - ${amount}` : sql`${users.balance}::numeric - ${amount}::numeric` })
           .where(and(eq(users.id, transaction.userId), debitCondition))
           .returning({ id: users.id });
         if (!debited) throw new Error("INSUFFICIENT_WALLET_BALANCE");
       } else {
         const [debited] = await trx.update(wallets)
           .set({
-            balance: sql`${wallets.balance}::numeric - ${amount}::numeric`,
+            balance: isMysqlDialect
+              ? sql`${wallets.balance} - ${amount}`
+              : sql`${wallets.balance}::numeric - ${amount}::numeric`,
             updatedAt: new Date(),
           })
           .where(and(
@@ -760,6 +870,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateTransaction(id: string, updates: Partial<InsertTransaction>): Promise<Transaction | undefined> {
+    if (isMysqlDialect) {
+      await db.update(transactions).set(updates as any).where(eq(transactions.id, id));
+      return this.getTransactionById(id);
+    }
     const [transaction] = await db
       .update(transactions)
       .set(updates as any)
@@ -773,6 +887,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateTransactionExternalReference(id: string, externalReference: string): Promise<Transaction | undefined> {
+    if (isMysqlDialect) {
+      await db.update(transactions)
+        .set({ externalReference })
+        .where(eq(transactions.id, id));
+      return this.getTransactionById(id);
+    }
     const [transaction] = await db
       .update(transactions)
       .set({ externalReference })
@@ -797,6 +917,13 @@ export class DatabaseStorage implements IStorage {
 
   async createPaymentLink(insertPaymentLink: InsertPaymentLink & { slug: string }): Promise<PaymentLink> {
     const { slug, ...rest } = insertPaymentLink;
+    if (isMysqlDialect) {
+      return mysqlInsertAndRead(
+        paymentLinks,
+        { ...rest, slug, isActive: true },
+        (id) => this.getPaymentLinkById(id),
+      );
+    }
     const [paymentLink] = await db
       .insert(paymentLinks)
       .values({
@@ -814,6 +941,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updatePaymentLink(id: string, updates: Partial<InsertPaymentLink>): Promise<PaymentLink | undefined> {
+    if (isMysqlDialect) {
+      return mysqlUpdateAndRead(paymentLinks, eq(paymentLinks.id, id), updates, () => this.getPaymentLinkById(id));
+    }
     const [link] = await db
       .update(paymentLinks)
       .set(updates)
@@ -835,6 +965,9 @@ export class DatabaseStorage implements IStorage {
 
   // Payment intent operations
   async createPaymentIntent(insertIntent: InsertPaymentIntent): Promise<PaymentIntent> {
+    if (isMysqlDialect) {
+      return mysqlInsertAndRead(paymentIntents, insertIntent as any, (id) => this.getPaymentIntentById(id));
+    }
     const [intent] = await db
       .insert(paymentIntents)
       .values(insertIntent)
@@ -880,6 +1013,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updatePaymentIntentStatus(id: string, status: string): Promise<PaymentIntent | undefined> {
+    if (isMysqlDialect) {
+      return mysqlUpdateAndRead(paymentIntents, eq(paymentIntents.id, id), { status }, () => this.getPaymentIntentById(id));
+    }
     const [intent] = await db
       .update(paymentIntents)
       .set({ status })
@@ -904,13 +1040,25 @@ export class DatabaseStorage implements IStorage {
 
   async updateUser(id: string, updates: Partial<User>): Promise<User | undefined> {
     invalidateUserCache(id);
-    const [user] = await db.update(users).set(updates).where(eq(users.id, id)).returning();
+    const user = isMysqlDialect
+      ? await mysqlUpdateAndRead(users, eq(users.id, id), updates, () => this.getUser(id))
+      : (await db.update(users).set(updates).where(eq(users.id, id)).returning())[0];
     if (user) setCachedUser(user);
     return user || undefined;
   }
 
   async banUser(id: string, reason: string): Promise<User | undefined> {
     invalidateUserCache(id);
+    if (isMysqlDialect) {
+      const result = await mysqlUpdateAndRead(
+        users,
+        eq(users.id, id),
+        { isBanned: true, banReason: reason },
+        () => this.getUser(id),
+      );
+      if (result) setCachedUser(result);
+      return result;
+    }
     // Use an explicit transaction with SET LOCAL so the guard trigger sees
     // application_name = 'ashtech_secure_app' even on pgBouncer Transaction mode,
     // which resets application_name between transactions at the session level.
@@ -929,6 +1077,16 @@ export class DatabaseStorage implements IStorage {
 
   async unbanUser(id: string): Promise<User | undefined> {
     invalidateUserCache(id);
+    if (isMysqlDialect) {
+      const result = await mysqlUpdateAndRead(
+        users,
+        eq(users.id, id),
+        { isBanned: false, banReason: null },
+        () => this.getUser(id),
+      );
+      if (result) setCachedUser(result);
+      return result;
+    }
     // Same pgBouncer application_name fix as banUser above.
     let result: User | undefined;
     await db.transaction(async (tx) => {
@@ -1006,11 +1164,18 @@ export class DatabaseStorage implements IStorage {
   async setUserApiKey(userId: string, apiKey: string): Promise<User | undefined> {
     const encryptedKey = encryptField(apiKey);
     const keyHash = hmacField(apiKey);
-    const [user] = await db
-      .update(users)
-      .set({ apiKey: encryptedKey, ...(keyHash ? { apiKeyHash: keyHash } : {}) })
-      .where(eq(users.id, userId))
-      .returning();
+    const user = isMysqlDialect
+      ? await mysqlUpdateAndRead(
+          users,
+          eq(users.id, userId),
+          { apiKey: encryptedKey, ...(keyHash ? { apiKeyHash: keyHash } : {}) },
+          () => this.getUser(userId),
+        )
+      : (await db
+          .update(users)
+          .set({ apiKey: encryptedKey, ...(keyHash ? { apiKeyHash: keyHash } : {}) })
+          .where(eq(users.id, userId))
+          .returning())[0];
     // Return with decrypted key for immediate display
     if (user) return { ...user, apiKey };
     return undefined;
@@ -1062,7 +1227,9 @@ export class DatabaseStorage implements IStorage {
             eq(transactions.status, "processing"),
             and(
               eq(transactions.status, "pending_manual"),
-              sql`${transactions.externalReference} ~* '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'`,
+              isMysqlDialect
+                ? sql`${transactions.externalReference} REGEXP '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'`
+                : sql`${transactions.externalReference} ~* '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'`,
             ),
           )
         )
@@ -1090,11 +1257,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createCountry(country: InsertCountry): Promise<Country> {
+    if (isMysqlDialect) {
+      return mysqlInsertAndRead(countries, country as any, (id) => this.getCountry(id));
+    }
     const [newCountry] = await db.insert(countries).values(country).returning();
     return newCountry;
   }
 
   async updateCountry(id: string, updates: Partial<InsertCountry>): Promise<Country | undefined> {
+    if (isMysqlDialect) {
+      return mysqlUpdateAndRead(countries, eq(countries.id, id), updates, () => this.getCountry(id));
+    }
     const [country] = await db.update(countries).set(updates).where(eq(countries.id, id)).returning();
     return country || undefined;
   }
@@ -1124,11 +1297,17 @@ export class DatabaseStorage implements IStorage {
     if (duplicate) {
       throw new Error(`Un opérateur nommé "${duplicate.name}" existe déjà dans ce pays.`);
     }
+    if (isMysqlDialect) {
+      return mysqlInsertAndRead(operators, operator as any, (id) => this.getOperator(id));
+    }
     const [newOperator] = await db.insert(operators).values(operator).returning();
     return newOperator;
   }
 
   async updateOperator(id: string, updates: Partial<InsertOperator>): Promise<Operator | undefined> {
+    if (isMysqlDialect) {
+      return mysqlUpdateAndRead(operators, eq(operators.id, id), updates, () => this.getOperator(id));
+    }
     const [operator] = await db.update(operators).set(updates).where(eq(operators.id, id)).returning();
     return operator || undefined;
   }
@@ -1151,11 +1330,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createFee(fee: InsertFee): Promise<Fee> {
+    if (isMysqlDialect) {
+      return mysqlInsertAndRead(fees, fee as any, (id) => this.getFee(id));
+    }
     const [newFee] = await db.insert(fees).values(fee).returning();
     return newFee;
   }
 
   async updateFee(id: string, updates: Partial<InsertFee>): Promise<Fee | undefined> {
+    if (isMysqlDialect) {
+      return mysqlUpdateAndRead(fees, eq(fees.id, id), updates, () => this.getFee(id));
+    }
     const [fee] = await db.update(fees).set(updates).where(eq(fees.id, id)).returning();
     return fee || undefined;
   }
@@ -1235,11 +1420,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createTicket(ticket: InsertSupportTicket): Promise<SupportTicket> {
+    if (isMysqlDialect) {
+      return mysqlInsertAndRead(supportTickets, ticket as any, (id) => this.getTicket(id));
+    }
     const [newTicket] = await db.insert(supportTickets).values(ticket).returning();
     return newTicket;
   }
 
   async updateTicket(id: string, updates: Partial<SupportTicket>): Promise<SupportTicket | undefined> {
+    if (isMysqlDialect) {
+      return mysqlUpdateAndRead(
+        supportTickets,
+        eq(supportTickets.id, id),
+        { ...updates, updatedAt: new Date() },
+        () => this.getTicket(id),
+      );
+    }
     const [ticket] = await db.update(supportTickets).set({ ...updates, updatedAt: new Date() }).where(eq(supportTickets.id, id)).returning();
     return ticket || undefined;
   }
@@ -1260,6 +1456,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createTicketMessage(message: InsertTicketMessage): Promise<TicketMessage> {
+    if (isMysqlDialect) {
+      return mysqlInsertAndRead(
+        ticketMessages,
+        message as any,
+        async (id) => (await db.select().from(ticketMessages).where(eq(ticketMessages.id, id)).limit(1))[0],
+      );
+    }
     const [newMessage] = await db.insert(ticketMessages).values(message).returning();
     return newMessage;
   }
@@ -1400,7 +1603,7 @@ export class DatabaseStorage implements IStorage {
     const rows = await db
       .select({
         country: sql<string>`COALESCE(NULLIF(${users.country}, ''), 'Inconnu')`,
-        volume:  sql<string>`COALESCE(SUM(${transactions.amount}::numeric), 0)`,
+        volume:  sql<string>`COALESCE(SUM(${numericSql(transactions.amount)}), 0)`,
         cnt:     sql<string>`COUNT(*)`,
       })
       .from(transactions)
@@ -1476,7 +1679,7 @@ export class DatabaseStorage implements IStorage {
         bucket:     truncExpr,
         type:       transactions.type,
         source:     transactions.source,
-        totalAmt:   sql<string>`COALESCE(SUM(${transactions.amount}::numeric), 0)`,
+        totalAmt:   sql<string>`COALESCE(SUM(${numericSql(transactions.amount)}), 0)`,
         cnt:        sql<string>`COUNT(*)`,
         currency:   transactions.currency,
       })
@@ -1610,17 +1813,17 @@ export class DatabaseStorage implements IStorage {
           type: transactions.type,
           status: transactions.status,
           currency: transactions.currency,
-          totalAmount:      sql<string>`COALESCE(SUM(${transactions.amount}::numeric), 0)`,
-          totalFee:         sql<string>`COALESCE(SUM(${transactions.feeAmount}::numeric), 0)`,
-          totalAshtechFee:  sql<string>`COALESCE(SUM(${transactions.ashtechFeeAmount}::numeric), 0)`,
+          totalAmount:      sql<string>`COALESCE(SUM(${numericSql(transactions.amount)}), 0)`,
+          totalFee:         sql<string>`COALESCE(SUM(${numericSql(transactions.feeAmount)}), 0)`,
+          totalAshtechFee:  sql<string>`COALESCE(SUM(${numericSql(transactions.ashtechFeeAmount)}), 0)`,
           cnt:              sql<string>`COUNT(*)`,
         }).from(transactions).where(whereClause).groupBy(transactions.type, transactions.status, transactions.currency)
       : db.select({
           type: transactions.type,
           status: transactions.status,
           currency: transactions.currency,
-          totalAmount:      sql<string>`COALESCE(SUM(${transactions.amount}::numeric), 0)`,
-          totalFee:         sql<string>`COALESCE(SUM(${transactions.feeAmount}::numeric), 0)`,
+          totalAmount:      sql<string>`COALESCE(SUM(${numericSql(transactions.amount)}), 0)`,
+          totalFee:         sql<string>`COALESCE(SUM(${numericSql(transactions.feeAmount)}), 0)`,
           totalAshtechFee:  sql<string>`'0'`,
           cnt:              sql<string>`COUNT(*)`,
         }).from(transactions).where(whereClause).groupBy(transactions.type, transactions.status, transactions.currency)
@@ -2263,6 +2466,28 @@ export class DatabaseStorage implements IStorage {
   }
 
   async upsertWallet(userId: string, currency: string, balanceDelta: number): Promise<Wallet> {
+    if (isMysqlDialect) {
+      const now = new Date();
+      await pool.query(
+        `INSERT INTO wallets (id, user_id, currency, balance, updated_at)
+         VALUES (?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+           balance = GREATEST(0, balance + ?),
+           updated_at = ?`,
+        [
+          randomUUID(),
+          userId,
+          currency,
+          Math.max(0, balanceDelta).toFixed(2),
+          now,
+          balanceDelta,
+          now,
+        ],
+      );
+      const wallet = await this.getWallet(userId, currency);
+      if (!wallet) throw new Error("WALLET_UPSERT_FAILED");
+      return wallet;
+    }
     // Atomic upsert: INSERT ... ON CONFLICT DO UPDATE using PostgreSQL raw SQL.
     // This prevents race conditions where two concurrent operations (e.g. deposit + conversion)
     // could both read "no wallet exists" and then create duplicates or silently lose balance.
