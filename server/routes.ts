@@ -4185,6 +4185,12 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Mot de passe actuel incorrect" });
       }
 
+      if (await bcrypt.compare(newPassword, user.password)) {
+        return res.status(400).json({
+          message: "Impossible de changer le mot de passe : l'ancien mot de passe est identique au nouveau.",
+        });
+      }
+
       const newHash = await bcrypt.hash(newPassword, 10);
       // FIX: crypto.randomInt (CSPRNG) — 6 chiffres = 1 000 000 combinaisons
       const otp = crypto.randomInt(100000, 1000000).toString();

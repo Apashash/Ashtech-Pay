@@ -425,6 +425,14 @@ export default function SettingsPage() {
       toast({ title: "Erreur", description: "Les mots de passe ne correspondent pas.", variant: "destructive" });
       return;
     }
+    if (newPassword === currentPassword) {
+      toast({
+        title: "Modification impossible",
+        description: "L'ancien mot de passe est identique au nouveau.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (newPassword.length < 8) {
       toast({ title: "Erreur", description: "Le nouveau mot de passe doit contenir au moins 8 caractères.", variant: "destructive" });
       return;
