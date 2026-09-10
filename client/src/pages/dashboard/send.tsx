@@ -148,6 +148,14 @@ export default function SendMoneyPage() {
   const amountValue = parseFloat(watchedAmount) || 0;
   const internalAmountValue = parseFloat(internalAmount) || 0;
 
+  useEffect(() => {
+    if (!destination && countries && countries.length > 0) {
+      const firstCountry = countries[0];
+      setDestination(firstCountry.id);
+      form.setValue("countryId", firstCountry.id, { shouldValidate: true });
+    }
+  }, [countries, destination, form]);
+
   const [feeBearer, setFeeBearer] = useState<"sender" | "receiver">("sender");
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pendingExternalData, setPendingExternalData] = useState<ExternalFormData | null>(null);

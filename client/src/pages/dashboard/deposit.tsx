@@ -166,6 +166,12 @@ export default function DepositPage() {
     return selectedCountry?.operators.find(op => op.id === watchedOperatorId);
   }, [selectedCountry, watchedOperatorId]);
 
+  useEffect(() => {
+    if (!watchedCountryId && countries && countries.length > 0) {
+      form.setValue("countryId", countries[0].id, { shouldValidate: true });
+    }
+  }, [countries, watchedCountryId, form]);
+
   const feeCalculation = useMemo(() => {
     const amount = parseFloat(watchedAmount) || 0;
     if (amount <= 0 || !selectedOperator) return null;
