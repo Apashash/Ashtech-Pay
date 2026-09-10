@@ -43,18 +43,18 @@ function SectionCard({ number, title, subtitle, icon: Icon, children }: {
 }) {
   const { t } = useLanguage();
   return (
-    <div className="bg-card border border-border rounded-xl overflow-hidden">
-      <div className="flex items-center gap-4 px-5 py-4 border-b border-border bg-muted/20">
-        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-muted/60 border border-border shrink-0">
-          <Icon className="w-4 h-4 text-muted-foreground" />
+    <div className="bg-card border border-border/70 rounded-2xl overflow-hidden shadow-sm">
+      <div className="flex items-center gap-4 px-5 py-4 border-b border-border/70">
+        <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary/10 shrink-0">
+          <Icon className="w-5 h-5 text-primary" />
         </div>
         <div className="flex-1 min-w-0">
-          <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{t.links.step} {number}</span>
-          <h3 className="font-semibold text-foreground text-sm leading-tight mt-0.5">{title}</h3>
-          <p className="text-xs text-muted-foreground">{subtitle}</p>
+          <span className="text-sm font-medium uppercase tracking-[0.16em] text-muted-foreground">{t.links.step} {number}</span>
+          <h3 className="font-normal text-foreground text-base leading-tight mt-1">{title}</h3>
+          <p className="text-sm text-muted-foreground mt-0.5">{subtitle}</p>
         </div>
       </div>
-      <div className="p-5 space-y-5">
+      <div className="p-5 space-y-6">
         {children}
       </div>
     </div>
@@ -204,13 +204,13 @@ export default function LinkCreatePage() {
             variant="ghost"
             size="icon"
             onClick={() => navigate("/dashboard/links")}
-            className="shrink-0 rounded-xl"
+            className="shrink-0 rounded-2xl"
             data-testid="button-back-links"
           >
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div>
-            <h1 className="text-xl font-bold text-foreground">{lk.pageCreateTitle}</h1>
+            <h1 className="text-2xl font-semibold text-foreground">{lk.pageCreateTitle}</h1>
           </div>
         </div>
 
@@ -224,11 +224,11 @@ export default function LinkCreatePage() {
                 name="title"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-sm font-medium">{lk.formTitle} <span className="text-destructive">*</span></FormLabel>
+                    <FormLabel className="text-base font-normal">{lk.formTitle} <span className="text-destructive">*</span></FormLabel>
                     <FormControl>
                       <Input
                         placeholder={lk.formTitlePlaceholder}
-                        className="h-11 rounded-xl border-border/60 focus:border-primary bg-background"
+                        className="h-12 rounded-2xl border-border/60 focus:border-primary bg-card text-base"
                         {...field}
                         data-testid="input-link-title"
                       />
@@ -243,11 +243,11 @@ export default function LinkCreatePage() {
                 name="description"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-sm font-medium">{lk.formDesc}</FormLabel>
+                    <FormLabel className="text-base font-normal">{lk.formDesc}</FormLabel>
                     <FormControl>
                       <Textarea
                         placeholder={lk.formDescPlaceholder}
-                        className="rounded-xl border-border/60 focus:border-primary bg-background resize-none min-h-[80px]"
+                        className="rounded-2xl border-border/60 focus:border-primary bg-card text-base resize-none min-h-[96px]"
                         {...field}
                         data-testid="input-link-description"
                       />
@@ -258,7 +258,7 @@ export default function LinkCreatePage() {
               />
 
               <div>
-                <FormLabel className="text-sm font-medium block mb-2">
+                <FormLabel className="text-base font-normal block mb-2">
                   {lk.formImage}
                 </FormLabel>
                 <input
@@ -270,7 +270,7 @@ export default function LinkCreatePage() {
                   data-testid="input-link-image"
                 />
                 {imagePreview ? (
-                  <div className="relative rounded-xl overflow-hidden border border-border/60 group">
+                  <div className="relative rounded-2xl overflow-hidden border border-border/60 group">
                     <img src={imagePreview} alt="Preview" className="w-full h-44 object-cover" />
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
                       <Button
@@ -297,7 +297,7 @@ export default function LinkCreatePage() {
                   </div>
                 ) : (
                   <div
-                    className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
+                    className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all ${
                       isDragOver
                         ? "border-primary bg-primary/5"
                         : "border-border/60 hover:border-primary/50 hover:bg-muted/30"
@@ -310,8 +310,8 @@ export default function LinkCreatePage() {
                     <div className="w-12 h-12 rounded-xl bg-muted/50 flex items-center justify-center mx-auto mb-3">
                       <Image className="w-5 h-5 text-muted-foreground" />
                     </div>
-                    <p className="text-sm font-medium text-foreground mb-1">{lk.formImageDrag}</p>
-                    <p className="text-xs text-muted-foreground">{lk.formImageBrowse}</p>
+                    <p className="text-base font-normal text-foreground mb-1">{lk.formImageDrag}</p>
+                    <p className="text-sm text-muted-foreground">{lk.formImageBrowse}</p>
                   </div>
                 )}
               </div>
