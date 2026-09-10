@@ -11637,10 +11637,11 @@ export async function registerRoutes(
 
       req.session.impersonatedBy = adminId;
       req.session.userId = id;
+      const userToken = storeAuthToken(id);
 
       req.session.save((err) => {
         if (err) console.error("[Impersonate] Session save error:", err);
-        res.json({ ok: true, userId: id, adminId, username: targetUser.username });
+        res.json({ ok: true, userId: id, adminId, username: targetUser.username, token: userToken });
       });
     } catch (error) {
       console.error("Admin impersonate error:", error);

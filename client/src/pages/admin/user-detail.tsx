@@ -320,7 +320,7 @@ export default function AdminUserDetail() {
     mutationFn: async ({ kycStatus }: { kycStatus: string }) =>
       apiRequest("PATCH", `/api/admin/users/${id}`, { kycStatus, isVerified: kycStatus === "verified" }),
     onSuccess: () => { invalidate(); toast({ title: "Statut KYC mis à jour" }); },
-    onError: () => toast({ title: "Erreur", variant: "destructive" }),
+    onError: (err: any) => toast({ title: "Erreur", description: err?.message || "Impossible de modifier le statut KYC.", variant: "destructive" }),
   });
 
   const updateUserMutation = useMutation({
@@ -336,37 +336,37 @@ export default function AdminUserDetail() {
       await Promise.all(promises);
     },
     onSuccess: () => { invalidate(); toast({ title: "Utilisateur mis à jour" }); setEditModal(false); },
-    onError: () => toast({ title: "Erreur", variant: "destructive" }),
+    onError: (err: any) => toast({ title: "Erreur", description: err?.message || "Impossible de modifier l'utilisateur.", variant: "destructive" }),
   });
 
   const banMutation = useMutation({
     mutationFn: async () => apiRequest("POST", `/api/admin/users/${id}/ban`, { reason: banReason }),
     onSuccess: () => { invalidate(); toast({ title: "Utilisateur banni" }); setBanModal(false); setBanReason(""); },
-    onError: () => toast({ title: "Erreur", variant: "destructive" }),
+    onError: (err: any) => toast({ title: "Erreur", description: err?.message || "Impossible de bannir l'utilisateur.", variant: "destructive" }),
   });
 
   const unbanMutation = useMutation({
     mutationFn: async () => apiRequest("POST", `/api/admin/users/${id}/unban`),
     onSuccess: () => { invalidate(); toast({ title: "Utilisateur débanni" }); },
-    onError: () => toast({ title: "Erreur", variant: "destructive" }),
+    onError: (err: any) => toast({ title: "Erreur", description: err?.message || "Impossible de débannir l'utilisateur.", variant: "destructive" }),
   });
 
   const blockMutation = useMutation({
     mutationFn: async () => apiRequest("POST", `/api/admin/users/${id}/block-withdrawal`, { reason: blockReason }),
     onSuccess: () => { invalidate(); toast({ title: "Retraits bloqués" }); setBlockModal(false); setBlockReason(""); },
-    onError: () => toast({ title: "Erreur", variant: "destructive" }),
+    onError: (err: any) => toast({ title: "Erreur", description: err?.message || "Impossible de bloquer les retraits.", variant: "destructive" }),
   });
 
   const unblockMutation = useMutation({
     mutationFn: async () => apiRequest("POST", `/api/admin/users/${id}/unblock-withdrawal`),
     onSuccess: () => { invalidate(); toast({ title: "Retraits débloqués" }); },
-    onError: () => toast({ title: "Erreur", variant: "destructive" }),
+    onError: (err: any) => toast({ title: "Erreur", description: err?.message || "Impossible de débloquer les retraits.", variant: "destructive" }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: async () => apiRequest("DELETE", `/api/admin/users/${id}`),
     onSuccess: () => { toast({ title: "Utilisateur supprimé" }); navigate(`${A}/users`); },
-    onError: () => toast({ title: "Erreur", variant: "destructive" }),
+    onError: (err: any) => toast({ title: "Erreur", description: err?.message || "Impossible de supprimer l'utilisateur.", variant: "destructive" }),
   });
 
   const impersonateMutation = useMutation({

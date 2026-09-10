@@ -1497,6 +1497,16 @@ export class DatabaseStorage implements IStorage {
 
   // Admin: Logs
   async createAdminLog(log: InsertAdminLog): Promise<AdminLog> {
+    if (isMysqlDialect) {
+      return mysqlInsertAndRead(
+        adminLogs,
+        { ...log, id: randomUUID() } as Record<string, unknown>,
+        async (id) => {
+          const [created] = await db.select().from(adminLogs).where(eq(adminLogs.id, id));
+          return created;
+        },
+      );
+    }
     const [newLog] = await db.insert(adminLogs).values(log).returning();
     return newLog;
   }

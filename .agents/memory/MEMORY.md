@@ -8,6 +8,7 @@
 - [Plesk Nginx upload limit](plesk-nginx-upload-limit.md) — Plesk/Nginx can reject multipart uploads above ~2 MB with 413 before Node; compress KYC images client-side or raise the proxy limit.
 - [Plesk npm registry](plesk-npm-registry.md) — package-lock may contain Replit firewall URLs; project .npmrc must force the public registry host for installs outside Replit.
 - [Admin path injection](admin-path-injection.md) — .htaccess must use passthrough (not static index.html) so Node.js injects window.__ADMIN_PATH__; server/index.ts now loads .env manually at startup because Passenger may not pass Plesk env vars to process.env.
+- [Admin private document access](admin-private-document-access.md) — protected KYC images/PDFs need authenticated fetches and object URLs; direct browser resource links omit the Bearer token.
 - [Country wallet currency codes](countries-table-currency-codes.md) — destination country mappings must preserve distinct wallets (GA→XAFG, CG→XAFC, etc.), not collapse them into generic XAF/XOF.
 - [AfribaPay OTP detection](afribapay-otp-detection.md) — OTP-requirement check must union live API data with a static fallback table and never silently swallow fetch errors, or OTP-required operators (Orange/Moov CI) fail opaquely.
 - [AfribaPay autonomous auth](afribapay-auth-refresh.md) — use server-side API credentials, encrypted token caching, proactive refresh, and one retry on invalid bearer tokens; never depend on dashboard sessions.

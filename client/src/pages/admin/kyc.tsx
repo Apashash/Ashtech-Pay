@@ -1,5 +1,5 @@
 import { getAdminPath } from "@/lib/adminPath";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { AdminLayout } from "./layout";
 const A = getAdminPath();
@@ -47,7 +47,7 @@ import { fr } from "date-fns/locale";
 import { apiRequest, queryClient, getAuthHeaders } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { KYC_DOCUMENT_TYPES, BUSINESS_CATEGORIES } from "@shared/schema";
-import { getImageSrc } from "@/lib/image";
+import { fetchImageBlobUrl } from "@/lib/image";
 
 interface KycSubmission {
   id: string;
@@ -119,6 +119,61 @@ export default function AdminKYC() {
   const [rejectNote, setRejectNote] = useState("");
   const [approveNote, setApproveNote] = useState("");
   const [imageModal, setImageModal] = useState<{ url: string; title: string } | null>(null);
+  const [documentUrls, setDocumentUrls] = useState<Record<string, string>>({});
+  const [documentErrors, setDocumentErrors] = useState<Record<string, boolean>>({});
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    const submission = viewSubmission;
+    setDocumentUrls({});
+    setDocumentErrors({});
+    setPdfUrl(null);
+    if (!submission) return;
+
+    let disposed = false;
+    const objectUrls: string[] = [];
+    const load = async (path: string | null | undefined) => {
+      if (!path) return null;
+      try {
+        const url = await fetchImageBlobUrl(path);
+        objectUrls.push(url);
+        return url;
+      } catch {
+        return null;
+      }
+    };
+
+    Promise.all([
+      load(submission.documentFrontPath),
+      load(submission.documentBackPath),
+      load(submission.selfiePath),
+      load(submission.summaryPdfPath),
+    ]).then(([front, back, selfie, pdf]) => {
+      if (disposed) return;
+      setDocumentUrls({
+        ...(front ? { Recto: front } : {}),
+        ...(back ? { Verso: back } : {}),
+        ...(selfie ? { Selfie: selfie } : {}),
+      });
+      setDocumentErrors({
+        ...(submission.documentFrontPath && !front ? { Recto: true } : {}),
+        ...(submission.documentBackPath && !back ? { Verso: true } : {}),
+        ...(submission.selfiePath && !selfie ? { Selfie: true } : {}),
+      });
+      setPdfUrl(pdf);
+    });
+
+    return () => {
+      disposed = true;
+      objectUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [
+    viewSubmission?.id,
+    viewSubmission?.documentFrontPath,
+    viewSubmission?.documentBackPath,
+    viewSubmission?.selfiePath,
+    viewSubmission?.summaryPdfPath,
+  ]);
 
   const { data: submissions, isLoading } = useQuery<KycSubmission[]>({
     queryKey: ["/api/admin/kyc", statusFilter],
@@ -201,8 +256,6 @@ export default function AdminKYC() {
         return <Badge className="shrink-0">{status}</Badge>;
     }
   };
-
-  const getImageUrl = (path: string) => getImageSrc(path);
 
   const filteredSubmissions = submissions?.filter(sub => {
     if (!search) return true;
@@ -576,14 +629,17 @@ export default function AdminKYC() {
                   <CardContent className="px-4 pb-4">
                     {viewSubmission.summaryPdfPath && (
                       <div className="mb-3 flex justify-end">
-                        <Button asChild variant="outline" size="sm">
+                         <Button asChild variant="outline" size="sm" disabled={!pdfUrl}>
                           <a
-                            href={`/api/image-proxy?path=${encodeURIComponent(viewSubmission.summaryPdfPath)}`}
+                             href={pdfUrl || "#"}
                             target="_blank"
                             rel="noreferrer"
+                             onClick={(event) => {
+                               if (!pdfUrl) event.preventDefault();
+                             }}
                           >
                             <ExternalLink className="w-4 h-4 mr-2" />
-                            Ouvrir le PDF récapitulatif
+                             {pdfUrl ? "Ouvrir le PDF récapitulatif" : "Chargement du PDF..."}
                           </a>
                         </Button>
                       </div>
@@ -597,12 +653,12 @@ export default function AdminKYC() {
                         <div key={testId}>
                           <p className="text-xs text-muted-foreground mb-1 text-center">{label}</p>
                           <button
-                            onClick={() => setImageModal({ url: getImageUrl(path), title: label })}
+                             onClick={() => documentUrls[label] && setImageModal({ url: documentUrls[label], title: label })}
                             className="w-full aspect-video bg-muted rounded-lg overflow-hidden hover:opacity-80 transition-opacity relative"
                             data-testid={testId}
                           >
                             <img
-                              src={getImageUrl(path)}
+                               src={documentUrls[label] || ""}
                               alt={alt}
                               className="w-full h-full object-cover"
                               onError={(e) => {
