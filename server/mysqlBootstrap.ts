@@ -41,6 +41,8 @@ export async function ensureMysqlAuxiliarySchema(): Promise<void> {
       claimed_until BIGINT,
       consumed_at BIGINT
     ) ENGINE=InnoDB`,
+    `ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS private_folder_path TEXT NULL`,
+    `ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS summary_pdf_path TEXT NULL`,
   ];
 
   for (const statement of statements) {

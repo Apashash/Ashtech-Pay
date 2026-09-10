@@ -168,7 +168,8 @@ export const kycSubmissions = mysqlTable("kyc_submissions", {
   selfiePath: text("selfie_path").notNull(), country: text("country"), city: text("city"), postalCode: text("postal_code"), latitude: text("latitude"), longitude: text("longitude"),
   businessType: text("business_type").notNull(), businessCategory: text("business_category").notNull(), businessDescription: text("business_description").notNull(),
   status: text("status").default("pending").notNull(), reviewerId: varchar("reviewer_id", { length: 191 }).references(() => users.id), reviewNote: text("review_note"),
-  reviewedAt: timestamp("reviewed_at"), createdAt: dt("created_at"), updatedAt: dt("updated_at"),
+  reviewedAt: timestamp("reviewed_at"), privateFolderPath: text("private_folder_path"), summaryPdfPath: text("summary_pdf_path"),
+  createdAt: dt("created_at"), updatedAt: dt("updated_at"),
 });
 export const wallets = mysqlTable("wallets", {
   id: id(), userId: varchar("user_id", { length: 191 }).notNull().references(() => users.id), currency: text("currency").notNull(),

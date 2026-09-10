@@ -53,7 +53,7 @@ let migrationsReady = false;
 // Bump this value whenever the idempotent migration block below gains a new
 // schema change. Completed versions are stored in platform_settings so a
 // normal Passenger restart does not repeat every ALTER TABLE/CREATE INDEX.
-const SCHEMA_MIGRATION_VERSION = "2026-09-10-boot-v1";
+const SCHEMA_MIGRATION_VERSION = "2026-09-10-boot-v2";
 
 // ── Gestionnaires d'erreurs globaux ──────────────────────────────────────────
 // unhandledRejection: log + continue — safe, these are async promise failures.
@@ -689,6 +689,8 @@ app.use((req, res, next) => {
     await db.execute(sql`ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS business_type TEXT`);
     await db.execute(sql`ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS business_category TEXT`);
     await db.execute(sql`ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS business_description TEXT`);
+    await db.execute(sql`ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS private_folder_path TEXT`);
+    await db.execute(sql`ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS summary_pdf_path TEXT`);
     // Ensure ashtech_fee_amount exists on transactions — Drizzle includes it in
     // every SELECT/RETURNING; without this column ALL transaction queries fail.
     await db.execute(sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS ashtech_fee_amount DECIMAL(15,2)`);

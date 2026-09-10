@@ -67,6 +67,8 @@ interface KycSubmission {
   reviewerId: string | null;
   reviewNote: string | null;
   reviewedAt: string | null;
+  privateFolderPath: string | null;
+  summaryPdfPath: string | null;
   createdAt: string | null;
   updatedAt: string | null;
   user: {
@@ -572,6 +574,20 @@ export default function AdminKYC() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="px-4 pb-4">
+                    {viewSubmission.summaryPdfPath && (
+                      <div className="mb-3 flex justify-end">
+                        <Button asChild variant="outline" size="sm">
+                          <a
+                            href={`/api/image-proxy?path=${encodeURIComponent(viewSubmission.summaryPdfPath)}`}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            <ExternalLink className="w-4 h-4 mr-2" />
+                            Ouvrir le PDF récapitulatif
+                          </a>
+                        </Button>
+                      </div>
+                    )}
                     <div className="grid grid-cols-3 gap-3">
                       {[
                         { path: viewSubmission.documentFrontPath, label: "Recto", testId: "button-view-front", alt: "Document recto" },

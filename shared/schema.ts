@@ -763,6 +763,8 @@ export const kycSubmissions = pgTable("kyc_submissions", {
   reviewerId: varchar("reviewer_id").references(() => users.id),
   reviewNote: text("review_note"),
   reviewedAt: timestamp("reviewed_at"),
+  privateFolderPath: text("private_folder_path"),
+  summaryPdfPath: text("summary_pdf_path"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

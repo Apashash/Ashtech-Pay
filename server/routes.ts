@@ -98,6 +98,14 @@ import { toLocalMobileMoneyPhone, validateMobileMoneyPhone } from "@shared/mobil
 import { getVapidPublicKey, sendPushNotificationToAll } from "./push";
 import { buildTransactionBalanceSnapshots } from "./transactionBalances";
 import { formatDebugError, shouldExposeDebugErrors } from "./errorDiagnostics";
+import {
+  createPrivateKycDocumentBundle,
+  isPrivateKycPath,
+  readPrivateKycDocument,
+  removePrivateKycBundle,
+  removePrivateKycUpload,
+  savePrivateKycUpload,
+} from "./kycPrivateDocuments";
 
 const PAWAPAY_PUBLIC_INITIATION_TIMEOUT_MS = 20_000;
 
@@ -2157,6 +2165,9 @@ export async function registerRoutes(
         secure: cookieSecure,
         httpOnly: true,
         sameSite: cookieSameSite,
+        ...(process.env.SESSION_COOKIE_DOMAIN
+          ? { domain: process.env.SESSION_COOKIE_DOMAIN }
+          : {}),
         maxAge: 3 * 24 * 60 * 60 * 1000,
       },
     })
@@ -2449,7 +2460,7 @@ export async function registerRoutes(
       // Strict allowlist: only accept relative storage paths (no URLs, no traversal)
       // Valid: "payment-links/1234-image.png" or "kyc/5678-doc.pdf"
       // Rejected: "http://...", "../etc/passwd", absolute paths, query strings
-      const ALLOWED_FOLDERS = ["payment-links", "kyc"];
+      const ALLOWED_FOLDERS = ["payment-links", "kyc", "private-kyc"];
       const isRelativePath = !storagePath.startsWith("http") &&
         !storagePath.startsWith("/") &&
         !storagePath.includes("..") &&
@@ -2469,20 +2480,42 @@ export async function registerRoutes(
       }
 
       // ── 5.2 IDOR fix: KYC documents require ownership or admin role ──────────
-      if (isRelativePath && storagePath.startsWith("kyc/")) {
+      if (isRelativePath && (storagePath.startsWith("kyc/") || isPrivateKycPath(storagePath))) {
         const requestingUser = await storage.getUser(req.userId!);
         const isAdminRole = requestingUser && ["admin"].includes(requestingUser.role);
         if (!isAdminRole) {
           // Verify the path belongs to a KYC submission owned by this user
           // FIX: exact path comparison only — no suffix/filename matching (IDOR)
           const kycSub = await storage.getKycSubmissionByUserId(req.userId!);
-          const ownedPaths = [kycSub?.documentFrontPath, kycSub?.documentBackPath, kycSub?.selfiePath]
+          const ownedPaths = [
+            kycSub?.documentFrontPath,
+            kycSub?.documentBackPath,
+            kycSub?.selfiePath,
+            kycSub?.summaryPdfPath,
+          ]
             .filter(Boolean) as string[];
           const isOwned = ownedPaths.some(p => p === storagePath);
           if (!isOwned) {
             return res.status(403).send("Accès refusé");
           }
         }
+      }
+
+      if (isRelativePath && isPrivateKycPath(storagePath)) {
+        const buffer = await readPrivateKycDocument(storagePath);
+        const extension = path.extname(storagePath).toLowerCase();
+        const contentType = extension === ".pdf"
+          ? "application/pdf"
+          : extension === ".png"
+            ? "image/png"
+            : extension === ".webp"
+              ? "image/webp"
+              : "image/jpeg";
+        res.setHeader("Content-Type", contentType);
+        res.setHeader("Content-Disposition", "inline");
+        res.setHeader("X-Content-Type-Options", "nosniff");
+        res.setHeader("Cache-Control", "private, no-store");
+        return res.end(buffer);
       }
 
       // ── Public bucket fast path: redirect directly to Supabase CDN URL ──────
@@ -2549,6 +2582,25 @@ export async function registerRoutes(
       const allowedFolders = ["payment-links", "kyc"];
       const safeFolder = allowedFolders.includes(folder) ? folder : "payment-links";
 
+      // KYC files never enter the public Supabase bucket. They are stored in a
+      // private per-user inbox until the KYC submission creates its final bundle.
+      if (safeFolder === "kyc") {
+        const objectPath = await savePrivateKycUpload(
+          req.userId!,
+          req.file.originalname,
+          req.file.buffer,
+          req.file.mimetype,
+        );
+        return res.json({
+          success: true,
+          objectPath,
+          filename: req.file.originalname,
+          originalName: req.file.originalname,
+          size: req.file.size,
+          mimetype: req.file.mimetype,
+        });
+      }
+
       // Try Supabase Storage first (file is already in memory — no disk I/O needed)
       const supabaseResult = await uploadToSupabase(
         req.file.buffer,
@@ -2606,7 +2658,7 @@ export async function registerRoutes(
       return res.status(401).json({ message: "Authentification requise" });
     }
 
-    const ALLOWED_FOLDERS = ["payment-links", "kyc"];
+      const ALLOWED_FOLDERS = ["payment-links", "kyc"];
     const isValid =
       !storagePath.startsWith("http") &&
       !storagePath.startsWith("/") &&
@@ -13907,6 +13959,7 @@ export async function registerRoutes(
 
   // User: Submit KYC
   app.post("/api/kyc", requireAuth, async (req, res) => {
+    let privateBundle: Awaited<ReturnType<typeof createPrivateKycDocumentBundle>> | undefined;
     try {
       const userId = req.userId!;
       
@@ -13940,13 +13993,35 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Tous les champs sont requis" });
       }
       
+      const kycSubmitter = await storage.getUser(userId);
+      if (!kycSubmitter) return res.status(404).json({ message: "Utilisateur introuvable" });
+
+      privateBundle = await createPrivateKycDocumentBundle({
+        userId,
+        fullName: kycSubmitter.fullName || kycSubmitter.username,
+        email: kycSubmitter.email || "",
+        documentType,
+        documentNumber,
+        country,
+        city,
+        postalCode,
+        latitude,
+        longitude,
+        businessType,
+        businessCategory,
+        businessDescription,
+        documentFrontPath,
+        documentBackPath,
+        selfiePath,
+      });
+
       const submission = await storage.createKycSubmission({
         userId,
         documentType,
         documentNumber,
-        documentFrontPath,
-        documentBackPath,
-        selfiePath,
+        documentFrontPath: privateBundle.frontPath,
+        documentBackPath: privateBundle.backPath,
+        selfiePath: privateBundle.selfiePath,
         country: country || null,
         city: city || null,
         postalCode: postalCode || null,
@@ -13955,35 +14030,40 @@ export async function registerRoutes(
         businessType,
         businessCategory,
         businessDescription,
+        privateFolderPath: privateBundle.folderPath,
+        summaryPdfPath: privateBundle.summaryPdfPath,
       });
+      await Promise.all([
+        removePrivateKycUpload(documentFrontPath),
+        removePrivateKycUpload(documentBackPath),
+        removePrivateKycUpload(selfiePath),
+      ]);
 
-      // Notify via Telegram (with photos + inline buttons)
-      const kycSubmitter = await storage.getUser(userId).catch(() => null);
-      if (kycSubmitter) {
-        Promise.all([
-          resolveFileUrl(documentFrontPath),
-          resolveFileUrl(documentBackPath),
-          resolveFileUrl(selfiePath),
-        ]).then(([frontUrl, backUrl, selfieUrl]) => {
-          notifyKycSubmittedFull({
-            submissionId: submission.id,
-            userName: kycSubmitter.fullName || kycSubmitter.username,
-            userEmail: kycSubmitter.email || "",
-            userId: kycSubmitter.id,
-            documentType,
-            documentNumber,
-            country: country || undefined,
-            city: city || undefined,
-            businessType,
-            businessCategory,
-            businessDescription,
-            photoUrls: { front: frontUrl, back: backUrl, selfie: selfieUrl },
-          });
-        }).catch(() => {});
-      }
+      // Private documents are intentionally not exposed through public URLs.
+      // Telegram still receives the submission metadata and admin actions.
+      notifyKycSubmittedFull({
+        submissionId: submission.id,
+        userName: kycSubmitter.fullName || kycSubmitter.username,
+        userEmail: kycSubmitter.email || "",
+        userId: kycSubmitter.id,
+        documentType,
+        documentNumber,
+        country: country || undefined,
+        city: city || undefined,
+        businessType,
+        businessCategory,
+        businessDescription,
+        photoUrls: { front: null, back: null, selfie: null },
+      }).catch(() => {});
 
       res.json(submission);
     } catch (error) {
+      if (privateBundle) await removePrivateKycBundle(privateBundle);
+      await Promise.all([
+        removePrivateKycUpload(String(req.body?.documentFrontPath || "")),
+        removePrivateKycUpload(String(req.body?.documentBackPath || "")),
+        removePrivateKycUpload(String(req.body?.selfiePath || "")),
+      ]);
       console.error("Submit KYC error:", error);
       res.status(500).json({ message: "Erreur serveur" });
     }

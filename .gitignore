@@ -18,6 +18,7 @@ node_modules
 
 # ─── Uploads (user files — not source code) ───────────────────────────────────
 uploads/
+private-documents/
 /exports/
 
 # ─── Logs ─────────────────────────────────────────────────────────────────────
