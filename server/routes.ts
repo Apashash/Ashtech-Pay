@@ -2670,9 +2670,16 @@ export async function registerRoutes(
         code: uploadError.code || null,
         message: uploadError.message || String(error),
       });
+      const storageMessage = uploadError.code === "EACCES" || uploadError.code === "EPERM"
+        ? "L'utilisateur de l'application Node.js n'a pas les droits d'écriture sur le dossier private-documents."
+        : uploadError.code === "ENOENT"
+          ? "Le chemin du stockage privé est introuvable. Vérifiez PRIVATE_DOCUMENTS_ROOT et le dossier private-documents."
+          : uploadError.code === "EROFS"
+            ? "Le stockage privé est en lecture seule sur le serveur."
+            : "Le serveur ne peut pas écrire dans le stockage sécurisé des documents.";
       res.status(isPrivateStorageUnavailable ? 503 : 500).json({
         error: isPrivateStorageUnavailable
-          ? "Le stockage sécurisé des documents est temporairement indisponible. Veuillez réessayer plus tard."
+          ? storageMessage
           : "Erreur lors de l'upload",
         code: isPrivateStorageUnavailable ? "KYC_STORAGE_UNAVAILABLE" : "UPLOAD_FAILED",
       });
