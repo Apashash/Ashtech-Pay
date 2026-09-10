@@ -11,7 +11,7 @@ import { loginSchema } from "@shared/schema";
 import { apiRequest, queryClient, setAuthToken } from "@/lib/queryClient";
 import { Mail, Lock, Loader2, Eye, EyeOff, Home, Clock, ShieldAlert, WifiOff, MonitorSmartphone, Phone } from "lucide-react";
 import { useLanguage } from "@/lib/language";
-import { TurnstileWidget } from "@/components/ui/turnstile";
+import { preloadTurnstileScript, TurnstileWidget } from "@/components/ui/turnstile";
 import { Select, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelectContent } from "@/components/ui/searchable-select-content";
 import { getBrowserCountryCode, getCloudflareCountryCode } from "@/lib/country-detection";
@@ -122,6 +122,10 @@ export default function LoginPage() {
   const siteKey = turnstileConfig?.siteKey || import.meta.env.VITE_TURNSTILE_SITE_KEY || "";
   const turnstileRequired = turnstileConfig?.required ?? true;
   const turnstileEnabled = turnstileRequired || Boolean(siteKey);
+
+  useEffect(() => {
+    preloadTurnstileScript();
+  }, []);
 
   const { data: countries = [] } = useQuery<CountryData[]>({
     queryKey: ["/api/public/countries"],

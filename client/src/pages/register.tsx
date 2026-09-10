@@ -13,7 +13,7 @@ import { registerSchema } from "@shared/schema";
 import { apiRequest, queryClient, setAuthToken } from "@/lib/queryClient";
 import { Mail, Lock, User, Phone, Loader2, Eye, EyeOff, Home, Clock, ShieldAlert, WifiOff } from "lucide-react";
 import { useLanguage } from "@/lib/language";
-import { TurnstileWidget } from "@/components/ui/turnstile";
+import { preloadTurnstileScript, TurnstileWidget } from "@/components/ui/turnstile";
 import { getBrowserCountryCode, getCloudflareCountryCode } from "@/lib/country-detection";
 import { z } from "zod";
 
@@ -120,6 +120,10 @@ export default function RegisterPage() {
   const siteKey = turnstileConfig?.siteKey || import.meta.env.VITE_TURNSTILE_SITE_KEY || "";
   const turnstileRequired = turnstileConfig?.required ?? true;
   const turnstileEnabled = turnstileRequired || Boolean(siteKey);
+
+  useEffect(() => {
+    preloadTurnstileScript();
+  }, []);
 
   useEffect(() => {
     fetch("/api/auth/ip-status")

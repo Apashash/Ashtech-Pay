@@ -62,6 +62,13 @@ function loadTurnstileScript(onLoad: () => void, onLoadError: () => void) {
   document.head.appendChild(script);
 }
 
+// Start the Cloudflare download while the auth page is fetching its public
+// configuration. The widget still renders only after a valid site key arrives.
+export function preloadTurnstileScript() {
+  if (typeof document === "undefined") return;
+  loadTurnstileScript(() => {}, () => {});
+}
+
 export function TurnstileWidget({ siteKey, onSuccess, onExpire, onError, onFallback, theme = "auto" }: TurnstileWidgetProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
