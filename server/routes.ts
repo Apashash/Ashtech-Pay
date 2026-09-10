@@ -3634,6 +3634,17 @@ export async function registerRoutes(
         return res.status(403).json({ message: "Accès réservé aux administrateurs." });
       }
 
+      // Validate the submitted PIN before the panel-session gate so a typo is
+      // reported as a PIN error instead of being misreported as a TOTP error.
+      // A successful PIN still cannot grant access until the TOTP/IP checks
+      // below pass.
+      const submittedPin = typeof req.body?.pin === "string" ? req.body.pin.trim() : "";
+      const result = verifyAdminPinCode(user.id, submittedPin);
+      if (!result.ok) {
+        console.error(`[AdminPin] Panel gate blocked — status=${result.status} userId=${user.id}`);
+        return res.status(result.status).json(result.body);
+      }
+
       const currentIp = getClientIp(req);
       const normalizeLoopback = (ip: string) =>
         ip === "::1" || ip === "::ffff:127.0.0.1" ? "127.0.0.1" : ip;
@@ -3650,13 +3661,6 @@ export async function registerRoutes(
           message: "Vérification Google Authenticator requise avant le code PIN.",
           totpRequired: true,
         });
-      }
-
-      const submittedPin = typeof req.body?.pin === "string" ? req.body.pin.trim() : "";
-      const result = verifyAdminPinCode(user.id, submittedPin);
-      if (!result.ok) {
-        console.error(`[AdminPin] Panel gate blocked — status=${result.status} userId=${user.id}`);
-        return res.status(result.status).json(result.body);
       }
 
       const panelAuthExp = Date.now() + ADMIN_PANEL_ACCESS_TTL_MS;
