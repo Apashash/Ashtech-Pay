@@ -2268,6 +2268,24 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createUserNotification(notification: InsertUserNotification): Promise<UserNotification> {
+    if (isMysqlDialect) {
+      const id = randomUUID();
+      await db.insert(userNotifications).values({ ...notification, id });
+      const [created] = await db.select()
+        .from(userNotifications)
+        .where(eq(userNotifications.id, id));
+      if (!created) throw new Error("NOTIFICATION_INSERT_READBACK_FAILED");
+      void import("./push")
+        .then(({ sendPushNotification }) => sendPushNotification(notification.userId, {
+          title: notification.title,
+          body: notification.message,
+          type: notification.type,
+          transactionId: notification.transactionId ?? null,
+          url: "/dashboard/notifications",
+        }))
+        .catch((error) => console.error("[Push] Delivery scheduling failed:", error?.message || error));
+      return created;
+    }
     const [newNotif] = await db.insert(userNotifications).values(notification).returning();
     // Push delivery is intentionally fire-and-forget: a provider outage must
     // never make a payment notification transaction fail.
@@ -2588,6 +2606,13 @@ export class DatabaseStorage implements IStorage {
   // ── Conversion requests ─────────────────────────────────────────────────────
 
   async createConversionRequest(data: InsertConversionRequest): Promise<ConversionRequest> {
+    if (isMysqlDialect) {
+      return mysqlInsertAndRead(
+        conversionRequests,
+        data as Record<string, unknown>,
+        (id) => this.getConversionRequest(id),
+      );
+    }
     const [created] = await db.insert(conversionRequests).values(data).returning();
     return created;
   }
@@ -2630,6 +2655,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateConversionRequest(id: string, data: Partial<ConversionRequest>): Promise<ConversionRequest> {
+    if (isMysqlDialect) {
+      await db.update(conversionRequests)
+        .set(data)
+        .where(eq(conversionRequests.id, id));
+      const updated = await this.getConversionRequest(id);
+      if (!updated) throw new Error("CONVERSION_UPDATE_READBACK_FAILED");
+      return updated;
+    }
     const [updated] = await db
       .update(conversionRequests)
       .set(data)
