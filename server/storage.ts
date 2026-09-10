@@ -2135,11 +2135,26 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createWithdrawalNumber(number: InsertWithdrawalNumber): Promise<WithdrawalNumber> {
+    if (isMysqlDialect) {
+      return mysqlInsertAndRead(
+        withdrawalNumbers,
+        number as Record<string, unknown>,
+        (id) => this.getWithdrawalNumber(id),
+      );
+    }
     const [newNumber] = await db.insert(withdrawalNumbers).values(number).returning();
     return newNumber;
   }
 
   async updateWithdrawalNumber(id: string, updates: Partial<InsertWithdrawalNumber>): Promise<WithdrawalNumber | undefined> {
+    if (isMysqlDialect) {
+      return mysqlUpdateAndRead(
+        withdrawalNumbers,
+        eq(withdrawalNumbers.id, id),
+        updates as Record<string, unknown>,
+        () => this.getWithdrawalNumber(id),
+      );
+    }
     const [updated] = await db.update(withdrawalNumbers).set(updates).where(eq(withdrawalNumbers.id, id)).returning();
     return updated || undefined;
   }
@@ -2155,6 +2170,13 @@ export class DatabaseStorage implements IStorage {
   
   // Withdrawal number change requests
   async createWithdrawalNumberChange(change: InsertWithdrawalNumberChange): Promise<WithdrawalNumberChange> {
+    if (isMysqlDialect) {
+      return mysqlInsertAndRead(
+        withdrawalNumberChanges,
+        change as Record<string, unknown>,
+        (id) => this.getWithdrawalNumberChange(id),
+      );
+    }
     const [newChange] = await db.insert(withdrawalNumberChanges).values(change).returning();
     return newChange;
   }
@@ -2202,16 +2224,34 @@ export class DatabaseStorage implements IStorage {
       }
     }
     
+    const updates = { status: "approved", adminId, adminNote: note, processedAt: new Date() };
+    if (isMysqlDialect) {
+      return mysqlUpdateAndRead(
+        withdrawalNumberChanges,
+        eq(withdrawalNumberChanges.id, id),
+        updates,
+        () => this.getWithdrawalNumberChange(id),
+      );
+    }
     const [updated] = await db.update(withdrawalNumberChanges)
-      .set({ status: "approved", adminId, adminNote: note, processedAt: new Date() })
+      .set(updates)
       .where(eq(withdrawalNumberChanges.id, id))
       .returning();
     return updated;
   }
 
   async rejectWithdrawalNumberChange(id: string, adminId: string, note?: string): Promise<WithdrawalNumberChange | undefined> {
+    const updates = { status: "rejected", adminId, adminNote: note, processedAt: new Date() };
+    if (isMysqlDialect) {
+      return mysqlUpdateAndRead(
+        withdrawalNumberChanges,
+        eq(withdrawalNumberChanges.id, id),
+        updates,
+        () => this.getWithdrawalNumberChange(id),
+      );
+    }
     const [updated] = await db.update(withdrawalNumberChanges)
-      .set({ status: "rejected", adminId, adminNote: note, processedAt: new Date() })
+      .set(updates)
       .where(eq(withdrawalNumberChanges.id, id))
       .returning();
     return updated;
