@@ -7,4 +7,4 @@ KYC uploads are stored as encrypted records in the database instead of relying o
 
 **Why:** The Plesk subscription did not provide SSH or administrator access, so Linux ownership of the private document directory could not be corrected safely.
 
-**How to apply:** Keep `FIELD_ENCRYPTION_KEY` stable across deployments. On MySQL, the application creates the document table during startup; deploy the compiled bundle and restart before testing uploads.
+**How to apply:** Keep `FIELD_ENCRYPTION_KEY` stable across deployments. On MySQL, the application creates the document table during startup; deploy the compiled bundle and restart before testing uploads. Telegram KYC notifications must read these encrypted records server-side and upload multipart files directly; never expose public document URLs.
