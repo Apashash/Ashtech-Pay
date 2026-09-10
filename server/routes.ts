@@ -986,14 +986,11 @@ function extractUserId(req: Request, _res: Response, next: NextFunction) {
       const id = getUserIdFromToken(token);
       if (id) {
         userId = id;
-        // Persister le userId dans la session si absent (bearer token sur nouvel appareil)
-        // → l'appareil apparaîtra dans la liste des sessions connectées
-        // EXCEPTION: ne pas créer de session éphémère pour les endpoints de gestion de sessions
-        // eux-mêmes — sinon chaque appel GET /api/user/sessions recrée immédiatement une session
-        // dans Supabase après une déconnexion, faisant réapparaître l'appareil dans la liste.
-        const isSessionMgmtPath = req.path === "/api/user/sessions" ||
-          req.path.startsWith("/api/user/sessions/");
-        if (!isSessionMgmtPath && req.session && !req.session.userId) {
+        // Persister le userId dans la session si absent (Bearer token sur nouvel appareil).
+        // Cela permet à /api/user/sessions de représenter aussi l'appareil courant.
+        // Un token révoqué ne passe pas getUserIdFromToken(), donc une ancienne session
+        // ne peut pas être recréée après une déconnexion.
+        if (req.session && !req.session.userId) {
           req.session.userId = id;
           if (!req.session.clientIp) req.session.clientIp = getClientIp(req);
           if (!req.session.userAgent) req.session.userAgent = req.headers["user-agent"] || "";
@@ -1493,11 +1490,12 @@ async function readMysqlSessionRecords(): Promise<MysqlSessionRecord[]> {
   return result.rows.flatMap((row: any) => {
     try {
       const parsed = typeof row.sess === "string" ? JSON.parse(row.sess) : row.sess;
+      const userId = parsed?.userId == null ? undefined : String(parsed.userId);
       return [{
         sid: String(row.sid),
         sess: parsed || {},
         expire: row.expire,
-        userId: typeof parsed?.userId === "string" ? parsed.userId : undefined,
+        userId,
         clientIp: typeof parsed?.clientIp === "string" ? parsed.clientIp : undefined,
       }];
     } catch {
@@ -1512,6 +1510,18 @@ async function readMysqlSessionRows(): Promise<Array<{ sid: string; userId?: str
     userId,
     clientIp,
   }));
+}
+
+function persistSessionForDeviceManagement(req: Request): Promise<void> {
+  if (!req.session?.userId) return Promise.resolve();
+  return new Promise((resolve) => {
+    req.session.save((error) => {
+      if (error) {
+        console.error("[Sessions] Impossible de persister la session courante:", error.message);
+      }
+      resolve();
+    });
+  });
 }
 
 async function destroyUserSessions(userId: string, blockedUntil: number): Promise<void> {
@@ -3681,11 +3691,14 @@ export async function registerRoutes(
 
   app.get("/api/user/sessions", requireAuth, async (req, res) => {
     try {
+      // The Bearer-token middleware may have just attached this device to the
+      // express session. Wait for the store write before listing rows.
+      await persistSessionForDeviceManagement(req);
       let rows: any[] = [];
       let usedPool = "session";
       if (isMysqlDialect) {
         rows = (await readMysqlSessionRecords())
-          .filter((row) => row.userId === req.userId)
+          .filter((row) => row.userId === String(req.userId))
           .sort((a, b) => new Date(b.expire).getTime() - new Date(a.expire).getTime())
           .map((row) => ({ sid: row.sid, sess: row.sess, expire: row.expire }));
       } else {
@@ -3752,6 +3765,9 @@ export async function registerRoutes(
     try {
       const userId = req.userId!;
       const currentSid = req.sessionID;
+      // Persist the current device before deleting other rows. This guarantees
+      // that "disconnect all other devices" never deletes this device.
+      await persistSessionForDeviceManagement(req);
 
       let count = 0;
       try {
