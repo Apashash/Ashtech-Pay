@@ -367,21 +367,20 @@ export default function WithdrawPage() {
 
             {/* ── Balance Card ── */}
             <div
-              className="rounded-2xl p-5 text-white"
-              style={{ background: "linear-gradient(135deg, #C75000 0%, #E07020 60%, #D06010 100%)" }}
+              className="rounded-2xl bg-[#1A237E] border border-[#1A237E] overflow-hidden p-6 text-white"
             >
-              <p className="text-[11px] font-bold uppercase tracking-widest text-white/70 mb-1">
+              <p className="text-white/75 text-sm mb-1">
                 Solde compte principal
               </p>
-              <p className="text-4xl font-bold tracking-tight">
+              <p className="text-4xl font-bold tracking-tight whitespace-nowrap">
                 {formatCurrency(balance, withdrawalCurrency as SupportedCurrency)}
               </p>
-              <p className="text-sm text-white/70 mt-1">
+              <p className="text-sm text-white/75 mt-1">
                 {selectedCountryData?.name || user?.country || "Votre pays"} · {withdrawalCurrency}
               </p>
 
               {limitsLoaded && (
-                <div className="flex items-center gap-6 mt-4 pt-4 border-t border-white/20">
+                <div className="flex items-center gap-6 mt-6 pt-4 border-t border-white/20">
                   <div>
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-white/60">Min retrait</p>
                     <p className="text-sm font-bold">{minWithdrawal.toLocaleString()} {withdrawalCurrency}</p>
