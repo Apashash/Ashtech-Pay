@@ -242,7 +242,6 @@ export default function ConvertPage() {
             <ArrowLeftRight className="w-5 h-5 text-primary" />
             {t.wallets.convertDialogTitle}
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">{t.wallets.convertDialogDesc}</p>
         </div>
 
         {/* Success banner */}
