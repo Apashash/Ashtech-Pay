@@ -654,6 +654,7 @@ export default function KYCPage() {
 
   const canSubmitForm = !kycSubmission || kycSubmission.status === "rejected";
   const currentWizardStep = wizardSteps[currentStep - 1];
+  const CurrentStepIcon = currentWizardStep.icon;
 
   if (isLoadingKyc) {
     return (
@@ -682,7 +683,106 @@ export default function KYCPage() {
         {renderStatusCard()}
 
         {canSubmitForm && (
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <>
+            <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                    {t.kyc.wizardStep} {currentStep} {t.kyc.wizardStepOf} {wizardSteps.length}
+                  </p>
+                  <p className="mt-1 text-sm font-medium text-foreground">{currentWizardStep.title}</p>
+                </div>
+                <span className="whitespace-nowrap text-xs font-medium text-[#1A237E]">
+                  {Math.round((currentStep / wizardSteps.length) * 100)}%
+                </span>
+              </div>
+
+              <div className="mt-4 flex items-center gap-1.5 sm:gap-2">
+                {wizardSteps.map((step, index) => {
+                  const StepIcon = step.icon;
+                  const isCompleted = step.number < currentStep;
+                  const isCurrent = step.number === currentStep;
+                  return (
+                    <div key={step.number} className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">
+                      <button
+                        type="button"
+                        disabled={step.number > currentStep}
+                        onClick={() => {
+                          if (isCompleted) {
+                            setCurrentStep(step.number);
+                            window.scrollTo({ top: 0, behavior: "smooth" });
+                          }
+                        }}
+                        className={cn(
+                          "flex min-w-0 items-center gap-1.5 text-left transition-colors",
+                          step.number > currentStep ? "cursor-not-allowed opacity-40" : "cursor-pointer"
+                        )}
+                        aria-current={isCurrent ? "step" : undefined}
+                      >
+                        <span className={cn(
+                          "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
+                          isCompleted || isCurrent ? "bg-[#1A237E] text-white" : "bg-muted text-muted-foreground"
+                        )}>
+                          {isCompleted ? <Check className="h-4 w-4" /> : <StepIcon className="h-4 w-4" />}
+                        </span>
+                        <span className={cn(
+                          "hidden truncate text-xs sm:block",
+                          isCurrent ? "font-medium text-[#1A237E]" : "text-muted-foreground"
+                        )}>
+                          {step.title}
+                        </span>
+                      </button>
+                      {index < wizardSteps.length - 1 && (
+                        <div className="h-0.5 min-w-1 flex-1 overflow-hidden rounded-full bg-muted">
+                          <div className={cn("h-full rounded-full transition-all", isCompleted ? "w-full bg-[#1A237E]" : "w-0")} />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <Card className="overflow-hidden border-[#1A237E]/15">
+              <div className="grid md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+                <div className="relative min-h-[190px] bg-[#1A237E]/10 md:min-h-[230px]">
+                  <img
+                    src={currentWizardStep.image}
+                    alt={currentWizardStep.title}
+                    className="absolute inset-0 h-full w-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#1A237E]/75 via-[#1A237E]/10 to-transparent" />
+                  <div className="absolute bottom-4 left-4 flex items-center gap-2 text-white">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm">
+                      <CurrentStepIcon className="h-4 w-4" />
+                    </span>
+                    <span className="text-xs font-medium uppercase tracking-[0.16em]">
+                      {t.kyc.wizardStep} {currentStep}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex flex-col justify-center p-5 sm:p-6">
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-[#1A237E]">
+                    {t.kyc.title}
+                  </p>
+                  <h2 className="mt-2 text-xl font-semibold text-foreground">{currentWizardStep.title}</h2>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">{currentWizardStep.description}</p>
+                </div>
+              </div>
+            </Card>
+
+            <form
+              onSubmit={(event) => {
+                if (currentStep < wizardSteps.length) {
+                  event.preventDefault();
+                  handleNextStep();
+                } else {
+                  handleSubmit(event);
+                }
+              }}
+              className="space-y-6"
+            >
+            {currentStep === 1 && (
             <Card>
               <CardHeader>
                 <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{t.kyc.identitySection}</p>
@@ -797,9 +897,11 @@ export default function KYCPage() {
                 </div>
               </CardContent>
             </Card>
+            )}
 
             <div className="grid lg:grid-cols-2 gap-6">
-              <Card>
+              {currentStep >= 2 && currentStep <= 4 && (
+              <Card className="lg:col-span-2">
                 <CardHeader>
                   <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{t.kyc.documentsSection}</p>
                   <CardTitle className="flex items-center gap-2 text-base">
@@ -809,6 +911,8 @@ export default function KYCPage() {
                   <CardDescription>{t.kyc.documentsDesc}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {currentStep === 2 && (
+                  <>
                   <div className="space-y-2">
                     <Label>{t.kyc.documentTypeLabel}</Label>
                     <Select value={documentType} onValueChange={setDocumentType}>
@@ -842,16 +946,21 @@ export default function KYCPage() {
                     <ImageIcon className="w-8 h-8" />,
                     frontInputRef as React.RefObject<HTMLInputElement>
                   )}
+                  </>
+                  )}
 
-                  {renderUploadBox(
+                  {currentStep === 3 && (
+                  renderUploadBox(
                     "back",
                     t.kyc.backLabel,
                     t.kyc.backDesc,
                     <ImageIcon className="w-8 h-8" />,
                     backInputRef as React.RefObject<HTMLInputElement>
+                  )
                   )}
 
                   {/* Selfie — caméra frontale ou galerie */}
+                  {currentStep === 4 && (
                   <div className="space-y-2">
                     <Label>{t.kyc.selfieLabel}</Label>
                     <canvas ref={canvasRef} className="hidden" />
@@ -921,9 +1030,12 @@ export default function KYCPage() {
                       </div>
                     )}
                   </div>
+                  )}
                 </CardContent>
               </Card>
+              )}
 
+              {currentStep === 5 && (
               <Card>
                 <CardHeader>
                   <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{t.kyc.activitySection}</p>
@@ -1044,29 +1156,51 @@ export default function KYCPage() {
                   </div>
                 </CardContent>
               </Card>
+              )}
             </div>
 
-            <div className="flex justify-end">
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
               <Button
-                type="submit"
-                size="lg"
-                disabled={submitMutation.isPending}
-                data-testid="button-submit-kyc"
+                type="button"
+                variant="outline"
+                onClick={handlePreviousStep}
+                disabled={currentStep === 1}
+                className="rounded-xl"
+                data-testid="button-previous-kyc-step"
               >
-                {submitMutation.isPending ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    {t.kyc.submitting}
-                  </>
-                ) : (
-                  <>
-                    <Shield className="w-4 h-4 mr-2" />
-                    {t.kyc.submitButton}
-                  </>
-                )}
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                {t.kyc.wizardBack}
               </Button>
+
+              {currentStep < wizardSteps.length ? (
+                <Button type="submit" size="lg" className="rounded-xl" data-testid="button-next-kyc-step">
+                  {t.kyc.wizardNext}
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              ) : (
+                <Button
+                  type="submit"
+                  size="lg"
+                  disabled={submitMutation.isPending}
+                  className="rounded-xl"
+                  data-testid="button-submit-kyc"
+                >
+                  {submitMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      {t.kyc.submitting}
+                    </>
+                  ) : (
+                    <>
+                      <Shield className="mr-2 h-4 w-4" />
+                      {t.kyc.wizardFinish}
+                    </>
+                  )}
+                </Button>
+              )}
             </div>
           </form>
+          </>
         )}
       </div>
 
