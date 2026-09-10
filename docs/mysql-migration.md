@@ -4,22 +4,41 @@ Cette procédure conserve Supabase intact jusqu'à la validation complète.
 
 ## 1. Exporter Supabase
 
-Configurer temporairement la variable PostgreSQL existante dans l'environnement
+Configurer temporairement la variable PostgreSQL Supabase dans l'environnement
 de développement, puis exécuter :
 
 ```bash
 npm run export:mysql -- --output exports/ashtechpay-supabase-mysql.sql
 ```
 
-Le script est en lecture seule. Il produit :
+Si seule `DATABASE_URL` est disponible, ne l'utiliser qu'après avoir vérifié
+qu'elle pointe bien vers Supabase, puis ajouter explicitement la confirmation :
+
+```bash
+npm run export:mysql -- --allow-generic-database-url \
+  --output exports/ashtechpay-supabase-mysql.sql
+```
+
+Le script ouvre une transaction PostgreSQL `REPEATABLE READ READ ONLY` :
+les compteurs et les lignes proviennent donc du même instant, sans modifier la
+source. Il produit :
 
 - `exports/ashtechpay-supabase-mysql.sql`
 - `exports/ashtechpay-supabase-mysql.sql.report.json`
 
-Le fichier `.report.json` contient les compteurs par table et les index
-PostgreSQL qui nécessitent une conversion manuelle. Les triggers PostgreSQL,
-fonctions PL/pgSQL, `LISTEN/NOTIFY`, RLS et Storage ne sont pas transformés
-silencieusement en faux SQL MySQL.
+Le fichier `.report.json` contient les compteurs par table, les conversions de
+types ou de valeurs par défaut et les index PostgreSQL qui nécessitent une
+conversion manuelle. Le SQL est généré en phases :
+
+1. création de toutes les tables sans clés étrangères ;
+2. insertion de toutes les données ;
+3. ajout des clés primaires et uniques ;
+4. ajout des clés étrangères ;
+5. ajout des index secondaires portables.
+
+Les triggers PostgreSQL, fonctions PL/pgSQL, `LISTEN/NOTIFY`, RLS et Storage
+ne sont pas transformés silencieusement en faux SQL MySQL. Les fichiers de
+sortie sont temporaires jusqu'à la fin de l'export et restent ignorés par Git.
 
 Le dossier `exports/` est ignoré par Git. Ne jamais ajouter un dump de données
 à un commit.
@@ -73,6 +92,7 @@ et les fichiers Storage aient été adaptés et testés.
 - webhooks marchands ;
 - fichiers Storage et références `image_path`, `pdf_path` et KYC ;
 - absence de lignes orphelines ;
+- avertissements du rapport `.report.json` traités ou acceptés ;
 - tests d'inscription, connexion, dashboard, dépôt, retrait, transfert et
   webhook.
 
