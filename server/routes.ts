@@ -818,7 +818,7 @@ const ADMIN_PANEL_TOTP_HANDOFF_MS = 2 * 60 * 1000;
 // TOTP is a fixed server-side requirement for every admin API request.
 // Deliberately not configurable through an environment variable: an environment
 // change must never be able to downgrade admin authentication.
-const ADMIN_TOTP_ENFORCEMENT_ENABLED = true as const;
+const ADMIN_TOTP_ENFORCEMENT_ENABLED = false as const;
 
 // Bearer-authenticated mobile browsers can arrive with a fresh Express session
 // on each request when the session cookie is unavailable. Recover the verified
@@ -3376,7 +3376,7 @@ export async function registerRoutes(
 
       // Admin login is deliberately incomplete until Google Authenticator is
       // verified. No admin session or bearer token is issued before this gate.
-      if (user.role === "admin") {
+      if (user.role === "admin" && ADMIN_TOTP_ENFORCEMENT_ENABLED) {
         if (!user.totpEnabled || !user.totpSecret) {
           return res.status(403).json({
             message: "Google Authenticator est obligatoire pour ce compte administrateur.",
@@ -10081,7 +10081,7 @@ export async function registerRoutes(
       needsPanelVerify: needsPanelVerify || undefined,
       needsPanelPin: needsPanelPin || undefined,
       totpEnabled: !!user.totpEnabled,
-      enforcementEnabled: true,
+      enforcementEnabled: ADMIN_TOTP_ENFORCEMENT_ENABLED,
       pinEnabled: isAdminPinProtectionEnabled(),
     });
   });

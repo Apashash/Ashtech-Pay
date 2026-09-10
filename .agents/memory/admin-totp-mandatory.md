@@ -6,39 +6,25 @@ description: How mandatory Google Authenticator is enforced for all admin panel 
 # Admin TOTP mandatory enforcement
 
 ## The rule
-Every admin/support/finance session MUST have a valid `_avs` (admin verified session) timestamp in order to pass `requireAdmin`. TOTP must also be configured on the account — if not, access is blocked entirely (no fallback).
+Google Authenticator and the admin PIN are currently disabled for the admin panel by explicit project configuration. Admin access still requires the normal authenticated admin account and server-side role checks.
 
 ## Why
-Previously, TOTP was "optional" at the middleware level — requireAdmin only checked role + IP blocklist. Both TOTP verification pages had hardcoded bypass redirects (marked "TOTP DÉSACTIVÉ TEMPORAIREMENT") that skipped verification entirely.
+The current operational requirement is to use password authentication only while isolating the panel access and session behavior. This is a deliberate security reduction and must not be mistaken for a safe default.
 
 ## How it works now
 
 ### Backend — `requireAdmin` (server/routes.ts)
-After IP blocklist check, two new mandatory gates:
-1. `user.totpEnabled && user.totpSecret` must be true — else 403 `{ totpNotConfigured: true }`
-2. `_avs` check via 3-tier lookup (memory map → session cookie → DB) — else 403 `{ totpRequired: true }`
-No env-var bypass (`ADMIN_OTP_BYPASS` removed).
+The TOTP gate is retained in code for future re-enablement but is currently disabled by the project constant. With it disabled, admin access proceeds after the role and IP blocklist checks.
 
 ### Backend — `/api/auth/login`
-Admin/support/finance roles intercepted before session creation:
-- TOTP not configured → 403 `{ totpNotConfigured: true }`
-- TOTP configured → create pending login token, return `{ requiresAdminOtp: true, adminLoginToken }`
-- Normal (non-admin) users still get a full session immediately
+Admin accounts currently receive the normal authenticated session after password verification; no pending TOTP challenge is created.
 
 ### Backend — `/api/auth/admin-panel-verify`
-After successful panel TOTP code verify, it sets:
-- `_avs` (24h inactivity TTL) — makes `requireAdmin` pass and slides on panel activity
-- `_pav` (24h inactivity TTL) — panel TOTP gate and activity window
-- clears any previous `_ppv` panel-PIN grant, so the PIN must follow the fresh TOTP
-Also populates `adminVerifiedSessions` in-memory map.
+The legacy endpoint remains available for controlled re-enablement, but the client redirects directly to the panel while TOTP enforcement is disabled.
 
 ### Backend — panel PIN gate
-- `/api/auth/admin-panel-pin-verify` accepts the PIN after a valid initial admin-login
-  `_avs`, then creates the panel `_pav` and `_ppv` grants with the current IP binding.
-- Dashboard-to-panel entry uses the PIN directly; it does not require a second
-  Google Authenticator code. Initial admin password login still requires TOTP.
-- `requireAdmin` rejects admin API access until `_ppv` is valid; the PIN is never
-  sent to the browser or logged.
+The PIN middleware and panel PIN gate are currently disabled. When re-enabled,
+the PIN must remain server-side and never be sent to the browser or logged.
 
 ### Challenge and session invariants
 - Admin password login never creates a session or bearer token before TOTP succeeds.

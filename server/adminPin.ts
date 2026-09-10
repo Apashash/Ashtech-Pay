@@ -29,7 +29,7 @@ import crypto from "crypto";
 
 const MAX_ATTEMPTS = 4;
 const LOCKOUT_MS = 20 * 60 * 1000; // 20 minutes
-const ADMIN_PIN_PROTECTION_ENABLED = true;
+const ADMIN_PIN_PROTECTION_ENABLED = false;
 
 interface AttemptRecord {
   count: number;
@@ -78,7 +78,9 @@ const _rawPin = (process.env.ADMIN_PIN_CODE ?? "").trim();
 const _pinValid = /^\d{4}$/.test(_rawPin);
 const configuredPin: string | null = _pinValid ? _rawPin : null;
 
-if (configuredPin) {
+if (!ADMIN_PIN_PROTECTION_ENABLED) {
+  console.log("[AdminPin] Protection PIN désactivée — les mutations admin ne demandent pas de PIN.");
+} else if (configuredPin) {
   console.log("[AdminPin] ✅ Protection PIN ACTIVE — toutes les mutations admin exigent le code à 4 chiffres.");
 } else if (_rawPin.length > 0) {
   // Clé présente mais format invalide — bloque quand même
