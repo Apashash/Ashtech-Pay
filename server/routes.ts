@@ -3720,7 +3720,7 @@ export async function registerRoutes(
     }
   });
 
-  // ── Admin Panel PIN — second gate after the panel TOTP challenge ───────────
+  // ── Admin Panel PIN — second gate after the initial admin-login TOTP ───────
   app.post("/api/auth/admin-panel-pin-verify", requireAuth, loginLimiter, async (req, res) => {
     try {
       const user = await storage.getUser(req.userId!);
@@ -3742,26 +3742,34 @@ export async function registerRoutes(
       const currentIp = getClientIp(req);
       const normalizeLoopback = (ip: string) =>
         ip === "::1" || ip === "::ffff:127.0.0.1" ? "127.0.0.1" : ip;
-      const panelTotpExp = req.session._pav;
-      const panelTotpIp = req.session._avsIp;
       const now = Date.now();
-      const panelTotpFresh = typeof req.session._pavVerifiedAt === "number" &&
-        now - req.session._pavVerifiedAt <= ADMIN_PANEL_TOTP_HANDOFF_MS;
-      const panelTotpIpMatches = typeof panelTotpIp === "string" &&
-        normalizeLoopback(panelTotpIp) === normalizeLoopback(currentIp);
-      if (typeof panelTotpExp !== "number" || panelTotpExp <= now ||
-          (!panelTotpIpMatches && !panelTotpFresh)) {
+      let adminTotpExp = req.session._avs;
+      let adminTotpIp = req.session._avsIp;
+      if (typeof adminTotpExp !== "number" || adminTotpExp <= now) {
+        const bearerSessionData = await loadBearerAuthSessionData(req);
+        if (bearerSessionData) {
+          adminTotpExp = bearerSessionData._avs;
+          adminTotpIp = bearerSessionData._avsIp;
+          if (typeof adminTotpExp === "number") req.session._avs = adminTotpExp;
+          if (typeof adminTotpIp === "string") req.session._avsIp = adminTotpIp;
+        }
+      }
+      if (typeof adminTotpExp !== "number" || adminTotpExp <= now) {
         return res.status(403).json({
-          message: "Vérification Google Authenticator requise avant le code PIN.",
-          totpRequired: true,
+          message: "La session admin a expiré. Reconnectez-vous pour valider Google Authenticator.",
+          adminSessionExpired: true,
         });
       }
 
       const panelAuthExp = Date.now() + ADMIN_PANEL_ACCESS_TTL_MS;
-      // A mobile carrier may have rotated the IP during the two-step panel
-      // handoff. Rebind the already TOTP-verified session before the first
-      // protected admin request, so requireAdmin does not immediately reject
-      // the successful PIN with another TOTP challenge.
+      // The initial admin-login TOTP is the first factor. The PIN is the
+      // second factor for opening the panel from the user dashboard. Rebind
+      // the session to the current mobile IP after the PIN succeeds.
+      if (typeof adminTotpIp === "string" &&
+          normalizeLoopback(adminTotpIp) !== normalizeLoopback(currentIp)) {
+        console.warn(`[AdminPin] Rebinding admin session IP after PIN — userId=${user.id} previousIp=${adminTotpIp} currentIp=${currentIp}`);
+      }
+      req.session._avs = panelAuthExp;
       req.session._avsIp = currentIp;
       req.session._pav = panelAuthExp;
       req.session._ppv = panelAuthExp;
@@ -10057,7 +10065,10 @@ export async function registerRoutes(
     }
   }
 
-  const needsPanelVerify = verified && !panelValid && !panelValidDb;
+  // The initial admin-login TOTP is the first factor for dashboard → panel
+  // entry. The PIN is the second factor, so a missing _pav does not require
+  // another Google Authenticator code here.
+  const needsPanelVerify = false;
   const panelPinExp = req.session._ppv;
   const panelPinIp = req.session._ppvIp;
   const panelPinValid = typeof panelPinExp === "number" && panelPinExp > now &&

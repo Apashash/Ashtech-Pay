@@ -105,7 +105,7 @@ export default function AdminPanelVerifyPage() {
     },
     onError: (err: any) => {
       setCode("");
-      if (err.totpRequired) {
+      if (err.totpRequired || err.adminSessionExpired) {
         setLocation("/login");
       }
       toast({

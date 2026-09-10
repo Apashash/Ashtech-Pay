@@ -33,8 +33,10 @@ After successful panel TOTP code verify, it sets:
 Also populates `adminVerifiedSessions` in-memory map.
 
 ### Backend — panel PIN gate
-- `/api/auth/admin-panel-pin-verify` accepts the PIN only after a valid panel `_pav`
-  bound to the current IP, then stores `_ppv` with the same IP binding.
+- `/api/auth/admin-panel-pin-verify` accepts the PIN after a valid initial admin-login
+  `_avs`, then creates the panel `_pav` and `_ppv` grants with the current IP binding.
+- Dashboard-to-panel entry uses the PIN directly; it does not require a second
+  Google Authenticator code. Initial admin password login still requires TOTP.
 - `requireAdmin` rejects admin API access until `_ppv` is valid; the PIN is never
   sent to the browser or logged.
 
@@ -63,13 +65,13 @@ The MySQL pool adapter must map `ResultSetHeader.affectedRows` to its compatible
 
 **How to apply:** Keep the adapter's result normalization correct for every `INSERT`, `UPDATE`, and `DELETE` path that relies on `rowCount`, especially pending admin-login claims and session housekeeping.
 
-### Mobile panel TOTP handoff
+### Mobile panel PIN handoff
 
-The panel TOTP handoff permits a short IP transition window for mobile networks, then rebinds the session to the IP present on the first panel request. This applies whether the temporary PIN gate is enabled or disabled; normal panel requests remain IP-bound.
+The panel PIN handoff rebinds the authenticated admin session to the IP present when the PIN succeeds. Normal panel requests remain IP-bound.
 
-**Why:** A 4G/5G address can rotate between the TOTP request and the first protected panel request, causing a valid TOTP to be rejected with `totpRequired` and sending the admin back to Google Authenticator.
+**Why:** A 4G/5G address can rotate between the initial TOTP login and the dashboard-to-panel PIN request, causing a valid PIN grant to be rejected by the old IP binding.
 
-**How to apply:** Keep the handoff narrow and tied to a freshly verified panel TOTP; do not turn off the broader session IP checks or mandatory TOTP enforcement. If a PIN is later restored, the same handoff window must cover the TOTP-only-to-PIN transition.
+**How to apply:** Keep the handoff tied to a valid initial admin-login TOTP plus the correct PIN; do not turn off the broader session IP checks or mandatory TOTP enforcement.
 
 ### Panel PIN error ordering
 
