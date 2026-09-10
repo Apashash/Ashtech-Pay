@@ -48,3 +48,4 @@
 - [Passenger startup resilience](passenger-startup-resilience.md) — open the listener before bootstrap and resolve paths from the committed bundle for reliable Plesk restarts.
 - [Supabase-to-MySQL export](supabase-mysql-export.md) — use a read-only snapshot and phased dump ordering; review conversion warnings before any runtime cutover.
 - [Private KYC Plesk storage](kyc-private-plesk-storage.md) — keep documents outside webroot, serve through authenticated routes, and migrate legacy public objects before cutover.
+- [Encrypted KYC database storage](kyc-database-storage.md) — when Plesk filesystem permissions cannot be changed, store new KYC files encrypted in the database and keep legacy reads compatible.
