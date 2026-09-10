@@ -360,7 +360,18 @@ export default function KYCPage() {
       });
 
       if (!response.ok) {
-        throw new Error("Échec du téléchargement");
+        let message = "Échec du téléchargement";
+        try {
+          const errorBody = await response.json();
+          if (typeof errorBody?.error === "string" && errorBody.error.trim()) {
+            message = errorBody.error;
+          } else if (typeof errorBody?.message === "string" && errorBody.message.trim()) {
+            message = errorBody.message;
+          }
+        } catch {
+          // Keep the generic message if the server returned a non-JSON response.
+        }
+        throw new Error(message);
       }
 
       const result = await response.json();

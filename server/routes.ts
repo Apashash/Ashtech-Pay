@@ -2563,8 +2563,30 @@ export async function registerRoutes(
     }
   });
 
+  // Multer runs before the route handler, so its errors would otherwise bypass
+  // the JSON response below and fall through to Express's generic error page.
+  // Safari then only sees a vague "Échec du téléchargement".
+  const handleMemoryUpload = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    memoryUpload.single("file")(req, res, (error: unknown) => {
+      if (!error) return next();
+
+      const uploadError = error as Error & { code?: string };
+      const isFileTooLarge = uploadError.code === "LIMIT_FILE_SIZE";
+      const message = isFileTooLarge
+        ? "Le fichier dépasse la taille maximale de 5 Mo"
+        : uploadError.message || "Type de fichier non autorisé";
+
+      console.warn("[Upload] Requête multipart refusée:", {
+        userId: req.userId || null,
+        code: uploadError.code || null,
+        message,
+      });
+      return res.status(400).json({ error: message, code: uploadError.code || "UPLOAD_REJECTED" });
+    });
+  };
+
   // Direct file upload endpoint - uses Supabase Storage for persistence
-  app.post("/api/uploads/file", requireAuth, memoryUpload.single("file"), async (req, res) => {
+  app.post("/api/uploads/file", requireAuth, handleMemoryUpload, async (req, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ error: "Aucun fichier fourni" });
@@ -2640,8 +2662,19 @@ export async function registerRoutes(
         });
       }
     } catch (error) {
-      console.error("File upload error:", error);
-      res.status(500).json({ error: "Erreur lors de l'upload" });
+      const uploadError = error as NodeJS.ErrnoException;
+      const isPrivateStorageUnavailable = ["EACCES", "EPERM", "ENOENT", "EROFS"].includes(uploadError.code || "");
+      console.error("[Upload] Échec du stockage fichier:", {
+        userId: req.userId || null,
+        folder: req.query.folder || null,
+        code: uploadError.code || null,
+        message: uploadError.message || String(error),
+      });
+      res.status(isPrivateStorageUnavailable ? 503 : 500).json({
+        error: isPrivateStorageUnavailable
+          ? "Le stockage sécurisé des documents est temporairement indisponible. Veuillez réessayer plus tard."
+          : "Erreur lors de l'upload",
+      });
     }
   });
 
