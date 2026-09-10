@@ -2566,7 +2566,7 @@ export async function registerRoutes(
   // Multer runs before the route handler, so its errors would otherwise bypass
   // the JSON response below and fall through to Express's generic error page.
   // Safari then only sees a vague "Échec du téléchargement".
-  const handleMemoryUpload = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const handleMemoryUpload = (req: Request, res: Response, next: NextFunction) => {
     memoryUpload.single("file")(req, res, (error: unknown) => {
       if (!error) return next();
 
