@@ -177,10 +177,15 @@ export default function ConvertPage() {
     const { conversionId, fromCurrency: fc, toCurrency: tc, fromAmount: fa, toAmount: ta } = conversionPending;
     pollingRef.current = setInterval(async () => {
       try {
-        const res = await fetch(`/api/wallets/conversion-status/${conversionId}`, { credentials: "include" });
+        const res = await fetch(`/api/wallets/conversion-status/${conversionId}?t=${Date.now()}`, {
+          credentials: "include",
+          cache: "no-store",
+          headers: { "Cache-Control": "no-cache" },
+        });
         if (!res.ok) return;
         const json = await res.json();
-        if (json.status === "completed") {
+        const status = String(json.status || "").trim().toLowerCase();
+        if (status === "completed" || status === "success" || status === "succeeded") {
           clearInterval(pollingRef.current!);
           pollingRef.current = null;
           setConversionPending(null);
@@ -189,7 +194,7 @@ export default function ConvertPage() {
           queryClient.invalidateQueries({ queryKey: ["/api/user"] });
           queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
           queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
-        } else if (json.status === "cancelled" || json.status === "failed") {
+        } else if (status === "cancelled" || status === "failed") {
           clearInterval(pollingRef.current!);
           pollingRef.current = null;
           setConversionPending(null);

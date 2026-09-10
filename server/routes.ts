@@ -6762,6 +6762,9 @@ export async function registerRoutes(
   // GET /api/wallets/conversion-status/:id — statut d'une conversion en attente
   app.get("/api/wallets/conversion-status/:id", requireAuth, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
       const convReq = await storage.getConversionRequest(req.params.id);
       if (!convReq || convReq.userId !== req.userId) {
         return res.status(404).json({ message: "Conversion introuvable" });
