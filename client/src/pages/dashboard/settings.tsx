@@ -11,10 +11,10 @@ import {
 } from "@/components/ui/collapsible";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation, Link } from "wouter";
-import { apiRequest, queryClient, setAuthToken } from "@/lib/queryClient";
+import { apiRequest, getAuthHeaders, queryClient, setAuthToken } from "@/lib/queryClient";
+import { getProfileImageSrc } from "@/lib/profile-image";
 import type { User } from "@shared/schema";
 import {
-  User as UserIcon,
   Bell,
   Lock,
   Save,
@@ -46,8 +46,9 @@ import {
   Fingerprint,
   Megaphone,
   Zap,
+  Camera,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useTheme } from "@/components/theme-provider";
 import { useLanguage } from "@/lib/language";
@@ -279,6 +280,8 @@ export default function SettingsPage() {
   const [fullName, setFullName] = useState("");
   const [isInitialized, setIsInitialized] = useState(false);
   const [editingName, setEditingName] = useState(false);
+  const profilePhotoInputRef = useRef<HTMLInputElement>(null);
+  const [profilePhotoPreview, setProfilePhotoPreview] = useState<string | null>(null);
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirmUsername, setDeleteConfirmUsername] = useState("");
@@ -363,6 +366,48 @@ export default function SettingsPage() {
       toast({ title: "Erreur", description: error.message, variant: "destructive" });
     },
   });
+
+  const uploadProfilePhotoMutation = useMutation({
+    mutationFn: async (file: File) => {
+      if (file.size > 5 * 1024 * 1024) {
+        throw new Error("La photo ne doit pas dépasser 5 Mo.");
+      }
+      const formData = new FormData();
+      formData.append("file", file);
+      const response = await fetch("/api/user/profile-photo", {
+        method: "POST",
+        headers: getAuthHeaders(),
+        credentials: "include",
+        body: formData,
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || data.message || "Impossible d'enregistrer la photo.");
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
+      toast({ title: "Photo de profil mise à jour" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+    },
+  });
+
+  function handleProfilePhotoChange(file: File) {
+    const previewUrl = URL.createObjectURL(file);
+    setProfilePhotoPreview(previewUrl);
+    uploadProfilePhotoMutation.mutate(file, {
+      onSuccess: () => {
+        URL.revokeObjectURL(previewUrl);
+        setProfilePhotoPreview(null);
+      },
+      onError: () => {
+        URL.revokeObjectURL(previewUrl);
+        setProfilePhotoPreview(null);
+      },
+    });
+  }
 
   const deleteAccountMutation = useMutation({
     mutationFn: async (username: string) => {
@@ -468,9 +513,36 @@ export default function SettingsPage() {
         <SettingsCard>
           {/* Avatar + nom */}
           <div className="flex items-center gap-4 px-4 py-4">
-            <div className="w-14 h-14 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
-              <UserIcon className="w-7 h-7 text-primary" />
-            </div>
+            <button
+              type="button"
+              className="relative w-14 h-14 rounded-full overflow-hidden shrink-0 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              onClick={() => profilePhotoInputRef.current?.click()}
+              disabled={uploadProfilePhotoMutation.isPending}
+              aria-label="Modifier la photo de profil"
+              data-testid="button-profile-photo"
+            >
+              <img
+                src={profilePhotoPreview || getProfileImageSrc(user?.profileImagePath)}
+                alt="Photo de profil"
+                className="w-full h-full object-cover"
+              />
+              <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                {uploadProfilePhotoMutation.isPending
+                  ? <Loader2 className="w-5 h-5 animate-spin" />
+                  : <Camera className="w-5 h-5" />}
+              </span>
+              <input
+                ref={profilePhotoInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/gif,image/webp"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  if (file) handleProfilePhotoChange(file);
+                }}
+              />
+            </button>
             <div className="flex-1 min-w-0">
               {editingName ? (
                 <div className="flex items-center gap-2">

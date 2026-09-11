@@ -40,7 +40,6 @@ import {
   Key,
   Settings,
   LogOut,
-  User as UserIcon,
   HelpCircle,
   BadgeCheck,
   Send,
@@ -68,6 +67,7 @@ import { useExchangeRates } from "@/hooks/use-exchange-rates";
 import type { SupportedCurrency } from "@shared/schema";
 import { COUNTRY_CURRENCIES } from "@shared/schema";
 import { useLanguage } from "@/lib/language";
+import { getProfileImageSrc } from "@/lib/profile-image";
 import { LanguageSwitcher } from "@/components/language-switcher";
 
 const MENU_URLS = [
@@ -419,8 +419,12 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               className="flex items-center gap-3 mb-2 px-2 py-2 rounded-xl hover:bg-sidebar-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring transition-colors"
               data-testid="link-sidebar-profile-settings"
             >
-              <div className="w-10 h-10 rounded-full bg-primary/15 border border-primary/20 flex items-center justify-center shrink-0">
-                <UserIcon className="w-5 h-5 text-primary" />
+              <div className="w-10 h-10 rounded-full overflow-hidden bg-primary/15 border border-primary/20 flex items-center justify-center shrink-0">
+                <img
+                  src={getProfileImageSrc(user.profileImagePath)}
+                  alt="Photo de profil"
+                  className="w-full h-full object-cover"
+                />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-sidebar-foreground truncate">{user.fullName}</p>
@@ -481,11 +485,15 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                   <span className="absolute -inset-1.5 rounded-full bg-red-500/40 animate-ping pointer-events-none" />
                 )}
                 <div
-                  className={`relative w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center cursor-pointer hover:bg-primary/30 transition-colors ${hasUnreadGlobalMessage ? "ring-2 ring-red-500 ring-offset-1 ring-offset-background" : ""}`}
+                  className={`relative w-10 h-10 rounded-full overflow-hidden bg-primary/20 flex items-center justify-center cursor-pointer hover:bg-primary/30 transition-colors ${hasUnreadGlobalMessage ? "ring-2 ring-red-500 ring-offset-1 ring-offset-background" : ""}`}
                   onClick={() => setLocation(hasUnreadGlobalMessage ? "/dashboard/global-message" : "/dashboard/settings")}
                   data-testid="button-profile"
                 >
-                  <UserIcon className="w-5 h-5 text-primary" />
+                  <img
+                    src={getProfileImageSrc(user.profileImagePath)}
+                    alt="Photo de profil"
+                    className="w-full h-full object-cover"
+                  />
                 </div>
                 {user.isVerified ? (
                   <div 

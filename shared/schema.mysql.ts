@@ -38,13 +38,14 @@ const money = (name: string, precision = 15, scale = 2) => decimal(name, { preci
 const js = (name: string) => json(name);
 
 export const users = mysqlTable("users", common([
-  "id","username","email","password","fullName","phone","country","preferredCurrency","balance","isVerified",
+  "id","username","email","password","fullName","profileImagePath","phone","country","preferredCurrency","balance","isVerified",
   "kycStatus","isBanned","banReason","withdrawalBlocked","withdrawalBlockReason","role","lastLoginAt","lastSeenAt",
   "resetToken","resetTokenExpiry","apiKey","apiKeyHash","apiEnabled","apiWebhookSecret","registrationIp",
   "totpSecret","totpEnabled","izichangeAccountId","createdAt",
 ], {
   id: id(), username: text("username").notNull(), email: text("email").notNull(), password: text("password").notNull(),
-  fullName: text("full_name").notNull(), balance: money("balance").default("0.00").notNull(),
+  fullName: text("full_name").notNull(), profileImagePath: text("profile_image_path"),
+  balance: money("balance").default("0.00").notNull(),
   isVerified: boolean("is_verified").default(false), isBanned: boolean("is_banned").default(false),
   withdrawalBlocked: boolean("withdrawal_blocked").default(false), apiEnabled: boolean("api_enabled").default(false),
   totpEnabled: boolean("totp_enabled").default(false), createdAt: dt("created_at"),

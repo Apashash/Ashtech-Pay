@@ -9,6 +9,7 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   password: text("password").notNull(),
   fullName: text("full_name").notNull(),
+  profileImagePath: text("profile_image_path"),
   phone: text("phone"),
   country: text("country").default("Cameroon"),
   preferredCurrency: text("preferred_currency").default("XAF").notNull(),

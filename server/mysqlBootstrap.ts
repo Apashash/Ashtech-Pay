@@ -114,5 +114,14 @@ export async function ensureMysqlAuxiliarySchema(): Promise<void> {
   for (const statement of statements) {
     await pool.query(statement);
   }
+  try {
+    await pool.query("ALTER TABLE users ADD COLUMN profile_image_path TEXT NULL");
+  } catch (error: any) {
+    const code = String(error?.code || "");
+    const message = String(error?.message || "");
+    if (code !== "ER_DUP_FIELDNAME" && !/duplicate column/i.test(message)) {
+      throw error;
+    }
+  }
   await ensureMysqlKycDocumentsSchema();
 }

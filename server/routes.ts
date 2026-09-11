@@ -374,6 +374,19 @@ if (!fs.existsSync(uploadsDir)) {
 }
 console.log(`[Uploads] Storage directory: ${uploadsDir}`);
 
+const privateProfileUploadsDir = (() => {
+  const configuredRoot = process.env.PRIVATE_DOCUMENTS_ROOT?.trim();
+  const applicationRoot = appPath();
+  const isHttpdocsRoot = path.basename(applicationRoot).toLowerCase() === "httpdocs";
+  const defaultRoot = process.env.NODE_ENV === "production" && isHttpdocsRoot
+    ? path.resolve(applicationRoot, "..", "private-documents")
+    : path.resolve(applicationRoot, "private-documents");
+  return path.resolve(configuredRoot || defaultRoot, "profile-avatars");
+})();
+if (!fs.existsSync(privateProfileUploadsDir)) {
+  fs.mkdirSync(privateProfileUploadsDir, { recursive: true });
+}
+
 const fileStorage = multer.diskStorage({
   destination: (_req, _file, cb) => {
     cb(null, uploadsDir);
@@ -2620,7 +2633,7 @@ export async function registerRoutes(
       // Strict allowlist: only accept relative storage paths (no URLs, no traversal)
       // Valid: "payment-links/1234-image.png" or "kyc/5678-doc.pdf"
       // Rejected: "http://...", "../etc/passwd", absolute paths, query strings
-      const ALLOWED_FOLDERS = ["payment-links", "kyc", "private-kyc"];
+      const ALLOWED_FOLDERS = ["payment-links", "kyc", "private-kyc", "profile-avatars"];
       const isRelativePath = !storagePath.startsWith("http") &&
         !storagePath.startsWith("/") &&
         !storagePath.includes("..") &&
@@ -2660,6 +2673,12 @@ export async function registerRoutes(
           }
         }
       }
+      if (isRelativePath && storagePath.startsWith("profile-avatars/")) {
+        const requestingUser = await storage.getUser(req.userId!);
+        if (!requestingUser || requestingUser.profileImagePath !== storagePath) {
+          return res.status(403).send("Accès refusé");
+        }
+      }
 
       if (isRelativePath && isPrivateKycPath(storagePath)) {
         const buffer = await readPrivateKycDocument(storagePath);
@@ -2678,12 +2697,45 @@ export async function registerRoutes(
         return res.end(buffer);
       }
 
+      // Local fallback profile avatars are kept outside the public uploads
+      // directory and still require the same authenticated ownership check.
+      if (isRelativePath && storagePath.startsWith("profile-avatars/")) {
+        const localFilename = storagePath.slice("profile-avatars/".length);
+        const localPath = path.resolve(privateProfileUploadsDir, localFilename);
+        const relativeLocalPath = path.relative(privateProfileUploadsDir, localPath);
+        if (
+          relativeLocalPath &&
+          !relativeLocalPath.startsWith("..") &&
+          !path.isAbsolute(relativeLocalPath) &&
+          fs.existsSync(localPath)
+        ) {
+          const extension = path.extname(localPath).toLowerCase();
+          const contentType = extension === ".png"
+            ? "image/png"
+            : extension === ".gif"
+              ? "image/gif"
+              : extension === ".webp"
+                ? "image/webp"
+                : "image/jpeg";
+          const buffer = fs.readFileSync(localPath);
+          res.setHeader("Content-Type", contentType);
+          res.setHeader("Content-Disposition", "inline");
+          res.setHeader("X-Content-Type-Options", "nosniff");
+          res.setHeader("Cache-Control", "private, no-store");
+          return res.end(buffer);
+        }
+      }
+
       // ── Public bucket fast path: redirect directly to Supabase CDN URL ──────
       // Since the Supabase "uploads" bucket is PUBLIC, we can serve the file via
       // a 302 redirect to the public URL instead of proxying bytes through the server.
       // Auth/IDOR checks above still apply — this only resolves after access is granted.
       const supabasePublicBase = process.env.SUPABASE_URL;
-      if (supabasePublicBase && isRelativePath) {
+      // Profile avatars stay behind this authenticated proxy even when the
+      // Supabase bucket itself is public; otherwise the redirect would expose
+      // a reusable CDN URL outside the ownership check above.
+      const isProfileAvatar = isRelativePath && storagePath.startsWith("profile-avatars/");
+      if (supabasePublicBase && isRelativePath && !isProfileAvatar) {
         const publicUrl = `${supabasePublicBase}/storage/v1/object/public/${STORAGE_BUCKET}/${storagePath}`;
         res.setHeader("Cache-Control", "public, max-age=3600");
         return res.redirect(302, publicUrl);
@@ -2762,7 +2814,7 @@ export async function registerRoutes(
       }
 
       const folder = (req.query.folder as string) || "payment-links";
-      const allowedFolders = ["payment-links", "kyc"];
+      const allowedFolders = ["payment-links", "kyc", "profile-avatars"];
       const safeFolder = allowedFolders.includes(folder) ? folder : "payment-links";
 
       // KYC files never enter the public Supabase bucket. They are stored in a
@@ -2865,6 +2917,56 @@ export async function registerRoutes(
             ? "KYC_DATABASE_UNAVAILABLE"
             : "UPLOAD_FAILED",
       });
+    }
+  });
+
+  // Profile photos are stored under a user-owned path and saved on the user
+  // record so the authenticated image proxy can enforce ownership.
+  app.post("/api/user/profile-photo", requireAuth, handleMemoryUpload, async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "Aucune photo fournie" });
+      }
+      if (!req.file.mimetype.startsWith("image/") || req.file.mimetype === "image/svg+xml") {
+        return res.status(400).json({ error: "Veuillez sélectionner une image JPG, PNG, GIF ou WebP." });
+      }
+
+      const magicCheck = validateFileMagicBytes(req.file.buffer);
+      if (!magicCheck.valid || !magicCheck.detected.startsWith("image/")) {
+        return res.status(400).json({ error: "Le contenu du fichier ne correspond pas à une image valide." });
+      }
+
+      const extensionByType: Record<string, string> = {
+        "image/jpeg": ".jpg",
+        "image/png": ".png",
+        "image/gif": ".gif",
+        "image/webp": ".webp",
+      };
+      const extension = extensionByType[req.file.mimetype] || ".jpg";
+      const filename = `${req.userId}-${Date.now()}${extension}`;
+      const supabaseResult = await uploadToSupabase(
+        req.file.buffer,
+        filename,
+        req.file.mimetype,
+        "profile-avatars",
+      );
+
+      let profileImagePath: string;
+      if (supabaseResult) {
+        profileImagePath = supabaseResult.path;
+      } else {
+        const diskFilename = `profile-${req.userId}-${Date.now()}${extension}`;
+        fs.writeFileSync(path.join(privateProfileUploadsDir, diskFilename), req.file.buffer);
+        profileImagePath = `profile-avatars/${diskFilename}`;
+      }
+
+      const user = await storage.updateUser(req.userId!, { profileImagePath } as any);
+      if (!user) return res.status(404).json({ error: "Utilisateur non trouvé" });
+
+      res.json({ success: true, profileImagePath });
+    } catch (error) {
+      console.error("[ProfilePhoto] Upload error:", error);
+      res.status(500).json({ error: "Impossible d'enregistrer la photo de profil." });
     }
   });
 
