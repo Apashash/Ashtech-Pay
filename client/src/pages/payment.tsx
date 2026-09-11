@@ -152,8 +152,16 @@ export default function PaymentPage() {
     queryKey: ["/api/payment-links/public", params?.slug],
     queryFn: async () => {
       const res = await fetch(`/api/payment-links/public/${params?.slug}`);
-      if (!res.ok) throw new Error("Lien de paiement introuvable");
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const requestError = new Error(data.message || "Lien de paiement introuvable") as Error & {
+          code?: string;
+          status?: number;
+        };
+        requestError.code = data.code;
+        requestError.status = res.status;
+        throw requestError;
+      }
       return data.link ?? data;
     },
     enabled: !!params?.slug,
@@ -660,14 +668,27 @@ export default function PaymentPage() {
   }
 
   if (error || !paymentLink) {
+    const paymentLinkError = error as (Error & { code?: string; status?: number }) | null;
+    const isPaymentLinkBlocked =
+      paymentLinkError?.code === "PAYMENT_LINK_BLOCKED" ||
+      paymentLinkError?.status === 403;
+
     return (
       <div className="min-h-screen bg-[#f0f4f8] flex flex-col">
         <div className="flex-1 flex items-center justify-center p-4">
           <Card className="w-full max-w-md text-center">
             <CardContent className="pt-6">
-              <XCircle className="w-16 h-16 text-destructive mx-auto mb-4" />
-              <h2 className="text-xl font-bold text-foreground mb-2">{p.linkNotFound}</h2>
-              <p className="text-muted-foreground mb-6">{p.linkNotFoundDesc}</p>
+              {isPaymentLinkBlocked ? (
+                <Shield className="w-16 h-16 text-amber-500 mx-auto mb-4" />
+              ) : (
+                <XCircle className="w-16 h-16 text-destructive mx-auto mb-4" />
+              )}
+              <h2 className="text-xl font-bold text-foreground mb-2">
+                {isPaymentLinkBlocked ? p.linkBlocked : p.linkNotFound}
+              </h2>
+              <p className="text-muted-foreground mb-6">
+                {isPaymentLinkBlocked ? p.linkBlockedDesc : p.linkNotFoundDesc}
+              </p>
               <Link href="/"><Button variant="outline">{p.backHome}</Button></Link>
             </CardContent>
           </Card>

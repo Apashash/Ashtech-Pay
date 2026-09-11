@@ -8813,8 +8813,18 @@ export async function registerRoutes(
   app.get("/api/payment-links/public/:slug", publicPayLimiter, async (req, res) => {
     try {
       const link = await storage.getPaymentLinkBySlug(req.params.slug);
-      if (!link || !link.isActive) {
-        return res.status(404).json({ message: "Lien de paiement non trouvé ou inactif" });
+      if (!link) {
+        return res.status(404).json({
+          code: "PAYMENT_LINK_NOT_FOUND",
+          message: "Lien de paiement non trouvé",
+        });
+      }
+      if (!link.isActive) {
+        return res.status(403).json({
+          code: "PAYMENT_LINK_BLOCKED",
+          message: "Lien de paiement bloqué",
+          description: "Ce lien de paiement a été bloqué par l'administrateur.",
+        });
       }
       
       const user = await storage.getUser(link.userId);

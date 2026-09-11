@@ -1306,6 +1306,8 @@ const translations = {
     payPage: {
       linkNotFound: "Lien introuvable",
       linkNotFoundDesc: "Ce lien de paiement n'existe pas ou a expiré.",
+      linkBlocked: "Lien de paiement bloqué",
+      linkBlockedDesc: "Ce lien de paiement a été bloqué par l'administrateur.",
       backHome: "Retour à l'accueil",
       pdfDelivery: "Un lien de téléchargement vous sera envoyé après le paiement",
       country: "Pays",
@@ -2624,6 +2626,8 @@ const translations = {
     payPage: {
       linkNotFound: "Link not found",
       linkNotFoundDesc: "This payment link does not exist or has expired.",
+      linkBlocked: "Payment link blocked",
+      linkBlockedDesc: "This payment link has been blocked by the administrator.",
       backHome: "Back to home",
       pdfDelivery: "A download link will be sent to you after payment",
       country: "Country",
