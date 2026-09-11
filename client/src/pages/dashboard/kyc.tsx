@@ -141,8 +141,14 @@ export default function KYCPage() {
   const search = location.includes("?")
     ? location.slice(location.indexOf("?"))
     : window.location.search;
-  const isUpdateRequested = new URLSearchParams(search).get("update") === "true";
-  const [allowKycUpdate, setAllowKycUpdate] = useState(false);
+  const updateParams = new URLSearchParams(search);
+  const isUpdateRequested = updateParams.get("update") === "true";
+  const isUpdateConfirmed = updateParams.get("confirmed") === "true";
+  const [allowKycUpdate, setAllowKycUpdate] = useState(isUpdateConfirmed);
+
+  useEffect(() => {
+    if (isUpdateConfirmed) setAllowKycUpdate(true);
+  }, [isUpdateConfirmed]);
 
   const [documentType, setDocumentType] = useState("");
   const [documentNumber, setDocumentNumber] = useState("");

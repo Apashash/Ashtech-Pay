@@ -10,7 +10,7 @@ export default function KYCVerifiedPage() {
   const { t } = useLanguage();
 
   const handleUpdateKYC = () => {
-    setLocation("/dashboard/kyc?update=true");
+    setLocation("/dashboard/kyc?update=true&confirmed=true");
   };
 
   const handleGoBack = () => {

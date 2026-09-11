@@ -143,7 +143,7 @@ export default function GlobalMessagePage() {
                 {isKycUpdate ? (
                   <>
                     <Button
-                      onClick={() => setLocation("/dashboard/kyc?update=true")}
+                      onClick={() => setLocation("/dashboard/kyc?update=true&confirmed=true")}
                       className="gap-2 bg-amber-500 hover:bg-amber-600 text-white"
                       data-testid="button-kyc-update"
                     >
