@@ -4232,6 +4232,39 @@ export async function registerRoutes(
         return res.status(500).json({ message: "Erreur génération token" });
       }
 
+      // The current Bearer device receives a fresh token after bulk logout.
+      // Remove every old row for that token before saving the new timestamp;
+      // otherwise the old current row survives and reappears as a second
+      // connected device on the next GET /api/user/sessions.
+      if (currentTokenTs !== null) {
+        try {
+          if (isMysqlDialect) {
+            const staleCurrentRows = (await readMysqlSessionRecords()).filter((row) =>
+              row.userId === userId &&
+              Number(row.sess?.tokenIssuedAt) === currentTokenTs
+            );
+            for (const row of staleCurrentRows) {
+              await pool.query(`DELETE FROM session WHERE sid = ?`, [row.sid]);
+            }
+          } else {
+            let cleanupPool = sessionPool;
+            try {
+              await cleanupPool.query("SELECT 1");
+            } catch {
+              cleanupPool = pool;
+            }
+            await cleanupPool.query(
+              `DELETE FROM session
+                WHERE sess->>'userId' = $1
+                  AND sess->>'tokenIssuedAt' = $2`,
+              [userId, String(currentTokenTs)],
+            );
+          }
+        } catch (cleanupError: any) {
+          console.error("[Sessions] Impossible de remplacer l'ancien token courant:", cleanupError?.message);
+        }
+      }
+
       // Sync the current session's tokenIssuedAt to the new token so that
       // GET /api/user/sessions correctly marks isCurrent=true on the next fetch.
       try {
