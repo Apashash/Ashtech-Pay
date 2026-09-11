@@ -53,6 +53,13 @@ const sslConfig = isLocalDb
 const PM2_INSTANCES = Math.max(1, parseInt(process.env.PM2_INSTANCES || "1", 10) || 1);
 const MAIN_POOL_MAX = Math.max(2, Math.floor(8 / PM2_INSTANCES));
 const SESSION_POOL_MAX = Math.max(1, Math.floor(4 / PM2_INSTANCES));
+// Keep cold-start probes short so a missing/restarting MySQL server does not
+// make Node appear frozen. The retry loop in server/index.ts still keeps
+// trying until the database becomes reachable.
+const MYSQL_CONNECT_TIMEOUT_MS = Math.max(
+  500,
+  Math.min(5000, Number(process.env.MYSQL_CONNECT_TIMEOUT_MS || 2000) || 2000),
+);
 
 console.log(`[DB] Pool limits — main: ${MAIN_POOL_MAX}, session: ${SESSION_POOL_MAX} (PM2 instances detected: ${PM2_INSTANCES})`);
 
@@ -99,7 +106,7 @@ function createMysqlCompatiblePool(url: string, connectionLimit: number): Compat
   const rawPool = mysql.createPool({
     uri: url,
     connectionLimit,
-    connectTimeout: 5000,
+    connectTimeout: MYSQL_CONNECT_TIMEOUT_MS,
     waitForConnections: true,
     queueLimit: 0,
     enableKeepAlive: true,
@@ -141,7 +148,7 @@ const pgPool = useMysql ? null : new Pool({
 const mysqlPool = useMysql ? mysql.createPool({
   uri: databaseUrl,
   connectionLimit: MAIN_POOL_MAX,
-  connectTimeout: 5000,
+  connectTimeout: MYSQL_CONNECT_TIMEOUT_MS,
   waitForConnections: true,
   queueLimit: 0,
   enableKeepAlive: true,
@@ -192,7 +199,7 @@ export const sessionPool: any = useMysql
       ssl: sslConfig,
       max: SESSION_POOL_MAX,
       idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 5000,
+       connectionTimeoutMillis: MYSQL_CONNECT_TIMEOUT_MS,
     });
 
 sessionPool.on("error", (err: any) => {

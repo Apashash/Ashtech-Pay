@@ -586,10 +586,13 @@ app.use((req, res, next) => {
     // arrive through the verified export/import procedure instead of being
     // mutated by an unsafe best-effort translation at boot.
     migrationStage = "mysql-auxiliary-schema";
-    // MySQL may still be starting when Passenger/PM2 opens the HTTP port.
-    // Retry the idempotent schema check before marking the whole application
-    // unavailable. Without this, one ECONNREFUSED permanently leaves every
-    // API request behind the startup gate at 503 until the next process restart.
+      // MySQL may still be starting when Passenger/PM2 opens the HTTP port.
+      // Retry the idempotent schema check before marking the whole application
+      // unavailable. Without this, one ECONNREFUSED permanently leaves every
+      // API request behind the startup gate at 503 until the next process restart.
+      // Retry quickly during the first seconds so a normal DB restart is not
+      // stretched by the old 1/2/4/8/30-second backoff.
+      const retryDelaysMs = [250, 500, 1000, 2000, 5000, 10000];
     let attempt = 0;
     while (true) {
       attempt++;
@@ -597,7 +600,7 @@ app.use((req, res, next) => {
         await ensureMysqlAuxiliarySchema();
         break;
       } catch (error) {
-        const delayMs = Math.min(1000 * 2 ** Math.min(attempt - 1, 5), 30000);
+          const delayMs = retryDelaysMs[Math.min(attempt - 1, retryDelaysMs.length - 1)];
         console.warn(`[Migration] MySQL unavailable (attempt ${attempt}); retrying in ${delayMs}ms`);
         await new Promise(resolve => setTimeout(resolve, delayMs));
       }
