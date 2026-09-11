@@ -50,6 +50,10 @@ const isMysqlDialect = process.env.DB_DIALECT?.toLowerCase() === "mysql";
 let startupReady = false;
 let startupFailure: string | null = null;
 let migrationsReady = false;
+let migrationStatus: "pending" | "ready" | "failed" = "pending";
+let migrationStage = "not_started";
+let migrationFailure: string | null = null;
+let migrationStartedAt: number | null = null;
 let startupStage = "initializing";
 let startupFailureStage: string | null = null;
 // Bump this value whenever the idempotent migration block below gains a new
@@ -159,6 +163,41 @@ function classifyStartupFailure(error: string | null): string | null {
     return "DATABASE_CONNECTION";
   }
   return "BOOTSTRAP_FAILED";
+}
+
+function classifyMigrationFailure(error: string | null): string | null {
+  if (!error) return null;
+  const message = error.toLowerCase();
+  if (
+    message.includes("econnrefused") ||
+    message.includes("etimedout") ||
+    message.includes("enotfound") ||
+    message.includes("connect timeout")
+  ) {
+    return "DATABASE_CONNECTION";
+  }
+  if (
+    message.includes("er_access_denied_error") ||
+    message.includes("access denied") ||
+    message.includes("er_dbaccess_denied")
+  ) {
+    return "DATABASE_PERMISSION";
+  }
+  if (
+    message.includes("er_no_such_table") ||
+    message.includes("doesn't exist") ||
+    message.includes("unknown table")
+  ) {
+    return "DATABASE_SCHEMA_MISSING";
+  }
+  if (
+    message.includes("syntax error") ||
+    message.includes("er_parse_error") ||
+    message.includes("er_bad_field_error")
+  ) {
+    return "MIGRATION_SQL_ERROR";
+  }
+  return "MIGRATION_FAILED";
 }
 
 // ── FIX-6: Trust proxy — nécessaire pour que req.ip soit fiable derrière Replit/Nginx ──
@@ -276,6 +315,12 @@ app.get("/api/ping", (_req, res) => {
     ok: true,
     ready: startupReady,
     migrations_ready: migrationsReady,
+    migration_status: migrationStatus,
+    migration_stage: migrationStage,
+    migration_failure_code: classifyMigrationFailure(migrationFailure),
+    migration_elapsed_ms: migrationStartedAt
+      ? Math.max(0, Date.now() - migrationStartedAt)
+      : null,
     bootstrap_failed: Boolean(startupFailure),
     bootstrap_stage: startupFailureStage ?? startupStage,
     bootstrap_failure_code: classifyStartupFailure(startupFailure),
@@ -522,15 +567,20 @@ app.use((req, res, next) => {
   // Run this in the background. Plesk/nginx commonly times out before the
   // complete idempotent migration set finishes on a cold restart.
   const migrationPromise = (async () => {
+  migrationStartedAt = Date.now();
+  migrationStatus = "pending";
+  migrationFailure = null;
   if (isMysqlDialect) {
     // The long migration block below is PostgreSQL-specific (JSONB, partial
     // indexes, ON CONFLICT, RETURNING and PL/pgSQL helpers). MySQL data must
     // arrive through the verified export/import procedure instead of being
     // mutated by an unsafe best-effort translation at boot.
+    migrationStage = "mysql-auxiliary-schema";
     await ensureMysqlAuxiliarySchema();
     console.log("[Migration] DB_DIALECT=mysql — PostgreSQL boot migrations skipped; using imported MySQL schema");
     return;
   }
+  migrationStage = "postgres-schema-marker";
   try {
     const marker = await db.execute(sql`
       SELECT value
@@ -1180,13 +1230,18 @@ app.use((req, res, next) => {
   migrationPromise
     .then(() => {
       migrationsReady = true;
+      migrationStatus = "ready";
+      migrationStage = "complete";
       log("database migrations complete");
       startBackgroundWorkers();
     })
     .catch(err => {
+      migrationFailure = err instanceof Error ? err.message : String(err);
+      migrationStatus = "failed";
+      migrationStage = `${migrationStage}:failed`;
       console.error("[Migration] Background migration failed:", err);
-      migrationsReady = true;
-      startBackgroundWorkers();
+      migrationsReady = false;
+      console.error("[Migration] Background workers withheld until the database migration succeeds.");
     });
   } catch (err) {
     startupFailure = err instanceof Error ? err.message : String(err);

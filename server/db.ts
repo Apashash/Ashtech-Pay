@@ -99,6 +99,7 @@ function createMysqlCompatiblePool(url: string, connectionLimit: number): Compat
   const rawPool = mysql.createPool({
     uri: url,
     connectionLimit,
+    connectTimeout: 5000,
     waitForConnections: true,
     queueLimit: 0,
     enableKeepAlive: true,
@@ -140,6 +141,7 @@ const pgPool = useMysql ? null : new Pool({
 const mysqlPool = useMysql ? mysql.createPool({
   uri: databaseUrl,
   connectionLimit: MAIN_POOL_MAX,
+  connectTimeout: 5000,
   waitForConnections: true,
   queueLimit: 0,
   enableKeepAlive: true,
