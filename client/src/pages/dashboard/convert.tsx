@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, getAuthHeaders, queryClient } from "@/lib/queryClient";
 import { ArrowLeftRight, Loader2, CheckCircle2, AlertTriangle, ChevronLeft, Check, ChevronsUpDown } from "lucide-react";
 import { ALL_FX_CURRENCIES, CURRENCY_SYMBOLS } from "@shared/schema";
 import type { User, Transaction } from "@shared/schema";
@@ -180,7 +180,10 @@ export default function ConvertPage() {
         const res = await fetch(`/api/wallets/conversion-status/${conversionId}?t=${Date.now()}`, {
           credentials: "include",
           cache: "no-store",
-          headers: { "Cache-Control": "no-cache" },
+          headers: {
+            ...getAuthHeaders(),
+            "Cache-Control": "no-cache",
+          },
         });
         if (!res.ok) return;
         const json = await res.json();

@@ -56,3 +56,4 @@
 - [MySQL balance aggregations](mysql-balance-aggregations.md) — admin monetary totals must use dialect-aware numeric casts; failed aggregate requests must not silently render as zero.
 - [KYC update notification flow](kyc-update-notification-flow.md) — open targeted KYC requests in the official-message detail surface and fall back to window query strings on mobile.
 - [Transient startup errors](transient-startup-errors.md) — treat DB bootstrap and lazy page chunk failures as recoverable during restarts, deploys, and brief mobile interruptions.
+- [Conversion polling authentication](conversion-polling-auth.md) — status polling must send Bearer headers as well as cookies on mobile/PWA sessions.
