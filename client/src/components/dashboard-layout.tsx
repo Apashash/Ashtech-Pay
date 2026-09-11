@@ -42,6 +42,7 @@ import {
   LogOut,
   HelpCircle,
   BadgeCheck,
+  Clock3,
   Send,
   Bell,
   X,
@@ -519,6 +520,17 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                   >
                     <BadgeCheck className="w-3 h-3 text-white" />
                   </div>
+                ) : user.kycStatus === "pending" ? (
+                  <RouterLink href="/dashboard/kyc" aria-label={t.kyc.statusPending}>
+                    <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-amber-500/30 animate-pulse pointer-events-none" />
+                    <div
+                      className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center cursor-pointer"
+                      data-testid="badge-pending"
+                      title={t.kyc.statusPending}
+                    >
+                      <Clock3 className="w-3 h-3 text-white" />
+                    </div>
+                  </RouterLink>
                 ) : (
                   <RouterLink href="/dashboard/kyc">
                     <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-red-500/40 animate-ping pointer-events-none" />
