@@ -154,13 +154,28 @@ export default function LoginPage() {
     refetchOnMount: "always",
   });
 
-  const { data: serverStatus } = useQuery<{ ok: boolean }>({
+  const { data: serverStatus } = useQuery<{
+    ok: boolean;
+    ready?: boolean;
+    migrations_ready?: boolean;
+    bootstrap_failed?: boolean;
+  }>({
     queryKey: ["/api/ping"],
     staleTime: 0,
     retry: true,
     retryDelay: 700,
+    refetchOnWindowFocus: true,
+    refetchInterval: (query) => (
+      query.state.data?.ready === true && query.state.data?.migrations_ready === true
+        ? false
+        : 2_000
+    ),
   });
-  const serverReady = serverStatus?.ok === true;
+  // `ok` only means that Node is listening. Login must wait until the
+  // database/migration gate is open as well, otherwise the first POST gets a
+  // 503 while the page incorrectly appears ready.
+  const serverReady = serverStatus?.ready === true && serverStatus?.migrations_ready === true;
+  const serverBootstrapFailed = serverStatus?.bootstrap_failed === true;
 
   useEffect(() => {
     if (countryManuallySelected || countries.length === 0) return;
@@ -571,7 +586,9 @@ export default function LoginPage() {
 
                 {!serverReady && (
                   <p className="text-xs text-muted-foreground text-center">
-                    Le serveur termine son démarrage. Cette page s’activera automatiquement.
+                    {serverBootstrapFailed
+                      ? "Le service rencontre un problème temporaire. Actualisez la page dans quelques instants."
+                      : "Le serveur termine sa préparation. Le bouton s’activera automatiquement."}
                   </p>
                 )}
 
