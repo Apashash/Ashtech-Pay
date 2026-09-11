@@ -14564,6 +14564,15 @@ export async function registerRoutes(
         privateFolderPath: privateBundle.folderPath,
         summaryPdfPath: privateBundle.summaryPdfPath,
       });
+      // Keep the user's global status synchronized with the submission so the
+      // dashboard and sidebar immediately show that review is in progress.
+      // The submission is already persisted, so a status-sync failure must not
+      // make the client retry and create a duplicate dossier.
+      try {
+        await storage.updateUser(userId, { kycStatus: "pending" });
+      } catch (statusError) {
+        console.error("KYC user status sync failed:", statusError);
+      }
       await Promise.all([
         removePrivateKycUpload(documentFrontPath),
         removePrivateKycUpload(documentBackPath),

@@ -11,6 +11,7 @@ import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, getAuthHeaders } from "@/lib/queryClient";
+import { useLocation } from "wouter";
 import type { User, KycSubmission } from "@shared/schema";
 import { KYC_DOCUMENT_TYPES, BUSINESS_CATEGORIES } from "@shared/schema";
 import {
@@ -128,6 +129,7 @@ async function compressKycImage(file: File): Promise<File> {
 export default function KYCPage() {
   const { toast } = useToast();
   const { t } = useLanguage();
+  const [, setLocation] = useLocation();
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const { data: kycSubmission, isLoading: isLoadingKyc } = useQuery<KycSubmission | null>({
     queryKey: ["/api/kyc"],
@@ -368,6 +370,7 @@ export default function KYCPage() {
         title: t.kyc.toastSubmitted,
         description: t.kyc.toastSubmittedDesc,
       });
+      setLocation("/dashboard");
     },
     onError: (error: Error) => {
       toast({

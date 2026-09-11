@@ -374,6 +374,22 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                       );
                     }
 
+                    if (isKyc && user?.kycStatus === "pending") {
+                      return (
+                        <SidebarMenuItem key={item.title}>
+                          <SidebarMenuButton asChild isActive={location === item.url} className="h-11 rounded-xl gap-3 text-sm font-semibold group-data-[collapsible=icon]:h-9!">
+                            <Link href={item.url}>
+                              <SidebarIconBadge icon={item.icon} imageSrc={item.imageSrc} color="bg-amber-500/10 text-amber-600 dark:text-amber-400" />
+                              <span className="flex-1">{item.title}</span>
+                              <Badge className="ml-auto bg-amber-500 text-white h-5 px-1.5 text-xs">
+                                {t.sidebar.pending}
+                              </Badge>
+                            </Link>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      );
+                    }
+
                     if (isKyc && user?.kycStatus !== "approved" && user?.kycStatus !== "verified") {
                       return (
                         <SidebarMenuItem key={item.title}>
