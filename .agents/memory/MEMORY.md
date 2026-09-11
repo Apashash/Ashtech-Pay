@@ -38,6 +38,7 @@
 - [Admin Telegram notification boundary](admin-telegram-notifications.md) — emit successful admin alerts at login only, never from per-request authorization middleware.
 - [Merchant webhook delivery](merchant-webhook-delivery.md) — all merchant events must use one persisted, HMAC-signed, idempotent queue with retry and cross-worker claims.
 - [Bearer device sessions](bearer-device-sessions.md) — persist the valid current Bearer-token session before listing or deleting other devices, while excluding that SID from bulk logout.
+- [Bearer session deduplication](bearer-session-deduplication.md) — cookie-less Bearer requests must persist by userId + tokenIssuedAt, not by each fresh Express SID.
 - [Provider API error exposure](provider-api-errors.md) — merchant-facing errors preserve the provider’s useful message and diagnostics, but never its raw response or sensitive data.
 - [PawaPay credential key alignment](pawapay-credential-key-alignment.md) — PawaPay credentials use a session-derived dedicated envelope with legacy FIELD_ENCRYPTION_KEY compatibility.
 - [PawaPay active-conf structure](pawapay-active-conf-structure.md) — operationTypes is keyed under each provider currency, so active-provider checks must read currencies[].operationTypes object keys.

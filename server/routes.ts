@@ -56,6 +56,7 @@ import { z } from "zod";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import { MySqlSessionStore } from "./mysqlSessionStore";
+import { wrapSessionStoreWithTokenDedup } from "./tokenDeduplicatingSessionStore";
 import { pool, db, sessionPool, poolStats } from "./db";
 import { transactions as transactionsTable, users as usersTable, wallets as walletsTable, supportTickets, ticketMessages } from "@shared/schema-runtime";
 import { and, count, desc, eq, sql, sql as drizzleSql } from "drizzle-orm";
@@ -2237,6 +2238,18 @@ export async function registerRoutes(
     },
   };
 
+  const sessionStore = process.env.DB_DIALECT?.toLowerCase() === "mysql"
+    ? new MySqlSessionStore({
+        pool: sessionPool as any,
+        tableName: "session",
+        errorLog: (err: Error) => console.error("[SessionStore]", err.message),
+      })
+    : new SessionStore({
+        pool: resilientSessionPool as any,
+        tableName: "session",
+        errorLog: (err: Error) => console.error("[SessionStore]", err.message),
+      });
+
   app.use(
     session({
       // FIX-1: utilise _DEV_TOKEN_SECRET (même valeur que getTokenSecret()) en dev
@@ -2244,17 +2257,12 @@ export async function registerRoutes(
       secret: sessionSecret || _DEV_TOKEN_SECRET,
       resave: false,
       saveUninitialized: false,
-      store: process.env.DB_DIALECT?.toLowerCase() === "mysql"
-        ? new MySqlSessionStore({
-            pool: sessionPool as any,
-            tableName: "session",
-            errorLog: (err: Error) => console.error("[SessionStore]", err.message),
-          })
-        : new SessionStore({
-            pool: resilientSessionPool as any,
-            tableName: "session",
-            errorLog: (err: Error) => console.error("[SessionStore]", err.message),
-          }),
+      store: wrapSessionStoreWithTokenDedup(sessionStore, {
+        pool: sessionPool as any,
+        isMysql: process.env.DB_DIALECT?.toLowerCase() === "mysql",
+        tableName: "session",
+        errorLog: (err: Error) => console.error("[SessionStoreDedup]", err.message),
+      }),
       proxy: isSecureProxy,
       name: "__ash_sid",
       cookie: {
@@ -4036,6 +4044,29 @@ export async function registerRoutes(
     return { device, browser };
   }
 
+  function getBearerTokenTimestamp(req: Request): number | null {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith("Bearer ")) return null;
+    return extractTokenTimestamp(authHeader.substring(7));
+  }
+
+  function deduplicateSessionRows(rows: any[]): any[] {
+    const seenTokenSessions = new Set<string>();
+    return rows.filter((row) => {
+      let sess: Record<string, any>;
+      try {
+        sess = typeof row.sess === "string" ? JSON.parse(row.sess) : (row.sess || {});
+      } catch {
+        return true;
+      }
+      if (sess.tokenIssuedAt == null) return true;
+      const tokenKey = String(sess.tokenIssuedAt);
+      if (seenTokenSessions.has(tokenKey)) return false;
+      seenTokenSessions.add(tokenKey);
+      return true;
+    });
+  }
+
   app.get("/api/user/sessions", requireAuth, async (req, res) => {
     try {
       // The Bearer-token middleware may have just attached this device to the
@@ -4083,8 +4114,13 @@ export async function registerRoutes(
         return null;
       })();
 
-      const sessions = rows.map((row) => {
-        const sess = typeof row.sess === "string" ? JSON.parse(row.sess) : (row.sess || {});
+      const sessions = deduplicateSessionRows(rows).map((row) => {
+        let sess: Record<string, any>;
+        try {
+          sess = typeof row.sess === "string" ? JSON.parse(row.sess) : (row.sess || {});
+        } catch {
+          sess = {};
+        }
         const ua = sess.userAgent || "";
         const { device, browser } = parseDeviceFromUA(ua);
         const tokenTsMatch = currentTokenTs != null && sess.tokenIssuedAt != null &&
@@ -4112,6 +4148,7 @@ export async function registerRoutes(
     try {
       const userId = req.userId!;
       const currentSid = req.sessionID;
+      const currentTokenTs = getBearerTokenTimestamp(req);
       // Persist the current device before deleting other rows. This guarantees
       // that "disconnect all other devices" never deletes this device.
       await persistSessionForDeviceManagement(req);
@@ -4120,7 +4157,11 @@ export async function registerRoutes(
       try {
         if (isMysqlDialect) {
           const otherSessions = (await readMysqlSessionRecords())
-            .filter((row) => row.userId === userId && row.sid !== (currentSid ?? ""));
+            .filter((row) =>
+              row.userId === userId &&
+              row.sid !== (currentSid ?? "") &&
+              !(currentTokenTs !== null && Number(row.sess?.tokenIssuedAt) === currentTokenTs)
+            );
           count = otherSessions.length;
           for (const row of otherSessions) {
             singleDeviceKicks.add(row.sid);
@@ -4133,16 +4174,28 @@ export async function registerRoutes(
           try { await sessionPool.query("SELECT 1"); } catch { qPool = pool; }
 
           // Count other sessions
+          const tokenExclusion = currentTokenTs !== null
+            ? ` AND (sess->>'tokenIssuedAt' IS NULL OR sess->>'tokenIssuedAt' <> $3)`
+            : "";
+          const countParams = currentTokenTs !== null
+            ? [userId, currentSid ?? "", String(currentTokenTs)]
+            : [userId, currentSid ?? ""];
           const countResult = await qPool.query(
-            `SELECT COUNT(*) as cnt FROM session WHERE sess->>'userId' = $1 AND sid != $2`,
-            [userId, currentSid ?? ""]
+            `SELECT COUNT(*) as cnt
+               FROM session
+              WHERE sess->>'userId' = $1
+                AND sid != $2${tokenExclusion}`,
+            countParams
           );
           count = parseInt(countResult.rows[0]?.cnt || "0", 10);
 
           // Add them to in-memory kicks so pending requests get sessionRevoked
           const othersResult = await qPool.query(
-            `SELECT sid FROM session WHERE sess->>'userId' = $1 AND sid != $2`,
-            [userId, currentSid ?? ""]
+            `SELECT sid
+               FROM session
+              WHERE sess->>'userId' = $1
+                AND sid != $2${tokenExclusion}`,
+            countParams
           );
           for (const row of othersResult.rows as { sid: string }[]) {
             singleDeviceKicks.add(row.sid);
@@ -4153,8 +4206,10 @@ export async function registerRoutes(
 
           // Delete other sessions from DB
           await qPool.query(
-            `DELETE FROM session WHERE sess->>'userId' = $1 AND sid != $2`,
-            [userId, currentSid ?? ""]
+            `DELETE FROM session
+              WHERE sess->>'userId' = $1
+                AND sid != $2${tokenExclusion}`,
+            countParams
           );
         }
       } catch (sessErr: any) {
