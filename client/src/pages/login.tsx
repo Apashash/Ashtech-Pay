@@ -266,7 +266,12 @@ export default function LoginPage() {
 
   const handleSubmit = (data: LoginFormData) => {
     if (!serverReady) {
-      toast({ title: "Serveur en démarrage", description: "Veuillez patienter quelques instants.", variant: "destructive" });
+      void queryClient.invalidateQueries({ queryKey: ["/api/ping"] });
+      toast({
+        title: "Service en préparation",
+        description: "La plateforme termine sa préparation. Réessayez dans quelques instants.",
+        duration: 4500,
+      });
       return;
     }
     if (loginMode === "phone" && phoneInput.replace(/\D/g, "").length < 6) {
@@ -305,6 +310,18 @@ export default function LoginPage() {
     onError: (error: any) => {
       setTurnstileToken(null);
       setTurnstileKey(k => k + 1);
+      // A 503 during a cold start is not a failed login. Keep it neutral,
+      // refresh readiness immediately, and let the polling query re-enable
+      // the form when the database gate opens.
+      if (Number(error?.status) === 503) {
+        void queryClient.invalidateQueries({ queryKey: ["/api/ping"] });
+        toast({
+          title: "Service en préparation",
+          description: "La plateforme termine sa préparation. Réessayez dans quelques instants.",
+          duration: 4500,
+        });
+        return;
+      }
       if (error.vpnDetected) { setVpnDetected(true); return; }
       if (error.blocked && error.retryAfter) {
         saveRateLimit(error.retryAfter);

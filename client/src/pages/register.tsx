@@ -272,6 +272,17 @@ export default function RegisterPage() {
     onError: (error: any) => {
       setTurnstileToken(null);
       setTurnstileKey(k => k + 1);
+      // A 503 during a cold start is not a failed registration. Keep it
+      // neutral and refresh the readiness check instead of showing an error.
+      if (Number(error?.status) === 503) {
+        void queryClient.invalidateQueries({ queryKey: ["/api/ping"] });
+        toast({
+          title: "Service en préparation",
+          description: "La plateforme termine sa préparation. Réessayez dans quelques instants.",
+          duration: 4500,
+        });
+        return;
+      }
       if (error.vpnDetected) {
         setVpnDetected(true);
         return;
@@ -289,7 +300,12 @@ export default function RegisterPage() {
 
   const onSubmit = (data: RegisterFormData) => {
     if (!serverReady) {
-      toast({ title: "Serveur en démarrage", description: "Veuillez patienter quelques instants.", variant: "destructive" });
+      void queryClient.invalidateQueries({ queryKey: ["/api/ping"] });
+      toast({
+        title: "Service en préparation",
+        description: "La plateforme termine sa préparation. Réessayez dans quelques instants.",
+        duration: 4500,
+      });
       return;
     }
     if (!selectedCountry) {
