@@ -4107,9 +4107,29 @@ export async function registerRoutes(
 
   app.get("/api/user", requireAuth, async (req, res) => {
     try {
-      const user = await storage.getUser(req.userId!);
+      let user = await storage.getUser(req.userId!);
       if (!user) {
         return res.status(404).json({ message: "Utilisateur non trouvé" });
+      }
+      // Repair stale global KYC status values left behind when a previous
+      // submission succeeded but the user-status synchronization failed.
+      // The latest submission is authoritative for the dashboard badge.
+      try {
+        const latestKyc = await storage.getKycSubmissionByUserId(req.userId!);
+        const expectedStatus =
+          latestKyc?.status === "pending" ? "pending"
+            : latestKyc?.status === "approved" ? "verified"
+              : latestKyc?.status === "rejected" ? "rejected"
+                : null;
+        if (expectedStatus && user.kycStatus !== expectedStatus) {
+          const syncedUser = await storage.updateUser(req.userId!, {
+            kycStatus: expectedStatus,
+            ...(expectedStatus === "verified" ? { isVerified: true } : {}),
+          });
+          user = syncedUser || { ...user, kycStatus: expectedStatus };
+        }
+      } catch (statusError) {
+        console.error("[KYC] Dashboard status reconciliation failed:", statusError);
       }
       const { password: _, ...safeUser } = user;
       const impersonatedBy = req.session.impersonatedBy || null;
