@@ -601,7 +601,10 @@ export default function KYCPage() {
       );
     }
 
-    if (kycSubmission?.status === "approved" || user?.isVerified) {
+    const isVerifiedWithoutSubmission =
+      !kycSubmission &&
+      (user?.isVerified || user?.kycStatus === "approved" || user?.kycStatus === "verified");
+    if (kycSubmission?.status === "approved" || isVerifiedWithoutSubmission) {
       return (
         <Card className="border-green-500/50 bg-green-500/5">
           <CardContent className="p-6">

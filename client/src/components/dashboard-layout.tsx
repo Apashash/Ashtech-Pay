@@ -511,7 +511,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                     className="w-full h-full object-cover"
                   />
                 </div>
-                {user.isVerified ? (
+                {user.isVerified && user.kycStatus !== "pending" && user.kycStatus !== "rejected" ? (
                   <div 
                     className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center cursor-pointer"
                     onClick={() => toast({ title: t.kyc.statusApproved, description: t.kyc.statusApprovedDesc })}

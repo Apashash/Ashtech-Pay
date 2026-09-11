@@ -4121,10 +4121,14 @@ export async function registerRoutes(
             : latestKyc?.status === "approved" ? "verified"
               : latestKyc?.status === "rejected" ? "rejected"
                 : null;
-        if (expectedStatus && user.kycStatus !== expectedStatus) {
+        const expectedIsVerified = expectedStatus === "verified";
+        if (
+          expectedStatus &&
+          (user.kycStatus !== expectedStatus || user.isVerified !== expectedIsVerified)
+        ) {
           const syncedUser = await storage.updateUser(req.userId!, {
             kycStatus: expectedStatus,
-            ...(expectedStatus === "verified" ? { isVerified: true } : {}),
+            isVerified: expectedIsVerified,
           });
           user = syncedUser || { ...user, kycStatus: expectedStatus };
         }
@@ -14614,7 +14618,10 @@ export async function registerRoutes(
       // The submission is already persisted, so a status-sync failure must not
       // make the client retry and create a duplicate dossier.
       try {
-        const syncedUser = await storage.updateUser(userId, { kycStatus: "pending" });
+        const syncedUser = await storage.updateUser(userId, {
+          kycStatus: "pending",
+          isVerified: false,
+        });
         if (!syncedUser || syncedUser.kycStatus !== "pending") {
           console.error("[KYC] User status sync did not read back as pending:", {
             userId,
