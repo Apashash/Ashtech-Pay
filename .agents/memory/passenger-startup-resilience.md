@@ -12,3 +12,9 @@ Passenger may report a generic startup 500 when the Node process does not open i
 **Why:** Static imports such as the route registry or bot guard can evaluate `db.ts` before the listener even when migrations are inside a later bootstrap function, turning a missing environment variable into Passenger's generic startup 500.
 
 **How to apply:** Do not hold the public page behind the full idempotent migration set. Serve the frontend and `/api/ping` after route setup, keep database APIs gated until migrations finish, and start pollers only after the migration promise resolves.
+
+**Additional rule:** If backend module import or route registration fails before the normal route setup completes, install an emergency static frontend fallback, keep `/api/ping` reachable with a non-sensitive bootstrap stage, and leave database APIs gated.
+
+**Why:** Passenger can reach the listener while the application remains permanently behind its own generic 503 gate; without a fallback, a backend-only startup fault hides the public shell and makes diagnosis depend entirely on Plesk logs.
+
+**How to apply:** Set the startup state to degraded after the outer bootstrap catch, serve the committed `dist/public` shell, and expose only boolean/readiness/stage diagnostics—not raw configuration or database errors.

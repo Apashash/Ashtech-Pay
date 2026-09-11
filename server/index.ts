@@ -50,6 +50,7 @@ const isMysqlDialect = process.env.DB_DIALECT?.toLowerCase() === "mysql";
 let startupReady = false;
 let startupFailure: string | null = null;
 let migrationsReady = false;
+let startupStage = "initializing";
 // Bump this value whenever the idempotent migration block below gains a new
 // schema change. Completed versions are stored in platform_settings so a
 // normal Passenger restart does not repeat every ALTER TABLE/CREATE INDEX.
@@ -109,6 +110,23 @@ app.use((req, res, next) => {
         : "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Démarrage</title></head><body>Le service démarre. Veuillez réessayer dans quelques instants.</body></html>",
     );
 });
+
+// Keep the public shell available when a backend-only module or route
+// registration fails during Passenger bootstrap. API requests remain behind
+// the startup gate above, while the browser can still display the application
+// and the health endpoint can identify the failed bootstrap phase.
+function serveEmergencyFrontend(): void {
+  const publicPath = appPath("dist", "public");
+  const indexPath = appPath("dist", "public", "index.html");
+  if (!_envExists(indexPath)) {
+    console.error(`[Static] Emergency fallback unavailable: ${indexPath}`);
+    return;
+  }
+  app.use(express.static(publicPath, { index: false }));
+  app.get("*", (_req, res) => {
+    res.set("Content-Type", "text/html; charset=utf-8").sendFile(indexPath);
+  });
+}
 
 // ── FIX-6: Trust proxy — nécessaire pour que req.ip soit fiable derrière Replit/Nginx ──
 // Sans cela, X-Forwarded-For peut être forgé par le client pour contourner les rate limiters.
@@ -221,7 +239,15 @@ app.use(compression());
 // Used to check if Node.js is running on the production server.
 // Visit https://ashtechpay.top/api/ping to verify server health.
 app.get("/api/ping", (_req, res) => {
-  res.json({ ok: true, uptime: Math.floor(process.uptime()), env: process.env.NODE_ENV || "development" });
+  res.json({
+    ok: true,
+    ready: startupReady,
+    migrations_ready: migrationsReady,
+    bootstrap_failed: Boolean(startupFailure),
+    bootstrap_stage: startupStage,
+    uptime: Math.floor(process.uptime()),
+    env: process.env.NODE_ENV || "development",
+  });
 });
 
 // ── Security: Bot guard (UA check, honeypot, path injection, IP ban) ─────────
@@ -426,6 +452,7 @@ app.use((req, res, next) => {
   // Keep Passenger's socket reachable even when a required environment
   // variable, native dependency, or database import is broken. The startup
   // gate below will return a clean 503 and the exact cause is logged.
+  startupStage = "configuration";
   if ((isProd || isMultiWorker) && !process.env.SESSION_SECRET) {
     throw new Error("SESSION_SECRET env var must be set in production or multi-worker PM2.");
   }
@@ -433,6 +460,7 @@ app.use((req, res, next) => {
   // These modules transitively import the database and must not be evaluated
   // before the listener above. This is important on Passenger, where a
   // top-level import failure is reported as a generic HTTP 500.
+  startupStage = "backend-modules";
   const { db } = await import("./db");
   const { sql } = await import("drizzle-orm");
   const { botGuard, hydrateBotBans } = await import("./botGuard");
@@ -1037,6 +1065,7 @@ app.use((req, res, next) => {
   }
   })();
 
+  startupStage = "routes";
   await registerRoutes(httpServer, app);
 
   // ── Security: Sanitized error handler (no stack traces in production) ─────
@@ -1073,6 +1102,7 @@ app.use((req, res, next) => {
     next();
   });
 
+  startupStage = "frontend";
   if (isProd) {
     serveStatic(app);
   } else {
@@ -1111,6 +1141,7 @@ app.use((req, res, next) => {
   };
 
   startupReady = true;
+  startupStage = "ready";
   log(`serving on port ${port}; database migrations continue in background`);
   migrationPromise
     .then(() => {
@@ -1125,6 +1156,10 @@ app.use((req, res, next) => {
     });
   } catch (err) {
     startupFailure = err instanceof Error ? err.message : String(err);
+    startupStage = "failed";
     console.error("[Startup] Application bootstrap failed:", err);
+    startupReady = true;
+    migrationsReady = false;
+    serveEmergencyFrontend();
   }
 })();
