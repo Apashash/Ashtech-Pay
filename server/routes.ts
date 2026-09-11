@@ -2294,7 +2294,8 @@ export async function registerRoutes(
 
     // First check session
     let userId = req.session?.userId;
-    
+    let bearerTokenTimestamp: number | null = null;
+
     // Then check Bearer token
     const authHeader = req.headers.authorization;
     if (!userId && authHeader && authHeader.startsWith('Bearer ')) {
@@ -2302,6 +2303,7 @@ export async function registerRoutes(
       const resolvedId = getUserIdFromToken(token);
       if (resolvedId) {
         userId = resolvedId;
+        bearerTokenTimestamp = extractTokenTimestamp(token);
       } else {
         // Token present but invalid/revoked → signal single-device kick
         // so requireAuth returns sessionRevoked:true and the frontend redirects to login
@@ -2344,6 +2346,38 @@ export async function registerRoutes(
             vpnDetected: true,
           });
         }
+      }
+
+      // Bearer-authenticated mobile browsers may not send the session cookie on
+      // the next request. Persist the current session with the token timestamp
+      // before continuing so admin TOTP factors saved during this request can be
+      // recovered by loadBearerAuthSessionData on the following request.
+      //
+      // This must happen in the active middleware (not only in the unused
+      // extractUserId helper below): otherwise a session containing _pav is
+      // stored without tokenIssuedAt and becomes invisible to Bearer recovery.
+      if (
+        bearerTokenTimestamp !== null &&
+        req.session &&
+        (
+          req.session.userId !== userId ||
+          req.session.tokenIssuedAt !== bearerTokenTimestamp
+        )
+      ) {
+        req.session.userId = userId;
+        req.session.tokenIssuedAt = bearerTokenTimestamp;
+        req.session.clientIp ??= getClientIp(req);
+        req.session.userAgent ??= req.headers["user-agent"] || "";
+        req.session.loginAt ??= new Date().toISOString();
+        req.session.role = user?.role;
+        await new Promise<void>((resolve) => {
+          req.session.save((saveError) => {
+            if (saveError) {
+              console.error("[Session] Bearer session persistence failed:", saveError);
+            }
+            resolve();
+          });
+        });
       }
 
       req.userId = userId;

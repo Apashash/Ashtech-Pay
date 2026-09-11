@@ -20,3 +20,9 @@ When several durable session rows share one token timestamp, prefer the row with
 **Why:** Cookie-less navigation can leave an older row without `_pav` beside the freshly verified row; taking the first database result makes a successful panel verification appear to expire immediately.
 
 **How to apply:** Recover `_pav`, `_ppv`, and `_avs` from the strongest matching row rather than relying on database row order or stopping after an empty first-pool result.
+
+The middleware that actually runs for requests must persist `userId` and `tokenIssuedAt` when it authenticates a cookie-less Bearer request; a separate unused helper does not protect the flow.
+
+**Why:** A panel-TOTP session saved without the token timestamp cannot be found on the next mobile request, so the admin is sent back to authentication even though `_pav` was valid.
+
+**How to apply:** Await the current session save before continuing the request, then let Bearer recovery match the saved panel factors on subsequent requests.
