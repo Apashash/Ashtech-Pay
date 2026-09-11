@@ -14,3 +14,9 @@ The public ping endpoint exposes two separate readiness concepts: `ready` means 
 **Why:** The listener intentionally opens before MySQL bootstrap to avoid Passenger timeouts. Treating `ready` alone as application readiness enables login or registration during the 503 migration gate.
 
 **How to apply:** Auth and other database-backed entry points must require both flags, and should keep checking the ping endpoint until both are true.
+
+Safe no-database public endpoints may bypass the migration gate so the shell can initialize quickly, but authentication, countries, payments, and private data must remain gated.
+
+**Why:** Node can serve country-independent bootstrap data in milliseconds while MySQL is warming up, without exposing an API that could read or mutate incomplete database state.
+
+**How to apply:** Keep the startup allowlist explicit and small; never make the entire `/api/public` namespace available during a database outage.

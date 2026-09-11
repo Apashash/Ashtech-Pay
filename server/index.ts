@@ -56,6 +56,14 @@ let migrationFailure: string | null = null;
 let migrationStartedAt: number | null = null;
 let startupStage = "initializing";
 let startupFailureStage: string | null = null;
+// These endpoints are safe to serve while MySQL is warming up. Keeping them
+// outside the migration gate lets the public shell initialize immediately
+// without exposing any database-backed or authenticated API prematurely.
+const STARTUP_PUBLIC_API_PATHS = new Set([
+  "/api/public/geo",
+  "/api/public/turnstile-key",
+  "/api/auth/ip-status",
+]);
 // Bump this value whenever the idempotent migration block below gains a new
 // schema change. Completed versions are stored in platform_settings so a
 // normal Passenger restart does not repeat every ALTER TABLE/CREATE INDEX.
@@ -91,7 +99,9 @@ let runtimeBotGuard = (_req: Request, _res: Response, next: NextFunction): void 
 
 app.use((req, res, next) => {
   const publicDuringMigration =
-    req.path === "/api/ping" || !req.path.startsWith("/api");
+    req.path === "/api/ping" ||
+    STARTUP_PUBLIC_API_PATHS.has(req.path) ||
+    !req.path.startsWith("/api");
   if (startupReady && (migrationsReady || publicDuringMigration)) return next();
   const message = startupFailure
     ? shouldExposeDebugErrors
