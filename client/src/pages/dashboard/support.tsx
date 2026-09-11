@@ -323,8 +323,8 @@ export default function SupportPage() {
               </Button>
               <div className="flex items-center gap-3">
                 <div className="relative">
-                  <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center">
-                    <MessageSquare className="w-5 h-5 text-primary" />
+                  <div className="w-10 h-10 rounded-2xl bg-primary/15 flex items-center justify-center overflow-hidden border border-primary/20">
+                    <img src={directChatIcon} alt="" aria-hidden="true" className="w-9 h-9 object-cover" />
                   </div>
                   {adminOnline && (
                     <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-green-500 border-2 border-background" />
@@ -407,7 +407,9 @@ export default function SupportPage() {
                 ) : (
                   <Card>
                     <CardContent className="p-6 text-center">
-                      <MessageSquare className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                      <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-primary/10 flex items-center justify-center overflow-hidden border border-primary/15">
+                        <img src={directChatIcon} alt="" aria-hidden="true" className="w-12 h-12 object-cover" />
+                      </div>
                       <p className="text-muted-foreground">{t.support.noConversations}</p>
                       <Button className="mt-4" onClick={() => setShowNewTicket(true)} data-testid="button-start-new-conversation">{t.support.startConversation}</Button>
                     </CardContent>
@@ -455,7 +457,9 @@ export default function SupportPage() {
                   </div>
                 ) : (
                   <div className="text-center py-8">
-                    <MessageSquare className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                    <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-primary/10 flex items-center justify-center overflow-hidden border border-primary/15">
+                      <img src={directChatIcon} alt="" aria-hidden="true" className="w-12 h-12 object-cover" />
+                    </div>
                     <p className="text-muted-foreground">{t.support.noMessages}</p>
                   </div>
                 )}
@@ -489,24 +493,60 @@ export default function SupportPage() {
           )}
 
           <BottomSheet open={showNewTicket} onOpenChange={setShowNewTicket}>
-            <BottomSheetContent>
-              <BottomSheetHeader>
-                <BottomSheetTitle>{t.support.newConversationTitle}</BottomSheetTitle>
-                <BottomSheetDescription>{t.support.newConversationDesc}</BottomSheetDescription>
+            <BottomSheetContent className="rounded-t-[28px] border-0 bg-background px-0 shadow-2xl">
+              <BottomSheetHeader className="px-5 pb-5 pt-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-11 h-11 shrink-0 rounded-2xl bg-primary/15 flex items-center justify-center overflow-hidden border border-primary/20">
+                    <img src={directChatIcon} alt="" aria-hidden="true" className="w-10 h-10 object-cover" />
+                  </div>
+                  <div className="min-w-0 pt-0.5">
+                    <BottomSheetTitle className="text-xl font-semibold tracking-tight text-foreground">
+                      {t.support.newConversationTitle}
+                    </BottomSheetTitle>
+                    <BottomSheetDescription className="mt-1 text-sm leading-5 text-muted-foreground">
+                      {t.support.newConversationDesc}
+                    </BottomSheetDescription>
+                  </div>
+                </div>
               </BottomSheetHeader>
-              <form onSubmit={handleCreateTicket} className="space-y-4">
+              <form onSubmit={handleCreateTicket} className="space-y-5 px-5 pb-2">
                 <div className="space-y-2">
-                  <Label>{t.support.subjectLabel}</Label>
-                  <Input value={newTicketSubject} onChange={(e) => setNewTicketSubject(e.target.value)} placeholder={t.support.subjectPlaceholder} data-testid="input-ticket-subject" />
+                  <Label className="text-sm font-semibold text-foreground">{t.support.subjectLabel}</Label>
+                  <Input
+                    value={newTicketSubject}
+                    onChange={(e) => setNewTicketSubject(e.target.value)}
+                    placeholder={t.support.subjectPlaceholder}
+                    className="h-12 rounded-xl border-input bg-background px-4 text-[15px] placeholder:text-muted-foreground/70 focus-visible:ring-primary"
+                    data-testid="input-ticket-subject"
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label>{t.support.messageLabel}</Label>
-                  <Textarea value={newTicketMessage} onChange={(e) => setNewTicketMessage(e.target.value)} placeholder={t.support.messagePlaceholder2} className="min-h-32" data-testid="input-ticket-message" />
+                  <Label className="text-sm font-semibold text-foreground">{t.support.messageLabel}</Label>
+                  <Textarea
+                    value={newTicketMessage}
+                    onChange={(e) => setNewTicketMessage(e.target.value)}
+                    placeholder={t.support.messagePlaceholder2}
+                    className="min-h-32 resize-none rounded-xl border-input bg-background px-4 py-3 text-[15px] leading-6 placeholder:text-muted-foreground/70 focus-visible:ring-primary"
+                    data-testid="input-ticket-message"
+                  />
                 </div>
-                <div className="flex gap-2 justify-end">
-                  <Button type="button" variant="outline" onClick={() => setShowNewTicket(false)}>{t.support.cancel}</Button>
-                  <Button type="submit" disabled={createTicketMutation.isPending}>
-                    {createTicketMutation.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{t.support.sending}</> : <><Send className="w-4 h-4 mr-2" />{t.support.send}</>}
+                <div className="flex gap-3 justify-end pt-1 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-11 rounded-xl border-border px-5 font-semibold"
+                    onClick={() => setShowNewTicket(false)}
+                  >
+                    {t.support.cancel}
+                  </Button>
+                  <Button
+                    type="submit"
+                    className="h-11 rounded-xl bg-primary px-5 font-semibold text-primary-foreground shadow-sm hover:bg-primary/90"
+                    disabled={createTicketMutation.isPending}
+                  >
+                    {createTicketMutation.isPending
+                      ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{t.support.sending}</>
+                      : <><Send className="w-4 h-4 mr-2" />{t.support.send}</>}
                   </Button>
                 </div>
               </form>
