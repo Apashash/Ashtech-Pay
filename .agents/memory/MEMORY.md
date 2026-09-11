@@ -54,3 +54,4 @@
 - [Private KYC Plesk storage](kyc-private-plesk-storage.md) — keep documents outside webroot, serve through authenticated routes, and migrate legacy public objects before cutover.
 - [Encrypted KYC database storage](kyc-database-storage.md) — when Plesk filesystem permissions cannot be changed, store new KYC files encrypted in the database and keep legacy reads compatible.
 - [MySQL balance aggregations](mysql-balance-aggregations.md) — admin monetary totals must use dialect-aware numeric casts; failed aggregate requests must not silently render as zero.
+- [KYC update notification flow](kyc-update-notification-flow.md) — open targeted KYC requests in the official-message detail surface and fall back to window query strings on mobile.
