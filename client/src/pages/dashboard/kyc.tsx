@@ -135,7 +135,13 @@ export default function KYCPage() {
   const { data: kycSubmission, isLoading: isLoadingKyc } = useQuery<KycSubmission | null>({
     queryKey: ["/api/kyc"],
   });
-  const isUpdateRequested = new URLSearchParams(location.split("?")[1] || "").get("update") === "true";
+  // Some mobile browser/router combinations expose only the pathname through
+  // wouter. Read window.location.search as the fallback so the update flow
+  // cannot silently fall back to the approved-only screen.
+  const search = location.includes("?")
+    ? location.slice(location.indexOf("?"))
+    : window.location.search;
+  const isUpdateRequested = new URLSearchParams(search).get("update") === "true";
   const [allowKycUpdate, setAllowKycUpdate] = useState(false);
 
   const [documentType, setDocumentType] = useState("");

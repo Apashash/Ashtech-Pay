@@ -72,7 +72,7 @@ export default function NotificationsPage() {
   });
 
   // ── Navigation par type ───────────────────────────────────────────────────────
-  function getDestination(type: string): string {
+  function getDestination(type: string, notificationId?: string): string {
     switch (type) {
       case "deposit_confirmed":
       case "deposit_failed":
@@ -87,7 +87,7 @@ export default function NotificationsPage() {
       case "global_message":
         return "/dashboard/global-message";
       case "kyc_update_required":
-        return "/dashboard/kyc?update=true";
+        return `/dashboard/global-message?notificationId=${encodeURIComponent(notificationId || "")}`;
       default:
         return "/dashboard/transactions";
     }
@@ -231,7 +231,7 @@ export default function NotificationsPage() {
                   }`}
                   onClick={() => {
                     if (!notif.isRead) markAsReadMutation.mutate(notif.id);
-                    setLocation(getDestination(notif.type));
+                    setLocation(getDestination(notif.type, notif.id));
                   }}
                 >
                   <div className="flex items-start gap-3">

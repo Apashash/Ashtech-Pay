@@ -6,7 +6,7 @@ import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { fr, enUS } from "date-fns/locale";
-import { Megaphone, CheckCircle2, ArrowLeft, Shield } from "lucide-react";
+import { Megaphone, CheckCircle2, ArrowLeft, Shield, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/lib/language";
 
@@ -22,11 +22,14 @@ interface GlobalMessage {
 interface Notification {
   id: string;
   type: string;
+  title: string;
+  message: string;
   isRead: boolean;
+  createdAt: string | null;
 }
 
 export default function GlobalMessagePage() {
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const { t, language } = useLanguage();
   const gm = t.globalMsg;
 
@@ -37,6 +40,12 @@ export default function GlobalMessagePage() {
   const { data: notificationData } = useQuery<{ notifications: Notification[]; unreadCount: number }>({
     queryKey: ["/api/notifications"],
   });
+  const notificationId = new URLSearchParams(
+    location.includes("?") ? location.slice(location.indexOf("?")) : window.location.search,
+  ).get("notificationId");
+  const kycNotification = notificationData?.notifications.find(
+    notification => notification.id === notificationId && notification.type === "kyc_update_required",
+  );
 
   const markAsReadMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -57,12 +66,20 @@ export default function GlobalMessagePage() {
     }
   }, [notificationData?.notifications?.length]);
 
+  useEffect(() => {
+    if (kycNotification && !kycNotification.isRead) {
+      markAsReadMutation.mutate(kycNotification.id);
+    }
+  }, [kycNotification?.id, kycNotification?.isRead]);
+
   const displayed = activeMessages
     .slice()
     .sort((a, b) => {
       if (!a.createdAt || !b.createdAt) return 0;
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     })[0] ?? null;
+  const displayedItem = kycNotification || displayed;
+  const isKycUpdate = Boolean(kycNotification);
 
   const dateLocale = language === "fr" ? fr : enUS;
   const datePattern = language === "fr" ? "dd MMMM yyyy 'à' HH:mm" : "MMMM dd, yyyy 'at' HH:mm";
@@ -81,7 +98,7 @@ export default function GlobalMessagePage() {
           {gm.back}
         </Button>
 
-        {!isLoading && displayed ? (
+        {!isLoading && displayedItem ? (
           <div className="relative overflow-hidden rounded-2xl border border-purple-500/30 bg-gradient-to-br from-purple-500/10 via-background to-blue-500/5 shadow-xl">
 
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 via-violet-500 to-blue-500" />
@@ -90,45 +107,65 @@ export default function GlobalMessagePage() {
 
               <div className="flex items-center gap-4">
                 <div className="w-14 h-14 rounded-2xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center shadow-inner">
-                  <Megaphone className="w-7 h-7 text-purple-500" />
+                  {isKycUpdate ? (
+                    <Shield className="w-7 h-7 text-amber-500" />
+                  ) : (
+                    <Megaphone className="w-7 h-7 text-purple-500" />
+                  )}
                 </div>
                 <div>
                   <div className="flex items-center gap-2 mb-0.5">
-                    <Shield className="w-3.5 h-3.5 text-purple-500" />
+                    <Shield className={`w-3.5 h-3.5 ${isKycUpdate ? "text-amber-500" : "text-purple-500"}`} />
                     <span className="text-xs font-semibold uppercase tracking-widest text-purple-500">
-                      {gm.officialBadge}
+                      {isKycUpdate ? "ACTION REQUISE" : gm.officialBadge}
                     </span>
                   </div>
                   <h1 className="text-xl font-semibold text-foreground leading-tight">
-                    {displayed.title}
+                    {displayedItem.title}
                   </h1>
                 </div>
               </div>
 
               <div className="rounded-xl bg-background/60 border border-border/60 p-5">
                 <p className="text-base text-foreground leading-relaxed whitespace-pre-wrap">
-                  {displayed.message}
+                  {displayedItem.message}
                 </p>
               </div>
 
-              {displayed.createdAt && (
+              {displayedItem.createdAt && (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <div className="w-1.5 h-1.5 rounded-full bg-purple-500" />
-                  {gm.published} {format(new Date(displayed.createdAt), datePattern, { locale: dateLocale })}
+                  <div className={`w-1.5 h-1.5 rounded-full ${isKycUpdate ? "bg-amber-500" : "bg-purple-500"}`} />
+                  {gm.published} {format(new Date(displayedItem.createdAt), datePattern, { locale: dateLocale })}
                 </div>
               )}
 
               <div className="flex items-center gap-3 pt-2">
-                <Button
-                  onClick={() => setLocation("/dashboard")}
-                  className="gap-2 bg-purple-600 hover:bg-purple-700 text-white"
-                  data-testid="button-global-message-ack"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  {gm.understood}
-                </Button>
+                {isKycUpdate ? (
+                  <>
+                    <Button
+                      onClick={() => setLocation("/dashboard/kyc?update=true")}
+                      className="gap-2 bg-amber-500 hover:bg-amber-600 text-white"
+                      data-testid="button-kyc-update"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      Mettre à jour mon KYC
+                    </Button>
+                    <Button variant="outline" onClick={() => setLocation("/dashboard")}>
+                      Plus tard
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    onClick={() => setLocation("/dashboard")}
+                    className="gap-2 bg-purple-600 hover:bg-purple-700 text-white"
+                    data-testid="button-global-message-ack"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    {gm.understood}
+                  </Button>
+                )}
                 <p className="text-xs text-muted-foreground">
-                  {gm.team}
+                  {isKycUpdate ? "AshTech Pay — Vérification KYC" : gm.team}
                 </p>
               </div>
             </div>
