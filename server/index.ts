@@ -51,6 +51,7 @@ let startupReady = false;
 let startupFailure: string | null = null;
 let migrationsReady = false;
 let startupStage = "initializing";
+let startupFailureStage: string | null = null;
 // Bump this value whenever the idempotent migration block below gains a new
 // schema change. Completed versions are stored in platform_settings so a
 // normal Passenger restart does not repeat every ALTER TABLE/CREATE INDEX.
@@ -126,6 +127,38 @@ function serveEmergencyFrontend(): void {
   app.get("*", (_req, res) => {
     res.set("Content-Type", "text/html; charset=utf-8").sendFile(indexPath);
   });
+}
+
+function classifyStartupFailure(error: string | null): string | null {
+  if (!error) return null;
+  const message = error.toLowerCase();
+  if (message.includes("session_secret")) return "MISSING_SESSION_SECRET";
+  if (message.includes("mysql_database_url") || message.includes("mysql_url")) {
+    return "MISSING_MYSQL_DATABASE_URL";
+  }
+  if (message.includes("database_url must be set")) return "MISSING_DATABASE_URL";
+  if (message.includes("cannot find module") || message.includes("module not found")) {
+    return "MISSING_RUNTIME_MODULE";
+  }
+  if (
+    message.includes("eacces") ||
+    message.includes("eperm") ||
+    message.includes("permission denied")
+  ) {
+    return "FILESYSTEM_PERMISSION";
+  }
+  if (message.includes("enoent") || message.includes("build directory not found")) {
+    return "MISSING_BUILD_ARTIFACT";
+  }
+  if (
+    message.includes("econnrefused") ||
+    message.includes("etimedout") ||
+    message.includes("er_access_denied") ||
+    message.includes("access denied")
+  ) {
+    return "DATABASE_CONNECTION";
+  }
+  return "BOOTSTRAP_FAILED";
 }
 
 // ── FIX-6: Trust proxy — nécessaire pour que req.ip soit fiable derrière Replit/Nginx ──
@@ -244,7 +277,8 @@ app.get("/api/ping", (_req, res) => {
     ready: startupReady,
     migrations_ready: migrationsReady,
     bootstrap_failed: Boolean(startupFailure),
-    bootstrap_stage: startupStage,
+    bootstrap_stage: startupFailureStage ?? startupStage,
+    bootstrap_failure_code: classifyStartupFailure(startupFailure),
     uptime: Math.floor(process.uptime()),
     env: process.env.NODE_ENV || "development",
   });
@@ -1156,7 +1190,8 @@ app.use((req, res, next) => {
     });
   } catch (err) {
     startupFailure = err instanceof Error ? err.message : String(err);
-    startupStage = "failed";
+    startupFailureStage = startupStage;
+    startupStage = `${startupStage}:failed`;
     console.error("[Startup] Application bootstrap failed:", err);
     startupReady = true;
     migrationsReady = false;
