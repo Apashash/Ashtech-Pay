@@ -10,6 +10,12 @@ type TokenDedupOptions = {
   isMysql: boolean;
   tableName?: string;
   errorLog?: (error: Error) => void;
+  maxDevices?: number;
+  onDeviceEvicted?: (event: {
+    userId: string;
+    sid: string;
+    tokenIssuedAt: number | null;
+  }) => void | Promise<void>;
 };
 
 /**
@@ -136,6 +142,78 @@ export function wrapSessionStoreWithTokenDedup(
         errorLog(error instanceof Error ? error : new Error(String(error)));
       }
 
+      // Keep a hard upper bound on authenticated devices. This runs only when
+      // a token is first persisted, not on every subsequent session update.
+      // The token timestamp is the device identity; the oldest timestamp is
+      // the device that must be evicted first.
+      const maxDevices = options.maxDevices;
+      if (!existingSid && maxDevices && maxDevices > 0) {
+        try {
+          const result = options.isMysql
+            ? await options.pool.query(
+                `SELECT sid, sess, expire
+                   FROM \`${tableName}\`
+                  WHERE JSON_UNQUOTE(JSON_EXTRACT(sess, '$.userId')) = ?`,
+                [String(userId)],
+              )
+            : await options.pool.query(
+                `SELECT sid, sess, expire
+                   FROM "${tableName}"
+                  WHERE sess->>'userId' = $1`,
+                [String(userId)],
+              );
+
+          const now = Date.now();
+          const deviceRows = (result.rows || []).flatMap((row: any) => {
+            let data: Record<string, any>;
+            try {
+              data = typeof row.sess === "string" ? JSON.parse(row.sess) : (row.sess || {});
+            } catch {
+              return [];
+            }
+            const expiresAt = new Date(row.expire).getTime();
+            if (Number.isFinite(expiresAt) && expiresAt <= now) return [];
+            return [{
+              sid: String(row.sid),
+              data,
+              age: getSessionDeviceAge(data, row.expire),
+            }];
+          });
+
+          if (deviceRows.length > maxDevices) {
+            deviceRows.sort((a, b) => b.age - a.age);
+            const evictedRows = deviceRows.slice(maxDevices);
+            for (const evicted of evictedRows) {
+              if (options.isMysql) {
+                await options.pool.query(
+                  `DELETE FROM \`${tableName}\` WHERE sid = ?`,
+                  [evicted.sid],
+                );
+              } else {
+                await options.pool.query(
+                  `DELETE FROM "${tableName}" WHERE sid = $1`,
+                  [evicted.sid],
+                );
+              }
+
+              const evictedTokenTs = Number(evicted.data?.tokenIssuedAt);
+              try {
+                await options.onDeviceEvicted?.({
+                  userId: String(userId),
+                  sid: evicted.sid,
+                  tokenIssuedAt: Number.isFinite(evictedTokenTs) ? evictedTokenTs : null,
+                });
+              } catch (error) {
+                errorLog(error instanceof Error ? error : new Error(String(error)));
+              }
+            }
+          }
+        } catch (error) {
+          // Device-limit enforcement must not turn a valid login into a 500.
+          errorLog(error instanceof Error ? error : new Error(String(error)));
+        }
+      }
+
       callback();
     })().catch((error) => {
       errorLog(error instanceof Error ? error : new Error(String(error)));
@@ -144,4 +222,15 @@ export function wrapSessionStoreWithTokenDedup(
   };
 
   return store;
+}
+
+function getSessionDeviceAge(sessionData: Record<string, any>, expire: unknown): number {
+  const tokenIssuedAt = Number(sessionData?.tokenIssuedAt);
+  if (Number.isFinite(tokenIssuedAt) && tokenIssuedAt > 0) return tokenIssuedAt;
+
+  const loginAt = Date.parse(String(sessionData?.loginAt || ""));
+  if (Number.isFinite(loginAt)) return loginAt;
+
+  const expiresAt = new Date(expire as any).getTime();
+  return Number.isFinite(expiresAt) ? expiresAt : 0;
 }

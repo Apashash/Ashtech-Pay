@@ -2261,6 +2261,18 @@ export async function registerRoutes(
         pool: sessionPool as any,
         isMysql: process.env.DB_DIALECT?.toLowerCase() === "mysql",
         tableName: "session",
+        maxDevices: 4,
+        onDeviceEvicted: ({ userId, sid, tokenIssuedAt }) => {
+          singleDeviceKicks.add(sid);
+          if (tokenIssuedAt !== null) {
+            if (!revokedSpecificTokenTs.has(userId)) {
+              revokedSpecificTokenTs.set(userId, new Set());
+            }
+            revokedSpecificTokenTs.get(userId)!.add(tokenIssuedAt);
+          }
+          notifySpecificSessionForceLogout(sid, "device_limit");
+          console.log(`[Sessions] Limite de 4 appareils atteinte — appareil le plus ancien déconnecté (userId=${userId}, sid=${sid})`);
+        },
         errorLog: (err: Error) => console.error("[SessionStoreDedup]", err.message),
       }),
       proxy: isSecureProxy,

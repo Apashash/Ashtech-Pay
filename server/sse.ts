@@ -100,10 +100,10 @@ export function notifyOtherSessionsForceLogout(userId: string, excludeSessionId:
   }
 }
 
-export function notifySpecificSessionForceLogout(targetSessionId: string) {
+export function notifySpecificSessionForceLogout(targetSessionId: string, reason = "disconnected_by_user") {
   for (const client of clients.values()) {
     if (client.sessionId === targetSessionId) {
-      sendEvent(client.res, "force_logout", { reason: "disconnected_by_user" });
+      sendEvent(client.res, "force_logout", { reason });
     }
   }
 }
