@@ -576,7 +576,22 @@ app.use((req, res, next) => {
     // arrive through the verified export/import procedure instead of being
     // mutated by an unsafe best-effort translation at boot.
     migrationStage = "mysql-auxiliary-schema";
-    await ensureMysqlAuxiliarySchema();
+    // MySQL may still be starting when Passenger/PM2 opens the HTTP port.
+    // Retry the idempotent schema check before marking the whole application
+    // unavailable. Without this, one ECONNREFUSED permanently leaves every
+    // API request behind the startup gate at 503 until the next process restart.
+    let attempt = 0;
+    while (true) {
+      attempt++;
+      try {
+        await ensureMysqlAuxiliarySchema();
+        break;
+      } catch (error) {
+        const delayMs = Math.min(1000 * 2 ** Math.min(attempt - 1, 5), 30000);
+        console.warn(`[Migration] MySQL unavailable (attempt ${attempt}); retrying in ${delayMs}ms`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    }
     console.log("[Migration] DB_DIALECT=mysql — PostgreSQL boot migrations skipped; using imported MySQL schema");
     return;
   }

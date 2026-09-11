@@ -234,7 +234,16 @@ export const queryClient = new QueryClient({
       refetchInterval: false,
       refetchOnWindowFocus: false,
       staleTime: Infinity,
-      retry: false,
+      // A cold restart or a brief mobile-network interruption can produce a
+      // 503/connection error before the API is ready. Keep the page in its
+      // loading state briefly instead of treating that transient response as
+      // a permanent failure.
+      retry: (failureCount, error: any) => {
+        const status = Number(error?.status || 0);
+        const transient = !status || status === 408 || status === 425 || status === 429 || status >= 500;
+        return transient && failureCount < 3;
+      },
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 4000),
     },
     mutations: {
       retry: false,

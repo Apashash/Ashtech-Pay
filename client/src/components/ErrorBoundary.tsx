@@ -17,6 +17,35 @@ export class ErrorBoundary extends React.Component<React.PropsWithChildren, Stat
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     console.error("[ErrorBoundary] Uncaught error:", error, info.componentStack);
+
+    // React.lazy() loads dashboard pages as separate chunks. During a deploy
+    // or on a briefly interrupted mobile connection, the old HTML can request
+    // a chunk that is no longer available. One automatic reload repairs that
+    // stale chunk without forcing the user to press the button manually.
+    if (this.isTransientChunkError(error)) {
+      const retryKey = "ashtech_chunk_reload_attempt";
+      try {
+        if (sessionStorage.getItem(retryKey) !== "1") {
+          sessionStorage.setItem(retryKey, "1");
+          window.setTimeout(() => window.location.reload(), 250);
+        } else {
+          sessionStorage.removeItem(retryKey);
+        }
+      } catch {
+        // Private browsing can block sessionStorage; leave the visible
+        // fallback in place rather than risking a reload loop.
+      }
+    }
+  }
+
+  private isTransientChunkError(error: Error): boolean {
+    const message = String(error?.message || error || "").toLowerCase();
+    return (
+      message.includes("failed to fetch dynamically imported module") ||
+      message.includes("error loading dynamically imported module") ||
+      message.includes("importing a module script failed") ||
+      message.includes("loading chunk") && message.includes("failed")
+    );
   }
 
   handleReload = () => {
