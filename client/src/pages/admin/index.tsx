@@ -145,7 +145,7 @@ export default function AdminDashboard() {
     refetchInterval: 30000,
   });
 
-  const { data: totalBalances, isLoading: balancesLoading } = useQuery<TotalBalances>({
+  const { data: totalBalances, isLoading: balancesLoading, isError: balancesError } = useQuery<TotalBalances>({
     queryKey: ["/api/admin/stats/total-balances"],
     refetchInterval: 60000,
   });
@@ -594,6 +594,8 @@ export default function AdminDashboard() {
                 <div className="text-right">
                   {balancesLoading ? (
                     <Skeleton className="h-9 w-40" />
+                  ) : balancesError ? (
+                    <p className="text-sm font-semibold text-destructive">Indisponible</p>
                   ) : (
                     <p className="text-3xl font-bold text-blue-500" data-testid="text-total-platform-balance">
                       {formatCurrency(totalBalances?.totalXAF || 0, "XAF")}

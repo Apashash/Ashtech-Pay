@@ -11065,25 +11065,29 @@ export async function registerRoutes(
   app.get("/api/admin/stats/total-balances", requireAuth, requireAdmin, async (req, res) => {
     try {
       const fxRates = await loadFxRates();
+      const numericBalance = (column: unknown) =>
+        isMysqlDialect
+          ? drizzleSql`CAST(${column} AS DECIMAL(30, 10))`
+          : drizzleSql`${column}::numeric`;
 
       // 1. Sum primary wallets (users.balance grouped by preferredCurrency)
       const primaryRows = await db
         .select({
           currency: usersTable.preferredCurrency,
-          total: drizzleSql<string>`COALESCE(SUM(${usersTable.balance}::numeric), 0)`,
+          total: drizzleSql<string>`COALESCE(SUM(${numericBalance(usersTable.balance)}), 0)`,
         })
         .from(usersTable)
-        .where(drizzleSql`${usersTable.balance}::numeric > 0`)
+        .where(drizzleSql`${numericBalance(usersTable.balance)} > 0`)
         .groupBy(usersTable.preferredCurrency);
 
       // 2. Sum secondary wallets (wallets table grouped by currency)
       const secondaryRows = await db
         .select({
           currency: walletsTable.currency,
-          total: drizzleSql<string>`COALESCE(SUM(${walletsTable.balance}::numeric), 0)`,
+          total: drizzleSql<string>`COALESCE(SUM(${numericBalance(walletsTable.balance)}), 0)`,
         })
         .from(walletsTable)
-        .where(drizzleSql`${walletsTable.balance}::numeric > 0`)
+        .where(drizzleSql`${numericBalance(walletsTable.balance)} > 0`)
         .groupBy(walletsTable.currency);
 
       // 3. Merge into a single map: currency → total
